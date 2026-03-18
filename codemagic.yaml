@@ -10,25 +10,15 @@ workflows:
       xcode: latest
 
     scripts:
-      - name: Set version from pubspec
-        script: |
-          VERSION=$(grep "^version:" pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
-          BUILD=$(grep "^version:" pubspec.yaml | awk '{print $2}' | cut -d+ -f2)
-          echo "Building Catalyst $VERSION ($BUILD)"
-
       - name: Get packages
         script: flutter pub get
 
       - name: Build IPA (unsigned)
         script: flutter build ipa --release --no-codesign
 
-      - name: Rename IPA
-        script: |
-          VERSION=$(grep "^version:" pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
-          mv build/ios/ipa/*.ipa "build/ios/ipa/Catalyst-${VERSION}.ipa"
-
     artifacts:
       - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
 
   # ── Android APKs ───────────────────────────────────────────────────────────
   android-release:
@@ -51,7 +41,7 @@ workflows:
       - build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
       - build/app/outputs/flutter-apk/app-x86_64-release.apk
 
-  # ── Both platforms in one run ──────────────────────────────────────────────
+  # ── Both platforms — triggers automatically on v* tags ────────────────────
   all-release:
     name: iOS + Android
     max_build_duration: 90
@@ -78,13 +68,9 @@ workflows:
       - name: Build IPA (unsigned)
         script: flutter build ipa --release --no-codesign
 
-      - name: Rename IPA
-        script: |
-          VERSION=$(grep "^version:" pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
-          mv build/ios/ipa/*.ipa "build/ios/ipa/Catalyst-${VERSION}.ipa"
-
     artifacts:
       - build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
       - build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
       - build/app/outputs/flutter-apk/app-x86_64-release.apk
       - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
