@@ -6,7 +6,7 @@ part of 'use_dynamic_color_tile.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$useDynamicColorHash() => r'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
+String _$useDynamicColorHash() => r'33e40152c542ccb43dc80f9c855e72ee4bf3a58e';
 
 /// See also [UseDynamicColor].
 @ProviderFor(UseDynamicColor)
@@ -14,8 +14,9 @@ final useDynamicColorProvider =
     AutoDisposeNotifierProvider<UseDynamicColor, bool?>.internal(
   UseDynamicColor.new,
   name: r'useDynamicColorProvider',
-  debugGetCreateSourceHash:
-      const bool.fromEnvironment('dart.vm.product') ? null : _$useDynamicColorHash,
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$useDynamicColorHash,
   dependencies: null,
   allTransitiveDependencies: null,
 );

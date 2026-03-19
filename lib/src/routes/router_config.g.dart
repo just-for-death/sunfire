@@ -229,6 +229,24 @@ extension $NavigationShellRouteExtension on NavigationShellRoute {
       const NavigationShellRoute();
 }
 
+extension $HistoryTabRouteExtension on HistoryTabRoute {
+  static HistoryTabRoute _fromState(GoRouterState state) =>
+      const HistoryTabRoute();
+
+  String get location => GoRouteData.$location(
+        '/history',
+      );
+
+  void go(BuildContext context) => context.go(location);
+
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  void replace(BuildContext context) => context.replace(location);
+}
+
 extension $LibraryRouteExtension on LibraryRoute {
   static LibraryRoute _fromState(GoRouterState state) => LibraryRoute(
         categoryId: int.parse(state.pathParameters['categoryId']!),
@@ -236,41 +254,6 @@ extension $LibraryRouteExtension on LibraryRoute {
 
   String get location => GoRouteData.$location(
         '/library/${Uri.encodeComponent(categoryId.toString())}',
-      );
-
-  void go(BuildContext context) => context.go(location);
-
-  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
-
-  void pushReplacement(BuildContext context) =>
-      context.pushReplacement(location);
-
-  void replace(BuildContext context) => context.replace(location);
-}
-
-extension $UpdatesRouteExtension on UpdatesRoute {
-  static UpdatesRoute _fromState(GoRouterState state) => const UpdatesRoute();
-
-  String get location => GoRouteData.$location(
-        '/updates',
-      );
-
-  void go(BuildContext context) => context.go(location);
-
-  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
-
-  void pushReplacement(BuildContext context) =>
-      context.pushReplacement(location);
-
-  void replace(BuildContext context) => context.replace(location);
-}
-
-extension $HistoryTabRouteExtension on HistoryTabRoute {
-  static HistoryTabRoute _fromState(GoRouterState state) =>
-      const HistoryTabRoute();
-
-  String get location => GoRouteData.$location(
-        '/history',
       );
 
   void go(BuildContext context) => context.go(location);
@@ -364,6 +347,23 @@ extension $BrowseExtensionRouteExtension on BrowseExtensionRoute {
 
   String get location => GoRouteData.$location(
         '/extension',
+      );
+
+  void go(BuildContext context) => context.go(location);
+
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  void replace(BuildContext context) => context.replace(location);
+}
+
+extension $UpdatesRouteExtension on UpdatesRoute {
+  static UpdatesRoute _fromState(GoRouterState state) => const UpdatesRoute();
+
+  String get location => GoRouteData.$location(
+        '/updates',
       );
 
   void go(BuildContext context) => context.go(location);
@@ -900,7 +900,7 @@ bool _$boolConverter(String value) {
 // RiverpodGenerator
 // **************************************************************************
 
-String _$routerConfigHash() => r'3a0231101ce98d6c94836b9846853185ecab9ef2';
+String _$routerConfigHash() => r'c551cd9df473ec5444a6bc1ecf59c93077457ac9';
 
 /// See also [routerConfig].
 @ProviderFor(routerConfig)
