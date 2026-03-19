@@ -1,7 +1,7 @@
 import '../../../manga/graphql/__generated__/fragment.graphql.dart';
+import 'package:catalyst/src/utils/misc/scalars.dart';
 import 'package:gql/ast.dart';
 import 'package:graphql/client.dart' as graphql;
-import 'package:catalyst/src/utils/misc/scalars.dart';
 
 class Fragment$ChapterDto {
   Fragment$ChapterDto({

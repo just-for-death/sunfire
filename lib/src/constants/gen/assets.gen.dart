@@ -36,19 +36,12 @@ class $AssetsIconsGen {
 class $AssetsIconsLauncherGen {
   const $AssetsIconsLauncherGen();
 
-  /// File path: assets/icons/launcher/from_suwayomi.png
-  AssetGenImage get fromSuwayomi =>
-      const AssetGenImage('assets/icons/launcher/from_suwayomi.png');
-
   /// File path: assets/icons/launcher/catalyst_icon.png
   AssetGenImage get catalystIcon =>
       const AssetGenImage('assets/icons/launcher/catalyst_icon.png');
 
   /// List of all assets
-  List<dynamic> get values => [
-        fromSuwayomi,
-        catalystIcon
-      ];
+  List<AssetGenImage> get values => [catalystIcon];
 }
 
 class Assets {

@@ -1,6 +1,6 @@
+import 'package:catalyst/src/utils/misc/scalars.dart';
 import 'package:gql/ast.dart';
 import 'package:graphql/client.dart' as graphql;
-import 'package:catalyst/src/utils/misc/scalars.dart';
 
 class Fragment$AboutDto {
   Fragment$AboutDto({

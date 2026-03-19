@@ -12,6 +12,7 @@ import '../../features/about/presentation/about/controllers/about_controller.dar
 import '../../features/about/presentation/about/widget/app_update_dialog.dart';
 import '../../utils/extensions/custom_extensions.dart';
 import '../../utils/misc/toast/toast.dart';
+import '../../features/settings/presentation/server/server_connectivity.dart';
 import 'big_screen_navigation_bar.dart';
 import 'ios/ios_navigation_shell.dart';
 import 'small_screen_navigation_bar.dart';
@@ -72,26 +73,30 @@ class NavigationShellScreen extends HookConsumerWidget {
 
     // Android tablet → rail
     if (context.isTablet) {
-      return Scaffold(
-        body: Row(
-          children: [
-            BigScreenNavigationBar(
-              selectedIndex: child.currentIndex,
-              onDestinationSelected: onDestinationSelected,
-            ),
-            Expanded(child: child),
-          ],
+      return ServerAwareWrapper(
+        child: Scaffold(
+          body: Row(
+            children: [
+              BigScreenNavigationBar(
+                selectedIndex: child.currentIndex,
+                onDestinationSelected: onDestinationSelected,
+              ),
+              Expanded(child: child),
+            ],
+          ),
         ),
       );
     }
 
     // Android phone → Material You bottom nav
-    return Scaffold(
-      body: child,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      bottomNavigationBar: SmallScreenNavigationBar(
-        selectedIndex: child.currentIndex,
-        onDestinationSelected: onDestinationSelected,
+    return ServerAwareWrapper(
+      child: Scaffold(
+        body: child,
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+        bottomNavigationBar: SmallScreenNavigationBar(
+          selectedIndex: child.currentIndex,
+          onDestinationSelected: onDestinationSelected,
+        ),
       ),
     );
   }

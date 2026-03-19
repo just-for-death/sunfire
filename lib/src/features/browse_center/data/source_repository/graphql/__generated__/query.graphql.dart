@@ -6,11 +6,11 @@ import '../../../../domain/manga_page/graphql/__generated__/fragment.graphql.dar
 import '../../../../domain/source/graphql/__generated__/fragment.graphql.dart';
 import '../../../../domain/source_preference/graphql/__generated__/fragment.graphql.dart';
 import 'dart:async';
+import 'package:catalyst/src/utils/misc/scalars.dart';
 import 'package:flutter/widgets.dart' as widgets;
 import 'package:gql/ast.dart';
 import 'package:graphql/client.dart' as graphql;
 import 'package:graphql_flutter/graphql_flutter.dart' as graphql_flutter;
-import 'package:catalyst/src/utils/misc/scalars.dart';
 
 class Query$SourceList {
   Query$SourceList({
