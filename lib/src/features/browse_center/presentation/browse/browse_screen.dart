@@ -6,6 +6,7 @@ import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../widgets/server_image.dart';
 import '../extension/controller/extension_controller.dart';
+import '../extension/extension_screen.dart';
 import '../extension/widgets/extension_language_filter_dialog.dart';
 import '../extension/widgets/install_extension_file.dart';
 import '../source/controller/source_controller.dart' hide SourceLanguageFilter;
@@ -45,19 +46,21 @@ class BrowseScreen extends HookConsumerWidget {
 
     final showSearch = useState(false);
     final cs = context.theme.colorScheme;
+    final isExtensions = tabController.index == 1;
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
             floating: true,
             snap: true,
+            forceElevated: innerBoxIsScrolled,
             titleSpacing: 16,
             title: showSearch.value
                 ? SearchBar(
-                    hintText: tabController.index == 0
-                        ? context.l10n.sources
-                        : context.l10n.extensions,
+                    hintText: isExtensions
+                        ? context.l10n.extensions
+                        : context.l10n.sources,
                     leading: const Icon(Icons.search_rounded),
                     trailing: [
                       IconButton(
@@ -65,21 +68,21 @@ class BrowseScreen extends HookConsumerWidget {
                         onPressed: () => showSearch.value = false,
                       )
                     ],
-                    onChanged: tabController.index == 0
-                        ? null
-                        : (val) => ref
+                    onChanged: isExtensions
+                        ? (val) => ref
                             .read(extensionQueryProvider.notifier)
-                            .update(val),
-                    onSubmitted: tabController.index == 0
-                        ? (v) {
+                            .update(val)
+                        : null,
+                    onSubmitted: isExtensions
+                        ? null
+                        : (v) {
                             if (v.isNotBlank) {
                               GlobalSearchRoute(query: v).push(context);
                             }
-                          }
-                        : null,
+                          },
                     elevation: const WidgetStatePropertyAll(0),
-                    backgroundColor: WidgetStatePropertyAll(
-                        cs.surfaceContainerHigh),
+                    backgroundColor:
+                        WidgetStatePropertyAll(cs.surfaceContainerHigh),
                   )
                 : Text(
                     context.l10n.browse,
@@ -91,18 +94,17 @@ class BrowseScreen extends HookConsumerWidget {
                 : [
                     IconButton(
                       onPressed: () => showSearch.value = true,
-                      icon: Icon(tabController.index == 0
-                          ? Icons.travel_explore_rounded
-                          : Icons.search_rounded),
+                      icon: Icon(isExtensions
+                          ? Icons.search_rounded
+                          : Icons.travel_explore_rounded),
                     ),
-                    if (tabController.index == 1)
-                      const InstallExtensionFile(),
+                    if (isExtensions) const InstallExtensionFile(),
                     IconButton(
                       onPressed: () => showDialog(
                         context: context,
-                        builder: (context) => tabController.index == 0
-                            ? const SourceLanguageFilter()
-                            : const ExtensionLanguageFilterDialog(),
+                        builder: (context) => isExtensions
+                            ? const ExtensionLanguageFilterDialog()
+                            : const SourceLanguageFilter(),
                       ),
                       icon: const Icon(Icons.translate_rounded),
                     ),
@@ -116,40 +118,50 @@ class BrowseScreen extends HookConsumerWidget {
               ],
             ),
           ),
-
-          // Futon-style quick-action pills
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
-              child: _QuickActionGrid(),
-            ),
-          ),
-
-          // "Pinned sources" header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Row(
-                children: [
-                  Text(
-                    context.l10n.sources,
-                    style: context.theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+        ],
+        body: TabBarView(
+          controller: tabController,
+          children: [
+            // ── Sources tab ───────────────────────────────────────────────
+            CustomScrollView(
+              slivers: [
+                // Quick-action pills
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                    child: _QuickActionGrid(),
+                  ),
+                ),
+                // Pinned sources header
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: Row(
+                      children: [
+                        Text(
+                          context.l10n.sources,
+                          style:
+                              context.theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => tabController.animateTo(0),
+                          child: const Text('See all'),
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => tabController.animateTo(0),
-                    child: Text('See all'),
-                  ),
-                ],
-              ),
+                ),
+                _PinnedSourcesSliver(),
+              ],
             ),
-          ),
 
-          // Pinned/recent source icon grid
-          _PinnedSourcesSliver(),
-        ],
+            // ── Extensions tab ─────────────────────────────────────────────
+            const ExtensionScreen(),
+          ],
+        ),
       ),
     );
   }
@@ -168,10 +180,10 @@ class _QuickActionGrid extends ConsumerWidget {
       (
         icon: Icons.bookmark_outline_rounded,
         label: context.l10n.migrate,
-        onTap: () => const GlobalSearchRoute(query: '').push(context),
+        onTap: () => const MigrationGlobalSearchRoute().push(context),
       ),
       (
-        icon: Icons.casino_outlined,
+        icon: Icons.travel_explore_rounded,
         label: context.l10n.globalSearch,
         onTap: () => const GlobalSearchRoute(query: '').push(context),
       ),
@@ -182,46 +194,37 @@ class _QuickActionGrid extends ConsumerWidget {
       ),
     ];
 
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      childAspectRatio: 3.2,
-      children: actions
-          .map(
-            (a) => Material(
-              color: cs.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: a.onTap,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: Row(
-                    children: [
-                      Icon(a.icon,
-                          size: 20, color: cs.primary),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Text(
-                          a.label,
-                          style: context.theme.textTheme.labelLarge?.copyWith(
-                            color: cs.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: actions.map((a) => SizedBox(
+        height: 36,
+        child: Material(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(20),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: a.onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(a.icon, size: 16, color: cs.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    a.label,
+                    style: context.theme.textTheme.labelMedium?.copyWith(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
-          )
-          .toList(),
+          ),
+        ),
+      )).toList(),
     );
   }
 }
@@ -233,7 +236,6 @@ class _PinnedSourcesSliver extends ConsumerWidget {
     final sourceMap = {...?sourceMapData.valueOrNull};
     sourceMap.remove('localsourcelang');
     final lastUsed = sourceMap.remove('lastUsed') ?? [];
-    // Take up to 8 pinned/recently-used sources
     final pinned = [
       ...lastUsed,
       ...sourceMap.values.expand((v) => v),
@@ -265,14 +267,14 @@ class _PinnedSourcesSliver extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                   child: ServerImage(
                     imageUrl: source.iconUrl,
-                    size: const Size.square(52),
+                    size: const Size.square(48),
                     fit: BoxFit.cover,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   source.name,
                   style: context.theme.textTheme.labelSmall,

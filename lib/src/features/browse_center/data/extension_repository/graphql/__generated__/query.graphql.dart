@@ -1,10 +1,10 @@
 import '../../../../domain/extension/graphql/__generated__/fragment.graphql.dart';
 import 'dart:async';
+import 'package:catalyst/src/utils/misc/scalars.dart';
 import 'package:flutter/widgets.dart' as widgets;
 import 'package:gql/ast.dart';
 import 'package:graphql/client.dart' as graphql;
 import 'package:graphql_flutter/graphql_flutter.dart' as graphql_flutter;
-import 'package:catalyst/src/utils/misc/scalars.dart';
 
 class Variables$Mutation$UpdateExtension {
   factory Variables$Mutation$UpdateExtension({

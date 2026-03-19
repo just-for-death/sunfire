@@ -46,6 +46,8 @@ class AboutRepository {
     return gitResponse.copyWithData<Version?>(
       (data) {
         String? tag = data?["tag_name"];
+        // GitHub tags use "v1.0.0" prefix — strip it before parsing
+        if (tag != null && tag.startsWith('v')) tag = tag.substring(1);
         Version? latestReleaseBuildNumber =
             tag != null ? Version.parse(tag) : null;
         Version? packageBuildNumber = Version.parse(packageInfo.version);

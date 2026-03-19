@@ -1,9 +1,9 @@
 import '../../../../../../graphql/__generated__/schema.graphql.dart';
 import '../../../../../browse_center/domain/source/graphql/__generated__/fragment.graphql.dart';
 import '../../../chapter/graphql/__generated__/fragment.graphql.dart';
+import 'package:catalyst/src/utils/misc/scalars.dart';
 import 'package:gql/ast.dart';
 import 'package:graphql/client.dart' as graphql;
-import 'package:catalyst/src/utils/misc/scalars.dart';
 
 class Fragment$MangaDto {
   Fragment$MangaDto({
