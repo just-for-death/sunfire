@@ -5,8 +5,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import '../../../../routes/router_config.dart';
 
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../browse_center/domain/source/source_model.dart';
@@ -15,7 +18,7 @@ import '../../controller/migration_controller.dart';
 import '../../domain/migration_models.dart';
 import '../widgets/migration_progress_widgets.dart';
 
-class MigrationProgressScreen extends ConsumerWidget {
+class MigrationProgressScreen extends HookConsumerWidget {
   const MigrationProgressScreen({
     super.key,
     required this.sourceManga,
@@ -34,13 +37,27 @@ class MigrationProgressScreen extends ConsumerWidget {
     final l10n = context.l10n;
     final migrationProgress = ref.watch(migrationExecutionProvider);
 
+    useEffect(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(migrationExecutionProvider.notifier).executeMigration(
+              fromMangaId: sourceManga.id,
+              toMangaId: targetManga.id,
+              options: options,
+            );
+      });
+      return null;
+    }, []);
+
     return PopScope(
       canPop: migrationProgress?.status == MigrationStatus.completed ||
           migrationProgress?.status == MigrationStatus.error ||
           migrationProgress?.status == MigrationStatus.cancelled,
       onPopInvokedWithResult: (didPop, _) async {
         if (!didPop && migrationProgress != null) {
-          await _showCancelConfirmation(context, ref);
+          if (migrationProgress.status == MigrationStatus.migrating ||
+              migrationProgress.status == MigrationStatus.preparing) {
+            await _showCancelConfirmation(context, ref);
+          }
         }
       },
       child: Scaffold(
@@ -116,7 +133,7 @@ class MigrationProgressScreen extends ConsumerWidget {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed == true && context.mounted) {
       await ref.read(migrationExecutionProvider.notifier).cancelMigration();
     }
   }
@@ -134,7 +151,7 @@ class MigrationProgressScreen extends ConsumerWidget {
     // Navigate based on migration result
     if (migrationProgress?.status == MigrationStatus.completed) {
       // If migration was successful, go back to the library so user can see the migrated manga
-      context.go('/library/0');
+      LibraryRoute(categoryId: 0).go(context);
     } else {
       // If migration failed or was cancelled, go back to source manga
       context.go('/manga/${sourceManga.id}');

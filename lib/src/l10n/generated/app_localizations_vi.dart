@@ -1357,4 +1357,45 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get syncNow => 'Sync now';
+
+  @override
+  String get mangaComparison => 'Manga Comparison';
+
+  @override
+  String get migrationFromLabel => 'From (Current)';
+
+  @override
+  String get migrationToLabel => 'To (Target)';
+
+  @override
+  String get comparisonSummary => 'Comparison Summary';
+
+  @override
+  String byAuthor(String author) {
+    return 'by $author';
+  }
+
+  @override
+  String get migrationSummaryTitle => 'Migration Summary';
+
+  @override
+  String migratedFromManga(String title) {
+    return 'Migrated from: $title';
+  }
+
+  @override
+  String migratedToManga(String title) {
+    return 'Migrated to: $title';
+  }
+
+  @override
+  String migrationSourceLabel(String name) {
+    return 'Source: $name';
+  }
+
+  @override
+  String get selectSource => 'Select Source';
+
+  @override
+  String get selectManga => 'Select Manga';
 }

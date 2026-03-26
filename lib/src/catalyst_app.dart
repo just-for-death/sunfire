@@ -5,6 +5,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import 'features/notifications/notification_providers.dart';
 import 'features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_selector.dart';
 import 'features/settings/presentation/appearance/widgets/is_true_black/is_true_black_tile.dart';
 import 'features/settings/presentation/appearance/widgets/use_dynamic_color/use_dynamic_color_tile.dart';
@@ -90,6 +91,10 @@ class CatalystApp extends ConsumerWidget {
     final isTrueBlack = ref.watch(isTrueBlackProvider).ifNull();
     final useDynamic = ref.watch(useDynamicColorProvider).ifNull(true);
     final client = ref.watch(graphQlClientNotifierProvider);
+
+    // Eagerly warm up notification providers so they start listening immediately.
+    ref.watch(chapterUpdateNotifierProvider);
+    ref.watch(extensionUpdateNotifierProvider);
 
     final baseLight = FlexThemeData.light(
       scheme: appScheme,
