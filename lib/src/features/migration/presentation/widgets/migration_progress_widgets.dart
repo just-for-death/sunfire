@@ -452,6 +452,7 @@ class MigrationSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.theme;
+    final l10n = context.l10n;
 
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
@@ -469,7 +470,7 @@ class MigrationSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Migration Summary',
+                  l10n.migrationSummaryTitle,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: theme.colorScheme.primary,
@@ -479,15 +480,15 @@ class MigrationSummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              '• Migrated from: ${sourceManga.title}',
+              l10n.migratedFromManga(sourceManga.title),
               style: theme.textTheme.bodySmall,
             ),
             Text(
-              '• Migrated to: ${targetManga.title}',
+              l10n.migratedToManga(targetManga.title),
               style: theme.textTheme.bodySmall,
             ),
             Text(
-              '• Source: ${targetSource.displayName}',
+              l10n.migrationSourceLabel(targetSource.displayName),
               style: theme.textTheme.bodySmall,
             ),
           ],

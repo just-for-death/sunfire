@@ -1,5 +1,26 @@
 part of '../router_config.dart';
 
+class MigrationMainRoute extends GoRouteData {
+  const MigrationMainRoute();
+
+  static final $parentNavigatorKey = _quickOpenNavigatorKey;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      const MigrationMainScreen();
+}
+
+class MigrationSourceMangaRoute extends GoRouteData {
+  const MigrationSourceMangaRoute({required this.sourceId});
+
+  static final $parentNavigatorKey = _quickOpenNavigatorKey;
+  final String sourceId;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      MigrationSourceMangaScreen(sourceId: sourceId);
+}
+
 class MigrationGlobalSearchRoute extends GoRouteData {
   const MigrationGlobalSearchRoute({this.$extra});
 
@@ -7,18 +28,14 @@ class MigrationGlobalSearchRoute extends GoRouteData {
   final MigrationRouteData? $extra;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    if ($extra == null) {
-      // If no manga provided, navigate back
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.pop();
-      });
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+  String? redirect(BuildContext context, GoRouterState state) {
+    if ($extra == null) return '/library/0';
+    return null;
+  }
 
-    return MigrationGlobalSearchScreen(sourceManga: $extra!.sourceManga);
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return MigrationGlobalSearchScreen(sourceManga: $extra!.sourceMangas.first);
   }
 }
 
@@ -29,18 +46,14 @@ class MigrationSourceSelectionRoute extends GoRouteData {
   final MigrationRouteData? $extra;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    if ($extra == null) {
-      // If no manga provided, navigate back
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.pop();
-      });
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+  String? redirect(BuildContext context, GoRouterState state) {
+    if ($extra == null) return '/library/0';
+    return null;
+  }
 
-    return MigrationSourceSelectionScreen(sourceManga: $extra!.sourceManga);
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return MigrationSourceSelectionScreen(sourceMangas: $extra!.sourceMangas);
   }
 }
 
@@ -51,19 +64,36 @@ class MigrationSearchRoute extends GoRouteData {
   final MigrationSearchRouteData? $extra;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    if ($extra == null) {
-      // If required data is missing, navigate back
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.pop();
-      });
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+  String? redirect(BuildContext context, GoRouterState state) {
+    if ($extra == null) return '/library/0';
+    return null;
+  }
 
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
     return MigrationSearchScreen(
-      sourceManga: $extra!.sourceManga,
+      sourceMangas: $extra!.sourceMangas,
+      targetSource: $extra!.targetSource,
+    );
+  }
+}
+
+class MigrationBatchMatchRoute extends GoRouteData {
+  const MigrationBatchMatchRoute({this.$extra});
+
+  static final $parentNavigatorKey = _quickOpenNavigatorKey;
+  final MigrationSearchRouteData? $extra;
+
+  @override
+  String? redirect(BuildContext context, GoRouterState state) {
+    if ($extra == null) return '/library/0';
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return MigrationBatchMatchScreen(
+      sourceMangas: $extra!.sourceMangas,
       targetSource: $extra!.targetSource,
     );
   }
@@ -76,17 +106,13 @@ class MigrationPreviewRoute extends GoRouteData {
   final MigrationPreviewRouteData? $extra;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    if ($extra == null) {
-      // If required data is missing, navigate back
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.pop();
-      });
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+  String? redirect(BuildContext context, GoRouterState state) {
+    if ($extra == null) return '/library/0';
+    return null;
+  }
 
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
     return MigrationPreviewScreen(
       sourceManga: $extra!.sourceManga,
       targetManga: $extra!.targetManga,
@@ -102,22 +128,29 @@ class MigrationProgressRoute extends GoRouteData {
   final MigrationProgressRouteData? $extra;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    if ($extra == null) {
-      // If required data is missing, navigate back
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.pop();
-      });
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+  String? redirect(BuildContext context, GoRouterState state) {
+    if ($extra == null) return '/library/0';
+    return null;
+  }
 
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
     return MigrationProgressScreen(
       sourceManga: $extra!.sourceManga,
       targetManga: $extra!.targetManga,
       targetSource: $extra!.targetSource,
       options: $extra!.options,
     );
+  }
+}
+
+class MigrationBatchProgressRoute extends GoRouteData {
+  const MigrationBatchProgressRoute();
+
+  static final $parentNavigatorKey = _quickOpenNavigatorKey;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return const MigrationBatchProgressScreen();
   }
 }

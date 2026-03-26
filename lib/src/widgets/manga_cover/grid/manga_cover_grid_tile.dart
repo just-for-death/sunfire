@@ -24,6 +24,7 @@ class MangaCoverGridTile extends StatelessWidget {
     this.showBadges = true,
     this.showCountBadges = false,
     this.showDarkOverlay = true,
+    this.isSelected = false,
   });
   final MangaDto manga;
   final VoidCallback? onPressed;
@@ -32,9 +33,10 @@ class MangaCoverGridTile extends StatelessWidget {
   final bool showTitle;
   final bool showBadges;
   final bool showDarkOverlay;
+  final bool isSelected;
   @override
   Widget build(BuildContext context) {
-    return InkResponse(
+    final baseCard = InkResponse(
       onTap: onPressed ??
           () => Navigator.push(
                 context,
@@ -121,5 +123,49 @@ class MangaCoverGridTile extends StatelessWidget {
         ),
       ),
     );
+    
+    // Add selection overlay on top
+    if (isSelected) {
+      return Stack(
+        fit: StackFit.passthrough,
+        children: [
+          baseCard,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Card(
+                color: context.theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                clipBehavior: Clip.antiAlias,
+                shape: RoundedRectangleBorder(
+                  borderRadius: KBorderRadius.r12.radius,
+                  side: BorderSide(
+                    color: context.theme.colorScheme.primary,
+                    width: 3,
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: CircleAvatar(
+                        radius: 12,
+                        backgroundColor: context.theme.colorScheme.primary,
+                        child: Icon(
+                          Icons.check,
+                          size: 16,
+                          color: context.theme.colorScheme.onPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    
+    return baseCard;
   }
 }

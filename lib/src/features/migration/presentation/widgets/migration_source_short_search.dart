@@ -40,7 +40,12 @@ class MigrationSourceShortSearch extends StatelessWidget {
           trailing: const Icon(Icons.arrow_forward_rounded),
           onTap: () {
             // Navigate to source for detailed search
-            // For now, we'll keep it simple and not navigate
+            MigrationSearchRoute(
+              $extra: MigrationSearchRouteData(
+                sourceMangas: [sourceManga],
+                targetSource: source,
+              ),
+            ).push(context);
           },
         ),
         mangaList.showUiWhenData(

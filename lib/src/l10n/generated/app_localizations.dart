@@ -2541,6 +2541,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sync now'**
   String get syncNow;
+
+  /// Header for manga comparison section
+  ///
+  /// In en, this message translates to:
+  /// **'Manga Comparison'**
+  String get mangaComparison;
+
+  /// Label for source manga in comparison
+  ///
+  /// In en, this message translates to:
+  /// **'From (Current)'**
+  String get migrationFromLabel;
+
+  /// Label for target manga in comparison
+  ///
+  /// In en, this message translates to:
+  /// **'To (Target)'**
+  String get migrationToLabel;
+
+  /// Header for comparison summary section
+  ///
+  /// In en, this message translates to:
+  /// **'Comparison Summary'**
+  String get comparisonSummary;
+
+  /// Author prefix label
+  ///
+  /// In en, this message translates to:
+  /// **'by {author}'**
+  String byAuthor(String author);
+
+  /// Header for migration summary section
+  ///
+  /// In en, this message translates to:
+  /// **'Migration Summary'**
+  String get migrationSummaryTitle;
+
+  /// Bullet point showing source manga
+  ///
+  /// In en, this message translates to:
+  /// **'Migrated from: {title}'**
+  String migratedFromManga(String title);
+
+  /// Bullet point showing target manga
+  ///
+  /// In en, this message translates to:
+  /// **'Migrated to: {title}'**
+  String migratedToManga(String title);
+
+  /// Bullet point showing target source
+  ///
+  /// In en, this message translates to:
+  /// **'Source: {name}'**
+  String migrationSourceLabel(String name);
+
+  /// App bar title for selecting migration source
+  ///
+  /// In en, this message translates to:
+  /// **'Select Source'**
+  String get selectSource;
+
+  /// App bar title for selecting manga to migrate
+  ///
+  /// In en, this message translates to:
+  /// **'Select Manga'**
+  String get selectManga;
 }
 
 class _AppLocalizationsDelegate

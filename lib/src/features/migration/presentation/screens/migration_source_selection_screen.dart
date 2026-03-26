@@ -19,16 +19,16 @@ import '../widgets/migration_source_card.dart';
 class MigrationSourceSelectionScreen extends HookConsumerWidget {
   const MigrationSourceSelectionScreen({
     super.key,
-    required this.sourceManga,
+    required this.sourceMangas,
   });
 
-  final MangaDto sourceManga;
+  final List<MangaDto> sourceMangas;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final sourcesAsync =
-        ref.watch(migrationSourcesProvider(mangaId: sourceManga.id));
+        ref.watch(migrationSourcesProvider(mangaId: sourceMangas.first.id));
     final selectedSource = ref.watch(selectedMigrationSourceProvider);
 
     return Scaffold(
@@ -66,7 +66,7 @@ class MigrationSourceSelectionScreen extends HookConsumerWidget {
 
           // Filter out the current source
           final availableSources = sources
-              .where((source) => source.id != sourceManga.source?.id)
+              .where((source) => source.id != sourceMangas.first.source?.id)
               .toList();
 
           if (availableSources.isEmpty) {
@@ -140,7 +140,7 @@ class MigrationSourceSelectionScreen extends HookConsumerWidget {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () => ref
-                    .refresh(migrationSourcesProvider(mangaId: sourceManga.id)),
+                    .refresh(migrationSourcesProvider(mangaId: sourceMangas.first.id)),
                 child: Text(l10n.retry),
               ),
             ],
@@ -166,19 +166,28 @@ class MigrationSourceSelectionScreen extends HookConsumerWidget {
       if (targetSourceDto != null) {
         // Navigate to manga search screen with proper data class
         if (context.mounted) {
-          MigrationSearchRoute(
-            $extra: MigrationSearchRouteData(
-              sourceManga: sourceManga,
-              targetSource: targetSourceDto,
-            ),
-          ).push(context);
+          if (sourceMangas.length == 1) {
+            MigrationSearchRoute(
+              $extra: MigrationSearchRouteData(
+                sourceMangas: sourceMangas,
+                targetSource: targetSourceDto,
+              ),
+            ).push(context);
+          } else {
+            MigrationBatchMatchRoute(
+              $extra: MigrationSearchRouteData(
+                sourceMangas: sourceMangas,
+                targetSource: targetSourceDto,
+              ),
+            ).push(context);
+          }
         }
       } else {
         // Fallback: Show error message
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error: Could not load source details'),
+              content: Text(context.l10n.errorSomethingWentWrong),
               backgroundColor: Colors.red,
             ),
           );
@@ -189,7 +198,7 @@ class MigrationSourceSelectionScreen extends HookConsumerWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error loading source: $e'),
+            content: Text(context.l10n.errorLoadingSources),
             backgroundColor: Colors.red,
           ),
         );

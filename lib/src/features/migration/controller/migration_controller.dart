@@ -210,6 +210,62 @@ class MigrationExecution extends _$MigrationExecution {
     }
   }
 
+  Future<void> executeBatchMigration(
+    Map<MangaDto, MangaDto> matchedMangas,
+    MigrationOption options,
+  ) async {
+    state = const MigrationProgress(
+      currentStep: MigrationStep.preparingMigration,
+      percentage: 0.0,
+      status: MigrationStatus.preparing,
+      processedItems: 0,
+      totalItems: 0,
+    );
+
+    int count = 0;
+    int total = matchedMangas.length;
+
+    for (final entry in matchedMangas.entries) {
+      final fromManga = entry.key;
+      final toManga = entry.value;
+
+      state = MigrationProgress(
+        currentStep: MigrationStep.migrationInProgress,
+        percentage: (count / total) * 100,
+        status: MigrationStatus.migrating,
+        processedItems: count,
+        totalItems: total,
+      );
+
+      final result = await ref
+          .read(migrationRepositoryProvider)
+          .migrateManga(fromManga.id, toManga.id, options);
+
+      if (result?.success == true) {
+        await _invalidateCachesAfterMigration(fromManga.id, toManga.id);
+      }
+
+      count++;
+      
+      // Update intermediate progress
+      state = MigrationProgress(
+        currentStep: MigrationStep.migrationInProgress,
+        percentage: (count / total) * 100,
+        status: MigrationStatus.migrating,
+        processedItems: count,
+        totalItems: total,
+      );
+    }
+
+    state = MigrationProgress(
+      currentStep: MigrationStep.migrationCompleted,
+      percentage: 100.0,
+      status: MigrationStatus.completed,
+      processedItems: total,
+      totalItems: total,
+    );
+  }
+
   void reset() {
     state = null;
   }

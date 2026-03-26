@@ -1403,5 +1403,69 @@
     "syncNow": "Sync now",
     "@syncNow": {
         "description": "Sync tracker button label"
+    },
+    "mangaComparison": "Manga Comparison",
+    "@mangaComparison": {
+        "description": "Header for manga comparison section"
+    },
+    "migrationFromLabel": "From (Current)",
+    "@migrationFromLabel": {
+        "description": "Label for source manga in comparison"
+    },
+    "migrationToLabel": "To (Target)",
+    "@migrationToLabel": {
+        "description": "Label for target manga in comparison"
+    },
+    "comparisonSummary": "Comparison Summary",
+    "@comparisonSummary": {
+        "description": "Header for comparison summary section"
+    },
+    "byAuthor": "by {author}",
+    "@byAuthor": {
+        "description": "Author prefix label",
+        "placeholders": {
+            "author": {
+                "type": "String"
+            }
+        }
+    },
+    "migrationSummaryTitle": "Migration Summary",
+    "@migrationSummaryTitle": {
+        "description": "Header for migration summary section"
+    },
+    "migratedFromManga": "Migrated from: {title}",
+    "@migratedFromManga": {
+        "description": "Bullet point showing source manga",
+        "placeholders": {
+            "title": {
+                "type": "String"
+            }
+        }
+    },
+    "migratedToManga": "Migrated to: {title}",
+    "@migratedToManga": {
+        "description": "Bullet point showing target manga",
+        "placeholders": {
+            "title": {
+                "type": "String"
+            }
+        }
+    },
+    "migrationSourceLabel": "Source: {name}",
+    "@migrationSourceLabel": {
+        "description": "Bullet point showing target source",
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
+    },
+    "selectSource": "Select Source",
+    "@selectSource": {
+        "description": "App bar title for selecting migration source"
+    },
+    "selectManga": "Select Manga",
+    "@selectManga": {
+        "description": "App bar title for selecting manga to migrate"
     }
 }

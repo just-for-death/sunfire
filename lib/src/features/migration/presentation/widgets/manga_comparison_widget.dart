@@ -23,6 +23,7 @@ class MangaComparisonWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.theme;
+    final l10n = context.l10n;
 
     return Card(
       child: Padding(
@@ -32,7 +33,7 @@ class MangaComparisonWidget extends StatelessWidget {
           children: [
             // Header
             Text(
-              'Manga Comparison',
+              l10n.mangaComparison,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -42,7 +43,7 @@ class MangaComparisonWidget extends StatelessWidget {
             // Mobile layout (vertical comparison)
             if (MediaQuery.of(context).size.width < 600) ...[
               _buildMangaInfo(
-                  context, sourceManga, 'From (Current)', Icons.source),
+                  context, sourceManga, l10n.migrationFromLabel, Icons.source),
               const SizedBox(height: 16),
               Center(
                 child: Icon(
@@ -53,7 +54,7 @@ class MangaComparisonWidget extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               _buildMangaInfo(
-                  context, targetManga, 'To (Target)', Icons.adjust),
+                  context, targetManga, l10n.migrationToLabel, Icons.adjust),
             ]
             // Tablet/Desktop layout (horizontal comparison)
             else ...[
@@ -61,7 +62,7 @@ class MangaComparisonWidget extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _buildMangaInfo(
-                        context, sourceManga, 'From (Current)', Icons.source),
+                        context, sourceManga, l10n.migrationFromLabel, Icons.source),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -73,7 +74,7 @@ class MangaComparisonWidget extends StatelessWidget {
                   ),
                   Expanded(
                     child: _buildMangaInfo(
-                        context, targetManga, 'To (Target)', Icons.adjust),
+                        context, targetManga, l10n.migrationToLabel, Icons.adjust),
                   ),
                 ],
               ),
@@ -162,7 +163,7 @@ class MangaComparisonWidget extends StatelessWidget {
                     if (manga.author?.isNotEmpty == true) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'by ${manga.author}',
+                        context.l10n.byAuthor(manga.author!),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -258,7 +259,7 @@ class MangaComparisonWidget extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Text(
-                'Comparison Summary',
+                context.l10n.comparisonSummary,
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.primary,
                   fontWeight: FontWeight.w500,
