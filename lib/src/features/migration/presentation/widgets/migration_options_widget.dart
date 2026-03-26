@@ -49,7 +49,11 @@ class MigrationOptionsWidget extends StatelessWidget {
                 _PresetChip(
                   label: l10n.customMigration,
                   isSelected: _isCustomPreset(),
-                  onTap: () {}, // Custom means user configures manually
+                  onTap: () {
+                    if (_isRecommendedPreset()) {
+                      onChanged(options.copyWith(deleteSource: false));
+                    }
+                  },
                 ),
               ],
             ),
@@ -116,7 +120,7 @@ class MigrationOptionsWidget extends StatelessWidget {
   bool _isRecommendedPreset() {
     return options.migrateChapters &&
         options.migrateCategories &&
-        !options.deleteSource;
+        options.deleteSource;
   }
 
   bool _isCustomPreset() {
@@ -129,7 +133,7 @@ class MigrationOptionsWidget extends StatelessWidget {
       migrateCategories: true,
       migrateDownloads: false,
       migrateTracking: false,
-      deleteSource: false,
+      deleteSource: true,
     ));
   }
 }

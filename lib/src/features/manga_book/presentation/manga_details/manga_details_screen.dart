@@ -93,10 +93,10 @@ class MangaDetailsScreen extends HookConsumerWidget {
     void startMigration(BuildContext context, int mangaId, dynamic manga) {
       if (manga == null) return;
 
-      // Navigate to migration source selection
-      MigrationGlobalSearchRoute(
-        $extra: MigrationRouteData(sourceManga: manga),
-      ).push(context);
+    // Navigate to migration source selection
+    MigrationGlobalSearchRoute(
+      $extra: MigrationRouteData(sourceMangas: [manga]),
+    ).push(context);
     }
 
     return PopScope(

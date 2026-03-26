@@ -180,7 +180,7 @@ class _QuickActionGrid extends ConsumerWidget {
       (
         icon: Icons.bookmark_outline_rounded,
         label: context.l10n.migrate,
-        onTap: () => const MigrationGlobalSearchRoute().push(context),
+        onTap: () => const MigrationMainRoute().push(context),
       ),
       (
         icon: Icons.travel_explore_rounded,

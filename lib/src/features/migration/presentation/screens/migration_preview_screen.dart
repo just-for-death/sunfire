@@ -226,14 +226,5 @@ class MigrationPreviewScreen extends ConsumerWidget {
         options: migrationOptions,
       ),
     ).pushReplacement(context);
-
-    // Add a small delay to ensure navigation completes, then start the migration process
-    Future.delayed(const Duration(milliseconds: 100), () {
-      ref.read(migrationExecutionProvider.notifier).executeMigration(
-            fromMangaId: sourceManga.id,
-            toMangaId: targetManga.id,
-            options: migrationOptions,
-          );
-    });
   }
 }

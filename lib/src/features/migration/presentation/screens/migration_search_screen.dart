@@ -21,12 +21,14 @@ import '../../domain/migration_models.dart';
 class MigrationSearchScreen extends HookConsumerWidget {
   const MigrationSearchScreen({
     super.key,
-    required this.sourceManga,
+    required this.sourceMangas,
     required this.targetSource,
+    this.onSelectedOverride,
   });
 
-  final MangaDto sourceManga;
+  final List<MangaDto> sourceMangas;
   final SourceDto targetSource;
+  final void Function(MangaDto)? onSelectedOverride;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,10 +38,10 @@ class MigrationSearchScreen extends HookConsumerWidget {
 
     // Auto-search with source manga title on screen load
     useEffect(() {
-      final initialQuery = sourceManga.title;
+      final initialQuery = sourceMangas.first.title;
       if (initialQuery.isNotEmpty) {
+        searchController.text = initialQuery;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          searchController.text = initialQuery;
           ref.read(migrationSearchQueryProvider.notifier).update(initialQuery);
           ref.read(migrationSearchProvider(
             sourceId: targetSource.id,
@@ -256,10 +258,15 @@ class MigrationSearchScreen extends HookConsumerWidget {
     // Select the target manga
     ref.read(selectedTargetMangaProvider.notifier).select(targetManga);
 
+    if (onSelectedOverride != null) {
+      onSelectedOverride!(targetManga);
+      return;
+    }
+
     // Navigate to migration preview screen with proper data class
     MigrationPreviewRoute(
       $extra: MigrationPreviewRouteData(
-        sourceManga: sourceManga,
+        sourceManga: sourceMangas.first,
         targetManga: targetManga,
         targetSource: targetSource,
       ),

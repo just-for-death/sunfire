@@ -109,14 +109,14 @@ class MangaSearchResult with _$MangaSearchResult {
 @freezed
 class MigrationRouteData with _$MigrationRouteData {
   const factory MigrationRouteData({
-    required Fragment$MangaDto sourceManga,
+    required List<Fragment$MangaDto> sourceMangas,
   }) = _MigrationRouteData;
 }
 
 @freezed
 class MigrationSearchRouteData with _$MigrationSearchRouteData {
   const factory MigrationSearchRouteData({
-    required Fragment$MangaDto sourceManga,
+    required List<Fragment$MangaDto> sourceMangas,
     required Fragment$SourceDto targetSource,
   }) = _MigrationSearchRouteData;
 }

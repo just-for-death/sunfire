@@ -1292,7 +1292,8 @@ abstract class _MangaSearchResult implements MangaSearchResult {
 
 /// @nodoc
 mixin _$MigrationRouteData {
-  Fragment$MangaDto get sourceManga => throw _privateConstructorUsedError;
+  List<Fragment$MangaDto> get sourceMangas =>
+      throw _privateConstructorUsedError;
 
   /// Create a copy of MigrationRouteData
   /// with the given fields replaced by the non-null parameter values.
@@ -1307,7 +1308,7 @@ abstract class $MigrationRouteDataCopyWith<$Res> {
           MigrationRouteData value, $Res Function(MigrationRouteData) then) =
       _$MigrationRouteDataCopyWithImpl<$Res, MigrationRouteData>;
   @useResult
-  $Res call({Fragment$MangaDto sourceManga});
+  $Res call({List<Fragment$MangaDto> sourceMangas});
 }
 
 /// @nodoc
@@ -1325,13 +1326,13 @@ class _$MigrationRouteDataCopyWithImpl<$Res, $Val extends MigrationRouteData>
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? sourceManga = null,
+    Object? sourceMangas = null,
   }) {
     return _then(_value.copyWith(
-      sourceManga: null == sourceManga
-          ? _value.sourceManga
-          : sourceManga // ignore: cast_nullable_to_non_nullable
-              as Fragment$MangaDto,
+      sourceMangas: null == sourceMangas
+          ? _value.sourceMangas
+          : sourceMangas // ignore: cast_nullable_to_non_nullable
+              as List<Fragment$MangaDto>,
     ) as $Val);
   }
 }
@@ -1344,7 +1345,7 @@ abstract class _$$MigrationRouteDataImplCopyWith<$Res>
       __$$MigrationRouteDataImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({Fragment$MangaDto sourceManga});
+  $Res call({List<Fragment$MangaDto> sourceMangas});
 }
 
 /// @nodoc
@@ -1360,13 +1361,13 @@ class __$$MigrationRouteDataImplCopyWithImpl<$Res>
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? sourceManga = null,
+    Object? sourceMangas = null,
   }) {
     return _then(_$MigrationRouteDataImpl(
-      sourceManga: null == sourceManga
-          ? _value.sourceManga
-          : sourceManga // ignore: cast_nullable_to_non_nullable
-              as Fragment$MangaDto,
+      sourceMangas: null == sourceMangas
+          ? _value._sourceMangas
+          : sourceMangas // ignore: cast_nullable_to_non_nullable
+              as List<Fragment$MangaDto>,
     ));
   }
 }
@@ -1374,14 +1375,21 @@ class __$$MigrationRouteDataImplCopyWithImpl<$Res>
 /// @nodoc
 
 class _$MigrationRouteDataImpl implements _MigrationRouteData {
-  const _$MigrationRouteDataImpl({required this.sourceManga});
+  const _$MigrationRouteDataImpl(
+      {required final List<Fragment$MangaDto> sourceMangas})
+      : _sourceMangas = sourceMangas;
 
+  final List<Fragment$MangaDto> _sourceMangas;
   @override
-  final Fragment$MangaDto sourceManga;
+  List<Fragment$MangaDto> get sourceMangas {
+    if (_sourceMangas is EqualUnmodifiableListView) return _sourceMangas;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_sourceMangas);
+  }
 
   @override
   String toString() {
-    return 'MigrationRouteData(sourceManga: $sourceManga)';
+    return 'MigrationRouteData(sourceMangas: $sourceMangas)';
   }
 
   @override
@@ -1389,12 +1397,13 @@ class _$MigrationRouteDataImpl implements _MigrationRouteData {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
             other is _$MigrationRouteDataImpl &&
-            (identical(other.sourceManga, sourceManga) ||
-                other.sourceManga == sourceManga));
+            const DeepCollectionEquality()
+                .equals(other._sourceMangas, _sourceMangas));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, sourceManga);
+  int get hashCode => Object.hash(
+      runtimeType, const DeepCollectionEquality().hash(_sourceMangas));
 
   /// Create a copy of MigrationRouteData
   /// with the given fields replaced by the non-null parameter values.
@@ -1408,11 +1417,11 @@ class _$MigrationRouteDataImpl implements _MigrationRouteData {
 
 abstract class _MigrationRouteData implements MigrationRouteData {
   const factory _MigrationRouteData(
-          {required final Fragment$MangaDto sourceManga}) =
+          {required final List<Fragment$MangaDto> sourceMangas}) =
       _$MigrationRouteDataImpl;
 
   @override
-  Fragment$MangaDto get sourceManga;
+  List<Fragment$MangaDto> get sourceMangas;
 
   /// Create a copy of MigrationRouteData
   /// with the given fields replaced by the non-null parameter values.
@@ -1424,7 +1433,8 @@ abstract class _MigrationRouteData implements MigrationRouteData {
 
 /// @nodoc
 mixin _$MigrationSearchRouteData {
-  Fragment$MangaDto get sourceManga => throw _privateConstructorUsedError;
+  List<Fragment$MangaDto> get sourceMangas =>
+      throw _privateConstructorUsedError;
   Fragment$SourceDto get targetSource => throw _privateConstructorUsedError;
 
   /// Create a copy of MigrationSearchRouteData
@@ -1440,7 +1450,8 @@ abstract class $MigrationSearchRouteDataCopyWith<$Res> {
           $Res Function(MigrationSearchRouteData) then) =
       _$MigrationSearchRouteDataCopyWithImpl<$Res, MigrationSearchRouteData>;
   @useResult
-  $Res call({Fragment$MangaDto sourceManga, Fragment$SourceDto targetSource});
+  $Res call(
+      {List<Fragment$MangaDto> sourceMangas, Fragment$SourceDto targetSource});
 }
 
 /// @nodoc
@@ -1459,14 +1470,14 @@ class _$MigrationSearchRouteDataCopyWithImpl<$Res,
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? sourceManga = null,
+    Object? sourceMangas = null,
     Object? targetSource = null,
   }) {
     return _then(_value.copyWith(
-      sourceManga: null == sourceManga
-          ? _value.sourceManga
-          : sourceManga // ignore: cast_nullable_to_non_nullable
-              as Fragment$MangaDto,
+      sourceMangas: null == sourceMangas
+          ? _value.sourceMangas
+          : sourceMangas // ignore: cast_nullable_to_non_nullable
+              as List<Fragment$MangaDto>,
       targetSource: null == targetSource
           ? _value.targetSource
           : targetSource // ignore: cast_nullable_to_non_nullable
@@ -1484,7 +1495,8 @@ abstract class _$$MigrationSearchRouteDataImplCopyWith<$Res>
       __$$MigrationSearchRouteDataImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({Fragment$MangaDto sourceManga, Fragment$SourceDto targetSource});
+  $Res call(
+      {List<Fragment$MangaDto> sourceMangas, Fragment$SourceDto targetSource});
 }
 
 /// @nodoc
@@ -1502,14 +1514,14 @@ class __$$MigrationSearchRouteDataImplCopyWithImpl<$Res>
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? sourceManga = null,
+    Object? sourceMangas = null,
     Object? targetSource = null,
   }) {
     return _then(_$MigrationSearchRouteDataImpl(
-      sourceManga: null == sourceManga
-          ? _value.sourceManga
-          : sourceManga // ignore: cast_nullable_to_non_nullable
-              as Fragment$MangaDto,
+      sourceMangas: null == sourceMangas
+          ? _value._sourceMangas
+          : sourceMangas // ignore: cast_nullable_to_non_nullable
+              as List<Fragment$MangaDto>,
       targetSource: null == targetSource
           ? _value.targetSource
           : targetSource // ignore: cast_nullable_to_non_nullable
@@ -1522,16 +1534,24 @@ class __$$MigrationSearchRouteDataImplCopyWithImpl<$Res>
 
 class _$MigrationSearchRouteDataImpl implements _MigrationSearchRouteData {
   const _$MigrationSearchRouteDataImpl(
-      {required this.sourceManga, required this.targetSource});
+      {required final List<Fragment$MangaDto> sourceMangas,
+      required this.targetSource})
+      : _sourceMangas = sourceMangas;
 
+  final List<Fragment$MangaDto> _sourceMangas;
   @override
-  final Fragment$MangaDto sourceManga;
+  List<Fragment$MangaDto> get sourceMangas {
+    if (_sourceMangas is EqualUnmodifiableListView) return _sourceMangas;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_sourceMangas);
+  }
+
   @override
   final Fragment$SourceDto targetSource;
 
   @override
   String toString() {
-    return 'MigrationSearchRouteData(sourceManga: $sourceManga, targetSource: $targetSource)';
+    return 'MigrationSearchRouteData(sourceMangas: $sourceMangas, targetSource: $targetSource)';
   }
 
   @override
@@ -1539,14 +1559,15 @@ class _$MigrationSearchRouteDataImpl implements _MigrationSearchRouteData {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
             other is _$MigrationSearchRouteDataImpl &&
-            (identical(other.sourceManga, sourceManga) ||
-                other.sourceManga == sourceManga) &&
+            const DeepCollectionEquality()
+                .equals(other._sourceMangas, _sourceMangas) &&
             (identical(other.targetSource, targetSource) ||
                 other.targetSource == targetSource));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, sourceManga, targetSource);
+  int get hashCode => Object.hash(runtimeType,
+      const DeepCollectionEquality().hash(_sourceMangas), targetSource);
 
   /// Create a copy of MigrationSearchRouteData
   /// with the given fields replaced by the non-null parameter values.
@@ -1560,12 +1581,12 @@ class _$MigrationSearchRouteDataImpl implements _MigrationSearchRouteData {
 
 abstract class _MigrationSearchRouteData implements MigrationSearchRouteData {
   const factory _MigrationSearchRouteData(
-          {required final Fragment$MangaDto sourceManga,
+          {required final List<Fragment$MangaDto> sourceMangas,
           required final Fragment$SourceDto targetSource}) =
       _$MigrationSearchRouteDataImpl;
 
   @override
-  Fragment$MangaDto get sourceManga;
+  List<Fragment$MangaDto> get sourceMangas;
   @override
   Fragment$SourceDto get targetSource;
 

@@ -340,6 +340,23 @@ class MigrationRepositoryImpl implements MigrationRepository {
 
       // Step 4: Remove source manga from library if deleteSource is enabled
       if (options.deleteSource && sourceManga.inLibrary) {
+        try {
+          await client.mutate$UpdateMangaCategories(
+            Options$Mutation$UpdateMangaCategories(
+              variables: Variables$Mutation$UpdateMangaCategories(
+                updateCategoryInput: Input$UpdateMangaCategoriesInput(
+                  id: fromMangaId,
+                  patch: Input$UpdateMangaCategoriesPatchInput(
+                    clearCategories: true,
+                  ),
+                ),
+              ),
+            ),
+          );
+        } catch (e) {
+          warnings.add('Failed to clear categories for source manga: $e');
+        }
+
         final removeFromLibraryResult = await client.mutate$UpdateManga(
           Options$Mutation$UpdateManga(
             variables: Variables$Mutation$UpdateManga(
@@ -354,6 +371,8 @@ class MigrationRepositoryImpl implements MigrationRepository {
         if (removeFromLibraryResult.hasException) {
           warnings.add(
               'Failed to remove source manga from library: ${removeFromLibraryResult.exception}');
+        } else {
+          warnings.add('• Removed original manga from library');
         }
       }
 
@@ -384,7 +403,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
 
   @override
   Future<void> cancelMigration() async {
-    throw UnimplementedError('Migration cancellation not yet implemented');
+    // Cancellation not yet supported server-side; state is handled by the controller.
   }
 }
 

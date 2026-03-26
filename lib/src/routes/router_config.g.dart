@@ -192,6 +192,16 @@ RouteBase get $quickSearchRoute => ShellRouteData.$route(
           factory: $GlobalSearchRouteExtension._fromState,
         ),
         GoRouteData.$route(
+          path: '/migration/main',
+          parentNavigatorKey: MigrationMainRoute.$parentNavigatorKey,
+          factory: $MigrationMainRouteExtension._fromState,
+        ),
+        GoRouteData.$route(
+          path: '/migration/source/:sourceId',
+          parentNavigatorKey: MigrationSourceMangaRoute.$parentNavigatorKey,
+          factory: $MigrationSourceMangaRouteExtension._fromState,
+        ),
+        GoRouteData.$route(
           path: '/migration/global-search',
           parentNavigatorKey: MigrationGlobalSearchRoute.$parentNavigatorKey,
           factory: $MigrationGlobalSearchRouteExtension._fromState,
@@ -215,6 +225,16 @@ RouteBase get $quickSearchRoute => ShellRouteData.$route(
           path: '/migration/progress',
           parentNavigatorKey: MigrationProgressRoute.$parentNavigatorKey,
           factory: $MigrationProgressRouteExtension._fromState,
+        ),
+        GoRouteData.$route(
+          path: '/migration/batch-match',
+          parentNavigatorKey: MigrationBatchMatchRoute.$parentNavigatorKey,
+          factory: $MigrationBatchMatchRouteExtension._fromState,
+        ),
+        GoRouteData.$route(
+          path: '/migration/batch-progress',
+          parentNavigatorKey: MigrationBatchProgressRoute.$parentNavigatorKey,
+          factory: $MigrationBatchProgressRouteExtension._fromState,
         ),
       ],
     );
@@ -760,6 +780,44 @@ extension $GlobalSearchRouteExtension on GlobalSearchRoute {
   void replace(BuildContext context) => context.replace(location);
 }
 
+extension $MigrationMainRouteExtension on MigrationMainRoute {
+  static MigrationMainRoute _fromState(GoRouterState state) =>
+      const MigrationMainRoute();
+
+  String get location => GoRouteData.$location(
+        '/migration/main',
+      );
+
+  void go(BuildContext context) => context.go(location);
+
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  void replace(BuildContext context) => context.replace(location);
+}
+
+extension $MigrationSourceMangaRouteExtension on MigrationSourceMangaRoute {
+  static MigrationSourceMangaRoute _fromState(GoRouterState state) =>
+      MigrationSourceMangaRoute(
+        sourceId: state.pathParameters['sourceId']!,
+      );
+
+  String get location => GoRouteData.$location(
+        '/migration/source/${Uri.encodeComponent(sourceId)}',
+      );
+
+  void go(BuildContext context) => context.go(location);
+
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  void replace(BuildContext context) => context.replace(location);
+}
+
 extension $MigrationGlobalSearchRouteExtension on MigrationGlobalSearchRoute {
   static MigrationGlobalSearchRoute _fromState(GoRouterState state) =>
       MigrationGlobalSearchRoute(
@@ -869,6 +927,46 @@ extension $MigrationProgressRouteExtension on MigrationProgressRoute {
 
   void replace(BuildContext context) =>
       context.replace(location, extra: $extra);
+}
+
+extension $MigrationBatchMatchRouteExtension on MigrationBatchMatchRoute {
+  static MigrationBatchMatchRoute _fromState(GoRouterState state) =>
+      MigrationBatchMatchRoute(
+        $extra: state.extra as MigrationSearchRouteData?,
+      );
+
+  String get location => GoRouteData.$location(
+        '/migration/batch-match',
+      );
+
+  void go(BuildContext context) => context.go(location, extra: $extra);
+
+  Future<T?> push<T>(BuildContext context) =>
+      context.push<T>(location, extra: $extra);
+
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location, extra: $extra);
+
+  void replace(BuildContext context) =>
+      context.replace(location, extra: $extra);
+}
+
+extension $MigrationBatchProgressRouteExtension on MigrationBatchProgressRoute {
+  static MigrationBatchProgressRoute _fromState(GoRouterState state) =>
+      const MigrationBatchProgressRoute();
+
+  String get location => GoRouteData.$location(
+        '/migration/batch-progress',
+      );
+
+  void go(BuildContext context) => context.go(location);
+
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  void replace(BuildContext context) => context.replace(location);
 }
 
 extension<T extends Enum> on Map<T, String> {
