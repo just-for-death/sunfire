@@ -33,6 +33,7 @@ android {
     ndkVersion "27.0.12077973"
     namespace "com.catalyst.app"
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
@@ -75,7 +76,9 @@ flutter {
     source '../..'
 }
 
-dependencies {}
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
+}
 
 configurations.all {
     resolutionStrategy {
