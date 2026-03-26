@@ -82,34 +82,7 @@ Catalyst stands on the shoulders of several great open-source projects. Huge tha
 | [**Futon**](https://github.com/AppFuton/Futon) by [AppFuton](https://github.com/AppFuton) | Inspired the Android UI redesign — the Home grouped cover grid, Explore pill-action layout, Feed date headers, Library filter chips, and bottom navigation structure are all modelled after Futon's Material design patterns. |
 | [**Aidoku**](https://github.com/Aidoku/Aidoku) by [Aidoku](https://github.com/Aidoku) | Inspired the iOS/iPadOS UI — the Cupertino navigation shell, frosted glass tab bar, large-title app bars, iPad split-view sidebar, and glass card aesthetic are all modelled after Aidoku's native SwiftUI design. |
 
-### Key Flutter packages
 
-| Package | Author | Purpose |
-|---|---|---|
-| [hooks_riverpod](https://pub.dev/packages/hooks_riverpod) | Remi Rousselet | State management |
-| [go_router](https://pub.dev/packages/go_router) | Flutter team | Declarative routing |
-| [flex_color_scheme](https://pub.dev/packages/flex_color_scheme) | Rydmike | Theming & Material You |
-| [dynamic_color](https://pub.dev/packages/dynamic_color) | Material Foundation | Wallpaper colour extraction |
-| [graphql_flutter](https://pub.dev/packages/graphql_flutter) | zino-app | GraphQL client |
-| [graphql_codegen](https://pub.dev/packages/graphql_codegen) | Zino ApS | GraphQL code generation |
-| [cached_network_image](https://pub.dev/packages/cached_network_image) | Baseflow | Manga cover & page caching |
-| [freezed](https://pub.dev/packages/freezed) | Remi Rousselet | Immutable data models |
-| [infinite_scroll_pagination](https://pub.dev/packages/infinite_scroll_pagination) | Edson Bueno | Paginated lists |
-| [flutter_hooks](https://pub.dev/packages/flutter_hooks) | Remi Rousselet | React-style hooks |
-| [scrollable_positioned_list](https://pub.dev/packages/scrollable_positioned_list) | Google | Reader scroll control |
-| [shimmer](https://pub.dev/packages/shimmer) | Hung HD | Loading placeholders |
-| [hive](https://pub.dev/packages/hive) | Hive | Local key-value storage |
-| [flutter_android_volume_keydown](https://github.com/DattatreyaReddy/flutter_android_volume_keydown) | DattatreyaReddy | Volume key page turning |
-| [font_awesome_flutter](https://pub.dev/packages/font_awesome_flutter) | Brian Egan & Brian Morrison | Icons |
-| [flutter_markdown](https://pub.dev/packages/flutter_markdown) | Flutter team | Markdown rendering |
-| [file_picker](https://pub.dev/packages/file_picker) | Miguel Ruivo | File import (extensions, backups) |
-| [url_launcher](https://pub.dev/packages/url_launcher) | Flutter team | Open external links |
-| [permission_handler](https://pub.dev/packages/permission_handler) | Baseflow | Storage & notification permissions |
-| [network_info_plus](https://pub.dev/packages/network_info_plus) | Flutter Community | Local server discovery |
-| [package_info_plus](https://pub.dev/packages/package_info_plus) | Flutter Community | App version info |
-| [shared_preferences](https://pub.dev/packages/shared_preferences) | Flutter team | Persistent settings |
-| [path_provider](https://pub.dev/packages/path_provider) | Flutter team | Filesystem paths |
-| [web_socket_channel](https://pub.dev/packages/web_socket_channel) | Flutter team | Live download progress |
 
 ---
 
