@@ -10,9 +10,9 @@ import 'package:pub_semver/pub_semver.dart';
 import '../../features/about/data/about_repository.dart';
 import '../../features/about/presentation/about/controllers/about_controller.dart';
 import '../../features/about/presentation/about/widget/app_update_dialog.dart';
+import '../../features/settings/presentation/server/server_connectivity.dart';
 import '../../utils/extensions/custom_extensions.dart';
 import '../../utils/misc/toast/toast.dart';
-import '../../features/settings/presentation/server/server_connectivity.dart';
 import 'big_screen_navigation_bar.dart';
 import 'ios/ios_navigation_shell.dart';
 import 'small_screen_navigation_bar.dart';
@@ -66,8 +66,8 @@ class NavigationShellScreen extends HookConsumerWidget {
     final isIOS = !kIsWeb && Platform.isIOS;
     if (isIOS) {
       return IOSNavigationShell(
-        child: child,
         onDestinationSelected: onDestinationSelected,
+        child: child,
       );
     }
 

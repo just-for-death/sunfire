@@ -92,9 +92,6 @@ class ReadingHistory extends _$ReadingHistory {
         ref.invalidate(mangaWithIdProvider(mangaId: mangaId));
       }
 
-      // Also invalidate the history provider itself to force a fresh query
-      ref.invalidateSelf();
-
       // Refresh the history data from server to get updated state
       final result =
           await ref.read(historyRepositoryProvider).getReadingHistory();

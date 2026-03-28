@@ -39,7 +39,9 @@ class DownloadsMap extends _$DownloadsMap {
           currState[element.download.chapter.id] = element.download;
           break;
         case DownloadUpdateType.$unknown:
-          throw UnimplementedError();
+          // Unknown event type from server (e.g. after a server update).
+          // Silently ignore to keep the WebSocket stream alive.
+          break;
       }
     }
     if (stateOrNull != null) {

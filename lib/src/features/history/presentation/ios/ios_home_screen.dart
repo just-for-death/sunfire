@@ -42,7 +42,7 @@ class IOSHomeScreen extends ConsumerWidget {
                     CupertinoIcons.search,
                     color: cs.primary,
                   ),
-                  onPressed: () {},
+                  onPressed: () => const GlobalSearchRoute().push(context),
                 ),
               ],
             ),

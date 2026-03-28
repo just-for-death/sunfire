@@ -19,6 +19,12 @@ class TimeoutHttpClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    // MultipartRequest bodies are single-use streams and cannot be cloned.
+    // Skip retry logic entirely for multipart requests — just apply timeout.
+    if (request is http.MultipartRequest) {
+      return _inner.send(request).timeout(timeout);
+    }
+
     int attempt = 0;
 
     // Keep an immutable template to clone for each retry
@@ -44,6 +50,8 @@ class TimeoutHttpClient extends http.BaseClient {
   }
 
   // Creates a fresh copy of an [http.BaseRequest] to reuse across retries.
+  // Only [http.Request] is cloneable; [http.MultipartRequest] is handled
+  // in [send] before this method is ever called.
   http.BaseRequest _cloneRequest(http.BaseRequest original) {
     if (original is http.Request) {
       final clone = http.Request(original.method, original.url)
@@ -56,6 +64,8 @@ class TimeoutHttpClient extends http.BaseClient {
       }
       return clone;
     }
-    throw UnsupportedError('Unsupported request type for retry');
+    // Fallback: return as-is and let the caller handle the response.
+    // This path should not be reached in normal operation.
+    return original;
   }
 }

@@ -16,11 +16,7 @@ class IOSSettingsScreen extends StatelessWidget {
     final isDark = context.isDarkMode;
     final cs = context.theme.colorScheme;
     final bg = isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF2F2F7);
-    final cardBg = isDark
-        ? Colors.white.withOpacity(0.07)
-        : Colors.white.withOpacity(0.8);
     final textColor = isDark ? Colors.white : Colors.black;
-    final subColor = (isDark ? Colors.white : Colors.black).withOpacity(0.45);
 
     return Scaffold(
       backgroundColor: bg,
@@ -215,12 +211,10 @@ class _SettingsTile extends StatelessWidget {
     required this.iconColor,
     required this.title,
     required this.onTap,
-    this.subtitle,
   });
   final IconData icon;
   final Color iconColor;
   final String title;
-  final String? subtitle;
   final VoidCallback onTap;
 
   @override
@@ -248,10 +242,6 @@ class _SettingsTile extends StatelessWidget {
           fontWeight: FontWeight.w400,
         ),
       ),
-      subtitle: subtitle != null
-          ? Text(subtitle!,
-              style: TextStyle(fontSize: 13, color: subColor))
-          : null,
       trailing: Icon(
         CupertinoIcons.chevron_right,
         size: 15,

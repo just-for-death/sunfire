@@ -74,17 +74,11 @@ class BackupAndRestoreSection extends HookConsumerWidget {
     }
 
     if (restoreBackup) {
-      final asyncBackupFile = await AsyncValue.guard(
-          () => FilePickerUtils.convertToMultipartFile(pickedFile, "backup"));
-
-      if (context.mounted &&
-          (asyncBackupFile.hasError || asyncBackupFile.value == null)) {
-        asyncBackupFile.showToastOnError(toast);
-        return null;
-      }
+      // Reuse the already-converted backupFile — no need to read the file
+      // from disk a second time.
       final backupResponse = (await AsyncValue.guard(() => ref
           .read(backupSettingsRepositoryProvider)
-          .restoreBackup(asyncBackupFile.value!)));
+          .restoreBackup(backupFile)));
 
       if (backupResponse.hasError) {
         toast?.showError(backupResponse.error.toString());

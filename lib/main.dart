@@ -12,9 +12,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'src/catalyst_app.dart';
 import 'src/features/about/presentation/about/controllers/about_controller.dart';
 import 'src/global_providers/global_providers.dart';
-import 'src/catalyst_app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

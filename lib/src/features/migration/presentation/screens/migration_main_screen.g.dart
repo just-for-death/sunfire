@@ -7,7 +7,7 @@ part of 'migration_main_screen.dart';
 // **************************************************************************
 
 String _$migrationLibrarySourcesHash() =>
-    r'19a6317e8957ec117cc1145fb874b44579929535';
+    r'96ff2b11a22995e7c9361ce31366805fcc32990c';
 
 /// See also [migrationLibrarySources].
 @ProviderFor(migrationLibrarySources)

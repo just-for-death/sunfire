@@ -39,6 +39,17 @@ class NotificationService {
   static const int _chapterUpdateId = 1001;
   static const int _extensionUpdateId = 1002;
 
+  // Android notification channel IDs
+  static const String _updatesChannelId = 'catalyst_updates';
+  static const String _updatesChannelName = 'Library Updates';
+  static const String _updatesChannelDescription =
+      'Notifications for new manga chapters';
+
+  static const String _extensionsChannelId = 'catalyst_extensions';
+  static const String _extensionsChannelName = 'Extension Updates';
+  static const String _extensionsChannelDescription =
+      'Notifications for extension updates';
+
   Future<void> init() async {
     if (_initialized) return;
 
@@ -97,16 +108,37 @@ class NotificationService {
       }
     }
 
+    final body =
+        '$chaptersCount new ${chaptersCount == 1 ? 'chapter' : 'chapters'} available';
+
     await _plugin.show(
       // Use manga ID as the notification ID to allow multiple separate notifications.
       // We offset it to avoid collisions with other static notification IDs.
       2000 + manga.id.toInt(),
       manga.title,
-      '$chaptersCount new ${chaptersCount == 1 ? 'chapter' : 'chapters'} available',
+      body,
       NotificationDetails(
         linux: LinuxNotificationDetails(
           category: LinuxNotificationCategory.transferComplete,
           icon: iconPath != null ? FilePathLinuxIcon(iconPath) : null,
+        ),
+        android: AndroidNotificationDetails(
+          _updatesChannelId,
+          _updatesChannelName,
+          channelDescription: _updatesChannelDescription,
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          largeIcon: iconPath != null
+              ? FilePathAndroidBitmap(iconPath)
+              : null,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: false,
+          attachments: iconPath != null
+              ? [DarwinNotificationAttachment(iconPath)]
+              : null,
         ),
       ),
     );
@@ -120,13 +152,28 @@ class NotificationService {
     if (!_initialized) await init();
     if (newChaptersCount <= 0) return;
 
+    final body =
+        '$newChaptersCount new ${newChaptersCount == 1 ? 'chapter' : 'chapters'} available';
+
     await _plugin.show(
       _chapterUpdateId,
       'Library Updated',
-      '$newChaptersCount new ${newChaptersCount == 1 ? 'chapter' : 'chapters'} available',
+      body,
       NotificationDetails(
         linux: LinuxNotificationDetails(
           category: LinuxNotificationCategory.transferComplete,
+        ),
+        android: AndroidNotificationDetails(
+          _updatesChannelId,
+          _updatesChannelName,
+          channelDescription: _updatesChannelDescription,
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: false,
         ),
       ),
     );
@@ -139,13 +186,28 @@ class NotificationService {
     if (!_initialized) await init();
     if (updateCount <= 0) return;
 
+    final body =
+        '$updateCount ${updateCount == 1 ? 'extension has' : 'extensions have'} updates — check Browse';
+
     await _plugin.show(
       _extensionUpdateId,
       'Extension Updates Available',
-      '$updateCount ${updateCount == 1 ? 'extension has' : 'extensions have'} updates — check Browse',
+      body,
       NotificationDetails(
         linux: LinuxNotificationDetails(
           category: LinuxNotificationCategory.transferComplete,
+        ),
+        android: AndroidNotificationDetails(
+          _extensionsChannelId,
+          _extensionsChannelName,
+          channelDescription: _extensionsChannelDescription,
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: false,
         ),
       ),
     );
