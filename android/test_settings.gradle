@@ -1,0 +1,10 @@
+def srcDir = file("gradle")
+def destDir = file(".gradle/test_copy")
+if (!destDir.exists()) {
+    destDir.mkdirs()
+    def ant = new groovy.ant.AntBuilder()
+    ant.copy(todir: destDir) {
+        fileset(dir: srcDir)
+    }
+}
+println "Success"

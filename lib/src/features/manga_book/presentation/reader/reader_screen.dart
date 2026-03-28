@@ -78,9 +78,8 @@ class ReaderScreen extends HookConsumerWidget {
         final chapterPagesValue = chapterPages.valueOrNull;
         if (chapterValue == null || chapterPagesValue == null) return;
 
-        // Skip if chapter is already read or if we're going backwards
-        if ((chapterValue.isRead).ifNull() ||
-            (chapterValue.lastPageRead).getValueOnNullOrNegative() >= index) {
+        // Skip if chapter is already read
+        if ((chapterValue.isRead).ifNull()) {
           return;
         }
 

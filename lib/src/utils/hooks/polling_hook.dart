@@ -10,13 +10,23 @@ T? usePolling<T>({
   final data = useState<T?>(null);
 
   useEffect(() {
+    // Cancellation flag — set to true in cleanup to stop the loop.
+    bool cancelled = false;
+
     Future<void> poll() async {
-      while (true) {
+      while (!cancelled) {
         if (delayedStart) {
           await Future.delayed(pollingInterval);
+          if (cancelled) return;
         }
-        final result = await pollFunction();
-        data.value = result;
+        try {
+          final result = await pollFunction();
+          if (!cancelled) {
+            data.value = result;
+          }
+        } catch (_) {
+          // Ignore errors during polling to avoid crashing on widget disposal.
+        }
         if (!delayedStart) {
           await Future.delayed(pollingInterval);
         }
@@ -25,9 +35,9 @@ T? usePolling<T>({
 
     poll();
 
-    // Cleanup function
+    // Cleanup: signal the loop to exit on next iteration.
     return () {
-      // No cleanup needed for this simple example
+      cancelled = true;
     };
   }, []);
 

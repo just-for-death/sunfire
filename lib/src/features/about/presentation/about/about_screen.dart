@@ -47,8 +47,14 @@ class AboutScreen extends HookConsumerWidget {
                 (e) => e.channel == about.buildType,
                 orElse: () => ServerUpdate(),
               );
+              // Guard: if tag is null/blank we can't parse a version — bail out.
+              final tag = newUpdate.tag;
+              if (tag == null || tag.isEmpty || tag == 'v') {
+                toast?.show(context.l10n.noUpdatesAvailable);
+                return;
+              }
               final currentVer = Version.parse(serverVer.substring(1));
-              final newVer = Version.parse(newUpdate.tag?.substring(1) ?? "");
+              final newVer = Version.parse(tag.substring(1));
               if ((newVer.compareTo(currentVer)).isGreaterThan(0)) {
                 appUpdateDialog(
                   title: about.name,

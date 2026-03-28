@@ -25,7 +25,7 @@ class HistoryScreen extends ConsumerWidget {
 }
 
 class _AndroidHomeScreen extends ConsumerWidget {
-  const _AndroidHomeScreen({super.key});
+  const _AndroidHomeScreen();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

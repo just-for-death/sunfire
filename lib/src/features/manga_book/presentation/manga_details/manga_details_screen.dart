@@ -90,13 +90,13 @@ class MangaDetailsScreen extends HookConsumerWidget {
     }, []);
 
     // Migration function
-    void startMigration(BuildContext context, int mangaId, dynamic manga) {
+    void startMigration(BuildContext context, dynamic manga) {
       if (manga == null) return;
 
-    // Navigate to migration source selection
-    MigrationGlobalSearchRoute(
-      $extra: MigrationRouteData(sourceMangas: [manga]),
-    ).push(context);
+      // Navigate to migration source selection
+      MigrationGlobalSearchRoute(
+        $extra: MigrationRouteData(sourceMangas: [manga]),
+      ).push(context);
     }
 
     return PopScope(
@@ -164,7 +164,7 @@ class MangaDetailsScreen extends HookConsumerWidget {
                         icon: const Icon(Icons.category_rounded),
                       ),
                       IconButton(
-                        onPressed: () => startMigration(context, mangaId, data),
+                        onPressed: () => startMigration(context, data),
                         icon: const Icon(Icons.swap_horiz_rounded),
                         tooltip: context.l10n.migrate,
                       ),
@@ -221,7 +221,7 @@ class MangaDetailsScreen extends HookConsumerWidget {
                             child: Text(context.l10n.editCategory),
                           ),
                           PopupMenuItem(
-                            onTap: () => startMigration(context, mangaId, data),
+                            onTap: () => startMigration(context, data),
                             child: Row(
                               children: [
                                 const Icon(Icons.swap_horiz_rounded),

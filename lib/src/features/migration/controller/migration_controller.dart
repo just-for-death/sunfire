@@ -223,7 +223,19 @@ class MigrationExecution extends _$MigrationExecution {
     );
 
     int count = 0;
-    int total = matchedMangas.length;
+    final int total = matchedMangas.length;
+
+    // Guard against empty map to prevent divide-by-zero (NaN percentage).
+    if (total == 0) {
+      state = const MigrationProgress(
+        currentStep: MigrationStep.migrationCompleted,
+        percentage: 100.0,
+        status: MigrationStatus.completed,
+        processedItems: 0,
+        totalItems: 0,
+      );
+      return;
+    }
 
     for (final entry in matchedMangas.entries) {
       final fromManga = entry.key;

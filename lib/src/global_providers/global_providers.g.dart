@@ -65,7 +65,7 @@ final trackerGraphQlClientProvider =
 // ignore: unused_element
 typedef TrackerGraphQlClientRef = AutoDisposeProviderRef<GraphQLClient>;
 String _$graphQlClientNotifierHash() =>
-    r'8c8eb534a612adcf10fdbfd288f5a6d2529ed58c';
+    r'4d2da73f84e823b1becfa67d47c7da9bc3079ed6';
 
 /// See also [graphQlClientNotifier].
 @ProviderFor(graphQlClientNotifier)

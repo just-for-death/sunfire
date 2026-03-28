@@ -41,5 +41,6 @@
         // "**/*.graphql.dart": true,
         // "**/*.freezed.dart": true,
         "**/*.g.dart": true,
-    }
+    },
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

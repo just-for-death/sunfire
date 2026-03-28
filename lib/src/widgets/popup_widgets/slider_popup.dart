@@ -93,7 +93,7 @@ class NumberSlider extends StatelessWidget {
                 Expanded(
                   child: SliderTheme(
                     data: const SliderThemeData(
-                      showValueIndicator: ShowValueIndicator.always,
+                      showValueIndicator: ShowValueIndicator.onDrag,
                     ),
                     child: Slider(
                       value: value.toDouble(),
