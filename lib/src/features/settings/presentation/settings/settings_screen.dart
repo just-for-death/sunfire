@@ -20,7 +20,7 @@ class SettingsScreen extends StatelessWidget {
 }
 
 class _AndroidSettingsScreen extends StatelessWidget {
-  const _AndroidSettingsScreen({super.key});
+  const _AndroidSettingsScreen();
 
   @override
   Widget build(BuildContext context) {

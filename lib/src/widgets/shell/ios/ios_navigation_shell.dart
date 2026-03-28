@@ -22,13 +22,13 @@ class IOSNavigationShell extends StatelessWidget {
   Widget build(BuildContext context) {
     if (context.isTablet) {
       return _IPadSplitShell(
-        child: child,
         onDestinationSelected: onDestinationSelected,
+        child: child,
       );
     }
     return _IPhoneGlassShell(
-      child: child,
       onDestinationSelected: onDestinationSelected,
+      child: child,
     );
   }
 }
@@ -83,7 +83,6 @@ class _GlassTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return ClipRect(
       child: BackdropFilter(

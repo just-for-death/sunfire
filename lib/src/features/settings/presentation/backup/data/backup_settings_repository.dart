@@ -44,7 +44,7 @@ class BackupSettingsRepository {
           .mutate$CreateBackup(Options$Mutation$CreateBackup(
               variables: Variables$Mutation$CreateBackup(
                   includeCategories: includeCategories,
-                  includeChapters: includeCategories)))
+                  includeChapters: includeChapters)))
           .getData((data) => data.createBackup.url);
 
   Future<SettingsDto?> updateBackupLocation(String? backupPath) => ferryClient

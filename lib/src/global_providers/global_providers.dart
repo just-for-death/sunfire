@@ -151,8 +151,11 @@ ValueNotifier<GraphQLClient> graphQlClientNotifier(Ref ref) {
   // Dispose of the notifier when the provider is destroyed
   ref.onDispose(notifier.dispose);
 
-  // Notify listeners of this provider whenever the ValueNotifier updates.
-  notifier.addListener(ref.notifyListeners);
+  // Push updated client into the notifier whenever the provider rebuilds
+  // (e.g. on auth changes, URL changes, timeout setting changes).
+  ref.listen<GraphQLClient>(graphQlClientProvider, (_, next) {
+    notifier.value = next;
+  });
 
   return notifier;
 }

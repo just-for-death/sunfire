@@ -7,9 +7,9 @@ import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../widgets/emoticons.dart';
 import '../../../../widgets/manga_cover/grid/manga_cover_grid_tile.dart';
-import '../../../manga_book/domain/manga/manga_model.dart';
 import '../../../library/presentation/category/controller/edit_category_controller.dart';
 import '../../../library/presentation/library/controller/library_controller.dart';
+import '../../../manga_book/domain/manga/manga_model.dart';
 import '../../domain/migration_models.dart';
 
 part 'migration_source_manga_screen.g.dart';

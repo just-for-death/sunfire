@@ -5,19 +5,19 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/hooks/paging_controller_hook.dart';
 import '../../../../widgets/custom_circular_progress_indicator.dart';
 import '../../../../widgets/emoticons.dart';
 import '../../../../widgets/server_image.dart';
-import '../../../../routes/router_config.dart';
 import '../../data/updates/updates_repository.dart';
 import '../../domain/chapter/chapter_model.dart';
 import '../../domain/chapter/graphql/__generated__/fragment.graphql.dart';
 import '../../widgets/chapter_actions/multi_chapters_actions_bottom_app_bar.dart';
+import '../../widgets/download_status_icon.dart';
 import '../../widgets/update_status_fab.dart';
 import '../../widgets/update_status_popup_menu.dart';
-import '../../widgets/download_status_icon.dart';
 import '../reader/controller/reader_controller.dart';
 
 class UpdatesScreen extends HookConsumerWidget {
@@ -28,7 +28,7 @@ class UpdatesScreen extends HookConsumerWidget {
     PagingController<int, ChapterWithMangaDto> controller,
     int pageKey,
   ) async {
-    AsyncValue.guard(
+    await AsyncValue.guard(
       () => repository.getRecentChaptersPage(pageNo: pageKey),
     ).then(
       (value) => value.whenOrNull(
@@ -137,7 +137,6 @@ class UpdatesScreen extends HookConsumerWidget {
                 isSelected: selectedChapters.value.containsKey(item.id),
                 canTapSelect: selectedChapters.value.isNotEmpty,
                 toggleSelect: (val) {
-                  if (val.id == null) return;
                   selectedChapters.value =
                       selectedChapters.value.toggleKey(val.id, val);
                 },

@@ -752,7 +752,7 @@ class _MangaWithIdProviderElement
   int get mangaId => (origin as MangaWithIdProvider).mangaId;
 }
 
-String _$mangaChapterListHash() => r'133c9a5c9c1ed54a1ef40dec499ff2177d11dc88';
+String _$mangaChapterListHash() => r'53aec7a21baa77638ffaeec0fb4b2d6211b7186a';
 
 abstract class _$MangaChapterList
     extends BuildlessAutoDisposeAsyncNotifier<List<ChapterDto>?> {

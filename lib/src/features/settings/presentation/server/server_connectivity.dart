@@ -10,9 +10,8 @@ import '../../../../constants/db_keys.dart';
 import '../../../../constants/endpoints.dart';
 import '../../../../features/settings/presentation/server/widget/client/server_port_tile/server_port_tile.dart';
 import '../../../../features/settings/presentation/server/widget/client/server_url_tile/server_url_tile.dart';
-import '../../../../widgets/emoticons.dart';
-import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../routes/router_config.dart';
+import '../../../../utils/extensions/custom_extensions.dart';
 
 part 'server_connectivity.g.dart';
 

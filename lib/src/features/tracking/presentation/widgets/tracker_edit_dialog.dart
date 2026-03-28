@@ -84,7 +84,7 @@ class TrackerEditDialog extends HookConsumerWidget {
               Text('Status', style: context.textTheme.labelMedium),
               const SizedBox(height: 4),
               DropdownButtonFormField<int?>(
-                value: statusValue.value,
+                initialValue: statusValue.value,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   isDense: true,
@@ -135,7 +135,7 @@ class TrackerEditDialog extends HookConsumerWidget {
               const SizedBox(height: 4),
               record.trackerScores?.isNotEmpty == true
                 ? DropdownButtonFormField<String?>(
-                    value: record.trackerScores!.contains(scoreController.text)
+                    initialValue: record.trackerScores!.contains(scoreController.text)
                         ? scoreController.text
                         : null,
                     decoration: const InputDecoration(

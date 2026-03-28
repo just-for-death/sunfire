@@ -18,6 +18,20 @@ import '../../../domain/category/category_model.dart';
 
 part 'library_controller.g.dart';
 
+/// Parse a [fetchedAt] string which may be either a Unix timestamp integer
+/// (e.g. "1710500000") or an ISO-8601 date string (e.g. "2024-03-15T10:30:00").
+/// Returns milliseconds since epoch for comparison, or 0 as a safe fallback.
+int _parseFetchedAt(String? fetchedAt) {
+  if (fetchedAt == null || fetchedAt.isEmpty) return 0;
+  // Try Unix timestamp first (seconds since epoch)
+  final asInt = int.tryParse(fetchedAt);
+  if (asInt != null) return asInt * 1000; // convert seconds → ms
+  // Fall back to ISO-8601
+  final asDate = DateTime.tryParse(fetchedAt);
+  if (asDate != null) return asDate.millisecondsSinceEpoch;
+  return 0;
+}
+
 @riverpod
 Future<List<MangaDto>?> categoryMangaList(Ref ref, int categoryId) => ref
     .watch(categoryRepositoryProvider)
@@ -78,10 +92,9 @@ class CategoryMangaListWithQueryAndFilter
             MangaSort.dateAdded => (m1.inLibraryAt.getValueOnNullOrNegative())
                 .compareTo(m2.inLibraryAt.getValueOnNullOrNegative()),
             MangaSort.lastUpdated =>
-              (int.tryParse(m1.latestFetchedChapter?.fetchedAt ?? '0') ?? 0)
+              _parseFetchedAt(m1.latestFetchedChapter?.fetchedAt)
                   .compareTo(
-                      int.tryParse(m2.latestFetchedChapter?.fetchedAt ?? '0') ??
-                          0),
+                      _parseFetchedAt(m2.latestFetchedChapter?.fetchedAt)),
           }) *
           sortDirToggle;
     }

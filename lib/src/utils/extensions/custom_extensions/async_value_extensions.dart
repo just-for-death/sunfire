@@ -23,9 +23,9 @@ extension AsyncValueExtensions<T> on AsyncValue<T> {
   void showToastOnError(Toast? toast, {bool withMicrotask = false}) {
     if (toast == null) return;
     if (withMicrotask) {
-      Future.microtask(() => (this._showToastOnError(toast)));
+      Future.microtask(() => (_showToastOnError(toast)));
     } else {
-      this._showToastOnError(toast);
+      _showToastOnError(toast);
     }
   }
 

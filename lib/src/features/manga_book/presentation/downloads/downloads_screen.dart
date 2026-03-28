@@ -123,8 +123,6 @@ class DownloadsScreen extends ConsumerWidget {
                       } else if (downloadsChapterIds.isBlank) {
                         return Emoticons(title: context.l10n.noDownloads);
                       }
-                      final count = downloadsChapterIds.length
-                          .getValueOnNullOrNegative();
                       final inProgress = downloadsChapterIds
                           .where((id) =>
                               ref.watch(downloadsFromIdProvider(id))?.state ==

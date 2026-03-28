@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../domain/history_group.dart';
-import '../../domain/history_item.dart';
 import 'history_item_tile.dart';
 
 class HistoryGroupWidget extends StatelessWidget {

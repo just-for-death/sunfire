@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../widgets/emoticons.dart';
 import '../../../../widgets/server_image.dart';
@@ -9,7 +10,6 @@ import '../../../browse_center/domain/source/source_model.dart';
 import '../../../browse_center/presentation/source/controller/source_controller.dart';
 import '../../../library/presentation/category/controller/edit_category_controller.dart';
 import '../../../library/presentation/library/controller/library_controller.dart';
-import '../../../../routes/router_config.dart';
 
 part 'migration_main_screen.g.dart';
 
@@ -21,8 +21,11 @@ Future<List<({SourceDto source, int count})>> migrationLibrarySources(Ref ref) a
   final seenMangaIds = <int>{};
   final sourceMangaCounts = <String, int>{};
 
-  for (final category in categories) {
-    final mangas = await ref.watch(categoryMangaListProvider(category.id).future);
+  final mangasLists = await Future.wait(
+    categories.map((c) => ref.watch(categoryMangaListProvider(c.id).future)),
+  );
+
+  for (final mangas in mangasLists) {
     if (mangas != null) {
       for (final manga in mangas) {
         if (seenMangaIds.add(manga.id)) {
