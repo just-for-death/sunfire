@@ -309,7 +309,7 @@ class TrackerRepository {
         as Map<String, dynamic>?;
     if (record == null) return null;
     // updateTrack returns partial record - minimal fields only
-    return null;
+    return TrackRecordDto.fromJson(Map<String, dynamic>.from(record));
   }
 
   Future<bool> loginTrackerCredentials(

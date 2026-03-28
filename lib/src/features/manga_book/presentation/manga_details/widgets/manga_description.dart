@@ -9,8 +9,8 @@ import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../utils/launch_url_in_web.dart';
 import '../../../../../utils/misc/toast/toast.dart';
 import '../../../../../widgets/server_image.dart';
-import '../../../domain/manga/manga_model.dart';
 import '../../../../tracking/presentation/manga_tracker_sheet.dart';
+import '../../../domain/manga/manga_model.dart';
 
 class MangaDescription extends HookConsumerWidget {
   const MangaDescription({

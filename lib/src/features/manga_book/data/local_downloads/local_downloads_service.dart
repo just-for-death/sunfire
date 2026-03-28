@@ -132,22 +132,36 @@ class LocalDownloadsService {
         : const <String, String>{};
 
     final savedFiles = <String>[];
-    for (int i = 0; i < total; i++) {
-      final pageUrl = chapterPages.pages[i];
-      final fullUrl = '$baseApi$pageUrl';
-      final response = await http.get(Uri.parse(fullUrl), headers: headers);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException('Failed to download page: $fullUrl');
+    try {
+      for (int i = 0; i < total; i++) {
+        final pageUrl = chapterPages.pages[i];
+        final fullUrl = '$baseApi$pageUrl';
+        final response = await http
+            .get(Uri.parse(fullUrl), headers: headers)
+            .timeout(const Duration(seconds: 30));
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw HttpException('Failed to download page: $fullUrl');
+        }
+
+        final extFromUrl = _safeExtFromUrl(pageUrl);
+        final fileName = '${(i + 1).toString().padLeft(4, '0')}$extFromUrl';
+        final targetPath = p.join(dir.path, fileName);
+        await File(targetPath).writeAsBytes(response.bodyBytes, flush: true);
+        savedFiles.add(fileName);
+
+        // Notify progress after each saved page.
+        onProgress?.call(i + 1, total);
       }
-
-      final extFromUrl = _safeExtFromUrl(pageUrl);
-      final fileName = '${(i + 1).toString().padLeft(4, '0')}$extFromUrl';
-      final targetPath = p.join(dir.path, fileName);
-      await File(targetPath).writeAsBytes(response.bodyBytes, flush: true);
-      savedFiles.add(fileName);
-
-      // Notify progress after each saved page.
-      onProgress?.call(i + 1, total);
+    } catch (e) {
+      // Clean up the partial directory to avoid orphaned files consuming storage.
+      try {
+        if (await dir.exists()) {
+          await dir.delete(recursive: true);
+        }
+      } catch (_) {
+        // Best-effort cleanup — don't mask the original error.
+      }
+      rethrow;
     }
 
     final manifest = await _manifestFile(chapterId);

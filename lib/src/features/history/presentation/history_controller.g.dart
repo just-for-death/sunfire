@@ -44,7 +44,7 @@ final filteredHistoryGroupsProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef FilteredHistoryGroupsRef = AutoDisposeProviderRef<List<HistoryGroup>>;
-String _$readingHistoryHash() => r'9f1da311d52a07df49fdb74c340fe4e7359a4eee';
+String _$readingHistoryHash() => r'357b823d0d08449c9ac1182e4a5799b6597bded2';
 
 /// See also [ReadingHistory].
 @ProviderFor(ReadingHistory)

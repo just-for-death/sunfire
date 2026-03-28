@@ -231,7 +231,7 @@ class _OptionTile extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: destructive
+            activeThumbColor: destructive
                 ? theme.colorScheme.error
                 : theme.colorScheme.primary,
           ),

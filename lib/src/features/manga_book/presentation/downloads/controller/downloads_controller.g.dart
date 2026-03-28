@@ -247,7 +247,7 @@ final showDownloadsFABProvider = AutoDisposeProvider<bool>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ShowDownloadsFABRef = AutoDisposeProviderRef<bool>;
-String _$downloadsMapHash() => r'baf5a318937f0d957a1c249800570115686dc14a';
+String _$downloadsMapHash() => r'b47d17eb35f5a5ddb4d635f7d6d8d7aace27bb9f';
 
 /// See also [DownloadsMap].
 @ProviderFor(DownloadsMap)

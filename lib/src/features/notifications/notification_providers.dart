@@ -9,19 +9,19 @@ import 'dart:async';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../constants/db_keys.dart';
+import '../../constants/endpoints.dart';
+import '../../constants/enum.dart';
+import '../../global_providers/global_providers.dart';
+import '../../utils/extensions/custom_extensions.dart';
 import '../browse_center/data/extension_repository/extension_repository.dart';
 import '../manga_book/data/updates/updates_repository.dart';
 import '../manga_book/domain/manga/manga_model.dart';
 import '../manga_book/domain/update_status/update_status_model.dart';
-import 'notification_service.dart';
-import '../../global_providers/global_providers.dart';
-import '../settings/presentation/server/widget/credential_popup/credentials_popup.dart';
-import '../../constants/enum.dart';
-import '../../constants/endpoints.dart';
-import '../../constants/db_keys.dart';
 import '../settings/presentation/server/widget/client/server_port_tile/server_port_tile.dart';
 import '../settings/presentation/server/widget/client/server_url_tile/server_url_tile.dart';
-import '../../utils/extensions/custom_extensions.dart';
+import '../settings/presentation/server/widget/credential_popup/credentials_popup.dart';
+import 'notification_service.dart';
 
 part 'notification_providers.g.dart';
 
@@ -47,7 +47,7 @@ NotificationService notificationService(Ref ref) {
   final credentials = ref.watch(credentialsProvider);
   
   if (authType == AuthType.basic && credentials.isNotBlank) {
-    svc.updateHeaders({'Authorization': 'Basic $credentials'});
+    svc.updateHeaders({'Authorization': credentials!});
   } else {
     svc.updateHeaders(null);
   }
