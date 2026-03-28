@@ -139,9 +139,13 @@ class AboutScreen extends HookConsumerWidget {
         onRefresh: () => ref.refresh(aboutProvider.future),
         child: ListView(
           children: [
-            ImageIcon(
-              AssetImage(Assets.icons.darkIcon.path),
-              size: context.height * .2,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.asset(
+                Assets.icons.launcher.catalystIcon.path,
+                height: context.height * .2,
+                width: context.height * .2,
+              ),
             ),
             const Divider(),
             ClipboardListTile(
