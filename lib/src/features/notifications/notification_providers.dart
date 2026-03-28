@@ -32,7 +32,7 @@ part 'notification_providers.g.dart';
 @Riverpod(keepAlive: true)
 NotificationService notificationService(Ref ref) {
   final svc = NotificationService.instance;
-  
+
   // Get base URL for thumbnails
   final baseUrl = Endpoints.baseApi(
     baseUrl: ref.watch(serverUrlProvider) ?? DBKeys.serverUrl.initial,
@@ -41,11 +41,11 @@ NotificationService notificationService(Ref ref) {
     appendApiToUrl: false,
   );
   svc.updateBaseUrl(baseUrl);
-  
+
   // Get auth headers from global providers
   final authType = ref.watch(authTypeKeyProvider);
   final credentials = ref.watch(credentialsProvider);
-  
+
   if (authType == AuthType.basic && credentials.isNotBlank) {
     svc.updateHeaders({'Authorization': credentials!});
   } else {
@@ -79,14 +79,12 @@ class ChapterUpdateNotifier extends _$ChapterUpdateNotifier {
       // Transition: running → completed
       if (_wasRunning && !isRunning) {
         final mangaNodes = status.completeJobs.mangas.nodes;
-        
+
         // Group by manga ID to count chapters per manga
         final mangaGroups = <int, _MangaUpdateGroup>{};
         for (final manga in mangaNodes) {
           final group = mangaGroups.putIfAbsent(
-            manga.id, 
-            () => _MangaUpdateGroup(manga: manga, count: 0)
-          );
+              manga.id, () => _MangaUpdateGroup(manga: manga, count: 0));
           group.count++;
         }
 
@@ -96,7 +94,7 @@ class ChapterUpdateNotifier extends _$ChapterUpdateNotifier {
           _fireMangaNotification(group.manga, group.count);
         }
 
-        // If there were more than 3, we could show a summary for the rest, 
+        // If there were more than 3, we could show a summary for the rest,
         // but the requirements asked for separate ones for "the" mangas.
       }
 
@@ -111,17 +109,14 @@ class ChapterUpdateNotifier extends _$ChapterUpdateNotifier {
 
   /// Can be called externally to force a check (e.g., after a manual refresh).
   Future<void> checkNow() async {
-    final summary =
-        await ref.read(updatesRepositoryProvider).summaryUpdates();
+    final summary = await ref.read(updatesRepositoryProvider).summaryUpdates();
     if (summary == null) return;
     if (!summary.isUpdateChecking) {
       final mangaNodes = summary.completeJobs.mangas.nodes;
       final mangaGroups = <int, _MangaUpdateGroup>{};
       for (final manga in mangaNodes) {
         final group = mangaGroups.putIfAbsent(
-          manga.id, 
-          () => _MangaUpdateGroup(manga: manga, count: 0)
-        );
+            manga.id, () => _MangaUpdateGroup(manga: manga, count: 0));
         group.count++;
       }
 

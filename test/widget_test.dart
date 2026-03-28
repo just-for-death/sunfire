@@ -13,7 +13,8 @@ void main() {
     // A complete CatalystApp test requires mocking GraphQL websocket links,
     // SharedPreferences, and the local database (Hive/Isar).
     // For now, we perform a basic smoke test to ensure the testing framework is sound.
-    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: Text('Smoke Test Passed'))));
+    await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: Text('Smoke Test Passed'))));
     expect(find.text('Smoke Test Passed'), findsOneWidget);
   });
 }

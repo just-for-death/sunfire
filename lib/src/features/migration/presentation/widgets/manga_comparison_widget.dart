@@ -61,8 +61,8 @@ class MangaComparisonWidget extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: _buildMangaInfo(
-                        context, sourceManga, l10n.migrationFromLabel, Icons.source),
+                    child: _buildMangaInfo(context, sourceManga,
+                        l10n.migrationFromLabel, Icons.source),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -73,8 +73,8 @@ class MangaComparisonWidget extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: _buildMangaInfo(
-                        context, targetManga, l10n.migrationToLabel, Icons.adjust),
+                    child: _buildMangaInfo(context, targetManga,
+                        l10n.migrationToLabel, Icons.adjust),
                   ),
                 ],
               ),

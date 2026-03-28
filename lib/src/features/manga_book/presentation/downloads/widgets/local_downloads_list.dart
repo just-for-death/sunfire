@@ -124,4 +124,3 @@ class LocalDownloadsList extends ConsumerWidget {
     );
   }
 }
-

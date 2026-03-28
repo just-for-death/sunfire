@@ -139,8 +139,8 @@ class MigrationSourceSelectionScreen extends HookConsumerWidget {
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: () => ref
-                    .refresh(migrationSourcesProvider(mangaId: sourceMangas.first.id)),
+                onPressed: () => ref.refresh(
+                    migrationSourcesProvider(mangaId: sourceMangas.first.id)),
                 child: Text(l10n.retry),
               ),
             ],

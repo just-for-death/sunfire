@@ -88,12 +88,12 @@ class NotificationService {
         final tempDir = await getTemporaryDirectory();
         final fileName = 'notif_manga_${manga.id}.jpg';
         final filePath = p.join(tempDir.path, fileName);
-        
+
         String url = manga.thumbnailUrl!;
         if (url.startsWith('/') && _baseUrl != null) {
           url = '$_baseUrl$url';
         }
-        
+
         final response = await http.get(
           Uri.parse(url),
           headers: _headers,
@@ -104,7 +104,8 @@ class NotificationService {
           iconPath = filePath;
         }
       } catch (e) {
-        debugPrint('[Notifications] Failed to download thumbnail for ${manga.title}: $e');
+        debugPrint(
+            '[Notifications] Failed to download thumbnail for ${manga.title}: $e');
       }
     }
 
@@ -128,9 +129,7 @@ class NotificationService {
           channelDescription: _updatesChannelDescription,
           importance: Importance.defaultImportance,
           priority: Priority.defaultPriority,
-          largeIcon: iconPath != null
-              ? FilePathAndroidBitmap(iconPath)
-              : null,
+          largeIcon: iconPath != null ? FilePathAndroidBitmap(iconPath) : null,
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,

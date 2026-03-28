@@ -26,7 +26,6 @@ class IOSSettingsScreen extends StatelessWidget {
             parent: AlwaysScrollableScrollPhysics()),
         slivers: [
           GlassSliverAppBar(title: context.l10n.settings),
-
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
             sliver: SliverList(
@@ -72,8 +71,7 @@ class IOSSettingsScreen extends StatelessWidget {
                       icon: CupertinoIcons.paintbrush_fill,
                       iconColor: Colors.pink,
                       title: context.l10n.appearance,
-                      onTap: () =>
-                          const AppearanceSettingsRoute().go(context),
+                      onTap: () => const AppearanceSettingsRoute().go(context),
                     ),
                     _SettingsTile(
                       icon: CupertinoIcons.book_fill,
@@ -93,8 +91,7 @@ class IOSSettingsScreen extends StatelessWidget {
                       icon: CupertinoIcons.arrow_down_circle_fill,
                       iconColor: Colors.blue,
                       title: context.l10n.downloads,
-                      onTap: () =>
-                          const DownloadsSettingsRoute().go(context),
+                      onTap: () => const DownloadsSettingsRoute().go(context),
                     ),
                     _SettingsTile(
                       icon: CupertinoIcons.book_circle_fill,
@@ -221,7 +218,8 @@ class _SettingsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
     final textColor = isDark ? Colors.white : Colors.black;
-    final subColor = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.45);
+    final subColor =
+        (isDark ? Colors.white : Colors.black).withValues(alpha: 0.45);
 
     return CupertinoListTile(
       onTap: onTap,

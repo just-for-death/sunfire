@@ -83,7 +83,6 @@ class _GlassTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return ClipRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
@@ -267,7 +266,8 @@ class _GlassSidebar extends StatelessWidget {
                             horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
                           color: selected
-                              ? cs.primary.withValues(alpha: isDark ? 0.25 : 0.12)
+                              ? cs.primary
+                                  .withValues(alpha: isDark ? 0.25 : 0.12)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(10),
                         ),

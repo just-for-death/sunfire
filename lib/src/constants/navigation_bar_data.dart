@@ -42,7 +42,8 @@ class NavigationBarData {
   ];
 
   static final tabletNavList = phoneNavList;
-  static List<NavigationBarData> getNavList(BuildContext context) => phoneNavList;
+  static List<NavigationBarData> getNavList(BuildContext context) =>
+      phoneNavList;
   static final navList = phoneNavList;
 
   NavigationBarData({
