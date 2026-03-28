@@ -4,8 +4,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-
-
 import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -59,9 +57,8 @@ class LocalChapterDownload extends _$LocalChapterDownload {
         chapterId: chapterId,
         onProgress: (current, total) {
           try {
-            ref
-                .read(localDownloadProgressProvider(chapterId).notifier)
-                .state = (current: current, total: total);
+            ref.read(localDownloadProgressProvider(chapterId).notifier).state =
+                (current: current, total: total);
           } catch (_) {}
         },
       );

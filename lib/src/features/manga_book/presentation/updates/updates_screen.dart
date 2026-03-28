@@ -52,8 +52,7 @@ class UpdatesScreen extends HookConsumerWidget {
         usePagingController<int, ChapterWithMangaDto>(firstPageKey: 0);
     final updatesRepository = ref.watch(updatesRepositoryProvider);
     final isChecking = ref
-        .watch(updatesSocketProvider
-            .select((v) => v.valueOrNull?.isRunning))
+        .watch(updatesSocketProvider.select((v) => v.valueOrNull?.isRunning))
         .ifNull();
     final selectedChapters = useState<Map<int, ChapterDto>>({});
 
@@ -80,8 +79,8 @@ class UpdatesScreen extends HookConsumerWidget {
                 onPressed: () => selectedChapters.value = {},
                 icon: const Icon(Icons.close_rounded),
               ),
-              title: Text(
-                  context.l10n.numSelected(selectedChapters.value.length)),
+              title:
+                  Text(context.l10n.numSelected(selectedChapters.value.length)),
             )
           : AppBar(
               titleSpacing: 16,
@@ -229,8 +228,7 @@ class _FeedTile extends ConsumerWidget {
             children: [
               // Cover thumbnail
               GestureDetector(
-                onTap: () =>
-                    MangaRoute(mangaId: item.manga.id).push(context),
+                onTap: () => MangaRoute(mangaId: item.manga.id).push(context),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: ServerImage(
@@ -259,8 +257,7 @@ class _FeedTile extends ConsumerWidget {
                     Text(
                       item.name,
                       style: context.theme.textTheme.bodySmall?.copyWith(
-                        color: textColor ??
-                            cs.onSurfaceVariant,
+                        color: textColor ?? cs.onSurfaceVariant,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

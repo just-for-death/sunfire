@@ -143,27 +143,30 @@ class DownloadsScreen extends ConsumerWidget {
                               _SectionHeader(
                                   label: 'In progress',
                                   icon: Icons.downloading_rounded),
-                              ...inProgress.asMap().entries.map((e) =>
-                                  DownloadProgressListTile(
-                                    key: ValueKey(e.value),
-                                    index: e.key,
-                                    downloadsCount: inProgress.length,
-                                    chapterId: e.value,
-                                    toast: toast,
-                                  )),
+                              ...inProgress
+                                  .asMap()
+                                  .entries
+                                  .map((e) => DownloadProgressListTile(
+                                        key: ValueKey(e.value),
+                                        index: e.key,
+                                        downloadsCount: inProgress.length,
+                                        chapterId: e.value,
+                                        toast: toast,
+                                      )),
                             ],
                             if (queued.isNotEmpty) ...[
                               _SectionHeader(
-                                  label: 'Queued',
-                                  icon: Icons.queue_rounded),
-                              ...queued.asMap().entries.map((e) =>
-                                  DownloadProgressListTile(
-                                    key: ValueKey(e.value),
-                                    index: e.key,
-                                    downloadsCount: queued.length,
-                                    chapterId: e.value,
-                                    toast: toast,
-                                  )),
+                                  label: 'Queued', icon: Icons.queue_rounded),
+                              ...queued
+                                  .asMap()
+                                  .entries
+                                  .map((e) => DownloadProgressListTile(
+                                        key: ValueKey(e.value),
+                                        index: e.key,
+                                        downloadsCount: queued.length,
+                                        chapterId: e.value,
+                                        toast: toast,
+                                      )),
                             ],
                             const Gap(104),
                           ],
@@ -194,8 +197,7 @@ class _SectionHeader extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
         child: Row(
           children: [
-            Icon(icon, size: 16,
-                color: context.theme.colorScheme.primary),
+            Icon(icon, size: 16, color: context.theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text(
               label,
@@ -225,8 +227,7 @@ class _OfflineTab extends ConsumerWidget {
                 : '${(bytes / 1024).toStringAsFixed(0)} KB used on device';
             return Container(
               width: double.infinity,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               color: context.theme.colorScheme.surfaceContainerHighest
                   .withValues(alpha: 0.6),
               child: Row(
@@ -237,8 +238,7 @@ class _OfflineTab extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Text(label,
                       style: context.theme.textTheme.labelMedium?.copyWith(
-                          color:
-                              context.theme.colorScheme.onSurfaceVariant)),
+                          color: context.theme.colorScheme.onSurfaceVariant)),
                 ],
               ),
             );

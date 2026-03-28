@@ -35,7 +35,7 @@ class ServerConnectivity extends _$ServerConnectivity {
     state = ServerStatus.checking;
     try {
       final baseUrl = ref.read(serverUrlProvider) ?? DBKeys.serverUrl.initial;
-      final port    = ref.read(serverPortProvider);
+      final port = ref.read(serverPortProvider);
       final addPort = true;
       final pingUrl = Endpoints.baseApi(
         baseUrl: baseUrl,

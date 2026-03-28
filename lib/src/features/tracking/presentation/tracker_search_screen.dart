@@ -92,12 +92,10 @@ class TrackerSearchScreen extends HookConsumerWidget {
       body: submittedQuery.value.isEmpty
           ? Center(
               child: Icon(Icons.search_rounded,
-                  size: 56,
-                  color: Theme.of(context).colorScheme.outline),
+                  size: 56, color: Theme.of(context).colorScheme.outline),
             )
           : results.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
@@ -196,14 +194,12 @@ class _TrackerSearchResultTile extends ConsumerWidget {
                 placeholder: (_, __) => Container(
                   width: 44,
                   height: 62,
-                  color:
-                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
                 errorWidget: (_, __, ___) => Container(
                   width: 44,
                   height: 62,
-                  color:
-                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   child: const Icon(Icons.image_not_supported_outlined),
                 ),
               )

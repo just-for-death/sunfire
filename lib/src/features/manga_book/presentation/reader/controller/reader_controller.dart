@@ -24,9 +24,9 @@ FutureOr<ChapterDto?> chapter(
 
 @riverpod
 Future<ChapterPagesDto?> chapterPages(Ref ref, {required int chapterId}) => ref
-    .watch(mangaBookRepositoryProvider)
-    .getChapterPages(chapterId: chapterId)
-    .then((remote) async {
+        .watch(mangaBookRepositoryProvider)
+        .getChapterPages(chapterId: chapterId)
+        .then((remote) async {
       if (remote == null) return null;
       final localPages = await ref
           .read(localDownloadsServiceProvider)

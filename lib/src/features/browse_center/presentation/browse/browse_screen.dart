@@ -140,8 +140,7 @@ class BrowseScreen extends HookConsumerWidget {
                       children: [
                         Text(
                           context.l10n.sources,
-                          style:
-                              context.theme.textTheme.titleSmall?.copyWith(
+                          style: context.theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -197,34 +196,37 @@ class _QuickActionGrid extends ConsumerWidget {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: actions.map((a) => SizedBox(
-        height: 36,
-        child: Material(
-          color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(20),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: a.onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(a.icon, size: 16, color: cs.primary),
-                  const SizedBox(width: 6),
-                  Text(
-                    a.label,
-                    style: context.theme.textTheme.labelMedium?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w600,
+      children: actions
+          .map((a) => SizedBox(
+                height: 36,
+                child: Material(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: a.onTap,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(a.icon, size: 16, color: cs.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            a.label,
+                            style:
+                                context.theme.textTheme.labelMedium?.copyWith(
+                              color: cs.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      )).toList(),
+                ),
+              ))
+          .toList(),
     );
   }
 }

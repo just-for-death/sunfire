@@ -95,8 +95,7 @@ class MangaTrackerSheet extends ConsumerWidget {
 
           Expanded(
             child: recordsAsync.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text(e.toString())),
               data: (records) => ListView(
                 controller: scrollController,
@@ -158,8 +157,8 @@ class MangaTrackerSheet extends ConsumerWidget {
                     data: (trackers) => Column(
                       children: trackers
                           .where((t) => t.isLoggedIn)
-                          .where((t) => !records
-                              .any((r) => r.trackerId == t.id))
+                          .where(
+                              (t) => !records.any((r) => r.trackerId == t.id))
                           .map(
                             (tracker) => ListTile(
                               leading: ClipRRect(
@@ -168,8 +167,8 @@ class MangaTrackerSheet extends ConsumerWidget {
                                   imageUrl: tracker.icon,
                                   width: 32,
                                   height: 32,
-                                  errorWidget: (_, __, ___) => const Icon(
-                                      Icons.track_changes_rounded),
+                                  errorWidget: (_, __, ___) =>
+                                      const Icon(Icons.track_changes_rounded),
                                 ),
                               ),
                               title: Text(tracker.name),
@@ -197,7 +196,8 @@ class MangaTrackerSheet extends ConsumerWidget {
                     ),
                   ),
                   // Prompt to log in if no trackers logged in
-                  if (trackersAsync.valueOrNull?.every((t) => !t.isLoggedIn) == true)
+                  if (trackersAsync.valueOrNull?.every((t) => !t.isLoggedIn) ==
+                      true)
                     Padding(
                       padding: const EdgeInsets.all(16),
                       child: OutlinedButton.icon(
@@ -233,8 +233,7 @@ class _TrackRecordTile extends ConsumerWidget {
         onTap: () async {
           await showDialog(
             context: context,
-            builder: (_) =>
-                TrackerEditDialog(record: record, mangaId: mangaId),
+            builder: (_) => TrackerEditDialog(record: record, mangaId: mangaId),
           );
         },
         child: Padding(
@@ -315,9 +314,7 @@ class _TrackRecordTile extends ConsumerWidget {
                         ref.invalidate(mangaTrackRecordsProvider(mangaId));
                       } catch (e) {
                         if (context.mounted) {
-                          ref
-                              .read(toastProvider)
-                              ?.showError(e.toString());
+                          ref.read(toastProvider)?.showError(e.toString());
                         }
                       }
                     },
@@ -348,8 +345,12 @@ class _TrackRecordTile extends ConsumerWidget {
       if (match != null) return match;
     }
     const labels = {
-      1: 'Reading', 2: 'Completed', 3: 'On Hold',
-      4: 'Dropped', 5: 'Plan to Read', 6: 'Re-reading',
+      1: 'Reading',
+      2: 'Completed',
+      3: 'On Hold',
+      4: 'Dropped',
+      5: 'Plan to Read',
+      6: 'Re-reading',
     };
     return labels[r.status] ?? r.status.toString();
   }
@@ -371,7 +372,8 @@ class _TrackRecordTile extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('This will remove the tracking entry from Catalyst. The entry on the tracker will not be deleted.'),
+              const Text(
+                  'This will remove the tracking entry from Catalyst. The entry on the tracker will not be deleted.'),
               const SizedBox(height: 12),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
@@ -421,8 +423,8 @@ class _InfoChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 12,
-            color: Theme.of(context).colorScheme.onSurfaceVariant),
+        Icon(icon,
+            size: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
         const SizedBox(width: 2),
         Text(label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(

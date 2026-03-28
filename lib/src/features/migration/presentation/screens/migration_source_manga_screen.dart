@@ -15,7 +15,8 @@ import '../../domain/migration_models.dart';
 part 'migration_source_manga_screen.g.dart';
 
 @riverpod
-Future<List<MangaDto>> migrationSourceMangaList(Ref ref, String sourceId) async {
+Future<List<MangaDto>> migrationSourceMangaList(
+    Ref ref, String sourceId) async {
   final categories = await ref.watch(categoryControllerProvider.future);
   if (categories == null) return [];
 
@@ -23,7 +24,8 @@ Future<List<MangaDto>> migrationSourceMangaList(Ref ref, String sourceId) async 
   final result = <MangaDto>[];
 
   for (final category in categories) {
-    final mangas = await ref.watch(categoryMangaListProvider(category.id).future);
+    final mangas =
+        await ref.watch(categoryMangaListProvider(category.id).future);
     if (mangas != null) {
       for (final manga in mangas) {
         if (manga.source?.id == sourceId && seenMangaIds.add(manga.id)) {
@@ -64,8 +66,8 @@ class MigrationSourceMangaScreen extends HookConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(selectedIds.value.isEmpty 
-            ? l10n.selectManga 
+        title: Text(selectedIds.value.isEmpty
+            ? l10n.selectManga
             : '${selectedIds.value.length} Selected'),
         actions: [
           if (selectedIds.value.isNotEmpty)
@@ -118,7 +120,7 @@ class MigrationSourceMangaScreen extends HookConsumerWidget {
             itemBuilder: (context, index) {
               final manga = data[index];
               final isSelected = selectedIds.value.contains(manga.id);
-              
+
               return MangaCoverGridTile(
                 manga: manga,
                 isSelected: isSelected,

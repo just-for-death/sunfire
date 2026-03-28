@@ -46,11 +46,9 @@ class LocalDownloadButton extends HookConsumerWidget {
 
     // ── Downloading — show arc progress + page counter ────────────────────
     if (localState == LocalDownloadState.downloading) {
-      final progress =
-          ref.watch(localDownloadProgressProvider(chapterId));
+      final progress = ref.watch(localDownloadProgressProvider(chapterId));
       final hasProgress = progress.total > 0;
-      final fraction =
-          hasProgress ? progress.current / progress.total : null;
+      final fraction = hasProgress ? progress.current / progress.total : null;
 
       return SizedBox(
         width: 40,
