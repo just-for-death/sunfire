@@ -81,13 +81,13 @@ class _GlassAppBarDelegate extends SliverPersistentHeaderDelegate {
         child: Container(
           decoration: BoxDecoration(
             color: isDark
-                ? Colors.black.withOpacity(0.55 * t + 0.1)
-                : Colors.white.withOpacity(0.72 * t + 0.1),
+                ? Colors.black.withValues(alpha: 0.55 * t + 0.1)
+                : Colors.white.withValues(alpha: 0.72 * t + 0.1),
             border: Border(
               bottom: BorderSide(
                 color: isDark
-                    ? Colors.white.withOpacity(0.08 * t)
-                    : Colors.black.withOpacity(0.06 * t),
+                    ? Colors.white.withValues(alpha: 0.08 * t)
+                    : Colors.black.withValues(alpha: 0.06 * t),
                 width: 0.5,
               ),
             ),
@@ -185,13 +185,13 @@ class GlassCard extends StatelessWidget {
             padding: padding ?? const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withOpacity(0.07)
-                  : Colors.white.withOpacity(0.72),
+                  ? Colors.white.withValues(alpha: 0.07)
+                  : Colors.white.withValues(alpha: 0.72),
               borderRadius: br,
               border: Border.all(
                 color: isDark
-                    ? Colors.white.withOpacity(0.12)
-                    : Colors.black.withOpacity(0.06),
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : Colors.black.withValues(alpha: 0.06),
                 width: 0.5,
               ),
             ),

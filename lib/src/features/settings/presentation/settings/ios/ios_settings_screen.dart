@@ -173,13 +173,13 @@ class _SettingsGroup extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: isDark
-                ? Colors.white.withOpacity(0.07)
-                : Colors.white.withOpacity(0.8),
+                ? Colors.white.withValues(alpha: 0.07)
+                : Colors.white.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isDark
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.black.withOpacity(0.05),
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.05),
               width: 0.5,
             ),
           ),
@@ -193,8 +193,8 @@ class _SettingsGroup extends StatelessWidget {
                     thickness: 0.5,
                     indent: 52,
                     color: isDark
-                        ? Colors.white.withOpacity(0.08)
-                        : Colors.black.withOpacity(0.08),
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.08),
                   ),
               ],
             ],
@@ -221,7 +221,7 @@ class _SettingsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
     final textColor = isDark ? Colors.white : Colors.black;
-    final subColor = (isDark ? Colors.white : Colors.black).withOpacity(0.45);
+    final subColor = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.45);
 
     return CupertinoListTile(
       onTap: onTap,

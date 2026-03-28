@@ -2,7 +2,7 @@ name: catalyst
 description: Catalyst - A fast, beautiful manga reader.
 
 publish_to: "none"
-version: 3.1.0
+version: 3.5.0
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -86,7 +86,6 @@ flutter_gen:
 flutter_native_splash:
   color: "#54C5F8"
   image: assets/icons/dark_icon.png
-  branding: assets/icons/launcher/from_suwayomi.png
   color_dark: "#01579B"
   image_dark: assets/icons/light_icon.png
   android_12:

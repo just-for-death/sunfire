@@ -138,7 +138,7 @@ class MigrationPreviewScreen extends ConsumerWidget {
               color: context.theme.colorScheme.surface,
               border: Border(
                 top: BorderSide(
-                  color: context.theme.colorScheme.outline.withOpacity(0.2),
+                  color: context.theme.colorScheme.outline.withValues(alpha: 0.2),
                 ),
               ),
             ),
