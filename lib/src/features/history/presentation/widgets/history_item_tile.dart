@@ -60,7 +60,7 @@ class HistoryItemTile extends ConsumerWidget {
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Colors.black.withOpacity(0.85),
+                      Colors.black.withValues(alpha: 0.85),
                     ],
                   ),
                 ),
@@ -87,8 +87,8 @@ class HistoryItemTile extends ConsumerWidget {
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                   decoration: BoxDecoration(
                     color: _isCompleted
-                        ? cs.secondary.withOpacity(0.9)
-                        : cs.primary.withOpacity(0.9),
+                        ? cs.secondary.withValues(alpha: 0.9)
+                        : cs.primary.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(

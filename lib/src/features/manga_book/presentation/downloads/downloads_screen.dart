@@ -228,7 +228,7 @@ class _OfflineTab extends ConsumerWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               color: context.theme.colorScheme.surfaceContainerHighest
-                  .withOpacity(0.6),
+                  .withValues(alpha: 0.6),
               child: Row(
                 children: [
                   Icon(Icons.storage_rounded,

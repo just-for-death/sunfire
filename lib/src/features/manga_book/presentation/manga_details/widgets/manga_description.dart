@@ -190,8 +190,8 @@ class MangaDescription extends HookConsumerWidget {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          cs.surface.withOpacity(0),
-                          cs.surface.withOpacity(0.9),
+                          cs.surface.withValues(alpha: 0),
+                          cs.surface.withValues(alpha: 0.9),
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,

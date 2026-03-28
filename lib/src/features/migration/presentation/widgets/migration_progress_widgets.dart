@@ -291,7 +291,7 @@ class MigrationCompletedWidget extends StatelessWidget {
         MigrationStatusIcon(
           icon: Icons.check_circle,
           color: Colors.green,
-          backgroundColor: Colors.green.withOpacity(0.1),
+          backgroundColor: Colors.green.withValues(alpha: 0.1),
         ),
         const SizedBox(height: 24),
         Text(
@@ -338,7 +338,7 @@ class MigrationErrorWidget extends StatelessWidget {
         MigrationStatusIcon(
           icon: Icons.error,
           color: Colors.red,
-          backgroundColor: Colors.red.withOpacity(0.1),
+          backgroundColor: Colors.red.withValues(alpha: 0.1),
         ),
         const SizedBox(height: 24),
         Text(
@@ -384,7 +384,7 @@ class MigrationCancelledWidget extends StatelessWidget {
         MigrationStatusIcon(
           icon: Icons.cancel,
           color: Colors.orange,
-          backgroundColor: Colors.orange.withOpacity(0.1),
+          backgroundColor: Colors.orange.withValues(alpha: 0.1),
         ),
         const SizedBox(height: 24),
         Text(
