@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 
 import '../../constants/app_sizes.dart';
@@ -63,7 +64,7 @@ class RadioList<T> extends StatelessWidget {
 
   Widget getRadioListTile(BuildContext context, T option) {
     return RadioListTile<T>(
-      activeColor: context.theme.indicatorColor,
+      activeColor: context.theme.colorScheme.primary,
       title: Text(
         getTitle?.call(option) ?? option.toString(),
       ),

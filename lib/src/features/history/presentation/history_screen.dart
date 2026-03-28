@@ -120,7 +120,7 @@ class _HistoryEmptyState extends StatelessWidget {
             Icon(Icons.home_rounded,
                 size: 64,
                 color: context.theme.colorScheme.onSurfaceVariant
-                    .withOpacity(0.4)),
+                    .withValues(alpha: 0.4)),
             const SizedBox(height: 16),
             Text(context.l10n.noHistoryFound,
                 style: context.theme.textTheme.titleMedium),
@@ -143,7 +143,7 @@ class _HistoryNoResults extends StatelessWidget {
             Icon(Icons.search_off_rounded,
                 size: 64,
                 color: context.theme.colorScheme.onSurfaceVariant
-                    .withOpacity(0.4)),
+                    .withValues(alpha: 0.4)),
             const SizedBox(height: 16),
             Text(context.l10n.noSearchResults,
                 style: context.theme.textTheme.titleMedium),

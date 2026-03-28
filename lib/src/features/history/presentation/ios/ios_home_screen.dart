@@ -99,14 +99,14 @@ class IOSHomeScreen extends ConsumerWidget {
                       Icon(CupertinoIcons.book,
                           size: 56,
                           color: (isDark ? Colors.white : Colors.black)
-                              .withOpacity(0.2)),
+                              .withValues(alpha: 0.2)),
                       const SizedBox(height: 16),
                       Text(
                         'No reading history',
                         style: TextStyle(
                           fontSize: 17,
                           color: (isDark ? Colors.white : Colors.black)
-                              .withOpacity(0.4),
+                              .withValues(alpha: 0.4),
                         ),
                       ),
                     ],
@@ -209,7 +209,7 @@ class _CarouselCard extends StatelessWidget {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            Colors.black.withOpacity(0.75),
+                            Colors.black.withValues(alpha: 0.75),
                           ],
                         ),
                       ),
@@ -234,7 +234,7 @@ class _CarouselCard extends StatelessWidget {
                             child: LinearProgressIndicator(
                               value: progress,
                               minHeight: 3,
-                              backgroundColor: Colors.white.withOpacity(0.25),
+                              backgroundColor: Colors.white.withValues(alpha: 0.25),
                               valueColor: const AlwaysStoppedAnimation(
                                   Colors.white),
                             ),
@@ -306,7 +306,7 @@ class _IOSHistoryTile extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     color: (isDark ? Colors.white : Colors.black)
-                        .withOpacity(0.5),
+                        .withValues(alpha: 0.5),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -323,7 +323,7 @@ class _IOSHistoryTile extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.15),
+                color: cs.primary.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
