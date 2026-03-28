@@ -40,8 +40,17 @@ class $AssetsIconsLauncherGen {
   AssetGenImage get catalystIcon =>
       const AssetGenImage('assets/icons/launcher/catalyst_icon.png');
 
+  /// File path: assets/icons/launcher/catalyst_icon_foreground.png
+  AssetGenImage get catalystIconForeground =>
+      const AssetGenImage('assets/icons/launcher/catalyst_icon_foreground.png');
+
+  /// File path: assets/icons/launcher/catalyst_icon_monochrome.png
+  AssetGenImage get catalystIconMonochrome =>
+      const AssetGenImage('assets/icons/launcher/catalyst_icon_monochrome.png');
+
   /// List of all assets
-  List<AssetGenImage> get values => [catalystIcon];
+  List<AssetGenImage> get values =>
+      [catalystIcon, catalystIconForeground, catalystIconMonochrome];
 }
 
 class Assets {
