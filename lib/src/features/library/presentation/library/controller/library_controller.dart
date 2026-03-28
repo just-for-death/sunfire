@@ -92,9 +92,8 @@ class CategoryMangaListWithQueryAndFilter
             MangaSort.dateAdded => (m1.inLibraryAt.getValueOnNullOrNegative())
                 .compareTo(m2.inLibraryAt.getValueOnNullOrNegative()),
             MangaSort.lastUpdated =>
-              _parseFetchedAt(m1.latestFetchedChapter?.fetchedAt)
-                  .compareTo(
-                      _parseFetchedAt(m2.latestFetchedChapter?.fetchedAt)),
+              _parseFetchedAt(m1.latestFetchedChapter?.fetchedAt).compareTo(
+                  _parseFetchedAt(m2.latestFetchedChapter?.fetchedAt)),
           }) *
           sortDirToggle;
     }

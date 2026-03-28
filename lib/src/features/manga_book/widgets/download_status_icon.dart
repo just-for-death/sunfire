@@ -86,8 +86,7 @@ class DownloadStatusIcon extends HookConsumerWidget {
         );
       }
 
-      Future<void> serverAdd() =>
-          toggleChapterToQueue(toast, ref, isAdd: true);
+      Future<void> serverAdd() => toggleChapterToQueue(toast, ref, isAdd: true);
       Future<void> serverRemove() =>
           toggleChapterToQueue(toast, ref, isRemove: true);
       Future<void> serverRetry() =>
@@ -118,9 +117,8 @@ class DownloadStatusIcon extends HookConsumerWidget {
             tooltip: 'Cancel server download',
             onPressed: serverRemove,
             icon: MiniCircularProgressIndicator(
-              value: downloadUpdate.progress == 0
-                  ? null
-                  : downloadUpdate.progress,
+              value:
+                  downloadUpdate.progress == 0 ? null : downloadUpdate.progress,
               color: context.iconColor,
             ),
           );

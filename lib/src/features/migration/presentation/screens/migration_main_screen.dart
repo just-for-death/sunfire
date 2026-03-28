@@ -14,7 +14,8 @@ import '../../../library/presentation/library/controller/library_controller.dart
 part 'migration_main_screen.g.dart';
 
 @riverpod
-Future<List<({SourceDto source, int count})>> migrationLibrarySources(Ref ref) async {
+Future<List<({SourceDto source, int count})>> migrationLibrarySources(
+    Ref ref) async {
   final categories = await ref.watch(categoryControllerProvider.future);
   if (categories == null) return [];
 
@@ -31,7 +32,8 @@ Future<List<({SourceDto source, int count})>> migrationLibrarySources(Ref ref) a
         if (seenMangaIds.add(manga.id)) {
           final sourceId = manga.source?.id;
           if (sourceId != null) {
-            sourceMangaCounts[sourceId] = (sourceMangaCounts[sourceId] ?? 0) + 1;
+            sourceMangaCounts[sourceId] =
+                (sourceMangaCounts[sourceId] ?? 0) + 1;
           }
         }
       }
@@ -63,7 +65,7 @@ class MigrationMainScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final theme = context.theme;
-    
+
     final sourcesAsync = ref.watch(migrationLibrarySourcesProvider);
 
     return Scaffold(
@@ -92,7 +94,8 @@ class MigrationMainScreen extends HookConsumerWidget {
               final count = item.count;
 
               return ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 leading: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: ServerImage(
@@ -103,7 +106,8 @@ class MigrationMainScreen extends HookConsumerWidget {
                 ),
                 title: Text(
                   source.name,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 subtitle: Text(
                   source.lang.toUpperCase(),

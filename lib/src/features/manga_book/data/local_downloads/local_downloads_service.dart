@@ -215,4 +215,3 @@ final offlineStorageSizeProvider = FutureProvider<int>((ref) async {
   await ref.watch(localDownloadedChapterIdsProvider.future);
   return ref.read(localDownloadsServiceProvider).getOfflineStorageBytesUsed();
 });
-

@@ -209,8 +209,7 @@ class TrackerRepository {
       QueryOptions(document: gql(_kGetTrackers)),
     );
     if (result.hasException) throw result.exception!;
-    final nodes =
-        result.data?['trackers']?['nodes'] as List<dynamic>? ?? [];
+    final nodes = result.data?['trackers']?['nodes'] as List<dynamic>? ?? [];
     return nodes
         .map((e) => TrackerDto.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -242,9 +241,8 @@ class TrackerRepository {
       ),
     );
     if (result.hasException) throw result.exception!;
-    final searches = result.data?['searchTracker']?['trackSearches']
-            as List<dynamic>? ??
-        [];
+    final searches =
+        result.data?['searchTracker']?['trackSearches'] as List<dynamic>? ?? [];
     return searches
         .map((e) => TrackerSearchResultDto.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -305,8 +303,8 @@ class TrackerRepository {
       ),
     );
     if (result.hasException) throw result.exception!;
-    final record = result.data?['updateTrack']?['trackRecord']
-        as Map<String, dynamic>?;
+    final record =
+        result.data?['updateTrack']?['trackRecord'] as Map<String, dynamic>?;
     if (record == null) return null;
     // updateTrack returns partial record - minimal fields only
     return TrackRecordDto.fromJson(Map<String, dynamic>.from(record));

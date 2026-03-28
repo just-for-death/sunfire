@@ -123,7 +123,7 @@ class MangaCoverGridTile extends StatelessWidget {
         ),
       ),
     );
-    
+
     // Add selection overlay on top
     if (isSelected) {
       return Stack(
@@ -133,7 +133,8 @@ class MangaCoverGridTile extends StatelessWidget {
           Positioned.fill(
             child: IgnorePointer(
               child: Card(
-                color: context.theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                color: context.theme.colorScheme.primaryContainer
+                    .withValues(alpha: 0.5),
                 clipBehavior: Clip.antiAlias,
                 shape: RoundedRectangleBorder(
                   borderRadius: KBorderRadius.r12.radius,
@@ -165,7 +166,7 @@ class MangaCoverGridTile extends StatelessWidget {
         ],
       );
     }
-    
+
     return baseCard;
   }
 }

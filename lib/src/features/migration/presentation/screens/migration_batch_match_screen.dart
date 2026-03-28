@@ -112,7 +112,8 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                     ? Center(
                         child: Text(
                           'Error: ${error.value}',
-                          style: TextStyle(color: context.theme.colorScheme.error),
+                          style:
+                              TextStyle(color: context.theme.colorScheme.error),
                         ),
                       )
                     : ListView.builder(
@@ -121,7 +122,7 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                         itemBuilder: (context, index) {
                           final sourceManga = sourceMangas[index];
                           final targetManga = matches.value[sourceManga];
-                          
+
                           return Card(
                             margin: const EdgeInsets.only(bottom: 8),
                             child: Padding(
@@ -130,29 +131,38 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                                 children: [
                                   // Source
                                   Expanded(
-                                    child: _MiniMangaCover(manga: sourceManga, label: 'Source'),
+                                    child: _MiniMangaCover(
+                                        manga: sourceManga, label: 'Source'),
                                   ),
-                                  
+
                                   // Middle icon
                                   Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4.0),
                                     child: IconButton(
                                       tooltip: 'Manual Search',
                                       icon: Icon(
-                                        targetManga != null ? Icons.edit : Icons.search,
+                                        targetManga != null
+                                            ? Icons.edit
+                                            : Icons.search,
                                       ),
-                                      color: targetManga != null 
-                                          ? context.theme.colorScheme.primary 
+                                      color: targetManga != null
+                                          ? context.theme.colorScheme.primary
                                           : context.theme.colorScheme.error,
                                       onPressed: () {
                                         Navigator.of(context).push(
                                           MaterialPageRoute(
-                                            builder: (context) => MigrationSearchScreen(
+                                            builder: (context) =>
+                                                MigrationSearchScreen(
                                               sourceMangas: [sourceManga],
                                               targetSource: targetSource,
-                                              onSelectedOverride: (newTargetManga) {
-                                                final newMatches = Map<MangaDto, MangaDto?>.from(matches.value);
-                                                newMatches[sourceManga] = newTargetManga;
+                                              onSelectedOverride:
+                                                  (newTargetManga) {
+                                                final newMatches = Map<MangaDto,
+                                                        MangaDto?>.from(
+                                                    matches.value);
+                                                newMatches[sourceManga] =
+                                                    newTargetManga;
                                                 matches.value = newMatches;
                                                 Navigator.of(context).pop();
                                               },
@@ -162,16 +172,18 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                                       },
                                     ),
                                   ),
-                                  
+
                                   // Target
                                   Expanded(
                                     child: targetManga != null
-                                        ? _MiniMangaCover(manga: targetManga, label: 'Match')
+                                        ? _MiniMangaCover(
+                                            manga: targetManga, label: 'Match')
                                         : Center(
                                             child: Text(
                                               'No match',
                                               style: TextStyle(
-                                                color: context.theme.colorScheme.error,
+                                                color: context
+                                                    .theme.colorScheme.error,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
@@ -184,7 +196,7 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                         },
                       ),
           ),
-          
+
           // Options
           if (!isMatching.value && canMigrate)
             Padding(
@@ -208,7 +220,6 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                 ],
               ),
             ),
-
         ],
       ),
       bottomNavigationBar: canMigrate
@@ -224,12 +235,14 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                         pairsToMigrate[entry.key] = entry.value!;
                       }
                     }
-                    
+
                     // Show progress screen
                     const MigrationBatchProgressRoute().push(context);
-                    
+
                     // Execute
-                    ref.read(migrationExecutionProvider.notifier).executeBatchMigration(
+                    ref
+                        .read(migrationExecutionProvider.notifier)
+                        .executeBatchMigration(
                           pairsToMigrate,
                           migrationOptions,
                         );
