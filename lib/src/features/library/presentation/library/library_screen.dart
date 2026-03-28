@@ -73,8 +73,7 @@ class LibraryScreen extends HookConsumerWidget {
                       ),
                     ),
               bottom: PreferredSize(
-                preferredSize: Size.fromHeight(
-                    data.length > 1 ? 96 : 48),
+                preferredSize: Size.fromHeight(data.length > 1 ? 96 : 48),
                 child: Column(
                   children: [
                     // Futon-style filter chips
@@ -174,7 +173,7 @@ class _LibraryFilterChips extends ConsumerWidget {
             selected: isDownloaded == true,
             onTap: () => widgetRef
                 .read(libraryMangaFilterDownloadedProvider.notifier)
-                .update(!( isDownloaded ?? false)),
+                .update(!(isDownloaded ?? false)),
           ),
           const SizedBox(width: 8),
           _chip(

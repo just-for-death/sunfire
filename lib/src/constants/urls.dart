@@ -9,7 +9,8 @@ enum AppUrls {
     url: "https://api.github.com/repos/just-for-death/catalyst/releases/latest",
   ),
   flareSolverr(
-      url: "https://github.com/FlareSolverr/FlareSolverr?tab=readme-ov-file#installation");
+      url:
+          "https://github.com/FlareSolverr/FlareSolverr?tab=readme-ov-file#installation");
 
   const AppUrls({required this.url});
 

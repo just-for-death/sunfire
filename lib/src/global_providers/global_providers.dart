@@ -107,7 +107,6 @@ GraphQLClient graphQlSubscriptionClient(Ref ref) {
   );
 }
 
-
 /// GraphQL client with a longer timeout for tracker operations.
 /// Tracker queries call external APIs (MAL, AniList, etc.) which can be slow.
 @riverpod

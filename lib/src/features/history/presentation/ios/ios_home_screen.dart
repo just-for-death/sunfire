@@ -23,7 +23,8 @@ class IOSHomeScreen extends ConsumerWidget {
     final cs = context.theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF2F2F7),
+      backgroundColor:
+          isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF2F2F7),
       extendBodyBehindAppBar: true,
       body: historyState.when(
         loading: () => const Center(child: CupertinoActivityIndicator()),
@@ -75,9 +76,8 @@ class IOSHomeScreen extends ConsumerWidget {
                       0, (sum, g) => sum + g.items.length),
                   itemBuilder: (context, index) {
                     // Flatten all items across groups
-                    final allItems = historyGroups
-                        .expand((g) => g.items)
-                        .toList();
+                    final allItems =
+                        historyGroups.expand((g) => g.items).toList();
                     if (index >= allItems.length) return null;
                     return _IOSHistoryTile(
                       item: allItems[index],
@@ -234,9 +234,10 @@ class _CarouselCard extends StatelessWidget {
                             child: LinearProgressIndicator(
                               value: progress,
                               minHeight: 3,
-                              backgroundColor: Colors.white.withValues(alpha: 0.25),
-                              valueColor: const AlwaysStoppedAnimation(
-                                  Colors.white),
+                              backgroundColor:
+                                  Colors.white.withValues(alpha: 0.25),
+                              valueColor:
+                                  const AlwaysStoppedAnimation(Colors.white),
                             ),
                           ),
                         ],

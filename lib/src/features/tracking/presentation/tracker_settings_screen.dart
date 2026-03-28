@@ -47,8 +47,7 @@ class TrackerSettingsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: trackers.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, i) =>
-                    _TrackerTile(tracker: trackers[i]),
+                itemBuilder: (context, i) => _TrackerTile(tracker: trackers[i]),
               ),
       ),
     );
@@ -62,8 +61,7 @@ class _TrackerTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: ClipRRect(
         borderRadius: BorderRadius.circular(6),
         child: CachedNetworkImage(
@@ -100,9 +98,7 @@ class _TrackerTile extends ConsumerWidget {
           ),
           const SizedBox(width: 4),
           Text(
-            tracker.isLoggedIn
-                ? 'Logged in'
-                : 'Not logged in',
+            tracker.isLoggedIn ? 'Logged in' : 'Not logged in',
             style: context.textTheme.bodySmall?.copyWith(
               color: tracker.isLoggedIn
                   ? Colors.green
@@ -123,8 +119,7 @@ class _TrackerTile extends ConsumerWidget {
           ? OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: context.theme.colorScheme.error,
-                side:
-                    BorderSide(color: context.theme.colorScheme.error),
+                side: BorderSide(color: context.theme.colorScheme.error),
               ),
               icon: const Icon(Icons.logout_rounded, size: 18),
               label: Text('Log Out'),
@@ -133,8 +128,7 @@ class _TrackerTile extends ConsumerWidget {
                   context: context,
                   builder: (_) => AlertDialog(
                     title: Text('Log Out'),
-                    content: Text(
-                        'Log out from ${tracker.name}?'),
+                    content: Text('Log out from ${tracker.name}?'),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context, false),
@@ -153,9 +147,7 @@ class _TrackerTile extends ConsumerWidget {
                       .logout(tracker.id);
                   final state = ref.read(trackerAuthNotifierProvider);
                   if (context.mounted && state.hasError) {
-                    ref
-                        .read(toastProvider)
-                        ?.showError(state.error.toString());
+                    ref.read(toastProvider)?.showError(state.error.toString());
                   }
                 }
               },

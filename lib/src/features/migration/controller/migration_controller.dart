@@ -258,7 +258,7 @@ class MigrationExecution extends _$MigrationExecution {
       }
 
       count++;
-      
+
       // Update intermediate progress
       state = MigrationProgress(
         currentStep: MigrationStep.migrationInProgress,

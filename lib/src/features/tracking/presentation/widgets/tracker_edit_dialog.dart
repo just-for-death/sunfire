@@ -90,26 +90,27 @@ class TrackerEditDialog extends HookConsumerWidget {
                   isDense: true,
                 ),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('— Not set —')),
-                  ...( record.trackerStatuses?.isNotEmpty == true
-                    ? record.trackerStatuses!.map((s) =>
-                        DropdownMenuItem(value: s.value, child: Text(s.name)))
-                    : const [
-                        DropdownMenuItem(value: 1, child: Text('Reading')),
-                        DropdownMenuItem(value: 2, child: Text('Completed')),
-                        DropdownMenuItem(value: 3, child: Text('On Hold')),
-                        DropdownMenuItem(value: 4, child: Text('Dropped')),
-                        DropdownMenuItem(value: 5, child: Text('Plan to Read')),
-                        DropdownMenuItem(value: 6, child: Text('Re-reading')),
-                      ]),
+                  const DropdownMenuItem(
+                      value: null, child: Text('— Not set —')),
+                  ...(record.trackerStatuses?.isNotEmpty == true
+                      ? record.trackerStatuses!.map((s) =>
+                          DropdownMenuItem(value: s.value, child: Text(s.name)))
+                      : const [
+                          DropdownMenuItem(value: 1, child: Text('Reading')),
+                          DropdownMenuItem(value: 2, child: Text('Completed')),
+                          DropdownMenuItem(value: 3, child: Text('On Hold')),
+                          DropdownMenuItem(value: 4, child: Text('Dropped')),
+                          DropdownMenuItem(
+                              value: 5, child: Text('Plan to Read')),
+                          DropdownMenuItem(value: 6, child: Text('Re-reading')),
+                        ]),
                 ],
                 onChanged: (v) => statusValue.value = v,
               ),
               const SizedBox(height: 12),
 
               // Last chapter
-              Text('Last Chapter Read',
-                  style: context.textTheme.labelMedium),
+              Text('Last Chapter Read', style: context.textTheme.labelMedium),
               const SizedBox(height: 4),
               TextField(
                 controller: chapterController,
@@ -122,10 +123,10 @@ class TrackerEditDialog extends HookConsumerWidget {
                   border: const OutlineInputBorder(),
                   isDense: true,
                   hintText: '0',
-                  suffixText: record.totalChapters != null &&
-                          record.totalChapters! > 0
-                      ? '/ ${record.totalChapters}'
-                      : null,
+                  suffixText:
+                      record.totalChapters != null && record.totalChapters! > 0
+                          ? '/ ${record.totalChapters}'
+                          : null,
                 ),
               ),
               const SizedBox(height: 12),
@@ -134,32 +135,34 @@ class TrackerEditDialog extends HookConsumerWidget {
               Text('Score', style: context.textTheme.labelMedium),
               const SizedBox(height: 4),
               record.trackerScores?.isNotEmpty == true
-                ? DropdownButtonFormField<String?>(
-                    initialValue: record.trackerScores!.contains(scoreController.text)
-                        ? scoreController.text
-                        : null,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
+                  ? DropdownButtonFormField<String?>(
+                      initialValue:
+                          record.trackerScores!.contains(scoreController.text)
+                              ? scoreController.text
+                              : null,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                            value: null, child: Text('— Not set —')),
+                        ...record.trackerScores!.map((s) =>
+                            DropdownMenuItem<String?>(
+                                value: s, child: Text(s))),
+                      ],
+                      onChanged: (v) {
+                        scoreController.text = v ?? '';
+                      },
+                    )
+                  : TextField(
+                      controller: scoreController,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        hintText: '—',
+                      ),
                     ),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                          value: null, child: Text('— Not set —')),
-                      ...record.trackerScores!.map((s) =>
-                          DropdownMenuItem<String?>(value: s, child: Text(s))),
-                    ],
-                    onChanged: (v) {
-                      scoreController.text = v ?? '';
-                    },
-                  )
-                : TextField(
-                    controller: scoreController,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      hintText: '—',
-                    ),
-                  ),
               const SizedBox(height: 12),
 
               // Dates row
@@ -215,7 +218,8 @@ class TrackerEditDialog extends HookConsumerWidget {
                           onTap: () async {
                             final picked = await showDatePicker(
                               context: context,
-                              initialDate: _parseDate(finishDateController.text),
+                              initialDate:
+                                  _parseDate(finishDateController.text),
                               firstDate: DateTime(1990),
                               lastDate: DateTime(2100),
                             );

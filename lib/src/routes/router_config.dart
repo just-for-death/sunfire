@@ -235,7 +235,8 @@ GoRouter routerConfig(ref) {
     TypedGoRoute<MigrationPreviewRoute>(path: Routes.migrationPreview),
     TypedGoRoute<MigrationProgressRoute>(path: Routes.migrationProgress),
     TypedGoRoute<MigrationBatchMatchRoute>(path: Routes.migrationBatchMatch),
-    TypedGoRoute<MigrationBatchProgressRoute>(path: Routes.migrationBatchProgress),
+    TypedGoRoute<MigrationBatchProgressRoute>(
+        path: Routes.migrationBatchProgress),
   ],
 )
 @immutable
