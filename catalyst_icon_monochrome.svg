@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <mask id="bookMask">
+      <!-- Everything white under the mask is kept, everything black is transparent -->
+      <rect x="0" y="0" width="200" height="300" rx="16" fill="white" />
+      <polygon points="50,300 80,300 80,346 65,332 50,346" fill="white" />
+      
+      <!-- Spine separation line -->
+      <line x1="30" y1="0" x2="30" y2="300" stroke="black" stroke-width="4" />
+      
+      <!-- Cut out the text by drawing it in black -->
+      <g fill="black" font-family="'Noto Sans CJK JP', 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif" font-weight="900" font-size="44" text-anchor="middle">
+        <text x="115" y="60">カ</text>
+        <text x="115" y="110">タ</text>
+        <text x="115" y="160">リ</text>
+        <text x="115" y="210">ス</text>
+        <text x="115" y="260">ト</text>
+      </g>
+    </mask>
+  </defs>
+
+  <g transform="translate(156, 106)">
+    <!-- Provide a bounding rect covering the book footprint which mask applies to -->
+    <rect x="0" y="0" width="200" height="350" fill="black" mask="url(#bookMask)" />
+  </g>
+</svg>

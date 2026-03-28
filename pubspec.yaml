@@ -101,7 +101,10 @@ flutter_launcher_icons:
   ios: true
   remove_alpha_ios: true
   image_path: "assets/icons/launcher/catalyst_icon.png"
-  
+  adaptive_icon_background: "#1C1C1E"
+  adaptive_icon_foreground: "assets/icons/launcher/catalyst_icon_foreground.png"
+  adaptive_icon_monochrome: "assets/icons/launcher/catalyst_icon_monochrome.png"
+
   web:
     generate: true
     image_path: "assets/icons/launcher/catalyst_icon.png"
