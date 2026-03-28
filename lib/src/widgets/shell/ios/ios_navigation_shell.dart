@@ -90,13 +90,13 @@ class _GlassTabBar extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: isDark
-                ? Colors.black.withOpacity(0.55)
-                : Colors.white.withOpacity(0.72),
+                ? Colors.black.withValues(alpha: 0.55)
+                : Colors.white.withValues(alpha: 0.72),
             border: Border(
               top: BorderSide(
                 color: isDark
-                    ? Colors.white.withOpacity(0.12)
-                    : Colors.black.withOpacity(0.08),
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : Colors.black.withValues(alpha: 0.08),
                 width: 0.5,
               ),
             ),
@@ -129,8 +129,8 @@ class _GlassTabBar extends StatelessWidget {
                                 color: selected
                                     ? cs.primary
                                     : (isDark
-                                        ? Colors.white.withOpacity(0.5)
-                                        : Colors.black.withOpacity(0.4)),
+                                        ? Colors.white.withValues(alpha: 0.5)
+                                        : Colors.black.withValues(alpha: 0.4)),
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -144,8 +144,8 @@ class _GlassTabBar extends StatelessWidget {
                                 color: selected
                                     ? cs.primary
                                     : (isDark
-                                        ? Colors.white.withOpacity(0.5)
-                                        : Colors.black.withOpacity(0.4)),
+                                        ? Colors.white.withValues(alpha: 0.5)
+                                        : Colors.black.withValues(alpha: 0.4)),
                               ),
                               child: Text(item.label(context)),
                             ),
@@ -197,8 +197,8 @@ class _IPadSplitShell extends StatelessWidget {
           Container(
             width: 0.5,
             color: isDark
-                ? Colors.white.withOpacity(0.1)
-                : Colors.black.withOpacity(0.08),
+                ? Colors.white.withValues(alpha: 0.1)
+                : Colors.black.withValues(alpha: 0.08),
           ),
           // Main content
           Expanded(child: child),
@@ -231,8 +231,8 @@ class _GlassSidebar extends StatelessWidget {
         child: Container(
           width: 220,
           color: isDark
-              ? Colors.black.withOpacity(0.5)
-              : Colors.white.withOpacity(0.7),
+              ? Colors.black.withValues(alpha: 0.5)
+              : Colors.white.withValues(alpha: 0.7),
           child: SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,7 +267,7 @@ class _GlassSidebar extends StatelessWidget {
                             horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
                           color: selected
-                              ? cs.primary.withOpacity(isDark ? 0.25 : 0.12)
+                              ? cs.primary.withValues(alpha: isDark ? 0.25 : 0.12)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -279,8 +279,8 @@ class _GlassSidebar extends StatelessWidget {
                               color: selected
                                   ? cs.primary
                                   : (isDark
-                                      ? Colors.white.withOpacity(0.6)
-                                      : Colors.black.withOpacity(0.5)),
+                                      ? Colors.white.withValues(alpha: 0.6)
+                                      : Colors.black.withValues(alpha: 0.5)),
                             ),
                             const SizedBox(width: 12),
                             Text(
@@ -293,8 +293,8 @@ class _GlassSidebar extends StatelessWidget {
                                 color: selected
                                     ? cs.primary
                                     : (isDark
-                                        ? Colors.white.withOpacity(0.8)
-                                        : Colors.black.withOpacity(0.7)),
+                                        ? Colors.white.withValues(alpha: 0.8)
+                                        : Colors.black.withValues(alpha: 0.7)),
                               ),
                             ),
                           ],

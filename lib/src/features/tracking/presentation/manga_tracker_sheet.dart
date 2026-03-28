@@ -67,7 +67,7 @@ class MangaTrackerSheet extends ConsumerWidget {
               height: 4,
               decoration: BoxDecoration(
                 color: context.theme.colorScheme.onSurfaceVariant
-                    .withOpacity(.4),
+                    .withValues(alpha: .4),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),

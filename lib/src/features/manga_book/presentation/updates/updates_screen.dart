@@ -203,11 +203,11 @@ class _FeedTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = context.theme.colorScheme;
     final isRead = item.isRead.ifNull();
-    final textColor = isRead ? cs.onSurface.withOpacity(0.45) : null;
+    final textColor = isRead ? cs.onSurface.withValues(alpha: 0.45) : null;
 
     return Material(
       color: isSelected
-          ? cs.primaryContainer.withOpacity(0.5)
+          ? cs.primaryContainer.withValues(alpha: 0.5)
           : Colors.transparent,
       child: InkWell(
         onTap: () {
@@ -270,7 +270,7 @@ class _FeedTile extends ConsumerWidget {
                       Text(
                         _formatTime(item.fetchedAt),
                         style: context.theme.textTheme.labelSmall?.copyWith(
-                          color: cs.onSurfaceVariant.withOpacity(0.7),
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.7),
                         ),
                       ),
                     ],

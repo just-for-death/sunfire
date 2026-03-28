@@ -95,10 +95,10 @@ class MigrationOptionsWidget extends StatelessWidget {
               margin: const EdgeInsets.only(top: 8),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: theme.colorScheme.errorContainer.withOpacity(0.3),
+                color: theme.colorScheme.errorContainer.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: theme.colorScheme.error.withOpacity(0.3),
+                  color: theme.colorScheme.error.withValues(alpha: 0.3),
                 ),
               ),
               child: _OptionTile(
@@ -221,7 +221,7 @@ class _OptionTile extends StatelessWidget {
                   subtitle,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: destructive
-                        ? theme.colorScheme.error.withOpacity(0.7)
+                        ? theme.colorScheme.error.withValues(alpha: 0.7)
                         : theme.colorScheme.onSurfaceVariant,
                   ),
                 ),

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+    <!-- Background -->
+    <rect x="0" y="0" width="512" height="512" fill="#1C1C1E" />
+    
+    <!-- Group with slight drop shadow for the whole book -->
+    <g transform="translate(156, 106)">
+        <filter id="shadow">
+            <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.5"/>
+        </filter>
+        
+        <g filter="url(#shadow)">
+            <!-- Book Base -->
+            <rect x="0" y="0" width="200" height="300" rx="16" fill="#EEEEEE" />
+            
+            <!-- Spine Strip -->
+            <path d="M 0 16 L 0 284 A 16 16 0 0 0 16 300 L 30 300 L 30 0 L 16 0 A 16 16 0 0 0 0 16 Z" fill="#A0A0A0" />
+            
+            <!-- Bookmark -->
+            <polygon points="50,300 80,300 80,346 65,332 50,346" fill="#D32F2F" />
+
+            <!-- Japanese Text: カタリスト (Katarisuto - Catalyst) -->
+            <g fill="#1C1C1E" font-family="'Noto Sans CJK JP', 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif" font-weight="900" font-size="44" text-anchor="middle">
+                <text x="115" y="60">カ</text>
+                <text x="115" y="110">タ</text>
+                <text x="115" y="160">リ</text>
+                <text x="115" y="210">ス</text>
+                <text x="115" y="260">ト</text>
+            </g>
+        </g>
+    </g>
+</svg>

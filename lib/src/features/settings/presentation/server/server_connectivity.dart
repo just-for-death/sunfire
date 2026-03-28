@@ -131,7 +131,7 @@ class _OfflineBody extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.cloud_off_rounded,
-                size: 72, color: cs.onSurface.withOpacity(.35)),
+                size: 72, color: cs.onSurface.withValues(alpha: .35)),
             const SizedBox(height: 24),
             Text(
               'Server unreachable',
@@ -143,7 +143,7 @@ class _OfflineBody extends StatelessWidget {
               'Make sure Suwayomi Server is running\nand the URL is correct in Settings.',
               textAlign: TextAlign.center,
               style: context.textTheme.bodyMedium
-                  ?.copyWith(color: cs.onSurface.withOpacity(.6)),
+                  ?.copyWith(color: cs.onSurface.withValues(alpha: .6)),
             ),
             const SizedBox(height: 28),
             FilledButton.icon(

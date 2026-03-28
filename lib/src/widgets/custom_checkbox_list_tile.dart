@@ -28,7 +28,7 @@ class CustomCheckboxListTile<NotifierT extends AutoDisposeNotifier<bool?>>
     final val = ref.watch(provider);
     return CheckboxListTile(
       controlAffinity: ListTileControlAffinity.leading,
-      activeColor: context.theme.indicatorColor,
+      activeColor: context.theme.colorScheme.primary,
       value: tristate ? val : val.ifNull(true),
       title: Text(title),
       tristate: tristate,
