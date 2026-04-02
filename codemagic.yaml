@@ -68,9 +68,18 @@ workflows:
       - name: Build IPA (unsigned)
         script: flutter build ipa --release --no-codesign
 
+      - name: Rename IPA for release
+        script: |
+          find build/ios/ipa -name "*.ipa" -exec mv {} build/ios/ipa/Catalyst.ipa \;
+
     artifacts:
       - build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
       - build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
       - build/app/outputs/flutter-apk/app-x86_64-release.apk
-      - build/ios/ipa/*.ipa
+      - build/ios/ipa/Catalyst.ipa
       - build/ios/archive/*.xcarchive
+
+    publishing:
+      github:
+        repo: just-for-death/catalyst
+        prerelease: false
