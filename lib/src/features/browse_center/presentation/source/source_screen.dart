@@ -59,8 +59,15 @@ class SourceScreen extends HookConsumerWidget {
             slivers: [
               if (lastUsed.isNotBlank) ...[
                 SliverToBoxAdapter(
-                  child: ListTile(
-                    title: Text(languageMap["lastUsed"]?.displayName ?? ""),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      languageMap["lastUsed"]?.displayName ?? "",
+                      style: context.theme.textTheme.titleSmall?.copyWith(
+                        color: context.theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
                 SliverToBoxAdapter(
@@ -68,11 +75,22 @@ class SourceScreen extends HookConsumerWidget {
               ],
               if (allSource.isNotBlank) ...[
                 SliverToBoxAdapter(
-                  child: ListTile(
-                    title: Text(languageMap["all"]?.displayName ?? ""),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      languageMap["all"]?.displayName ?? "",
+                      style: context.theme.textTheme.titleSmall?.copyWith(
+                        color: context.theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
-                SliverList(
+                SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 450,
+                    mainAxisExtent: 80,
+                  ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) => SourceListTile(
                       source: allSource![index],
@@ -84,10 +102,22 @@ class SourceScreen extends HookConsumerWidget {
               for (final k in sourceMap.keys) ...[
                 if (sourceMap[k].isNotBlank) ...[
                   SliverToBoxAdapter(
-                    child:
-                        ListTile(title: Text(languageMap[k]?.displayName ?? k)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Text(
+                        languageMap[k]?.displayName ?? k,
+                        style: context.theme.textTheme.titleSmall?.copyWith(
+                          color: context.theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ),
-                  SliverList(
+                  SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 450,
+                      mainAxisExtent: 80,
+                    ),
                     delegate: SliverChildBuilderDelegate(
                       (context, index) => SourceListTile(
                         source: sourceMap[k]![index],
@@ -99,9 +129,15 @@ class SourceScreen extends HookConsumerWidget {
               ],
               if (localSource.isNotBlank) ...[
                 SliverToBoxAdapter(
-                  child: ListTile(
-                    title:
-                        Text(languageMap["localsourcelang"]?.displayName ?? ""),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      languageMap["localsourcelang"]?.displayName ?? "",
+                      style: context.theme.textTheme.titleSmall?.copyWith(
+                        color: context.theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
                 SliverToBoxAdapter(
