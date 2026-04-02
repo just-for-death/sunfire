@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
+import '../../../../utils/misc/toast/toast.dart';
 import '../../../../widgets/server_image.dart';
 import '../../domain/source/source_model.dart';
 import '../extension/controller/extension_controller.dart';
@@ -11,6 +12,7 @@ import '../extension/extension_screen.dart';
 import '../extension/widgets/extension_language_filter_dialog.dart';
 import '../extension/widgets/install_extension_file.dart';
 import '../source/controller/source_controller.dart' hide SourceLanguageFilter;
+import '../source/source_screen.dart';
 import '../source/widgets/source_language_filter.dart';
 
 class BrowseScreen extends HookConsumerWidget {
@@ -146,7 +148,17 @@ class BrowseScreen extends HookConsumerWidget {
                         ),
                         const Spacer(),
                         TextButton(
-                          onPressed: () => tabController.animateTo(0),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => Scaffold(
+                                  appBar: AppBar(title: Text(context.l10n.sources)),
+                                  body: const SourceScreen(),
+                                ),
+                              ),
+                            );
+                          },
                           child: const Text('See all'),
                         ),
                       ],
@@ -174,7 +186,7 @@ class _QuickActionGrid extends ConsumerWidget {
       (
         icon: Icons.storage_rounded,
         label: 'Local Storage',
-        onTap: () {},
+        onTap: () => ref.read(toastProvider)?.show("Local Storage coming soon!"),
       ),
       (
         icon: Icons.bookmark_outline_rounded,
@@ -193,9 +205,12 @@ class _QuickActionGrid extends ConsumerWidget {
       ),
     ];
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return SizedBox(
+      width: double.infinity,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 8,
+        runSpacing: 8,
       children: actions
           .map((a) => SizedBox(
                 height: 36,
@@ -227,6 +242,7 @@ class _QuickActionGrid extends ConsumerWidget {
                 ),
               ))
           .toList(),
+      ),
     );
   }
 }
@@ -248,43 +264,56 @@ class _PinnedSourcesSliver extends ConsumerWidget {
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 96),
       sliver: SliverGrid.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4,
-          childAspectRatio: 0.75,
-          crossAxisSpacing: 8,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 100,
+          childAspectRatio: 0.95,
+          crossAxisSpacing: 4,
           mainAxisSpacing: 8,
         ),
         itemCount: pinned.length,
         itemBuilder: (context, i) {
           final source = pinned[i];
-          return GestureDetector(
-            onTap: () {
-              ref.read(sourceLastUsedProvider.notifier).update(source.id);
-              SourceTypeRoute(
-                sourceId: source.id,
-                sourceType: SourceType.POPULAR,
-              ).go(context);
-            },
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: ServerImage(
-                    imageUrl: source.iconUrl,
-                    size: const Size.square(48),
-                    fit: BoxFit.cover,
+          return Center(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  ref.read(sourceLastUsedProvider.notifier).update(source.id);
+                  SourceTypeRoute(
+                    sourceId: source.id,
+                    sourceType: SourceType.POPULAR,
+                  ).go(context);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(6.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: ServerImage(
+                          imageUrl: source.iconUrl,
+                          size: const Size.square(46),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        source.name,
+                        style: context.theme.textTheme.labelSmall?.copyWith(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  source.name,
-                  style: context.theme.textTheme.labelSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ],
+              ),
             ),
           );
         },
