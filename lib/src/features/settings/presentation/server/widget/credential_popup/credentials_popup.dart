@@ -12,18 +12,21 @@ import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../../../../../constants/db_keys.dart';
 import '../../../../../../utils/extensions/custom_extensions.dart';
-import '../../../../../../utils/mixin/shared_preferences_client_mixin.dart';
 import '../../../../../../widgets/popup_widgets/pop_button.dart';
+import '../../../../data/basic_credentials_store.dart';
 
 part 'credentials_popup.g.dart';
 
 @riverpod
-class Credentials extends _$Credentials
-    with SharedPreferenceClientMixin<String> {
+class Credentials extends _$Credentials {
   @override
-  String? build() => initialize(DBKeys.basicCredentials);
+  String? build() => BasicCredentialsStore.instance.current;
+
+  Future<void> update(String? value) async {
+    await BasicCredentialsStore.instance.set(value);
+    state = BasicCredentialsStore.instance.current;
+  }
 }
 
 final formKey = GlobalKey<FormState>();
@@ -47,30 +50,35 @@ class CredentialsPopup extends HookConsumerWidget {
       title: Text(context.l10n.credentials),
       content: Form(
         key: formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: username,
-              validator: (value) =>
-                  value.isBlank ? (context.l10n.errorUserName) : null,
-              decoration: InputDecoration(
-                hintText: context.l10n.userName,
-                border: const OutlineInputBorder(),
+        child: AutofillGroup(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: username,
+                autofillHints: const [AutofillHints.username],
+                textInputAction: TextInputAction.next,
+                validator: (value) =>
+                    value.isBlank ? (context.l10n.errorUserName) : null,
+                decoration: InputDecoration(
+                  hintText: context.l10n.userName,
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            ),
-            const Gap(4),
-            TextFormField(
-              controller: password,
-              validator: (value) =>
-                  value.isBlank ? (context.l10n.errorPassword) : null,
-              obscureText: true,
-              decoration: InputDecoration(
-                hintText: context.l10n.password,
-                border: const OutlineInputBorder(),
+              const Gap(4),
+              TextFormField(
+                controller: password,
+                autofillHints: const [AutofillHints.password],
+                obscureText: true,
+                validator: (value) =>
+                    value.isBlank ? (context.l10n.errorPassword) : null,
+                decoration: InputDecoration(
+                  hintText: context.l10n.password,
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [
@@ -78,13 +86,13 @@ class CredentialsPopup extends HookConsumerWidget {
         ElevatedButton(
           onPressed: () async {
             if ((formKey.currentState?.validate()).ifNull()) {
-              ref.read(credentialsProvider.notifier).update(
+              await ref.read(credentialsProvider.notifier).update(
                     _basicAuth(
                       userName: username.text,
                       password: password.text,
                     ),
                   );
-              Navigator.pop(context);
+              if (context.mounted) Navigator.pop(context);
             }
           },
           child: Text(context.l10n.save),

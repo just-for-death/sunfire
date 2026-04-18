@@ -65,9 +65,13 @@ class NavigationShellScreen extends HookConsumerWidget {
     // iOS / iPadOS → glass UI
     final isIOS = !kIsWeb && Platform.isIOS;
     if (isIOS) {
-      return IOSNavigationShell(
-        onDestinationSelected: onDestinationSelected,
-        child: child,
+      return ServerAwareWrapper(
+        child: IOSNavigationShell(
+          onDestinationSelected: onDestinationSelected,
+          compactBottomNav:
+              !context.isTablet && context.mediaQueryShortestSide < 600,
+          child: child,
+        ),
       );
     }
 
@@ -89,13 +93,16 @@ class NavigationShellScreen extends HookConsumerWidget {
     }
 
     // Android phone → Material You bottom nav
+    final compactBottomNav = context.mediaQueryShortestSide < 600;
     return ServerAwareWrapper(
       child: Scaffold(
         body: child,
         floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         bottomNavigationBar: SmallScreenNavigationBar(
-          selectedIndex: child.currentIndex,
-          onDestinationSelected: onDestinationSelected,
+          selectedBranchIndex: child.currentIndex,
+          compact: compactBottomNav,
+          shell: compactBottomNav ? child : null,
+          onBranchSelected: onDestinationSelected,
         ),
       ),
     );

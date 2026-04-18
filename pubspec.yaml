@@ -2,7 +2,7 @@ name: catalyst
 description: Catalyst - A fast, beautiful manga reader.
 
 publish_to: "none"
-version: 4.0.0
+version: 4.5.0+450
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -19,7 +19,10 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_android_volume_keydown:
-    git: https://github.com/DattatreyaReddy/flutter_android_volume_keydown
+    git:
+      url: https://github.com/DattatreyaReddy/flutter_android_volume_keydown
+      ref: 9db2306fd2b4f804f5b9fbf69b97b211f47f527c
+  flutter_secure_storage: ^9.2.4
   flutter_cache_manager: ^3.3.0
   flutter_hooks: ^0.20.0
   flutter_localizations:

@@ -574,6 +574,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get newUpdateAvailable => '';
 
   @override
+  String get navHome => 'Home';
+
+  @override
+  String get navMenu => 'Menu';
+
+  @override
+  String get navOverflowSheetTitle => 'Go to';
+
+  @override
   String nextChapter(Object chapterTitle) {
     return 'Next: $chapterTitle';
   }
@@ -1100,6 +1109,28 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get serverVersion => '';
+
+  @override
+  String get serverUnreachableTitle => 'Server unreachable';
+
+  @override
+  String get serverUnreachableBody =>
+      'Make sure Suwayomi Server is running and the URL is correct in Settings.';
+
+  @override
+  String get serverRetryButton => 'Retry';
+
+  @override
+  String get serverOpenSettingsButton => 'Server settings';
+
+  @override
+  String get serverOfflineBanner => 'Server offline — tap retry';
+
+  @override
+  String get serverOfflineRetryA11y => 'Retry connection';
+
+  @override
+  String get serverOfflineDismissA11y => 'Dismiss offline notice';
 
   @override
   String get settings => '';

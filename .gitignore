@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Gradle caches (local machine; should not be committed)
+android/.gradle/
+**/local.properties
