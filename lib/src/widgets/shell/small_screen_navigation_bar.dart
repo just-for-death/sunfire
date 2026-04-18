@@ -5,21 +5,35 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../constants/navigation_bar_data.dart';
+import 'nav_overflow_menu.dart';
 
 class SmallScreenNavigationBar extends StatelessWidget {
   const SmallScreenNavigationBar({
     super.key,
-    required this.selectedIndex,
-    required this.onDestinationSelected,
+    required this.selectedBranchIndex,
+    required this.onBranchSelected,
+    required this.compact,
+    this.shell,
   });
 
-  final int selectedIndex;
-  final void Function(int) onDestinationSelected;
+  /// Stateful shell branch index (0–5).
+  final int selectedBranchIndex;
 
-  NavigationDestination getNavigationDestination(
-      BuildContext context, NavigationBarData data) {
+  final void Function(int branchIndex) onBranchSelected;
+
+  /// When true, shows five tabs; tab four opens [showCompactNavOverflowMenu].
+  final bool compact;
+
+  /// Required when [compact] is true.
+  final StatefulNavigationShell? shell;
+
+  NavigationDestination _destination(
+    BuildContext context,
+    NavigationBarData data,
+  ) {
     return NavigationDestination(
       icon: Icon(data.icon),
       label: data.label(context),
@@ -28,8 +42,18 @@ class SmallScreenNavigationBar extends StatelessWidget {
     );
   }
 
+  int get _displaySelectedIndex {
+    if (!compact) return selectedBranchIndex;
+    if (selectedBranchIndex <= 3) return selectedBranchIndex;
+    return 4;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final navList = compact
+        ? NavigationBarData.getCompactPhoneNavList(context)
+        : NavigationBarData.getNavList(context);
+
     return NavigationBarTheme(
       data: NavigationBarThemeData(
         labelTextStyle: WidgetStateProperty.all(
@@ -37,12 +61,22 @@ class SmallScreenNavigationBar extends StatelessWidget {
         ),
       ),
       child: NavigationBar(
-        selectedIndex: selectedIndex,
-        onDestinationSelected: onDestinationSelected,
-        destinations: NavigationBarData.getNavList(context)
-            .map<NavigationDestination>(
-              (e) => getNavigationDestination(context, e),
-            )
+        selectedIndex: _displaySelectedIndex,
+        onDestinationSelected: (displayIndex) {
+          if (compact) {
+            if (displayIndex == 4) {
+              if (shell != null) {
+                showCompactNavOverflowMenu(context, shell!);
+              }
+              return;
+            }
+            onBranchSelected(displayIndex);
+            return;
+          }
+          onBranchSelected(displayIndex);
+        },
+        destinations: navList
+            .map((e) => _destination(context, e))
             .toList(),
       ),
     );

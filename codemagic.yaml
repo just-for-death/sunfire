@@ -1,8 +1,9 @@
+# CodeMagic CI for Catalyst. App version: 4.5.0 (source of truth: pubspec.yaml).
 workflows:
 
   # ── iOS IPA (unsigned — sideload via AltStore / Sideloadly) ────────────────
   ios-release:
-    name: iOS IPA
+    name: iOS IPA v4.5.0
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -22,7 +23,7 @@ workflows:
 
   # ── Android APKs ───────────────────────────────────────────────────────────
   android-release:
-    name: Android APKs
+    name: Android APKs v4.5.0
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -43,7 +44,7 @@ workflows:
 
   # ── Both platforms — triggers automatically on v* tags ────────────────────
   all-release:
-    name: iOS + Android
+    name: iOS + Android v4.5.0
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:

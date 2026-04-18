@@ -14,12 +14,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/catalyst_app.dart';
 import 'src/features/about/presentation/about/controllers/about_controller.dart';
+import 'src/features/settings/data/basic_credentials_store.dart';
 import 'src/global_providers/global_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final packageInfo = await PackageInfo.fromPlatform();
   final sharedPreferences = await SharedPreferences.getInstance();
+  await BasicCredentialsStore.instance.init(sharedPreferences);
   await initHiveForFlutter();
 
   SystemChrome.setPreferredOrientations(DeviceOrientation.values);
