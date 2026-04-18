@@ -6,8 +6,30 @@ part of 'server_connectivity.dart';
 // RiverpodGenerator
 // **************************************************************************
 
+String _$serverConnectivityHttpGetHash() =>
+    r'1fccabef5c6bd017f6a1bc3aeae4b7839d949745';
+
+/// HTTP GET for server reachability checks. Override in tests to mock responses.
+///
+/// Copied from [serverConnectivityHttpGet].
+@ProviderFor(serverConnectivityHttpGet)
+final serverConnectivityHttpGetProvider =
+    AutoDisposeProvider<Future<http.Response> Function(Uri uri)>.internal(
+  serverConnectivityHttpGet,
+  name: r'serverConnectivityHttpGetProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$serverConnectivityHttpGetHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef ServerConnectivityHttpGetRef
+    = AutoDisposeProviderRef<Future<http.Response> Function(Uri uri)>;
 String _$serverConnectivityHash() =>
-    r'8a695bac86551e78e402016baf911a9fff02b255';
+    r'8037735558c9158ce5720206ff607bb19695c070';
 
 /// See also [ServerConnectivity].
 @ProviderFor(ServerConnectivity)

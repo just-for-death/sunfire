@@ -44,7 +44,10 @@ class Emoticons extends HookWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             iconData != null
-                ? Icon(iconData, size: context.height * .2)
+                ? Icon(
+                    iconData,
+                    size: (context.height * .2).clamp(48.0, 120.0),
+                  )
                 : Text(
                     errorFace,
                     textAlign: TextAlign.center,
