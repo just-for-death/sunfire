@@ -1084,6 +1084,24 @@ abstract class AppLocalizations {
   /// **'New update available'**
   String get newUpdateAvailable;
 
+  /// No description provided for @navHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get navHome;
+
+  /// No description provided for @navMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get navMenu;
+
+  /// No description provided for @navOverflowSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to'**
+  String get navOverflowSheetTitle;
+
   /// Text for Next Chapter button in Manga Reader Screen
   ///
   /// In en, this message translates to:
@@ -2073,6 +2091,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Server version'**
   String get serverVersion;
+
+  /// No description provided for @serverUnreachableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Server unreachable'**
+  String get serverUnreachableTitle;
+
+  /// No description provided for @serverUnreachableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Make sure Suwayomi Server is running and the URL is correct in Settings.'**
+  String get serverUnreachableBody;
+
+  /// No description provided for @serverRetryButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get serverRetryButton;
+
+  /// No description provided for @serverOpenSettingsButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Server settings'**
+  String get serverOpenSettingsButton;
+
+  /// No description provided for @serverOfflineBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Server offline — tap retry'**
+  String get serverOfflineBanner;
+
+  /// No description provided for @serverOfflineRetryA11y.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry connection'**
+  String get serverOfflineRetryA11y;
+
+  /// No description provided for @serverOfflineDismissA11y.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss offline notice'**
+  String get serverOfflineDismissA11y;
 
   /// Screen title and Button text of Settings screen
   ///

@@ -86,6 +86,17 @@ Catalyst stands on the shoulders of several great open-source projects. Huge tha
 
 ---
 
+## Security notes
+
+Catalyst talks to **your** Suwayomi server using a URL you configure.
+
+- **HTTP on a trusted LAN** is common for self-hosted setups. If the server is reachable from untrusted networks (e.g. the public internet), prefer **HTTPS** so traffic and Basic auth are not sent in the clear.
+- **Basic authentication**: when enabled, the app stores the credentials in the **OS secure store** (Keychain / Keystore) after a one-time migration from older builds that used app preferences. A fully compromised device can still expose secrets; treat physical access accordingly.
+- **Android**: cleartext HTTP and trust for **user-installed certificate authorities** are intentional so local servers and self-signed TLS work (`android/app/src/main/AndroidManifest.xml`, `android/app/src/main/res/xml/network_security_config.xml`).
+- **iOS**: **local network** HTTP to typical LAN hosts is allowed via App Transport Security (`NSAllowsLocalNetworking` in `ios/Runner/Info.plist`). If you use an unusual host or still see ATS errors, try HTTPS or consult Apple’s ATS documentation.
+
+---
+
 ## Contributing
 
 Pull requests are welcome. For major changes please open an issue first.
