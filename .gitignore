@@ -26,6 +26,9 @@ migrate_working_dir/
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
+# iOS: paths are machine-specific; wrong FLUTTER_ROOT breaks CI (e.g. Codemagic Mac).
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
 .dart_tool/
 .flutter-plugins-dependencies
 .pub-cache/
