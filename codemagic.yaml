@@ -2,20 +2,29 @@
 workflows:
 
   # ── iOS IPA (unsigned — sideload via AltStore / Sideloadly) ────────────────
+  # Uses flutter build ipa --no-codesign only. Do not attach Apple certificates
+  # or App Store Connect integration to this workflow in the Codemagic UI, or
+  # signing may be applied despite this flag.
   ios-release:
-    name: iOS IPA v4.5.0
+    name: iOS IPA v4.5.0 (unsigned)
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
       flutter: stable
       xcode: latest
+      cocoapods: default
 
     scripts:
       - name: Get packages
         script: flutter pub get
 
-      - name: Build IPA (unsigned)
-        script: flutter build ipa --release --no-codesign
+      - name: CocoaPods (iOS)
+        script: cd ios && pod install
+
+      - name: Build IPA unsigned (no code signing)
+        script: |
+          set -e
+          flutter build ipa --release --no-codesign
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -44,13 +53,14 @@ workflows:
 
   # ── Both platforms — triggers automatically on v* tags ────────────────────
   all-release:
-    name: iOS + Android v4.5.0
+    name: iOS + Android v4.5.0 (unsigned IPA)
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:
       flutter: stable
       xcode: latest
       java: 17
+      cocoapods: default
 
     triggering:
       events:
@@ -66,8 +76,13 @@ workflows:
       - name: Build APKs
         script: flutter build apk --release --split-per-abi
 
-      - name: Build IPA (unsigned)
-        script: flutter build ipa --release --no-codesign
+      - name: CocoaPods (iOS)
+        script: cd ios && pod install
+
+      - name: Build IPA unsigned (no code signing)
+        script: |
+          set -e
+          flutter build ipa --release --no-codesign
 
       - name: Rename IPA for release
         script: |
