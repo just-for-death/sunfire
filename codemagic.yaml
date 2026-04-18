@@ -80,7 +80,6 @@ workflows:
       - build/ios/ipa/Catalyst.ipa
       - build/ios/archive/*.xcarchive
 
-    publishing:
-      github:
-        repo: just-for-death/catalyst
-        prerelease: false
+    # Note: Codemagic no longer allows publishing.github.repo / prerelease here.
+    # For GitHub Releases, add GITHUB_TOKEN in the app’s Environment variables and
+    # use a script with `gh release create` (see Codemagic “Github Releases” docs).
