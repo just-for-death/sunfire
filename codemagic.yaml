@@ -18,9 +18,9 @@ workflows:
       - name: Get packages
         script: flutter pub get
 
-      - name: CocoaPods (iOS)
-        script: cd ios && pod install
-
+      # Do not run `pod install` alone: Podfile reads FLUTTER_ROOT from
+      # ios/Flutter/Generated.xcconfig. That file must match the builder’s Flutter
+      # SDK (flutter pub get). `flutter build ipa` runs CocoaPods with the right paths.
       - name: Build IPA unsigned (no code signing)
         script: |
           set -e
@@ -75,9 +75,6 @@ workflows:
 
       - name: Build APKs
         script: flutter build apk --release --split-per-abi
-
-      - name: CocoaPods (iOS)
-        script: cd ios && pod install
 
       - name: Build IPA unsigned (no code signing)
         script: |
