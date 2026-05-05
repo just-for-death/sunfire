@@ -5,10 +5,10 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../../constants/enum.dart';
 import '../../../../../routes/router_config.dart';
+import '../../../../../theme/komikku_ui_tokens.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../utils/launch_url_in_web.dart';
 import '../../../../../utils/misc/toast/toast.dart';
-import '../../../../../widgets/server_image.dart';
 import '../../../../tracking/presentation/manga_tracker_sheet.dart';
 import '../../../domain/manga/manga_model.dart';
 
@@ -31,105 +31,63 @@ class MangaDescription extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isExpanded = useState(context.isTablet);
     final cs = context.theme.colorScheme;
-    final tt = context.theme.textTheme;
 
     final status = MangaStatus.fromJson(manga.status.name);
     final unread = manga.unreadCount;
+    final downloaded = manga.downloadCount;
+    final inLibrary = manga.inLibrary.ifNull();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── Hero: cover + title + author
+        // ── Action Buttons
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.fromLTRB(
+            KomikkuUiTokens.space16,
+            KomikkuUiTokens.space16,
+            KomikkuUiTokens.space16,
+            0,
+          ),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            alignment: WrapAlignment.start,
             children: [
-              // Cover
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: ServerImage(
-                  imageUrl: manga.thumbnailUrl ?? '',
-                  size: const Size(110, 155),
-                  fit: BoxFit.cover,
-                ),
+              _ActionChip(
+                icon: manga.inLibrary.ifNull()
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_outlined,
+                label: manga.inLibrary.ifNull()
+                    ? context.l10n.inLibrary
+                    : context.l10n.addToLibrary,
+                filled: manga.inLibrary.ifNull(),
+                onTap: () async {
+                  final val = await AsyncValue.guard(() async {
+                    if (manga.inLibrary.ifNull()) {
+                      await removeMangaFromLibrary();
+                    } else {
+                      await addMangaToLibrary();
+                    }
+                    await refresh();
+                  });
+                  if (context.mounted) {
+                    val.showToastOnError(ref.read(toastProvider));
+                  }
+                },
               ),
-              const SizedBox(width: 14),
-              // Title + author + action buttons
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: () =>
-                          GlobalSearchRoute(query: manga.title).push(context),
-                      child: Text(
-                        manga.title,
-                        style: tt.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (manga.author.isNotBlank) ...[
-                      const SizedBox(height: 4),
-                      GestureDetector(
-                        onTap: () => GlobalSearchRoute(query: manga.author)
-                            .push(context),
-                        child: Text(
-                          manga.author ?? '',
-                          style: tt.bodyMedium
-                              ?.copyWith(color: cs.onSurfaceVariant),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 14),
-                    // Favourite / WebView / Tracking buttons
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        _ActionChip(
-                          icon: manga.inLibrary.ifNull()
-                              ? Icons.favorite_rounded
-                              : Icons.favorite_border_outlined,
-                          label: manga.inLibrary.ifNull()
-                              ? context.l10n.inLibrary
-                              : context.l10n.addToLibrary,
-                          filled: manga.inLibrary.ifNull(),
-                          onTap: () async {
-                            final val = await AsyncValue.guard(() async {
-                              if (manga.inLibrary.ifNull()) {
-                                await removeMangaFromLibrary();
-                              } else {
-                                await addMangaToLibrary();
-                              }
-                              await refresh();
-                            });
-                            if (context.mounted) {
-                              val.showToastOnError(ref.read(toastProvider));
-                            }
-                          },
-                        ),
-                        if (manga.realUrl.isNotBlank)
-                          _ActionChip(
-                            icon: Icons.public_rounded,
-                            label: context.l10n.webView,
-                            onTap: () => launchUrlInWeb(context,
-                                manga.realUrl ?? '', ref.read(toastProvider)),
-                          ),
-                        _ActionChip(
-                          icon: Icons.track_changes_rounded,
-                          label: 'Tracking',
-                          onTap: () => showMangaTrackerSheet(
-                              context, mangaId, manga.title),
-                        ),
-                      ],
-                    ),
-                  ],
+              if (manga.realUrl.isNotBlank)
+                _ActionChip(
+                  icon: Icons.public_rounded,
+                  label: context.l10n.webView,
+                  onTap: () => launchUrlInWeb(
+                      context, manga.realUrl ?? '', ref.read(toastProvider)),
                 ),
+              _ActionChip(
+                icon: Icons.track_changes_rounded,
+                label: 'Tracking',
+                onTap: () =>
+                    showMangaTrackerSheet(context, mangaId, manga.title),
               ),
             ],
           ),
@@ -139,10 +97,10 @@ class MangaDescription extends HookConsumerWidget {
 
         // ── Info card (Futon style)
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: KomikkuUiTokens.screenPadding,
           child: Material(
             color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: KomikkuUiTokens.cardRadius,
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
@@ -172,12 +130,39 @@ class MangaDescription extends HookConsumerWidget {
             ),
           ),
         ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: KomikkuUiTokens.screenPadding,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _StatChip(
+                icon: Icons.menu_book_rounded,
+                label: context.l10n.unread,
+                value: '$unread',
+              ),
+              _StatChip(
+                icon: Icons.download_done_rounded,
+                label: context.l10n.downloaded,
+                value: '$downloaded',
+              ),
+              _StatChip(
+                icon: inLibrary
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                label: context.l10n.library,
+                value: inLibrary ? context.l10n.yes : context.l10n.no,
+              ),
+            ],
+          ),
+        ),
 
         // ── Description
         if (manga.description.isNotBlank) ...[
           const SizedBox(height: 12),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: KomikkuUiTokens.screenPadding,
             child: Stack(
               alignment: AlignmentDirectional.bottomStart,
               children: [
@@ -225,7 +210,7 @@ class MangaDescription extends HookConsumerWidget {
         if (isExpanded.value && manga.genre.isNotBlank) ...[
           const SizedBox(height: 10),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: KomikkuUiTokens.screenPadding,
             child: Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -238,6 +223,34 @@ class MangaDescription extends HookConsumerWidget {
                         visualDensity: VisualDensity.compact,
                       ))
                   .toList(),
+            ),
+          ),
+        ],
+        if (isExpanded.value) ...[
+          const SizedBox(height: 10),
+          Padding(
+            padding: KomikkuUiTokens.screenPadding,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      GlobalSearchRoute(query: manga.title).push(context),
+                  icon:
+                      const Icon(Icons.collections_bookmark_rounded, size: 16),
+                  label: const Text('Related'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    if (manga.author.isNotBlank) {
+                      GlobalSearchRoute(query: manga.author!).push(context);
+                    }
+                  },
+                  icon: const Icon(Icons.thumb_up_alt_outlined, size: 16),
+                  label: const Text('Recommendations'),
+                ),
+              ],
             ),
           ),
         ],
@@ -318,7 +331,7 @@ class _ActionChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: filled ? cs.primaryContainer : cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: KomikkuUiTokens.chipRadius,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -336,6 +349,46 @@ class _ActionChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  const _StatChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.theme.colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: KomikkuUiTokens.chipRadius,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: cs.primary),
+          const SizedBox(width: 6),
+          Text(
+            '$label: $value',
+            style: context.theme.textTheme.labelMedium?.copyWith(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../constants/app_sizes.dart';
+import '../../../../theme/komikku_ui_tokens.dart';
 
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/misc/toast/toast.dart';
@@ -213,6 +214,7 @@ class _LibraryFilterChips extends ConsumerWidget {
       selected: selected,
       onSelected: (_) => onTap(),
       showCheckmark: false,
+      shape: RoundedRectangleBorder(borderRadius: KomikkuUiTokens.chipRadius),
     );
   }
 }

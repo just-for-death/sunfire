@@ -33,6 +33,7 @@ enum DBKeys {
   downloadedBadge(true),
   unreadBadge(true),
   languageBadge(false),
+  sourceBadge(false),
   l10n(Locale('en')),
   mangaFilterDownloaded(null),
   mangaFilterUnread(null),
@@ -61,6 +62,7 @@ enum DBKeys {
   serverRequestTimeout(5000), // milliseconds
   autoRefreshOnTimeout(false),
   autoRefreshRetryDelay(1000), // milliseconds
+  customFlexScheme(null),
   ;
 
   const DBKeys(this.initial);
