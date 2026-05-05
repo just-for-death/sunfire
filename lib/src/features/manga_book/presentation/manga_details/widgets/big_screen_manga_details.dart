@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../../../theme/komikku_ui_tokens.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../widgets/emoticons.dart';
 import '../../../data/manga_book/manga_book_repository.dart';
@@ -15,6 +16,7 @@ import '../../../domain/chapter/chapter_model.dart';
 import '../../../domain/manga/manga_model.dart';
 import 'chapter_list_tile.dart';
 import 'manga_description.dart';
+import 'panorama_cover.dart';
 
 class BigScreenMangaDetails extends ConsumerWidget {
   const BigScreenMangaDetails({
@@ -44,74 +46,101 @@ class BigScreenMangaDetails extends ConsumerWidget {
         children: [
           Expanded(
             child: SingleChildScrollView(
-              child: MangaDescription(
-                manga: manga,
-                mangaId: mangaId,
-                removeMangaFromLibrary: (() => ref
-                    .read(mangaBookRepositoryProvider)
-                    .removeMangaFromLibrary(mangaId)),
-                addMangaToLibrary: (() => ref
-                    .read(mangaBookRepositoryProvider)
-                    .addMangaToLibrary(mangaId)),
-                refresh: () => onDescriptionRefresh(false),
+              child: Column(
+                children: [
+                  PanoramaCover(
+                    imageUrl: manga.thumbnailUrl ?? '',
+                    title: manga.title,
+                    author: manga.author,
+                  ),
+                  MangaDescription(
+                    manga: manga,
+                    mangaId: mangaId,
+                    removeMangaFromLibrary: (() => ref
+                        .read(mangaBookRepositoryProvider)
+                        .removeMangaFromLibrary(mangaId)),
+                    addMangaToLibrary: (() => ref
+                        .read(mangaBookRepositoryProvider)
+                        .addMangaToLibrary(mangaId)),
+                    refresh: () => onDescriptionRefresh(false),
+                  ),
+                ],
               ),
             ),
           ),
           const VerticalDivider(width: 0),
           Expanded(
-            child: chapterList.showUiWhenData(
-              context,
-              (data) {
-                if (data.isNotBlank) {
-                  return Column(
-                    children: [
-                      ListTile(
-                        title: Text(context.l10n.noOfChapters(
-                          filteredChapterList?.length ?? 0,
-                        )),
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          itemBuilder: (context, index) {
-                            if (filteredChapterList.length == index) {
-                              return const ListTile();
-                            }
-                            final key =
-                                ValueKey("${filteredChapterList[index].id}");
-                            final chapter = filteredChapterList[index];
-                            return ChapterListTile(
-                              key: key,
-                              manga: manga,
-                              chapter: chapter,
-                              updateData: () => onListRefresh(false),
-                              isSelected: selectedChapters.value
-                                  .containsKey(chapter.id),
-                              canTapSelect: selectedChapters.value.isNotEmpty,
-                              toggleSelect: (ChapterDto val) {
-                                if ((val.id).isNull) return;
-                                selectedChapters.value = selectedChapters.value
-                                    .toggleKey(val.id, val);
-                              },
-                            );
-                          },
-                          itemCount: filteredChapterList!.length + 1,
+            child: chapterList.showUiWhenData(context, (data) {
+              if (data.isNotBlank) {
+                return Column(
+                  children: [
+                    Padding(
+                      padding: KomikkuUiTokens.screenPadding,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: SizeTransition(
+                            sizeFactor: animation,
+                            axisAlignment: -1,
+                            child: child,
+                          ),
+                        ),
+                        child: ListTile(
+                          key: ValueKey(filteredChapterList?.length ?? 0),
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            context.l10n.noOfChapters(
+                              filteredChapterList?.length ?? 0,
+                            ),
+                          ),
                         ),
                       ),
-                    ],
-                  );
-                } else {
-                  return Emoticons(
-                    title: context.l10n.noChaptersFound,
-                    button: TextButton(
-                      onPressed: () => onListRefresh(true),
-                      child: Text(context.l10n.refresh),
                     ),
-                  );
-                }
-              },
-              refresh: () => onRefresh(false),
-            ),
+                    Expanded(
+                      child: ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          if (filteredChapterList.length == index) {
+                            return const ListTile();
+                          }
+                          final key = ValueKey(
+                            "${filteredChapterList[index].id}",
+                          );
+                          final chapter = filteredChapterList[index];
+                          return ChapterListTile(
+                            key: key,
+                            manga: manga,
+                            chapter: chapter,
+                            updateData: () => onListRefresh(false),
+                            isSelected: selectedChapters.value.containsKey(
+                              chapter.id,
+                            ),
+                            canTapSelect: selectedChapters.value.isNotEmpty,
+                            toggleSelect: (ChapterDto val) {
+                              if ((val.id).isNull) return;
+                              selectedChapters.value = selectedChapters.value
+                                  .toggleKey(val.id, val);
+                            },
+                          );
+                        },
+                        itemCount: filteredChapterList!.length + 1,
+                      ),
+                    ),
+                  ],
+                );
+              } else {
+                return Emoticons(
+                  title: context.l10n.noChaptersFound,
+                  button: TextButton(
+                    onPressed: () => onListRefresh(true),
+                    child: Text(context.l10n.refresh),
+                  ),
+                );
+              }
+            }, refresh: () => onRefresh(false)),
           ),
         ],
       ),

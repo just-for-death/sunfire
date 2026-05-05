@@ -10,8 +10,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../utils/extensions/custom_extensions.dart';
 
-class CustomCheckboxListTile<NotifierT extends AutoDisposeNotifier<bool?>>
-    extends ConsumerWidget {
+class CustomCheckboxListTile extends ConsumerWidget {
   const CustomCheckboxListTile({
     super.key,
     required this.title,
@@ -20,7 +19,7 @@ class CustomCheckboxListTile<NotifierT extends AutoDisposeNotifier<bool?>>
     this.tristate = true,
   });
   final String title;
-  final AutoDisposeNotifierProvider<NotifierT, bool?> provider;
+  final ProviderListenable<bool?> provider;
   final ValueChanged<bool?> onChanged;
   final bool tristate;
   @override

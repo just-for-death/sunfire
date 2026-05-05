@@ -3,8 +3,8 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../routes/router_config.dart';
+import '../../../../theme/komikku_ui_tokens.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
-import '../../../../utils/misc/toast/toast.dart';
 import '../../../../widgets/server_image.dart';
 import '../../domain/source/source_model.dart';
 import '../extension/controller/extension_controller.dart';
@@ -185,8 +185,8 @@ class _QuickActionGrid extends ConsumerWidget {
     final actions = [
       (
         icon: Icons.storage_rounded,
-        label: 'Local Storage',
-        onTap: () => ref.read(toastProvider)?.show("Local Storage coming soon!"),
+        label: context.l10n.sources,
+        onTap: () => const GlobalSearchRoute(query: '').push(context),
       ),
       (
         icon: Icons.bookmark_outline_rounded,
@@ -216,9 +216,9 @@ class _QuickActionGrid extends ConsumerWidget {
                 height: 36,
                 child: Material(
                   color: cs.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: KomikkuUiTokens.chipRadius,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: KomikkuUiTokens.chipRadius,
                     onTap: a.onTap,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
