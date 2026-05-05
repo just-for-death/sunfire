@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../../../theme/komikku_ui_tokens.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../widgets/emoticons.dart';
 import '../../../data/manga_book/manga_book_repository.dart';
@@ -15,6 +16,7 @@ import '../../../domain/chapter/chapter_model.dart';
 import '../../../domain/manga/manga_model.dart';
 import 'chapter_list_tile.dart';
 import 'manga_description.dart';
+import 'panorama_cover.dart';
 
 class SmallScreenMangaDetails extends ConsumerWidget {
   const SmallScreenMangaDetails({
@@ -44,23 +46,53 @@ class SmallScreenMangaDetails extends ConsumerWidget {
         slivers: [
           SliverToBoxAdapter(
             child: SingleChildScrollView(
-              child: MangaDescription(
-                manga: manga,
-                mangaId: mangaId,
-                refresh: () => onDescriptionRefresh(false),
-                removeMangaFromLibrary: () => ref
-                    .read(mangaBookRepositoryProvider)
-                    .removeMangaFromLibrary(mangaId),
-                addMangaToLibrary: () => ref
-                    .read(mangaBookRepositoryProvider)
-                    .addMangaToLibrary(mangaId),
+              child: Column(
+                children: [
+                  PanoramaCover(
+                    imageUrl: manga.thumbnailUrl ?? '',
+                    title: manga.title,
+                    author: manga.author,
+                  ),
+                  MangaDescription(
+                    manga: manga,
+                    mangaId: mangaId,
+                    refresh: () => onDescriptionRefresh(false),
+                    removeMangaFromLibrary: () => ref
+                        .read(mangaBookRepositoryProvider)
+                        .removeMangaFromLibrary(mangaId),
+                    addMangaToLibrary: () => ref
+                        .read(mangaBookRepositoryProvider)
+                        .addMangaToLibrary(mangaId),
+                  ),
+                ],
               ),
             ),
           ),
           SliverToBoxAdapter(
-            child: ListTile(
-              title: Text(
-                context.l10n.noOfChapters(filteredChapterList?.length ?? 0),
+            child: Padding(
+              padding: KomikkuUiTokens.screenPadding,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axisAlignment: -1,
+                    child: child,
+                  ),
+                ),
+                child: ListTile(
+                  key: ValueKey(filteredChapterList?.length ?? 0),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    context.l10n.noOfChapters(filteredChapterList?.length ?? 0),
+                    style: context.theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -75,13 +107,14 @@ class SmallScreenMangaDetails extends ConsumerWidget {
                       manga: manga,
                       chapter: filteredChapterList[index],
                       updateData: () => onRefresh(false),
-                      isSelected: selectedChapters.value
-                          .containsKey(filteredChapterList[index].id),
+                      isSelected: selectedChapters.value.containsKey(
+                        filteredChapterList[index].id,
+                      ),
                       canTapSelect: selectedChapters.value.isNotEmpty,
                       toggleSelect: (ChapterDto val) {
                         if ((val.id).isNull) return;
-                        selectedChapters.value =
-                            selectedChapters.value.toggleKey(val.id, val);
+                        selectedChapters.value = selectedChapters.value
+                            .toggleKey(val.id, val);
                       },
                     ),
                     childCount: filteredChapterList!.length,
@@ -101,10 +134,7 @@ class SmallScreenMangaDetails extends ConsumerWidget {
             },
             refresh: () => onRefresh(false),
             wrapper: (child) => SliverToBoxAdapter(
-              child: SizedBox(
-                height: context.height * .5,
-                child: child,
-              ),
+              child: SizedBox(height: context.height * .5, child: child),
             ),
           ),
           const SliverToBoxAdapter(child: ListTile()),

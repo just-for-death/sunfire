@@ -25,6 +25,7 @@ Future<void> main() async {
   await initHiveForFlutter();
 
   SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   GoRouter.optionURLReflectsImperativeAPIs = true;
   runApp(
     ProviderScope(
