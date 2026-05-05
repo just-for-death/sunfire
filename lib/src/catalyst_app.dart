@@ -4,15 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-
 import 'features/notifications/notification_providers.dart';
 import 'features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_selector.dart';
+import 'features/settings/presentation/appearance/widgets/app_theme_selector/custom_scheme_provider.dart';
 import 'features/settings/presentation/appearance/widgets/is_true_black/is_true_black_tile.dart';
 import 'features/settings/presentation/appearance/widgets/use_dynamic_color/use_dynamic_color_tile.dart';
 import 'features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
 import 'global_providers/global_providers.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'routes/router_config.dart';
+import 'theme/komikko_custom_schemes.dart';
+import 'theme/komikku_ui_tokens.dart';
 import 'utils/extensions/custom_extensions.dart';
 
 class CatalystApp extends ConsumerWidget {
@@ -57,7 +59,8 @@ class CatalystApp extends ConsumerWidget {
         }),
         backgroundColor: harmonized.surfaceContainer,
         elevation: 0,
-        height: 80,
+        height: 72,
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
       ),
       appBarTheme: base.appBarTheme.copyWith(
         backgroundColor: harmonized.surface,
@@ -68,6 +71,8 @@ class CatalystApp extends ConsumerWidget {
       chipTheme: ChipThemeData(
         selectedColor: harmonized.secondaryContainer,
         checkmarkColor: harmonized.onSecondaryContainer,
+        shape: RoundedRectangleBorder(borderRadius: KomikkuUiTokens.chipRadius),
+        side: BorderSide.none,
       ),
       tabBarTheme: TabBarThemeData(
         labelColor: harmonized.primary,
@@ -78,6 +83,10 @@ class CatalystApp extends ConsumerWidget {
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: harmonized.primaryContainer,
         foregroundColor: harmonized.onPrimaryContainer,
+      ),
+      cardTheme: CardThemeData(
+        shape: RoundedRectangleBorder(borderRadius: KomikkuUiTokens.cardRadius),
+        elevation: 0,
       ),
     );
   }
@@ -96,22 +105,36 @@ class CatalystApp extends ConsumerWidget {
     ref.watch(chapterUpdateNotifierProvider);
     ref.watch(extensionUpdateNotifierProvider);
 
-    final baseLight = FlexThemeData.light(
-      scheme: appScheme,
-      useMaterial3: true,
-      useMaterial3ErrorColors: true,
-    ).copyWith(
-      tabBarTheme: const TabBarThemeData(tabAlignment: TabAlignment.center),
-    );
+    final customSchemeName = ref.watch(customFlexSchemeProvider);
+    final baseLight = customSchemeName != null && KomikkuCustomSchemes.lightSchemes.containsKey(customSchemeName)
+        ? FlexThemeData.light(
+            colors: KomikkuCustomSchemes.lightSchemes[customSchemeName]!,
+            useMaterial3: true,
+            useMaterial3ErrorColors: true,
+          )
+        : FlexThemeData.light(
+            scheme: appScheme,
+            useMaterial3: true,
+            useMaterial3ErrorColors: true,
+          ).copyWith(
+            tabBarTheme: const TabBarThemeData(tabAlignment: TabAlignment.center),
+          );
 
-    final baseDark = FlexThemeData.dark(
-      scheme: appScheme,
-      useMaterial3: true,
-      useMaterial3ErrorColors: true,
-      darkIsTrueBlack: isTrueBlack,
-    ).copyWith(
-      tabBarTheme: const TabBarThemeData(tabAlignment: TabAlignment.center),
-    );
+    final baseDark = customSchemeName != null && KomikkuCustomSchemes.darkSchemes.containsKey(customSchemeName)
+        ? FlexThemeData.dark(
+            colors: KomikkuCustomSchemes.darkSchemes[customSchemeName]!,
+            useMaterial3: true,
+            useMaterial3ErrorColors: true,
+            darkIsTrueBlack: isTrueBlack,
+          )
+        : FlexThemeData.dark(
+            scheme: appScheme,
+            useMaterial3: true,
+            useMaterial3ErrorColors: true,
+            darkIsTrueBlack: isTrueBlack,
+          ).copyWith(
+            tabBarTheme: const TabBarThemeData(tabAlignment: TabAlignment.center),
+          );
 
     return GraphQLProvider(
       client: client,

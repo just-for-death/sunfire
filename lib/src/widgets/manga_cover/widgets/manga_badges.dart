@@ -9,6 +9,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../constants/app_sizes.dart';
 import '../../../features/manga_book/domain/manga/manga_model.dart';
+import '../../../theme/komikku_ui_tokens.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../providers/manga_cover_providers.dart';
 
@@ -28,7 +29,8 @@ class MangaBadgesRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final downloadedBadge = ref.watch(downloadedBadgeProvider).ifNull(true);
     final unreadBadge = ref.watch(unreadBadgeProvider).ifNull(true);
-    // final languageBadge = ref.watch(languageBadgeProvider) .ifNull();
+    final languageBadge = ref.watch(languageBadgeProvider).ifNull(false);
+    final sourceBadge = ref.watch(sourceBadgeProvider).ifNull(false);
     return Padding(
       padding: padding ?? KEdgeInsets.a8.size,
       child: Row(
@@ -39,8 +41,8 @@ class MangaBadgesRow extends ConsumerWidget {
               borderRadius: KBorderRadius.r8.radius,
               child: MangaBadge(
                 icon: Icons.collections_bookmark_rounded,
-                color: context.theme.colorScheme.primary,
-                textColor: context.theme.colorScheme.onPrimary,
+                color: context.theme.colorScheme.secondaryContainer,
+                textColor: context.theme.colorScheme.onSecondaryContainer,
               ),
             ),
           if (showCountBadges) ...[
@@ -52,28 +54,39 @@ class MangaBadgesRow extends ConsumerWidget {
                   if (manga.unreadCount.isGreaterThan(0) && unreadBadge)
                     MangaBadge(
                       text: "${manga.unreadCount.getValueOnNullOrNegative()}",
-                      color: context.theme.colorScheme.primary,
-                      textColor: context.theme.colorScheme.onPrimary,
+                      color: context.theme.colorScheme.secondaryContainer,
+                      textColor: context.theme.colorScheme.onSecondaryContainer,
                     ),
                   if (manga.downloadCount.isGreaterThan(0) && downloadedBadge)
                     MangaBadge(
                       text: "${manga.downloadCount.getValueOnNullOrNegative()}",
-                      color: context.theme.colorScheme.tertiary,
-                      textColor: context.theme.colorScheme.onTertiary,
+                      color: context.theme.colorScheme.tertiaryContainer,
+                      textColor: context.theme.colorScheme.onTertiaryContainer,
                     ),
                 ],
               ),
             ),
             if (needSpacer) const Spacer(),
-            // if ((manga.source?.lang?.code) != null && languageBadge)
-            //   ClipRRect(
-            //     borderRadius: KBorderRadius.r16.radius,
-            //     child: Badge(
-            //       text: manga.source!.lang!.code!,
-            //       color: context.theme.colorScheme.tertiary,
-            //       textColor: context.theme.colorScheme.onTertiary,
-            //     ),
-            //   )
+            if (manga.source != null) ...[
+              if (sourceBadge)
+                ClipRRect(
+                  borderRadius: KBorderRadius.r8.radius,
+                  child: MangaBadge(
+                    text: manga.source!.name,
+                    color: context.theme.colorScheme.secondaryContainer,
+                    textColor: context.theme.colorScheme.onSecondaryContainer,
+                  ),
+                ),
+              if (manga.source?.lang.isNotBlank == true && languageBadge)
+                ClipRRect(
+                  borderRadius: KBorderRadius.r8.radius,
+                  child: MangaBadge(
+                    text: manga.source!.lang.toUpperCase(),
+                    color: context.theme.colorScheme.tertiaryContainer,
+                    textColor: context.theme.colorScheme.onTertiaryContainer,
+                  ),
+                ),
+            ],
           ],
         ],
       ),
@@ -100,9 +113,19 @@ class MangaBadge extends StatelessWidget {
       color: color,
       shape: const RoundedRectangleBorder(),
       child: Padding(
-        padding: KEdgeInsets.a4.size,
+        padding: const EdgeInsets.symmetric(
+          horizontal: KomikkuUiTokens.space8,
+          vertical: KomikkuUiTokens.space4,
+        ),
         child: text.isNotBlank
-            ? Text(text!, style: TextStyle(color: textColor))
+            ? Text(
+                text!,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              )
             : Icon(icon, color: textColor, size: 16),
       ),
     );

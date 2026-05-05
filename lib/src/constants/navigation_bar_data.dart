@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../utils/extensions/custom_extensions.dart';
 
+enum NavBadgeType { updates }
+
 class NavigationBarData {
   final String Function(BuildContext context) label;
   final IconData icon;
   final IconData activeIcon;
+  final NavBadgeType? badgeType;
 
   // Catalyst tab order: History · Library · Explore · Feed · Downloads · More
   static final phoneNavList = [
@@ -28,6 +31,7 @@ class NavigationBarData {
       icon: Icons.rss_feed_outlined,
       activeIcon: Icons.rss_feed_rounded,
       label: (context) => context.l10n.updates,
+      badgeType: NavBadgeType.updates,
     ),
     NavigationBarData(
       icon: Icons.download_outlined,
@@ -67,5 +71,6 @@ class NavigationBarData {
     required this.label,
     required this.icon,
     required this.activeIcon,
+    this.badgeType,
   });
 }

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../../../constants/app_sizes.dart';
 import '../../../features/manga_book/domain/manga/manga_model.dart';
+import '../../../utils/extensions/custom_extensions.dart';
 import '../../server_image.dart';
 import '../widgets/manga_badges.dart';
 
@@ -19,6 +20,7 @@ class MangaCoverListTile extends StatelessWidget {
     this.onLongPress,
     this.showBadges = true,
     this.showCountBadges = false,
+    this.isSelected = false,
   });
 
   final MangaDto manga;
@@ -26,9 +28,10 @@ class MangaCoverListTile extends StatelessWidget {
   final VoidCallback? onLongPress;
   final bool showCountBadges;
   final bool showBadges;
+  final bool isSelected;
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final baseTile = InkWell(
       onTap: onPressed,
       onLongPress: onLongPress,
       child: Row(
@@ -58,5 +61,29 @@ class MangaCoverListTile extends StatelessWidget {
         ],
       ),
     );
+
+    if (isSelected) {
+      return Container(
+        color: context.theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+        child: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CircleAvatar(
+                radius: 12,
+                backgroundColor: context.theme.colorScheme.primary,
+                child: Icon(
+                  Icons.check,
+                  size: 16,
+                  color: context.theme.colorScheme.onPrimary,
+                ),
+              ),
+            ),
+            Expanded(child: baseTile),
+          ],
+        ),
+      );
+    }
+    return baseTile;
   }
 }

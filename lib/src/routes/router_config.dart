@@ -250,9 +250,8 @@ class QuickSearchRoute extends ShellRouteData {
       AnnotatedRegion<SystemUiOverlayStyle>(
         value: FlexColorScheme.themedSystemNavigationBar(
           context,
-          systemNavBarStyle: FlexSystemNavBarStyle.background,
+          systemNavBarStyle: FlexSystemNavBarStyle.transparent,
           useDivider: false,
-          opacity: 0.60,
         ),
         child: SearchStackScreen(child: navigator),
       );

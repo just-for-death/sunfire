@@ -6,11 +6,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../constants/navigation_bar_data.dart';
+import 'nav_badge_providers.dart';
 import 'nav_overflow_menu.dart';
 
-class SmallScreenNavigationBar extends StatelessWidget {
+class SmallScreenNavigationBar extends ConsumerWidget {
   const SmallScreenNavigationBar({
     super.key,
     required this.selectedBranchIndex,
@@ -33,11 +35,19 @@ class SmallScreenNavigationBar extends StatelessWidget {
   NavigationDestination _destination(
     BuildContext context,
     NavigationBarData data,
+    int updateCount,
   ) {
+    Widget icon = Icon(data.icon);
+    Widget selectedIcon = Icon(data.activeIcon);
+    if (data.badgeType == NavBadgeType.updates && updateCount > 0) {
+      icon = Badge.count(count: updateCount, child: Icon(data.icon));
+      selectedIcon =
+          Badge.count(count: updateCount, child: Icon(data.activeIcon));
+    }
     return NavigationDestination(
-      icon: Icon(data.icon),
+      icon: icon,
       label: data.label(context),
-      selectedIcon: Icon(data.activeIcon),
+      selectedIcon: selectedIcon,
       tooltip: data.label(context),
     );
   }
@@ -49,7 +59,8 @@ class SmallScreenNavigationBar extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final updateCount = ref.watch(navUpdatesBadgeCountProvider);
     final navList = compact
         ? NavigationBarData.getCompactPhoneNavList(context)
         : NavigationBarData.getNavList(context);
@@ -76,7 +87,7 @@ class SmallScreenNavigationBar extends StatelessWidget {
           onBranchSelected(displayIndex);
         },
         destinations: navList
-            .map((e) => _destination(context, e))
+            .map((e) => _destination(context, e, updateCount))
             .toList(),
       ),
     );

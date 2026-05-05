@@ -26,6 +26,7 @@ class MangaCoverDescriptiveListTile extends StatelessWidget {
     this.onTitleClicked,
     this.showBadges = true,
     this.showCountBadges = true,
+    this.isSelected = false,
   });
   final MangaDto manga;
   final bool showBadges;
@@ -33,9 +34,10 @@ class MangaCoverDescriptiveListTile extends StatelessWidget {
   final VoidCallback? onPressed;
   final VoidCallback? onLongPress;
   final ValueChanged<String?>? onTitleClicked;
+  final bool isSelected;
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final baseTile = InkWell(
       onTap: onPressed,
       onLongPress: onLongPress,
       child: Padding(
@@ -117,24 +119,6 @@ class MangaCoverDescriptiveListTile extends StatelessWidget {
                         ]
                       ],
                     ),
-                    // if (showLastReadChapter) ...[
-                    //   Padding(
-                    //     padding: const EdgeInsets.fromLTRB(0, 20, 0, 0),
-                    //     child: Text(
-                    //       manga.lastChapterRead?.name ?? "",
-                    //       overflow: TextOverflow.ellipsis,
-                    //       style: context.textTheme.bodySmall,
-                    //     ),
-                    //   ),
-                    //   Padding(
-                    //     padding: const EdgeInsets.symmetric(vertical: 2.0),
-                    //     child: Text(
-                    //       manga.lastReadAt.toDaysAgoFromSeconds ?? "",
-                    //       overflow: TextOverflow.ellipsis,
-                    //       style: context.textTheme.bodySmall,
-                    //     ),
-                    //   ),
-                    // ],
                     if (showBadges)
                       context.isTablet
                           ? MangaChipsRow(
@@ -154,5 +138,29 @@ class MangaCoverDescriptiveListTile extends StatelessWidget {
         ),
       ),
     );
+
+    if (isSelected) {
+      return Container(
+        color: context.theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+        child: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CircleAvatar(
+                radius: 12,
+                backgroundColor: context.theme.colorScheme.primary,
+                child: Icon(
+                  Icons.check,
+                  size: 16,
+                  color: context.theme.colorScheme.onPrimary,
+                ),
+              ),
+            ),
+            Expanded(child: baseTile),
+          ],
+        ),
+      );
+    }
+    return baseTile;
   }
 }

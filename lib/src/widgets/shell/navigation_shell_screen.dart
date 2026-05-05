@@ -16,6 +16,7 @@ import '../../utils/misc/toast/toast.dart';
 import 'big_screen_navigation_bar.dart';
 import 'ios/ios_navigation_shell.dart';
 import 'small_screen_navigation_bar.dart';
+import 'top_state_banners.dart';
 
 class NavigationShellScreen extends HookConsumerWidget {
   const NavigationShellScreen({super.key, required this.child});
@@ -85,7 +86,24 @@ class NavigationShellScreen extends HookConsumerWidget {
                 selectedIndex: child.currentIndex,
                 onDestinationSelected: onDestinationSelected,
               ),
-              Expanded(child: child),
+              Expanded(
+                child: Column(
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 280),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => SizeTransition(
+                        sizeFactor: animation,
+                        axisAlignment: -1,
+                        child: FadeTransition(opacity: animation, child: child),
+                      ),
+                      child: TopStateBanners(),
+                    ),
+                    Expanded(child: child),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -96,7 +114,22 @@ class NavigationShellScreen extends HookConsumerWidget {
     final compactBottomNav = context.mediaQueryShortestSide < 600;
     return ServerAwareWrapper(
       child: Scaffold(
-        body: child,
+        body: Column(
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => SizeTransition(
+                sizeFactor: animation,
+                axisAlignment: -1,
+                child: FadeTransition(opacity: animation, child: child),
+              ),
+              child: TopStateBanners(),
+            ),
+            Expanded(child: child),
+          ],
+        ),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         bottomNavigationBar: SmallScreenNavigationBar(
           selectedBranchIndex: child.currentIndex,
