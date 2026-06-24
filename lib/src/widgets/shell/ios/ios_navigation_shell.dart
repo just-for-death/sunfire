@@ -8,7 +8,6 @@ import '../../../constants/navigation_bar_data.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../nav_overflow_menu.dart';
 import '../shell_banner_stack.dart';
-import '../shell_insets.dart';
 
 /// iOS/iPad navigation shell — glass tab bar on iPhone,
 /// sidebar + detail split on iPad.
@@ -72,12 +71,12 @@ class _IPhoneGlassShell extends StatelessWidget {
             switchOutCurve: Curves.easeInCubic,
             transitionBuilder: (child, animation) => SizeTransition(
               sizeFactor: animation,
-              axisAlignment: -1,
+              alignment: Alignment.topCenter,
               child: FadeTransition(opacity: animation, child: child),
             ),
             child: const ShellBannerStack(),
           ),
-          Expanded(child: ShellBottomInset(child: child)),
+          Expanded(child: child),
         ],
       ),
       bottomNavigationBar: _GlassTabBar(
@@ -275,7 +274,7 @@ class _IPadSplitShell extends StatelessWidget {
             child: Column(
               children: [
                 const ShellBannerStack(),
-                Expanded(child: ShellBottomInset(child: child)),
+                Expanded(child: child),
               ],
             ),
           ),

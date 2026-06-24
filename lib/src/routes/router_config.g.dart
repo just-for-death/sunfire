@@ -681,7 +681,7 @@ extension $TrackerSettingsRouteExtension on TrackerSettingsRoute {
 
 extension $MangaRouteExtension on MangaRoute {
   static MangaRoute _fromState(GoRouterState state) => MangaRoute(
-        mangaId: int.parse(state.pathParameters['mangaId']!),
+        mangaId: int.tryParse(state.pathParameters['mangaId'] ?? '') ?? -1,
         categoryId: _$convertMapValue(
             'category-id', state.uri.queryParameters, int.parse),
       );
@@ -705,8 +705,8 @@ extension $MangaRouteExtension on MangaRoute {
 
 extension $ReaderRouteExtension on ReaderRoute {
   static ReaderRoute _fromState(GoRouterState state) => ReaderRoute(
-        mangaId: int.parse(state.pathParameters['mangaId']!),
-        chapterId: int.parse(state.pathParameters['chapterId']!),
+        mangaId: int.tryParse(state.pathParameters['mangaId'] ?? '') ?? -1,
+        chapterId: int.tryParse(state.pathParameters['chapterId'] ?? '') ?? -1,
         transVertical: _$convertMapValue(
             'trans-vertical', state.uri.queryParameters, _$boolConverter),
         toPrev: _$convertMapValue(

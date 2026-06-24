@@ -11,6 +11,7 @@ import '../../../../widgets/shell/ios/glass_app_bar.dart';
 import '../../domain/history_group.dart';
 import '../../domain/history_item.dart';
 import '../history_controller.dart';
+import '../history_reader_navigation.dart';
 
 class IOSHomeScreen extends ConsumerWidget {
   const IOSHomeScreen({super.key});
@@ -19,6 +20,7 @@ class IOSHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final historyGroups = ref.watch(filteredHistoryGroupsProvider);
     final historyState = ref.watch(readingHistoryProvider);
+    final searchQuery = ref.watch(historySearchQueryProvider);
     final isDark = context.isDarkMode;
     final cs = context.theme.colorScheme;
 
@@ -34,7 +36,6 @@ class IOSHomeScreen extends ConsumerWidget {
             parent: AlwaysScrollableScrollPhysics(),
           ),
           slivers: [
-            // Glass large-title app bar
             GlassSliverAppBar(
               title: context.l10n.navHome,
               actions: [
@@ -45,19 +46,36 @@ class IOSHomeScreen extends ConsumerWidget {
                   ),
                   onPressed: () => const GlobalSearchRoute().push(context),
                 ),
+                IconButton(
+                  icon: const Icon(CupertinoIcons.refresh),
+                  onPressed: () =>
+                      ref.read(readingHistoryProvider.notifier).refresh(),
+                ),
               ],
             ),
-
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: CupertinoSearchTextField(
+                  placeholder: context.l10n.searchHistory,
+                  onChanged: (value) => ref
+                      .read(historySearchQueryProvider.notifier)
+                      .updateQuery(value),
+                  onSuffixTap: searchQuery.isBlank
+                      ? null
+                      : () => ref
+                          .read(historySearchQueryProvider.notifier)
+                          .updateQuery(''),
+                ),
+              ),
+            ),
             if (historyGroups.isNotEmpty) ...[
-              // ── Continue Reading carousel
               _ContinueReadingCarousel(groups: historyGroups),
-
-              // ── Recent section header
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
                   child: Text(
-                    'Recent',
+                    context.l10n.historyRecent,
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
@@ -67,25 +85,36 @@ class IOSHomeScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-
-              // ── Recent history list as glass cards
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
                 sliver: SliverList.builder(
                   itemCount: historyGroups.fold<int>(
                       0, (sum, g) => sum + g.items.length),
                   itemBuilder: (context, index) {
-                    // Flatten all items across groups
                     final allItems =
                         historyGroups.expand((g) => g.items).toList();
                     if (index >= allItems.length) return null;
-                    return _IOSHistoryTile(
-                      item: allItems[index],
-                      isDark: isDark,
-                      cs: cs,
-                      onRemove: () => ref
+                    final item = allItems[index];
+                    return Dismissible(
+                      key: ValueKey('ios_history_${item.id}'),
+                      direction: DismissDirection.endToStart,
+                      onDismissed: (_) => ref
                           .read(readingHistoryProvider.notifier)
-                          .removeFromHistory(allItems[index].id),
+                          .removeFromHistory(item.id),
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 24),
+                        color: cs.error.withValues(alpha: 0.85),
+                        child: Icon(
+                          CupertinoIcons.delete,
+                          color: cs.onError,
+                        ),
+                      ),
+                      child: _IOSHistoryTile(
+                        item: item,
+                        isDark: isDark,
+                        cs: cs,
+                      ),
                     );
                   },
                 ),
@@ -96,13 +125,17 @@ class IOSHomeScreen extends ConsumerWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(CupertinoIcons.book,
-                          size: 56,
-                          color: (isDark ? Colors.white : Colors.black)
-                              .withValues(alpha: 0.2)),
+                      Icon(
+                        CupertinoIcons.book,
+                        size: 56,
+                        color: (isDark ? Colors.white : Colors.black)
+                            .withValues(alpha: 0.2),
+                      ),
                       const SizedBox(height: 16),
                       Text(
-                        'No reading history',
+                        searchQuery.isNotBlank
+                            ? context.l10n.noHistoryFound
+                            : context.l10n.noHistoryFound,
                         style: TextStyle(
                           fontSize: 17,
                           color: (isDark ? Colors.white : Colors.black)
@@ -120,7 +153,6 @@ class IOSHomeScreen extends ConsumerWidget {
   }
 }
 
-// ── Continue Reading carousel (Aidoku HomeBigScrollerView style)
 class _ContinueReadingCarousel extends StatelessWidget {
   const _ContinueReadingCarousel({required this.groups});
   final List<HistoryGroup> groups;
@@ -138,7 +170,7 @@ class _ContinueReadingCarousel extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
             child: Text(
-              'Continue Reading',
+              context.l10n.historyContinueReading,
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -164,22 +196,19 @@ class _ContinueReadingCarousel extends StatelessWidget {
   }
 }
 
-class _CarouselCard extends StatelessWidget {
+class _CarouselCard extends ConsumerWidget {
   const _CarouselCard({required this.item, required this.isDark});
   final HistoryItemDto item;
   final bool isDark;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final progress = item.pageCount > 0
         ? (item.lastPageRead / item.pageCount).clamp(0.0, 1.0)
         : 0.0;
 
     return GestureDetector(
-      onTap: () => ReaderRoute(
-        mangaId: item.mangaId,
-        chapterId: item.id,
-      ).push(context),
+      onTap: () => openReaderFromHistoryItem(context, ref, item),
       child: Container(
         width: 120,
         margin: const EdgeInsets.only(right: 12),
@@ -188,12 +217,10 @@ class _CarouselCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Cover
               ServerImage(
                 imageUrl: item.manga.thumbnailUrl ?? '',
                 fit: BoxFit.cover,
               ),
-              // Bottom glass overlay with title + progress
               Positioned(
                 left: 0,
                 right: 0,
@@ -228,7 +255,6 @@ class _CarouselCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 6),
-                          // Progress bar
                           ClipRRect(
                             borderRadius: BorderRadius.circular(2),
                             child: LinearProgressIndicator(
@@ -254,26 +280,22 @@ class _CarouselCard extends StatelessWidget {
   }
 }
 
-// ── iOS-style history list tile with glass card
-class _IOSHistoryTile extends StatelessWidget {
+class _IOSHistoryTile extends ConsumerWidget {
   const _IOSHistoryTile({
     required this.item,
     required this.isDark,
     required this.cs,
-    required this.onRemove,
   });
   final HistoryItemDto item;
   final bool isDark;
   final ColorScheme cs;
-  final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return GlassCard(
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          // Cover
           GestureDetector(
             onTap: () => MangaRoute(mangaId: item.mangaId).push(context),
             child: ClipRRect(
@@ -286,7 +308,6 @@ class _IOSHistoryTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          // Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,12 +336,8 @@ class _IOSHistoryTile extends StatelessWidget {
               ],
             ),
           ),
-          // Continue arrow
           GestureDetector(
-            onTap: () => ReaderRoute(
-              mangaId: item.mangaId,
-              chapterId: item.id,
-            ).push(context),
+            onTap: () => openReaderFromHistoryItem(context, ref, item),
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
