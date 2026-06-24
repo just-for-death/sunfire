@@ -8,6 +8,7 @@ import '../../../../widgets/emoticons.dart';
 import '../../data/downloads/downloads_repository.dart';
 import '../../data/local_downloads/local_downloads_service.dart';
 import '../../domain/downloads/downloads_model.dart';
+import '../reader/controller/reader_controller.dart';
 import 'controller/downloads_controller.dart';
 import 'widgets/download_progress_list_tile.dart';
 import 'widgets/downloads_fab.dart';
@@ -52,18 +53,19 @@ class DownloadsScreen extends ConsumerWidget {
                       final ok = await showDialog<bool>(
                             context: context,
                             builder: (ctx) => AlertDialog(
-                              title: const Text('Delete offline downloads?'),
+                              title: Text(context.l10n.deleteOfflineDownloadsTitle),
                               content: Text(
-                                  'This will remove ${ids.length} offline chapter(s) from this device.'),
+                                context.l10n.deleteOfflineDownloadsBody(ids.length),
+                              ),
                               actions: [
                                 TextButton(
                                     onPressed: () =>
                                         Navigator.of(ctx).pop(false),
-                                    child: const Text('Cancel')),
+                                    child: Text(context.l10n.cancel)),
                                 FilledButton(
                                     onPressed: () =>
                                         Navigator.of(ctx).pop(true),
-                                    child: const Text('Delete')),
+                                    child: Text(context.l10n.remove)),
                               ],
                             ),
                           ) ??
@@ -72,8 +74,10 @@ class DownloadsScreen extends ConsumerWidget {
                       final service = ref.read(localDownloadsServiceProvider);
                       for (final id in ids) {
                         await service.deleteChapter(id);
+                        ref.invalidate(chapterPagesProvider(chapterId: id));
                       }
                       ref.invalidate(localDownloadedChapterIdsProvider);
+                      ref.invalidate(offlineStorageSizeProvider);
                     },
                     icon: const Icon(Icons.delete_outline_rounded),
                   )

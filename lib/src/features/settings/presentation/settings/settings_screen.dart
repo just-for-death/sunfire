@@ -69,7 +69,7 @@ class MaterialSettingsScreen extends StatelessWidget {
             onTap: () => const ServerSettingsRoute().go(context),
           ),
           ListTile(
-            title: const Text('Trackers'),
+            title: Text(context.l10n.trackers),
             leading: const Icon(Icons.track_changes_rounded),
             onTap: () => const TrackerSettingsRoute().go(context),
           ),

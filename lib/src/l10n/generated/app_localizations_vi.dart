@@ -890,6 +890,24 @@ class AppLocalizationsVi extends AppLocalizations {
   String get migrationInProgress => 'Đang tiến hành di chuyển';
 
   @override
+  String get migrationBatchTitle => 'Batch migration';
+
+  @override
+  String migrationSuccessMangaCount(int count) {
+    return 'Successfully migrated $count manga.';
+  }
+
+  @override
+  String migrationPartialFailure(int success, int total, int failed) {
+    return 'Migrated $success of $total. $failed failed.';
+  }
+
+  @override
+  String migrationProgressCount(int current, int total) {
+    return '$current of $total';
+  }
+
+  @override
   String get migrationComplete => 'Di chuyển đã hoàn tất';
 
   @override
@@ -1213,6 +1231,26 @@ class AppLocalizationsVi extends AppLocalizations {
   @override
   String get localDownloadRemoveBody =>
       'This chapter will be removed from your device. You can download it again anytime.';
+
+  @override
+  String get deleteOfflineDownloadsTitle => 'Delete offline downloads?';
+
+  @override
+  String deleteOfflineDownloadsBody(int count) {
+    return 'This will remove $count offline chapter(s) from this device.';
+  }
+
+  @override
+  String get readerPagesLoadFailed => 'Could not load chapter pages';
+
+  @override
+  String get readerTapPreviousPage => 'Previous page';
+
+  @override
+  String get readerTapNextPage => 'Next page';
+
+  @override
+  String get readerTapToggleMenu => 'Toggle reader menu';
 
   @override
   String get globalSearchHint => 'Type to search across all sources';

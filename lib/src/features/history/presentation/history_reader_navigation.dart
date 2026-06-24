@@ -24,6 +24,7 @@ Future<void> openReaderFromHistoryItem(
 
   final completer = Completer<void>();
   ProviderSubscription? sub;
+  var opened = false;
 
   void finish() {
     if (!completer.isCompleted) {
@@ -51,6 +52,10 @@ Future<void> openReaderFromHistoryItem(
   }
 
   void resolveAndOpen() {
+    if (opened) return;
+    opened = true;
+    sub?.close();
+
     final pair = ref.read(
       getNextAndPreviousChaptersProvider(
         mangaId: item.mangaId,
@@ -70,8 +75,10 @@ Future<void> openReaderFromHistoryItem(
     (_, next) {
       if (next is AsyncData) {
         resolveAndOpen();
-      } else if (next is AsyncError) {
-        openChapter(item.id);
+      } else if (next is AsyncError && !opened) {
+        opened = true;
+        sub?.close();
+        openMangaDetails();
       }
     },
   );
@@ -92,7 +99,10 @@ Future<void> openReaderFromHistoryItem(
   try {
     await completer.future.timeout(const Duration(seconds: 10));
   } on TimeoutException {
-    openChapter(item.id);
+    if (!opened) {
+      opened = true;
+      openMangaDetails();
+    }
   } finally {
     finish();
   }
