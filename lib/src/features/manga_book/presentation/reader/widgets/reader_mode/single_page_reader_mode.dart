@@ -90,7 +90,7 @@ class SinglePageReaderMode extends HookConsumerWidget {
     useEffect(() {
       listener() {
         final currentPage = scrollController.page;
-        if (currentPage != null) currentIndex.value = (currentPage.toInt());
+        if (currentPage != null) currentIndex.value = currentPage.round();
       }
 
       scrollController.addListener(listener);
@@ -104,6 +104,7 @@ class SinglePageReaderMode extends HookConsumerWidget {
       manga: manga,
       chapterPages: chapterPages,
       currentIndex: currentIndex.value,
+      livePageIndex: currentIndex,
       onChanged: (index) => scrollController.jumpToPage(index),
       showReaderLayoutAnimation: showReaderLayoutAnimation,
       onPrevious: () => scrollController.previousPage(

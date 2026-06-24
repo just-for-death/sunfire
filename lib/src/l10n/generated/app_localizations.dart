@@ -2224,6 +2224,48 @@ abstract class AppLocalizations {
   /// **'Enable notifications'**
   String get notificationsEnableA11y;
 
+  /// No description provided for @localDownloadToDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Download offline to device'**
+  String get localDownloadToDevice;
+
+  /// No description provided for @localDownloadRemoveTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove offline download'**
+  String get localDownloadRemoveTooltip;
+
+  /// No description provided for @localDownloadRetryTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry offline download'**
+  String get localDownloadRetryTooltip;
+
+  /// No description provided for @localDownloadRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove offline download?'**
+  String get localDownloadRemoveTitle;
+
+  /// No description provided for @localDownloadRemoveBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This chapter will be removed from your device. You can download it again anytime.'**
+  String get localDownloadRemoveBody;
+
+  /// No description provided for @globalSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type to search across all sources'**
+  String get globalSearchHint;
+
+  /// No description provided for @seeAll.
+  ///
+  /// In en, this message translates to:
+  /// **'See all'**
+  String get seeAll;
+
   /// Screen title and Button text of Settings screen
   ///
   /// In en, this message translates to:
