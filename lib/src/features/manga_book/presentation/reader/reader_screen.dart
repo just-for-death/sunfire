@@ -299,7 +299,7 @@ class ReaderScreen extends HookConsumerWidget {
       }
       if (chapterPagesData == null) {
         return Emoticons(
-          title: context.l10n.noChaptersFound,
+          title: context.l10n.readerPagesLoadFailed,
           button: TextButton(
             onPressed: () =>
                 ref.refresh(chapterPagesProvider(chapterId: chapterId).future),

@@ -10,6 +10,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 
 import '../../../../../constants/enum.dart';
 import '../../../../../routes/router_config.dart';
+import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../domain/chapter/chapter_model.dart';
 import '../../../domain/chapter_page/chapter_page_model.dart';
 import '../utils/last_page_swipe_utils.dart';
@@ -70,7 +71,10 @@ class DirectionalSwipeGestureHandler extends HookWidget {
 
   /// Advanced gesture handler using RawGestureDetector for proper arena competition
   Widget _buildAdvancedGestureHandler(BuildContext context) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: context.l10n.readerTapToggleMenu,
+      child: GestureDetector(
       onLongPressStart: onLongPressStart,
       onLongPressEnd: onLongPressEnd,
       onLongPressMoveUpdate: onLongPressMoveUpdate,
@@ -88,12 +92,16 @@ class DirectionalSwipeGestureHandler extends HookWidget {
         }
       },
       child: child,
+    ),
     );
   }
 
   /// Simple gesture handler as fallback
   Widget _buildSimpleGestureHandler(BuildContext context) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: context.l10n.readerTapToggleMenu,
+      child: GestureDetector(
       onLongPressStart: onLongPressStart,
       onLongPressEnd: onLongPressEnd,
       onLongPressMoveUpdate: onLongPressMoveUpdate,
@@ -114,6 +122,7 @@ class DirectionalSwipeGestureHandler extends HookWidget {
         );
       },
       child: child,
+    ),
     );
   }
 
@@ -236,6 +245,23 @@ class DirectionalSwipeGestureHandler extends HookWidget {
     }
   }
 
+  bool _isRTLReaderMode(ReaderMode mode) {
+    switch (mode) {
+      case ReaderMode.singleHorizontalRTL:
+      case ReaderMode.continuousHorizontalRTL:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  bool _chapterToPrev({
+    required bool goingToPrevious,
+  }) {
+    final isRTL = _isRTLReaderMode(resolvedReaderMode);
+    return goingToPrevious ? !isRTL : isRTL;
+  }
+
   /// Navigate to next chapter with graceful fallback
   void _navigateToNextChapterWithFallback(BuildContext context) {
     if (prevNextChapterPair?.first != null) {
@@ -244,6 +270,7 @@ class DirectionalSwipeGestureHandler extends HookWidget {
           mangaId: mangaId,
           chapterId: prevNextChapterPair!.first!.id,
           transVertical: scrollDirection != Axis.vertical,
+          toPrev: _chapterToPrev(goingToPrevious: false),
         ).pushReplacement(context);
       } catch (e) {
         onNextPage();
@@ -260,7 +287,7 @@ class DirectionalSwipeGestureHandler extends HookWidget {
         ReaderRoute(
           mangaId: mangaId,
           chapterId: prevNextChapterPair!.second!.id,
-          toPrev: true,
+          toPrev: _chapterToPrev(goingToPrevious: true),
           transVertical: scrollDirection != Axis.vertical,
         ).pushReplacement(context);
       } catch (e) {
@@ -342,10 +369,23 @@ class DirectionalSwipeGestureHandler extends HookWidget {
 
     if (details.primaryVelocity == null) return;
 
-    if (details.primaryVelocity! > 8) {
-      _navigateToPreviousChapterWithFallback(context);
-    } else {
+    final velocity = details.primaryVelocity!;
+    if (velocity.abs() < 8) return;
+
+    final bool isVertical = scrollDirection == Axis.vertical;
+    final bool isRTL = resolvedReaderMode == ReaderMode.singleHorizontalRTL ||
+        resolvedReaderMode == ReaderMode.continuousHorizontalRTL;
+
+    final bool goesToNext = isVertical
+        ? velocity < 0
+        : isRTL
+            ? velocity > 0
+            : velocity < 0;
+
+    if (goesToNext) {
       _navigateToNextChapterWithFallback(context);
+    } else {
+      _navigateToPreviousChapterWithFallback(context);
     }
   }
 }

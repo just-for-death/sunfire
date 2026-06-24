@@ -90,6 +90,11 @@ Future<List<MangaDto>> migrationSourceQuickSearchMangaList(
 AsyncValue<List<MigrationQuickSearchResults>> migrationGlobalSearchResults(
     Ref ref,
     {String? query}) {
+  final trimmed = query?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return const AsyncData([]);
+  }
+
   final sourceMapData = ref.watch(sourceMapFilteredProvider);
 
   final sourceMap = <String, List<SourceDto>>{...?sourceMapData.valueOrNull}
@@ -102,7 +107,7 @@ AsyncValue<List<MigrationQuickSearchResults>> migrationGlobalSearchResults(
   for (SourceDto source in sourceList) {
     if (source.id.isNotBlank) {
       final mangaList = ref.watch(
-        migrationSourceQuickSearchMangaListProvider(source.id, query: query),
+        migrationSourceQuickSearchMangaListProvider(source.id, query: trimmed),
       );
       sourceMangaListPairList.add((mangaList: mangaList, source: source));
     }
@@ -113,14 +118,27 @@ AsyncValue<List<MigrationQuickSearchResults>> migrationGlobalSearchResults(
 
 @riverpod
 class MigrationExecution extends _$MigrationExecution {
+  bool _cancelRequested = false;
+
   @override
   MigrationProgress? build() => null;
+
+  bool get _isCancelled =>
+      _cancelRequested || state?.status == MigrationStatus.cancelled;
+
+  void _setCancelledState() {
+    state = const MigrationProgress(
+      currentStep: MigrationStep.migrationCancelled,
+      status: MigrationStatus.cancelled,
+    );
+  }
 
   Future<MigrationResult?> executeMigration({
     required int fromMangaId,
     required int toMangaId,
     required MigrationOption options,
   }) async {
+    _cancelRequested = false;
     try {
       // Set initial progress
       state = const MigrationProgress(
@@ -131,6 +149,10 @@ class MigrationExecution extends _$MigrationExecution {
 
       // Add a delay for visual feedback
       await Future.delayed(const Duration(milliseconds: 1000));
+      if (_isCancelled) {
+        _setCancelledState();
+        return null;
+      }
 
       // Update progress to migrating chapters
       state = const MigrationProgress(
@@ -141,6 +163,10 @@ class MigrationExecution extends _$MigrationExecution {
 
       // Add another delay
       await Future.delayed(const Duration(milliseconds: 800));
+      if (_isCancelled) {
+        _setCancelledState();
+        return null;
+      }
 
       // Update progress to migrating categories
       state = const MigrationProgress(
@@ -151,6 +177,10 @@ class MigrationExecution extends _$MigrationExecution {
 
       // Add another delay
       await Future.delayed(const Duration(milliseconds: 600));
+      if (_isCancelled) {
+        _setCancelledState();
+        return null;
+      }
 
       // Update progress to finalizing
       state = const MigrationProgress(
@@ -160,6 +190,11 @@ class MigrationExecution extends _$MigrationExecution {
       );
 
       // Now execute the actual migration
+      if (_isCancelled) {
+        _setCancelledState();
+        return null;
+      }
+
       final result = await ref
           .read(migrationRepositoryProvider)
           .migrateManga(fromMangaId, toMangaId, options);
@@ -195,6 +230,7 @@ class MigrationExecution extends _$MigrationExecution {
   }
 
   Future<void> cancelMigration() async {
+    _cancelRequested = true;
     try {
       await ref.read(migrationRepositoryProvider).cancelMigration();
       state = const MigrationProgress(
@@ -214,6 +250,7 @@ class MigrationExecution extends _$MigrationExecution {
     Map<MangaDto, MangaDto> matchedMangas,
     MigrationOption options,
   ) async {
+    _cancelRequested = false;
     state = const MigrationProgress(
       currentStep: MigrationStep.preparingMigration,
       percentage: 0.0,
@@ -223,6 +260,8 @@ class MigrationExecution extends _$MigrationExecution {
     );
 
     int count = 0;
+    int successCount = 0;
+    int failedCount = 0;
     final int total = matchedMangas.length;
 
     // Guard against empty map to prevent divide-by-zero (NaN percentage).
@@ -238,6 +277,11 @@ class MigrationExecution extends _$MigrationExecution {
     }
 
     for (final entry in matchedMangas.entries) {
+      if (_isCancelled) {
+        _setCancelledState();
+        return;
+      }
+
       final fromManga = entry.key;
       final toManga = entry.value;
 
@@ -254,7 +298,15 @@ class MigrationExecution extends _$MigrationExecution {
           .migrateManga(fromManga.id, toManga.id, options);
 
       if (result?.success == true) {
+        successCount++;
         await _invalidateCachesAfterMigration(fromManga.id, toManga.id);
+      } else {
+        failedCount++;
+      }
+
+      if (_isCancelled) {
+        _setCancelledState();
+        return;
       }
 
       count++;
@@ -269,6 +321,17 @@ class MigrationExecution extends _$MigrationExecution {
       );
     }
 
+    if (failedCount > 0) {
+      state = MigrationProgress(
+        currentStep: MigrationStep.migrationFailed,
+        percentage: 100.0,
+        status: MigrationStatus.error,
+        processedItems: successCount,
+        totalItems: total,
+      );
+      return;
+    }
+
     state = MigrationProgress(
       currentStep: MigrationStep.migrationCompleted,
       percentage: 100.0,
@@ -279,6 +342,7 @@ class MigrationExecution extends _$MigrationExecution {
   }
 
   void reset() {
+    _cancelRequested = false;
     state = null;
   }
 

@@ -65,6 +65,9 @@ class LocalChapterDownload extends _$LocalChapterDownload {
       );
       state = LocalDownloadState.finished;
       ref.invalidate(chapterPagesProvider(chapterId: chapterId));
+      ref.invalidate(localDownloadedChapterIdsProvider);
+      ref.invalidate(offlineStorageSizeProvider);
+      state = LocalDownloadState.idle;
     } catch (_) {
       state = LocalDownloadState.error;
     }
@@ -78,6 +81,8 @@ class LocalChapterDownload extends _$LocalChapterDownload {
       await service.deleteChapter(chapterId);
       state = LocalDownloadState.idle;
       ref.invalidate(chapterPagesProvider(chapterId: chapterId));
+      ref.invalidate(localDownloadedChapterIdsProvider);
+      ref.invalidate(offlineStorageSizeProvider);
     } catch (_) {
       state = LocalDownloadState.error;
     }

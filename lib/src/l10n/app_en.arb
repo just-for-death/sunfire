@@ -1194,6 +1194,28 @@
     "migrationSearchInSource": "Search in {sourceName}",
     "migrationPreview": "Migration Preview",
     "migrationInProgress": "Migration in Progress",
+    "migrationBatchTitle": "Batch migration",
+    "migrationSuccessMangaCount": "Successfully migrated {count} manga.",
+    "@migrationSuccessMangaCount": {
+        "placeholders": {
+            "count": { "type": "int" }
+        }
+    },
+    "migrationPartialFailure": "Migrated {success} of {total}. {failed} failed.",
+    "@migrationPartialFailure": {
+        "placeholders": {
+            "success": { "type": "int" },
+            "total": { "type": "int" },
+            "failed": { "type": "int" }
+        }
+    },
+    "migrationProgressCount": "{current} of {total}",
+    "@migrationProgressCount": {
+        "placeholders": {
+            "current": { "type": "int" },
+            "total": { "type": "int" }
+        }
+    },
     "migrationComplete": "Migration completed successfully",
     "migrationFailed": "Migration Failed",
     "migrationCancelled": "Migration Cancelled",
@@ -1296,6 +1318,17 @@
     "localDownloadRetryTooltip": "Retry offline download",
     "localDownloadRemoveTitle": "Remove offline download?",
     "localDownloadRemoveBody": "This chapter will be removed from your device. You can download it again anytime.",
+    "deleteOfflineDownloadsTitle": "Delete offline downloads?",
+    "deleteOfflineDownloadsBody": "This will remove {count} offline chapter(s) from this device.",
+    "@deleteOfflineDownloadsBody": {
+        "placeholders": {
+            "count": { "type": "int" }
+        }
+    },
+    "readerPagesLoadFailed": "Could not load chapter pages",
+    "readerTapPreviousPage": "Previous page",
+    "readerTapNextPage": "Next page",
+    "readerTapToggleMenu": "Toggle reader menu",
     "globalSearchHint": "Type to search across all sources",
     "seeAll": "See all",
     "settings": "Settings",

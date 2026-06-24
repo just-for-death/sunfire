@@ -115,7 +115,9 @@ class LocalDownloadsService {
   }) async {
     final repo = ref.read(mangaBookRepositoryProvider);
     final chapterPages = await repo.getChapterPages(chapterId: chapterId);
-    if (chapterPages == null || chapterPages.pages.isEmpty) return;
+    if (chapterPages == null || chapterPages.pages.isEmpty) {
+      throw StateError('No chapter pages available for offline download');
+    }
 
     final total = chapterPages.pages.length;
     final dir = await _chapterDir(chapterId);
