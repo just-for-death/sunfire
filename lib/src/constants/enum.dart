@@ -70,6 +70,19 @@ enum ReaderNavigationLayout {
       };
 }
 
+enum ReaderOrientationLock {
+  auto,
+  portrait,
+  landscape;
+
+  String toLocale(BuildContext context) => switch (this) {
+        ReaderOrientationLock.auto => context.l10n.readerOrientationAuto,
+        ReaderOrientationLock.portrait => context.l10n.readerOrientationPortrait,
+        ReaderOrientationLock.landscape =>
+          context.l10n.readerOrientationLandscape,
+      };
+}
+
 enum MangaSort {
   alphabetical,
   dateAdded,

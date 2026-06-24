@@ -12,6 +12,8 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'notification_navigation.dart';
+import '../../../../utils/platform/mobile_permissions.dart';
 import '../manga_book/domain/manga/manga_model.dart';
 
 /// Singleton wrapper around FlutterLocalNotificationsPlugin.
@@ -69,9 +71,7 @@ class NotificationService {
   }
 
   void _onNotificationTap(NotificationResponse response) {
-    // Could navigate to updates / extensions screen.
-    // Navigation from outside widgets is complex — left for future.
-    debugPrint('[Notifications] Tapped: ${response.id}');
+    NotificationNavigation.handleTap(response.id);
   }
 
   /// Show a notification for a specific manga update.
@@ -81,6 +81,7 @@ class NotificationService {
   }) async {
     if (!_initialized) await init();
     if (chaptersCount <= 0) return;
+    if (!await MobilePermissions.ensureNotificationPermission()) return;
 
     String? iconPath;
     if (manga.thumbnailUrl != null && manga.thumbnailUrl!.isNotEmpty) {
@@ -184,6 +185,7 @@ class NotificationService {
   }) async {
     if (!_initialized) await init();
     if (updateCount <= 0) return;
+    if (!await MobilePermissions.ensureNotificationPermission()) return;
 
     final body =
         '$updateCount ${updateCount == 1 ? 'extension has' : 'extensions have'} updates — check Browse';

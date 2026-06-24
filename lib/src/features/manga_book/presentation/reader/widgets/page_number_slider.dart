@@ -25,23 +25,27 @@ class PageNumberSlider extends StatelessWidget {
   final bool inverted;
   @override
   Widget build(BuildContext context) {
+    final safeMaxValue = max(maxValue, 1);
+    final safeCurrentValue = currentValue.clamp(0, safeMaxValue - 1);
     final sliderWidget = [
-      Text("${currentValue + 1}"),
+      Text("${safeCurrentValue + 1}"),
       Expanded(
         child: Transform.flip(
           flipX: inverted,
           child: Slider(
-            value: min(currentValue.toDouble(), maxValue.toDouble()),
+            value: safeCurrentValue.toDouble(),
             min: 0,
-            max: maxValue.toDouble() - 1,
-            divisions: max(maxValue - 1, 1),
-            onChanged: (val) => onChanged(val.toInt()),
+            max: (safeMaxValue - 1).toDouble(),
+            divisions: max(safeMaxValue - 1, 1),
+            onChanged: (val) => onChanged(val.round().clamp(0, safeMaxValue - 1)),
           ),
         ),
       ),
-      Text("$maxValue"),
+      Text("$safeMaxValue"),
     ];
-    return Card(
+    return Semantics(
+      label: 'Page ${safeCurrentValue + 1} of $safeMaxValue',
+      child: Card(
       color: context.theme.appBarTheme.backgroundColor?.withValues(alpha: .7),
       shape: RoundedRectangleBorder(
         borderRadius: KBorderRadius.r32.radius,
@@ -52,6 +56,7 @@ class PageNumberSlider extends StatelessWidget {
           children: inverted ? sliderWidget.reversed.toList() : sliderWidget,
         ),
       ),
+    ),
     );
   }
 }
