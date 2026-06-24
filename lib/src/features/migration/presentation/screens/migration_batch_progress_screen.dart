@@ -28,7 +28,7 @@ class MigrationBatchProgressScreen extends ConsumerWidget {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text('Batch Migration'),
+          title: Text(l10n.migrationBatchTitle),
           automaticallyImplyLeading:
               progress?.status == MigrationStatus.completed ||
                   progress?.status == MigrationStatus.error ||
@@ -45,26 +45,40 @@ class MigrationBatchProgressScreen extends ConsumerWidget {
                       size: 80, color: context.theme.colorScheme.primary),
                   const SizedBox(height: 24),
                   Text(
-                    'Migration Completed',
+                    l10n.migrationComplete,
                     style: context.theme.textTheme.headlineSmall,
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Successfully migrated ${progress?.totalItems} mangas.',
+                    l10n.migrationSuccessMangaCount(progress!.totalItems),
                     style: context.theme.textTheme.bodyLarge?.copyWith(
                       color: context.theme.colorScheme.onSurfaceVariant,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ] else if (progress?.status == MigrationStatus.error) ...[
                   Icon(Icons.error,
                       size: 80, color: context.theme.colorScheme.error),
                   const SizedBox(height: 24),
                   Text(
-                    'Migration Failed',
+                    l10n.migrationFailed,
                     style: context.theme.textTheme.headlineSmall,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.migrationPartialFailure(
+                      progress!.processedItems,
+                      progress.totalItems,
+                      progress.totalItems - progress.processedItems,
+                    ),
+                    textAlign: TextAlign.center,
+                    style: context.theme.textTheme.bodyLarge?.copyWith(
+                      color: context.theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ] else ...[
-                  // Progressing
                   CircularProgressIndicator(
                     value: progress != null && progress.totalItems > 0
                         ? (progress.processedItems / progress.totalItems)
@@ -72,13 +86,16 @@ class MigrationBatchProgressScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 32),
                   Text(
-                    'Migrating...',
+                    l10n.migrationInProgress,
                     style: context.theme.textTheme.titleLarge,
                   ),
                   const SizedBox(height: 16),
                   if (progress != null && progress.totalItems > 0)
                     Text(
-                      '${progress.processedItems} of ${progress.totalItems}',
+                      l10n.migrationProgressCount(
+                        progress.processedItems,
+                        progress.totalItems,
+                      ),
                       style: context.theme.textTheme.titleMedium?.copyWith(
                         color: context.theme.colorScheme.onSurfaceVariant,
                       ),
@@ -93,7 +110,8 @@ class MigrationBatchProgressScreen extends ConsumerWidget {
                   ),
                 ],
                 const SizedBox(height: 48),
-                if (progress?.status == MigrationStatus.migrating)
+                if (progress?.status == MigrationStatus.migrating ||
+                    progress?.status == MigrationStatus.preparing)
                   OutlinedButton.icon(
                     onPressed: () => _showCancelConfirmation(context, ref),
                     icon: const Icon(Icons.cancel),
@@ -105,7 +123,6 @@ class MigrationBatchProgressScreen extends ConsumerWidget {
                   FilledButton(
                     onPressed: () {
                       ref.read(migrationExecutionProvider.notifier).reset();
-                      // go back to library or something
                       context.go('/library/0');
                     },
                     child: Text(l10n.done),

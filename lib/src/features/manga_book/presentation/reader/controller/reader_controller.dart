@@ -15,6 +15,51 @@ import '../../../domain/chapter_page/graphql/__generated__/fragment.graphql.dart
 
 part 'reader_controller.g.dart';
 
+Future<ChapterPagesDto?> _chapterPagesWithLocalFallback(
+  Ref ref, {
+  required int chapterId,
+}) async {
+  final localPages = await ref
+      .read(localDownloadsServiceProvider)
+      .getLocalPages(chapterId);
+
+  ChapterPagesDto? remote;
+  try {
+    remote = await ref
+        .read(mangaBookRepositoryProvider)
+        .getChapterPages(chapterId: chapterId);
+  } catch (_) {
+    remote = null;
+  }
+
+  if (remote != null) {
+    if (localPages == null || localPages.isEmpty) return remote;
+    return remote.copyWith(
+      pages: localPages,
+      chapter: remote.chapter.copyWith(pageCount: localPages.length),
+    );
+  }
+
+  if (localPages == null || localPages.isEmpty) return null;
+
+  ChapterDto? chapter;
+  try {
+    chapter = await ref
+        .read(mangaBookRepositoryProvider)
+        .getChapter(chapterId: chapterId);
+  } catch (_) {
+    chapter = null;
+  }
+
+  return ChapterPagesDto(
+    chapter: Fragment$ChapterPagesDto$chapter(
+      id: chapter?.id ?? chapterId,
+      pageCount: localPages.length,
+    ),
+    pages: localPages,
+  );
+}
+
 @riverpod
 FutureOr<ChapterDto?> chapter(
   Ref ref, {
@@ -23,19 +68,5 @@ FutureOr<ChapterDto?> chapter(
     ref.watch(mangaBookRepositoryProvider).getChapter(chapterId: chapterId);
 
 @riverpod
-Future<ChapterPagesDto?> chapterPages(Ref ref, {required int chapterId}) => ref
-        .watch(mangaBookRepositoryProvider)
-        .getChapterPages(chapterId: chapterId)
-        .then((remote) async {
-      if (remote == null) return null;
-      final localPages = await ref
-          .read(localDownloadsServiceProvider)
-          .getLocalPages(chapterId);
-      if (localPages == null || localPages.isEmpty) return remote;
-
-      // Ensure both the pages list and `pageCount` match for reader layouts.
-      return remote.copyWith(
-        pages: localPages,
-        chapter: remote.chapter.copyWith(pageCount: localPages.length),
-      );
-    });
+Future<ChapterPagesDto?> chapterPages(Ref ref, {required int chapterId}) =>
+    _chapterPagesWithLocalFallback(ref, chapterId: chapterId);
