@@ -8,11 +8,9 @@ import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../widgets/server_image.dart';
 import '../../domain/source/source_model.dart';
 import '../extension/controller/extension_controller.dart';
-import '../extension/extension_screen.dart';
 import '../extension/widgets/extension_language_filter_dialog.dart';
 import '../extension/widgets/install_extension_file.dart';
 import '../source/controller/source_controller.dart' hide SourceLanguageFilter;
-import '../source/source_screen.dart';
 import '../source/widgets/source_language_filter.dart';
 
 class BrowseScreen extends HookConsumerWidget {
@@ -30,13 +28,30 @@ class BrowseScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tabController =
         useTabController(initialLength: 2, initialIndex: currentIndex);
+    final syncingFromShell = useRef(false);
 
     useEffect(() {
       if (currentIndex != tabController.index) {
+        syncingFromShell.value = true;
         tabController.animateTo(currentIndex);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          syncingFromShell.value = false;
+        });
       }
       return null;
     }, [currentIndex]);
+
+    useEffect(() {
+      void onTabChanged() {
+        if (syncingFromShell.value || tabController.indexIsChanging) return;
+        if (tabController.index != currentIndex) {
+          onDestinationSelected(tabController.index);
+        }
+      }
+
+      tabController.addListener(onTabChanged);
+      return () => tabController.removeListener(onTabChanged);
+    }, [currentIndex, tabController]);
 
     useListenable(tabController);
 
@@ -119,56 +134,54 @@ class BrowseScreen extends HookConsumerWidget {
         body: TabBarView(
           controller: tabController,
           children: [
-            // ── Sources tab ───────────────────────────────────────────────
-            CustomScrollView(
-              slivers: [
-                // Quick-action pills
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-                    child: _QuickActionGrid(),
-                  ),
-                ),
-                // Pinned sources header
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                    child: Row(
-                      children: [
-                        Text(
-                          context.l10n.sources,
-                          style: context.theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => Scaffold(
-                                  appBar: AppBar(title: Text(context.l10n.sources)),
-                                  body: const SourceScreen(),
-                                ),
-                              ),
-                            );
-                          },
-                          child: Text(context.l10n.seeAll),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                _PinnedSourcesSliver(),
-              ],
-            ),
-
-            // ── Extensions tab ─────────────────────────────────────────────
-            const ExtensionScreen(),
+            _SourcesBranchTab(branch: children[0]),
+            children.length > 1 ? children[1] : const SizedBox.shrink(),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SourcesBranchTab extends StatelessWidget {
+  const _SourcesBranchTab({required this.branch});
+  final Widget branch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+          child: _QuickActionGrid(),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Row(
+            children: [
+              Text(
+                context.l10n.sources,
+                style: context.theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () => BrowseSourceRoute().go(context),
+                child: Text(context.l10n.seeAll),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 220,
+          child: SingleChildScrollView(
+            child: _PinnedSourcesGrid(),
+          ),
+        ),
+        Expanded(child: branch),
+      ],
     );
   }
 }
@@ -181,7 +194,7 @@ class _QuickActionGrid extends ConsumerWidget {
       (
         icon: Icons.storage_rounded,
         label: context.l10n.sources,
-        onTap: () => const GlobalSearchRoute(query: '').push(context),
+        onTap: () => BrowseSourceRoute().go(context),
       ),
       (
         icon: Icons.bookmark_outline_rounded,
@@ -242,7 +255,7 @@ class _QuickActionGrid extends ConsumerWidget {
   }
 }
 
-class _PinnedSourcesSliver extends ConsumerWidget {
+class _PinnedSourcesGrid extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sourceMapData = ref.watch(sourceMapFilteredProvider);
@@ -254,11 +267,13 @@ class _PinnedSourcesSliver extends ConsumerWidget {
       ...sourceMap.values.expand((v) => v),
     ].take(8).toList();
 
-    if (pinned.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
+    if (pinned.isEmpty) return const SizedBox.shrink();
 
-    return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 96),
-      sliver: SliverGrid.builder(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: 100,
           childAspectRatio: 0.95,

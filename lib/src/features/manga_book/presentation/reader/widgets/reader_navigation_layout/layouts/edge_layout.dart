@@ -6,6 +6,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../reader_tap_zone.dart';
+
 class EdgeLayout extends StatelessWidget {
   const EdgeLayout({
     super.key,
@@ -13,21 +15,26 @@ class EdgeLayout extends StatelessWidget {
     this.onRightTap,
     this.leftColor,
     this.rightColor,
+    this.previousPageLabel,
+    this.nextPageLabel,
   });
   final VoidCallback? onLeftTap;
   final VoidCallback? onRightTap;
   final Color? leftColor;
   final Color? rightColor;
+  final String? previousPageLabel;
+  final String? nextPageLabel;
+
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
+          child: ReaderTapZone(
             onTap: onRightTap,
-            child: Container(color: rightColor),
+            color: rightColor,
+            semanticsLabel: nextPageLabel,
           ),
         ),
         Expanded(
@@ -38,20 +45,20 @@ class EdgeLayout extends StatelessWidget {
                 child: SizedBox.expand(),
               ),
               Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
+                child: ReaderTapZone(
                   onTap: onLeftTap,
-                  child: Container(color: leftColor),
+                  color: leftColor,
+                  semanticsLabel: previousPageLabel,
                 ),
               ),
             ],
           ),
         ),
         Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
+          child: ReaderTapZone(
             onTap: onRightTap,
-            child: Container(color: rightColor),
+            color: rightColor,
+            semanticsLabel: nextPageLabel,
           ),
         ),
       ],

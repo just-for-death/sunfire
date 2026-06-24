@@ -1642,6 +1642,30 @@ abstract class AppLocalizations {
   /// **'Migration in Progress'**
   String get migrationInProgress;
 
+  /// No description provided for @migrationBatchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Batch migration'**
+  String get migrationBatchTitle;
+
+  /// No description provided for @migrationSuccessMangaCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Successfully migrated {count} manga.'**
+  String migrationSuccessMangaCount(int count);
+
+  /// No description provided for @migrationPartialFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Migrated {success} of {total}. {failed} failed.'**
+  String migrationPartialFailure(int success, int total, int failed);
+
+  /// No description provided for @migrationProgressCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{current} of {total}'**
+  String migrationProgressCount(int current, int total);
+
   /// No description provided for @migrationComplete.
   ///
   /// In en, this message translates to:
@@ -2253,6 +2277,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This chapter will be removed from your device. You can download it again anytime.'**
   String get localDownloadRemoveBody;
+
+  /// No description provided for @deleteOfflineDownloadsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete offline downloads?'**
+  String get deleteOfflineDownloadsTitle;
+
+  /// No description provided for @deleteOfflineDownloadsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This will remove {count} offline chapter(s) from this device.'**
+  String deleteOfflineDownloadsBody(int count);
+
+  /// No description provided for @readerPagesLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load chapter pages'**
+  String get readerPagesLoadFailed;
+
+  /// No description provided for @readerTapPreviousPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous page'**
+  String get readerTapPreviousPage;
+
+  /// No description provided for @readerTapNextPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Next page'**
+  String get readerTapNextPage;
+
+  /// No description provided for @readerTapToggleMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Toggle reader menu'**
+  String get readerTapToggleMenu;
 
   /// No description provided for @globalSearchHint.
   ///
