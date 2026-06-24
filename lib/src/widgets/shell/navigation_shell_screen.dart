@@ -17,7 +17,6 @@ import '../../utils/misc/toast/toast.dart';
 import 'big_screen_navigation_bar.dart';
 import 'ios/ios_navigation_shell.dart';
 import 'shell_banner_stack.dart';
-import 'shell_insets.dart';
 import 'small_screen_navigation_bar.dart';
 
 class NavigationShellScreen extends HookConsumerWidget {
@@ -104,12 +103,12 @@ class NavigationShellScreen extends HookConsumerWidget {
                       switchOutCurve: Curves.easeInCubic,
                       transitionBuilder: (child, animation) => SizeTransition(
                         sizeFactor: animation,
-                        axisAlignment: -1,
+                        alignment: Alignment.topCenter,
                         child: FadeTransition(opacity: animation, child: child),
                       ),
                       child: ShellBannerStack(),
                     ),
-                    Expanded(child: ShellBottomInset(child: child)),
+                    Expanded(child: child),
                   ],
                 ),
               ),
@@ -132,12 +131,12 @@ class NavigationShellScreen extends HookConsumerWidget {
               switchOutCurve: Curves.easeInCubic,
               transitionBuilder: (child, animation) => SizeTransition(
                 sizeFactor: animation,
-                axisAlignment: -1,
+                alignment: Alignment.topCenter,
                 child: FadeTransition(opacity: animation, child: child),
               ),
               child: ShellBannerStack(),
             ),
-            Expanded(child: ShellBottomInset(child: child)),
+            Expanded(child: child),
           ],
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,

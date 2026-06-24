@@ -1276,7 +1276,7 @@ abstract class AppLocalizations {
   /// **'Pinch to Zoom'**
   String get pinchToZoom;
 
-  /// Pinch to zoom scope hint for reader settings
+  /// No description provided for @pinchToZoomSubtitle.
   ///
   /// In en, this message translates to:
   /// **'Horizontal pages only; long-press for magnifier in webtoon mode'**
@@ -1468,7 +1468,10 @@ abstract class AppLocalizations {
   /// **'Shows title and quick settings when opening a chapter'**
   String get readerOverlaySubtitle;
 
-  /// Hint shown once on first reader open
+  /// No description provided for @readerTapToShowControls.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the center of the screen to show reading controls'**
   String get readerTapToShowControls;
 
   /// Slider title text for Reader Padding
@@ -1537,34 +1540,64 @@ abstract class AppLocalizations {
   /// **'Allow content to extend into notch and home indicator areas'**
   String get readerIgnoreSafeAreaToggleDescription;
 
-  /// Reader haptics toggle title
+  /// No description provided for @readerHaptics.
+  ///
+  /// In en, this message translates to:
+  /// **'Haptic feedback'**
   String get readerHaptics;
 
-  /// Reader haptics toggle subtitle
+  /// No description provided for @readerHapticsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vibrate lightly on page and chapter changes'**
   String get readerHapticsSubtitle;
 
-  /// Reader brightness overlay title
+  /// No description provided for @readerBrightnessOverlay.
+  ///
+  /// In en, this message translates to:
+  /// **'Reader dimming'**
   String get readerBrightnessOverlay;
 
-  /// Reader brightness overlay subtitle
+  /// No description provided for @readerBrightnessOverlaySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Darken the screen while reading (does not change system brightness)'**
   String get readerBrightnessOverlaySubtitle;
 
-  /// Reader orientation lock setting title
+  /// No description provided for @readerOrientationLock.
+  ///
+  /// In en, this message translates to:
+  /// **'Orientation lock'**
   String get readerOrientationLock;
 
-  /// Reader orientation auto option
+  /// No description provided for @readerOrientationAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
   String get readerOrientationAuto;
 
-  /// Reader orientation portrait option
+  /// No description provided for @readerOrientationPortrait.
+  ///
+  /// In en, this message translates to:
+  /// **'Portrait'**
   String get readerOrientationPortrait;
 
-  /// Reader orientation landscape option
+  /// No description provided for @readerOrientationLandscape.
+  ///
+  /// In en, this message translates to:
+  /// **'Landscape'**
   String get readerOrientationLandscape;
 
-  /// iOS volume key navigation hint
+  /// No description provided for @readerIOSVolumeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'On iOS, use tap zones or the page slider to navigate'**
   String get readerIOSVolumeHint;
 
-  /// Toast when resuming reading from saved page
+  /// No description provided for @readerResumedPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Resumed from page {page} of {total}'**
   String readerResumedPage(int page, int total);
 
   /// Reddit app title
@@ -2173,6 +2206,24 @@ abstract class AppLocalizations {
   /// **'Dismiss offline notice'**
   String get serverOfflineDismissA11y;
 
+  /// No description provided for @notificationsDisabledBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are off — chapter updates won\'t alert you'**
+  String get notificationsDisabledBanner;
+
+  /// No description provided for @notificationsOpenSettingsA11y.
+  ///
+  /// In en, this message translates to:
+  /// **'Open notification settings'**
+  String get notificationsOpenSettingsA11y;
+
+  /// No description provided for @notificationsEnableA11y.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable notifications'**
+  String get notificationsEnableA11y;
+
   /// Screen title and Button text of Settings screen
   ///
   /// In en, this message translates to:
@@ -2430,6 +2481,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'History'**
   String get history;
+
+  /// No description provided for @historyContinueReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue Reading'**
+  String get historyContinueReading;
+
+  /// No description provided for @historyRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get historyRecent;
 
   /// No description provided for @searchHistory.
   ///

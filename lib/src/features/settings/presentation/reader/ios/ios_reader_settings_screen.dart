@@ -6,9 +6,10 @@
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../../../utils/extensions/custom_extensions.dart';
-import 'reader_settings_body.dart';
+import '../../../../../utils/extensions/custom_extensions.dart';
+import '../reader_settings_body.dart';
 
 class IOSReaderSettingsScreen extends StatelessWidget {
   const IOSReaderSettingsScreen({super.key});
@@ -20,6 +21,13 @@ class IOSReaderSettingsScreen extends StatelessWidget {
       backgroundColor:
           isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF2F2F7),
       navigationBar: CupertinoNavigationBar(
+        leading: context.canPop()
+            ? CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => context.pop(),
+                child: const Icon(CupertinoIcons.back),
+              )
+            : null,
         middle: Text(context.l10n.reader),
         backgroundColor: isDark
             ? Colors.black.withValues(alpha: 0.72)

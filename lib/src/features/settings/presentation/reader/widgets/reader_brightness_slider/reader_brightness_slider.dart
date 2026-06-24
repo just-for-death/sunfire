@@ -26,7 +26,8 @@ class ReaderBrightnessSlider extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final value = ref.watch(readerBrightnessOverlayProvider).ifNull();
+    final value =
+        ref.watch(readerBrightnessOverlayProvider) ?? DBKeys.readerBrightnessOverlay.initial;
     return ListTile(
       leading: const Icon(Icons.brightness_4_rounded),
       title: Text(context.l10n.readerBrightnessOverlay),

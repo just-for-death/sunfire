@@ -1,10 +1,5 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
-//
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../utils/launch_url_in_web.dart';
@@ -15,13 +10,13 @@ class MediaLaunchButton extends StatelessWidget {
     super.key,
     required this.toast,
     required this.title,
-    required this.iconData,
+    required this.icon,
     required this.url,
   });
 
   final Toast? toast;
   final String title;
-  final IconData iconData;
+  final FaIconData icon;
   final String url;
 
   @override
@@ -31,12 +26,12 @@ class MediaLaunchButton extends StatelessWidget {
             ? IconButton(
                 tooltip: title,
                 onPressed: () => launchUrlInWeb(context, url, toast),
-                icon: Icon(iconData),
+                icon: FaIcon(icon),
               )
             : TextButton.icon(
                 label: Text(title),
                 onPressed: () => launchUrlInWeb(context, url, toast),
-                icon: Icon(iconData),
+                icon: FaIcon(icon),
               )
         : const SizedBox.shrink();
   }
