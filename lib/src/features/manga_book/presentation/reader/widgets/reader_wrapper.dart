@@ -13,7 +13,9 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../../../../global_providers/global_providers.dart';
 import '../../../../../constants/app_constants.dart';
 import '../../../../../constants/app_sizes.dart';
 import '../../../../../constants/db_keys.dart';
@@ -24,6 +26,8 @@ import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../utils/launch_url_in_web.dart';
 import '../../../../../utils/misc/toast/toast.dart';
 import '../../../../../widgets/popup_widgets/radio_list_popup.dart';
+import '../../../../settings/presentation/reader/widgets/reader_brightness_slider/reader_brightness_slider.dart';
+import '../../../../settings/presentation/reader/widgets/reader_haptics_tile/reader_haptics_tile.dart';
 import '../../../../settings/presentation/reader/widgets/reader_initial_overlay_tile/reader_initial_overlay_tile.dart';
 import '../../../../settings/presentation/reader/widgets/reader_invert_tap_tile/reader_invert_tap_tile.dart';
 import '../../../../settings/presentation/reader/widgets/reader_last_page_swipe_tile/reader_last_page_swipe_tile.dart';
@@ -42,9 +46,13 @@ import '../../../widgets/chapter_actions/single_chapter_action_icon.dart';
 import '../../manga_details/controller/manga_details_controller.dart';
 import '../controller/reader_controller.dart';
 import '../utils/last_page_swipe_utils.dart';
+import '../utils/reader_haptics.dart';
+import '../utils/reader_system_ui.dart';
 import 'directional_swipe_gesture_handler.dart';
 import 'page_number_slider.dart';
+import 'reader_coach_mark.dart';
 import 'reader_navigation_layout/reader_navigation_layout.dart';
+import 'reader_offline_banner.dart';
 
 class ReaderWrapper extends HookConsumerWidget {
   const ReaderWrapper({
@@ -145,6 +153,9 @@ class ReaderWrapper extends HookConsumerWidget {
 
     final visibility =
         useState(ref.read(readerInitialOverlayProvider).ifNull());
+    final bool hapticsEnabled = ref.watch(readerHapticsEnabledProvider).ifNull();
+    final double brightnessOverlay =
+        ref.watch(readerBrightnessOverlayProvider).ifNull();
     final mangaReaderPadding =
         useState(manga.metaData.readerPadding ?? localMangaReaderPadding);
     final mangaReaderMagnifierSize = useState(
@@ -216,9 +227,15 @@ class ReaderWrapper extends HookConsumerWidget {
     );
 
     useEffect(() {
-      if (!visibility.value) {
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      }
+      ReaderSystemUi.enterReader(chromeVisible: visibility.value);
+      WakelockPlus.enable();
+      return () {
+        WakelockPlus.disable();
+      };
+    }, []);
+
+    useEffect(() {
+      ReaderSystemUi.enterReader(chromeVisible: visibility.value);
       return null;
     }, [visibility.value]);
 
@@ -240,13 +257,15 @@ class ReaderWrapper extends HookConsumerWidget {
       }
 
       // Use normal page navigation
+      ReaderHaptics.pageTurn(enabled: hapticsEnabled);
       onNext();
     }, [
       lastPageSwipeEnabled,
       readerSwipeChapterToggle,
       currentIndex,
       chapterPages.pages.length,
-      nextPrevChapterPair
+      nextPrevChapterPair,
+      hapticsEnabled,
     ]);
 
     final enhancedOnPrevious = useCallback(() {
@@ -267,17 +286,20 @@ class ReaderWrapper extends HookConsumerWidget {
       }
 
       // Use normal page navigation
+      ReaderHaptics.pageTurn(enabled: hapticsEnabled);
       onPrevious();
     }, [
       lastPageSwipeEnabled,
       readerSwipeChapterToggle,
       currentIndex,
-      nextPrevChapterPair
+      nextPrevChapterPair,
+      hapticsEnabled,
     ]);
 
     // Chapter navigation callbacks with direction-aware animations
     final onNextChapter = useCallback(() {
       if (nextPrevChapterPair?.first != null) {
+        ReaderHaptics.chapterChange(enabled: hapticsEnabled);
         // Determine transition direction and RTL handling
         final transVertical = _shouldUseVerticalTransition(resolvedReaderMode);
         final isRTL = _isRTLReaderMode(resolvedReaderMode);
@@ -295,6 +317,7 @@ class ReaderWrapper extends HookConsumerWidget {
 
     final onPreviousChapter = useCallback(() {
       if (nextPrevChapterPair?.second != null) {
+        ReaderHaptics.chapterChange(enabled: hapticsEnabled);
         // Determine transition direction and RTL handling
         final transVertical = _shouldUseVerticalTransition(resolvedReaderMode);
         final isRTL = _isRTLReaderMode(resolvedReaderMode);
@@ -428,99 +451,127 @@ class ReaderWrapper extends HookConsumerWidget {
           ),
         ),
         bottomSheet: visibility.value
-            ? ExcludeFocus(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Card(
-                          shape: const CircleBorder(),
-                          child: IconButton(
-                            onPressed: nextPrevChapterPair?.second != null
-                                ? () => ReaderRoute(
-                                      mangaId:
-                                          nextPrevChapterPair!.second!.mangaId,
-                                      chapterId: nextPrevChapterPair.second!.id,
-                                      toPrev: true,
-                                      transVertical:
-                                          scrollDirection != Axis.vertical,
-                                    ).pushReplacement(context)
-                                : null,
-                            icon: const Icon(
-                              Icons.skip_previous_rounded,
+            ? SafeArea(
+                top: false,
+                child: ExcludeFocus(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Card(
+                            shape: const CircleBorder(),
+                            child: IconButton(
+                              constraints: const BoxConstraints(
+                                minWidth: 44,
+                                minHeight: 44,
+                              ),
+                              onPressed: nextPrevChapterPair?.second != null
+                                  ? () => ReaderRoute(
+                                        mangaId: nextPrevChapterPair!
+                                            .second!.mangaId,
+                                        chapterId:
+                                            nextPrevChapterPair.second!.id,
+                                        toPrev: true,
+                                        transVertical:
+                                            scrollDirection != Axis.vertical,
+                                      ).pushReplacement(context)
+                                  : null,
+                              icon: const Icon(
+                                Icons.skip_previous_rounded,
+                              ),
                             ),
                           ),
-                        ),
-                        Expanded(
-                          child: PageNumberSlider(
-                            currentValue: currentIndex,
-                            maxValue: chapterPages.chapter.pageCount,
-                            onChanged: (index) => onChanged(index),
-                            inverted: invertTap,
+                          Expanded(
+                            child: PageNumberSlider(
+                              currentValue: currentIndex,
+                              maxValue: chapterPages.pages.isNotEmpty
+                                  ? chapterPages.pages.length
+                                  : chapterPages.chapter.pageCount,
+                              onChanged: (index) => onChanged(index),
+                              inverted: invertTap,
+                            ),
+                          ),
+                          Card(
+                            shape: const CircleBorder(),
+                            child: IconButton(
+                              constraints: const BoxConstraints(
+                                minWidth: 44,
+                                minHeight: 44,
+                              ),
+                              onPressed: nextPrevChapterPair?.first != null
+                                  ? () => ReaderRoute(
+                                        mangaId:
+                                            nextPrevChapterPair!.first!.mangaId,
+                                        chapterId:
+                                            nextPrevChapterPair.first!.id,
+                                        transVertical:
+                                            scrollDirection != Axis.vertical,
+                                      ).pushReplacement(context)
+                                  : null,
+                              icon: const Icon(Icons.skip_next_rounded),
+                            ),
+                          )
+                        ],
+                      ),
+                      const Gap(8),
+                      Card(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(
+                            top: KRadius.r8.radius,
                           ),
                         ),
-                        Card(
-                          shape: const CircleBorder(),
-                          child: IconButton(
-                            onPressed: nextPrevChapterPair?.first != null
-                                ? () => ReaderRoute(
-                                      mangaId:
-                                          nextPrevChapterPair!.first!.mangaId,
-                                      chapterId: nextPrevChapterPair.first!.id,
-                                      transVertical:
-                                          scrollDirection != Axis.vertical,
-                                    ).pushReplacement(context)
-                                : null,
-                            icon: const Icon(Icons.skip_next_rounded),
+                        margin: EdgeInsets.zero,
+                        child: Padding(
+                          padding: KEdgeInsets.h16v8.size,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              SingleChapterActionIcon(
+                                icon: chapter.isBookmarked
+                                    ? Icons.bookmark_rounded
+                                    : Icons.bookmark_outline_rounded,
+                                chapterId: chapter.id,
+                                change: ChapterChange(
+                                    isBookmarked: !chapter.isBookmarked),
+                                refresh: () => ref.refresh(
+                                    chapterProvider(chapterId: chapter.id)
+                                        .future),
+                              ),
+                              IconButton(
+                                constraints: const BoxConstraints(
+                                  minWidth: 44,
+                                  minHeight: 44,
+                                ),
+                                icon:
+                                    const Icon(Icons.app_settings_alt_outlined),
+                                onPressed: () => showReaderModePopup(),
+                              ),
+                              Builder(builder: (context) {
+                                return IconButton(
+                                  constraints: const BoxConstraints(
+                                    minWidth: 44,
+                                    minHeight: 44,
+                                  ),
+                                  onPressed: () =>
+                                      Scaffold.of(context).openEndDrawer(),
+                                  icon: const Icon(Icons.settings_rounded),
+                                );
+                              }),
+                            ],
                           ),
-                        )
-                      ],
-                    ),
-                    const Gap(8),
-                    Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(
-                          top: KRadius.r8.radius,
                         ),
                       ),
-                      margin: EdgeInsets.zero,
-                      child: Padding(
-                        padding: KEdgeInsets.h16v8.size,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            SingleChapterActionIcon(
-                              icon: chapter.isBookmarked
-                                  ? Icons.bookmark_rounded
-                                  : Icons.bookmark_outline_rounded,
-                              chapterId: chapter.id,
-                              change: ChapterChange(
-                                  isBookmarked: !chapter.isBookmarked),
-                              refresh: () => ref.refresh(
-                                  chapterProvider(chapterId: chapter.id)
-                                      .future),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.app_settings_alt_outlined),
-                              onPressed: () => showReaderModePopup(),
-                            ),
-                            Builder(builder: (context) {
-                              return IconButton(
-                                onPressed: () =>
-                                    Scaffold.of(context).openEndDrawer(),
-                                icon: const Icon(Icons.settings_rounded),
-                              );
-                            }),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               )
             : null,
-        body: Shortcuts.manager(
+        body: Column(
+          children: [
+            const ReaderOfflineBanner(),
+            Expanded(
+              child: Shortcuts.manager(
           manager: readerShortcutManager(scrollDirection),
           child: Actions(
             actions: {
@@ -566,12 +617,17 @@ class ReaderWrapper extends HookConsumerWidget {
               child: Listener(
                 child: RepaintBoundary(
                   child: ReaderView(
-                    toggleVisibility: () =>
-                        visibility.value = !visibility.value,
+                    toggleVisibility: () {
+                      visibility.value = !visibility.value;
+                      ref
+                          .read(sharedPreferencesProvider)
+                          .setBool('reader_coach_mark_shown', true);
+                    },
                     scrollDirection: scrollDirection,
                     mangaId: manga.id,
                     mangaReaderPadding: mangaReaderPadding.value,
                     mangaReaderMagnifierSize: mangaReaderMagnifierSize.value,
+                    brightnessOverlay: brightnessOverlay,
                     onNext: enhancedOnNext,
                     onPrevious: enhancedOnPrevious,
                     mangaReaderNavigationLayout: mangaReaderNavigationLayout,
@@ -583,6 +639,7 @@ class ReaderWrapper extends HookConsumerWidget {
                     chapterPages: chapterPages,
                     showReaderLayoutAnimation: showReaderLayoutAnimation,
                     pageController: pageController,
+                    chromeVisible: visibility.value,
                     child: _buildEnhancedChildWithPageDetection(
                       child,
                       lastPageSwipeEnabled,
@@ -597,6 +654,9 @@ class ReaderWrapper extends HookConsumerWidget {
               ),
             ),
           ),
+        ),
+            ),
+          ],
         ),
       ),
     );
@@ -845,6 +905,8 @@ class ReaderView extends HookWidget {
     required this.child,
     this.showReaderLayoutAnimation = false,
     this.pageController,
+    this.chromeVisible = true,
+    this.brightnessOverlay = 0,
   });
 
   final VoidCallback toggleVisibility;
@@ -864,6 +926,8 @@ class ReaderView extends HookWidget {
   final bool showReaderLayoutAnimation;
   final Widget child;
   final PageController? pageController;
+  final bool chromeVisible;
+  final double brightnessOverlay;
 
   /// Gesture handling extracted for better performance and maintainability.
   /// This widget focuses on:
@@ -925,12 +989,21 @@ class ReaderView extends HookWidget {
     return Stack(
       children: [
         content,
+        if (brightnessOverlay > 0)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: brightnessOverlay),
+              ),
+            ),
+          ),
         ReaderNavigationLayoutWidget(
           onNext: onNext,
           onPrevious: onPrevious,
           navigationLayout: mangaReaderNavigationLayout,
           showReaderLayoutAnimation: showReaderLayoutAnimation,
         ),
+        ReaderCoachMark(chromeVisible: chromeVisible),
         if (showMagnification.value)
           Positioned(
             left: positionOffset.dx,
