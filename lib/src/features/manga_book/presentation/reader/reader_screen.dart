@@ -49,7 +49,7 @@ class ReaderScreen extends HookConsumerWidget {
     if (mangaId <= 0 || chapterId <= 0) {
       return Scaffold(
         body: Emoticons(
-          title: 'Invalid chapter link',
+          title: context.l10n.invalidChapterLink,
           button: TextButton(
             onPressed: () => Navigator.of(context).maybePop(),
             child: Text(context.l10n.close),
@@ -190,6 +190,7 @@ class ReaderScreen extends HookConsumerWidget {
         ReaderMode.singleVertical => SinglePageReaderMode(
             chapter: chapterData,
             manga: mangaData,
+            readerMode: ReaderMode.singleVertical,
             onPageChanged: onPageChanged,
             scrollDirection: Axis.vertical,
             showReaderLayoutAnimation: showReaderLayoutAnimation,
@@ -198,6 +199,7 @@ class ReaderScreen extends HookConsumerWidget {
         ReaderMode.singleHorizontalRTL => SinglePageReaderMode(
             chapter: chapterData,
             manga: mangaData,
+            readerMode: ReaderMode.singleHorizontalRTL,
             onPageChanged: onPageChanged,
             reverse: true,
             showReaderLayoutAnimation: showReaderLayoutAnimation,
@@ -223,6 +225,7 @@ class ReaderScreen extends HookConsumerWidget {
         ReaderMode.singleHorizontalLTR => SinglePageReaderMode(
             chapter: chapterData,
             manga: mangaData,
+            readerMode: ReaderMode.singleHorizontalLTR,
             onPageChanged: onPageChanged,
             chapterPages: chapterPagesData,
           ),
@@ -294,8 +297,24 @@ class ReaderScreen extends HookConsumerWidget {
       final mangaData = manga.valueOrNull;
       final chapterData = chapter.valueOrNull;
       final chapterPagesData = chapterPages.valueOrNull;
-      if (mangaData == null || chapterData == null) {
-        return const SizedBox.shrink();
+
+      if (mangaData == null) {
+        return Emoticons(
+          title: context.l10n.errorSomethingWentWrong,
+          button: TextButton(
+            onPressed: () => ref.refresh(mangaProvider.future),
+            child: Text(context.l10n.refresh),
+          ),
+        );
+      }
+      if (chapterData == null) {
+        return Emoticons(
+          title: context.l10n.errorSomethingWentWrong,
+          button: TextButton(
+            onPressed: () => ref.refresh(chapterProviderWithIndex.future),
+            child: Text(context.l10n.refresh),
+          ),
+        );
       }
       if (chapterPagesData == null) {
         return Emoticons(
@@ -352,12 +371,14 @@ Widget _buildDefaultReaderMode({
     ReaderMode.singleHorizontalLTR => SinglePageReaderMode(
         chapter: chapterData,
         manga: mangaData,
+        readerMode: ReaderMode.singleHorizontalLTR,
         onPageChanged: onPageChanged,
         chapterPages: chapterPagesData,
       ),
     ReaderMode.singleHorizontalRTL => SinglePageReaderMode(
         chapter: chapterData,
         manga: mangaData,
+        readerMode: ReaderMode.singleHorizontalRTL,
         onPageChanged: onPageChanged,
         reverse: true,
         showReaderLayoutAnimation: showReaderLayoutAnimation,
@@ -366,6 +387,7 @@ Widget _buildDefaultReaderMode({
     ReaderMode.singleVertical => SinglePageReaderMode(
         chapter: chapterData,
         manga: mangaData,
+        readerMode: ReaderMode.singleVertical,
         onPageChanged: onPageChanged,
         scrollDirection: Axis.vertical,
         showReaderLayoutAnimation: showReaderLayoutAnimation,

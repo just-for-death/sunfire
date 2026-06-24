@@ -1588,6 +1588,30 @@ abstract class AppLocalizations {
   /// **'Landscape'**
   String get readerOrientationLandscape;
 
+  /// No description provided for @readerDoublePageSpread.
+  ///
+  /// In en, this message translates to:
+  /// **'Double-page spread'**
+  String get readerDoublePageSpread;
+
+  /// No description provided for @readerDoublePageSpreadAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic (tablet landscape)'**
+  String get readerDoublePageSpreadAuto;
+
+  /// No description provided for @readerDoublePageSpreadAlways.
+  ///
+  /// In en, this message translates to:
+  /// **'Always'**
+  String get readerDoublePageSpreadAlways;
+
+  /// No description provided for @readerDoublePageSpreadNever.
+  ///
+  /// In en, this message translates to:
+  /// **'Never'**
+  String get readerDoublePageSpreadNever;
+
   /// No description provided for @readerIOSVolumeHint.
   ///
   /// In en, this message translates to:
@@ -1599,6 +1623,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Resumed from page {page} of {total}'**
   String readerResumedPage(int page, int total);
+
+  /// No description provided for @readerPageSliderA11y.
+  ///
+  /// In en, this message translates to:
+  /// **'Page {page} of {total}'**
+  String readerPageSliderA11y(int page, int total);
 
   /// Reddit app title
   ///
@@ -2290,6 +2320,120 @@ abstract class AppLocalizations {
   /// **'This will remove {count} offline chapter(s) from this device.'**
   String deleteOfflineDownloadsBody(int count);
 
+  /// No description provided for @invalidChapterLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid chapter link'**
+  String get invalidChapterLink;
+
+  /// No description provided for @downloadsTabServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Server'**
+  String get downloadsTabServer;
+
+  /// No description provided for @downloadsTabOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get downloadsTabOffline;
+
+  /// No description provided for @downloadsInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get downloadsInProgress;
+
+  /// No description provided for @downloadsQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get downloadsQueued;
+
+  /// No description provided for @offlineStorageUsedMb.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} MB used on device'**
+  String offlineStorageUsedMb(String size);
+
+  /// No description provided for @offlineStorageUsedKb.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} KB used on device'**
+  String offlineStorageUsedKb(String size);
+
+  /// No description provided for @migrateSelectedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Migrate ({count})'**
+  String migrateSelectedCount(int count);
+
+  /// No description provided for @migrationBatchMatchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Batch match ({source})'**
+  String migrationBatchMatchTitle(String source);
+
+  /// No description provided for @migrationBatchPairing.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically pairing {count} manga…'**
+  String migrationBatchPairing(int count);
+
+  /// No description provided for @migrationBatchMatchSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Found {matched} matches out of {total}'**
+  String migrationBatchMatchSummary(int matched, int total);
+
+  /// No description provided for @migrationMigrateButtonCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Migrate {count} manga'**
+  String migrationMigrateButtonCount(int count);
+
+  /// No description provided for @migrationCoverSourceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get migrationCoverSourceLabel;
+
+  /// No description provided for @migrationCoverMatchLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Match'**
+  String get migrationCoverMatchLabel;
+
+  /// No description provided for @migrationNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No match'**
+  String get migrationNoMatch;
+
+  /// No description provided for @migrationSearchingInSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching in {source} ({language})'**
+  String migrationSearchingInSource(String source, String language);
+
+  /// No description provided for @offlineChapterFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapter'**
+  String get offlineChapterFallback;
+
+  /// No description provided for @offlineChapterId.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapter {id}'**
+  String offlineChapterId(int id);
+
+  /// No description provided for @loadingEllipsis.
+  ///
+  /// In en, this message translates to:
+  /// **'…'**
+  String get loadingEllipsis;
+
   /// No description provided for @readerPagesLoadFailed.
   ///
   /// In en, this message translates to:
@@ -2775,6 +2919,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Log Out'**
   String get logOut;
+
+  /// No description provided for @trackerLogOutConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Log out from {tracker}?'**
+  String trackerLogOutConfirm(String tracker);
 
   /// Status label for logged-in tracker
   ///
