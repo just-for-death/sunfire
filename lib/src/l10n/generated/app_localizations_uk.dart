@@ -1200,6 +1200,28 @@ class AppLocalizationsUk extends AppLocalizations {
   String get notificationsEnableA11y => 'Enable notifications';
 
   @override
+  String get localDownloadToDevice => 'Download offline to device';
+
+  @override
+  String get localDownloadRemoveTooltip => 'Remove offline download';
+
+  @override
+  String get localDownloadRetryTooltip => 'Retry offline download';
+
+  @override
+  String get localDownloadRemoveTitle => 'Remove offline download?';
+
+  @override
+  String get localDownloadRemoveBody =>
+      'This chapter will be removed from your device. You can download it again anytime.';
+
+  @override
+  String get globalSearchHint => 'Type to search across all sources';
+
+  @override
+  String get seeAll => 'See all';
+
+  @override
   String get settings => 'Налаштування';
 
   @override
