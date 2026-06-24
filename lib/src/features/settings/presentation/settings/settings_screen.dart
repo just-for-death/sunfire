@@ -15,12 +15,12 @@ class SettingsScreen extends StatelessWidget {
     if (!kIsWeb && Platform.isIOS) {
       return const IOSSettingsScreen();
     }
-    return const _AndroidSettingsScreen();
+    return const MaterialSettingsScreen();
   }
 }
 
-class _AndroidSettingsScreen extends StatelessWidget {
-  const _AndroidSettingsScreen();
+class MaterialSettingsScreen extends StatelessWidget {
+  const MaterialSettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

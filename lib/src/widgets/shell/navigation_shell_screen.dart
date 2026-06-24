@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:pub_semver/pub_semver.dart';
 
+import '../../constants/app_breakpoints.dart';
 import '../../features/about/data/about_repository.dart';
 import '../../features/about/presentation/about/controllers/about_controller.dart';
 import '../../features/about/presentation/about/widget/app_update_dialog.dart';
@@ -15,8 +16,9 @@ import '../../utils/extensions/custom_extensions.dart';
 import '../../utils/misc/toast/toast.dart';
 import 'big_screen_navigation_bar.dart';
 import 'ios/ios_navigation_shell.dart';
+import 'shell_banner_stack.dart';
+import 'shell_insets.dart';
 import 'small_screen_navigation_bar.dart';
-import 'top_state_banners.dart';
 
 class NavigationShellScreen extends HookConsumerWidget {
   const NavigationShellScreen({super.key, required this.child});
@@ -47,7 +49,11 @@ class NavigationShellScreen extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final updateChecked = useRef(false);
+
     useEffect(() {
+      if (updateChecked.value) return null;
+      updateChecked.value = true;
       Future.microtask(() async {
         if (!context.mounted) return;
         await checkForUpdate(
@@ -57,7 +63,7 @@ class NavigationShellScreen extends HookConsumerWidget {
           toast: ref.read(toastProvider),
         );
       });
-      return;
+      return null;
     }, []);
 
     void onDestinationSelected(int index) =>
@@ -67,18 +73,21 @@ class NavigationShellScreen extends HookConsumerWidget {
     final isIOS = !kIsWeb && Platform.isIOS;
     if (isIOS) {
       return ServerAwareWrapper(
+        showOfflineBanner: false,
         child: IOSNavigationShell(
           onDestinationSelected: onDestinationSelected,
           compactBottomNav:
-              !context.isTablet && context.mediaQueryShortestSide < 600,
+              !AppBreakpoints.isTabletLayout(context) &&
+              AppBreakpoints.isCompactNav(context),
           child: child,
         ),
       );
     }
 
     // Android tablet → rail
-    if (context.isTablet) {
+    if (AppBreakpoints.isTabletLayout(context)) {
       return ServerAwareWrapper(
+        showOfflineBanner: false,
         child: Scaffold(
           body: Row(
             children: [
@@ -98,9 +107,9 @@ class NavigationShellScreen extends HookConsumerWidget {
                         axisAlignment: -1,
                         child: FadeTransition(opacity: animation, child: child),
                       ),
-                      child: TopStateBanners(),
+                      child: ShellBannerStack(),
                     ),
-                    Expanded(child: child),
+                    Expanded(child: ShellBottomInset(child: child)),
                   ],
                 ),
               ),
@@ -111,8 +120,9 @@ class NavigationShellScreen extends HookConsumerWidget {
     }
 
     // Android phone → Material You bottom nav
-    final compactBottomNav = context.mediaQueryShortestSide < 600;
+    final compactBottomNav = AppBreakpoints.isCompactNav(context);
     return ServerAwareWrapper(
+      showOfflineBanner: false,
       child: Scaffold(
         body: Column(
           children: [
@@ -125,9 +135,9 @@ class NavigationShellScreen extends HookConsumerWidget {
                 axisAlignment: -1,
                 child: FadeTransition(opacity: animation, child: child),
               ),
-              child: TopStateBanners(),
+              child: ShellBannerStack(),
             ),
-            Expanded(child: child),
+            Expanded(child: ShellBottomInset(child: child)),
           ],
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
