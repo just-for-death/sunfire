@@ -154,7 +154,7 @@ class BrowseScreen extends HookConsumerWidget {
                               ),
                             );
                           },
-                          child: const Text('See all'),
+                          child: Text(context.l10n.seeAll),
                         ),
                       ],
                     ),

@@ -41,6 +41,11 @@ Future<List<MangaDto>> sourceQuickSearchMangaList(
 @riverpod
 AsyncValue<List<QuickSearchResults>> quickSearchResults(Ref ref,
     {String? query}) {
+  final trimmed = query?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return const AsyncData([]);
+  }
+
   final sourceMapData = ref.watch(sourceMapFilteredProvider);
 
   final sourceMap = {...?sourceMapData.valueOrNull}..remove("lastUsed");
@@ -52,7 +57,7 @@ AsyncValue<List<QuickSearchResults>> quickSearchResults(Ref ref,
   for (SourceDto source in sourceList) {
     if (source.id.isNotBlank) {
       final mangaList = ref.watch(
-        sourceQuickSearchMangaListProvider(source.id, query: query),
+        sourceQuickSearchMangaListProvider(source.id, query: trimmed),
       );
       sourceMangaListPairList.add((mangaList: mangaList, source: source));
     }

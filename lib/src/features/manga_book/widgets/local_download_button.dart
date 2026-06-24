@@ -78,7 +78,7 @@ class LocalDownloadButton extends HookConsumerWidget {
     // ── Error — red icon, tap to retry ───────────────────────────────────
     if (localState == LocalDownloadState.error) {
       return IconButton(
-        tooltip: 'Retry offline download',
+        tooltip: context.l10n.localDownloadRetryTooltip,
         icon: const Icon(Icons.error_outline_rounded, color: Colors.red),
         iconSize: 20,
         padding: KEdgeInsets.h4.size,
@@ -90,7 +90,7 @@ class LocalDownloadButton extends HookConsumerWidget {
     // ── Already downloaded locally — green icon, tap to remove ───────────
     if (isDownloadedLocal) {
       return IconButton(
-        tooltip: 'Remove offline download',
+        tooltip: context.l10n.localDownloadRemoveTooltip,
         icon: Icon(
           Icons.phone_android,
           color: context.theme.colorScheme.primary,
@@ -104,7 +104,7 @@ class LocalDownloadButton extends HookConsumerWidget {
 
     // ── Not downloaded — outlined icon, tap to download ──────────────────
     return IconButton(
-      tooltip: 'Download offline (device)',
+      tooltip: context.l10n.localDownloadToDevice,
       icon: Icon(
         Icons.phone_android,
         color: context.theme.colorScheme.onSurfaceVariant,
@@ -124,17 +124,16 @@ class LocalDownloadButton extends HookConsumerWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove offline download?'),
-        content: const Text(
-            'This chapter will be removed from your device. You can download it again anytime.'),
+        title: Text(context.l10n.localDownloadRemoveTitle),
+        content: Text(context.l10n.localDownloadRemoveBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Remove'),
+            child: Text(context.l10n.remove),
           ),
         ],
       ),

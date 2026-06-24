@@ -6,6 +6,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_android_volume_keydown/flutter_android_volume_keydown.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -61,6 +62,7 @@ class ReaderWrapper extends HookConsumerWidget {
     required this.chapter,
     required this.onChanged,
     required this.currentIndex,
+    this.livePageIndex,
     required this.onNext,
     required this.onPrevious,
     required this.scrollDirection,
@@ -75,6 +77,7 @@ class ReaderWrapper extends HookConsumerWidget {
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final int currentIndex;
+  final ValueListenable<int>? livePageIndex;
   final Axis scrollDirection;
   final bool showReaderLayoutAnimation;
   final ChapterPagesDto chapterPages;
@@ -613,6 +616,7 @@ class ReaderWrapper extends HookConsumerWidget {
                     lastPageSwipeEnabled: lastPageSwipeEnabled,
                     resolvedReaderMode: resolvedReaderMode,
                     currentIndex: currentIndex,
+                    livePageIndex: livePageIndex,
                     chapterPages: chapterPages,
                     showReaderLayoutAnimation: showReaderLayoutAnimation,
                     pageController: pageController,
@@ -878,6 +882,7 @@ class ReaderView extends HookWidget {
     required this.lastPageSwipeEnabled,
     required this.resolvedReaderMode,
     required this.currentIndex,
+    this.livePageIndex,
     required this.chapterPages,
     required this.child,
     this.showReaderLayoutAnimation = false,
@@ -899,6 +904,7 @@ class ReaderView extends HookWidget {
   final bool lastPageSwipeEnabled;
   final ReaderMode resolvedReaderMode;
   final int currentIndex;
+  final ValueListenable<int>? livePageIndex;
   final ChapterPagesDto chapterPages;
   final bool showReaderLayoutAnimation;
   final Widget child;
@@ -954,6 +960,7 @@ class ReaderView extends HookWidget {
       lastPageSwipeEnabled: lastPageSwipeEnabled,
       resolvedReaderMode: resolvedReaderMode,
       currentIndex: currentIndex,
+      livePageIndex: livePageIndex,
       chapterPages: chapterPages,
       mangaId: mangaId,
       prevNextChapterPair: prevNextChapterPair,
