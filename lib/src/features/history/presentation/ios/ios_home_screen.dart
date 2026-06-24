@@ -33,6 +33,11 @@ class IOSHomeScreen extends HookConsumerWidget {
       return null;
     }, [searchQuery]);
 
+    final allHistoryItems = useMemoized(
+      () => historyGroups.expand((g) => g.items).toList(),
+      [historyGroups],
+    );
+
     return Scaffold(
       backgroundColor:
           isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF2F2F7),
@@ -101,13 +106,10 @@ class IOSHomeScreen extends HookConsumerWidget {
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
                 sliver: SliverList.builder(
-                  itemCount: historyGroups.fold<int>(
-                      0, (sum, g) => sum + g.items.length),
+                  itemCount: allHistoryItems.length,
                   itemBuilder: (context, index) {
-                    final allItems =
-                        historyGroups.expand((g) => g.items).toList();
-                    if (index >= allItems.length) return null;
-                    final item = allItems[index];
+                    if (index >= allHistoryItems.length) return null;
+                    final item = allHistoryItems[index];
                     return Dismissible(
                       key: ValueKey('ios_history_${item.id}'),
                       direction: DismissDirection.endToStart,

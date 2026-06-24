@@ -153,6 +153,7 @@ class ContinuousReaderMode extends HookConsumerWidget {
       manga: manga,
       showReaderLayoutAnimation: showReaderLayoutAnimation,
       currentIndex: currentIndex.value,
+      livePageIndex: currentIndex,
       onChanged: (index) {
         // Mark that we're navigating from slider to prevent position interference
         isNavigatingFromSlider.value = true;
