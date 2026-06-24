@@ -80,28 +80,16 @@ class ReaderWrapper extends HookConsumerWidget {
   final ChapterPagesDto chapterPages;
   final PageController? pageController;
 
-  /// Determine transition direction based on reading mode for proper animations
-  /// Returns true for vertical transitions, false for horizontal transitions
-  bool _shouldUseVerticalTransition(ReaderMode readerMode) {
-    switch (readerMode) {
-      // Vertical/Webtoon modes should use vertical transitions (slide up from bottom)
-      case ReaderMode.singleVertical:
-      case ReaderMode.continuousVertical:
-      case ReaderMode.webtoon:
-        return true;
+  /// ReaderRoute uses [transVertical] true for horizontal slide, false for vertical.
+  bool _chapterTransVertical(Axis scrollDirection) =>
+      scrollDirection != Axis.vertical;
 
-      // Horizontal LTR/RTL modes should use horizontal transitions
-      // This allows the system to animate from right (LTR) or left (RTL) based on toPrev flag
-      case ReaderMode.singleHorizontalLTR:
-      case ReaderMode.continuousHorizontalLTR:
-      case ReaderMode.singleHorizontalRTL:
-      case ReaderMode.continuousHorizontalRTL:
-        return false;
-
-      // Default case - use horizontal transition as fallback
-      case ReaderMode.defaultReader:
-        return false;
-    }
+  bool _chapterToPrev({
+    required ReaderMode readerMode,
+    required bool goingToPrevious,
+  }) {
+    final isRTL = _isRTLReaderMode(readerMode);
+    return goingToPrevious ? !isRTL : isRTL;
   }
 
   /// Determine if the reading mode is RTL for proper animation direction
@@ -152,6 +140,7 @@ class ReaderWrapper extends HookConsumerWidget {
 
     final visibility =
         useState(ref.read(readerInitialOverlayProvider).ifNull());
+    final lastChapterNavAt = useRef<DateTime?>(null);
     final bool hapticsEnabled = ref.watch(readerHapticsEnabledProvider).ifNull();
     final double brightnessOverlay =
         ref.watch(readerBrightnessOverlayProvider) ?? DBKeys.readerBrightnessOverlay.initial;
@@ -238,6 +227,28 @@ class ReaderWrapper extends HookConsumerWidget {
       return null;
     }, [visibility.value]);
 
+    final navigateToChapter = useCallback(
+      (int chapterId, {required bool goingToPrevious}) {
+        final now = DateTime.now();
+        final lastNav = lastChapterNavAt.value;
+        if (lastNav != null &&
+            now.difference(lastNav) < const Duration(milliseconds: 600)) {
+          return;
+        }
+        lastChapterNavAt.value = now;
+        ReaderRoute(
+          mangaId: manga.id,
+          chapterId: chapterId,
+          transVertical: _chapterTransVertical(scrollDirection),
+          toPrev: _chapterToPrev(
+            readerMode: resolvedReaderMode,
+            goingToPrevious: goingToPrevious,
+          ),
+        ).pushReplacement(context);
+      },
+      [resolvedReaderMode, scrollDirection, manga.id],
+    );
+
     // Enhanced navigation callbacks with last-page swipe logic
     final enhancedOnNext = useCallback(() {
       if (lastPageSwipeEnabled && !readerSwipeChapterToggle) {
@@ -245,12 +256,10 @@ class ReaderWrapper extends HookConsumerWidget {
         final isAtLastPage = currentIndex >= (chapterPages.pages.length - 1);
 
         if (isAtLastPage && nextPrevChapterPair?.first != null) {
-          // Navigate to next chapter
-          ReaderRoute(
-            mangaId: manga.id,
-            chapterId: nextPrevChapterPair!.first!.id,
-            transVertical: scrollDirection != Axis.vertical,
-          ).pushReplacement(context);
+          navigateToChapter(
+            nextPrevChapterPair!.first!.id,
+            goingToPrevious: false,
+          );
           return;
         }
       }
@@ -273,13 +282,10 @@ class ReaderWrapper extends HookConsumerWidget {
         final isAtFirstPage = currentIndex <= 0;
 
         if (isAtFirstPage && nextPrevChapterPair?.second != null) {
-          // Navigate to previous chapter
-          ReaderRoute(
-            mangaId: manga.id,
-            chapterId: nextPrevChapterPair!.second!.id,
-            toPrev: true,
-            transVertical: scrollDirection != Axis.vertical,
-          ).pushReplacement(context);
+          navigateToChapter(
+            nextPrevChapterPair!.second!.id,
+            goingToPrevious: true,
+          );
           return;
         }
       }
@@ -299,38 +305,22 @@ class ReaderWrapper extends HookConsumerWidget {
     final onNextChapter = useCallback(() {
       if (nextPrevChapterPair?.first != null) {
         ReaderHaptics.chapterChange(enabled: hapticsEnabled);
-        // Determine transition direction and RTL handling
-        final transVertical = _shouldUseVerticalTransition(resolvedReaderMode);
-        final isRTL = _isRTLReaderMode(resolvedReaderMode);
-        final toPrev =
-            isRTL; // For RTL, next chapter should slide from left (toPrev=true)
-
-        ReaderRoute(
-          mangaId: manga.id,
-          chapterId: nextPrevChapterPair!.first!.id,
-          transVertical: transVertical,
-          toPrev: toPrev,
-        ).pushReplacement(context);
+        navigateToChapter(
+          nextPrevChapterPair!.first!.id,
+          goingToPrevious: false,
+        );
       }
-    }, [nextPrevChapterPair, manga.id, resolvedReaderMode]);
+    }, [nextPrevChapterPair, navigateToChapter, hapticsEnabled]);
 
     final onPreviousChapter = useCallback(() {
       if (nextPrevChapterPair?.second != null) {
         ReaderHaptics.chapterChange(enabled: hapticsEnabled);
-        // Determine transition direction and RTL handling
-        final transVertical = _shouldUseVerticalTransition(resolvedReaderMode);
-        final isRTL = _isRTLReaderMode(resolvedReaderMode);
-        final toPrev =
-            !isRTL; // For RTL, previous chapter should slide from right (toPrev=false)
-
-        ReaderRoute(
-          mangaId: manga.id,
-          chapterId: nextPrevChapterPair!.second!.id,
-          toPrev: toPrev,
-          transVertical: transVertical,
-        ).pushReplacement(context);
+        navigateToChapter(
+          nextPrevChapterPair!.second!.id,
+          goingToPrevious: true,
+        );
       }
-    }, [nextPrevChapterPair, manga.id, resolvedReaderMode]);
+    }, [nextPrevChapterPair, navigateToChapter, hapticsEnabled]);
 
     useEffect(() {
       StreamSubscription<HardwareButton>? subscription;
@@ -466,15 +456,10 @@ class ReaderWrapper extends HookConsumerWidget {
                                 minHeight: 44,
                               ),
                               onPressed: nextPrevChapterPair?.second != null
-                                  ? () => ReaderRoute(
-                                        mangaId: nextPrevChapterPair!
-                                            .second!.mangaId,
-                                        chapterId:
-                                            nextPrevChapterPair.second!.id,
-                                        toPrev: true,
-                                        transVertical:
-                                            scrollDirection != Axis.vertical,
-                                      ).pushReplacement(context)
+                                  ? () => navigateToChapter(
+                                        nextPrevChapterPair!.second!.id,
+                                        goingToPrevious: true,
+                                      )
                                   : null,
                               icon: const Icon(
                                 Icons.skip_previous_rounded,
@@ -499,14 +484,10 @@ class ReaderWrapper extends HookConsumerWidget {
                                 minHeight: 44,
                               ),
                               onPressed: nextPrevChapterPair?.first != null
-                                  ? () => ReaderRoute(
-                                        mangaId:
-                                            nextPrevChapterPair!.first!.mangaId,
-                                        chapterId:
-                                            nextPrevChapterPair.first!.id,
-                                        transVertical:
-                                            scrollDirection != Axis.vertical,
-                                      ).pushReplacement(context)
+                                  ? () => navigateToChapter(
+                                        nextPrevChapterPair!.first!.id,
+                                        goingToPrevious: false,
+                                      )
                                   : null,
                               icon: const Icon(Icons.skip_next_rounded),
                             ),
@@ -585,23 +566,20 @@ class ReaderWrapper extends HookConsumerWidget {
               PreviousChapterIntent: CallbackAction<PreviousChapterIntent>(
                 onInvoke: (intent) {
                   nextPrevChapterPair?.second != null
-                      ? ReaderRoute(
-                          mangaId: nextPrevChapterPair!.second!.mangaId,
-                          chapterId: nextPrevChapterPair.second!.id,
-                          toPrev: true,
-                          transVertical: scrollDirection != Axis.vertical,
-                        ).pushReplacement(context)
+                      ? navigateToChapter(
+                          nextPrevChapterPair!.second!.id,
+                          goingToPrevious: true,
+                        )
                       : enhancedOnPrevious();
                   return null;
                 },
               ),
               NextChapterIntent: CallbackAction<NextChapterIntent>(
                 onInvoke: (intent) => nextPrevChapterPair?.first != null
-                    ? ReaderRoute(
-                        mangaId: nextPrevChapterPair!.first!.mangaId,
-                        chapterId: nextPrevChapterPair.first!.id,
-                        transVertical: scrollDirection != Axis.vertical,
-                      ).pushReplacement(context)
+                    ? navigateToChapter(
+                        nextPrevChapterPair!.first!.id,
+                        goingToPrevious: false,
+                      )
                     : enhancedOnNext(),
               ),
               HideQuickOpenIntent: CallbackAction<HideQuickOpenIntent>(

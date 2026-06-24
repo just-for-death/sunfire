@@ -166,8 +166,13 @@ class ExtensionUpdateNotifier extends _$ExtensionUpdateNotifier {
 
       final updateCount = extensions.where((e) => e.hasUpdate).length;
 
+      if (updateCount == 0) {
+        _lastNotifiedCount = 0;
+        return;
+      }
+
       // Only notify if the count changed since we last notified
-      if (updateCount > 0 && updateCount != _lastNotifiedCount) {
+      if (updateCount != _lastNotifiedCount) {
         _lastNotifiedCount = updateCount;
         final svc = ref.read(notificationServiceProvider);
         await svc.showExtensionUpdateNotification(updateCount: updateCount);

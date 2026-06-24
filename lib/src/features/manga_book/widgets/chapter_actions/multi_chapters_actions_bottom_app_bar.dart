@@ -64,10 +64,15 @@ class MultiChaptersActionsBottomAppBar extends HookConsumerWidget {
             ),
           if (selectedList.isSingletonList && chapterList.isNotBlank)
             MultiChaptersActionIcon(
-              chapterList: [
-                for (final chapter in chapterList!)
-                  if (firstChapter.index > chapter.index) chapter.id
-              ],
+              chapterList: () {
+                final list = chapterList!;
+                final selectedPos =
+                    list.indexWhere((c) => c.id == firstChapter.id);
+                if (selectedPos <= 0) return <int>[];
+                return [
+                  for (var i = 0; i < selectedPos; i++) list[i].id,
+                ];
+              }(),
               icon: ImageIcon(
                 Assets.icons.previousDone.provider(),
                 color: context.theme.cardTheme.color,
