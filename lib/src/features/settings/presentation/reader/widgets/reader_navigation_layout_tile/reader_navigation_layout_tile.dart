@@ -13,6 +13,7 @@ import '../../../../../../constants/enum.dart';
 import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/mixin/shared_preferences_client_mixin.dart';
 import '../../../../../../widgets/popup_widgets/radio_list_popup.dart';
+import '../../../../../../widgets/settings/adaptive_list_tile.dart';
 
 part 'reader_navigation_layout_tile.g.dart';
 
@@ -32,7 +33,7 @@ class ReaderNavigationLayoutTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final readerNavigationLayout = ref.watch(readerNavigationLayoutKeyProvider);
-    return ListTile(
+    return AdaptiveListTile(
       leading: const Icon(Icons.touch_app_rounded),
       subtitle: readerNavigationLayout != null
           ? Text(readerNavigationLayout.toLocale(context))

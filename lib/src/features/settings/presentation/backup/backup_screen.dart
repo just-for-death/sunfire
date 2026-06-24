@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../utils/extensions/custom_extensions.dart';
+import '../../../../widgets/settings/settings_subpage_scaffold.dart';
 import '../../controller/server_controller.dart';
 import 'widgets/automatic_backup/automatic_backup_section.dart';
 import 'widgets/backup_and_restore/backup_and_restore_section.dart';
@@ -17,8 +18,8 @@ class BackupScreen extends ConsumerWidget {
 
   @override
   Widget build(context, ref) {
-    return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.backup)),
+    return SettingsSubpageScaffold(
+      title: context.l10n.backup,
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(settingsProvider.future),
         child: ListTileTheme(

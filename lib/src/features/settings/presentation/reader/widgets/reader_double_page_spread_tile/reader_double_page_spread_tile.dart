@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2026 Contributors to the Suwayomi project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,37 +15,37 @@ import '../../../../../../utils/mixin/shared_preferences_client_mixin.dart';
 import '../../../../../../widgets/popup_widgets/radio_list_popup.dart';
 import '../../../../../../widgets/settings/adaptive_list_tile.dart';
 
-part 'reader_orientation_tile.g.dart';
+part 'reader_double_page_spread_tile.g.dart';
 
 @riverpod
-class ReaderOrientationLockKey extends _$ReaderOrientationLockKey
-    with SharedPreferenceEnumClientMixin<ReaderOrientationLock> {
+class ReaderDoublePageSpreadKey extends _$ReaderDoublePageSpreadKey
+    with SharedPreferenceEnumClientMixin<ReaderDoublePageSpread> {
   @override
-  ReaderOrientationLock? build() => initialize(
-        DBKeys.readerOrientationLock,
-        enumList: ReaderOrientationLock.values,
+  ReaderDoublePageSpread? build() => initialize(
+        DBKeys.readerDoublePageSpread,
+        enumList: ReaderDoublePageSpread.values,
       );
 }
 
-class ReaderOrientationTile extends ConsumerWidget {
-  const ReaderOrientationTile({super.key});
+class ReaderDoublePageSpreadTile extends ConsumerWidget {
+  const ReaderDoublePageSpreadTile({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final lock = ref.watch(readerOrientationLockKeyProvider);
+    final spread = ref.watch(readerDoublePageSpreadKeyProvider);
     return AdaptiveListTile(
-      leading: const Icon(Icons.screen_rotation_rounded),
-      title: Text(context.l10n.readerOrientationLock),
-      subtitle: lock != null ? Text(lock.toLocale(context)) : null,
+      leading: const Icon(Icons.menu_book_rounded),
+      title: Text(context.l10n.readerDoublePageSpread),
+      subtitle: spread != null ? Text(spread.toLocale(context)) : null,
       onTap: () => showDialog(
         context: context,
-        builder: (context) => RadioListPopup<ReaderOrientationLock>(
-          title: context.l10n.readerOrientationLock,
-          optionList: ReaderOrientationLock.values,
-          value: lock ?? ReaderOrientationLock.auto,
+        builder: (context) => RadioListPopup<ReaderDoublePageSpread>(
+          title: context.l10n.readerDoublePageSpread,
+          optionList: ReaderDoublePageSpread.values,
+          value: spread ?? ReaderDoublePageSpread.auto,
           getOptionTitle: (value) => value.toLocale(context),
           onChange: (value) {
-            ref.read(readerOrientationLockKeyProvider.notifier).update(value);
+            ref.read(readerDoublePageSpreadKeyProvider.notifier).update(value);
             Navigator.pop(context);
           },
         ),

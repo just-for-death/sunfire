@@ -13,6 +13,8 @@ import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/launch_url_in_web.dart';
 import '../../../../utils/misc/toast/toast.dart';
+import '../../../../widgets/settings/adaptive_list_tile.dart';
+import '../../../../widgets/settings/settings_subpage_scaffold.dart';
 import '../../widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
 import '../server/widget/client/server_url_tile/server_url_tile.dart';
 
@@ -21,10 +23,8 @@ class MoreScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.more),
-      ),
+    return SettingsSubpageScaffold(
+      title: context.l10n.more,
       body: ListView(
         children: [
           ImageIcon(
@@ -33,34 +33,34 @@ class MoreScreen extends ConsumerWidget {
           ),
           const Divider(),
           const ServerUrlTile(),
-          ListTile(
+          AdaptiveListTile(
             title: Text(context.l10n.categories),
             leading: const Icon(Icons.label_rounded),
             onTap: () => const EditCategoriesRoute().push(context),
           ),
-          ListTile(
+          AdaptiveListTile(
             title: Text(context.l10n.history),
             leading: const Icon(Icons.history_rounded),
             onTap: () => const HistoryRoute().go(context),
           ),
           const AppThemeModeTile(),
-          ListTile(
+          AdaptiveListTile(
             title: Text(context.l10n.backup),
             leading: const Icon(Icons.settings_backup_restore_rounded),
             onTap: () => const BackupRoute().push(context),
           ),
           const Divider(),
-          ListTile(
+          AdaptiveListTile(
             title: Text(context.l10n.settings),
             leading: const Icon(Icons.settings_rounded),
             onTap: () => const SettingsRoute().go(context),
           ),
-          ListTile(
+          AdaptiveListTile(
             title: Text(context.l10n.about),
             leading: const Icon(Icons.info_rounded),
             onTap: () => const AboutRoute().go(context),
           ),
-          ListTile(
+          AdaptiveListTile(
             title: Text(context.l10n.help),
             leading: const Icon(Icons.help_rounded),
             onTap: () => launchUrlInWeb(
@@ -74,6 +74,3 @@ class MoreScreen extends ConsumerWidget {
     );
   }
 }
-
-// iOS redirects to the dedicated iOS settings screen
-// This extension is applied in the route — see settings_screen.dart iOS branch

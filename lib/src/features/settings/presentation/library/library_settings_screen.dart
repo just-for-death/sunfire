@@ -15,6 +15,7 @@ import '../../../../widgets/emoticons.dart';
 import '../../../../widgets/input_popup/domain/settings_prop_type.dart';
 import '../../../../widgets/input_popup/settings_prop_tile.dart';
 import '../../../../widgets/section_title.dart';
+import '../../../../widgets/settings/settings_subpage_scaffold.dart';
 import '../../controller/server_controller.dart';
 import '../../domain/settings/settings.dart';
 import 'data/library_settings_repository.dart';
@@ -28,15 +29,13 @@ class LibrarySettingsScreen extends ConsumerWidget {
     final repository = ref.watch(librarySettingsRepositoryProvider);
     final serverSettings = ref.watch(settingsProvider);
 
-    return ListTileTheme(
-      data: const ListTileThemeData(
-        subtitleTextStyle: TextStyle(color: Colors.grey),
-      ),
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(context.l10n.library),
+    return SettingsSubpageScaffold(
+      title: context.l10n.library,
+      body: ListTileTheme(
+        data: const ListTileThemeData(
+          subtitleTextStyle: TextStyle(color: Colors.grey),
         ),
-        body: RefreshIndicator(
+        child: RefreshIndicator(
           onRefresh: () => ref.refresh(settingsProvider.future),
           child: serverSettings.showUiWhenData(
             context,

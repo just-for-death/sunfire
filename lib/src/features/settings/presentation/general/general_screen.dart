@@ -14,6 +14,8 @@ import '../../../../l10n/generated/app_localizations.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/misc/toast/toast.dart';
 import '../../../../widgets/popup_widgets/radio_list_popup.dart';
+import '../../../../widgets/settings/adaptive_list_tile.dart';
+import '../../../../widgets/settings/settings_subpage_scaffold.dart';
 import 'quick_search_toggle/quick_search_toggle_tile.dart';
 import 'timeout_settings/timeout_settings_section.dart';
 
@@ -22,11 +24,11 @@ class GeneralScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.general)),
+    return SettingsSubpageScaffold(
+      title: context.l10n.general,
       body: ListView(
         children: [
-          ListTile(
+          AdaptiveListTile(
             leading: const Icon(Icons.translate_rounded),
             title: Text(context.l10n.appLanguage),
             subtitle: Text(getLanguageNameFormLocale(context.currentLocale)),
@@ -45,7 +47,7 @@ class GeneralScreen extends ConsumerWidget {
               ),
             ),
           ),
-          ListTile(
+          AdaptiveListTile(
             leading: const Icon(Icons.cleaning_services_rounded),
             title: Text(context.l10n.clearCache),
             onTap: () async {

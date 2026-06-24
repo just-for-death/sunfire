@@ -11,6 +11,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../../../constants/db_keys.dart';
 import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/mixin/shared_preferences_client_mixin.dart';
+import '../../../../../../widgets/settings/adaptive_list_tile.dart';
 
 part 'reader_swipe_chapter_toggle_tile.g.dart';
 
@@ -25,9 +26,8 @@ class SwipeChapterToggleTile extends HookConsumerWidget {
   const SwipeChapterToggleTile({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return SwitchListTile(
-      controlAffinity: ListTileControlAffinity.trailing,
-      secondary: const Icon(Icons.swipe_rounded),
+    return AdaptiveSwitchListTile(
+      leading: const Icon(Icons.swipe_rounded),
       title: Text(context.l10n.readerSwipeChapterToggle),
       subtitle: Text(context.l10n.readerSwipeChapterToggleDescription),
       onChanged: ref.read(swipeChapterToggleProvider.notifier).update,
