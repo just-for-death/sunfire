@@ -72,6 +72,8 @@ class ReaderNavigationLayoutWidget extends HookConsumerWidget {
           onRightTap: onRightTap,
           leftColor: leftColor,
           rightColor: rightColor,
+          previousPageLabel: context.l10n.readerTapPreviousPage,
+          nextPageLabel: context.l10n.readerTapNextPage,
         ),
       ReaderNavigationLayout.kindlish => KindlishLayout(
           onLeftTap: onLeftTap,

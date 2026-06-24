@@ -65,6 +65,7 @@ abstract final class NotificationNavigation {
   }
 
   static void _navigate(BuildContext context, int notificationId) {
+    if (!context.mounted) return;
     if (notificationId == extensionUpdateId) {
       context.go(const BrowseExtensionRoute().location);
       return;

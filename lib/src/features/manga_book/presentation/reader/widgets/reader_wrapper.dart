@@ -115,6 +115,17 @@ class ReaderWrapper extends HookConsumerWidget {
     }
   }
 
+  bool _chapterNavAtLastPage(int index) {
+    if (chapterPages.pages.isEmpty) return false;
+    return LastPageSwipeUtils.isAtLastPageReliable(
+      currentIndex: index,
+      chapterPages: chapterPages,
+    );
+  }
+
+  bool _chapterNavAtFirstPage(int index) =>
+      LastPageSwipeUtils.isAtFirstPage(currentIndex: index);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final nextPrevChapterPair = ref.watch(
@@ -255,10 +266,9 @@ class ReaderWrapper extends HookConsumerWidget {
     // Enhanced navigation callbacks with last-page swipe logic
     final enhancedOnNext = useCallback(() {
       if (lastPageSwipeEnabled && !readerSwipeChapterToggle) {
-        // Check if we're at the last page
-        final isAtLastPage = currentIndex >= (chapterPages.pages.length - 1);
-
-        if (isAtLastPage && nextPrevChapterPair?.first != null) {
+        final pageIndex = livePageIndex?.value ?? currentIndex;
+        if (_chapterNavAtLastPage(pageIndex) &&
+            nextPrevChapterPair?.first != null) {
           navigateToChapter(
             nextPrevChapterPair!.first!.id,
             goingToPrevious: false,
@@ -274,17 +284,18 @@ class ReaderWrapper extends HookConsumerWidget {
       lastPageSwipeEnabled,
       readerSwipeChapterToggle,
       currentIndex,
-      chapterPages.pages.length,
+      livePageIndex,
+      chapterPages,
       nextPrevChapterPair,
       hapticsEnabled,
+      navigateToChapter,
     ]);
 
     final enhancedOnPrevious = useCallback(() {
       if (lastPageSwipeEnabled && !readerSwipeChapterToggle) {
-        // Check if we're at the first page
-        final isAtFirstPage = currentIndex <= 0;
-
-        if (isAtFirstPage && nextPrevChapterPair?.second != null) {
+        final pageIndex = livePageIndex?.value ?? currentIndex;
+        if (_chapterNavAtFirstPage(pageIndex) &&
+            nextPrevChapterPair?.second != null) {
           navigateToChapter(
             nextPrevChapterPair!.second!.id,
             goingToPrevious: true,
@@ -300,8 +311,10 @@ class ReaderWrapper extends HookConsumerWidget {
       lastPageSwipeEnabled,
       readerSwipeChapterToggle,
       currentIndex,
+      livePageIndex,
       nextPrevChapterPair,
       hapticsEnabled,
+      navigateToChapter,
     ]);
 
     // Chapter navigation callbacks with direction-aware animations
@@ -744,14 +757,19 @@ class _PageViewEnhancerState extends State<_PageViewEnhancer> {
   }
 
   void _checkScrollAttemptAtBoundary(ScrollMetrics metrics) {
+    if (widget.chapterPages.pages.isEmpty) return;
+
     // Handle both PageMetrics (for PageView) and general ScrollMetrics (for Webtoon)
     if (metrics is PageMetrics) {
       // PageView-based readers (horizontal modes)
       final currentPage = metrics.page?.round() ?? 0;
-      final totalPages = widget.chapterPages.pages.length;
 
-      final bool atLastPage = currentPage >= (totalPages - 1);
-      final bool atFirstPage = currentPage <= 0;
+      final bool atLastPage = LastPageSwipeUtils.isAtLastPageReliable(
+        currentIndex: currentPage,
+        chapterPages: widget.chapterPages,
+      );
+      final bool atFirstPage =
+          LastPageSwipeUtils.isAtFirstPage(currentIndex: currentPage);
 
       // Trigger immediately when user drags past edge more than 10 logical pixels
       const double kOverscrollThreshold = 10.0;
@@ -810,8 +828,7 @@ class _PageViewEnhancerState extends State<_PageViewEnhancer> {
   }
 
   void _handleWebtoonOverscroll(OverscrollNotification notification) {
-    // Safety check: only process if last page swipe is enabled
-    if (!widget.lastPageSwipeEnabled) {
+    if (!widget.lastPageSwipeEnabled || widget.chapterPages.pages.isEmpty) {
       return;
     }
 
