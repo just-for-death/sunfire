@@ -100,7 +100,9 @@ class LastPageSwipeUtils {
     required ChapterPagesDto chapterPages,
   }) {
     if (chapterPages.pages.isEmpty) return false;
-    return currentIndex >= chapterPages.pages.length - 1;
+    final lastIndex = chapterPages.pages.length - 1;
+    if (currentIndex > lastIndex) return false;
+    return currentIndex >= lastIndex;
   }
 
   /// Checks if the current page is the first page of the chapter

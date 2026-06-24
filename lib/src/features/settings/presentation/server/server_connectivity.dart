@@ -61,7 +61,7 @@ class ServerConnectivity extends _$ServerConnectivity {
       );
       final get = ref.read(serverConnectivityHttpGetProvider);
       final response = await get(Uri.parse(pingUrl));
-      if (response.statusCode < 500) {
+      if (response.statusCode >= 200 && response.statusCode < 400) {
         _retryTimer?.cancel();
         state = ServerStatus.online;
       } else {

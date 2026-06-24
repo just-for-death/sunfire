@@ -7,7 +7,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_android_volume_keydown/flutter_android_volume_keydown.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:gap/gap.dart';
@@ -15,12 +14,12 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-import '../../../../../global_providers/global_providers.dart';
 import '../../../../../constants/app_constants.dart';
 import '../../../../../constants/app_sizes.dart';
 import '../../../../../constants/db_keys.dart';
 import '../../../../../constants/enum.dart';
 import '../../../../../constants/reader_keyboard_shortcuts.dart';
+import '../../../../../global_providers/global_providers.dart';
 import '../../../../../routes/router_config.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../utils/launch_url_in_web.dart';
@@ -47,7 +46,7 @@ import '../../manga_details/controller/manga_details_controller.dart';
 import '../controller/reader_controller.dart';
 import '../utils/last_page_swipe_utils.dart';
 import '../utils/reader_haptics.dart';
-import '../utils/reader_system_ui.dart';
+import '../utils/reader_session.dart';
 import 'directional_swipe_gesture_handler.dart';
 import 'page_number_slider.dart';
 import 'reader_coach_mark.dart';
@@ -155,7 +154,7 @@ class ReaderWrapper extends HookConsumerWidget {
         useState(ref.read(readerInitialOverlayProvider).ifNull());
     final bool hapticsEnabled = ref.watch(readerHapticsEnabledProvider).ifNull();
     final double brightnessOverlay =
-        ref.watch(readerBrightnessOverlayProvider).ifNull();
+        ref.watch(readerBrightnessOverlayProvider) ?? DBKeys.readerBrightnessOverlay.initial;
     final mangaReaderPadding =
         useState(manga.metaData.readerPadding ?? localMangaReaderPadding);
     final mangaReaderMagnifierSize = useState(
@@ -227,15 +226,15 @@ class ReaderWrapper extends HookConsumerWidget {
     );
 
     useEffect(() {
-      ReaderSystemUi.enterReader(chromeVisible: visibility.value);
-      WakelockPlus.enable();
-      return () {
-        WakelockPlus.disable();
-      };
+      WakelockPlusBridge.register(
+        enable: WakelockPlus.enable,
+        disable: WakelockPlus.disable,
+      );
+      return null;
     }, []);
 
     useEffect(() {
-      ReaderSystemUi.enterReader(chromeVisible: visibility.value);
+      ReaderSession.onChromeVisibilityChanged(visibility.value);
       return null;
     }, [visibility.value]);
 

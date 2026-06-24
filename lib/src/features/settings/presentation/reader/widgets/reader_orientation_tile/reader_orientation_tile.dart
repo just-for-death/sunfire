@@ -41,7 +41,7 @@ class ReaderOrientationTile extends ConsumerWidget {
         builder: (context) => RadioListPopup<ReaderOrientationLock>(
           title: context.l10n.readerOrientationLock,
           optionList: ReaderOrientationLock.values,
-          value: lock,
+          value: lock ?? ReaderOrientationLock.auto,
           getOptionTitle: (value) => value.toLocale(context),
           onChange: (value) {
             ref.read(readerOrientationLockKeyProvider.notifier).update(value);

@@ -44,7 +44,6 @@ import '../features/settings/presentation/server/server_screen.dart';
 import '../features/settings/presentation/settings/settings_screen.dart';
 import '../features/tracking/presentation/tracker_settings_screen.dart';
 import '../utils/extensions/custom_extensions.dart';
-import '../utils/platform/system_ui_style.dart';
 import '../widgets/shell/navigation_shell_screen.dart';
 
 part 'router_config.g.dart';
@@ -121,6 +120,7 @@ GoRouter routerConfig(ref) {
     debugLogDiagnostics: true,
     initialLocation: const HistoryTabRoute().location,
     navigatorKey: rootNavigatorKey,
+    onException: (_, state, router) => router.go(const HistoryTabRoute().location),
   );
 }
 

@@ -79,7 +79,7 @@ class SmallScreenMangaDetails extends ConsumerWidget {
                   opacity: animation,
                   child: SizeTransition(
                     sizeFactor: animation,
-                    axisAlignment: -1,
+                    alignment: Alignment.topCenter,
                     child: child,
                   ),
                 ),
