@@ -60,6 +60,14 @@
 		<string>LaunchScreen</string>
 		<key>UIMainStoryboardFile</key>
 		<string>Main</string>
+		<key>NSLocalNetworkUsageDescription</key>
+		<string>Catalyst connects to your Suwayomi server on your local network.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Catalyst needs photo library access to import backup files and images.</string>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>fetch</string>
+		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
 		<key>UISupportedInterfaceOrientations</key>
@@ -76,6 +84,6 @@
 			<string>UIInterfaceOrientationLandscapeRight</string>
 		</array>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
-		<false/>
+		<true/>
 	</dict>
 </plist>

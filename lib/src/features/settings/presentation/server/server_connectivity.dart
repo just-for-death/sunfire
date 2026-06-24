@@ -94,10 +94,12 @@ class ServerAwareWrapper extends HookConsumerWidget {
     super.key,
     required this.child,
     this.blockWhenOffline = false,
+    this.showOfflineBanner = true,
   });
 
   final Widget child;
   final bool blockWhenOffline;
+  final bool showOfflineBanner;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -126,7 +128,7 @@ class ServerAwareWrapper extends HookConsumerWidget {
       );
     }
 
-    if (bannerDismissed.value) return child;
+    if (!showOfflineBanner || bannerDismissed.value) return child;
 
     return Stack(
       fit: StackFit.expand,

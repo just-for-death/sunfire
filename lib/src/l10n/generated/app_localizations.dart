@@ -1276,6 +1276,12 @@ abstract class AppLocalizations {
   /// **'Pinch to Zoom'**
   String get pinchToZoom;
 
+  /// Pinch to zoom scope hint for reader settings
+  ///
+  /// In en, this message translates to:
+  /// **'Horizontal pages only; long-press for magnifier in webtoon mode'**
+  String get pinchToZoomSubtitle;
+
   /// Text for Previous Chapter button in Manga Reader Screen
   ///
   /// In en, this message translates to:
@@ -1462,6 +1468,9 @@ abstract class AppLocalizations {
   /// **'Shows title and quick settings when opening a chapter'**
   String get readerOverlaySubtitle;
 
+  /// Hint shown once on first reader open
+  String get readerTapToShowControls;
+
   /// Slider title text for Reader Padding
   ///
   /// In en, this message translates to:
@@ -1527,6 +1536,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Allow content to extend into notch and home indicator areas'**
   String get readerIgnoreSafeAreaToggleDescription;
+
+  /// Reader haptics toggle title
+  String get readerHaptics;
+
+  /// Reader haptics toggle subtitle
+  String get readerHapticsSubtitle;
+
+  /// Reader brightness overlay title
+  String get readerBrightnessOverlay;
+
+  /// Reader brightness overlay subtitle
+  String get readerBrightnessOverlaySubtitle;
+
+  /// Reader orientation lock setting title
+  String get readerOrientationLock;
+
+  /// Reader orientation auto option
+  String get readerOrientationAuto;
+
+  /// Reader orientation portrait option
+  String get readerOrientationPortrait;
+
+  /// Reader orientation landscape option
+  String get readerOrientationLandscape;
+
+  /// iOS volume key navigation hint
+  String get readerIOSVolumeHint;
+
+  /// Toast when resuming reading from saved page
+  String readerResumedPage(int page, int total);
 
   /// Reddit app title
   ///
