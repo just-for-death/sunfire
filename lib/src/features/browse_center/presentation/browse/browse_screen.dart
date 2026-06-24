@@ -38,12 +38,6 @@ class BrowseScreen extends HookConsumerWidget {
       return null;
     }, [currentIndex]);
 
-    useEffect(() {
-      if (currentIndex != tabController.index) {
-        Future.microtask(() => onDestinationSelected(tabController.index));
-      }
-      return null;
-    }, [tabController.index]);
     useListenable(tabController);
 
     final showSearch = useState(false);
@@ -113,6 +107,7 @@ class BrowseScreen extends HookConsumerWidget {
                   ],
             bottom: TabBar(
               controller: tabController,
+              onTap: onDestinationSelected,
               dividerColor: Colors.transparent,
               tabs: [
                 Tab(text: context.l10n.sources),

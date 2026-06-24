@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../routes/router_config.dart';
@@ -13,7 +14,7 @@ import '../../domain/history_item.dart';
 import '../history_controller.dart';
 import '../history_reader_navigation.dart';
 
-class IOSHomeScreen extends ConsumerWidget {
+class IOSHomeScreen extends HookConsumerWidget {
   const IOSHomeScreen({super.key});
 
   @override
@@ -21,8 +22,16 @@ class IOSHomeScreen extends ConsumerWidget {
     final historyGroups = ref.watch(filteredHistoryGroupsProvider);
     final historyState = ref.watch(readingHistoryProvider);
     final searchQuery = ref.watch(historySearchQueryProvider);
+    final searchController = useTextEditingController(text: searchQuery);
     final isDark = context.isDarkMode;
     final cs = context.theme.colorScheme;
+
+    useEffect(() {
+      if (searchController.text != searchQuery) {
+        searchController.text = searchQuery;
+      }
+      return null;
+    }, [searchQuery]);
 
     return Scaffold(
       backgroundColor:
@@ -57,15 +66,19 @@ class IOSHomeScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: CupertinoSearchTextField(
+                  controller: searchController,
                   placeholder: context.l10n.searchHistory,
                   onChanged: (value) => ref
                       .read(historySearchQueryProvider.notifier)
                       .updateQuery(value),
                   onSuffixTap: searchQuery.isBlank
                       ? null
-                      : () => ref
-                          .read(historySearchQueryProvider.notifier)
-                          .updateQuery(''),
+                      : () {
+                          searchController.clear();
+                          ref
+                              .read(historySearchQueryProvider.notifier)
+                              .updateQuery('');
+                        },
                 ),
               ),
             ),
@@ -134,7 +147,7 @@ class IOSHomeScreen extends ConsumerWidget {
                       const SizedBox(height: 16),
                       Text(
                         searchQuery.isNotBlank
-                            ? context.l10n.noHistoryFound
+                            ? context.l10n.noSearchResults
                             : context.l10n.noHistoryFound,
                         style: TextStyle(
                           fontSize: 17,
