@@ -674,6 +674,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get pinchToZoom => 'ピンチでズーム';
 
   @override
+  String get pinchToZoomSubtitle =>
+      'Horizontal pages only; long-press for magnifier in webtoon mode';
+
+  @override
   String previousChapter(Object chapterTitle) {
     return '前: $chapterTitle';
   }
@@ -770,6 +774,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get readerOverlaySubtitle => 'チャプターを開くときにタイトルとクイック設定を表示';
 
   @override
+  String get readerTapToShowControls =>
+      'Tap the center of the screen to show reading controls';
+
+  @override
   String get readerPadding => 'リーダーのパディング';
 
   @override
@@ -802,6 +810,41 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get readerIgnoreSafeAreaToggleDescription =>
       'コンテンツをノッチやホームインジケーター領域まで表示可能にする';
+
+  @override
+  String get readerHaptics => 'Haptic feedback';
+
+  @override
+  String get readerHapticsSubtitle =>
+      'Vibrate lightly on page and chapter changes';
+
+  @override
+  String get readerBrightnessOverlay => 'Reader dimming';
+
+  @override
+  String get readerBrightnessOverlaySubtitle =>
+      'Darken the screen while reading (does not change system brightness)';
+
+  @override
+  String get readerOrientationLock => 'Orientation lock';
+
+  @override
+  String get readerOrientationAuto => 'Auto';
+
+  @override
+  String get readerOrientationPortrait => 'Portrait';
+
+  @override
+  String get readerOrientationLandscape => 'Landscape';
+
+  @override
+  String get readerIOSVolumeHint =>
+      'On iOS, use tap zones or the page slider to navigate';
+
+  @override
+  String readerResumedPage(int page, int total) {
+    return 'Resumed from page $page of $total';
+  }
 
   @override
   String get reddit => 'Reddit';

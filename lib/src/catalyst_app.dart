@@ -1,6 +1,7 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -16,6 +17,7 @@ import 'routes/router_config.dart';
 import 'theme/komikko_custom_schemes.dart';
 import 'theme/komikku_ui_tokens.dart';
 import 'utils/extensions/custom_extensions.dart';
+import 'utils/platform/system_ui_style.dart';
 
 class CatalystApp extends ConsumerWidget {
   const CatalystApp({super.key});
@@ -155,7 +157,13 @@ class CatalystApp extends ConsumerWidget {
           );
 
           return MaterialApp.router(
-            builder: FToastBuilder(),
+            builder: (context, child) {
+              final brightness = Theme.of(context).brightness;
+              return AnnotatedRegion<SystemUiOverlayStyle>(
+                value: SystemUiStyle.forBrightness(brightness),
+                child: FToastBuilder()(context, child),
+              );
+            },
             onGenerateTitle: (context) => context.l10n.appTitle,
             debugShowCheckedModeBanner: false,
             theme: lightTheme,

@@ -50,3 +50,4 @@ app.*.map.json
 # Gradle caches (local machine; should not be committed)
 android/.gradle/
 **/local.properties
+android/key.properties

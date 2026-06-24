@@ -38,7 +38,6 @@ class BigScreenMangaDetails extends ConsumerWidget {
   final AsyncValue<List<ChapterDto>?> chapterList;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final filteredChapterList = chapterList.valueOrNull;
     return RefreshIndicator(
       onRefresh: () => onRefresh(true),
       child: Row(
@@ -71,67 +70,7 @@ class BigScreenMangaDetails extends ConsumerWidget {
           const VerticalDivider(width: 0),
           Expanded(
             child: chapterList.showUiWhenData(context, (data) {
-              if (data.isNotBlank) {
-                return Column(
-                  children: [
-                    Padding(
-                      padding: KomikkuUiTokens.screenPadding,
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: animation,
-                          child: SizeTransition(
-                            sizeFactor: animation,
-                            axisAlignment: -1,
-                            child: child,
-                          ),
-                        ),
-                        child: ListTile(
-                          key: ValueKey(filteredChapterList?.length ?? 0),
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            context.l10n.noOfChapters(
-                              filteredChapterList?.length ?? 0,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        itemBuilder: (context, index) {
-                          if (filteredChapterList.length == index) {
-                            return const ListTile();
-                          }
-                          final key = ValueKey(
-                            "${filteredChapterList[index].id}",
-                          );
-                          final chapter = filteredChapterList[index];
-                          return ChapterListTile(
-                            key: key,
-                            manga: manga,
-                            chapter: chapter,
-                            updateData: () => onListRefresh(false),
-                            isSelected: selectedChapters.value.containsKey(
-                              chapter.id,
-                            ),
-                            canTapSelect: selectedChapters.value.isNotEmpty,
-                            toggleSelect: (ChapterDto val) {
-                              if ((val.id).isNull) return;
-                              selectedChapters.value = selectedChapters.value
-                                  .toggleKey(val.id, val);
-                            },
-                          );
-                        },
-                        itemCount: filteredChapterList!.length + 1,
-                      ),
-                    ),
-                  ],
-                );
-              } else {
+              if (data.isBlank) {
                 return Emoticons(
                   title: context.l10n.noChaptersFound,
                   button: TextButton(
@@ -140,6 +79,61 @@ class BigScreenMangaDetails extends ConsumerWidget {
                   ),
                 );
               }
+              return Column(
+                children: [
+                  Padding(
+                    padding: KomikkuUiTokens.screenPadding,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SizeTransition(
+                          sizeFactor: animation,
+                          axisAlignment: -1,
+                          child: child,
+                        ),
+                      ),
+                      child: ListTile(
+                        key: ValueKey(data.length),
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          context.l10n.noOfChapters(data.length),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemBuilder: (context, index) {
+                        if (data.length == index) {
+                          return const ListTile();
+                        }
+                        final key = ValueKey("${data[index].id}");
+                        final chapter = data[index];
+                        return ChapterListTile(
+                          key: key,
+                          manga: manga,
+                          chapter: chapter,
+                          updateData: () => onListRefresh(false),
+                          isSelected: selectedChapters.value.containsKey(
+                            chapter.id,
+                          ),
+                          canTapSelect: selectedChapters.value.isNotEmpty,
+                          toggleSelect: (ChapterDto val) {
+                            if ((val.id).isNull) return;
+                            selectedChapters.value = selectedChapters.value
+                                .toggleKey(val.id, val);
+                          },
+                        );
+                      },
+                      itemCount: data.length + 1,
+                    ),
+                  ),
+                ],
+              );
             }, refresh: () => onRefresh(false)),
           ),
         ],

@@ -1127,6 +1127,7 @@
     "pause": "Pause",
     "pending": "Pending",
     "pinchToZoom": "Pinch to Zoom",
+    "pinchToZoomSubtitle": "Horizontal pages only; long-press for magnifier in webtoon mode",
     "previousChapter": "Previous: {chapterTitle}",
     "queued": "Queued",
     "quickSearch": "Quick Search",
@@ -1158,6 +1159,7 @@
     "readerNavigationLayoutRightAndLeft": "Right And Left",
     "readerOverlay": "Reader initial overlay",
     "readerOverlaySubtitle": "Shows title and quick settings when opening a chapter",
+    "readerTapToShowControls": "Tap the center of the screen to show reading controls",
     "readerPadding": "Reader Padding",
     "readerScrollAnimation": "Scroll animation",
     "readerSwipeChapterToggle": "Swipe toggle",
@@ -1169,6 +1171,22 @@
     "readerVolumeTapSubtitle": "Navigate with Volume Keys",
     "readerIgnoreSafeAreaToggle": "Ignore Safe Area",
     "readerIgnoreSafeAreaToggleDescription": "Allow content to extend into notch and home indicator areas",
+    "readerHaptics": "Haptic feedback",
+    "readerHapticsSubtitle": "Vibrate lightly on page and chapter changes",
+    "readerBrightnessOverlay": "Reader dimming",
+    "readerBrightnessOverlaySubtitle": "Darken the screen while reading (does not change system brightness)",
+    "readerOrientationLock": "Orientation lock",
+    "readerOrientationAuto": "Auto",
+    "readerOrientationPortrait": "Portrait",
+    "readerOrientationLandscape": "Landscape",
+    "readerIOSVolumeHint": "On iOS, use tap zones or the page slider to navigate",
+    "readerResumedPage": "Resumed from page {page} of {total}",
+    "@readerResumedPage": {
+        "placeholders": {
+            "page": {"type": "int"},
+            "total": {"type": "int"}
+        }
+    },
     "reddit": "Reddit",
     "refresh": "Refresh",
     "migrate": "Migrate",

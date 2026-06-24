@@ -3,9 +3,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../constants/app_breakpoints.dart';
 import '../../../constants/navigation_bar_data.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../nav_overflow_menu.dart';
+import '../shell_banner_stack.dart';
+import '../shell_insets.dart';
 
 /// iOS/iPad navigation shell — glass tab bar on iPhone,
 /// sidebar + detail split on iPad.
@@ -23,7 +26,7 @@ class IOSNavigationShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (context.isTablet) {
+    if (context.isTablet && !AppBreakpoints.useCompactShellOnIPad(context)) {
       return _IPadSplitShell(
         onDestinationSelected: onDestinationSelected,
         child: child,
@@ -61,8 +64,22 @@ class _IPhoneGlassShell extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      extendBody: true,
-      body: child,
+      body: Column(
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) => SizeTransition(
+              sizeFactor: animation,
+              axisAlignment: -1,
+              child: FadeTransition(opacity: animation, child: child),
+            ),
+            child: const ShellBannerStack(),
+          ),
+          Expanded(child: ShellBottomInset(child: child)),
+        ],
+      ),
       bottomNavigationBar: _GlassTabBar(
         selectedBranchIndex: child.currentIndex,
         navList: navList,
@@ -254,7 +271,14 @@ class _IPadSplitShell extends StatelessWidget {
                 ? Colors.white.withValues(alpha: 0.1)
                 : Colors.black.withValues(alpha: 0.08),
           ),
-          Expanded(child: child),
+          Expanded(
+            child: Column(
+              children: [
+                const ShellBannerStack(),
+                Expanded(child: ShellBottomInset(child: child)),
+              ],
+            ),
+          ),
         ],
       ),
     );

@@ -36,7 +36,7 @@ class IOSHomeScreen extends ConsumerWidget {
           slivers: [
             // Glass large-title app bar
             GlassSliverAppBar(
-              title: 'Home',
+              title: context.l10n.navHome,
               actions: [
                 IconButton(
                   icon: Icon(

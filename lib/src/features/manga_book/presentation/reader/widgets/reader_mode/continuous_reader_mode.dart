@@ -6,6 +6,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/misc/app_utils.dart';
+import '../../../../../../widgets/custom_circular_progress_indicator.dart';
 import '../../../../../../widgets/server_image.dart';
 import '../../../../../settings/presentation/reader/widgets/reader_pinch_to_zoom/reader_pinch_to_zoom.dart';
 import '../../../../../settings/presentation/reader/widgets/reader_scroll_animation_tile/reader_scroll_animation_tile.dart';
@@ -66,11 +68,18 @@ class ContinuousReaderMode extends HookConsumerWidget {
     final ItemPositionsListener positionsListener =
         useMemoized(() => ItemPositionsListener.create());
 
-    final ValueNotifier<int> currentIndex = useState(
+    final int pageCount = chapterPages.pages.isNotEmpty
+        ? chapterPages.pages.length
+        : chapterPages.chapter.pageCount;
+
+    final int initialIndex = _clampPageIndex(
       chapter.isRead.ifNull()
           ? 0
-          : (chapter.lastPageRead).getValueOnNullOrNegative(),
+          : chapter.lastPageRead.getValueOnNullOrNegative(),
+      pageCount,
     );
+
+    final ValueNotifier<int> currentIndex = useState(initialIndex);
 
     // Passive position tracking that doesn't interfere with scrolling
     final ObjectRef<Timer?> positionUpdateTimer = useRef<Timer?>(null);
@@ -135,8 +144,8 @@ class ContinuousReaderMode extends HookConsumerWidget {
 
     final bool isAnimationEnabled =
         ref.read(readerScrollAnimationProvider).ifNull(true);
-    final bool isPinchToZoomEnabled =
-        ref.read(pinchToZoomProvider).ifNull(true);
+    final bool isPinchToZoomEnabled = ref.read(pinchToZoomProvider).ifNull(true) &&
+        scrollDirection == Axis.horizontal;
 
     return ReaderWrapper(
       scrollDirection: scrollDirection,
@@ -180,51 +189,58 @@ class ContinuousReaderMode extends HookConsumerWidget {
         isAnimationEnabled,
         isNext: true,
       ),
-      child: AppUtils.wrapOn(
-        !kIsWeb &&
-                (Platform.isAndroid || Platform.isIOS) &&
-                isPinchToZoomEnabled
-            ? (Widget child) => InteractiveViewer(maxScale: 5, child: child)
-            : null,
-        ScrollablePositionedList.separated(
-          itemScrollController: scrollController,
-          itemPositionsListener: positionsListener,
-          initialScrollIndex: chapter.isRead.ifNull()
-              ? 0
-              : chapter.lastPageRead.getValueOnNullOrNegative(),
-          scrollDirection: scrollDirection,
-          reverse: reverse,
-          itemCount: chapterPages.chapter.pageCount,
-          minCacheExtent: scrollDirection == Axis.vertical
-              ? context.height * 2
-              : context.width * 2,
-          separatorBuilder: (BuildContext context, int index) =>
-              showSeparator ? const Gap(16) : const SizedBox.shrink(),
-          itemBuilder: (BuildContext context, int index) {
-            final Widget image = ServerImage(
-              showReloadButton: true,
-              fit: scrollDirection == Axis.vertical
-                  ? BoxFit.fitWidth
-                  : BoxFit.fitHeight,
-              appendApiToUrl: false,
-              imageUrl: chapterPages.pages[index],
-              progressIndicatorBuilder: (_, __, downloadProgress) => Center(
-                child: CircularProgressIndicator(
-                  value: downloadProgress.progress,
-                ),
-              ),
-              wrapper: (Widget child) => SizedBox(
-                height: scrollDirection == Axis.vertical
-                    ? context.height * .7
-                    : null,
-                width: scrollDirection != Axis.vertical
-                    ? context.width * .7
-                    : null,
-                child: child,
-              ),
-            );
+      child: ScrollablePositionedList.separated(
+        itemScrollController: scrollController,
+        itemPositionsListener: positionsListener,
+        initialScrollIndex: initialIndex,
+        scrollDirection: scrollDirection,
+        reverse: reverse,
+        itemCount: pageCount > 0 ? pageCount : 1,
+        minCacheExtent: scrollDirection == Axis.vertical
+            ? context.height * 2
+            : context.width * 2,
+        separatorBuilder: (BuildContext context, int index) =>
+            showSeparator ? const Gap(16) : const SizedBox.shrink(),
+        itemBuilder: (BuildContext context, int index) {
+          if (chapterPages.pages.isEmpty) {
+            return const Center(child: CenterCatalystShimmerIndicator());
+          }
+          if (index >= chapterPages.pages.length) {
+            return const Center(child: CenterCatalystShimmerIndicator());
+          }
 
-            if (index == 0 || index == chapterPages.chapter.pageCount - 1) {
+          Widget image = ServerImage(
+            showReloadButton: true,
+            fit: scrollDirection == Axis.vertical
+                ? BoxFit.fitWidth
+                : BoxFit.fitHeight,
+            appendApiToUrl: false,
+            imageUrl: chapterPages.pages[index],
+            progressIndicatorBuilder: (_, __, downloadProgress) => Center(
+              child: CircularProgressIndicator(
+                value: downloadProgress.progress,
+              ),
+            ),
+            wrapper: (Widget child) => SizedBox(
+              height: scrollDirection == Axis.vertical
+                  ? context.height * .7
+                  : null,
+              width: scrollDirection != Axis.vertical
+                  ? context.width * .7
+                  : null,
+              child: child,
+            ),
+          );
+          image = AppUtils.wrapOn(
+            !kIsWeb &&
+                    (Platform.isAndroid || Platform.isIOS) &&
+                    isPinchToZoomEnabled
+                ? (Widget child) => InteractiveViewer(maxScale: 5, child: child)
+                : null,
+            image,
+          );
+
+            if (index == 0 || index == pageCount - 1) {
               final bool reverseDirection =
                   scrollDirection == Axis.horizontal && reverse;
               final Widget separator = SizedBox(
@@ -250,8 +266,12 @@ class ContinuousReaderMode extends HookConsumerWidget {
             }
           },
         ),
-      ),
     );
+  }
+
+  static int _clampPageIndex(int index, int pageCount) {
+    if (pageCount <= 0) return 0;
+    return index.clamp(0, pageCount - 1);
   }
 
   /// Immediate position tracking for UI display (navigation bar)

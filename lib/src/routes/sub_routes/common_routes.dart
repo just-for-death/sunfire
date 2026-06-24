@@ -36,14 +36,22 @@ class ReaderRoute extends GoRouteData {
 
   @override
   Page<void> buildPage(context, state) {
+    final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return CustomTransitionPage(
       key: state.pageKey,
-      child: ReaderScreen(
-        mangaId: mangaId,
-        chapterId: chapterId,
-        showReaderLayoutAnimation: showReaderLayoutAnimation,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiStyle.hidden,
+        child: ReaderScreen(
+          mangaId: mangaId,
+          chapterId: chapterId,
+          showReaderLayoutAnimation: showReaderLayoutAnimation,
+        ),
       ),
+      transitionDuration: disableAnimations ? Duration.zero : const Duration(milliseconds: 300),
+      reverseTransitionDuration:
+          disableAnimations ? Duration.zero : const Duration(milliseconds: 300),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        if (disableAnimations) return child;
         Offset offset = Offset.zero;
         offset += Offset(
           transVertical.ifNull() ? 0 : 1,
