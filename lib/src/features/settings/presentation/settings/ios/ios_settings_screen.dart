@@ -128,7 +128,7 @@ class IOSSettingsScreen extends StatelessWidget {
                     _SettingsTile(
                       icon: CupertinoIcons.chart_bar_fill,
                       iconColor: Colors.cyan,
-                      title: 'Trackers',
+                      title: context.l10n.trackers,
                       onTap: () => const TrackerSettingsRoute().go(context),
                     ),
                   ],

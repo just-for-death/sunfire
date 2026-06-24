@@ -1148,6 +1148,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get serverOfflineDismissA11y => 'Dismiss offline notice';
 
   @override
+  String get notificationsDisabledBanner =>
+      'Notifications are off — chapter updates won\'t alert you';
+
+  @override
+  String get notificationsOpenSettingsA11y => 'Open notification settings';
+
+  @override
+  String get notificationsEnableA11y => 'Enable notifications';
+
+  @override
   String get settings => '设置';
 
   @override
@@ -1279,6 +1289,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get history => '历史';
+
+  @override
+  String get historyContinueReading => 'Continue Reading';
+
+  @override
+  String get historyRecent => 'Recent';
 
   @override
   String get searchHistory => '搜索历史...';

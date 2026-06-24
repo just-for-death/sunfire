@@ -12,9 +12,9 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import 'notification_navigation.dart';
-import '../../../../utils/platform/mobile_permissions.dart';
+import '../../utils/platform/mobile_permissions.dart';
 import '../manga_book/domain/manga/manga_model.dart';
+import 'notification_navigation.dart';
 
 /// Singleton wrapper around FlutterLocalNotificationsPlugin.
 class NotificationService {
@@ -23,6 +23,8 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+
+  FlutterLocalNotificationsPlugin get notificationsPlugin => _plugin;
 
   bool _initialized = false;
   Map<String, String>? _headers;
@@ -66,6 +68,38 @@ class NotificationService {
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
+
+    if (!kIsWeb && Platform.isAndroid) {
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(
+            const AndroidNotificationChannel(
+              _updatesChannelId,
+              _updatesChannelName,
+              description: _updatesChannelDescription,
+              importance: Importance.defaultImportance,
+            ),
+          );
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(
+            const AndroidNotificationChannel(
+              _extensionsChannelId,
+              _extensionsChannelName,
+              description: _extensionsChannelDescription,
+              importance: Importance.defaultImportance,
+            ),
+          );
+    }
+
+    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+    if (launchDetails?.didNotificationLaunchApp ?? false) {
+      NotificationNavigation.scheduleTap(
+        launchDetails?.notificationResponse?.id,
+      );
+    }
 
     _initialized = true;
   }
@@ -151,6 +185,7 @@ class NotificationService {
   }) async {
     if (!_initialized) await init();
     if (newChaptersCount <= 0) return;
+    if (!await MobilePermissions.ensureNotificationPermission()) return;
 
     final body =
         '$newChaptersCount new ${newChaptersCount == 1 ? 'chapter' : 'chapters'} available';

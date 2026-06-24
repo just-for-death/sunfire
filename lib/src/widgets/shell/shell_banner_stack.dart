@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../features/settings/presentation/server/server_connectivity.dart';
 import '../../utils/extensions/custom_extensions.dart';
+import 'notification_permission_banner.dart';
 import 'top_state_banners.dart';
 
 /// Inline banners for the navigation shell (server status + library updates).
@@ -23,13 +24,20 @@ class ShellBannerStack extends HookConsumerWidget {
         status == ServerStatus.offline && !bannerDismissed.value;
 
     if (!showOffline) {
-      return const TopStateBanners();
+      return const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          NotificationPermissionBanner(),
+          TopStateBanners(),
+        ],
+      );
     }
 
     final cs = context.theme.colorScheme;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        const NotificationPermissionBanner(),
         Material(
           color: cs.errorContainer,
           child: SafeArea(

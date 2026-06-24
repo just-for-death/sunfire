@@ -1,14 +1,12 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../widgets/server_image.dart';
-import '../../../manga_book/presentation/manga_details/controller/manga_details_controller.dart';
 import '../../domain/history_item.dart';
 import '../../domain/history_menu_action.dart';
+import '../history_reader_navigation.dart';
 
 class HistoryItemTile extends ConsumerWidget {
   const HistoryItemTile({
@@ -162,61 +160,8 @@ class HistoryItemTile extends ConsumerWidget {
     );
   }
 
-  void _ensurePrefs(WidgetRef ref) {
-    ref.read(mangaChapterSortProvider);
-    ref.read(mangaChapterSortDirectionProvider);
-    ref.read(mangaChapterFilterUnreadProvider);
-    ref.read(mangaChapterFilterDownloadedProvider);
-    ref.read(mangaChapterFilterBookmarkedProvider);
-    ref.read(mangaChapterFilterScanlatorProvider(mangaId: item.mangaId));
-  }
-
   void _navigateToReader(BuildContext context, WidgetRef ref) {
-    if (_isCompleted) {
-      _navigateToNextChapter(context, ref);
-    } else {
-      ReaderRoute(mangaId: item.mangaId, chapterId: item.id).push(context);
-    }
-  }
-
-  Future<void> _navigateToNextChapter(
-      BuildContext context, WidgetRef ref) async {
-    final completer = Completer<void>();
-    ProviderSubscription? sub;
-
-    void go(int chapterId) {
-      if (completer.isCompleted) return;
-      if (context.mounted) {
-        ReaderRoute(mangaId: item.mangaId, chapterId: chapterId).push(context);
-      }
-      sub?.close();
-      completer.complete();
-    }
-
-    sub = ref.listenManual(
-      mangaChapterListWithFilterProvider(mangaId: item.mangaId),
-      (_, next) {
-        if (next is AsyncData) {
-          final pair = ref.read(getNextAndPreviousChaptersProvider(
-              mangaId: item.mangaId, chapterId: item.id));
-          go(pair?.first?.id ?? item.id);
-        } else if (next is AsyncError) {
-          go(item.id);
-        }
-      },
-    );
-
-    _ensurePrefs(ref);
-    await ref
-        .read(mangaChapterListProvider(mangaId: item.mangaId).notifier)
-        .refresh();
-
-    Future.any([
-      completer.future,
-      Future.delayed(const Duration(seconds: 10)).then((_) {
-        if (!completer.isCompleted) go(item.id);
-      }),
-    ]);
+    openReaderFromHistoryItem(context, ref, item);
   }
 
   void _navigateToManga(BuildContext context) =>
