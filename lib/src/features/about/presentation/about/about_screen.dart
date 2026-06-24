@@ -17,6 +17,7 @@ import '../../../../constants/urls.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/launch_url_in_web.dart';
 import '../../../../utils/misc/toast/toast.dart';
+import '../../../../widgets/settings/settings_subpage_scaffold.dart';
 import '../../data/about_repository.dart';
 import '../../domain/about/about_dto.dart';
 import '../../domain/server_update/server_update.dart';
@@ -134,8 +135,8 @@ class AboutScreen extends HookConsumerWidget {
       return;
     }, [aboutAsync.valueOrNull]);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.about)),
+    return SettingsSubpageScaffold(
+      title: context.l10n.about,
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(aboutProvider.future),
         child: ListView(

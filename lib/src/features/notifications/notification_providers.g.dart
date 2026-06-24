@@ -42,7 +42,7 @@ final chapterUpdateNotifierProvider =
 
 typedef _$ChapterUpdateNotifier = Notifier<void>;
 String _$extensionUpdateNotifierHash() =>
-    r'a7a39aa7e76fdc45952313a1d6fe67726c6f20de';
+    r'873995a16a9251f6ac00f3376b6ca3a660a62791';
 
 /// See also [ExtensionUpdateNotifier].
 @ProviderFor(ExtensionUpdateNotifier)

@@ -1,997 +1,1353 @@
 {
-  "@@locale": "pt",
-  "about": "Sobre",
-  "@about": {},
-  "addCategory": "Adicionar Categoria",
-  "@addCategory": {},
-  "addToLibrary": "Adicionar à biblioteca",
-  "@addToLibrary": {},
-  "appLanguage": "Idioma do aplicativo",
-  "@appLanguage": {},
-  "appTheme": "Tema do aplicativo",
-  "@appTheme": {},
-  "appTitle": "Catalyst",
-  "@appTitle": {},
-  "appearance": "Aparência",
-  "@appearance": {},
-  "authType": "Tipo de autenticação",
-  "@authType": {},
-  "authTypeBasic": "Autenticação Básica",
-  "@authTypeBasic": {},
-  "authTypeNone": "Nenhum",
-  "@authTypeNone": {},
-  "backup": "Backup e restauração",
-  "@backup": {},
-  "badges": "Distintivos",
-  "@badges": {},
-  "bookmarked": "Favoritado",
-  "@bookmarked": {},
-  "browse": "Navegar",
-  "@browse": {},
-  "buildTime": "Tempo de compilação",
-  "@buildTime": {},
-  "cancel": "Cancelar",
-  "@cancel": {},
-  "categories": "Categorias",
-  "@categories": {},
-  "category": "Categoria",
-  "@category": {},
-  "categoryUpdate": "Atualização de categoria",
-  "@categoryUpdate": {},
-  "channel": "Canal",
-  "@channel": {},
-  "chapterNumber": "Capítulo {number}",
-  "@chapterNumber": {},
-  "chapterSortFetchedDate": "Por Data de Busca",
-  "@chapterSortFetchedDate": {},
-  "chapterSortSource": "Por fonte",
-  "@chapterSortSource": {},
-  "checkForServerUpdates": "Procurar atualizações do servidor",
-  "@checkForServerUpdates": {},
-  "checkForUpdates": "Procurar atualizações",
-  "@checkForUpdates": {},
-  "client": "Cliente",
-  "@client": {},
-  "clientVersion": "Versão do Cliente",
-  "@clientVersion": {},
-  "close": "Fechar",
-  "@close": {},
-  "completed": "Completo",
-  "@completed": {},
-  "copyMsg": "'{msg}' Copiado para área de transferência!",
-  "@copyMsg": {},
-  "create": "Criar",
-  "@create": {},
-  "createBackupDescription": "Salvar a biblioteca como um backup do Tachidesk",
-  "@createBackupDescription": {},
-  "createBackupTitle": "Criar Backup",
-  "@createBackupTitle": {},
-  "credentials": "Credenciais",
-  "@credentials": {},
-  "current": "Atuais",
-  "@current": {},
-  "defaultCategory": "Categoria predefinida quando um novo mangá é adicionado à biblioteca",
-  "@defaultCategory": {},
-  "delete": "Remover",
-  "@delete": {},
-  "deleteCategoryDescription": "Isto mesclará todos os mangás desta categoria para predefinidos!",
-  "@deleteCategoryDescription": {},
-  "deleteCategoryTitle": "Tem certeza?",
-  "@deleteCategoryTitle": {},
-  "discord": "Discord",
-  "@discord": {},
-  "display": "Exibição",
-  "@display": {},
-  "displayMode": "Modo de exibição",
-  "@displayMode": {},
-  "displayModeDescriptiveList": "Lista descritiva",
-  "@displayModeDescriptiveList": {},
-  "displayModeGrid": "Grade",
-  "@displayModeGrid": {},
-  "displayModeList": "Lista",
-  "@displayModeList": {},
-  "downloaded": "Transferidos",
-  "@downloaded": {},
-  "downloads": "Baixados",
-  "@downloads": {},
-  "edit": "Editar",
-  "@edit": {},
-  "editCategory": "Editar Categoria",
-  "@editCategory": {},
-  "emptyCategory": "Nome da categoria não pode ficar em branco",
-  "@emptyCategory": {},
-  "errorExtension": "Não foi possível encontrar a extensão selecionada",
-  "@errorExtension": {},
-  "errorFilePick": "Arquivo não selecionado!",
-  "@errorFilePick": {},
-  "errorFilePickUnknownExtension": "Por favor selecione um arquivo com {extensionName} extensão",
-  "@errorFilePickUnknownExtension": {},
-  "errorLaunchURL": "Falha ao abrir!\nCopiando \"{url}\" para a área de transferência",
-  "@errorLaunchURL": {},
-  "errorPassword": "Senha não pode ficar em branco",
-  "@errorPassword": {},
-  "errorSomethingWentWrong": "Algo correu mal!",
-  "@errorSomethingWentWrong": {},
-  "errorUserName": "Nome de usuário não pode ficar em branco",
-  "@errorUserName": {},
-  "extensionInstalled": "Extensão instalada!",
-  "@extensionInstalled": {},
-  "extensionListEmpty": "Lista de extensão está vazia",
-  "@extensionListEmpty": {},
-  "extensions": "Extensões",
-  "@extensions": {},
-  "failed": "Falha",
-  "@failed": {},
-  "filter": "Filtro",
-  "@filter": {},
-  "finished": "Concluído",
-  "@finished": {},
-  "general": "Geral",
-  "@general": {},
-  "gitHub": "GitHub",
-  "@gitHub": {},
-  "globalSearch": "Procura global",
-  "@globalSearch": {},
-  "globalUpdate": "Atualização global",
-  "@globalUpdate": {},
-  "help": "Ajuda",
-  "@help": {},
-  "inLibrary": "Na Biblioteca",
-  "@inLibrary": {},
-  "install": "Instalar",
-  "@install": {},
-  "installing": "A Instalar",
-  "@installing": {},
-  "installingExtension": "Instalando extensão",
-  "@installingExtension": {},
-  "languages": "Idiomas",
-  "@languages": {},
-  "latest": "Mais recente",
-  "@latest": {},
-  "library": "Biblioteca",
-  "@library": {},
-  "manga": "Manga",
-  "@manga": {},
-  "mangaMissingSources": "Fontes do manga em falta",
-  "@mangaMissingSources": {},
-  "mangaSortAlphabetical": "Ordem alfabética",
-  "@mangaSortAlphabetical": {},
-  "mangaSortDateAdded": "Data adicionada",
-  "@mangaSortDateAdded": {},
-  "mangaSortUnread": "Não lido",
-  "@mangaSortUnread": {},
-  "mangaSortLastRead": "Última leitura",
-  "@mangaSortLastRead": {},
-  "mangaStatusCancelled": "Cancelado",
-  "@mangaStatusCancelled": {},
-  "mangaStatusCompleted": "Completo",
-  "@mangaStatusCompleted": {},
-  "mangaStatusLicensed": "Licenciado",
-  "@mangaStatusLicensed": {},
-  "mangaStatusOnHiatus": "Em curso",
-  "@mangaStatusOnHiatus": {},
-  "mangaStatusOngoing": "Em pausa",
-  "@mangaStatusOngoing": {},
-  "mangaStatusPublishingFinished": "Publicação concluída",
-  "@mangaStatusPublishingFinished": {},
-  "mangaStatusUnknown": "Desconhecido",
-  "@mangaStatusUnknown": {},
-  "missingExtension": "Extensões em falta",
-  "@missingExtension": {},
-  "missingTrackers": "Rasteadores em falta",
-  "@missingTrackers": {},
-  "more": "Mais",
-  "@more": {},
-  "moveToBottom": "Mover para baixo",
-  "@moveToBottom": {},
-  "moveToTop": "Mover para cima",
-  "@moveToTop": {},
-  "nameCountDisplay": "{name}: {count}",
-  "@nameCountDisplay": {},
-  "newUpdateAvailable": "Nova atualização disponível",
-  "@newUpdateAvailable": {},
-  "noCategoriesFound": "Não tem nenhuma categoria.\nToque no botão mais para criar uma categoria para organizar a sua biblioteca",
-  "@noCategoriesFound": {},
-  "noCategoriesFoundAlt": "Não tem nenhuma categoria.\nCria uma nas definições para organizar a sua biblioteca",
-  "@noCategoriesFoundAlt": {},
-  "noCategoryMangaFound": "Nenhum manga encontrado nesta categoria.\n(Dica: Verifique as suas pesquisas e filtros!)",
-  "@noCategoryMangaFound": {},
-  "noChaptersFound": "Nenhum capítulo encontrado",
-  "@noChaptersFound": {},
-  "noDownloads": "Nenhuma transferência",
-  "@noDownloads": {},
-  "noMangaFound": "Nenhum manga encontrado",
-  "@noMangaFound": {},
-  "noOfChapters": "{count} Capítulos",
-  "@noOfChapters": {},
-  "noResultFound": "Nenhum resultado encontrado",
-  "@noResultFound": {},
-  "noSourcesFound": "Nenhuma fonte encontrada",
-  "@noSourcesFound": {},
-  "noUpdatesAvailable": "Está a usar a versão mais recente",
-  "@noUpdatesAvailable": {},
-  "noUpdatesFound": "Nenhuma atualização encontrada",
-  "@noUpdatesFound": {},
-  "nsfw": "Mostrar extensões e fontes NSFW",
-  "@nsfw": {},
-  "nsfw18": "18+",
-  "@nsfw18": {},
-  "nsfwInfo": "Isto não impede extensões não oficiais ou incorretamente marcadas de mostrarem conteúdo NSFW (18+) dentro da aplicação",
-  "@nsfwInfo": {},
-  "numSelected": "{num} Selecionado",
-  "@numSelected": {},
-  "obsolete": "Obsoleta",
-  "@obsolete": {},
-  "page": "Página: {number}",
-  "@page": {},
-  "password": "Senha",
-  "@password": {},
-  "pause": "Pausa",
-  "@pause": {},
-  "pending": "Pendente",
-  "@pending": {},
-  "reader": "Leitor",
-  "@reader": {},
-  "readerMode": "Modo de leitura",
-  "@readerMode": {},
-  "readerModeContinuousHorizontalLTR": "Horizontal Contínuo (LTR)",
-  "@readerModeContinuousHorizontalLTR": {},
-  "readerModeContinuousHorizontalRTL": "Horizontal Contínuo (RTL)",
-  "@readerModeContinuousHorizontalRTL": {},
-  "readerModeContinuousVertical": "Vertical Contínuo",
-  "@readerModeContinuousVertical": {},
-  "readerModeDefaultReader": "Predefinido",
-  "@readerModeDefaultReader": {},
-  "readerModeSingleHorizontalLTR": "Horizontal único (LTR)",
-  "@readerModeSingleHorizontalLTR": {},
-  "readerModeSingleHorizontalRTL": "Horizontal único (RTL)",
-  "@readerModeSingleHorizontalRTL": {},
-  "readerModeSingleVertical": "Vertical único",
-  "@readerModeSingleVertical": {},
-  "readerModeWebtoon": "Webtoon",
-  "@readerModeWebtoon": {},
-  "readerNavigationLayout": "Disposição de Navegação",
-  "@readerNavigationLayout": {},
-  "readerNavigationLayoutDefault": "Predefinido",
-  "@readerNavigationLayoutDefault": {},
-  "readerNavigationLayoutDisabled": "Desativado",
-  "@readerNavigationLayoutDisabled": {},
-  "readerNavigationLayoutEdge": "Borda",
-  "@readerNavigationLayoutEdge": {},
-  "readerNavigationLayoutInvert": "Inverter toque",
-  "@readerNavigationLayoutInvert": {},
-  "readerNavigationLayoutKindlish": "Formato Kindle-ish",
-  "@readerNavigationLayoutKindlish": {},
-  "readerNavigationLayoutLShaped": "Formato L",
-  "@readerNavigationLayoutLShaped": {},
-  "readerNavigationLayoutRightAndLeft": "Direita para Esquerda",
-  "@readerNavigationLayoutRightAndLeft": {},
-  "reddit": "Reddit",
-  "@reddit": {},
-  "refresh": "Recarregar",
-  "@refresh": {},
-  "reset": "Reiniciar",
-  "@reset": {},
-  "restoreBackupDescription": "Restaurar Tachidesk pela cópia de segurança",
-  "@restoreBackupDescription": {},
-  "restoreBackupTitle": "Restaurar cópia de segurança",
-  "@restoreBackupTitle": {},
-  "restored": "Cópia de segurança restaurada!",
-  "@restored": {},
-  "restoring": "Restaurando backup",
-  "@restoring": {},
-  "resume": "Continuar",
-  "@resume": {},
-  "retry": "Tentar novamente",
-  "@retry": {},
-  "running": "Em execução",
-  "@running": {},
-  "save": "Guardar",
-  "@save": {},
-  "search": "Procurar",
-  "@search": {},
-  "searchingForUpdates": "Procurando por atualizações",
-  "@searchingForUpdates": {},
-  "server": "Servidor",
-  "@server": {},
-  "serverUrl": "URL do Server",
-  "@serverUrl": {},
-  "serverUrlHintText": "URL do servidor",
-  "@serverUrlHintText": {},
-  "serverVersion": "Versão do servidor",
-  "@serverVersion": {},
-  "settings": "Definições",
-  "@settings": {},
-  "sort": "Ordenar",
-  "@sort": {},
-  "source": "Fonte",
-  "@source": {},
-  "sourceTypeFilter": "Filtro",
-  "@sourceTypeFilter": {},
-  "sourceTypeLatest": "Mais recentes",
-  "@sourceTypeLatest": {},
-  "sourceTypePopular": "Popular",
-  "@sourceTypePopular": {},
-  "sources": "Fontes",
-  "@sources": {},
-  "start": "Inicio",
-  "@start": {},
-  "themeModeDark": "Escuro",
-  "@themeModeDark": {},
-  "themeModeLight": "Claro",
-  "@themeModeLight": {},
-  "themeModeSystem": "Sistema",
-  "@themeModeSystem": {},
-  "uninstall": "Desinstalar",
-  "@uninstall": {},
-  "uninstalling": "A Desinstalar",
-  "@uninstalling": {},
-  "unknown": "Desconhecido",
-  "@unknown": {},
-  "unknownAuthor": "Autor Desconhecido",
-  "@unknownAuthor": {},
-  "unknownManga": "Manga Desconhecido",
-  "@unknownManga": {},
-  "unknownSource": "Fonte Desconhecida",
-  "@unknownSource": {},
-  "unread": "Não lida",
-  "@unread": {},
-  "update": "Atualização",
-  "@update": {},
-  "updateCompleted": "Atualização Completa",
-  "@updateCompleted": {},
-  "updates": "Atualizações",
-  "@updates": {},
-  "updatesSummary": "Resumo de Atualizações",
-  "@updatesSummary": {},
-  "updating": "Atualizando",
-  "@updating": {},
-  "userName": "Nome de Utilizador",
-  "@userName": {},
-  "versionAvailable": "Versão {version} disponivel para {app}!!",
-  "@versionAvailable": {},
-  "webUI": "Abrir no WEB",
-  "@webUI": {},
-  "webView": "WebView",
-  "@webView": {},
-  "whatsNew": "O que há de Novo?",
-  "@whatsNew": {},
-  "clearCache": "Limpar Cache",
-  "@clearCache": {
-    "description": "Button text for clear cache in General Settings screen"
-  },
-  "cacheCleared": "Cache limpo",
-  "@cacheCleared": {
-    "description": "Toast Text to show after clearing cache"
-  },
-  "serverPort": "Porta do servidor",
-  "@serverPort": {
-    "description": "Popup title and Button text to update Server Port"
-  },
-  "serverPortHintText": "Porta do servidor",
-  "@serverPortHintText": {
-    "description": "Text Filed hint text to update Server Port"
-  },
-  "findServer": "Procurar",
-  "@findServer": {
-    "description": "Button text of Find Server"
-  },
-  "chapterSortUploadDate": "Por Data de Envio",
-  "@chapterSortUploadDate": {
-    "description": "Radio button text for sort by Upload Date"
-  },
-  "readerScrollAnimation": "Animação de rolagem",
-  "@readerScrollAnimation": {
-    "description": "Switch title to Disable scroll animation in reader screen"
-  },
-  "readerMagnifierSize": "Tamanho da Lupa",
-  "@readerMagnifierSize": {
-    "description": "Slider title text for Reader Magnifier Size"
-  },
-  "quickSearchCategoryManga": "Pesquisa o Manga 'M' na categoria 'C'",
-  "@quickSearchCategoryManga": {
-    "description": "Quick Open Hint text for searching Manga M in Category C with prefill '#C/M'"
-  },
-  "quickSearchCategory": "Vá para categoria 'C'",
-  "@quickSearchCategory": {
-    "description": "Quick Open Hint text for Category C with prefill '#C'"
-  },
-  "quickSearchSource": "Pesquisa a fonte 'S'",
-  "@quickSearchSource": {
-    "description": "Quick Open Hint text for Source S with prefill '@S'"
-  },
-  "quickSearchCategoryMangaChapter": "Pesquisa o capítulo 'CN' na manga 'M' na Categoria 'C'",
-  "@quickSearchCategoryMangaChapter": {
-    "description": "Quick Open Hint text for searching Chapter name CN from Manga M in Source S with prefill '#C/M:CN'"
-  },
-  "noServerFound": "Servidor não encontrado em sua rede local",
-  "@noServerFound": {
-    "description": "Text to show that no Server found in locale network"
-  },
-  "quickSearchContext": "Pesquisa padrão (Resultado baseado nas informações da tela)",
-  "@quickSearchContext": {
-    "description": "Quick Open Hint text for query X"
-  },
-  "readerPadding": "Preenchimento do leitor",
-  "@readerPadding": {
-    "description": "Slider title text for Reader Padding"
-  },
-  "quickSearchSourceManga": "Pesquisa o mangá 'M' na fonte 'S'",
-  "@quickSearchSourceManga": {
-    "description": "Quick Open Hint text for searching Manga M in Source S with prefill '@S/M'"
-  },
-  "scanlators": "Scans",
-  "@scanlators": {
-    "description": "Title text for Scanlators"
-  },
-  "allScanlators": "Todas as Scans",
-  "@allScanlators": {
-    "description": "Text for all Scanlators in manga description screen chapter filter"
-  },
-  "mangaGridSize": "Tamanho da tela do mangá",
-  "@mangaGridSize": {
-    "description": "Popup title and Button text to change Manga Grid size"
-  },
-  "daysAgo": "{days} dias atrás",
-  "@daysAgo": {
-    "description": "Days ago text to show the release date of manga"
-  },
-  "today": "Hoje",
-  "@today": {
-    "description": "Today Text to show the release date of manga"
-  },
-  "yesterday": "Ontem",
-  "@yesterday": {
-    "description": "Yesterday Text to show the release date of manga"
-  },
-  "readerSwipeChapterToggle": "Deslize para alternar",
-  "@readerSwipeChapterToggle": {
-    "description": "Switch title to toggle `swipe to change chapter` in reader screen"
-  },
-  "readerSwipeChapterToggleDescription": "Deslize para mudar o capítulo no leitor",
-  "@readerSwipeChapterToggleDescription": {
-    "description": "Switch tile description for, toggle `swipe to change chapter` in reader screen"
-  },
-  "previousChapter": "Anterior: {chapterTitle}",
-  "@previousChapter": {
-    "description": "Text for Previous Chapter button in Manga Reader Screen"
-  },
-  "reload": "Recarregar",
-  "@reload": {
-    "description": "Reload button text"
-  },
-  "readerOverlay": "Sobreposição inicial do leitor",
-  "@readerOverlay": {
-    "description": "Toggle subtile text for Initial Reader Overlay"
-  },
-  "quickSearchShowAllCommandTip": "Dica: clique em '?' para ver todos os comandos",
-  "@quickSearchShowAllCommandTip": {
-    "description": "Quick Open Tip text for showing all commands by entering '?'"
-  },
-  "isTrueBlack": "Preto puro",
-  "@isTrueBlack": {
-    "description": "Switch title to enable {} black theme"
-  },
-  "nextChapter": "Próximo: {chapterTitle}",
-  "@nextChapter": {
-    "description": "Text for Next Chapter button in Manga Reader Screen"
-  },
-  "pinchToZoom": "Aperte para ampliar",
-  "@pinchToZoom": {
-    "description": "Switch title to enable pinch to zoom in reader screen"
-  },
-  "quickSearch": "Pesquisa rápida",
-  "@quickSearch": {
-    "description": "Screen title and Button text of Quick Search screen"
-  },
-  "remove": "Remover",
-  "@remove": {
-    "description": "Remove Button text"
-  },
-  "selectInBetween": "Selecione entre",
-  "@selectInBetween": {
-    "description": "Toast Text for selecting chapters in between first and last Chapters"
-  },
-  "readerOverlaySubtitle": "Mostra título e configurações rápidas ao abrir um capítulo",
-  "@readerOverlaySubtitle": {},
-  "readerVolumeTap": "Botões de volume",
-  "@readerVolumeTap": {
-    "description": "Switch button text for Reader Page Navigation with Volume Tap"
-  },
-  "readerVolumeTapSubtitle": "Navegue com botões de volume",
-  "@readerVolumeTapSubtitle": {
-    "description": "Switch button Subtitle text for Reader Page Navigation with Volume Tap"
-  },
-  "readerVolumeTapInvert": "inverter botões de volume",
-  "@readerVolumeTapInvert": {
-    "description": "Switch button text to invert Volume Tap "
-  },
-  "removeFromLibrary": "Remover da Biblioteca?",
-  "@removeFromLibrary": {
-    "description": "Remove From Library Popup text"
-  },
-  "selectUnread": "Selecione os não lidos",
-  "@selectUnread": {
-    "description": "Popup Text for selecting unread chapters"
-  },
-  "selectNext10": "Selecione os próximos 10",
-  "@selectNext10": {
-    "description": "Toast Text for selecting next 10 chapters"
-  },
-  "advanced": "Avançado",
-  "@advanced": {
-    "description": "Section title Text for Advanced Section"
-  },
-  "backupAndRestore": "Fazer Backup e Restaurar",
-  "@backupAndRestore": {
-    "description": "Title for Backup and Restore section in settings"
-  },
-  "backupCleanup": "Limpar Backups",
-  "@backupCleanup": {
-    "description": "Title for file backup cleanup edit tile"
-  },
-  "chapterDownloadLimit": "Limite de download de capítulos",
-  "@chapterDownloadLimit": {
-    "description": "Title Text for changing Chapter download limit settings"
-  },
-  "chapterDownloadLimitDesc": "Limite a quantidade de capítulos novos que serão baixados.",
-  "@chapterDownloadLimitDesc": {
-    "description": "Sub Title Text for changing Chapter download limit settings"
-  },
-  "copied": "Copiado!",
-  "@copied": {
-    "description": "Copied Text"
-  },
-  "debugLogs": "Registros de debug",
-  "@debugLogs": {
-    "description": "Switch title for Debug logs in settings"
-  },
-  "downloadLocation": "Local de download",
-  "@downloadLocation": {
-    "description": "Settings label Text to update Download location"
-  },
-  "downloadLocationHint": "O caminho para o diretório no servidor onde os arquivos baixados devem ser salvos",
-  "@downloadLocationHint": {
-    "description": "Hint text for updating downloads location"
-  },
-  "downloading": "Baixando",
-  "@downloading": {
-    "description": "Text to show chapters downloading"
-  },
-  "error": "Erro",
-  "@error": {
-    "description": "Text to show error downloading chapters"
-  },
-  "errorBackupCreate": "Falha ao criar Backup",
-  "@errorBackupCreate": {
-    "description": "Error Text to show that backup creating failed"
-  },
-  "errorBackupRestore": "Falha ao restaurar Backup!",
-  "@errorBackupRestore": {
-    "description": "toast to show that backup restoration failed"
-  },
-  "extensionRepository": "Repositório de extensões",
-  "@extensionRepository": {
-    "description": "Screen title text for Extension repository settings screen"
-  },
-  "extensionRepositoryDescription": "Adicione repositórios de onde as extensões podem ser instaladas",
-  "@extensionRepositoryDescription": {
-    "description": "Subtitle text for Extension repository settings property"
-  },
-  "excludeEntryWithUnreadChapters": "Ignorar downloads automáticos de capítulos para entradas com capítulos não lidos",
-  "@excludeEntryWithUnreadChapters": {
-    "description": "Toggle's title to change Toggle Exclude Entry With Unread Chapters setting"
-  },
-  "authentication": "Autenticação",
-  "@authentication": {
-    "description": "Section title for server authentication"
-  },
-  "autoDownload": "Download automático",
-  "@autoDownload": {
-    "description": "Title for Auto-download Section in downloads settings"
-  },
-  "autoDownloadNewChapters": "Baixe novos capítulos",
-  "@autoDownloadNewChapters": {
-    "description": "Toggle's title to change Auto Download New Chapters settings"
-  },
-  "automaticBackup": "Backup automático",
-  "@automaticBackup": {
-    "description": "Settings group title for automatic backup settings"
-  },
-  "automaticUpdate": "Atualização Automática",
-  "@automaticUpdate": {
-    "description": "Popup title and Settings text to update Automatic Global Update interval"
-  },
-  "automaticallyRefreshMetadata": "Recarregar automaticamente os metadados",
-  "@automaticallyRefreshMetadata": {
-    "description": "Settings text to update Automatically refresh metadata"
-  },
-  "automaticallyRefreshMetadataSubtitle": "Buscar por novas capas e detalhes quando atualizar a biblioteca",
-  "@automaticallyRefreshMetadataSubtitle": {
-    "description": "Settings sub title text to update Automatically refresh metadata"
-  },
-  "backupCleanupDescription": "{count, select, 0{Never} 01{Delete Backups que são mais antigos que 1 dia} other{Delete Backups que são mais antigos que {count} dias}}",
-  "@backupCleanupDescription": {},
-  "backupInterval": "Intervalo de Backup",
-  "@backupInterval": {
-    "description": "Title for file backup interval edit tile"
-  },
-  "backupLocation": "Local do backup",
-  "@backupLocation": {
-    "description": "Title for backup file storage location edit tile"
-  },
-  "backupLocationDescription": "O caminho para o diretório no servidor onde os backups automáticos devem ser salvos",
-  "@backupLocationDescription": {
-    "description": "description for editing backup location"
-  },
-  "backupTime": "Hora do Backup",
-  "@backupTime": {
-    "description": "Title for file backup time edit tile"
-  },
-  "cloudflareBypass": "Cloudflare Bypass",
-  "@cloudflareBypass": {
-    "description": "Section title for Cloudflare Bypass"
-  },
-  "enableSocksProxy": "Use Proxy SOCKS",
-  "@enableSocksProxy": {
-    "description": "Switch title to enable SOCKS Proxy"
-  },
-  "flareSolverr": "FlareSolverr",
-  "@flareSolverr": {
-    "description": "Toggle title to enable FlareSolverr"
-  },
-  "flareSolverrRequestTimeout": "Tempo limite da solicitação do FlareSolverr",
-  "@flareSolverrRequestTimeout": {
-    "description": "Title text for FlareSolverr Request Timeout property"
-  },
-  "flareSolverrServerUrl": "URL do servidor FlareSolverr",
-  "@flareSolverrServerUrl": {
-    "description": "Title text for FlareSolverr Server Url property"
-  },
-  "flareSolverrSessionName": "Nome da sessão do FlareSolverr",
-  "@flareSolverrSessionName": {
-    "description": "Title text for FlareSolverr Session Name property"
-  },
-  "flareSolverrSessionTTL": "TTL da sessão do FlareSolverr",
-  "@flareSolverrSessionTTL": {
-    "description": "Title text for FlareSolverr Session TTL property"
-  },
-  "gqlDebugLogs": "Logs de depuração do Graphql",
-  "@gqlDebugLogs": {
-    "description": "Switch title for Graphql Debug logs in settings"
-  },
-  "gqlDebugLogsHint": "Isso inclui registros com informações não seguras de privacidade",
-  "@gqlDebugLogsHint": {
-    "description": "Switch subTitle for Graphql Debug logs in settings"
-  },
-  "hideEmptyCategory": "Ocultar categoria vazia",
-  "@hideEmptyCategory": {
-    "description": "Switch button text to Hide empty category in library"
-  },
-  "includeCategories": "Categorias",
-  "@includeCategories": {
-    "description": "Check box text to include categories during create backup"
-  },
-  "includeChapters": "Capítulos",
-  "@includeChapters": {
-    "description": "Check box text to include chapters during create backup"
-  },
-  "invalidPort": "Porta inválida",
-  "@invalidPort": {
-    "description": "Error when Submitted invalid Port Number"
-  },
-  "invalidProp": "inválida {property}",
-  "@invalidProp": {
-    "description": "Toast text for select invalid property value"
-  },
-  "ip": "Endereço IP",
-  "@ip": {
-    "description": "Option title for Server IP Address in Server settings"
-  },
-  "ipHintText": "Insira o endereço IP de vinculação do servidor",
-  "@ipHintText": {},
-  "localSourceLocation": "Localização da fonte local",
-  "@localSourceLocation": {
-    "description": "Text for Local Source Location settings property"
-  },
-  "localSourceLocationDescription": "O caminho para o diretório no servidor onde os arquivos de origem locais são salvos",
-  "@localSourceLocationDescription": {
-    "description": "Description text for Local Source Location property"
-  },
-  "none": "Nenhum",
-  "@none": {
-    "description": "Text for None"
-  },
-  "openFlareSolverr": "Consulte o FlareSolverr para obter informações sobre como configurá-lo",
-  "@openFlareSolverr": {
-    "description": "Text for link to Open Flare Solverr setup documentation"
-  },
-  "openInWeb": "Abrir na Web",
-  "@openInWeb": {
-    "description": "Button title text for open the url in web"
-  },
-  "or": "ou",
-  "@or": {
-    "description": "text literal for word or"
-  },
-  "parallelSourceRequest": "Solicitações de fontes paralelas",
-  "@parallelSourceRequest": {
-    "description": "Text for Parallel source requests property"
-  },
-  "queued": "Na fila",
-  "@queued": {
-    "description": "Text to show chapters are queued for downloading"
-  },
-  "restore": "Restaurar",
-  "@restore": {
-    "description": "Button Text to create backup"
-  },
-  "saveAsCBZArchive": "Salvar como arquivo CBZ",
-  "@saveAsCBZArchive": {
-    "description": "Settings toggle label for Save as CBZ archive"
-  },
-  "serverBindings": "Ligações do servidor",
-  "@serverBindings": {
-    "description": "Title for server bindings settings"
-  },
-  "skipUpdatingEntries": "Pular atualização de entradas",
-  "@skipUpdatingEntries": {
-    "description": "Settings Text to update skip Updating Entries"
-  },
-  "socksHost": "Host SOCKS",
-  "@socksHost": {},
-  "socksPassword": "Senha SOCKS",
-  "@socksPassword": {},
-  "socksPort": "Porta SOCKS",
-  "@socksPort": {},
-  "socksProxy": "Proxy SOCKS",
-  "@socksProxy": {
-    "description": "Section title for SOCKS Proxy settings"
-  },
-  "socksUserName": "Nome de usuário SOCKS",
-  "@socksUserName": {},
-  "socksVersion": "Versão SOCKS",
-  "@socksVersion": {
-    "description": "Title for Socks version picker"
-  },
-  "systemTrayIcon": "Mostrar ícone na bandeja do sistema",
-  "@systemTrayIcon": {
-    "description": "Switch title to Show icon in system tray in settings"
-  },
-  "thatHaventBeenStarted": "Que ainda não foram iniciadas",
-  "@thatHaventBeenStarted": {
-    "description": "Setting option Text for Skip updating entries to toggle That haven't been started"
-  },
-  "updateFailed": "Falha ao atualizar {property}",
-  "@updateFailed": {
-    "description": "Failed to update Text"
-  },
-  "validating": "Validando",
-  "@validating": {
-    "description": "toast to show backup validation is in progress"
-  },
-  "withCompletedStatus": "Com status Concluído",
-  "@withCompletedStatus": {
-    "description": "Setting option Text for Skip updating entries to toggle With Completed status"
-  },
-  "misc": "Diversos",
-  "@misc": {
-    "description": "Section title for misc settings"
-  },
-  "history": "Histórico",
-  "@history": {},
-  "searchHistory": "Pesquisar histórico...",
-  "@searchHistory": {},
-  "enterProp": "Entrar {prop}",
-  "@enterProp": {
-    "description": "Hint text for text field to enter value of Property"
-  },
-  "nHours": "{n, plural, =1{1 hour} other{{n} hours}}",
-  "@nHours": {
-    "description": "Text to represent 'n' hours"
-  },
-  "nRepo": "{n, plural, =1{1 Repo} other{{n} Repos}}",
-  "@nRepo": {
-    "description": "Text to show n repo as subtitle"
-  },
-  "nChapters": "{n, plural, =0{None} =1{1 Chapter} other{{n} Chapters}}",
-  "@nChapters": {
-    "description": "Text for showing N chapters"
-  },
-  "nSources": "{n, plural, =1{1 Source} other{{n} Sources}}",
-  "@nSources": {
-    "description": "Text to represent n number Parallel source requests"
-  },
-  "noPropFound": "Nenhum {prop} encontrado",
-  "@noPropFound": {
-    "description": "Template text to say No value for property found"
-  },
-  "migrate": "Migrar",
-  "@migrate": {},
-  "migrationPreview": "Pré-visualizar migração",
-  "@migrationPreview": {},
-  "migrationSelectTargetSource": "Selecione a fonte de destino",
-  "@migrationSelectTargetSource": {},
-  "migrationSearchInSource": "Pesquisar em {sourceName}",
-  "@migrationSearchInSource": {},
-  "migrationInProgress": "Migração em Progresso",
-  "@migrationInProgress": {},
-  "migrationFailed": "Migração Falhou",
-  "@migrationFailed": {},
-  "migrateChapters": "Migrar capítulos",
-  "@migrateChapters": {},
-  "migrationCancelled": "Migração cancelada",
-  "@migrationCancelled": {},
-  "migrateChaptersDescription": "Copie o status do capítulo lido para nova fonte",
-  "@migrateChaptersDescription": {},
-  "selectTargetSource": "Selecione a fonte de destino",
-  "@selectTargetSource": {},
-  "migrationSettings": "Configurações de migração",
-  "@migrationSettings": {},
-  "errorGettingMigrationSources": "Falha ao obter fontes de migração",
-  "@errorGettingMigrationSources": {},
-  "deleteSourceWarning": "O mangá original será removido de sua biblioteca após a migração.",
-  "@deleteSourceWarning": {},
-  "confirmMigration": "Confirme a migração",
-  "@confirmMigration": {},
-  "startMigration": "Iniciar migração",
-  "@startMigration": {},
-  "migrationWarning": "Isso irá mover permanentemente seus dados de mangá. Esta ação não pode ser desfeita.",
-  "@migrationWarning": {},
-  "migrationConfirmationMessage": "Tem certeza de que quer migrar este mangá? Esta ação não pode ser desfeita.",
-  "@migrationConfirmationMessage": {},
-  "preparingMigration": "Preparando a migração...",
-  "@preparingMigration": {},
-  "migrationCompleted": "Migração concluída!",
-  "@migrationCompleted": {},
-  "deleteSourceAfterMigration": "Excluir mangá origem após a migração",
-  "@deleteSourceAfterMigration": {},
-  "migrationComplete": "Migração concluída com sucesso",
-  "@migrationComplete": {},
-  "errorLoadingSources": "Erro ao carregar fontes",
-  "@errorLoadingSources": {},
-  "errorSearchingMangaInSource": "Falha ao procurar mangá na fonte",
-  "@errorSearchingMangaInSource": {},
-  "errorFetchingSourceManga": "Falha ao buscar mangá de origem",
-  "@errorFetchingSourceManga": {},
-  "migrateTrackingDescription": "Copiar informações de rastreamento para nova fonte",
-  "@migrateTrackingDescription": {},
-  "migrationOptions": "Opções de migração",
-  "@migrationOptions": {},
-  "noSourcesAvailable": "Não existem fontes disponíveis para migração",
-  "@noSourcesAvailable": {},
-  "checkSourceConfiguration": "Por favor, verifique a configuração da sua fonte",
-  "@checkSourceConfiguration": {},
-  "noAlternativeSources": "Não existem fontes alternativas disponíveis",
-  "@noAlternativeSources": {},
-  "installMoreSources": "Instale mais fontes para habilitar a migração",
-  "@installMoreSources": {},
-  "tryDifferentSearch": "Experimente um termo de pesquisa diferente",
-  "@tryDifferentSearch": {},
-  "deleteSourceManga": "Deletar mangá fonte",
-  "@deleteSourceManga": {},
-  "quickMigration": "Rápido",
-  "@quickMigration": {},
-  "fullMigration": "Total",
-  "@fullMigration": {},
-  "customMigration": "Personalizado",
-  "@customMigration": {},
-  "done": "Feito",
-  "@done": {},
-  "to": "Para",
-  "@to": {},
-  "migrationDetails": "Detalhes da migração",
-  "@migrationDetails": {},
-  "searchAllSources": "Pesquisar todas as fontes",
-  "@searchAllSources": {},
-  "searchingAllSources": "Procurando em todas as fontes disponíveis...",
-  "@searchingAllSources": {},
-  "noMatchingMangaFound": "Nenhum mangá correspondente encontrado em qualquer fonte",
-  "@noMatchingMangaFound": {},
-  "errorOccurred": "Um erro ocorreu",
-  "@errorOccurred": {},
-  "viewManga": "Ver Mangá",
-  "@viewManga": {},
-  "noSearchResults": "Sem resultados de pesquisa",
-  "@noSearchResults": {},
-  "startReadingToSeeHistory": "Comece a ler mangás para ver seu histórico aqui",
-  "@startReadingToSeeHistory": {},
-  "tryDifferentSearchTerm": "Experimente um termo de pesquisa diferente",
-  "@tryDifferentSearchTerm": {},
-  "removeFromHistory": "Remover do Histórico",
-  "@removeFromHistory": {},
-  "readerLastPageSwipeToggle": "Gesto na última página",
-  "@readerLastPageSwipeToggle": {
-    "description": "Last page swipe"
-  },
-  "readerLastPageSwipeToggleDescription": "Deslizar para o próximo capítulo só na última página",
-  "@readerLastPageSwipeToggleDescription": {
-    "description": "Swipe to next chapter only at last page"
-  },
-  "readerIgnoreSafeAreaToggle": "Ignorar área segura",
-  "@readerIgnoreSafeAreaToggle": {
-    "description": "Toggle text to ignore safe area in reader"
-  },
-  "migrateCategoriesDescription": "Copiar categorias do mangá para nova fonte",
-  "@migrateCategoriesDescription": {},
-  "migrateDownloadsDescription": "Mover capítulos baixados para nova fonte",
-  "@migrateDownloadsDescription": {},
-  "migrateCategories": "Migrar categorias",
-  "@migrateCategories": {},
-  "migrateDownloads": "Migrar Downloads",
-  "@migrateDownloads": {},
-  "migrateTracking": "Migrar Rastreadores",
-  "@migrateTracking": {},
-  "errorTargetMangaNotFound": "Mangá alvo não encontrado",
-  "@errorTargetMangaNotFound": {},
-  "searchManga": "Procurar mangá...",
-  "@searchManga": {},
-  "enterSearchTerm": "Digite um termo de pesquisa para encontrar mangá",
-  "@enterSearchTerm": {},
-  "noResultsFound": "Nenhum resultado encontrado",
-  "@noResultsFound": {},
-  "searchError": "Erro de pesquisa",
-  "@searchError": {},
-  "importantNotice": "Aviso Importante",
-  "@importantNotice": {},
-  "migrationSuccessMessage": "Seu mangá foi migrado com sucesso para a nova fonte.",
-  "@migrationSuccessMessage": {},
-  "cancelMigration": "Cancelar migração",
-  "@cancelMigration": {},
-  "cancelMigrationConfirmation": "Tem certeza de que quer cancelar a migração? Esta ação não pode ser desfeita.",
-  "@cancelMigrationConfirmation": {},
-  "quickPresets": "Presets rápidos",
-  "@quickPresets": {},
-  "deleteSourceMangaDescription": "Remova o mangá original da biblioteca após a migração",
-  "@deleteSourceMangaDescription": {},
-  "yes": "Sim",
-  "@yes": {},
-  "no": "Não",
-  "@no": {},
-  "errorSourceMangaNotFound": "Mangá de origem não encontrado",
-  "@errorSourceMangaNotFound": {},
-  "errorFetchingTargetManga": "Falha ao buscar mangá destino",
-  "@errorFetchingTargetManga": {},
-  "searchForManga": "Procurar mangá na fonte destino",
-  "@searchForManga": {},
-  "from": "A partir de",
-  "@from": {},
-  "withUnreadChapter": "Com capítulo(s) não lido(s)",
-  "@withUnreadChapter": {
-    "description": "Setting option Text for Skip updating entries to toggle With unread chapter(s)"
-  },
-  "recentlyRead": "Lidos recentemente",
-  "@recentlyRead": {
-    "description": "Recently Read Text to show reading history grouping"
-  },
-  "noHistoryFound": "Nenhum histórico de leitura encontrado",
-  "@noHistoryFound": {},
-  "removeFromHistoryConfirmation": "Tem certeza de que deseja remover este capítulo do seu histórico de leitura?",
-  "@removeFromHistoryConfirmation": {},
-  "timeoutSettings": "Configurações de timeout",
-  "@timeoutSettings": {},
-  "serverRequestTimeoutDescription": "Tempo para esperar por respostas do servidor (em segundos)",
-  "@serverRequestTimeoutDescription": {},
-  "autoRefreshOnTimeout": "Auto-refresh no Timeout",
-  "@autoRefreshOnTimeout": {
-    "description": "Toggle automatic retry on timeout"
-  },
-  "nMinutes": "{n, plural, =1{1 Minute} other{{n} Minutes}}",
-  "@nMinutes": {
-    "description": "Text to represent 'n' Minutes"
-  },
-  "mangaSortLastUpdated": "Última atualização",
-  "@mangaSortLastUpdated": {
-    "description": "Radio button text for Manga sort Type - Last Updated"
-  },
-  "nSeconds": "{n, plural, =1{1 second} other{{n} seconds}}",
-  "@nSeconds": {
-    "description": "Text to represent 'n' seconds"
-  },
-  "nDays": "{count, select, 01{01 Day} other{{count} Days}}",
-  "@nDays": {
-    "description": "to show Number of days with plural"
-  },
-  "migrationCancelledMessage": "O processo de migração foi cancelado. Não foram feitas alterações.",
-  "@migrationCancelledMessage": {}
+    "@@locale": "pt",
+    "@about": {},
+    "@addCategory": {},
+    "@addToLibrary": {},
+    "@advanced": {
+        "description": "Section title Text for Advanced Section"
+    },
+    "@allScanlators": {
+        "description": "Text for all Scanlators in manga description screen chapter filter"
+    },
+    "@appLanguage": {},
+    "@appTheme": {},
+    "@appTitle": {},
+    "@appearance": {},
+    "@authType": {},
+    "@authTypeBasic": {},
+    "@authTypeNone": {},
+    "@authentication": {
+        "description": "Section title for server authentication"
+    },
+    "@autoDownload": {
+        "description": "Title for Auto-download Section in downloads settings"
+    },
+    "@autoDownloadNewChapters": {
+        "description": "Toggle's title to change Auto Download New Chapters settings"
+    },
+    "@automaticBackup": {
+        "description": "Settings group title for automatic backup settings"
+    },
+    "@automaticUpdate": {
+        "description": "Popup title and Settings text to update Automatic Global Update interval"
+    },
+    "@automaticallyRefreshMetadata": {
+        "description": "Settings text to update Automatically refresh metadata"
+    },
+    "@automaticallyRefreshMetadataSubtitle": {
+        "description": "Settings sub title text to update Automatically refresh metadata"
+    },
+    "@backup": {},
+    "@backupAndRestore": {
+        "description": "Title for Backup and Restore section in settings"
+    },
+    "@backupCleanup": {
+        "description": "Title for file backup cleanup edit tile"
+    },
+    "@backupInterval": {
+        "description": "Title for file backup interval edit tile"
+    },
+    "@backupLocation": {
+        "description": "Title for backup file storage location edit tile"
+    },
+    "@backupLocationDescription": {
+        "description": "description for editing backup location"
+    },
+    "@backupTime": {
+        "description": "Title for file backup time edit tile"
+    },
+    "@badges": {},
+    "@bookmarked": {},
+    "@browse": {},
+    "@buildTime": {},
+    "@cacheCleared": {
+        "description": "Toast Text to show after clearing cache"
+    },
+    "@cancel": {},
+    "@categories": {},
+    "@categoryUpdate": {},
+    "@channel": {},
+    "@chapterDownloadLimit": {
+        "description": "Title Text for changing Chapter download limit settings"
+    },
+    "@chapterDownloadLimitDesc": {
+        "description": "Sub Title Text for changing Chapter download limit settings"
+    },
+    "@chapterNumber": {},
+    "@chapterSortFetchedDate": {},
+    "@chapterSortSource": {},
+    "@chapterSortUploadDate": {
+        "description": "Radio button text for sort by Upload Date"
+    },
+    "@checkForServerUpdates": {},
+    "@checkForUpdates": {},
+    "@clearCache": {
+        "description": "Button text for clear cache in General Settings screen"
+    },
+    "@client": {},
+    "@clientVersion": {},
+    "@close": {},
+    "@cloudflareBypass": {
+        "description": "Section title for Cloudflare Bypass"
+    },
+    "@completed": {},
+    "@copied": {
+        "description": "Copied Text"
+    },
+    "@copyMsg": {},
+    "@createBackupDescription": {},
+    "@createBackupTitle": {},
+    "@credentials": {},
+    "@current": {},
+    "@daysAgo": {
+        "description": "Days ago text to show the release date of manga"
+    },
+    "@debugLogs": {
+        "description": "Switch title for Debug logs in settings"
+    },
+    "@defaultCategory": {},
+    "@delete": {},
+    "@deleteCategoryDescription": {},
+    "@deleteCategoryTitle": {},
+    "@discord": {},
+    "@display": {},
+    "@displayMode": {},
+    "@displayModeDescriptiveList": {},
+    "@displayModeGrid": {},
+    "@displayModeList": {},
+    "@downloadLocation": {
+        "description": "Settings label Text to update Download location"
+    },
+    "@downloadLocationHint": {
+        "description": "Hint text for updating downloads location"
+    },
+    "@downloaded": {},
+    "@downloading": {
+        "description": "Text to show chapters downloading"
+    },
+    "@downloads": {},
+    "@edit": {},
+    "@editCategory": {},
+    "@emptyCategory": {},
+    "@enableSocksProxy": {
+        "description": "Switch title to enable SOCKS Proxy"
+    },
+    "@enterProp": {
+        "description": "Hint text for text field to enter value of Property"
+    },
+    "@error": {
+        "description": "Text to show error downloading chapters"
+    },
+    "@errorBackupCreate": {
+        "description": "Error Text to show that backup creating failed"
+    },
+    "@errorBackupRestore": {
+        "description": "toast to show that backup restoration failed"
+    },
+    "@errorExtension": {},
+    "@errorFilePick": {},
+    "@errorFilePickUnknownExtension": {},
+    "@errorLaunchURL": {},
+    "@errorPassword": {},
+    "@errorSomethingWentWrong": {},
+    "@errorUserName": {},
+    "@excludeEntryWithUnreadChapters": {
+        "description": "Toggle's title to change Toggle Exclude Entry With Unread Chapters setting"
+    },
+    "@extensionInstalled": {},
+    "@extensionListEmpty": {},
+    "@extensionRepository": {
+        "description": "Screen title text for Extension repository settings screen"
+    },
+    "@extensionRepositoryDescription": {
+        "description": "Subtitle text for Extension repository settings property"
+    },
+    "@extensions": {},
+    "@failed": {},
+    "@filter": {},
+    "@findServer": {
+        "description": "Button text of Find Server"
+    },
+    "@finished": {},
+    "@flareSolverr": {
+        "description": "Toggle title to enable FlareSolverr"
+    },
+    "@flareSolverrRequestTimeout": {
+        "description": "Title text for FlareSolverr Request Timeout property"
+    },
+    "@flareSolverrServerUrl": {
+        "description": "Title text for FlareSolverr Server Url property"
+    },
+    "@flareSolverrSessionName": {
+        "description": "Title text for FlareSolverr Session Name property"
+    },
+    "@flareSolverrSessionTTL": {
+        "description": "Title text for FlareSolverr Session TTL property"
+    },
+    "@general": {},
+    "@gitHub": {},
+    "@globalSearch": {},
+    "@globalUpdate": {},
+    "@gqlDebugLogs": {
+        "description": "Switch title for Graphql Debug logs in settings"
+    },
+    "@gqlDebugLogsHint": {
+        "description": "Switch subTitle for Graphql Debug logs in settings"
+    },
+    "@help": {},
+    "@hideEmptyCategory": {
+        "description": "Switch button text to Hide empty category in library"
+    },
+    "@inLibrary": {},
+    "@includeCategories": {
+        "description": "Check box text to include categories during create backup"
+    },
+    "@includeChapters": {
+        "description": "Check box text to include chapters during create backup"
+    },
+    "@install": {},
+    "@installing": {},
+    "@installingExtension": {},
+    "@invalidPort": {
+        "description": "Error when Submitted invalid Port Number"
+    },
+    "@invalidProp": {
+        "description": "Toast text for select invalid property value"
+    },
+    "@ip": {
+        "description": "Option title for Server IP Address in Server settings"
+    },
+    "@isTrueBlack": {
+        "description": "Switch title to enable {} black theme"
+    },
+    "@languages": {},
+    "@latest": {},
+    "@library": {},
+    "@localSourceLocation": {
+        "description": "Text for Local Source Location settings property"
+    },
+    "@localSourceLocationDescription": {
+        "description": "Description text for Local Source Location property"
+    },
+    "@manga": {},
+    "@mangaGridSize": {
+        "description": "Popup title and Button text to change Manga Grid size"
+    },
+    "@mangaMissingSources": {},
+    "@mangaSortAlphabetical": {},
+    "@mangaSortDateAdded": {},
+    "@mangaSortLastRead": {},
+    "@mangaSortLastUpdated": {
+        "description": "Radio button text for Manga sort Type - Last Updated"
+    },
+    "@mangaSortUnread": {},
+    "@mangaStatusCancelled": {},
+    "@mangaStatusCompleted": {},
+    "@mangaStatusLicensed": {},
+    "@mangaStatusOnHiatus": {},
+    "@mangaStatusOngoing": {},
+    "@mangaStatusPublishingFinished": {},
+    "@mangaStatusUnknown": {},
+    "@misc": {
+        "description": "Section title for misc settings"
+    },
+    "@missingExtension": {},
+    "@missingTrackers": {},
+    "@more": {},
+    "@moveToBottom": {},
+    "@moveToTop": {},
+    "@nChapters": {
+        "description": "Text for showing N chapters"
+    },
+    "@nDays": {
+        "description": "to show Number of days with plural"
+    },
+    "@nHours": {
+        "description": "Text to represent 'n' hours"
+    },
+    "@nMinutes": {
+        "description": "Text to represent 'n' Minutes"
+    },
+    "@nRepo": {
+        "description": "Text to show n repo as subtitle"
+    },
+    "@nSeconds": {
+        "description": "Text to represent 'n' seconds"
+    },
+    "@nSources": {
+        "description": "Text to represent n number Parallel source requests"
+    },
+    "@nameCountDisplay": {},
+    "@newUpdateAvailable": {},
+    "@nextChapter": {
+        "description": "Text for Next Chapter button in Manga Reader Screen"
+    },
+    "@noCategoriesFound": {},
+    "@noCategoriesFoundAlt": {},
+    "@noCategoryMangaFound": {},
+    "@noChaptersFound": {},
+    "@noDownloads": {},
+    "@noMangaFound": {},
+    "@noOfChapters": {},
+    "@noPropFound": {
+        "description": "Template text to say No value for property found"
+    },
+    "@noResultFound": {},
+    "@noServerFound": {
+        "description": "Text to show that no Server found in locale network"
+    },
+    "@noSourcesFound": {},
+    "@noUpdatesAvailable": {},
+    "@noUpdatesFound": {},
+    "@none": {
+        "description": "Text for None"
+    },
+    "@nsfw": {},
+    "@nsfw18": {},
+    "@nsfwInfo": {},
+    "@numSelected": {},
+    "@obsolete": {},
+    "@openFlareSolverr": {
+        "description": "Text for link to Open Flare Solverr setup documentation"
+    },
+    "@openInWeb": {
+        "description": "Button title text for open the url in web"
+    },
+    "@or": {
+        "description": "text literal for word or"
+    },
+    "@page": {},
+    "@parallelSourceRequest": {
+        "description": "Text for Parallel source requests property"
+    },
+    "@password": {},
+    "@pause": {},
+    "@pending": {},
+    "@pinchToZoom": {
+        "description": "Switch title to enable pinch to zoom in reader screen"
+    },
+    "@previousChapter": {
+        "description": "Text for Previous Chapter button in Manga Reader Screen"
+    },
+    "@queued": {
+        "description": "Text to show chapters are queued for downloading"
+    },
+    "@quickSearch": {
+        "description": "Screen title and Button text of Quick Search screen"
+    },
+    "@quickSearchCategory": {
+        "description": "Quick Open Hint text for Category C with prefill '#C'"
+    },
+    "@quickSearchCategoryManga": {
+        "description": "Quick Open Hint text for searching Manga M in Category C with prefill '#C/M'"
+    },
+    "@quickSearchCategoryMangaChapter": {
+        "description": "Quick Open Hint text for searching Chapter name CN from Manga M in Source S with prefill '#C/M:CN'"
+    },
+    "@quickSearchContext": {
+        "description": "Quick Open Hint text for query X"
+    },
+    "@quickSearchShowAllCommandTip": {
+        "description": "Quick Open Tip text for showing all commands by entering '?'"
+    },
+    "@quickSearchSource": {
+        "description": "Quick Open Hint text for Source S with prefill '@S'"
+    },
+    "@quickSearchSourceManga": {
+        "description": "Quick Open Hint text for searching Manga M in Source S with prefill '@S/M'"
+    },
+    "@reader": {},
+    "@readerMagnifierSize": {
+        "description": "Slider title text for Reader Magnifier Size"
+    },
+    "@readerMode": {},
+    "@readerModeContinuousHorizontalLTR": {},
+    "@readerModeContinuousHorizontalRTL": {},
+    "@readerModeContinuousVertical": {},
+    "@readerModeDefaultReader": {},
+    "@readerModeSingleHorizontalLTR": {},
+    "@readerModeSingleHorizontalRTL": {},
+    "@readerModeSingleVertical": {},
+    "@readerModeWebtoon": {},
+    "@readerNavigationLayout": {},
+    "@readerNavigationLayoutDefault": {},
+    "@readerNavigationLayoutDisabled": {},
+    "@readerNavigationLayoutEdge": {},
+    "@readerNavigationLayoutInvert": {},
+    "@readerNavigationLayoutKindlish": {},
+    "@readerNavigationLayoutLShaped": {},
+    "@readerNavigationLayoutRightAndLeft": {},
+    "@readerOverlay": {
+        "description": "Toggle subtile text for Initial Reader Overlay"
+    },
+    "@readerOverlaySubtitle": {},
+    "@readerPadding": {
+        "description": "Slider title text for Reader Padding"
+    },
+    "@readerScrollAnimation": {
+        "description": "Switch title to Disable scroll animation in reader screen"
+    },
+    "@readerSwipeChapterToggle": {
+        "description": "Switch title to toggle `swipe to change chapter` in reader screen"
+    },
+    "@readerSwipeChapterToggleDescription": {
+        "description": "Switch tile description for, toggle `swipe to change chapter` in reader screen"
+    },
+    "@readerLastPageSwipeToggle": {
+        "description": "Last page swipe"
+    },
+    "@readerLastPageSwipeToggleDescription": {
+        "description": "Swipe to next chapter only at last page"
+    },
+    "@readerVolumeTap": {
+        "description": "Switch button text for Reader Page Navigation with Volume Tap"
+    },
+    "@readerVolumeTapInvert": {
+        "description": "Switch button text to invert Volume Tap "
+    },
+    "@readerVolumeTapSubtitle": {
+        "description": "Switch button Subtitle text for Reader Page Navigation with Volume Tap"
+    },
+    "@readerIgnoreSafeAreaToggle": {
+        "description": "Toggle text to ignore safe area in reader"
+    },
+    "@readerIgnoreSafeAreaToggleDescription": {
+        "description": "Description for ignore safe area toggle in reader settings"
+    },
+    "@reddit": {},
+    "@refresh": {},
+    "@reload": {
+        "description": "Reload button text"
+    },
+    "@remove": {
+        "description": "Remove Button text"
+    },
+    "@removeFromLibrary": {
+        "description": "Remove From Library Popup text"
+    },
+    "@reset": {},
+    "@restore": {
+        "description": "Button Text to create backup"
+    },
+    "@restoreBackupDescription": {},
+    "@restoreBackupTitle": {},
+    "@restored": {},
+    "@restoring": {},
+    "@resume": {},
+    "@retry": {},
+    "@running": {},
+    "@save": {},
+    "@saveAsCBZArchive": {
+        "description": "Settings toggle label for Save as CBZ archive"
+    },
+    "@scanlators": {
+        "description": "Title text for Scanlators"
+    },
+    "@search": {},
+    "@searchingForUpdates": {},
+    "@selectInBetween": {
+        "description": "Toast Text for selecting chapters in between first and last Chapters"
+    },
+    "@selectNext10": {
+        "description": "Toast Text for selecting next 10 chapters"
+    },
+    "@selectUnread": {
+        "description": "Popup Text for selecting unread chapters"
+    },
+    "@server": {},
+    "@serverBindings": {
+        "description": "Title for server bindings settings"
+    },
+    "@serverPort": {
+        "description": "Popup title and Button text to update Server Port"
+    },
+    "@serverPortHintText": {
+        "description": "Text Filed hint text to update Server Port"
+    },
+    "@serverUrl": {},
+    "@serverUrlHintText": {},
+    "@serverVersion": {},
+    "@settings": {},
+    "@skipUpdatingEntries": {
+        "description": "Settings Text to update skip Updating Entries"
+    },
+    "@socksProxy": {
+        "description": "Section title for SOCKS Proxy settings"
+    },
+    "@socksVersion": {
+        "description": "Title for Socks version picker"
+    },
+    "@sort": {},
+    "@source": {},
+    "@sourceTypeFilter": {},
+    "@sourceTypeLatest": {},
+    "@sourceTypePopular": {},
+    "@sources": {},
+    "@start": {},
+    "@systemTrayIcon": {
+        "description": "Switch title to Show icon in system tray in settings"
+    },
+    "@thatHaventBeenStarted": {
+        "description": "Setting option Text for Skip updating entries to toggle That haven't been started"
+    },
+    "@themeModeDark": {},
+    "@themeModeLight": {},
+    "@themeModeSystem": {},
+    "@today": {
+        "description": "Today Text to show the release date of manga"
+    },
+    "@uninstall": {},
+    "@uninstalling": {},
+    "@unknownAuthor": {},
+    "@unknownManga": {},
+    "@unknownSource": {},
+    "@unread": {},
+    "@update": {},
+    "@updateCompleted": {},
+    "@updateFailed": {
+        "description": "Failed to update Text"
+    },
+    "@updates": {},
+    "@updatesSummary": {},
+    "@updating": {},
+    "@userName": {},
+    "@validating": {
+        "description": "toast to show backup validation is in progress"
+    },
+    "@versionAvailable": {},
+    "@webUI": {},
+    "@webView": {},
+    "@whatsNew": {},
+    "@withCompletedStatus": {
+        "description": "Setting option Text for Skip updating entries to toggle With Completed status"
+    },
+    "@withUnreadChapter": {
+        "description": "Setting option Text for Skip updating entries to toggle With unread chapter(s)"
+    },
+    "@yesterday": {
+        "description": "Yesterday Text to show the release date of manga"
+    },
+    "@recentlyRead": {
+        "description": "Recently Read Text to show reading history grouping"
+    },
+    "about": "Sobre",
+    "addCategory": "Adicionar Categoria",
+    "addToLibrary": "Adicionar à biblioteca",
+    "advanced": "Avançado",
+    "allScanlators": "Todas as Scans",
+    "appLanguage": "Idioma do aplicativo",
+    "appTheme": "Tema do aplicativo",
+    "appTitle": "Catalyst",
+    "appearance": "Aparência",
+    "authType": "Tipo de autenticação",
+    "authTypeBasic": "Autenticação Básica",
+    "authTypeNone": "Nenhum",
+    "authentication": "Autenticação",
+    "autoDownload": "Download automático",
+    "autoDownloadNewChapters": "Baixe novos capítulos",
+    "automaticBackup": "Backup automático",
+    "automaticUpdate": "Atualização Automática",
+    "automaticallyRefreshMetadata": "Recarregar automaticamente os metadados",
+    "automaticallyRefreshMetadataSubtitle": "Buscar por novas capas e detalhes quando atualizar a biblioteca",
+    "backup": "Backup e restauração",
+    "backupAndRestore": "Fazer Backup e Restaurar",
+    "backupCleanup": "Limpar Backups",
+    "backupCleanupDescription": "{count, select, 0{Never} 01{Delete Backups que são mais antigos que 1 dia} other{Delete Backups que são mais antigos que {count} dias}}",
+    "backupInterval": "Intervalo de Backup",
+    "backupLocation": "Local do backup",
+    "backupLocationDescription": "O caminho para o diretório no servidor onde os backups automáticos devem ser salvos",
+    "backupTime": "Hora do Backup",
+    "badges": "Distintivos",
+    "bookmarked": "Favoritado",
+    "browse": "Navegar",
+    "buildTime": "Tempo de compilação",
+    "cacheCleared": "Cache limpo",
+    "cancel": "Cancelar",
+    "categories": "Categorias",
+    "categoryUpdate": "Atualização de categoria",
+    "channel": "Canal",
+    "chapterDownloadLimit": "Limite de download de capítulos",
+    "chapterDownloadLimitDesc": "Limite a quantidade de capítulos novos que serão baixados.",
+    "chapterNumber": "Capítulo {number}",
+    "chapterSortFetchedDate": "Por Data de Busca",
+    "chapterSortSource": "Por fonte",
+    "chapterSortUploadDate": "Por Data de Envio",
+    "checkForServerUpdates": "Procurar atualizações do servidor",
+    "checkForUpdates": "Procurar atualizações",
+    "clearCache": "Limpar Cache",
+    "client": "Cliente",
+    "clientVersion": "Versão do Cliente",
+    "close": "Fechar",
+    "cloudflareBypass": "Cloudflare Bypass",
+    "completed": "Completo",
+    "copied": "Copiado!",
+    "copyMsg": "'{msg}' Copiado para área de transferência!",
+    "createBackupDescription": "Salvar a biblioteca como um backup do Tachidesk",
+    "createBackupTitle": "Criar Backup",
+    "credentials": "Credenciais",
+    "current": "Atuais",
+    "daysAgo": "{days} dias atrás",
+    "debugLogs": "Registros de debug",
+    "defaultCategory": "Categoria predefinida quando um novo mangá é adicionado à biblioteca",
+    "delete": "Remover",
+    "deleteCategoryDescription": "Isto mesclará todos os mangás desta categoria para predefinidos!",
+    "deleteCategoryTitle": "Tem certeza?",
+    "discord": "Discord",
+    "display": "Exibição",
+    "displayMode": "Modo de exibição",
+    "displayModeDescriptiveList": "Lista descritiva",
+    "displayModeGrid": "Grade",
+    "displayModeList": "Lista",
+    "downloadLocation": "Local de download",
+    "downloadLocationHint": "O caminho para o diretório no servidor onde os arquivos baixados devem ser salvos",
+    "downloaded": "Transferidos",
+    "downloading": "Baixando",
+    "downloads": "Baixados",
+    "edit": "Editar",
+    "editCategory": "Editar Categoria",
+    "emptyCategory": "Nome da categoria não pode ficar em branco",
+    "enableSocksProxy": "Use Proxy SOCKS",
+    "enterProp": "Entrar {prop}",
+    "error": "Erro",
+    "errorBackupCreate": "Falha ao criar Backup",
+    "errorBackupRestore": "Falha ao restaurar Backup!",
+    "errorExtension": "Não foi possível encontrar a extensão selecionada",
+    "errorFilePick": "Arquivo não selecionado!",
+    "errorFilePickUnknownExtension": "Por favor selecione um arquivo com {extensionName} extensão",
+    "errorLaunchURL": "Falha ao abrir!\nCopiando \"{url}\" para a área de transferência",
+    "errorPassword": "Senha não pode ficar em branco",
+    "errorSomethingWentWrong": "Algo correu mal!",
+    "errorUserName": "Nome de usuário não pode ficar em branco",
+    "excludeEntryWithUnreadChapters": "Ignorar downloads automáticos de capítulos para entradas com capítulos não lidos",
+    "extensionInstalled": "Extensão instalada!",
+    "extensionListEmpty": "Lista de extensão está vazia",
+    "extensionRepository": "Repositório de extensões",
+    "extensionRepositoryDescription": "Adicione repositórios de onde as extensões podem ser instaladas",
+    "extensions": "Extensões",
+    "failed": "Falha",
+    "filter": "Filtro",
+    "findServer": "Procurar",
+    "finished": "Concluído",
+    "flareSolverr": "FlareSolverr",
+    "flareSolverrRequestTimeout": "Tempo limite da solicitação do FlareSolverr",
+    "flareSolverrServerUrl": "URL do servidor FlareSolverr",
+    "flareSolverrSessionName": "Nome da sessão do FlareSolverr",
+    "flareSolverrSessionTTL": "TTL da sessão do FlareSolverr",
+    "general": "Geral",
+    "gitHub": "GitHub",
+    "globalSearch": "Procura global",
+    "globalUpdate": "Atualização global",
+    "gqlDebugLogs": "Logs de depuração do Graphql",
+    "gqlDebugLogsHint": "Isso inclui registros com informações não seguras de privacidade",
+    "help": "Ajuda",
+    "hideEmptyCategory": "Ocultar categoria vazia",
+    "inLibrary": "Na Biblioteca",
+    "includeCategories": "Categorias",
+    "includeChapters": "Capítulos",
+    "install": "Instalar",
+    "installing": "A Instalar",
+    "installingExtension": "Instalando extensão",
+    "invalidPort": "Porta inválida",
+    "invalidProp": "inválida {property}",
+    "ip": "Endereço IP",
+    "ipHintText": "Insira o endereço IP de vinculação do servidor",
+    "isTrueBlack": "Preto puro",
+    "languages": "Idiomas",
+    "latest": "Mais recente",
+    "library": "Biblioteca",
+    "localSourceLocation": "Localização da fonte local",
+    "localSourceLocationDescription": "O caminho para o diretório no servidor onde os arquivos de origem locais são salvos",
+    "manga": "Manga",
+    "mangaGridSize": "Tamanho da tela do mangá",
+    "mangaMissingSources": "Fontes do manga em falta",
+    "mangaSortAlphabetical": "Ordem alfabética",
+    "mangaSortDateAdded": "Data adicionada",
+    "mangaSortLastRead": "Última leitura",
+    "mangaSortLastUpdated": "Última atualização",
+    "mangaSortUnread": "Não lido",
+    "mangaStatusCancelled": "Cancelado",
+    "mangaStatusCompleted": "Completo",
+    "mangaStatusLicensed": "Licenciado",
+    "mangaStatusOnHiatus": "Em curso",
+    "mangaStatusOngoing": "Em pausa",
+    "mangaStatusPublishingFinished": "Publicação concluída",
+    "mangaStatusUnknown": "Desconhecido",
+    "misc": "Diversos",
+    "missingExtension": "Extensões em falta",
+    "missingTrackers": "Rasteadores em falta",
+    "more": "Mais",
+    "moveToBottom": "Mover para baixo",
+    "moveToTop": "Mover para cima",
+    "nChapters": "{n, plural, =0{None} =1{1 Chapter} other{{n} Chapters}}",
+    "nDays": "{count, select, 01{01 Day} other{{count} Days}}",
+    "nHours": "{n, plural, =1{1 hour} other{{n} hours}}",
+    "nMinutes": "{n, plural, =1{1 Minute} other{{n} Minutes}}",
+    "nRepo": "{n, plural, =1{1 Repo} other{{n} Repos}}",
+    "nSeconds": "{n, plural, =1{1 second} other{{n} seconds}}",
+    "nSources": "{n, plural, =1{1 Source} other{{n} Sources}}",
+    "nameCountDisplay": "{name}: {count}",
+    "newUpdateAvailable": "Nova atualização disponível",
+    "navHome": "Home",
+    "navMenu": "Menu",
+    "navOverflowSheetTitle": "Go to",
+    "nextChapter": "Próximo: {chapterTitle}",
+    "noCategoriesFound": "Não tem nenhuma categoria.\nToque no botão mais para criar uma categoria para organizar a sua biblioteca",
+    "noCategoriesFoundAlt": "Não tem nenhuma categoria.\nCria uma nas definições para organizar a sua biblioteca",
+    "noCategoryMangaFound": "Nenhum manga encontrado nesta categoria.\n(Dica: Verifique as suas pesquisas e filtros!)",
+    "noChaptersFound": "Nenhum capítulo encontrado",
+    "noDownloads": "Nenhuma transferência",
+    "noMangaFound": "Nenhum manga encontrado",
+    "noOfChapters": "{count} Capítulos",
+    "noPropFound": "Nenhum {prop} encontrado",
+    "noResultFound": "Nenhum resultado encontrado",
+    "noServerFound": "Servidor não encontrado em sua rede local",
+    "noSourcesFound": "Nenhuma fonte encontrada",
+    "noUpdatesAvailable": "Está a usar a versão mais recente",
+    "noUpdatesFound": "Nenhuma atualização encontrada",
+    "none": "Nenhum",
+    "nsfw": "Mostrar extensões e fontes NSFW",
+    "nsfw18": "18+",
+    "nsfwInfo": "Isto não impede extensões não oficiais ou incorretamente marcadas de mostrarem conteúdo NSFW (18+) dentro da aplicação",
+    "numSelected": "{num} Selecionado",
+    "obsolete": "Obsoleta",
+    "openFlareSolverr": "Consulte o FlareSolverr para obter informações sobre como configurá-lo",
+    "openInWeb": "Abrir na Web",
+    "or": "ou",
+    "page": "Página: {number}",
+    "parallelSourceRequest": "Solicitações de fontes paralelas",
+    "password": "Senha",
+    "pause": "Pausa",
+    "pending": "Pendente",
+    "pinchToZoom": "Aperte para ampliar",
+    "pinchToZoomSubtitle": "Horizontal pages only; long-press for magnifier in webtoon mode",
+    "previousChapter": "Anterior: {chapterTitle}",
+    "queued": "Na fila",
+    "quickSearch": "Pesquisa rápida",
+    "quickSearchCategory": "Vá para categoria 'C'",
+    "quickSearchCategoryManga": "Pesquisa o Manga 'M' na categoria 'C'",
+    "quickSearchCategoryMangaChapter": "Pesquisa o capítulo 'CN' na manga 'M' na Categoria 'C'",
+    "quickSearchContext": "Pesquisa padrão (Resultado baseado nas informações da tela)",
+    "quickSearchShowAllCommandTip": "Dica: clique em '?' para ver todos os comandos",
+    "quickSearchSource": "Pesquisa a fonte 'S'",
+    "quickSearchSourceManga": "Pesquisa o mangá 'M' na fonte 'S'",
+    "reader": "Leitor",
+    "readerMagnifierSize": "Tamanho da Lupa",
+    "readerMode": "Modo de leitura",
+    "readerModeContinuousHorizontalLTR": "Horizontal Contínuo (LTR)",
+    "readerModeContinuousHorizontalRTL": "Horizontal Contínuo (RTL)",
+    "readerModeContinuousVertical": "Vertical Contínuo",
+    "readerModeDefaultReader": "Predefinido",
+    "readerModeSingleHorizontalLTR": "Horizontal único (LTR)",
+    "readerModeSingleHorizontalRTL": "Horizontal único (RTL)",
+    "readerModeSingleVertical": "Vertical único",
+    "readerModeWebtoon": "Webtoon",
+    "readerNavigationLayout": "Disposição de Navegação",
+    "readerNavigationLayoutDefault": "Predefinido",
+    "readerNavigationLayoutDisabled": "Desativado",
+    "readerNavigationLayoutEdge": "Borda",
+    "readerNavigationLayoutInvert": "Inverter toque",
+    "readerNavigationLayoutKindlish": "Formato Kindle-ish",
+    "readerNavigationLayoutLShaped": "Formato L",
+    "readerNavigationLayoutRightAndLeft": "Direita para Esquerda",
+    "readerOverlay": "Sobreposição inicial do leitor",
+    "readerOverlaySubtitle": "Mostra título e configurações rápidas ao abrir um capítulo",
+    "readerTapToShowControls": "Tap the center of the screen to show reading controls",
+    "readerPadding": "Preenchimento do leitor",
+    "readerScrollAnimation": "Animação de rolagem",
+    "readerSwipeChapterToggle": "Deslize para alternar",
+    "readerSwipeChapterToggleDescription": "Deslize para mudar o capítulo no leitor",
+    "readerLastPageSwipeToggle": "Gesto na última página",
+    "readerLastPageSwipeToggleDescription": "Deslizar para o próximo capítulo só na última página",
+    "readerVolumeTap": "Botões de volume",
+    "readerVolumeTapInvert": "inverter botões de volume",
+    "readerVolumeTapSubtitle": "Navegue com botões de volume",
+    "readerIgnoreSafeAreaToggle": "Ignorar área segura",
+    "readerIgnoreSafeAreaToggleDescription": "Allow content to extend into notch and home indicator areas",
+    "readerHaptics": "Haptic feedback",
+    "readerHapticsSubtitle": "Vibrate lightly on page and chapter changes",
+    "readerBrightnessOverlay": "Reader dimming",
+    "readerBrightnessOverlaySubtitle": "Darken the screen while reading (does not change system brightness)",
+    "readerOrientationLock": "Orientation lock",
+    "readerOrientationAuto": "Auto",
+    "readerOrientationPortrait": "Portrait",
+    "readerOrientationLandscape": "Landscape",
+    "readerDoublePageSpread": "Double-page spread",
+    "readerDoublePageSpreadAuto": "Automatic (tablet landscape)",
+    "readerDoublePageSpreadAlways": "Always",
+    "readerDoublePageSpreadNever": "Never",
+    "readerIOSVolumeHint": "On iOS, use tap zones or the page slider to navigate",
+    "readerResumedPage": "Resumed from page {page} of {total}",
+    "@readerResumedPage": {
+        "placeholders": {
+            "page": {
+                "type": "int"
+            },
+            "total": {
+                "type": "int"
+            }
+        }
+    },
+    "readerPageSliderA11y": "Page {page} of {total}",
+    "@readerPageSliderA11y": {
+        "placeholders": {
+            "page": {
+                "type": "int"
+            },
+            "total": {
+                "type": "int"
+            }
+        }
+    },
+    "reddit": "Reddit",
+    "refresh": "Recarregar",
+    "migrate": "Migrar",
+    "migrationSelectTargetSource": "Selecione a fonte de destino",
+    "migrationSearchInSource": "Pesquisar em {sourceName}",
+    "migrationPreview": "Pré-visualizar migração",
+    "migrationInProgress": "Migração em Progresso",
+    "migrationBatchTitle": "Batch migration",
+    "migrationSuccessMangaCount": "Successfully migrated {count} manga.",
+    "@migrationSuccessMangaCount": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "migrationPartialFailure": "Migrated {success} of {total}. {failed} failed.",
+    "@migrationPartialFailure": {
+        "placeholders": {
+            "success": {
+                "type": "int"
+            },
+            "total": {
+                "type": "int"
+            },
+            "failed": {
+                "type": "int"
+            }
+        }
+    },
+    "migrationProgressCount": "{current} of {total}",
+    "@migrationProgressCount": {
+        "placeholders": {
+            "current": {
+                "type": "int"
+            },
+            "total": {
+                "type": "int"
+            }
+        }
+    },
+    "migrationComplete": "Migração concluída com sucesso",
+    "migrationFailed": "Migração Falhou",
+    "migrationCancelled": "Migração cancelada",
+    "migrateChapters": "Migrar capítulos",
+    "migrateChaptersDescription": "Copie o status do capítulo lido para nova fonte",
+    "migrateCategories": "Migrar categorias",
+    "migrateCategoriesDescription": "Copiar categorias do mangá para nova fonte",
+    "migrateDownloads": "Migrar Downloads",
+    "migrateDownloadsDescription": "Mover capítulos baixados para nova fonte",
+    "migrateTracking": "Migrar Rastreadores",
+    "migrateTrackingDescription": "Copiar informações de rastreamento para nova fonte",
+    "migrationOptions": "Opções de migração",
+    "migrationSettings": "Configurações de migração",
+    "selectTargetSource": "Selecione a fonte de destino",
+    "noSourcesAvailable": "Não existem fontes disponíveis para migração",
+    "checkSourceConfiguration": "Por favor, verifique a configuração da sua fonte",
+    "noAlternativeSources": "Não existem fontes alternativas disponíveis",
+    "installMoreSources": "Instale mais fontes para habilitar a migração",
+    "errorLoadingSources": "Erro ao carregar fontes",
+    "errorGettingMigrationSources": "Falha ao obter fontes de migração",
+    "errorSearchingMangaInSource": "Falha ao procurar mangá na fonte",
+    "errorFetchingSourceManga": "Falha ao buscar mangá de origem",
+    "errorSourceMangaNotFound": "Mangá de origem não encontrado",
+    "errorFetchingTargetManga": "Falha ao buscar mangá destino",
+    "errorTargetMangaNotFound": "Mangá alvo não encontrado",
+    "searchManga": "Procurar mangá...",
+    "searchForManga": "Procurar mangá na fonte destino",
+    "enterSearchTerm": "Digite um termo de pesquisa para encontrar mangá",
+    "noResultsFound": "Nenhum resultado encontrado",
+    "tryDifferentSearch": "Experimente um termo de pesquisa diferente",
+    "searchError": "Erro de pesquisa",
+    "importantNotice": "Aviso Importante",
+    "migrationWarning": "Isso irá mover permanentemente seus dados de mangá. Esta ação não pode ser desfeita.",
+    "deleteSourceWarning": "O mangá original será removido de sua biblioteca após a migração.",
+    "confirmMigration": "Confirme a migração",
+    "migrationConfirmationMessage": "Tem certeza de que quer migrar este mangá? Esta ação não pode ser desfeita.",
+    "startMigration": "Iniciar migração",
+    "preparingMigration": "Preparando a migração...",
+    "migrationCompleted": "Migração concluída!",
+    "migrationSuccessMessage": "Seu mangá foi migrado com sucesso para a nova fonte.",
+    "migrationCancelledMessage": "O processo de migração foi cancelado. Não foram feitas alterações.",
+    "cancelMigration": "Cancelar migração",
+    "cancelMigrationConfirmation": "Tem certeza de que quer cancelar a migração? Esta ação não pode ser desfeita.",
+    "quickPresets": "Presets rápidos",
+    "quickMigration": "Rápido",
+    "fullMigration": "Total",
+    "customMigration": "Personalizado",
+    "deleteSourceManga": "Deletar mangá fonte",
+    "deleteSourceMangaDescription": "Remova o mangá original da biblioteca após a migração",
+    "done": "Feito",
+    "yes": "Sim",
+    "no": "Não",
+    "from": "A partir de",
+    "to": "Para",
+    "source": "Fonte",
+    "migrationDetails": "Detalhes da migração",
+    "searchAllSources": "Pesquisar todas as fontes",
+    "searchingAllSources": "Procurando em todas as fontes disponíveis...",
+    "noMatchingMangaFound": "Nenhum mangá correspondente encontrado em qualquer fonte",
+    "deleteSourceAfterMigration": "Excluir mangá origem após a migração",
+    "reload": "Recarregar",
+    "remove": "Remover",
+    "removeFromLibrary": "Remover da Biblioteca?",
+    "reset": "Reiniciar",
+    "restore": "Restaurar",
+    "restoreBackupDescription": "Restaurar Tachidesk pela cópia de segurança",
+    "restoreBackupTitle": "Restaurar cópia de segurança",
+    "restored": "Cópia de segurança restaurada!",
+    "restoring": "Restaurando backup",
+    "resume": "Continuar",
+    "retry": "Tentar novamente",
+    "running": "Em execução",
+    "save": "Guardar",
+    "saveAsCBZArchive": "Salvar como arquivo CBZ",
+    "scanlators": "Scans",
+    "search": "Procurar",
+    "searchingForUpdates": "Procurando por atualizações",
+    "selectInBetween": "Selecione entre",
+    "selectNext10": "Selecione os próximos 10",
+    "selectUnread": "Selecione os não lidos",
+    "server": "Servidor",
+    "serverBindings": "Ligações do servidor",
+    "serverPort": "Porta do servidor",
+    "serverPortHintText": "Porta do servidor",
+    "serverUrl": "URL do Server",
+    "serverUrlHintText": "URL do servidor",
+    "serverVersion": "Versão do servidor",
+    "serverUnreachableTitle": "Server unreachable",
+    "serverUnreachableBody": "Make sure Suwayomi Server is running and the URL is correct in Settings.",
+    "serverRetryButton": "Retry",
+    "serverOpenSettingsButton": "Server settings",
+    "serverOfflineBanner": "Server offline — tap retry",
+    "serverOfflineRetryA11y": "Retry connection",
+    "serverOfflineDismissA11y": "Dismiss offline notice",
+    "notificationsDisabledBanner": "Notifications are off — chapter updates won't alert you",
+    "notificationsOpenSettingsA11y": "Open notification settings",
+    "notificationsEnableA11y": "Enable notifications",
+    "localDownloadToDevice": "Download offline to device",
+    "localDownloadRemoveTooltip": "Remove offline download",
+    "localDownloadRetryTooltip": "Retry offline download",
+    "localDownloadRemoveTitle": "Remove offline download?",
+    "localDownloadRemoveBody": "This chapter will be removed from your device. You can download it again anytime.",
+    "deleteOfflineDownloadsTitle": "Delete offline downloads?",
+    "deleteOfflineDownloadsBody": "This will remove {count} offline chapter(s) from this device.",
+    "@deleteOfflineDownloadsBody": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "invalidChapterLink": "Invalid chapter link",
+    "downloadsTabServer": "Server",
+    "downloadsTabOffline": "Offline",
+    "downloadsInProgress": "In progress",
+    "downloadsQueued": "Queued",
+    "offlineStorageUsedMb": "{size} MB used on device",
+    "@offlineStorageUsedMb": {
+        "placeholders": {
+            "size": {
+                "type": "String"
+            }
+        }
+    },
+    "offlineStorageUsedKb": "{size} KB used on device",
+    "@offlineStorageUsedKb": {
+        "placeholders": {
+            "size": {
+                "type": "String"
+            }
+        }
+    },
+    "migrateSelectedCount": "Migrate ({count})",
+    "@migrateSelectedCount": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "migrationBatchMatchTitle": "Batch match ({source})",
+    "@migrationBatchMatchTitle": {
+        "placeholders": {
+            "source": {
+                "type": "String"
+            }
+        }
+    },
+    "migrationBatchPairing": "Automatically pairing {count} manga…",
+    "@migrationBatchPairing": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "migrationBatchMatchSummary": "Found {matched} matches out of {total}",
+    "@migrationBatchMatchSummary": {
+        "placeholders": {
+            "matched": {
+                "type": "int"
+            },
+            "total": {
+                "type": "int"
+            }
+        }
+    },
+    "migrationMigrateButtonCount": "Migrate {count} manga",
+    "@migrationMigrateButtonCount": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "migrationCoverSourceLabel": "Source",
+    "migrationCoverMatchLabel": "Match",
+    "migrationNoMatch": "No match",
+    "migrationSearchingInSource": "Searching in {source} ({language})",
+    "@migrationSearchingInSource": {
+        "placeholders": {
+            "source": {
+                "type": "String"
+            },
+            "language": {
+                "type": "String"
+            }
+        }
+    },
+    "offlineChapterFallback": "Chapter",
+    "offlineChapterId": "Chapter {id}",
+    "@offlineChapterId": {
+        "placeholders": {
+            "id": {
+                "type": "int"
+            }
+        }
+    },
+    "loadingEllipsis": "…",
+    "readerPagesLoadFailed": "Could not load chapter pages",
+    "readerTapPreviousPage": "Previous page",
+    "readerTapNextPage": "Next page",
+    "readerTapToggleMenu": "Toggle reader menu",
+    "globalSearchHint": "Type to search across all sources",
+    "seeAll": "See all",
+    "settings": "Definições",
+    "skipUpdatingEntries": "Pular atualização de entradas",
+    "socksHost": "Host SOCKS",
+    "socksPassword": "Senha SOCKS",
+    "socksPort": "Porta SOCKS",
+    "socksProxy": "Proxy SOCKS",
+    "socksUserName": "Nome de usuário SOCKS",
+    "socksVersion": "Versão SOCKS",
+    "sort": "Ordenar",
+    "sourceTypeFilter": "Filtro",
+    "sourceTypeLatest": "Mais recentes",
+    "sourceTypePopular": "Popular",
+    "sources": "Fontes",
+    "start": "Inicio",
+    "systemTrayIcon": "Mostrar ícone na bandeja do sistema",
+    "thatHaventBeenStarted": "Que ainda não foram iniciadas",
+    "themeModeDark": "Escuro",
+    "themeModeLight": "Claro",
+    "themeModeSystem": "Sistema",
+    "today": "Hoje",
+    "uninstall": "Desinstalar",
+    "uninstalling": "A Desinstalar",
+    "unknownAuthor": "Autor Desconhecido",
+    "unknownManga": "Manga Desconhecido",
+    "unknownSource": "Fonte Desconhecida",
+    "unread": "Não lida",
+    "update": "Atualização",
+    "updateCompleted": "Atualização Completa",
+    "updateFailed": "Falha ao atualizar {property}",
+    "updates": "Atualizações",
+    "updatesSummary": "Resumo de Atualizações",
+    "updating": "Atualizando",
+    "userName": "Nome de Utilizador",
+    "validating": "Validando",
+    "versionAvailable": "Versão {version} disponivel para {app}!!",
+    "webUI": "Abrir no WEB",
+    "webView": "WebView",
+    "whatsNew": "O que há de Novo?",
+    "withCompletedStatus": "Com status Concluído",
+    "withUnreadChapter": "Com capítulo(s) não lido(s)",
+    "yesterday": "Ontem",
+    "recentlyRead": "Lidos recentemente",
+    "history": "Histórico",
+    "historyContinueReading": "Continue Reading",
+    "historyRecent": "Recent",
+    "searchHistory": "Pesquisar histórico...",
+    "noHistoryFound": "Nenhum histórico de leitura encontrado",
+    "startReadingToSeeHistory": "Comece a ler mangás para ver seu histórico aqui",
+    "noSearchResults": "Sem resultados de pesquisa",
+    "tryDifferentSearchTerm": "Experimente um termo de pesquisa diferente",
+    "errorOccurred": "Um erro ocorreu",
+    "viewManga": "Ver Mangá",
+    "removeFromHistory": "Remover do Histórico",
+    "removeFromHistoryConfirmation": "Tem certeza de que deseja remover este capítulo do seu histórico de leitura?",
+    "timeoutSettings": "Configurações de timeout",
+    "serverRequestTimeout": "Server Request Timeout",
+    "@serverRequestTimeout": {
+        "description": "Controls how long to wait for server responses"
+    },
+    "serverRequestTimeoutDescription": "Tempo para esperar por respostas do servidor (em segundos)",
+    "autoRefreshOnTimeout": "Auto-refresh no Timeout",
+    "@autoRefreshOnTimeout": {
+        "description": "Toggle automatic retry on timeout"
+    },
+    "autoRefreshOnTimeoutDescription": "Automatically retries requests that timeout",
+    "autoRefreshRetryDelay": "Auto-refresh Retry Delay",
+    "@autoRefreshRetryDelay": {
+        "description": "Delay between auto retry attempts in seconds"
+    },
+    "autoRefreshRetryDelayDescription": "Delay between auto retry attempts (in seconds)",
+    "trackers": "Trackers",
+    "@trackers": {
+        "description": "Trackers settings section title"
+    },
+    "tracking": "Tracking",
+    "@tracking": {
+        "description": "Tracking button on manga page"
+    },
+    "addTracking": "Add Tracking",
+    "@addTracking": {
+        "description": "Button to add a new tracker binding"
+    },
+    "trackingSearch": "Search on tracker...",
+    "@trackingSearch": {
+        "description": "Hint text for tracker search field"
+    },
+    "trackingStatus": "Status",
+    "@trackingStatus": {
+        "description": "Label for tracking status field"
+    },
+    "trackingScore": "Score",
+    "@trackingScore": {
+        "description": "Label for tracking score field"
+    },
+    "trackingLastChapter": "Last Chapter Read",
+    "@trackingLastChapter": {
+        "description": "Label for last chapter read field"
+    },
+    "trackingStartDate": "Start Date",
+    "@trackingStartDate": {
+        "description": "Label for start date field"
+    },
+    "trackingFinishDate": "Finish Date",
+    "@trackingFinishDate": {
+        "description": "Label for finish date field"
+    },
+    "trackingRemoveConfirm": "Remove tracking?",
+    "@trackingRemoveConfirm": {
+        "description": "Confirm remove tracking dialog title"
+    },
+    "trackingRemoveDescription": "This will remove the tracking entry from Catalyst. The entry on the tracker service will not be deleted.",
+    "@trackingRemoveDescription": {
+        "description": "Confirm remove tracking dialog body"
+    },
+    "trackingRemoveAlsoRemote": "Also delete from tracker service",
+    "@trackingRemoveAlsoRemote": {
+        "description": "Checkbox to also delete remote tracker entry"
+    },
+    "logIn": "Log In",
+    "@logIn": {
+        "description": "Log in button label"
+    },
+    "logOut": "Log Out",
+    "@logOut": {
+        "description": "Log out button label"
+    },
+    "trackerLogOutConfirm": "Log out from {tracker}?",
+    "@trackerLogOutConfirm": {
+        "placeholders": {
+            "tracker": {
+                "type": "String"
+            }
+        }
+    },
+    "loggedIn": "Logged in",
+    "@loggedIn": {
+        "description": "Status label for logged-in tracker"
+    },
+    "notLoggedIn": "Not logged in",
+    "@notLoggedIn": {
+        "description": "Status label for not-logged-in tracker"
+    },
+    "noTrackingFound": "No tracking entries yet",
+    "@noTrackingFound": {
+        "description": "Empty state for manga tracker sheet"
+    },
+    "trackerNoResults": "No results found on tracker",
+    "@trackerNoResults": {
+        "description": "Empty state for tracker search"
+    },
+    "syncNow": "Sync now",
+    "@syncNow": {
+        "description": "Sync tracker button label"
+    },
+    "mangaComparison": "Manga Comparison",
+    "@mangaComparison": {
+        "description": "Header for manga comparison section"
+    },
+    "migrationFromLabel": "From (Current)",
+    "@migrationFromLabel": {
+        "description": "Label for source manga in comparison"
+    },
+    "migrationToLabel": "To (Target)",
+    "@migrationToLabel": {
+        "description": "Label for target manga in comparison"
+    },
+    "comparisonSummary": "Comparison Summary",
+    "@comparisonSummary": {
+        "description": "Header for comparison summary section"
+    },
+    "byAuthor": "by {author}",
+    "@byAuthor": {
+        "description": "Author prefix label",
+        "placeholders": {
+            "author": {
+                "type": "String"
+            }
+        }
+    },
+    "migrationSummaryTitle": "Migration Summary",
+    "@migrationSummaryTitle": {
+        "description": "Header for migration summary section"
+    },
+    "migratedFromManga": "Migrated from: {title}",
+    "@migratedFromManga": {
+        "description": "Bullet point showing source manga",
+        "placeholders": {
+            "title": {
+                "type": "String"
+            }
+        }
+    },
+    "migratedToManga": "Migrated to: {title}",
+    "@migratedToManga": {
+        "description": "Bullet point showing target manga",
+        "placeholders": {
+            "title": {
+                "type": "String"
+            }
+        }
+    },
+    "migrationSourceLabel": "Source: {name}",
+    "@migrationSourceLabel": {
+        "description": "Bullet point showing target source",
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
+    },
+    "selectSource": "Select Source",
+    "@selectSource": {
+        "description": "App bar title for selecting migration source"
+    },
+    "selectManga": "Select Manga",
+    "@selectManga": {
+        "description": "App bar title for selecting manga to migrate"
+    },
+    "category": "Categoria",
+    "@category": {},
+    "create": "Criar",
+    "@create": {},
+    "unknown": "Desconhecido",
+    "@unknown": {},
+    "@backupCleanupDescription": {},
+    "@ipHintText": {},
+    "@socksHost": {},
+    "@socksPassword": {},
+    "@socksPort": {},
+    "@socksUserName": {},
+    "@history": {},
+    "@searchHistory": {},
+    "@migrate": {},
+    "@migrationPreview": {},
+    "@migrationSelectTargetSource": {},
+    "@migrationSearchInSource": {},
+    "@migrationInProgress": {},
+    "@migrationFailed": {},
+    "@migrateChapters": {},
+    "@migrationCancelled": {},
+    "@migrateChaptersDescription": {},
+    "@selectTargetSource": {},
+    "@migrationSettings": {},
+    "@errorGettingMigrationSources": {},
+    "@deleteSourceWarning": {},
+    "@confirmMigration": {},
+    "@startMigration": {},
+    "@migrationWarning": {},
+    "@migrationConfirmationMessage": {},
+    "@preparingMigration": {},
+    "@migrationCompleted": {},
+    "@deleteSourceAfterMigration": {},
+    "@migrationComplete": {},
+    "@errorLoadingSources": {},
+    "@errorSearchingMangaInSource": {},
+    "@errorFetchingSourceManga": {},
+    "@migrateTrackingDescription": {},
+    "@migrationOptions": {},
+    "@noSourcesAvailable": {},
+    "@checkSourceConfiguration": {},
+    "@noAlternativeSources": {},
+    "@installMoreSources": {},
+    "@tryDifferentSearch": {},
+    "@deleteSourceManga": {},
+    "@quickMigration": {},
+    "@fullMigration": {},
+    "@customMigration": {},
+    "@done": {},
+    "@to": {},
+    "@migrationDetails": {},
+    "@searchAllSources": {},
+    "@searchingAllSources": {},
+    "@noMatchingMangaFound": {},
+    "@errorOccurred": {},
+    "@viewManga": {},
+    "@noSearchResults": {},
+    "@startReadingToSeeHistory": {},
+    "@tryDifferentSearchTerm": {},
+    "@removeFromHistory": {},
+    "@migrateCategoriesDescription": {},
+    "@migrateDownloadsDescription": {},
+    "@migrateCategories": {},
+    "@migrateDownloads": {},
+    "@migrateTracking": {},
+    "@errorTargetMangaNotFound": {},
+    "@searchManga": {},
+    "@enterSearchTerm": {},
+    "@noResultsFound": {},
+    "@searchError": {},
+    "@importantNotice": {},
+    "@migrationSuccessMessage": {},
+    "@cancelMigration": {},
+    "@cancelMigrationConfirmation": {},
+    "@quickPresets": {},
+    "@deleteSourceMangaDescription": {},
+    "@yes": {},
+    "@no": {},
+    "@errorSourceMangaNotFound": {},
+    "@errorFetchingTargetManga": {},
+    "@searchForManga": {},
+    "@from": {},
+    "@noHistoryFound": {},
+    "@removeFromHistoryConfirmation": {},
+    "@timeoutSettings": {},
+    "@serverRequestTimeoutDescription": {},
+    "@migrationCancelledMessage": {}
 }

@@ -44,7 +44,10 @@ class PageNumberSlider extends StatelessWidget {
       Text("$safeMaxValue"),
     ];
     return Semantics(
-      label: 'Page ${safeCurrentValue + 1} of $safeMaxValue',
+      label: context.l10n.readerPageSliderA11y(
+        safeCurrentValue + 1,
+        safeMaxValue,
+      ),
       child: Card(
       color: context.theme.appBarTheme.backgroundColor?.withValues(alpha: .7),
       shape: RoundedRectangleBorder(

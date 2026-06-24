@@ -681,7 +681,7 @@ extension $TrackerSettingsRouteExtension on TrackerSettingsRoute {
 
 extension $MangaRouteExtension on MangaRoute {
   static MangaRoute _fromState(GoRouterState state) => MangaRoute(
-        mangaId: int.tryParse(state.pathParameters['mangaId'] ?? '') ?? -1,
+        mangaId: int.parse(state.pathParameters['mangaId']!),
         categoryId: _$convertMapValue(
             'category-id', state.uri.queryParameters, int.parse),
       );
@@ -705,8 +705,8 @@ extension $MangaRouteExtension on MangaRoute {
 
 extension $ReaderRouteExtension on ReaderRoute {
   static ReaderRoute _fromState(GoRouterState state) => ReaderRoute(
-        mangaId: int.tryParse(state.pathParameters['mangaId'] ?? '') ?? -1,
-        chapterId: int.tryParse(state.pathParameters['chapterId'] ?? '') ?? -1,
+        mangaId: int.parse(state.pathParameters['mangaId']!),
+        chapterId: int.parse(state.pathParameters['chapterId']!),
         transVertical: _$convertMapValue(
             'trans-vertical', state.uri.queryParameters, _$boolConverter),
         toPrev: _$convertMapValue(
@@ -998,7 +998,7 @@ bool _$boolConverter(String value) {
 // RiverpodGenerator
 // **************************************************************************
 
-String _$routerConfigHash() => r'c551cd9df473ec5444a6bc1ecf59c93077457ac9';
+String _$routerConfigHash() => r'c62d8bf9cc08740a112eb4a98fc159c82171df76';
 
 /// See also [routerConfig].
 @ProviderFor(routerConfig)

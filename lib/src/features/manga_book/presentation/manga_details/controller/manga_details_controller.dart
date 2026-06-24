@@ -9,9 +9,11 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../../constants/db_keys.dart';
 import '../../../../../constants/enum.dart';
+import '../../../../../graphql/__generated__/schema.graphql.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../utils/mixin/shared_preferences_client_mixin.dart';
 import '../../../../library/domain/category/category_model.dart';
+import '../../../data/local_downloads/local_downloads_service.dart';
 import '../../../data/manga_book/manga_book_repository.dart';
 import '../../../domain/chapter/chapter_model.dart';
 import '../../../domain/manga/manga_model.dart';
@@ -54,8 +56,36 @@ List<ChapterDto> _sortedChapterList(
 @riverpod
 class MangaWithId extends _$MangaWithId {
   @override
-  Future<MangaDto?> build({required int mangaId}) =>
-      ref.watch(mangaBookRepositoryProvider).getManga(mangaId: mangaId);
+  Future<MangaDto?> build({required int mangaId}) async {
+    try {
+      final manga =
+          await ref.read(mangaBookRepositoryProvider).getManga(mangaId: mangaId);
+      if (manga != null) return manga;
+    } catch (_) {}
+
+    final offlineTitle = await ref
+        .read(localDownloadsServiceProvider)
+        .getOfflineMangaTitle(mangaId);
+    final hasOffline = offlineTitle != null ||
+        await ref.read(localDownloadsServiceProvider).hasOfflineManga(mangaId);
+    if (!hasOffline) return null;
+
+    return MangaDto(
+      downloadCount: 0,
+      genre: const [],
+      id: mangaId,
+      inLibrary: true,
+      inLibraryAt: '0',
+      initialized: true,
+      meta: const [],
+      sourceId: '',
+      status: Enum$MangaStatus.UNKNOWN,
+      title: offlineTitle ?? '',
+      unreadCount: 0,
+      updateStrategy: Enum$UpdateStrategy.ONLY_FETCH_ONCE,
+      url: '',
+    );
+  }
 
   Future<void> refresh() async {
     ref.invalidateSelf();

@@ -185,7 +185,7 @@ class _MigrationSourceQuickSearchMangaListProviderElement
 }
 
 String _$migrationGlobalSearchResultsHash() =>
-    r'87e65d01ab45a502e5c3ae9d5d955579160e3a5b';
+    r'c252c616296661ab605a7dbee4be9d866e5dc1a7';
 
 /// See also [migrationGlobalSearchResults].
 @ProviderFor(migrationGlobalSearchResults)
@@ -645,7 +645,7 @@ class _MigrationSearchProviderElement
 }
 
 String _$migrationExecutionHash() =>
-    r'18d53786689087edd33ca6257e3bd7a62aa5ad60';
+    r'5f0265ee7d069a7284a458f3b2aa8c81f33525e8';
 
 /// See also [MigrationExecution].
 @ProviderFor(MigrationExecution)

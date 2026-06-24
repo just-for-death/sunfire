@@ -6,6 +6,7 @@ import '../../features/settings/domain/settings/settings.dart';
 import '../../utils/extensions/custom_extensions.dart';
 import '../../utils/misc/app_utils.dart';
 import '../../utils/misc/toast/toast.dart';
+import '../settings/adaptive_list_tile.dart';
 import 'domain/settings_prop_type.dart';
 import 'settings_prop_pop_up.dart';
 
@@ -53,13 +54,13 @@ class SettingsPropTile extends StatelessWidget {
     }
     return Tooltip(
       message: subtitleString ?? title,
-      child: ListTile(
+      child: AdaptiveListTile(
         leading: leading,
         trailing: trailing,
         title: titleWidget ?? Text(title!),
         subtitle: subtitleString.isNotBlank
             ? Text(
-                subtitleString ?? "",
+                subtitleString ?? '',
                 overflow: TextOverflow.ellipsis,
               )
             : null,
@@ -103,14 +104,13 @@ class SwitchSettingsPropTile extends ConsumerWidget {
   Widget build(context, ref) {
     return Tooltip(
       message: subtitleString ?? title,
-      child: SwitchListTile(
-        controlAffinity: ListTileControlAffinity.trailing,
-        secondary: leading,
+      child: AdaptiveSwitchListTile(
+        leading: leading,
         title: titleWidget ?? Text(title!),
         value: switchProp.value.ifNull(),
         subtitle: subtitleString.isNotBlank
             ? Text(
-                subtitleString ?? "",
+                subtitleString ?? '',
                 overflow: TextOverflow.ellipsis,
               )
             : null,

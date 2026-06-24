@@ -57,6 +57,7 @@ enum DBKeys {
   readerHapticsEnabled(true),
   readerBrightnessOverlay(0.0),
   readerOrientationLock(ReaderOrientationLock.auto),
+  readerDoublePageSpread(ReaderDoublePageSpread.auto),
   flexScheme(FlexScheme.material),
   useDynamicColor(true),
   historyEnabled(true),

@@ -41,7 +41,8 @@ class LocalDownloadsList extends ConsumerWidget {
 
               return chapterAsync.when(
                 data: (chapter) {
-                  final title = chapter?.name ?? 'Chapter';
+                  final title =
+                      chapter?.name ?? context.l10n.offlineChapterFallback;
                   final mangaId = chapter?.mangaId;
                   final mangaTitleAsync = mangaId == null
                       ? null
@@ -79,7 +80,7 @@ class LocalDownloadsList extends ConsumerWidget {
                               if (mangaTitle?.isNotEmpty == true) title,
                               if (chapterNo != null &&
                                   chapterNo.toString().isNotEmpty)
-                                'Ch. $chapterNo',
+                                context.l10n.chapterNumber(chapterNo),
                             ].whereType<String>().join(' • '),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -101,17 +102,18 @@ class LocalDownloadsList extends ConsumerWidget {
                                 .notifier)
                             .delete();
                         ref.invalidate(localDownloadedChapterIdsProvider);
+                        ref.invalidate(offlineStorageSizeProvider);
                       },
                     ),
                   );
                 },
-                loading: () => const ListTile(
-                  leading: Icon(Icons.download_done_rounded),
-                  title: Text('...'),
+                loading: () => ListTile(
+                  leading: const Icon(Icons.download_done_rounded),
+                  title: Text(context.l10n.loadingEllipsis),
                 ),
                 error: (e, _) => ListTile(
                   leading: const Icon(Icons.download_done_rounded),
-                  title: Text('Chapter $chapterId'),
+                  title: Text(context.l10n.offlineChapterId(chapterId)),
                   subtitle: Text(e.toString()),
                 ),
               );

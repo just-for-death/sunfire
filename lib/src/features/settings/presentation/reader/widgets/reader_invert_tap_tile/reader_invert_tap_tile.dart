@@ -11,6 +11,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../../../constants/db_keys.dart';
 import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/mixin/shared_preferences_client_mixin.dart';
+import '../../../../../../widgets/settings/adaptive_list_tile.dart';
 
 part 'reader_invert_tap_tile.g.dart';
 
@@ -24,9 +25,8 @@ class ReaderInvertTapTile extends HookConsumerWidget {
   const ReaderInvertTapTile({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return SwitchListTile(
-      controlAffinity: ListTileControlAffinity.trailing,
-      secondary: const Icon(Icons.switch_left_rounded),
+    return AdaptiveSwitchListTile(
+      leading: const Icon(Icons.switch_left_rounded),
       title: Text(context.l10n.readerNavigationLayoutInvert),
       onChanged: ref.read(invertTapProvider.notifier).update,
       value: ref.watch(invertTapProvider).ifNull(),

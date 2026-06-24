@@ -838,12 +838,29 @@ class AppLocalizationsJa extends AppLocalizations {
   String get readerOrientationLandscape => 'Landscape';
 
   @override
+  String get readerDoublePageSpread => 'Double-page spread';
+
+  @override
+  String get readerDoublePageSpreadAuto => 'Automatic (tablet landscape)';
+
+  @override
+  String get readerDoublePageSpreadAlways => 'Always';
+
+  @override
+  String get readerDoublePageSpreadNever => 'Never';
+
+  @override
   String get readerIOSVolumeHint =>
       'On iOS, use tap zones or the page slider to navigate';
 
   @override
   String readerResumedPage(int page, int total) {
     return 'Resumed from page $page of $total';
+  }
+
+  @override
+  String readerPageSliderA11y(int page, int total) {
+    return 'Page $page of $total';
   }
 
   @override
@@ -1205,6 +1222,81 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get invalidChapterLink => 'Invalid chapter link';
+
+  @override
+  String get downloadsTabServer => 'Server';
+
+  @override
+  String get downloadsTabOffline => 'Offline';
+
+  @override
+  String get downloadsInProgress => 'In progress';
+
+  @override
+  String get downloadsQueued => 'Queued';
+
+  @override
+  String offlineStorageUsedMb(String size) {
+    return '$size MB used on device';
+  }
+
+  @override
+  String offlineStorageUsedKb(String size) {
+    return '$size KB used on device';
+  }
+
+  @override
+  String migrateSelectedCount(int count) {
+    return 'Migrate ($count)';
+  }
+
+  @override
+  String migrationBatchMatchTitle(String source) {
+    return 'Batch match ($source)';
+  }
+
+  @override
+  String migrationBatchPairing(int count) {
+    return 'Automatically pairing $count manga…';
+  }
+
+  @override
+  String migrationBatchMatchSummary(int matched, int total) {
+    return 'Found $matched matches out of $total';
+  }
+
+  @override
+  String migrationMigrateButtonCount(int count) {
+    return 'Migrate $count manga';
+  }
+
+  @override
+  String get migrationCoverSourceLabel => 'Source';
+
+  @override
+  String get migrationCoverMatchLabel => 'Match';
+
+  @override
+  String get migrationNoMatch => 'No match';
+
+  @override
+  String migrationSearchingInSource(String source, String language) {
+    return 'Searching in $source ($language)';
+  }
+
+  @override
+  String get offlineChapterFallback => 'Chapter';
+
+  @override
+  String offlineChapterId(int id) {
+    return 'Chapter $id';
+  }
+
+  @override
+  String get loadingEllipsis => '…';
+
+  @override
   String get readerPagesLoadFailed => 'Could not load chapter pages';
 
   @override
@@ -1451,6 +1543,11 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get logOut => 'Log Out';
+
+  @override
+  String trackerLogOutConfirm(String tracker) {
+    return 'Log out from $tracker?';
+  }
 
   @override
   String get loggedIn => 'Logged in';

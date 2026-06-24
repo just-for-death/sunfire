@@ -13,6 +13,7 @@ import '../../../../../../constants/enum.dart';
 import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/mixin/shared_preferences_client_mixin.dart';
 import '../../../../../../widgets/popup_widgets/radio_list_popup.dart';
+import '../../../../../../widgets/settings/adaptive_list_tile.dart';
 
 part 'reader_orientation_tile.g.dart';
 
@@ -32,7 +33,7 @@ class ReaderOrientationTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lock = ref.watch(readerOrientationLockKeyProvider);
-    return ListTile(
+    return AdaptiveListTile(
       leading: const Icon(Icons.screen_rotation_rounded),
       title: Text(context.l10n.readerOrientationLock),
       subtitle: lock != null ? Text(lock.toLocale(context)) : null,

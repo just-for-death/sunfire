@@ -96,7 +96,7 @@ class MigrationSourceMangaScreen extends HookConsumerWidget {
                 ).push(context);
               },
               icon: const Icon(Icons.arrow_forward),
-              label: Text('Migrate (${selectedIds.value.length})'),
+              label: Text(l10n.migrateSelectedCount(selectedIds.value.length)),
             )
           : null,
       body: mangasAsync.showUiWhenData(

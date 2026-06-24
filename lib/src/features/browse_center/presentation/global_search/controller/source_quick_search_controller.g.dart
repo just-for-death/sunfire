@@ -182,7 +182,7 @@ class _SourceQuickSearchMangaListProviderElement
 }
 
 String _$quickSearchResultsHash() =>
-    r'49730d30c2625d1fb004ec12be11bf239e308a64';
+    r'd7de78a27ce31768a822500c15e330bfeb42126b';
 
 /// See also [quickSearchResults].
 @ProviderFor(quickSearchResults)

@@ -1179,9 +1179,20 @@
     "readerOrientationAuto": "Auto",
     "readerOrientationPortrait": "Portrait",
     "readerOrientationLandscape": "Landscape",
+    "readerDoublePageSpread": "Double-page spread",
+    "readerDoublePageSpreadAuto": "Automatic (tablet landscape)",
+    "readerDoublePageSpreadAlways": "Always",
+    "readerDoublePageSpreadNever": "Never",
     "readerIOSVolumeHint": "On iOS, use tap zones or the page slider to navigate",
     "readerResumedPage": "Resumed from page {page} of {total}",
     "@readerResumedPage": {
+        "placeholders": {
+            "page": {"type": "int"},
+            "total": {"type": "int"}
+        }
+    },
+    "readerPageSliderA11y": "Page {page} of {total}",
+    "@readerPageSliderA11y": {
         "placeholders": {
             "page": {"type": "int"},
             "total": {"type": "int"}
@@ -1325,6 +1336,72 @@
             "count": { "type": "int" }
         }
     },
+    "invalidChapterLink": "Invalid chapter link",
+    "downloadsTabServer": "Server",
+    "downloadsTabOffline": "Offline",
+    "downloadsInProgress": "In progress",
+    "downloadsQueued": "Queued",
+    "offlineStorageUsedMb": "{size} MB used on device",
+    "@offlineStorageUsedMb": {
+        "placeholders": {
+            "size": { "type": "String" }
+        }
+    },
+    "offlineStorageUsedKb": "{size} KB used on device",
+    "@offlineStorageUsedKb": {
+        "placeholders": {
+            "size": { "type": "String" }
+        }
+    },
+    "migrateSelectedCount": "Migrate ({count})",
+    "@migrateSelectedCount": {
+        "placeholders": {
+            "count": { "type": "int" }
+        }
+    },
+    "migrationBatchMatchTitle": "Batch match ({source})",
+    "@migrationBatchMatchTitle": {
+        "placeholders": {
+            "source": { "type": "String" }
+        }
+    },
+    "migrationBatchPairing": "Automatically pairing {count} manga…",
+    "@migrationBatchPairing": {
+        "placeholders": {
+            "count": { "type": "int" }
+        }
+    },
+    "migrationBatchMatchSummary": "Found {matched} matches out of {total}",
+    "@migrationBatchMatchSummary": {
+        "placeholders": {
+            "matched": { "type": "int" },
+            "total": { "type": "int" }
+        }
+    },
+    "migrationMigrateButtonCount": "Migrate {count} manga",
+    "@migrationMigrateButtonCount": {
+        "placeholders": {
+            "count": { "type": "int" }
+        }
+    },
+    "migrationCoverSourceLabel": "Source",
+    "migrationCoverMatchLabel": "Match",
+    "migrationNoMatch": "No match",
+    "migrationSearchingInSource": "Searching in {source} ({language})",
+    "@migrationSearchingInSource": {
+        "placeholders": {
+            "source": { "type": "String" },
+            "language": { "type": "String" }
+        }
+    },
+    "offlineChapterFallback": "Chapter",
+    "offlineChapterId": "Chapter {id}",
+    "@offlineChapterId": {
+        "placeholders": {
+            "id": { "type": "int" }
+        }
+    },
+    "loadingEllipsis": "…",
     "readerPagesLoadFailed": "Could not load chapter pages",
     "readerTapPreviousPage": "Previous page",
     "readerTapNextPage": "Next page",
@@ -1456,6 +1533,12 @@
     "logOut": "Log Out",
     "@logOut": {
         "description": "Log out button label"
+    },
+    "trackerLogOutConfirm": "Log out from {tracker}?",
+    "@trackerLogOutConfirm": {
+        "placeholders": {
+            "tracker": { "type": "String" }
+        }
     },
     "loggedIn": "Logged in",
     "@loggedIn": {

@@ -12,6 +12,7 @@ import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../widgets/input_popup/domain/settings_prop_type.dart';
 import '../../../../widgets/input_popup/settings_prop_tile.dart';
+import '../../../../widgets/settings/settings_subpage_scaffold.dart';
 import '../../controller/server_controller.dart';
 import '../../domain/settings/settings.dart';
 import 'data/browse_settings_repository.dart';
@@ -26,8 +27,8 @@ class BrowseSettingsScreen extends ConsumerWidget {
     final serverSettings = ref.watch(settingsProvider);
     final BrowserSettingsDto? browseSettings = serverSettings.valueOrNull;
     onRefresh() => ref.refresh(settingsProvider.future);
-    return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.browse)),
+    return SettingsSubpageScaffold(
+      title: context.l10n.browse,
       body: RefreshIndicator(
         onRefresh: onRefresh,
         child: ListTileTheme(

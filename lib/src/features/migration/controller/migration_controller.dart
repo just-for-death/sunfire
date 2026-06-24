@@ -199,6 +199,11 @@ class MigrationExecution extends _$MigrationExecution {
           .read(migrationRepositoryProvider)
           .migrateManga(fromMangaId, toMangaId, options);
 
+      if (_isCancelled) {
+        _setCancelledState();
+        return null;
+      }
+
       // Update final progress based on result
       if (result?.success == true) {
         state = const MigrationProgress(

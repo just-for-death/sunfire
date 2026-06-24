@@ -12,6 +12,7 @@ import '../../../../constants/endpoints.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/launch_url_in_web.dart';
 import '../../../../utils/misc/toast/toast.dart';
+import '../../../../widgets/settings/settings_subpage_scaffold.dart';
 import '../../controller/server_controller.dart';
 import 'widget/authentication/authentication_section.dart';
 import 'widget/client/client_section.dart';
@@ -29,10 +30,8 @@ class ServerScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final serverSettings = ref.watch(settingsProvider);
     onRefresh() => ref.refresh(settingsProvider.future);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.server),
-      ),
+    return SettingsSubpageScaffold(
+      title: context.l10n.server,
       body: RefreshIndicator(
         onRefresh: onRefresh,
         child: ListTileTheme(
