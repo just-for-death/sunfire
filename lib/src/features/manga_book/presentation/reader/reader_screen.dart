@@ -69,7 +69,7 @@ class ReaderScreen extends HookConsumerWidget {
 
     final debounce = useRef<Timer?>(null);
     final pendingPageIndex = useRef<int?>(null);
-    final flushProgressRef = useRef<Future<void> Function(int)?>(null);
+    final progressFlushed = useRef(false);
     final resumeHintShown = useRef(false);
 
     final updateLastRead = useCallback((int currentPage) async {
@@ -97,7 +97,12 @@ class ReaderScreen extends HookConsumerWidget {
       pendingPageIndex.value = null;
     }, [chapter.valueOrNull, chapterPages.valueOrNull]);
 
-    flushProgressRef.value = updateLastRead;
+    final flushProgress = useCallback((int index) async {
+      if (progressFlushed.value) return;
+      progressFlushed.value = true;
+      debounce.value?.cancel();
+      await updateLastRead(index);
+    }, [updateLastRead]);
 
     useEffect(() {
       WakelockPlusBridge.register(
@@ -109,9 +114,8 @@ class ReaderScreen extends HookConsumerWidget {
       return () {
         debounce.value?.cancel();
         final pending = pendingPageIndex.value;
-        final flush = flushProgressRef.value;
-        if (pending != null && flush != null) {
-          unawaited(flush(pending));
+        if (pending != null) {
+          unawaited(flushProgress(pending));
         }
         ReaderSession.leave();
       };
@@ -314,10 +318,9 @@ class ReaderScreen extends HookConsumerWidget {
     return PopScope(
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) {
-          debounce.value?.cancel();
           final pending = pendingPageIndex.value;
           if (pending != null) {
-            await updateLastRead(pending);
+            await flushProgress(pending);
           }
           ref.invalidate(chapterProviderWithIndex);
           ref.invalidate(mangaChapterListProvider(mangaId: mangaId));
