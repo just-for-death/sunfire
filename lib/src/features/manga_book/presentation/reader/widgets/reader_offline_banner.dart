@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import '../../../../settings/presentation/server/server_connectivity.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
+import '../../../../settings/presentation/server/server_connectivity.dart';
 
 /// Compact offline notice shown at the top of the reader when the server is down.
 class ReaderOfflineBanner extends ConsumerWidget {

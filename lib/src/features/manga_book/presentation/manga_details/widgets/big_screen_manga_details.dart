@@ -70,7 +70,8 @@ class BigScreenMangaDetails extends ConsumerWidget {
           const VerticalDivider(width: 0),
           Expanded(
             child: chapterList.showUiWhenData(context, (data) {
-              if (data.isBlank) {
+              final chapters = data ?? const <ChapterDto>[];
+              if (chapters.isBlank) {
                 return Emoticons(
                   title: context.l10n.noChaptersFound,
                   button: TextButton(
@@ -91,15 +92,15 @@ class BigScreenMangaDetails extends ConsumerWidget {
                         opacity: animation,
                         child: SizeTransition(
                           sizeFactor: animation,
-                          axisAlignment: -1,
+                          alignment: Alignment.topCenter,
                           child: child,
                         ),
                       ),
                       child: ListTile(
-                        key: ValueKey(data.length),
+                        key: ValueKey(chapters.length),
                         contentPadding: EdgeInsets.zero,
                         title: Text(
-                          context.l10n.noOfChapters(data.length),
+                          context.l10n.noOfChapters(chapters.length),
                         ),
                       ),
                     ),
@@ -108,11 +109,11 @@ class BigScreenMangaDetails extends ConsumerWidget {
                     child: ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
                       itemBuilder: (context, index) {
-                        if (data.length == index) {
+                        if (chapters.length == index) {
                           return const ListTile();
                         }
-                        final key = ValueKey("${data[index].id}");
-                        final chapter = data[index];
+                        final key = ValueKey("${chapters[index].id}");
+                        final chapter = chapters[index];
                         return ChapterListTile(
                           key: key,
                           manga: manga,
@@ -129,7 +130,7 @@ class BigScreenMangaDetails extends ConsumerWidget {
                           },
                         );
                       },
-                      itemCount: data.length + 1,
+                      itemCount: chapters.length + 1,
                     ),
                   ),
                 ],

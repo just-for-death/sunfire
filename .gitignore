@@ -51,3 +51,6 @@ app.*.map.json
 android/.gradle/
 **/local.properties
 android/key.properties
+
+# FVM Version Cache
+.fvm/

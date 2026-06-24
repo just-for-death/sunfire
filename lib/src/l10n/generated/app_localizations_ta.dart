@@ -1200,6 +1200,16 @@ class AppLocalizationsTa extends AppLocalizations {
   String get serverOfflineDismissA11y => 'Dismiss offline notice';
 
   @override
+  String get notificationsDisabledBanner =>
+      'Notifications are off — chapter updates won\'t alert you';
+
+  @override
+  String get notificationsOpenSettingsA11y => 'Open notification settings';
+
+  @override
+  String get notificationsEnableA11y => 'Enable notifications';
+
+  @override
   String get settings => 'அமைப்புகள்';
 
   @override
@@ -1331,6 +1341,12 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get history => 'வரலாறு';
+
+  @override
+  String get historyContinueReading => 'Continue Reading';
+
+  @override
+  String get historyRecent => 'Recent';
 
   @override
   String get searchHistory => 'தேடல் வரலாறு ...';

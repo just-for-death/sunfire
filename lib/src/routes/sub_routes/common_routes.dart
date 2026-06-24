@@ -39,13 +39,10 @@ class ReaderRoute extends GoRouteData {
     final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return CustomTransitionPage(
       key: state.pageKey,
-      child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiStyle.hidden,
-        child: ReaderScreen(
-          mangaId: mangaId,
-          chapterId: chapterId,
-          showReaderLayoutAnimation: showReaderLayoutAnimation,
-        ),
+      child: ReaderScreen(
+        mangaId: mangaId,
+        chapterId: chapterId,
+        showReaderLayoutAnimation: showReaderLayoutAnimation,
       ),
       transitionDuration: disableAnimations ? Duration.zero : const Duration(milliseconds: 300),
       reverseTransitionDuration:

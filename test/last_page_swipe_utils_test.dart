@@ -36,7 +36,7 @@ void main() {
 
     test('isAtLastPageReliable prefers loaded pages over metadata', () {
       final chapterPages = Fragment$ChapterPagesDto(
-        chapter: const Fragment$ChapterPagesDto$chapter(
+        chapter: Fragment$ChapterPagesDto$chapter(
           id: 1,
           pageCount: 10,
         ),

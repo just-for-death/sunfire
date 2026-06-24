@@ -5,8 +5,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
@@ -17,6 +17,7 @@ import '../../../../widgets/custom_circular_progress_indicator.dart';
 import '../../../../widgets/emoticons.dart';
 import '../../../history/presentation/history_controller.dart';
 import '../../../settings/presentation/reader/widgets/reader_ignore_safe_area_tile/reader_ignore_safe_area_tile.dart';
+import '../../../settings/presentation/reader/widgets/reader_mode_tile/reader_mode_tile.dart';
 import '../../../settings/presentation/reader/widgets/reader_orientation_tile/reader_orientation_tile.dart';
 import '../../data/manga_book/manga_book_repository.dart';
 import '../../domain/chapter/chapter_model.dart';
@@ -44,6 +45,18 @@ class ReaderScreen extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (mangaId <= 0 || chapterId <= 0) {
+      return Scaffold(
+        body: Emoticons(
+          title: 'Invalid chapter link',
+          button: TextButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            child: Text(context.l10n.close),
+          ),
+        ),
+      );
+    }
+
     final mangaProvider = mangaWithIdProvider(mangaId: mangaId);
     final chapterProviderWithIndex = chapterProvider(chapterId: chapterId);
     final chapterPages = ref.watch(chapterPagesProvider(chapterId: chapterId));
@@ -58,22 +71,10 @@ class ReaderScreen extends HookConsumerWidget {
 
     useEffect(() {
       ReaderSession.enter();
-      final lock = orientationLock ?? ReaderOrientationLock.auto;
-      final orientations = switch (lock) {
-        ReaderOrientationLock.portrait => [
-            DeviceOrientation.portraitUp,
-            DeviceOrientation.portraitDown,
-          ],
-        ReaderOrientationLock.landscape => [
-            DeviceOrientation.landscapeLeft,
-            DeviceOrientation.landscapeRight,
-          ],
-        ReaderOrientationLock.auto => DeviceOrientation.values,
-      };
-      SystemChrome.setPreferredOrientations(orientations);
+      ReaderSession.applyOrientationLock(orientationLock);
+      ReaderSession.onEnterReader(chromeVisible: false);
       return () {
         debounce.value?.cancel();
-        SystemChrome.setPreferredOrientations(DeviceOrientation.values);
         ReaderSession.leave();
       };
     }, [orientationLock]);
@@ -130,10 +131,6 @@ class ReaderScreen extends HookConsumerWidget {
         final chapterPagesValue = chapterPages.valueOrNull;
         if (chapterValue == null || chapterPagesValue == null) return;
 
-        if ((chapterValue.isRead).ifNull()) {
-          return;
-        }
-
         final activeDebounce = debounce.value;
         if (activeDebounce?.isActive ?? false) {
           activeDebounce!.cancel();
@@ -158,7 +155,8 @@ class ReaderScreen extends HookConsumerWidget {
       required ChapterDto chapterData,
       required ChapterPagesDto chapterPagesData,
     }) {
-      final readerMode = mangaData.metaData.readerMode ?? defaultReaderMode;
+      final readerMode =
+          mangaData.metaData.readerMode ?? defaultReaderMode ?? ReaderMode.defaultReader;
       return switch (readerMode) {
         ReaderMode.singleVertical => SinglePageReaderMode(
             chapter: chapterData,
@@ -214,7 +212,7 @@ class ReaderScreen extends HookConsumerWidget {
             showReaderLayoutAnimation: showReaderLayoutAnimation,
             chapterPages: chapterPagesData,
           ),
-        ReaderMode.defaultReader || null =>
+        ReaderMode.defaultReader =>
           _buildDefaultReaderMode(
             defaultReaderMode: defaultReaderMode,
             chapterData: chapterData,
