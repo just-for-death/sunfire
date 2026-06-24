@@ -9,6 +9,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../data/local_downloads/local_downloads_service.dart';
+import '../../reader/controller/reader_controller.dart';
 
 part 'local_downloads_controller.g.dart';
 
@@ -63,6 +64,7 @@ class LocalChapterDownload extends _$LocalChapterDownload {
         },
       );
       state = LocalDownloadState.finished;
+      ref.invalidate(chapterPagesProvider(chapterId: chapterId));
     } catch (_) {
       state = LocalDownloadState.error;
     }
@@ -75,6 +77,7 @@ class LocalChapterDownload extends _$LocalChapterDownload {
       final service = ref.read(localDownloadsServiceProvider);
       await service.deleteChapter(chapterId);
       state = LocalDownloadState.idle;
+      ref.invalidate(chapterPagesProvider(chapterId: chapterId));
     } catch (_) {
       state = LocalDownloadState.error;
     }

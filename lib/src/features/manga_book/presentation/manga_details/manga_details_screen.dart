@@ -71,7 +71,9 @@ class MangaDetailsScreen extends HookConsumerWidget {
       await mangaRefresh(onlineFetch);
       await chapterListRefresh(onlineFetch);
       if (context.mounted && onlineFetch) {
-        if (manga.hasError) {
+        final mangaState = ref.read(mangaProvider);
+        final chapterState = ref.read(chapterListProvider);
+        if (mangaState.hasError || chapterState.hasError) {
           ref.read(toastProvider)?.showError(
                 context.l10n.errorSomethingWentWrong,
               );
@@ -82,7 +84,7 @@ class MangaDetailsScreen extends HookConsumerWidget {
               );
         }
       }
-    }, [context, mangaRefresh, chapterListRefresh]);
+    }, [context, mangaRefresh, chapterListRefresh, mangaProvider, chapterListProvider]);
 
     useEffect(() {
       if (filteredChapterList.isNotLoading && manga.isNotLoading) refresh();

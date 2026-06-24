@@ -43,6 +43,9 @@ class NavigationShellScreen extends HookConsumerWidget {
           );
         }
       },
+      error: (error, _) {
+        versionResult.showToastOnError(toast);
+      },
     );
   }
 

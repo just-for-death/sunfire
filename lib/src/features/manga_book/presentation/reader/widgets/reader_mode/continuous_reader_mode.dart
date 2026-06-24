@@ -84,7 +84,7 @@ class ContinuousReaderMode extends HookConsumerWidget {
     final ObjectRef<Timer?> positionUpdateTimer = useRef<Timer?>(null);
     final ValueNotifier<bool> isUserScrolling = useState(false);
     final ValueNotifier<bool> isNavigatingFromSlider = useState(false);
-    final ValueNotifier<int> lastReportedIndex = useState(currentIndex.value);
+    final ValueNotifier<int> lastReportedIndex = useState(-1);
 
     // Dispose timer properly
     useEffect(() {
@@ -179,6 +179,7 @@ class ContinuousReaderMode extends HookConsumerWidget {
         positionsListener,
         isUserScrolling,
         isAnimationEnabled,
+        pageCount: pageCount,
         isNext: false,
       ),
       onNext: () => _handleNavigationSafely(
@@ -186,6 +187,7 @@ class ContinuousReaderMode extends HookConsumerWidget {
         positionsListener,
         isUserScrolling,
         isAnimationEnabled,
+        pageCount: pageCount,
         isNext: true,
       ),
       child: ScrollablePositionedList.separated(
@@ -335,7 +337,8 @@ class ContinuousReaderMode extends HookConsumerWidget {
       ItemPositionsListener positionsListener,
       ValueNotifier<bool> isUserScrolling,
       bool isAnimationEnabled,
-      {required bool isNext}) {
+      {required int pageCount, required bool isNext}) {
+    if (pageCount <= 0) return;
     // Don't interfere if user is actively scrolling
     if (isUserScrolling.value) return;
 
@@ -359,6 +362,7 @@ class ContinuousReaderMode extends HookConsumerWidget {
     final double alignment;
 
     if (isNext) {
+      if (currentPosition.index >= pageCount - 1) return;
       // Move to next item with minimal scroll
       if (currentPosition.itemTrailingEdge > 0.8) {
         targetIndex = currentPosition.index + 1;
@@ -369,9 +373,12 @@ class ContinuousReaderMode extends HookConsumerWidget {
       }
     } else {
       // Move to previous item with minimal scroll
+      if (currentPosition.index <= 0 &&
+          currentPosition.itemLeadingEdge >= 0.2) {
+        return;
+      }
       if (currentPosition.itemLeadingEdge < 0.2) {
-        targetIndex =
-            (currentPosition.index - 1).clamp(0, double.infinity).toInt();
+        targetIndex = currentPosition.index - 1;
         alignment = 0.0;
       } else {
         targetIndex = currentPosition.index;
