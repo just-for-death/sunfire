@@ -46,12 +46,17 @@ class SinglePageReaderMode extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cacheManager = useMemoized(() => DefaultCacheManager());
-    final scrollController = usePageController(
-      initialPage: chapter.isRead.ifNull()
+    final pageCount = chapterPages.pages.isNotEmpty
+        ? chapterPages.pages.length
+        : chapterPages.chapter.pageCount;
+    final initialPage = _clampPageIndex(
+      chapter.isRead.ifNull()
           ? 0
           : chapter.lastPageRead.getValueOnNullOrNegative(),
+      pageCount,
     );
-    final currentIndex = useState(scrollController.initialPage);
+    final scrollController = usePageController(initialPage: initialPage);
+    final currentIndex = useState(initialPage);
 
     useEffect(() {
       if (onPageChanged != null) onPageChanged!(currentIndex.value);
@@ -153,5 +158,10 @@ class SinglePageReaderMode extends HookConsumerWidget {
         itemCount: chapterPages.pages.isEmpty ? 1 : chapterPages.pages.length,
       ),
     );
+  }
+
+  static int _clampPageIndex(int index, int pageCount) {
+    if (pageCount <= 0) return 0;
+    return index.clamp(0, pageCount - 1);
   }
 }

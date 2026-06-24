@@ -106,7 +106,7 @@ class SmallScreenMangaDetails extends ConsumerWidget {
                       key: ValueKey("${filteredChapterList[index].id}"),
                       manga: manga,
                       chapter: filteredChapterList[index],
-                      updateData: () => onRefresh(false),
+                      updateData: () => onListRefresh(false),
                       isSelected: selectedChapters.value.containsKey(
                         filteredChapterList[index].id,
                       ),
@@ -125,7 +125,7 @@ class SmallScreenMangaDetails extends ConsumerWidget {
                   child: Emoticons(
                     title: context.l10n.noChaptersFound,
                     button: TextButton(
-                      onPressed: () => onDescriptionRefresh(true),
+                      onPressed: () => onListRefresh(true),
                       child: Text(context.l10n.refresh),
                     ),
                   ),

@@ -11,7 +11,9 @@ abstract final class NotificationNavigation {
 
   static int? _pendingNotificationId;
   static int _pendingAttempts = 0;
-  static const int _maxPendingAttempts = 120;
+  static const int _maxPendingAttempts = 600;
+  static int _delayedRetries = 0;
+  static const int _maxDelayedRetries = 5;
 
   /// Call after [NotificationService.init] when the app was launched from a notification.
   static void scheduleTap(int? notificationId) {
@@ -37,8 +39,15 @@ abstract final class NotificationNavigation {
     if (id == null) return;
 
     if (_pendingAttempts >= _maxPendingAttempts) {
+      if (_delayedRetries < _maxDelayedRetries) {
+        _delayedRetries++;
+        _pendingAttempts = 0;
+        Future.delayed(const Duration(seconds: 1), processPending);
+        return;
+      }
       _pendingNotificationId = null;
       _pendingAttempts = 0;
+      _delayedRetries = 0;
       return;
     }
     _pendingAttempts++;
@@ -51,6 +60,7 @@ abstract final class NotificationNavigation {
 
     _pendingNotificationId = null;
     _pendingAttempts = 0;
+    _delayedRetries = 0;
     _navigate(context, id);
   }
 

@@ -12,10 +12,12 @@ import '../../../../../constants/app_sizes.dart';
 import '../../../../../constants/enum.dart';
 import '../../../../../routes/router_config.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
+import '../../../../settings/presentation/reader/widgets/reader_mode_tile/reader_mode_tile.dart';
 import '../../../../settings/presentation/reader/widgets/reader_navigation_layout_tile/reader_navigation_layout_tile.dart';
 import '../../../domain/chapter/chapter_model.dart';
 import '../../../domain/manga/manga_model.dart';
 import '../../manga_details/controller/manga_details_controller.dart';
+import '../utils/last_page_swipe_utils.dart';
 
 class ChapterSeparator extends ConsumerWidget {
   const ChapterSeparator({
@@ -34,6 +36,21 @@ class ChapterSeparator extends ConsumerWidget {
           mangaId: manga.id, chapterId: chapter.id),
     );
     final navigationLayout = ref.watch(readerNavigationLayoutKeyProvider);
+    final defaultReaderMode = ref.watch(readerModeKeyProvider);
+    final resolvedReaderMode = LastPageSwipeUtils.resolveActualReaderMode(
+      mangaReaderMode:
+          manga.metaData.readerMode ?? ReaderMode.defaultReader,
+      defaultReaderMode: defaultReaderMode,
+    );
+    final transVertical = switch (resolvedReaderMode) {
+      ReaderMode.singleVertical ||
+      ReaderMode.continuousVertical ||
+      ReaderMode.webtoon =>
+        false,
+      _ => true,
+    };
+    final isRTL = resolvedReaderMode == ReaderMode.singleHorizontalRTL ||
+        resolvedReaderMode == ReaderMode.continuousHorizontalRTL;
     final showPrevNextButtons = manga.metaData.readerNavigationLayout ==
             ReaderNavigationLayout.disabled ||
         ((manga.metaData.readerNavigationLayout == null ||
@@ -56,6 +73,8 @@ class ChapterSeparator extends ConsumerWidget {
                   onPressed: () => ReaderRoute(
                     mangaId: nextPrevChapterPair!.second!.mangaId,
                     chapterId: nextPrevChapterPair.second!.id,
+                    toPrev: !isRTL,
+                    transVertical: transVertical,
                   ).pushReplacement(context),
                   child: Text(
                     context.l10n.previousChapter(
@@ -87,6 +106,8 @@ class ChapterSeparator extends ConsumerWidget {
                   onPressed: () => ReaderRoute(
                     mangaId: nextPrevChapterPair!.first!.mangaId,
                     chapterId: nextPrevChapterPair.first!.id,
+                    toPrev: isRTL,
+                    transVertical: transVertical,
                   ).pushReplacement(context),
                   child: Text(
                     context.l10n.nextChapter(
