@@ -11,6 +11,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/misc/toast/toast.dart';
 import '../../../../widgets/emoticons.dart';
+import '../../../../widgets/settings/settings_subpage_scaffold.dart';
 import 'controller/edit_category_controller.dart';
 import 'widgets/category_create_fab.dart';
 import 'widgets/category_tile.dart';
@@ -30,10 +31,8 @@ class EditCategoryScreen extends HookConsumerWidget {
       return;
     }, [categoryList.valueOrNull]);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.editCategory),
-      ),
+    return SettingsSubpageScaffold(
+      title: context.l10n.editCategory,
       floatingActionButton: categoryList.asError?.error != null
           ? null
           : const CategoryCreateFab(),

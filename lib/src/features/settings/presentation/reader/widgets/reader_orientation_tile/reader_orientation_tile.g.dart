@@ -2,9 +2,14 @@
 
 part of 'reader_orientation_tile.dart';
 
-String _$readerOrientationLockKeyHash() =>
-    r'reader_orientation_lock_key_hash_placeholder';
+// **************************************************************************
+// RiverpodGenerator
+// **************************************************************************
 
+String _$readerOrientationLockKeyHash() =>
+    r'd502cc5a13685e26ca4c77581c843d3cd87a9602';
+
+/// See also [ReaderOrientationLockKey].
 @ProviderFor(ReaderOrientationLockKey)
 final readerOrientationLockKeyProvider = AutoDisposeNotifierProvider<
     ReaderOrientationLockKey, ReaderOrientationLock?>.internal(
@@ -17,4 +22,7 @@ final readerOrientationLockKeyProvider = AutoDisposeNotifierProvider<
   allTransitiveDependencies: null,
 );
 
-typedef _$ReaderOrientationLockKey = AutoDisposeNotifier<ReaderOrientationLock?>;
+typedef _$ReaderOrientationLockKey
+    = AutoDisposeNotifier<ReaderOrientationLock?>;
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

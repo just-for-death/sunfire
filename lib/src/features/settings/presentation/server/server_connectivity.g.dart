@@ -29,7 +29,7 @@ final serverConnectivityHttpGetProvider =
 typedef ServerConnectivityHttpGetRef
     = AutoDisposeProviderRef<Future<http.Response> Function(Uri uri)>;
 String _$serverConnectivityHash() =>
-    r'8037735558c9158ce5720206ff607bb19695c070';
+    r'3df5ecd1ffd82457b133ffd49ef0b1293f876a0a';
 
 /// See also [ServerConnectivity].
 @ProviderFor(ServerConnectivity)
