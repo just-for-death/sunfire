@@ -10,6 +10,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../utils/extensions/custom_extensions.dart';
 import '../../../utils/misc/toast/toast.dart';
+import '../../../widgets/settings/settings_subpage_scaffold.dart';
 import '../domain/tracker_model.dart';
 import 'controller/tracker_controller.dart';
 import 'widgets/tracker_login_dialog.dart';
@@ -21,8 +22,8 @@ class TrackerSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final trackersAsync = ref.watch(trackersProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: Text('Trackers')),
+    return SettingsSubpageScaffold(
+      title: context.l10n.trackers,
       body: trackersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -122,13 +123,13 @@ class _TrackerTile extends ConsumerWidget {
                 side: BorderSide(color: context.theme.colorScheme.error),
               ),
               icon: const Icon(Icons.logout_rounded, size: 18),
-              label: Text('Log Out'),
+              label: Text(context.l10n.logOut),
               onPressed: () async {
                 final confirmed = await showDialog<bool>(
                   context: context,
                   builder: (_) => AlertDialog(
-                    title: Text('Log Out'),
-                    content: Text('Log out from ${tracker.name}?'),
+                    title: Text(context.l10n.logOut),
+                    content: Text(context.l10n.trackerLogOutConfirm(tracker.name)),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context, false),
@@ -136,7 +137,7 @@ class _TrackerTile extends ConsumerWidget {
                       ),
                       FilledButton(
                         onPressed: () => Navigator.pop(context, true),
-                        child: Text('Log Out'),
+                        child: Text(context.l10n.logOut),
                       ),
                     ],
                   ),
@@ -154,7 +155,7 @@ class _TrackerTile extends ConsumerWidget {
             )
           : FilledButton.icon(
               icon: const Icon(Icons.login_rounded, size: 18),
-              label: Text('Log In'),
+              label: Text(context.l10n.logIn),
               onPressed: () async {
                 await showDialog(
                   context: context,

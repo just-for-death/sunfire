@@ -99,11 +99,11 @@ class DownloadsScreen extends ConsumerWidget {
               tabs: [
                 Tab(
                   icon: const Icon(Icons.cloud_download_rounded),
-                  text: 'Server',
+                  text: context.l10n.downloadsTabServer,
                 ),
                 Tab(
                   icon: const Icon(Icons.download_done_rounded),
-                  text: 'Offline',
+                  text: context.l10n.downloadsTabOffline,
                 ),
               ],
               indicator: BoxDecoration(
@@ -145,7 +145,7 @@ class DownloadsScreen extends ConsumerWidget {
                           children: [
                             if (inProgress.isNotEmpty) ...[
                               _SectionHeader(
-                                  label: 'In progress',
+                                  label: context.l10n.downloadsInProgress,
                                   icon: Icons.downloading_rounded),
                               ...inProgress
                                   .asMap()
@@ -160,7 +160,8 @@ class DownloadsScreen extends ConsumerWidget {
                             ],
                             if (queued.isNotEmpty) ...[
                               _SectionHeader(
-                                  label: 'Queued', icon: Icons.queue_rounded),
+                                  label: context.l10n.downloadsQueued,
+                                  icon: Icons.queue_rounded),
                               ...queued
                                   .asMap()
                                   .entries
@@ -227,8 +228,10 @@ class _OfflineTab extends ConsumerWidget {
             if (bytes == 0) return const SizedBox.shrink();
             final mb = bytes / (1024 * 1024);
             final label = mb >= 1
-                ? '${mb.toStringAsFixed(1)} MB used on device'
-                : '${(bytes / 1024).toStringAsFixed(0)} KB used on device';
+                ? context.l10n.offlineStorageUsedMb(mb.toStringAsFixed(1))
+                : context.l10n.offlineStorageUsedKb(
+                    (bytes / 1024).toStringAsFixed(0),
+                  );
             return Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

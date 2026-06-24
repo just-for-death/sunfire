@@ -10,18 +10,41 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../data/local_downloads/local_downloads_service.dart';
 import '../../../data/manga_book/manga_book_repository.dart';
 import '../../../domain/chapter/chapter_model.dart';
+import '../../../domain/chapter/graphql/__generated__/fragment.graphql.dart';
 import '../../../domain/chapter_page/chapter_page_model.dart';
 import '../../../domain/chapter_page/graphql/__generated__/fragment.graphql.dart';
 
 part 'reader_controller.g.dart';
 
+ChapterDto _chapterFromOfflineManifest(OfflineChapterManifest manifest) {
+  return Fragment$ChapterDto(
+    chapterNumber: manifest.chapterNumber,
+    fetchedAt: '0',
+    id: manifest.chapterId,
+    isBookmarked: false,
+    isDownloaded: true,
+    isRead: false,
+    lastPageRead: 0,
+    lastReadAt: '0',
+    mangaId: manifest.mangaId,
+    name: manifest.chapterName.isNotEmpty
+        ? manifest.chapterName
+        : 'Chapter ${manifest.chapterId}',
+    pageCount: manifest.pageCount,
+    sourceOrder: 0,
+    uploadDate: '0',
+    url: '',
+    meta: const [],
+  );
+}
+
 Future<ChapterPagesDto?> _chapterPagesWithLocalFallback(
   Ref ref, {
   required int chapterId,
 }) async {
-  final localPages = await ref
-      .read(localDownloadsServiceProvider)
-      .getLocalPages(chapterId);
+  final service = ref.read(localDownloadsServiceProvider);
+  final localPages = await service.getLocalPages(chapterId);
+  final offlineManifest = await service.getOfflineManifest(chapterId);
 
   ChapterPagesDto? remote;
   try {
@@ -42,6 +65,16 @@ Future<ChapterPagesDto?> _chapterPagesWithLocalFallback(
 
   if (localPages == null || localPages.isEmpty) return null;
 
+  if (offlineManifest != null) {
+    return ChapterPagesDto(
+      chapter: Fragment$ChapterPagesDto$chapter(
+        id: offlineManifest.chapterId,
+        pageCount: localPages.length,
+      ),
+      pages: localPages,
+    );
+  }
+
   ChapterDto? chapter;
   try {
     chapter = await ref
@@ -60,12 +93,29 @@ Future<ChapterPagesDto?> _chapterPagesWithLocalFallback(
   );
 }
 
+Future<ChapterDto?> _chapterWithOfflineFallback(
+  Ref ref, {
+  required int chapterId,
+}) async {
+  try {
+    final chapter = await ref
+        .read(mangaBookRepositoryProvider)
+        .getChapter(chapterId: chapterId);
+    if (chapter != null) return chapter;
+  } catch (_) {}
+
+  final manifest =
+      await ref.read(localDownloadsServiceProvider).getOfflineManifest(chapterId);
+  if (manifest == null) return null;
+  return _chapterFromOfflineManifest(manifest);
+}
+
 @riverpod
 FutureOr<ChapterDto?> chapter(
   Ref ref, {
   required int chapterId,
 }) =>
-    ref.watch(mangaBookRepositoryProvider).getChapter(chapterId: chapterId);
+    _chapterWithOfflineFallback(ref, chapterId: chapterId);
 
 @riverpod
 Future<ChapterPagesDto?> chapterPages(Ref ref, {required int chapterId}) =>

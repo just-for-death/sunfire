@@ -11,6 +11,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../../../constants/db_keys.dart';
 import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/mixin/shared_preferences_client_mixin.dart';
+import '../../../../../../widgets/settings/adaptive_list_tile.dart';
 
 part 'reader_brightness_slider.g.dart';
 
@@ -28,7 +29,7 @@ class ReaderBrightnessSlider extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final value =
         ref.watch(readerBrightnessOverlayProvider) ?? DBKeys.readerBrightnessOverlay.initial;
-    return ListTile(
+    return AdaptiveListTile(
       leading: const Icon(Icons.brightness_4_rounded),
       title: Text(context.l10n.readerBrightnessOverlay),
       subtitle: Column(

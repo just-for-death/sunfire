@@ -83,6 +83,19 @@ enum ReaderOrientationLock {
       };
 }
 
+enum ReaderDoublePageSpread {
+  auto,
+  always,
+  never;
+
+  String toLocale(BuildContext context) => switch (this) {
+        ReaderDoublePageSpread.auto => context.l10n.readerDoublePageSpreadAuto,
+        ReaderDoublePageSpread.always =>
+          context.l10n.readerDoublePageSpreadAlways,
+        ReaderDoublePageSpread.never => context.l10n.readerDoublePageSpreadNever,
+      };
+}
+
 enum MangaSort {
   alphabetical,
   dateAdded,

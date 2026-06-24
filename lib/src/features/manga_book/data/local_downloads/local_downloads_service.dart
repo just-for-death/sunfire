@@ -21,8 +21,58 @@ import '../../../../features/settings/presentation/server/widget/credential_popu
 import '../../../../global_providers/global_providers.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../data/manga_book/manga_book_repository.dart';
+import '../../domain/chapter/chapter_model.dart';
+import '../../domain/manga/manga_model.dart';
 
 part 'local_downloads_service.g.dart';
+
+/// Metadata stored alongside offline chapter pages for offline reading fallbacks.
+class OfflineChapterManifest {
+  const OfflineChapterManifest({
+    required this.chapterId,
+    required this.mangaId,
+    required this.chapterName,
+    required this.chapterNumber,
+    required this.mangaTitle,
+    required this.pageCount,
+    required this.pages,
+  });
+
+  final int chapterId;
+  final int mangaId;
+  final String chapterName;
+  final double chapterNumber;
+  final String mangaTitle;
+  final int pageCount;
+  final List<String> pages;
+
+  factory OfflineChapterManifest.fromJson(Map<String, dynamic> json) {
+    final pagesRaw = json['pages'];
+    return OfflineChapterManifest(
+      chapterId: json['chapterId'] as int? ?? 0,
+      mangaId: json['mangaId'] as int? ?? 0,
+      chapterName: json['chapterName'] as String? ?? '',
+      chapterNumber: (json['chapterNumber'] as num?)?.toDouble() ?? 0,
+      mangaTitle: json['mangaTitle'] as String? ?? '',
+      pageCount: json['pageCount'] as int? ??
+          (pagesRaw is List ? pagesRaw.length : 0),
+      pages: pagesRaw is List
+          ? pagesRaw.whereType<String>().toList()
+          : const [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'chapterId': chapterId,
+        'mangaId': mangaId,
+        'chapterName': chapterName,
+        'chapterNumber': chapterNumber,
+        'mangaTitle': mangaTitle,
+        'pageCount': pageCount,
+        'downloadedAt': DateTime.now().toIso8601String(),
+        'pages': pages,
+      };
+}
 
 class LocalDownloadsService {
   const LocalDownloadsService();
@@ -52,23 +102,52 @@ class LocalDownloadsService {
     return manifest.exists();
   }
 
-  Future<List<String>?> getLocalPages(int chapterId) async {
+  Future<OfflineChapterManifest?> getOfflineManifest(int chapterId) async {
     final manifest = await _manifestFile(chapterId);
     if (!await manifest.exists()) return null;
 
-    final raw = await manifest.readAsString();
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map<String, dynamic>) return null;
-    final pages = decoded['pages'];
-    if (pages is! List) return null;
+    try {
+      final raw = await manifest.readAsString();
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      return OfflineChapterManifest.fromJson(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> getOfflineMangaTitle(int mangaId) async {
+    if (mangaId <= 0) return null;
+    final ids = await listDownloadedChapterIds();
+    for (final chapterId in ids) {
+      final manifest = await getOfflineManifest(chapterId);
+      if (manifest?.mangaId == mangaId &&
+          manifest!.mangaTitle.isNotEmpty) {
+        return manifest.mangaTitle;
+      }
+    }
+    return null;
+  }
+
+  Future<bool> hasOfflineManga(int mangaId) async {
+    if (mangaId <= 0) return false;
+    final ids = await listDownloadedChapterIds();
+    for (final chapterId in ids) {
+      final manifest = await getOfflineManifest(chapterId);
+      if (manifest?.mangaId == mangaId) return true;
+    }
+    return false;
+  }
+
+  Future<List<String>?> getLocalPages(int chapterId) async {
+    final manifest = await getOfflineManifest(chapterId);
+    if (manifest == null || manifest.pages.isEmpty) return null;
 
     final dir = await _chapterDir(chapterId);
     final result = <String>[];
-    for (final entry in pages) {
-      if (entry is! String) continue;
+    for (final entry in manifest.pages) {
       final filePath = p.join(dir.path, entry);
       if (await File(filePath).exists()) {
-        // Use file:// so the rest of the app can treat it like a URL.
         result.add(Uri.file(filePath).toString());
       }
     }
@@ -119,6 +198,23 @@ class LocalDownloadsService {
       throw StateError('No chapter pages available for offline download');
     }
 
+    ChapterDto? chapterMeta;
+    try {
+      chapterMeta = await repo.getChapter(chapterId: chapterId);
+    } catch (_) {
+      chapterMeta = null;
+    }
+
+    MangaDto? mangaMeta;
+    final mangaId = chapterMeta?.mangaId;
+    if (mangaId != null && mangaId > 0) {
+      try {
+        mangaMeta = await repo.getManga(mangaId: mangaId);
+      } catch (_) {
+        mangaMeta = null;
+      }
+    }
+
     final total = chapterPages.pages.length;
     final dir = await _chapterDir(chapterId);
     final authType = ref.read(authTypeKeyProvider);
@@ -167,11 +263,19 @@ class LocalDownloadsService {
     }
 
     final manifest = await _manifestFile(chapterId);
-    await manifest.writeAsString(jsonEncode({
-      'chapterId': chapterId,
-      'downloadedAt': DateTime.now().toIso8601String(),
-      'pages': savedFiles,
-    }));
+    await manifest.writeAsString(
+      jsonEncode(
+        OfflineChapterManifest(
+          chapterId: chapterId,
+          mangaId: mangaId ?? 0,
+          chapterName: chapterMeta?.name ?? '',
+          chapterNumber: chapterMeta?.chapterNumber ?? 0,
+          mangaTitle: mangaMeta?.title ?? '',
+          pageCount: total,
+          pages: savedFiles,
+        ).toJson(),
+      ),
+    );
   }
 
   /// Returns total bytes used by all offline downloads in the app documents dir.

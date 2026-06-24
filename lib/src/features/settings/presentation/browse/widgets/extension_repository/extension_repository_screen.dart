@@ -8,6 +8,7 @@ import '../../../../../../utils/misc/app_utils.dart';
 import '../../../../../../utils/misc/toast/toast.dart';
 import '../../../../../../widgets/emoticons.dart';
 import '../../../../../../widgets/input_popup/widgets/text_field_dialog.dart';
+import '../../../../../../widgets/settings/settings_subpage_scaffold.dart';
 import '../../../../controller/server_controller.dart';
 import '../../data/browse_settings_repository.dart';
 
@@ -21,33 +22,37 @@ class ExtensionRepositoryScreen extends ConsumerWidget {
       ...?serverSettings.valueOrNull?.extensionRepos
     ];
     onRefresh() => ref.refresh(settingsProvider.future);
-    return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.extensionRepository)),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          String? newUrl = await showDialog<String?>(
-            context: context,
-            builder: (context) => TextFieldDialog(
-              title: context.l10n.extensionRepository,
-              hintText:
-                  context.l10n.enterProp(context.l10n.extensionRepository),
-            ),
-          );
-          if (newUrl.isNotBlank && newUrl.isUrl) {
-            final result = await AppUtils.guard(
-              () => repository.updateExtensionRepos({...repoList, newUrl!}),
-              ref.read(toastProvider),
-            );
-            if (result != null) {
-              ref.read(settingsProvider.notifier).updateState(result);
-            }
-          } else if (context.mounted) {
-            ref.read(toastProvider)?.showError(
-                context.l10n.invalidProp(context.l10n.extensionRepository));
-          }
-        },
-        child: const Icon(Icons.add_rounded),
-      ),
+
+    Future<void> addRepository() async {
+      String? newUrl = await showDialog<String?>(
+        context: context,
+        builder: (context) => TextFieldDialog(
+          title: context.l10n.extensionRepository,
+          hintText: context.l10n.enterProp(context.l10n.extensionRepository),
+        ),
+      );
+      if (newUrl.isNotBlank && newUrl.isUrl) {
+        final result = await AppUtils.guard(
+          () => repository.updateExtensionRepos({...repoList, newUrl!}),
+          ref.read(toastProvider),
+        );
+        if (result != null) {
+          ref.read(settingsProvider.notifier).updateState(result);
+        }
+      } else if (context.mounted) {
+        ref.read(toastProvider)?.showError(
+            context.l10n.invalidProp(context.l10n.extensionRepository));
+      }
+    }
+
+    return SettingsSubpageScaffold(
+      title: context.l10n.extensionRepository,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.add_rounded),
+          onPressed: addRepository,
+        ),
+      ],
       body: RefreshIndicator(
         onRefresh: onRefresh,
         child: repoList.isNotBlank

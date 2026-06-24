@@ -67,7 +67,7 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Batch Match (${targetSource.displayName})'),
+        title: Text(l10n.migrationBatchMatchTitle(targetSource.displayName)),
         elevation: 0,
       ),
       body: Column(
@@ -87,8 +87,11 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                 Expanded(
                   child: Text(
                     isMatching.value
-                        ? 'Automatically pairing ${sourceMangas.length} mangas...'
-                        : 'Found $matchedCount matches out of ${sourceMangas.length}',
+                        ? l10n.migrationBatchPairing(sourceMangas.length)
+                        : l10n.migrationBatchMatchSummary(
+                            matchedCount,
+                            sourceMangas.length,
+                          ),
                     style: context.theme.textTheme.bodyMedium?.copyWith(
                       color: context.theme.colorScheme.onSurfaceVariant,
                     ),
@@ -132,7 +135,8 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                                   // Source
                                   Expanded(
                                     child: _MiniMangaCover(
-                                        manga: sourceManga, label: 'Source'),
+                                        manga: sourceManga,
+                                        label: l10n.migrationCoverSourceLabel),
                                   ),
 
                                   // Middle icon
@@ -177,10 +181,11 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                                   Expanded(
                                     child: targetManga != null
                                         ? _MiniMangaCover(
-                                            manga: targetManga, label: 'Match')
+                                            manga: targetManga,
+                                            label: l10n.migrationCoverMatchLabel)
                                         : Center(
                                             child: Text(
-                                              'No match',
+                                              l10n.migrationNoMatch,
                                               style: TextStyle(
                                                 color: context
                                                     .theme.colorScheme.error,
@@ -248,7 +253,7 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                         );
                   },
                   icon: const Icon(Icons.move_up),
-                  label: Text('Migrate $matchedCount mangas'),
+                  label: Text(l10n.migrationMigrateButtonCount(matchedCount)),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),

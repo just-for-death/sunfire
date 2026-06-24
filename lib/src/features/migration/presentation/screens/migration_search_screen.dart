@@ -59,7 +59,7 @@ class MigrationSearchScreen extends HookConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Search in ${targetSource.displayName}'),
+        title: Text(l10n.migrationSearchInSource(targetSource.displayName)),
       ),
       body: Column(
         children: [
@@ -113,7 +113,10 @@ class MigrationSearchScreen extends HookConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Searching in ${targetSource.displayName} (${targetSource.lang.toUpperCase()})',
+                    l10n.migrationSearchingInSource(
+                      targetSource.displayName,
+                      targetSource.lang.toUpperCase(),
+                    ),
                     style: context.theme.textTheme.bodySmall?.copyWith(
                       color: context.theme.colorScheme.onSurfaceVariant,
                     ),
