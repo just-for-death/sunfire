@@ -26,6 +26,7 @@ abstract final class MobilePermissions {
     }
 
     if (Platform.isIOS) {
+      if (await isNotificationGranted()) return true;
       final iosPlugin = _plugin.resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin>();
       if (iosPlugin == null) return false;

@@ -28,6 +28,7 @@ Future<http.Response> Function(Uri uri) serverConnectivityHttpGet(Ref ref) {
 @riverpod
 class ServerConnectivity extends _$ServerConnectivity {
   Timer? _retryTimer;
+  Future<void>? _checkInFlight;
 
   /// When true, [build] does not schedule the initial [checkServer] microtask.
   /// Used by tests that call [checkServer] explicitly to avoid overlapping work.
@@ -46,8 +47,21 @@ class ServerConnectivity extends _$ServerConnectivity {
     return ServerStatus.checking;
   }
 
-  Future<void> checkServer() async {
-    state = ServerStatus.checking;
+  Future<void> checkServer() {
+    final inFlight = _checkInFlight;
+    if (inFlight != null) return inFlight;
+
+    final future = _performCheck();
+    _checkInFlight = future;
+    return future.whenComplete(() {
+      if (_checkInFlight == future) _checkInFlight = null;
+    });
+  }
+
+  Future<void> _performCheck() async {
+    if (state != ServerStatus.checking) {
+      state = ServerStatus.checking;
+    }
     try {
       final baseUrl = ref.read(serverUrlProvider) ?? DBKeys.serverUrl.initial;
       final port = ref.read(serverPortProvider);

@@ -39,6 +39,7 @@ class AboutScreen extends HookConsumerWidget {
     AsyncValue.guard(updateCallback).then(
       (value) {
         toast?.close();
+        if (!context.mounted) return;
         try {
           value.whenOrNull(
             data: (data) {

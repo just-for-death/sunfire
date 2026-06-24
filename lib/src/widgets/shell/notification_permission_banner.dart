@@ -28,7 +28,16 @@ class NotificationPermissionBanner extends HookWidget {
         return null;
       }
       refresh();
-      return null;
+
+      void onLifecycleChange(AppLifecycleState state) {
+        if (state == AppLifecycleState.resumed) {
+          refresh();
+        }
+      }
+
+      final observer = _LifecycleObserver(onLifecycleChange);
+      WidgetsBinding.instance.addObserver(observer);
+      return () => WidgetsBinding.instance.removeObserver(observer);
     }, const []);
 
     if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
@@ -114,4 +123,12 @@ class NotificationPermissionBanner extends HookWidget {
       ),
     );
   }
+}
+
+class _LifecycleObserver with WidgetsBindingObserver {
+  _LifecycleObserver(this.onChange);
+  final void Function(AppLifecycleState state) onChange;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) => onChange(state);
 }

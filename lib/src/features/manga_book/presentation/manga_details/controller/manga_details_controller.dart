@@ -18,6 +18,39 @@ import '../../../domain/manga/manga_model.dart';
 
 part 'manga_details_controller.g.dart';
 
+int _compareChapters(
+  ChapterDto m1,
+  ChapterDto m2, {
+  required ChapterSort sortedBy,
+  required bool sortedDirection,
+}) {
+  final sortDirToggle = sortedDirection ? 1 : -1;
+  return (switch (sortedBy) {
+        ChapterSort.fetchedDate => (int.tryParse(m1.fetchedAt) ?? 0)
+            .compareTo(int.tryParse(m2.fetchedAt) ?? 0),
+        ChapterSort.source => m1.index.compareTo(m2.index),
+        ChapterSort.uploadDate => (int.tryParse(m1.uploadDate) ?? 0)
+            .compareTo(int.tryParse(m2.uploadDate) ?? 0),
+      }) *
+      sortDirToggle;
+}
+
+List<ChapterDto> _sortedChapterList(
+  List<ChapterDto> chapters, {
+  required ChapterSort sortedBy,
+  required bool sortedDirection,
+}) {
+  return [...chapters]
+    ..sort(
+      (a, b) => _compareChapters(
+        a,
+        b,
+        sortedBy: sortedBy,
+        sortedDirection: sortedDirection,
+      ),
+    );
+}
+
 @riverpod
 class MangaWithId extends _$MangaWithId {
   @override
@@ -105,8 +138,8 @@ AsyncValue<List<ChapterDto>?> mangaChapterListWithFilter(
   final chapterFilterDownloaded =
       ref.watch(mangaChapterFilterDownloadedProvider);
   final chapterFilterBookmark = ref.watch(mangaChapterFilterBookmarkedProvider);
-  final ChapterSort sortedBy = ref.watch(mangaChapterSortProvider) ??
-      DBKeys.chapterSortDirection.initial;
+  final ChapterSort sortedBy =
+      ref.watch(mangaChapterSortProvider) ?? DBKeys.chapterSort.initial;
   final sortedDirection =
       ref.watch(mangaChapterSortDirectionProvider).ifNull(true);
 
@@ -136,17 +169,12 @@ AsyncValue<List<ChapterDto>?> mangaChapterListWithFilter(
     return true;
   }
 
-  int applyChapterSort(ChapterDto m1, ChapterDto m2) {
-    final sortDirToggle = (sortedDirection ? 1 : -1);
-    return (switch (sortedBy) {
-          ChapterSort.fetchedDate => (int.tryParse(m1.fetchedAt) ?? 0)
-              .compareTo(int.tryParse(m2.fetchedAt) ?? 0),
-          ChapterSort.source => (m1.index).compareTo(m2.index),
-          ChapterSort.uploadDate => (int.tryParse(m1.uploadDate) ?? 0)
-              .compareTo(int.tryParse(m2.uploadDate) ?? 0),
-        }) *
-        sortDirToggle;
-  }
+  int applyChapterSort(ChapterDto m1, ChapterDto m2) => _compareChapters(
+        m1,
+        m2,
+        sortedBy: sortedBy,
+        sortedDirection: sortedDirection,
+      );
 
   return chapterList.copyWithData(
     (data) => [...?data?.where(applyChapterFilter)]..sort(applyChapterSort),
@@ -185,22 +213,29 @@ ChapterDto? firstUnreadInFilteredChapterList(
 }) {
   final isAscSorted = ref.watch(mangaChapterSortDirectionProvider) ??
       DBKeys.chapterSortDirection.initial;
-  final filteredList = ref
-      .watch(mangaChapterListWithFilterProvider(mangaId: mangaId))
-      .valueOrNull;
-  if (filteredList == null) {
+  final sortedBy =
+      ref.watch(mangaChapterSortProvider) ?? DBKeys.chapterSort.initial;
+  final chapterList =
+      ref.watch(mangaChapterListProvider(mangaId: mangaId)).valueOrNull;
+  if (chapterList == null) {
     return null;
-  } else {
-    final current =
-        filteredList.indexWhere((element) => element.id == chapterId);
-    final prevChapter = current > 0 ? filteredList[current - 1] : null;
-    final nextChapter =
-        current < (filteredList.length - 1) ? filteredList[current + 1] : null;
-    return (
-      first: shouldAscSort && isAscSorted ? nextChapter : prevChapter,
-      second: shouldAscSort && isAscSorted ? prevChapter : nextChapter,
-    );
   }
+  final sortedList = _sortedChapterList(
+    chapterList,
+    sortedBy: sortedBy,
+    sortedDirection: isAscSorted,
+  );
+  final current = sortedList.indexWhere((element) => element.id == chapterId);
+  if (current < 0) {
+    return (first: null, second: null);
+  }
+  final prevChapter = current > 0 ? sortedList[current - 1] : null;
+  final nextChapter =
+      current < (sortedList.length - 1) ? sortedList[current + 1] : null;
+  return (
+    first: shouldAscSort && isAscSorted ? nextChapter : prevChapter,
+    second: shouldAscSort && isAscSorted ? prevChapter : nextChapter,
+  );
 }
 
 @riverpod

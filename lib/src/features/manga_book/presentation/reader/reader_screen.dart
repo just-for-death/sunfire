@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../../constants/enum.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
@@ -67,16 +68,58 @@ class ReaderScreen extends HookConsumerWidget {
     final orientationLock = ref.watch(readerOrientationLockKeyProvider);
 
     final debounce = useRef<Timer?>(null);
+    final pendingPageIndex = useRef<int?>(null);
+    final flushProgressRef = useRef<Future<void> Function(int)?>(null);
     final resumeHintShown = useRef(false);
 
+    final updateLastRead = useCallback((int currentPage) async {
+      final chapterValue = chapter.valueOrNull;
+      final chapterPagesValue = chapterPages.valueOrNull;
+      if (chapterValue == null || chapterPagesValue == null) return;
+
+      final pageCount = chapterPagesValue.pages.isNotEmpty
+          ? chapterPagesValue.pages.length
+          : chapterValue.pageCount;
+      final isReadingCompleted =
+          pageCount > 0 && currentPage >= (pageCount - 1);
+
+      await AsyncValue.guard(
+        () => ref.read(mangaBookRepositoryProvider).putChapter(
+              chapterId: chapterValue.id,
+              patch: ChapterChange(
+                lastPageRead: isReadingCompleted ? 0 : currentPage,
+                isRead: isReadingCompleted,
+              ),
+            ),
+      );
+
+      ref.invalidate(readingHistoryProvider);
+      pendingPageIndex.value = null;
+    }, [chapter.valueOrNull, chapterPages.valueOrNull]);
+
+    flushProgressRef.value = updateLastRead;
+
     useEffect(() {
+      WakelockPlusBridge.register(
+        enable: WakelockPlus.enable,
+        disable: WakelockPlus.disable,
+      );
       ReaderSession.enter();
-      ReaderSession.applyOrientationLock(orientationLock);
       ReaderSession.onEnterReader(chromeVisible: false);
       return () {
         debounce.value?.cancel();
+        final pending = pendingPageIndex.value;
+        final flush = flushProgressRef.value;
+        if (pending != null && flush != null) {
+          unawaited(flush(pending));
+        }
         ReaderSession.leave();
       };
+    }, []);
+
+    useEffect(() {
+      ReaderSession.applyOrientationLock(orientationLock);
+      return null;
     }, [orientationLock]);
 
     useEffect(() {
@@ -103,42 +146,24 @@ class ReaderScreen extends HookConsumerWidget {
       return null;
     }, [chapter.valueOrNull?.id, chapterPages.valueOrNull?.pages.length]);
 
-    final updateLastRead = useCallback((int currentPage) async {
-      final chapterValue = chapter.valueOrNull;
-      final chapterPagesValue = chapterPages.valueOrNull;
-      if (chapterValue == null || chapterPagesValue == null) return;
-
-      final actualPageCount = chapterPagesValue.pages.length;
-      final isReadingCompleted =
-          (currentPage >= (actualPageCount - 1)) && actualPageCount > 0;
-
-      await AsyncValue.guard(
-        () => ref.read(mangaBookRepositoryProvider).putChapter(
-              chapterId: chapterValue.id,
-              patch: ChapterChange(
-                lastPageRead: isReadingCompleted ? 0 : currentPage,
-                isRead: isReadingCompleted,
-              ),
-            ),
-      );
-
-      ref.invalidate(readingHistoryProvider);
-    }, [chapter.valueOrNull, chapterPages.valueOrNull]);
-
     final onPageChanged = useCallback<AsyncValueSetter<int>>(
       (int index) async {
         final chapterValue = chapter.valueOrNull;
         final chapterPagesValue = chapterPages.valueOrNull;
         if (chapterValue == null || chapterPagesValue == null) return;
 
+        pendingPageIndex.value = index;
+
         final activeDebounce = debounce.value;
         if (activeDebounce?.isActive ?? false) {
           activeDebounce!.cancel();
         }
 
-        final actualPageCount = chapterPagesValue.pages.length;
+        final pageCount = chapterPagesValue.pages.isNotEmpty
+            ? chapterPagesValue.pages.length
+            : chapterValue.pageCount;
 
-        if (index >= (actualPageCount - 1) && actualPageCount > 0) {
+        if (index >= (pageCount - 1) && pageCount > 0) {
           updateLastRead(index);
         } else {
           debounce.value = Timer(
@@ -265,8 +290,18 @@ class ReaderScreen extends HookConsumerWidget {
       final mangaData = manga.valueOrNull;
       final chapterData = chapter.valueOrNull;
       final chapterPagesData = chapterPages.valueOrNull;
-      if (mangaData == null || chapterData == null || chapterPagesData == null) {
+      if (mangaData == null || chapterData == null) {
         return const SizedBox.shrink();
+      }
+      if (chapterPagesData == null) {
+        return Emoticons(
+          title: context.l10n.noChaptersFound,
+          button: TextButton(
+            onPressed: () =>
+                ref.refresh(chapterPagesProvider(chapterId: chapterId).future),
+            child: Text(context.l10n.refresh),
+          ),
+        );
       }
 
       return buildReader(
@@ -279,6 +314,11 @@ class ReaderScreen extends HookConsumerWidget {
     return PopScope(
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) {
+          debounce.value?.cancel();
+          final pending = pendingPageIndex.value;
+          if (pending != null) {
+            await updateLastRead(pending);
+          }
           ref.invalidate(chapterProviderWithIndex);
           ref.invalidate(mangaChapterListProvider(mangaId: mangaId));
         }
