@@ -1064,6 +1064,23 @@ class AppLocalizationsFr extends AppLocalizations {
       'The migration process has been cancelled. No changes were made.';
 
   @override
+  String get migrationCancelledNoChanges =>
+      'Migration cancelled before any changes were applied.';
+
+  @override
+  String get migrationCancelledPartial =>
+      'Cancel was requested after the server had already applied changes. Check your library — the migration may have completed.';
+
+  @override
+  String migrationCancelledPartialBatch(int success, int total) {
+    return 'Migration stopped. $success of $total manga had already been migrated.';
+  }
+
+  @override
+  String get cancelMigrationConfirmationInProgress =>
+      'Stop remaining work? A migration already running on the server cannot be undone.';
+
+  @override
   String get cancelMigration => 'Cancel Migration';
 
   @override

@@ -114,7 +114,7 @@ class MigrationProgressScreen extends HookConsumerWidget {
       builder: (context) => AlertDialog(
         title: Text(l10n.cancelMigration),
         content: Text(
-          l10n.cancelMigrationConfirmation,
+          l10n.cancelMigrationConfirmationInProgress,
         ),
         actions: [
           TextButton(
@@ -149,11 +149,10 @@ class MigrationProgressScreen extends HookConsumerWidget {
     ref.read(migrationSearchQueryProvider.notifier).clear();
 
     // Navigate based on migration result
-    if (migrationProgress?.status == MigrationStatus.completed) {
-      // If migration was successful, go back to the library so user can see the migrated manga
+    if (migrationProgress?.status == MigrationStatus.completed ||
+        migrationProgress?.serverChangesApplied == true) {
       LibraryRoute(categoryId: 0).go(context);
     } else {
-      // If migration failed or was cancelled, go back to source manga
       context.go('/manga/${sourceManga.id}');
     }
   }

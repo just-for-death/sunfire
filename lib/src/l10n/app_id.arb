@@ -1696,5 +1696,9 @@
     "appearanceMaterialSchemes": "Material Schemes",
     "appearanceKomikkuCustomSchemes": "Komikku Custom Schemes",
     "appearanceDynamicColor": "Dynamic Color",
-    "appearanceDynamicColorSubtitle": "Use wallpaper colors (Android 12+)"
+    "appearanceDynamicColorSubtitle": "Use wallpaper colors (Android 12+)",
+    "migrationCancelledNoChanges": "Migration cancelled before any changes were applied.",
+    "migrationCancelledPartial": "Cancel was requested after the server had already applied changes. Check your library — the migration may have completed.",
+    "migrationCancelledPartialBatch": "Migration stopped. {success} of {total} manga had already been migrated.",
+    "cancelMigrationConfirmationInProgress": "Stop remaining work? A migration already running on the server cannot be undone."
 }

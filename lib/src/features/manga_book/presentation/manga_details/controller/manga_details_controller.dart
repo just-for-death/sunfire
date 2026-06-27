@@ -17,6 +17,7 @@ import '../../../data/local_downloads/local_downloads_service.dart';
 import '../../../data/manga_book/manga_book_repository.dart';
 import '../../../domain/chapter/chapter_model.dart';
 import '../../../domain/manga/manga_model.dart';
+import '../chapter_navigation_utils.dart';
 
 part 'manga_details_controller.g.dart';
 
@@ -51,6 +52,50 @@ List<ChapterDto> _sortedChapterList(
         sortedDirection: sortedDirection,
       ),
     );
+}
+
+bool _chapterFiltersActive(
+  bool? chapterFilterUnread,
+  bool? chapterFilterDownloaded,
+  bool? chapterFilterBookmark,
+  String chapterFilterScanlator,
+) {
+  return chapterFilterUnread != null ||
+      chapterFilterDownloaded != null ||
+      chapterFilterBookmark != null ||
+      chapterFilterScanlator != MangaMetaKeys.scanlator.key;
+}
+
+bool Function(ChapterDto chapter) _chapterFilterPredicate({
+  required bool? chapterFilterUnread,
+  required bool? chapterFilterDownloaded,
+  required bool? chapterFilterBookmark,
+  required String chapterFilterScanlator,
+  required Set<int> localDownloadedChapterIds,
+}) {
+  return (ChapterDto chapter) {
+    if (chapterFilterUnread != null &&
+        (chapterFilterUnread ^ !(chapter.isRead.ifNull()))) {
+      return false;
+    }
+
+    if (chapterFilterDownloaded != null) {
+      final isDownloaded = chapter.isDownloaded.ifNull() ||
+          localDownloadedChapterIds.contains(chapter.id);
+      if (chapterFilterDownloaded ^ isDownloaded) return false;
+    }
+
+    if (chapterFilterBookmark != null &&
+        (chapterFilterBookmark ^ (chapter.isBookmarked.ifNull()))) {
+      return false;
+    }
+
+    if (chapterFilterScanlator != MangaMetaKeys.scanlator.key &&
+        chapter.scanlator != chapterFilterScanlator) {
+      return false;
+    }
+    return true;
+  };
 }
 
 @riverpod
@@ -182,29 +227,19 @@ AsyncValue<List<ChapterDto>?> mangaChapterListWithFilter(
 
   final chapterFilterScanlator =
       ref.watch(mangaChapterFilterScanlatorProvider(mangaId: mangaId));
+  final localDownloadedIds =
+      ref.watch(localDownloadedChapterIdsProvider).valueOrNull?.toSet() ??
+          const <int>{};
 
-  bool applyChapterFilter(ChapterDto chapter) {
-    if (chapterFilterUnread != null &&
-        (chapterFilterUnread ^ !(chapter.isRead.ifNull()))) {
-      return false;
-    }
+  final passesFilter = _chapterFilterPredicate(
+    chapterFilterUnread: chapterFilterUnread,
+    chapterFilterDownloaded: chapterFilterDownloaded,
+    chapterFilterBookmark: chapterFilterBookmark,
+    chapterFilterScanlator: chapterFilterScanlator,
+    localDownloadedChapterIds: localDownloadedIds,
+  );
 
-    if (chapterFilterDownloaded != null &&
-        (chapterFilterDownloaded ^ (chapter.isDownloaded.ifNull()))) {
-      return false;
-    }
-
-    if (chapterFilterBookmark != null &&
-        (chapterFilterBookmark ^ (chapter.isBookmarked.ifNull()))) {
-      return false;
-    }
-
-    if (chapterFilterScanlator != MangaMetaKeys.scanlator.key &&
-        chapter.scanlator != chapterFilterScanlator) {
-      return false;
-    }
-    return true;
-  }
+  bool applyChapterFilter(ChapterDto chapter) => passesFilter(chapter);
 
   int applyChapterSort(ChapterDto m1, ChapterDto m2) => _compareChapters(
         m1,
@@ -257,6 +292,24 @@ ChapterDto? firstUnreadInFilteredChapterList(
   if (chapterList == null) {
     return null;
   }
+
+  final chapterFilterUnread = ref.watch(mangaChapterFilterUnreadProvider);
+  final chapterFilterDownloaded =
+      ref.watch(mangaChapterFilterDownloadedProvider);
+  final chapterFilterBookmark = ref.watch(mangaChapterFilterBookmarkedProvider);
+  final chapterFilterScanlator =
+      ref.watch(mangaChapterFilterScanlatorProvider(mangaId: mangaId));
+  final localDownloadedIds =
+      ref.watch(localDownloadedChapterIdsProvider).valueOrNull?.toSet() ??
+          const <int>{};
+
+  final filtersActive = _chapterFiltersActive(
+    chapterFilterUnread,
+    chapterFilterDownloaded,
+    chapterFilterBookmark,
+    chapterFilterScanlator,
+  );
+
   final sortedList = _sortedChapterList(
     chapterList,
     sortedBy: sortedBy,
@@ -266,12 +319,49 @@ ChapterDto? firstUnreadInFilteredChapterList(
   if (current < 0) {
     return (first: null, second: null);
   }
-  final prevChapter = current > 0 ? sortedList[current - 1] : null;
-  final nextChapter =
-      current < (sortedList.length - 1) ? sortedList[current + 1] : null;
+
+  final listAscending = isAscSorted;
+  final readingForward = shouldAscSort;
+
+  if (filtersActive) {
+    final passesFilter = _chapterFilterPredicate(
+      chapterFilterUnread: chapterFilterUnread,
+      chapterFilterDownloaded: chapterFilterDownloaded,
+      chapterFilterBookmark: chapterFilterBookmark,
+      chapterFilterScanlator: chapterFilterScanlator,
+      localDownloadedChapterIds: localDownloadedIds,
+    );
+    final forward = chapterForwardInReadingOrderFiltered(
+      sortedList,
+      current,
+      listAscending: listAscending,
+      passesFilter: passesFilter,
+    );
+    final backward = chapterBackwardInReadingOrderFiltered(
+      sortedList,
+      current,
+      listAscending: listAscending,
+      passesFilter: passesFilter,
+    );
+    return (
+      first: readingForward ? forward : backward,
+      second: readingForward ? backward : forward,
+    );
+  }
+
+  final forward = chapterForwardInReadingOrder(
+    sortedList,
+    current,
+    listAscending: listAscending,
+  );
+  final backward = chapterBackwardInReadingOrder(
+    sortedList,
+    current,
+    listAscending: listAscending,
+  );
   return (
-    first: shouldAscSort && isAscSorted ? nextChapter : prevChapter,
-    second: shouldAscSort && isAscSorted ? prevChapter : nextChapter,
+    first: readingForward ? forward : backward,
+    second: readingForward ? backward : forward,
   );
 }
 
