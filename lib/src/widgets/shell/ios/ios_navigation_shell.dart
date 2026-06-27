@@ -2,10 +2,15 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../constants/app_breakpoints.dart';
+import '../../../constants/gen/assets.gen.dart';
 import '../../../constants/navigation_bar_data.dart';
+import '../../../global_providers/global_providers.dart';
+import '../../../routes/router_config.dart';
 import '../../../utils/extensions/custom_extensions.dart';
+import '../nav_badge_providers.dart';
 import '../nav_overflow_menu.dart';
 import '../shell_banner_stack.dart';
 
@@ -92,7 +97,7 @@ class _IPhoneGlassShell extends StatelessWidget {
   }
 }
 
-class _GlassTabBar extends StatelessWidget {
+class _GlassTabBar extends ConsumerWidget {
   const _GlassTabBar({
     required this.selectedBranchIndex,
     required this.navList,
@@ -130,7 +135,8 @@ class _GlassTabBar extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final updateCount = ref.watch(navUpdatesBadgeCountProvider);
     final textScaler =
         MediaQuery.textScalerOf(context).clamp(minScaleFactor: 0.85, maxScaleFactor: 2.0);
     final baseIcon = 22.0;
@@ -165,39 +171,45 @@ class _GlassTabBar extends StatelessWidget {
                   final item = navList[i];
                   final selected = i == _displaySelectedIndex;
                   final label = item.label(context);
+                  Widget icon = Icon(
+                    selected ? item.activeIcon : item.icon,
+                    size: iconSize,
+                    color: selected
+                        ? cs.primary
+                        : (isDark
+                            ? Colors.white.withValues(alpha: 0.5)
+                            : Colors.black.withValues(alpha: 0.4)),
+                  );
+                  if (item.badgeType == NavBadgeType.updates && updateCount > 0) {
+                    icon = Badge.count(count: updateCount, child: icon);
+                  }
                   return Expanded(
                     child: Semantics(
                       button: true,
                       selected: selected,
                       label: label,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => _onTap(context, i),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeOutCubic,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                AnimatedScale(
-                                  scale: selected ? 1.12 : 1.0,
-                                  duration: const Duration(milliseconds: 200),
-                                  curve: Curves.easeOutCubic,
-                                  child: Icon(
-                                    selected ? item.activeIcon : item.icon,
-                                    size: iconSize,
-                                    color: selected
-                                        ? cs.primary
-                                        : (isDark
-                                            ? Colors.white
-                                                .withValues(alpha: 0.5)
-                                            : Colors.black
-                                                .withValues(alpha: 0.4)),
+                      child: Tooltip(
+                        message: label,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _onTap(context, i),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOutCubic,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  AnimatedScale(
+                                    scale: selected ? 1.12 : 1.0,
+                                    duration: const Duration(milliseconds: 200),
+                                    curve: Curves.easeOutCubic,
+                                    child: icon,
                                   ),
-                                ),
-                                SizedBox(height: textScaler.scale(3).clamp(2.0, 6.0)),
-                                AnimatedDefaultTextStyle(
+                                  SizedBox(
+                                    height: textScaler.scale(3).clamp(2.0, 6.0),
+                                  ),
+                                  AnimatedDefaultTextStyle(
                                   duration: const Duration(milliseconds: 200),
                                   style: TextStyle(
                                     fontSize: labelFontSize,
@@ -225,6 +237,7 @@ class _GlassTabBar extends StatelessWidget {
                         ),
                       ),
                     ),
+                  ),
                   );
                 }),
               ),
@@ -237,9 +250,9 @@ class _GlassTabBar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// iPad — sidebar + detail split
+// iPad — sidebar + detail split (collapsible sidebar)
 // ─────────────────────────────────────────────────────────────────────────────
-class _IPadSplitShell extends StatelessWidget {
+class _IPadSplitShell extends ConsumerStatefulWidget {
   const _IPadSplitShell({
     required this.onDestinationSelected,
     required this.child,
@@ -249,20 +262,51 @@ class _IPadSplitShell extends StatelessWidget {
   final StatefulNavigationShell child;
 
   @override
+  ConsumerState<_IPadSplitShell> createState() => _IPadSplitShellState();
+}
+
+class _IPadSplitShellState extends ConsumerState<_IPadSplitShell> {
+  static const _sidebarPrefKey = 'ipad_sidebar_expanded';
+  bool _sidebarExpanded = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _sidebarExpanded =
+        ref.read(sharedPreferencesProvider).getBool(_sidebarPrefKey) ?? true;
+  }
+
+  void _toggleSidebar() {
+    setState(() => _sidebarExpanded = !_sidebarExpanded);
+    ref.read(sharedPreferencesProvider).setBool(_sidebarPrefKey, _sidebarExpanded);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final navList = NavigationBarData.getNavList(context);
     final cs = context.theme.colorScheme;
     final isDark = context.isDarkMode;
+    final textScaler = MediaQuery.textScalerOf(context)
+        .clamp(minScaleFactor: 0.85, maxScaleFactor: 2.0);
+    final expandedWidth = textScaler.scale(220.0).clamp(200.0, 260.0);
+    const collapsedWidth = 72.0;
 
     return Scaffold(
       body: Row(
         children: [
-          _GlassSidebar(
-            navList: navList,
-            selectedIndex: child.currentIndex,
-            onTap: onDestinationSelected,
-            isDark: isDark,
-            cs: cs,
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            width: _sidebarExpanded ? expandedWidth : collapsedWidth,
+            child: _GlassSidebar(
+              navList: navList,
+              selectedIndex: widget.child.currentIndex,
+              onTap: widget.onDestinationSelected,
+              isDark: isDark,
+              cs: cs,
+              expanded: _sidebarExpanded,
+              onToggle: _toggleSidebar,
+            ),
           ),
           Container(
             width: 0.5,
@@ -273,8 +317,18 @@ class _IPadSplitShell extends StatelessWidget {
           Expanded(
             child: Column(
               children: [
-                const ShellBannerStack(),
-                Expanded(child: child),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 280),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) => SizeTransition(
+                    sizeFactor: animation,
+                    alignment: Alignment.topCenter,
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                  child: const ShellBannerStack(),
+                ),
+                Expanded(child: widget.child),
               ],
             ),
           ),
@@ -284,13 +338,15 @@ class _IPadSplitShell extends StatelessWidget {
   }
 }
 
-class _GlassSidebar extends StatelessWidget {
+class _GlassSidebar extends ConsumerWidget {
   const _GlassSidebar({
     required this.navList,
     required this.selectedIndex,
     required this.onTap,
     required this.isDark,
     required this.cs,
+    required this.expanded,
+    required this.onToggle,
   });
 
   final List<NavigationBarData> navList;
@@ -298,20 +354,39 @@ class _GlassSidebar extends StatelessWidget {
   final void Function(int) onTap;
   final bool isDark;
   final ColorScheme cs;
+  final bool expanded;
+  final VoidCallback onToggle;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final updateCount = ref.watch(navUpdatesBadgeCountProvider);
     final textScaler = MediaQuery.textScalerOf(context)
         .clamp(minScaleFactor: 0.85, maxScaleFactor: 2.0);
     final titleSize = textScaler.scale(22.0).clamp(18.0, 28.0);
     final rowLabelSize = textScaler.scale(15.0).clamp(13.0, 20.0);
     final rowIconSize = textScaler.scale(20.0).clamp(18.0, 26.0);
 
+    Widget navIcon(NavigationBarData item, bool selected) {
+      Widget icon = Icon(
+        selected ? item.activeIcon : item.icon,
+        size: rowIconSize,
+        color: selected
+            ? cs.primary
+            : (isDark
+                ? Colors.white.withValues(alpha: 0.6)
+                : Colors.black.withValues(alpha: 0.5)),
+      );
+      if (item.badgeType == NavBadgeType.updates && updateCount > 0) {
+        icon = Badge.count(count: updateCount, child: icon);
+      }
+      return icon;
+    }
+
     return ClipRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
-          width: textScaler.scale(220.0).clamp(200.0, 260.0),
+          width: double.infinity,
           color: isDark
               ? Colors.black.withValues(alpha: 0.5)
               : Colors.white.withValues(alpha: 0.7),
@@ -320,90 +395,167 @@ class _GlassSidebar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                  child: Text(
-                    context.l10n.appTitle,
-                    style: TextStyle(
-                      fontSize: titleSize,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.white : Colors.black,
-                      letterSpacing: -0.3,
-                    ),
+                  padding: EdgeInsets.fromLTRB(
+                    expanded ? 12 : 8,
+                    12,
+                    expanded ? 8 : 8,
+                    8,
                   ),
-                ),
-                const SizedBox(height: 4),
-                ...List.generate(navList.length, (i) {
-                  final item = navList[i];
-                  final selected = i == selectedIndex;
-                  final label = item.label(context);
-                  return Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                    child: Semantics(
-                      button: true,
-                      selected: selected,
-                      label: label,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(10),
-                          onTap: () => onTap(i),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            curve: Curves.easeOutCubic,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? cs.primary
-                                      .withValues(alpha: isDark ? 0.25 : 0.12)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  selected ? item.activeIcon : item.icon,
-                                  size: rowIconSize,
-                                  color: selected
-                                      ? cs.primary
-                                      : (isDark
-                                          ? Colors.white
-                                              .withValues(alpha: 0.6)
-                                          : Colors.black
-                                              .withValues(alpha: 0.5)),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    label,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: rowLabelSize,
-                                      fontWeight: selected
-                                          ? FontWeight.w600
-                                          : FontWeight.w400,
-                                      color: selected
-                                          ? cs.primary
-                                          : (isDark
-                                              ? Colors.white
-                                                  .withValues(alpha: 0.8)
-                                              : Colors.black
-                                                  .withValues(alpha: 0.7)),
+                  child: Row(
+                    children: [
+                      if (expanded)
+                        Expanded(
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => const AboutRoute().go(context),
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Row(
+                                  children: [
+                                    ImageIcon(
+                                      AssetImage(Assets.icons.darkIcon.path),
+                                      size: titleSize,
                                     ),
-                                  ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        context.l10n.appTitle,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: titleSize,
+                                          fontWeight: FontWeight.w700,
+                                          color:
+                                              isDark ? Colors.white : Colors.black,
+                                          letterSpacing: -0.3,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        Tooltip(
+                          message: context.l10n.about,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => const AboutRoute().go(context),
+                              child: Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: ImageIcon(
+                                  AssetImage(Assets.icons.darkIcon.path),
+                                  size: rowIconSize + 4,
+                                ),
+                              ),
                             ),
                           ),
                         ),
+                      IconButton(
+                        onPressed: onToggle,
+                        tooltip: expanded
+                            ? context.l10n.collapseSidebar
+                            : context.l10n.expandSidebar,
+                        icon: Icon(
+                          expanded
+                              ? Icons.chevron_left_rounded
+                              : Icons.chevron_right_rounded,
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.7)
+                              : Colors.black.withValues(alpha: 0.6),
+                        ),
                       ),
-                    ),
-                  );
-                }),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: List.generate(navList.length, (i) {
+                      final item = navList[i];
+                      final selected = i == selectedIndex;
+                      final label = item.label(context);
+                      return Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: expanded ? 10 : 8,
+                          vertical: 2,
+                        ),
+                        child: Semantics(
+                          button: true,
+                          selected: selected,
+                          label: label,
+                          child: Tooltip(
+                            message: expanded ? '' : label,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: () => onTap(i),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  curve: Curves.easeOutCubic,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: expanded ? 12 : 0,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: selected
+                                        ? cs.primary.withValues(
+                                            alpha: isDark ? 0.25 : 0.12,
+                                          )
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: expanded
+                                      ? Row(
+                                          children: [
+                                            navIcon(item, selected),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                label,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: rowLabelSize,
+                                                  fontWeight: selected
+                                                      ? FontWeight.w600
+                                                      : FontWeight.w400,
+                                                  color: selected
+                                                      ? cs.primary
+                                                      : (isDark
+                                                          ? Colors.white
+                                                              .withValues(
+                                                            alpha: 0.8,
+                                                          )
+                                                          : Colors.black
+                                                              .withValues(
+                                                            alpha: 0.7,
+                                                          )),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Center(
+                                          child: navIcon(item, selected),
+                                        ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
               ],
             ),
           ),

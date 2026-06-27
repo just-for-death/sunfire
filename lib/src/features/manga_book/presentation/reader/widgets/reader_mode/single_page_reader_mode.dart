@@ -79,7 +79,6 @@ class SinglePageReaderMode extends HookConsumerWidget {
     final currentIndex = useState(initialPage);
 
     useEffect(() {
-      if (onPageChanged != null) onPageChanged!(currentIndex.value);
       if (chapterPages.pages.isEmpty) return null;
 
       final spreadsToPrefetch = spreadEnabled

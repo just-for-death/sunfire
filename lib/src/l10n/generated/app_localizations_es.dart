@@ -168,6 +168,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get close => 'Cerrar';
 
   @override
+  String get collapseSidebar => 'Collapse sidebar';
+
+  @override
+  String get expandSidebar => 'Expand sidebar';
+
+  @override
   String get cloudflareBypass => 'Cloudflare Bypass';
 
   @override

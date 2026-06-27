@@ -1,105 +1,157 @@
 {
   "ar": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "de": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "es": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "fil": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "fr": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "gan": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "gan_Hant": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "id": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "it": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "ja": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "ko": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "nb": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "nb_NO": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "nl": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "pt": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "pt_BR": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "pt_PT": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "ru": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "ta": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "th": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "tr": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "uk": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "vi": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "zh": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "zh_Hans": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ],
 
   "zh_Hant": [
+    "collapseSidebar",
+    "expandSidebar",
     "migrationWarnTrackingBindFailed"
   ]
 }

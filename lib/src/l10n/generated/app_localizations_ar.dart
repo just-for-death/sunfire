@@ -168,6 +168,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get close => 'إغلاق';
 
   @override
+  String get collapseSidebar => 'Collapse sidebar';
+
+  @override
+  String get expandSidebar => 'Expand sidebar';
+
+  @override
   String get cloudflareBypass => 'تجاوز خدمة Cloudflare';
 
   @override

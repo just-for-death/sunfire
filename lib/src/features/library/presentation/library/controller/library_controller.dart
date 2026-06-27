@@ -12,6 +12,7 @@ import '../../../../../constants/enum.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../utils/mixin/shared_preferences_client_mixin.dart';
 import '../../../../../utils/mixin/state_provider_mixin.dart';
+import '../../../../manga_book/data/local_downloads/local_downloads_service.dart';
 import '../../../../manga_book/domain/manga/manga_model.dart';
 import '../../../data/category_repository.dart';
 import '../../../domain/category/category_model.dart';
@@ -59,6 +60,8 @@ class CategoryMangaListWithQueryAndFilter
         ref.watch(libraryMangaSortProvider) ?? DBKeys.mangaSort.initial;
     final sortedDirection =
         ref.watch(libraryMangaSortDirectionProvider).ifNull(true);
+    final offlineMangaIds =
+        ref.watch(localDownloadedMangaIdsProvider).valueOrNull ?? const {};
 
     bool applyMangaFilter(MangaDto manga) {
       if (mangaFilterUnread == true && !manga.unreadCount.isGreaterThan(0)) {
@@ -69,13 +72,15 @@ class CategoryMangaListWithQueryAndFilter
         return false;
       }
 
-      if (mangaFilterDownloaded == true &&
-          !manga.downloadCount.isGreaterThan(0)) {
-        return false;
+      if (mangaFilterDownloaded == true) {
+        final hasDownloads = manga.downloadCount.isGreaterThan(0) ||
+            offlineMangaIds.contains(manga.id);
+        if (!hasDownloads) return false;
       }
-      if (mangaFilterDownloaded == false &&
-          manga.downloadCount.isGreaterThan(0)) {
-        return false;
+      if (mangaFilterDownloaded == false) {
+        final hasDownloads = manga.downloadCount.isGreaterThan(0) ||
+            offlineMangaIds.contains(manga.id);
+        if (hasDownloads) return false;
       }
 
       if (mangaFilterCompleted == true &&
