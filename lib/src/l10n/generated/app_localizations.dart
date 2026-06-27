@@ -2956,6 +2956,174 @@ abstract class AppLocalizations {
   /// **'Sync now'**
   String get syncNow;
 
+  /// No description provided for @trackingNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'— Not set —'**
+  String get trackingNotSet;
+
+  /// No description provided for @trackingStatusReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading'**
+  String get trackingStatusReading;
+
+  /// No description provided for @trackingStatusCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get trackingStatusCompleted;
+
+  /// No description provided for @trackingStatusOnHold.
+  ///
+  /// In en, this message translates to:
+  /// **'On Hold'**
+  String get trackingStatusOnHold;
+
+  /// No description provided for @trackingStatusDropped.
+  ///
+  /// In en, this message translates to:
+  /// **'Dropped'**
+  String get trackingStatusDropped;
+
+  /// No description provided for @trackingStatusPlanToRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan to Read'**
+  String get trackingStatusPlanToRead;
+
+  /// No description provided for @trackingStatusRereading.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-reading'**
+  String get trackingStatusRereading;
+
+  /// No description provided for @trackingAddForTracker.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Tracking — {tracker}'**
+  String trackingAddForTracker(String tracker);
+
+  /// No description provided for @trackingSearchOnTracker.
+  ///
+  /// In en, this message translates to:
+  /// **'Search on {tracker}...'**
+  String trackingSearchOnTracker(String tracker);
+
+  /// No description provided for @trackingAddConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Track \"{title}\" on {tracker}?'**
+  String trackingAddConfirm(String title, String tracker);
+
+  /// No description provided for @trackingChapterCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chapters'**
+  String trackingChapterCount(int count);
+
+  /// No description provided for @trackingLoginInSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in to a tracker in Settings'**
+  String get trackingLoginInSettings;
+
+  /// No description provided for @trackingBindLoginRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Not logged in to {tracker}. Go to Settings → Trackers.'**
+  String trackingBindLoginRequired(String tracker);
+
+  /// No description provided for @trackingBindEmptyCollection.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not bind — make sure you are logged in to {tracker} in Settings → Trackers.'**
+  String trackingBindEmptyCollection(String tracker);
+
+  /// No description provided for @trackingSearchTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Search timed out. {tracker} may be slow — please retry.'**
+  String trackingSearchTimeout(String tracker);
+
+  /// No description provided for @trackingNoInternet.
+  ///
+  /// In en, this message translates to:
+  /// **'No internet connection.'**
+  String get trackingNoInternet;
+
+  /// No description provided for @trackingDateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'YYYY-MM-DD'**
+  String get trackingDateHint;
+
+  /// No description provided for @unknownTracker.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracker'**
+  String get unknownTracker;
+
+  /// No description provided for @mangaRelated.
+  ///
+  /// In en, this message translates to:
+  /// **'Related'**
+  String get mangaRelated;
+
+  /// No description provided for @mangaRecommendations.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommendations'**
+  String get mangaRecommendations;
+
+  /// No description provided for @appearanceMaterialYou.
+  ///
+  /// In en, this message translates to:
+  /// **'Material You'**
+  String get appearanceMaterialYou;
+
+  /// No description provided for @appearanceTheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get appearanceTheme;
+
+  /// No description provided for @appearanceColorScheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Color Scheme'**
+  String get appearanceColorScheme;
+
+  /// No description provided for @appearanceColorSchemeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Used when Dynamic Color is off or unavailable'**
+  String get appearanceColorSchemeHint;
+
+  /// No description provided for @appearanceMaterialSchemes.
+  ///
+  /// In en, this message translates to:
+  /// **'Material Schemes'**
+  String get appearanceMaterialSchemes;
+
+  /// No description provided for @appearanceKomikkuCustomSchemes.
+  ///
+  /// In en, this message translates to:
+  /// **'Komikku Custom Schemes'**
+  String get appearanceKomikkuCustomSchemes;
+
+  /// No description provided for @appearanceDynamicColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Dynamic Color'**
+  String get appearanceDynamicColor;
+
+  /// No description provided for @appearanceDynamicColorSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use wallpaper colors (Android 12+)'**
+  String get appearanceDynamicColorSubtitle;
+
   /// Header for manga comparison section
   ///
   /// In en, this message translates to:

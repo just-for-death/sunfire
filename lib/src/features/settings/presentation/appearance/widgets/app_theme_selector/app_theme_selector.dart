@@ -41,7 +41,10 @@ class AppThemeSelector extends HookConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Material Schemes', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  context.l10n.appearanceMaterialSchemes,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
                 SizedBox(
                   height: 80,
@@ -79,7 +82,10 @@ class AppThemeSelector extends HookConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('Komikku Custom Schemes', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  context.l10n.appearanceKomikkuCustomSchemes,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
                 Builder(builder: (context) {
                   final customSchemeNames = KomikkuCustomSchemes.lightSchemes.keys.toList();
