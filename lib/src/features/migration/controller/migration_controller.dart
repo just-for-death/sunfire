@@ -156,6 +156,7 @@ class MigrationExecution extends _$MigrationExecution {
     BuildContext? context,
   }) async {
     final msgs = MigrationMessages.fromContext(context);
+    final keepAliveLink = ref.keepAlive();
     _cancelRequested = false;
     try {
       state = const MigrationProgress(
@@ -220,6 +221,8 @@ class MigrationExecution extends _$MigrationExecution {
         errorMessage: msgs.migrationFailed('$e'),
       );
       return null;
+    } finally {
+      keepAliveLink.close();
     }
   }
 
@@ -245,115 +248,119 @@ class MigrationExecution extends _$MigrationExecution {
     BuildContext? context,
   }) async {
     final msgs = MigrationMessages.fromContext(context);
+    final keepAliveLink = ref.keepAlive();
     _cancelRequested = false;
-    state = const MigrationProgress(
-      currentStep: MigrationStep.preparingMigration,
-      percentage: 0.0,
-      status: MigrationStatus.preparing,
-      processedItems: 0,
-      totalItems: 0,
-    );
-
-    int count = 0;
-    int successCount = 0;
-    int failedCount = 0;
-    final warnings = <String>[];
-    final int total = matchedMangas.length;
-
-    // Guard against empty map to prevent divide-by-zero (NaN percentage).
-    if (total == 0) {
+    try {
       state = const MigrationProgress(
-        currentStep: MigrationStep.migrationCompleted,
-        percentage: 100.0,
-        status: MigrationStatus.completed,
+        currentStep: MigrationStep.preparingMigration,
+        percentage: 0.0,
+        status: MigrationStatus.preparing,
         processedItems: 0,
         totalItems: 0,
       );
-      return;
-    }
 
-    for (final entry in matchedMangas.entries) {
-      if (_isCancelled) {
-        _setCancelledState(
-          serverChangesApplied: successCount > 0,
+      int count = 0;
+      int successCount = 0;
+      int failedCount = 0;
+      final warnings = <String>[];
+      final int total = matchedMangas.length;
+
+      // Guard against empty map to prevent divide-by-zero (NaN percentage).
+      if (total == 0) {
+        state = const MigrationProgress(
+          currentStep: MigrationStep.migrationCompleted,
+          percentage: 100.0,
+          status: MigrationStatus.completed,
+          processedItems: 0,
+          totalItems: 0,
         );
         return;
       }
 
-      final fromManga = entry.key;
-      final toManga = entry.value;
+      for (final entry in matchedMangas.entries) {
+        if (_isCancelled) {
+          _setCancelledState(
+            serverChangesApplied: successCount > 0,
+          );
+          return;
+        }
 
-      state = MigrationProgress(
-        currentStep: MigrationStep.migrationInProgress,
-        percentage: (count / total) * 100,
-        status: MigrationStatus.migrating,
-        processedItems: count,
-        totalItems: total,
-      );
+        final fromManga = entry.key;
+        final toManga = entry.value;
 
-      if (_isCancelled) {
-        _setCancelledState(serverChangesApplied: successCount > 0);
-        return;
-      }
-
-      final result = await ref
-          .read(migrationRepositoryProvider)
-          .migrateManga(fromManga.id, toManga.id, options, msgs);
-
-      if (result?.success == true) {
-        successCount++;
-        warnings.addAll(result?.warnings ?? const []);
-        await _invalidateCachesAfterMigration(fromManga.id, toManga.id);
-      } else {
-        failedCount++;
-      }
-
-      if (_isCancelled) {
         state = MigrationProgress(
-          currentStep: MigrationStep.migrationCancelled,
-          status: MigrationStatus.cancelled,
-          serverChangesApplied: successCount > 0,
-          processedItems: successCount,
+          currentStep: MigrationStep.migrationInProgress,
+          percentage: (count / total) * 100,
+          status: MigrationStatus.migrating,
+          processedItems: count,
           totalItems: total,
         );
+
+        if (_isCancelled) {
+          _setCancelledState(serverChangesApplied: successCount > 0);
+          return;
+        }
+
+        final result = await ref
+            .read(migrationRepositoryProvider)
+            .migrateManga(fromManga.id, toManga.id, options, msgs);
+
+        if (result?.success == true) {
+          successCount++;
+          warnings.addAll(result?.warnings ?? const []);
+          await _invalidateCachesAfterMigration(fromManga.id, toManga.id);
+        } else {
+          failedCount++;
+        }
+
+        if (_isCancelled) {
+          state = MigrationProgress(
+            currentStep: MigrationStep.migrationCancelled,
+            status: MigrationStatus.cancelled,
+            serverChangesApplied: successCount > 0,
+            processedItems: successCount,
+            totalItems: total,
+          );
+          return;
+        }
+
+        count++;
+
+        state = MigrationProgress(
+          currentStep: MigrationStep.migrationInProgress,
+          percentage: (count / total) * 100,
+          status: MigrationStatus.migrating,
+          processedItems: count,
+          totalItems: total,
+        );
+      }
+
+      if (failedCount > 0) {
+        state = MigrationProgress(
+          currentStep: MigrationStep.migrationFailed,
+          percentage: 100.0,
+          status: MigrationStatus.error,
+          processedItems: successCount,
+          totalItems: total,
+          warnings: warnings,
+          errorMessage: failedCount == total
+              ? null
+              : msgs.partialFailure(successCount, total, failedCount),
+        );
         return;
       }
 
-      count++;
-
-      // Update intermediate progress
       state = MigrationProgress(
-        currentStep: MigrationStep.migrationInProgress,
-        percentage: (count / total) * 100,
-        status: MigrationStatus.migrating,
-        processedItems: count,
-        totalItems: total,
-      );
-    }
-
-    if (failedCount > 0) {
-      state = MigrationProgress(
-        currentStep: MigrationStep.migrationFailed,
+        currentStep: MigrationStep.migrationCompleted,
         percentage: 100.0,
-        status: MigrationStatus.error,
+        status: MigrationStatus.completed,
         processedItems: successCount,
         totalItems: total,
         warnings: warnings,
-        errorMessage: failedCount == total
-            ? null
-            : '$successCount/$total succeeded',
       );
-      return;
+    } finally {
+      keepAliveLink.close();
     }
-
-    state = MigrationProgress(
-      currentStep: MigrationStep.migrationCompleted,
-      percentage: 100.0,
-      status: MigrationStatus.completed,
-      processedItems: successCount,
-      totalItems: total,
-      warnings: warnings,
-    );
   }
 
   void reset() {

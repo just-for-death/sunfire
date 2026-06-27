@@ -3,7 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'data/tracker_repository.dart';
 import 'presentation/controller/tracker_controller.dart';
 
-/// Best-effort sync of bound tracker records when a chapter is finished.
+/// Best-effort sync of bound tracker records when chapter progress advances.
 Future<void> syncTrackerProgressOnChapterComplete(
   WidgetRef ref, {
   required int mangaId,

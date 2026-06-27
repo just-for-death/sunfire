@@ -9,28 +9,37 @@ part of '../custom_extensions.dart';
 extension AsyncValueExtensions<T> on AsyncValue<T> {
   bool get isNotLoading => !isLoading;
 
-  void _showToastOnError(Toast toast) {
+  void _showToastOnError(Toast toast, {String? message}) {
     if (!isRefreshing) {
       whenOrNull(
         error: (error, stackTrace) {
           toast.close();
-          toast.showError(error.toString());
+          toast.showError(message ?? 'Something went wrong');
         },
       );
     }
   }
 
-  void showToastOnError(Toast? toast, {bool withMicrotask = false}) {
+  void showToastOnError(
+    Toast? toast, {
+    bool withMicrotask = false,
+    String? message,
+  }) {
     if (toast == null) return;
     if (withMicrotask) {
-      Future.microtask(() => (_showToastOnError(toast)));
+      Future.microtask(() => _showToastOnError(toast, message: message));
     } else {
-      _showToastOnError(toast);
+      _showToastOnError(toast, message: message);
     }
   }
 
-  T? valueOrToast(Toast? toast, {bool withMicrotask = false}) =>
-      (this..showToastOnError(toast, withMicrotask: withMicrotask)).valueOrNull;
+  T? valueOrToast(
+    Toast? toast, {
+    bool withMicrotask = false,
+    String? message,
+  }) =>
+      (this..showToastOnError(toast,
+          withMicrotask: withMicrotask, message: message)).valueOrNull;
 
   Widget showUiWhenData(
     BuildContext context,

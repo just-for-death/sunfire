@@ -7,7 +7,7 @@ part of 'local_downloads_controller.dart';
 // **************************************************************************
 
 String _$localChapterDownloadHash() =>
-    r'278f83fe7de957bb9f467f3e20f300c4adcc501f';
+    r'2f601cc41858b6248f86ab51e7a5f21ddb933bbe';
 
 /// Copied from Dart SDK
 class _SystemHash {

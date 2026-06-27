@@ -79,4 +79,4 @@ class ExtensionRepository {
 
 @riverpod
 ExtensionRepository extensionRepository(Ref ref) =>
-    ExtensionRepository(ref.watch(graphQlClientProvider));
+    ExtensionRepository(ref.watch(longRunningGraphQlClientProvider));
