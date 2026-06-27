@@ -127,10 +127,13 @@ class MigrationExecution extends _$MigrationExecution {
   bool get _isCancelled =>
       _cancelRequested || state?.status == MigrationStatus.cancelled;
 
-  void _setCancelledState() {
-    state = const MigrationProgress(
+  void _setCancelledState({bool serverChangesApplied = false}) {
+    state = MigrationProgress(
       currentStep: MigrationStep.migrationCancelled,
       status: MigrationStatus.cancelled,
+      serverChangesApplied: serverChangesApplied,
+      processedItems: state?.processedItems ?? 0,
+      totalItems: state?.totalItems ?? 0,
     );
   }
 
@@ -141,56 +144,23 @@ class MigrationExecution extends _$MigrationExecution {
   }) async {
     _cancelRequested = false;
     try {
-      // Set initial progress
       state = const MigrationProgress(
         currentStep: MigrationStep.preparingMigration,
         percentage: 0.0,
         status: MigrationStatus.preparing,
       );
 
-      // Add a delay for visual feedback
-      await Future.delayed(const Duration(milliseconds: 1000));
       if (_isCancelled) {
         _setCancelledState();
         return null;
       }
 
-      // Update progress to migrating chapters
       state = const MigrationProgress(
-        currentStep: MigrationStep.migrateChapters,
-        percentage: 25.0,
-        status: MigrationStatus.migrating,
-      );
-
-      // Add another delay
-      await Future.delayed(const Duration(milliseconds: 800));
-      if (_isCancelled) {
-        _setCancelledState();
-        return null;
-      }
-
-      // Update progress to migrating categories
-      state = const MigrationProgress(
-        currentStep: MigrationStep.migrateCategories,
+        currentStep: MigrationStep.migrationInProgress,
         percentage: 50.0,
         status: MigrationStatus.migrating,
       );
 
-      // Add another delay
-      await Future.delayed(const Duration(milliseconds: 600));
-      if (_isCancelled) {
-        _setCancelledState();
-        return null;
-      }
-
-      // Update progress to finalizing
-      state = const MigrationProgress(
-        currentStep: MigrationStep.migrationInProgress,
-        percentage: 75.0,
-        status: MigrationStatus.migrating,
-      );
-
-      // Now execute the actual migration
       if (_isCancelled) {
         _setCancelledState();
         return null;
@@ -201,8 +171,12 @@ class MigrationExecution extends _$MigrationExecution {
           .migrateManga(fromMangaId, toMangaId, options);
 
       if (_isCancelled) {
-        _setCancelledState();
-        return null;
+        final applied = result?.success == true;
+        if (applied) {
+          await _invalidateCachesAfterMigration(fromMangaId, toMangaId);
+        }
+        _setCancelledState(serverChangesApplied: applied);
+        return applied ? result : null;
       }
 
       // Update final progress based on result
@@ -213,7 +187,6 @@ class MigrationExecution extends _$MigrationExecution {
           status: MigrationStatus.completed,
         );
 
-        // Invalidate caches to refresh UI data after successful migration
         await _invalidateCachesAfterMigration(fromMangaId, toMangaId);
       } else {
         state = MigrationProgress(
@@ -284,7 +257,9 @@ class MigrationExecution extends _$MigrationExecution {
 
     for (final entry in matchedMangas.entries) {
       if (_isCancelled) {
-        _setCancelledState();
+        _setCancelledState(
+          serverChangesApplied: successCount > 0,
+        );
         return;
       }
 
@@ -299,6 +274,11 @@ class MigrationExecution extends _$MigrationExecution {
         totalItems: total,
       );
 
+      if (_isCancelled) {
+        _setCancelledState(serverChangesApplied: successCount > 0);
+        return;
+      }
+
       final result = await ref
           .read(migrationRepositoryProvider)
           .migrateManga(fromManga.id, toManga.id, options);
@@ -311,7 +291,13 @@ class MigrationExecution extends _$MigrationExecution {
       }
 
       if (_isCancelled) {
-        _setCancelledState();
+        state = MigrationProgress(
+          currentStep: MigrationStep.migrationCancelled,
+          status: MigrationStatus.cancelled,
+          serverChangesApplied: successCount > 0,
+          processedItems: successCount,
+          totalItems: total,
+        );
         return;
       }
 

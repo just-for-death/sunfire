@@ -159,7 +159,7 @@ class _MangaScanlatorListProviderElement
 }
 
 String _$mangaChapterListWithFilterHash() =>
-    r'ffb712f100d9328c5c6bdd6c1d5f8a9ea95209c3';
+    r'252b85669a9a16fa08e4d9dcd3b782143c719019';
 
 /// See also [mangaChapterListWithFilter].
 @ProviderFor(mangaChapterListWithFilter)
@@ -434,7 +434,7 @@ class _FirstUnreadInFilteredChapterListProviderElement
 }
 
 String _$getNextAndPreviousChaptersHash() =>
-    r'c1b6b81c0c13e0581674b6214ad29ea623122add';
+    r'932799e79034444926ba8e01dd7077d4f421b44c';
 
 /// See also [getNextAndPreviousChapters].
 @ProviderFor(getNextAndPreviousChapters)
@@ -606,7 +606,7 @@ class _GetNextAndPreviousChaptersProviderElement
       (origin as GetNextAndPreviousChaptersProvider).shouldAscSort;
 }
 
-String _$mangaWithIdHash() => r'1f1a8cdea7e307ec933f516d7399972a4633a4b2';
+String _$mangaWithIdHash() => r'1e3a6d41376665c3762c963ffb8022a1332443c3';
 
 abstract class _$MangaWithId
     extends BuildlessAutoDisposeAsyncNotifier<MangaDto?> {
@@ -752,7 +752,7 @@ class _MangaWithIdProviderElement
   int get mangaId => (origin as MangaWithIdProvider).mangaId;
 }
 
-String _$mangaChapterListHash() => r'53aec7a21baa77638ffaeec0fb4b2d6211b7186a';
+String _$mangaChapterListHash() => r'15e66c077406ecbd4f332ea7cddecf05577ab640';
 
 abstract class _$MangaChapterList
     extends BuildlessAutoDisposeAsyncNotifier<List<ChapterDto>?> {
