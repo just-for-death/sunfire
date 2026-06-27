@@ -142,7 +142,7 @@ class MigrationBatchProgressScreen extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.cancelMigration),
-        content: Text(l10n.cancelMigrationConfirmation),
+        content: Text(l10n.cancelMigrationConfirmationInProgress),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),

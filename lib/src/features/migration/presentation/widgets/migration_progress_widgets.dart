@@ -88,7 +88,7 @@ class MigrationProgressContent extends StatelessWidget {
         return MigrationErrorWidget(progress: progress!);
 
       case MigrationStatus.cancelled:
-        return MigrationCancelledWidget();
+        return MigrationCancelledWidget(progress: progress!);
 
       default:
         return MigrationActiveProgressWidget(progress: progress!);
@@ -371,32 +371,54 @@ class MigrationErrorWidget extends StatelessWidget {
 
 /// Widget showing cancelled state
 class MigrationCancelledWidget extends StatelessWidget {
-  const MigrationCancelledWidget({super.key});
+  const MigrationCancelledWidget({super.key, required this.progress});
+
+  final MigrationProgress progress;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final theme = context.theme;
+    final partial = progress.serverChangesApplied;
+    final batchPartial =
+        progress.totalItems > 0 && progress.processedItems > 0;
+
+    String message;
+    if (batchPartial && progress.totalItems > 1) {
+      message = l10n.migrationCancelledPartialBatch(
+        progress.processedItems,
+        progress.totalItems,
+      );
+    } else if (partial) {
+      message = l10n.migrationCancelledPartial;
+    } else {
+      message = l10n.migrationCancelledNoChanges;
+    }
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         MigrationStatusIcon(
-          icon: Icons.cancel,
-          color: Colors.orange,
-          backgroundColor: Colors.orange.withValues(alpha: 0.1),
+          icon: partial || batchPartial ? Icons.warning_amber_rounded : Icons.cancel,
+          color: partial || batchPartial ? Colors.amber.shade700 : Colors.orange,
+          backgroundColor: (partial || batchPartial
+                  ? Colors.amber
+                  : Colors.orange)
+              .withValues(alpha: 0.1),
         ),
         const SizedBox(height: 24),
         Text(
           l10n.migrationCancelled,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w600,
-            color: Colors.orange,
+            color: partial || batchPartial
+                ? Colors.amber.shade800
+                : Colors.orange,
           ),
         ),
         const SizedBox(height: 16),
         Text(
-          l10n.migrationCancelledMessage,
+          message,
           style: theme.textTheme.bodyLarge,
           textAlign: TextAlign.center,
         ),
