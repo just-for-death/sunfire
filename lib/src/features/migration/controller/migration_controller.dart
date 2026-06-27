@@ -12,6 +12,7 @@ import '../../../utils/extensions/custom_extensions.dart';
 import '../../browse_center/data/source_repository/source_repository.dart';
 import '../../browse_center/domain/source/source_model.dart';
 import '../../browse_center/presentation/source/controller/source_controller.dart';
+import '../../history/presentation/history_controller.dart';
 import '../../library/presentation/category/controller/edit_category_controller.dart';
 import '../../library/presentation/library/controller/library_controller.dart';
 import '../../manga_book/domain/manga/graphql/__generated__/fragment.graphql.dart';
@@ -362,6 +363,7 @@ class MigrationExecution extends _$MigrationExecution {
       // Invalidate chapter lists for both manga (needed for unread count refresh)
       ref.invalidate(mangaChapterListProvider(mangaId: fromMangaId));
       ref.invalidate(mangaChapterListProvider(mangaId: toMangaId));
+      ref.invalidate(readingHistoryProvider);
 
       // Invalidate all category manga lists to refresh library
       final categories = ref.read(categoryControllerProvider).valueOrNull ?? [];

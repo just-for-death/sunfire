@@ -111,11 +111,14 @@ class SinglePageReaderMode extends HookConsumerWidget {
         final currentPage = scrollController.page;
         if (currentPage == null) return;
         final viewportIndex = currentPage.round();
+        final settled = (currentPage - viewportIndex).abs() < 0.01;
         currentIndex.value = spreadEnabled
-            ? SpreadPageUtils.logicalPageForSpread(
-                viewportIndex,
-                chapterPages.pages.length,
-              )
+            ? (settled
+                ? SpreadPageUtils.logicalPageForSpread(
+                    viewportIndex,
+                    chapterPages.pages.length,
+                  )
+                : SpreadPageUtils.leadingPageForSpread(viewportIndex))
             : viewportIndex.clamp(0, pageCount > 0 ? pageCount - 1 : 0);
       }
 

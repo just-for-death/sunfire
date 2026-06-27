@@ -239,7 +239,7 @@ class MangaDescription extends HookConsumerWidget {
                       GlobalSearchRoute(query: manga.title).push(context),
                   icon:
                       const Icon(Icons.collections_bookmark_rounded, size: 16),
-                  label: const Text('Related'),
+                  label: Text(context.l10n.mangaRelated),
                 ),
                 OutlinedButton.icon(
                   onPressed: () {
@@ -248,7 +248,7 @@ class MangaDescription extends HookConsumerWidget {
                     }
                   },
                   icon: const Icon(Icons.thumb_up_alt_outlined, size: 16),
-                  label: const Text('Recommendations'),
+                  label: Text(context.l10n.mangaRecommendations),
                 ),
               ],
             ),

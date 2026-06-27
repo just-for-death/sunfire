@@ -1560,6 +1560,70 @@
     "@syncNow": {
         "description": "Sync tracker button label"
     },
+    "trackingNotSet": "— Not set —",
+    "trackingStatusReading": "Reading",
+    "trackingStatusCompleted": "Completed",
+    "trackingStatusOnHold": "On Hold",
+    "trackingStatusDropped": "Dropped",
+    "trackingStatusPlanToRead": "Plan to Read",
+    "trackingStatusRereading": "Re-reading",
+    "trackingAddForTracker": "Add Tracking — {tracker}",
+    "@trackingAddForTracker": {
+        "placeholders": {
+            "tracker": { "type": "String" }
+        }
+    },
+    "trackingSearchOnTracker": "Search on {tracker}...",
+    "@trackingSearchOnTracker": {
+        "placeholders": {
+            "tracker": { "type": "String" }
+        }
+    },
+    "trackingAddConfirm": "Track \"{title}\" on {tracker}?",
+    "@trackingAddConfirm": {
+        "placeholders": {
+            "title": { "type": "String" },
+            "tracker": { "type": "String" }
+        }
+    },
+    "trackingChapterCount": "{count} chapters",
+    "@trackingChapterCount": {
+        "placeholders": {
+            "count": { "type": "int" }
+        }
+    },
+    "trackingLoginInSettings": "Log in to a tracker in Settings",
+    "trackingBindLoginRequired": "Not logged in to {tracker}. Go to Settings → Trackers.",
+    "@trackingBindLoginRequired": {
+        "placeholders": {
+            "tracker": { "type": "String" }
+        }
+    },
+    "trackingBindEmptyCollection": "Could not bind — make sure you are logged in to {tracker} in Settings → Trackers.",
+    "@trackingBindEmptyCollection": {
+        "placeholders": {
+            "tracker": { "type": "String" }
+        }
+    },
+    "trackingSearchTimeout": "Search timed out. {tracker} may be slow — please retry.",
+    "@trackingSearchTimeout": {
+        "placeholders": {
+            "tracker": { "type": "String" }
+        }
+    },
+    "trackingNoInternet": "No internet connection.",
+    "trackingDateHint": "YYYY-MM-DD",
+    "unknownTracker": "Tracker",
+    "mangaRelated": "Related",
+    "mangaRecommendations": "Recommendations",
+    "appearanceMaterialYou": "Material You",
+    "appearanceTheme": "Theme",
+    "appearanceColorScheme": "Color Scheme",
+    "appearanceColorSchemeHint": "Used when Dynamic Color is off or unavailable",
+    "appearanceMaterialSchemes": "Material Schemes",
+    "appearanceKomikkuCustomSchemes": "Komikku Custom Schemes",
+    "appearanceDynamicColor": "Dynamic Color",
+    "appearanceDynamicColorSubtitle": "Use wallpaper colors (Android 12+)",
     "mangaComparison": "Manga Comparison",
     "@mangaComparison": {
         "description": "Header for manga comparison section"
