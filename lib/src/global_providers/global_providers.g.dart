@@ -43,7 +43,7 @@ final graphQlSubscriptionClientProvider =
 // ignore: unused_element
 typedef GraphQlSubscriptionClientRef = AutoDisposeProviderRef<GraphQLClient>;
 String _$trackerGraphQlClientHash() =>
-    r'295ea22bcc0825f878b4f91537e0b69a4ed76628';
+    r'7d5a912a2dbe5b75d0a8c822ba07db4db3d43cd1';
 
 /// GraphQL client with a longer timeout for tracker operations.
 /// Tracker queries call external APIs (MAL, AniList, etc.) which can be slow.
@@ -64,6 +64,27 @@ final trackerGraphQlClientProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef TrackerGraphQlClientRef = AutoDisposeProviderRef<GraphQLClient>;
+String _$longRunningGraphQlClientHash() =>
+    r'b54905637b4c04f4a1d7764df957b292f329c987';
+
+/// GraphQL client for slow server operations (extension install/update, etc.).
+///
+/// Copied from [longRunningGraphQlClient].
+@ProviderFor(longRunningGraphQlClient)
+final longRunningGraphQlClientProvider =
+    AutoDisposeProvider<GraphQLClient>.internal(
+  longRunningGraphQlClient,
+  name: r'longRunningGraphQlClientProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$longRunningGraphQlClientHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef LongRunningGraphQlClientRef = AutoDisposeProviderRef<GraphQLClient>;
 String _$graphQlClientNotifierHash() =>
     r'4d2da73f84e823b1becfa67d47c7da9bc3079ed6';
 

@@ -153,7 +153,6 @@ class LocalDownloadsService {
 
       final toDir = await _chapterDirIfExists(target.id);
       if (await toDir.exists()) {
-        await deleteChapter(source.id);
         warnings.add(onChapterSkipped(source.id));
         continue;
       }
@@ -410,8 +409,10 @@ class LocalDownloadsService {
         // Notify progress after each saved page.
         onProgress?.call(i + 1, total);
       }
+    } on DownloadCancelledException {
+      rethrow;
     } catch (e) {
-      // Clean up the partial directory to avoid orphaned files consuming storage.
+      // Clean up partial downloads on failure, but preserve files on user cancel.
       try {
         if (await dir.exists()) {
           await dir.delete(recursive: true);

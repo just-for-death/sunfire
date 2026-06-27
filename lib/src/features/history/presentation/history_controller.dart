@@ -10,7 +10,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../constants/db_keys.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../../../utils/mixin/shared_preferences_client_mixin.dart';
-import '../../manga_book/presentation/manga_details/controller/manga_details_controller.dart';
 import '../data/history_repository.dart';
 import '../domain/history_group.dart';
 import '../domain/history_item.dart';
@@ -33,21 +32,47 @@ class ReadingHistory extends _$ReadingHistory {
     ref.read(historyHasMoreProvider.notifier).state = true;
   }
 
+  DateTime? _retentionFromDate() {
+    final days = ref.read(historyRetentionDaysProvider);
+    if (days == null || days <= 0) return null;
+    return DateTime.now().subtract(Duration(days: days));
+  }
+
+  String? _activeSearchQuery() {
+    final query = ref.read(historySearchQueryProvider);
+    return query.isBlank ? null : query;
+  }
+
   Future<List<HistoryItemDto>?> _fetchFirstPage() async {
     _resetPagination();
-    final page = await ref
-        .read(historyRepositoryProvider)
-        .fetchReadingHistoryPage(targetCount: _pageSize);
+    final hidden = ref.read(historyHiddenChapterIdsProvider) ?? const [];
+    final page = await ref.read(historyRepositoryProvider).fetchReadingHistoryPage(
+          targetCount: _pageSize,
+          searchQuery: _activeSearchQuery(),
+          fromDate: _retentionFromDate(),
+        );
     _rawOffset = page.nextRawOffset;
     for (final item in page.items) {
+      if (hidden.contains(item.id)) continue;
       _loadedMangaIds.add(item.mangaId);
     }
     ref.read(historyHasMoreProvider.notifier).state = page.hasMore;
-    return page.items;
+    return page.items.where((item) => !hidden.contains(item.id)).toList();
   }
 
   @override
   Future<List<HistoryItemDto>?> build() async {
+    final enabled = ref.watch(historyEnabledProvider) ?? true;
+    if (!enabled) {
+      ref.keepAlive();
+      return const [];
+    }
+
+    // Refetch when search, retention, or hidden set changes.
+    ref.watch(historySearchQueryProvider);
+    ref.watch(historyRetentionDaysProvider);
+    ref.watch(historyHiddenChapterIdsProvider);
+
     final nodes = await _fetchFirstPage();
     ref.keepAlive();
     return nodes;
@@ -75,10 +100,13 @@ class ReadingHistory extends _$ReadingHistory {
 
     _loadingMore = true;
     try {
+      final hidden = ref.read(historyHiddenChapterIdsProvider) ?? const [];
       final page = await ref.read(historyRepositoryProvider).fetchReadingHistoryPage(
             rawOffset: _rawOffset,
             excludeMangaIds: _loadedMangaIds,
             targetCount: _pageSize,
+            searchQuery: _activeSearchQuery(),
+            fromDate: _retentionFromDate(),
           );
 
       if (page.items.isEmpty) {
@@ -88,6 +116,7 @@ class ReadingHistory extends _$ReadingHistory {
 
       _rawOffset = page.nextRawOffset;
       for (final item in page.items) {
+        if (hidden.contains(item.id)) continue;
         _loadedMangaIds.add(item.mangaId);
       }
       ref.read(historyHasMoreProvider.notifier).state = page.hasMore;
@@ -95,7 +124,9 @@ class ReadingHistory extends _$ReadingHistory {
       final existingIds = currentItems.map((e) => e.id).toSet();
       final merged = [
         ...currentItems,
-        ...page.items.where((e) => !existingIds.contains(e.id)),
+        ...page.items.where(
+          (e) => !existingIds.contains(e.id) && !hidden.contains(e.id),
+        ),
       ];
       state = AsyncData(merged);
     } finally {
@@ -116,15 +147,9 @@ class ReadingHistory extends _$ReadingHistory {
         // Chapter not found in current list, continue anyway
       }
 
-      await ref
-          .read(historyRepositoryProvider)
-          .removeChapterFromHistory(chapterId);
-
-      if (chapterToRemove != null) {
-        final mangaId = chapterToRemove.mangaId;
-        ref.invalidate(mangaChapterListProvider(mangaId: mangaId));
-        ref.invalidate(mangaWithIdProvider(mangaId: mangaId));
-      }
+      // Server has no history-removal API; resetting progress would wipe
+      // read state and refresh lastReadAt. Hide client-side instead.
+      ref.read(historyHiddenChapterIdsProvider.notifier).hideChapter(chapterId);
 
       // Optimistically remove from local list; full refresh resets pagination.
       final filtered =
@@ -240,6 +265,7 @@ class HistoryRetentionDays extends _$HistoryRetentionDays
 
   void updateRetentionDays(int days) {
     update(days);
+    ref.invalidate(readingHistoryProvider);
   }
 }
 
@@ -251,7 +277,36 @@ class HistoryEnabled extends _$HistoryEnabled
 
   void toggleHistory() {
     update(!(state ?? true));
+    ref.invalidate(readingHistoryProvider);
   }
 
-  void setEnabled(bool enabled) => update(enabled);
+  void setEnabled(bool enabled) {
+    update(enabled);
+    ref.invalidate(readingHistoryProvider);
+  }
+}
+
+@riverpod
+class HistoryHiddenChapterIds extends _$HistoryHiddenChapterIds
+    with SharedPreferenceClientMixin<List<int>> {
+  @override
+  List<int>? build() => initialize(
+        DBKeys.historyHiddenChapterIds,
+        initial: const <int>[],
+        toJson: (value) => value,
+        fromJson: (value) =>
+            value == null ? const <int>[] : (value as List).cast<int>(),
+      );
+
+  void hideChapter(int chapterId) {
+    final current = state ?? const [];
+    if (current.contains(chapterId)) return;
+    update([...current, chapterId]);
+  }
+
+  void unhideChapter(int chapterId) {
+    final current = state ?? const [];
+    if (!current.contains(chapterId)) return;
+    update(current.where((id) => id != chapterId).toList());
+  }
 }

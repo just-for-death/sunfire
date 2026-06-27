@@ -18,7 +18,11 @@ class MigrationBatchProgressScreen extends HookConsumerWidget {
     final pending = ref.watch(pendingBatchMigrationProvider);
 
     useEffect(() {
-      if (pending == null || progress != null) return null;
+      if (pending == null) return null;
+      if (progress?.status == MigrationStatus.migrating ||
+          progress?.status == MigrationStatus.preparing) {
+        return null;
+      }
       final job = pending;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;

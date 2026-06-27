@@ -154,6 +154,11 @@ class TrackerSearchScreen extends HookConsumerWidget {
   /// Convert server/network errors to user-friendly messages.
   String _friendlyError(BuildContext context, String raw) {
     final l10n = context.l10n;
+    if (raw.contains('401') ||
+        raw.contains('Unauthorized') ||
+        raw.contains('Not logged in')) {
+      return l10n.trackingBindLoginRequired(tracker.name);
+    }
     if (raw.contains('Collection is empty')) {
       return l10n.trackingBindEmptyCollection(tracker.name);
     }
@@ -265,9 +270,13 @@ class _TrackerSearchResultTile extends ConsumerWidget {
       if (context.mounted) Navigator.pop(context, true);
     } catch (e) {
       if (context.mounted) {
-        final msg = e.toString().contains('Collection is empty')
+        final err = e.toString();
+        final msg = err.contains('401') ||
+                err.contains('Unauthorized') ||
+                err.contains('Not logged in') ||
+                err.contains('Collection is empty')
             ? context.l10n.trackingBindLoginRequired(trackerName)
-            : e.toString();
+            : err;
         ref.read(toastProvider)?.showError(msg);
       }
     }
