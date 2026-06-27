@@ -82,6 +82,7 @@ class MigrationProgressContent extends StatelessWidget {
           sourceManga: sourceManga,
           targetManga: targetManga,
           targetSource: targetSource,
+          warnings: progress!.warnings,
         );
 
       case MigrationStatus.error:
@@ -274,11 +275,13 @@ class MigrationCompletedWidget extends StatelessWidget {
     required this.sourceManga,
     required this.targetManga,
     required this.targetSource,
+    this.warnings = const [],
   });
 
   final MangaDto sourceManga;
   final MangaDto targetManga;
   final SourceDto targetSource;
+  final List<String> warnings;
 
   @override
   Widget build(BuildContext context) {
@@ -313,7 +316,64 @@ class MigrationCompletedWidget extends StatelessWidget {
           targetManga: targetManga,
           targetSource: targetSource,
         ),
+        if (warnings.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          MigrationWarningsCard(warnings: warnings),
+        ],
       ],
+    );
+  }
+}
+
+class MigrationWarningsCard extends StatelessWidget {
+  const MigrationWarningsCard({super.key, required this.warnings});
+
+  final List<String> warnings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.theme;
+    final l10n = context.l10n;
+
+    return Card(
+      color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.5),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: theme.colorScheme.onTertiaryContainer,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  l10n.migrationWarningsTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onTertiaryContainer,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ...warnings.map(
+              (warning) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  warning,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onTertiaryContainer,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

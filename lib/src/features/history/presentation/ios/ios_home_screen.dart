@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
@@ -13,6 +14,7 @@ import '../../domain/history_group.dart';
 import '../../domain/history_item.dart';
 import '../history_controller.dart';
 import '../history_reader_navigation.dart';
+import '../history_settings_sheet.dart';
 
 class IOSHomeScreen extends HookConsumerWidget {
   const IOSHomeScreen({super.key});
@@ -21,8 +23,10 @@ class IOSHomeScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final historyGroups = ref.watch(filteredHistoryGroupsProvider);
     final historyState = ref.watch(readingHistoryProvider);
+    final hasMore = ref.watch(historyHasMoreProvider);
     final searchQuery = ref.watch(historySearchQueryProvider);
     final searchController = useTextEditingController(text: searchQuery);
+    final isLoadingMore = useState(false);
     final isDark = context.isDarkMode;
     final cs = context.theme.colorScheme;
 
@@ -32,6 +36,16 @@ class IOSHomeScreen extends HookConsumerWidget {
       }
       return null;
     }, [searchQuery]);
+
+    Future<void> tryLoadMore() async {
+      if (!hasMore || isLoadingMore.value || searchQuery.isNotBlank) return;
+      isLoadingMore.value = true;
+      try {
+        await ref.read(readingHistoryProvider.notifier).loadMore();
+      } finally {
+        isLoadingMore.value = false;
+      }
+    }
 
     final allHistoryItems = useMemoized(
       () => historyGroups.expand((g) => g.items).toList(),
@@ -44,8 +58,40 @@ class IOSHomeScreen extends HookConsumerWidget {
       extendBodyBehindAppBar: true,
       body: historyState.when(
         loading: () => const Center(child: CupertinoActivityIndicator()),
-        error: (e, _) => Center(child: Text(e.toString())),
-        data: (_) => CustomScrollView(
+        error: (_, __) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                CupertinoIcons.exclamationmark_triangle,
+                size: 48,
+                color: cs.error.withValues(alpha: 0.7),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                context.l10n.errorSomethingWentWrong,
+                style: TextStyle(
+                  color: (isDark ? Colors.white : Colors.black)
+                      .withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 16),
+              CupertinoButton.filled(
+                onPressed: () =>
+                    ref.read(readingHistoryProvider.notifier).refresh(),
+                child: Text(context.l10n.retry),
+              ),
+            ],
+          ),
+        ),
+        data: (_) => NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification.metrics.extentAfter < 240) {
+              unawaited(tryLoadMore());
+            }
+            return false;
+          },
+          child: CustomScrollView(
           physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
           ),
@@ -64,6 +110,10 @@ class IOSHomeScreen extends HookConsumerWidget {
                   icon: const Icon(CupertinoIcons.refresh),
                   onPressed: () =>
                       ref.read(readingHistoryProvider.notifier).refresh(),
+                ),
+                IconButton(
+                  icon: const Icon(CupertinoIcons.settings),
+                  onPressed: () => showHistorySettingsSheet(context, ref),
                 ),
               ],
             ),
@@ -106,9 +156,25 @@ class IOSHomeScreen extends HookConsumerWidget {
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
                 sliver: SliverList.builder(
-                  itemCount: allHistoryItems.length,
+                  itemCount: allHistoryItems.length + (hasMore ? 1 : 0),
                   itemBuilder: (context, index) {
-                    if (index >= allHistoryItems.length) return null;
+                    if (index == allHistoryItems.length) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: isLoadingMore.value
+                              ? const CupertinoActivityIndicator()
+                              : Text(
+                                  context.l10n.historyLoadMore,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: (isDark ? Colors.white : Colors.black)
+                                        .withValues(alpha: 0.4),
+                                  ),
+                                ),
+                        ),
+                      );
+                    }
                     final item = allHistoryItems[index];
                     return Dismissible(
                       key: ValueKey('ios_history_${item.id}'),
@@ -162,6 +228,7 @@ class IOSHomeScreen extends HookConsumerWidget {
                 ),
               ),
           ],
+        ),
         ),
       ),
     );

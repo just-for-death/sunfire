@@ -32,7 +32,8 @@ class TrackerSettingsScreen extends ConsumerWidget {
             children: [
               const Icon(Icons.error_outline_rounded, size: 48),
               const SizedBox(height: 12),
-              Text(e.toString(), textAlign: TextAlign.center),
+              Text(context.l10n.errorSomethingWentWrong,
+                  textAlign: TextAlign.center),
               const SizedBox(height: 12),
               FilledButton.icon(
                 onPressed: () => ref.invalidate(trackersProvider),
@@ -99,7 +100,9 @@ class _TrackerTile extends ConsumerWidget {
           ),
           const SizedBox(width: 4),
           Text(
-            tracker.isLoggedIn ? 'Logged in' : 'Not logged in',
+            tracker.isLoggedIn
+                ? context.l10n.loggedIn
+                : context.l10n.notLoggedIn,
             style: context.textTheme.bodySmall?.copyWith(
               color: tracker.isLoggedIn
                   ? Colors.green
@@ -109,7 +112,7 @@ class _TrackerTile extends ConsumerWidget {
           if (tracker.isTokenExpired == true) ...[
             const SizedBox(width: 6),
             Text(
-              '(token expired)',
+              context.l10n.trackerTokenExpired,
               style: context.textTheme.bodySmall
                   ?.copyWith(color: context.theme.colorScheme.error),
             ),
@@ -148,7 +151,9 @@ class _TrackerTile extends ConsumerWidget {
                       .logout(tracker.id);
                   final state = ref.read(trackerAuthNotifierProvider);
                   if (context.mounted && state.hasError) {
-                    ref.read(toastProvider)?.showError(state.error.toString());
+                    ref
+                        .read(toastProvider)
+                        ?.showError(context.l10n.errorSomethingWentWrong);
                   }
                 }
               },
