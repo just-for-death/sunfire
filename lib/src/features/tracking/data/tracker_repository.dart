@@ -294,11 +294,11 @@ class TrackerRepository {
         document: gql(_kUpdateTrack),
         variables: {
           'recordId': recordId,
-          if (status != null) 'status': status,
-          if (lastChapterRead != null) 'lastChapterRead': lastChapterRead,
-          if (scoreString != null) 'scoreString': scoreString,
-          if (startDate != null) 'startDate': startDate,
-          if (finishDate != null) 'finishDate': finishDate,
+          'status': status,
+          'lastChapterRead': lastChapterRead,
+          'scoreString': scoreString,
+          'startDate': startDate,
+          'finishDate': finishDate,
         },
       ),
     );

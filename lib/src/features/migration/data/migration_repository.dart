@@ -147,6 +147,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
       List<String> warnings = [];
       int migratedChapters = 0;
       int migratedCategories = 0;
+      var criticalFailure = false;
 
       // Step 1: Add target manga to library if source manga is in library
       if (sourceManga.inLibrary) {
@@ -162,6 +163,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
         );
 
         if (updateLibraryResult.hasException) {
+          criticalFailure = true;
           warnings.add(
               'Failed to add target manga to library: ${updateLibraryResult.exception}');
         }
@@ -201,6 +203,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
               );
 
               if (updateCategoriesResult.hasException) {
+                criticalFailure = true;
                 warnings.add(
                     'Failed to migrate categories: ${updateCategoriesResult.exception}');
               } else {
@@ -209,6 +212,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
             }
           }
         } catch (e) {
+          criticalFailure = true;
           warnings.add('Category migration failed: $e');
         }
       }
@@ -263,7 +267,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
                     )
                     .firstOrNull;
 
-                // If no exact match, try name matching (case insensitive)
+                // Exact chapter number or exact name only — avoid ambiguous partial matches.
                 if (matchingChapter == null && sourceChapter.name.isNotEmpty) {
                   final sourceName = sourceChapter.name.toLowerCase().trim();
                   matchingChapter = targetChapters
@@ -272,18 +276,6 @@ class MigrationRepositoryImpl implements MigrationRepository {
                             chapter.name.toLowerCase().trim() == sourceName,
                       )
                       .firstOrNull;
-                }
-
-                // If still no match, try partial name matching
-                if (matchingChapter == null && sourceChapter.name.isNotEmpty) {
-                  final sourceName = sourceChapter.name.toLowerCase().trim();
-                  matchingChapter = targetChapters.where(
-                    (chapter) {
-                      final targetName = chapter.name.toLowerCase().trim();
-                      return targetName.contains(sourceName) ||
-                          sourceName.contains(targetName);
-                    },
-                  ).firstOrNull;
                 }
 
                 // If we found a matching chapter and it's not already read
@@ -334,6 +326,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
             }
           }
         } catch (e) {
+          criticalFailure = true;
           warnings.add('Chapter migration failed: $e');
         }
       }
@@ -388,10 +381,16 @@ class MigrationRepositoryImpl implements MigrationRepository {
       }
 
       return MigrationResult(
-        success: true,
+        success: !criticalFailure,
         migratedChapters: migratedChapters,
         migratedCategories: migratedCategories,
         warnings: warnings,
+        error: criticalFailure
+            ? warnings.firstWhere(
+                (w) => w.startsWith('Failed') || w.contains('failed'),
+                orElse: () => 'Migration completed with errors',
+              )
+            : null,
       );
     } catch (e) {
       return MigrationResult(

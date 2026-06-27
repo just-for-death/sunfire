@@ -151,10 +151,9 @@ class DirectionalSwipeGestureHandler extends HookWidget {
       chapterPages: chapterPages,
     );
 
-    final isAtLastPage = pagePosition == PagePosition.lastPage ||
-        pagePosition == PagePosition.singlePage;
-    final isAtFirstPage = pagePosition == PagePosition.firstPage ||
-        pagePosition == PagePosition.singlePage;
+    final isSinglePage = pagePosition == PagePosition.singlePage;
+    final isAtLastPage = pagePosition == PagePosition.lastPage || isSinglePage;
+    final isAtFirstPage = pagePosition == PagePosition.firstPage;
 
     // Skip swipe handling during mid-chapter scrolling in continuous
     // vertical readers.
