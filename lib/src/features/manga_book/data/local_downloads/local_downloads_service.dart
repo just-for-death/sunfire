@@ -172,6 +172,27 @@ class LocalDownloadsService {
     );
   }
 
+  /// Persists reading progress into the offline manifest for resume when offline.
+  Future<void> updateReadingProgress(
+    int chapterId, {
+    required int lastPageRead,
+    required bool isRead,
+  }) async {
+    final file = await _manifestFile(chapterId);
+    if (!await file.exists()) return;
+
+    try {
+      final raw = await file.readAsString();
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return;
+      decoded['lastPageRead'] = lastPageRead;
+      decoded['isRead'] = isRead;
+      await file.writeAsString(jsonEncode(decoded));
+    } catch (_) {
+      // Best-effort — don't block server progress save.
+    }
+  }
+
   /// Builds a chapter list from offline manifests when the server is unavailable.
   Future<List<ChapterDto>> getOfflineChaptersForManga(int mangaId) async {
     if (mangaId <= 0) return const [];

@@ -1,9 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../routes/router_config.dart';
+import '../../manga_book/data/local_downloads/local_downloads_service.dart';
 import '../../manga_book/presentation/manga_details/controller/manga_details_controller.dart';
 import '../domain/history_item.dart';
 
@@ -22,39 +21,23 @@ Future<void> openReaderFromHistoryItem(
     return;
   }
 
-  final completer = Completer<void>();
-  ProviderSubscription? sub;
-  var opened = false;
+  try {
+    final chapterListState =
+        ref.read(mangaChapterListProvider(mangaId: item.mangaId));
+    final chapterInList = chapterListState.valueOrNull
+            ?.any((chapter) => chapter.id == item.id) ??
+        false;
 
-  void finish() {
-    if (!completer.isCompleted) {
-      sub?.close();
-      completer.complete();
+    if (!chapterInList) {
+      await ref
+          .read(mangaChapterListProvider(mangaId: item.mangaId).notifier)
+          .refresh();
     }
-  }
 
-  void openChapter(int chapterId) {
-    if (!context.mounted) {
-      finish();
-      return;
-    }
-    ReaderRoute(mangaId: item.mangaId, chapterId: chapterId).push(context);
-    finish();
-  }
+    await ref.read(mangaChapterListProvider(mangaId: item.mangaId).future);
+    await ref.read(localDownloadedChapterIdsProvider.future);
 
-  void openMangaDetails() {
-    if (!context.mounted) {
-      finish();
-      return;
-    }
-    MangaRoute(mangaId: item.mangaId).push(context);
-    finish();
-  }
-
-  void resolveAndOpen() {
-    if (opened) return;
-    opened = true;
-    sub?.close();
+    if (!context.mounted) return;
 
     final pair = ref.read(
       getNextAndPreviousChaptersProvider(
@@ -64,50 +47,13 @@ Future<void> openReaderFromHistoryItem(
     );
     final nextId = pair?.first?.id;
     if (nextId != null && nextId != item.id) {
-      openChapter(nextId);
+      await ReaderRoute(mangaId: item.mangaId, chapterId: nextId).push(context);
     } else {
-      openMangaDetails();
+      await MangaRoute(mangaId: item.mangaId).push(context);
     }
-  }
-
-  sub = ref.listenManual(
-    mangaChapterListProvider(mangaId: item.mangaId),
-    (_, next) {
-      if (next is AsyncData) {
-        resolveAndOpen();
-      } else if (next is AsyncError && !opened) {
-        opened = true;
-        sub?.close();
-        openMangaDetails();
-      }
-    },
-  );
-
-  ref.read(mangaChapterSortProvider);
-  ref.read(mangaChapterSortDirectionProvider);
-
-  final existing = ref.read(mangaChapterListProvider(mangaId: item.mangaId));
-  if (existing is AsyncData) {
-    final list = existing.value;
-    final chapterFound = list?.any((c) => c.id == item.id) ?? false;
-    if (chapterFound) {
-      resolveAndOpen();
-      return;
+  } catch (_) {
+    if (context.mounted) {
+      await MangaRoute(mangaId: item.mangaId).push(context);
     }
-  }
-
-  unawaited(
-    ref.read(mangaChapterListProvider(mangaId: item.mangaId).notifier).refresh(),
-  );
-
-  try {
-    await completer.future.timeout(const Duration(seconds: 10));
-  } on TimeoutException {
-    if (!opened) {
-      opened = true;
-      openMangaDetails();
-    }
-  } finally {
-    finish();
   }
 }
