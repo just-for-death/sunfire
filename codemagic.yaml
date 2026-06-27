@@ -26,8 +26,27 @@ workflows:
           set -e
           flutter build ipa --release --no-codesign
 
+      - name: Prepare Catalyst.ipa artifact
+        script: |
+          set -e
+          mkdir -p build/ios/ipa
+          shopt -s nullglob
+          ipas=(build/ios/ipa/*.ipa)
+          if [ ${#ipas[@]} -gt 0 ]; then
+            mv "${ipas[0]}" build/ios/ipa/Catalyst.ipa
+          elif [ -d build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app ]; then
+            echo "IPA missing from flutter output; packaging from xcarchive..."
+            rm -rf /tmp/catalyst-ipa && mkdir -p /tmp/catalyst-ipa/Payload
+            cp -R build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app /tmp/catalyst-ipa/Payload/
+            (cd /tmp/catalyst-ipa && zip -qr "$CM_BUILD_DIR/build/ios/ipa/Catalyst.ipa" Payload)
+          else
+            echo "No .ipa or xcarchive app bundle found" >&2
+            exit 1
+          fi
+          ls -lh build/ios/ipa/Catalyst.ipa
+
     artifacts:
-      - build/ios/ipa/*.ipa
+      - build/ios/ipa/Catalyst.ipa
       - build/ios/archive/*.xcarchive
 
   # ── Android APKs ───────────────────────────────────────────────────────────
@@ -81,9 +100,24 @@ workflows:
           set -e
           flutter build ipa --release --no-codesign
 
-      - name: Rename IPA for release
+      - name: Prepare Catalyst.ipa artifact
         script: |
-          find build/ios/ipa -name "*.ipa" -exec mv {} build/ios/ipa/Catalyst.ipa \;
+          set -e
+          mkdir -p build/ios/ipa
+          shopt -s nullglob
+          ipas=(build/ios/ipa/*.ipa)
+          if [ ${#ipas[@]} -gt 0 ]; then
+            mv "${ipas[0]}" build/ios/ipa/Catalyst.ipa
+          elif [ -d build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app ]; then
+            echo "IPA missing from flutter output; packaging from xcarchive..."
+            rm -rf /tmp/catalyst-ipa && mkdir -p /tmp/catalyst-ipa/Payload
+            cp -R build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app /tmp/catalyst-ipa/Payload/
+            (cd /tmp/catalyst-ipa && zip -qr "$CM_BUILD_DIR/build/ios/ipa/Catalyst.ipa" Payload)
+          else
+            echo "No .ipa or xcarchive app bundle found" >&2
+            exit 1
+          fi
+          ls -lh build/ios/ipa/Catalyst.ipa
 
     artifacts:
       - build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
