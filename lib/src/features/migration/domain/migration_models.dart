@@ -88,6 +88,7 @@ class MigrationProgress with _$MigrationProgress {
     @Default(0) int totalItems,
     /// True when cancel was requested after the server had already applied changes.
     @Default(false) bool serverChangesApplied,
+    @Default(<String>[]) List<String> warnings,
   }) = _MigrationProgress;
 
   factory MigrationProgress.fromJson(Map<String, dynamic> json) =>

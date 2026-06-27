@@ -89,6 +89,24 @@ class MigrationOptionsWidget extends StatelessWidget {
                   options.copyWith(migrateCategories: value ?? false)),
             ),
 
+            _OptionTile(
+              icon: Icons.download_outlined,
+              title: l10n.migrateDownloads,
+              subtitle: l10n.migrateDownloadsDescription,
+              value: options.migrateDownloads,
+              onChanged: (value) =>
+                  onChanged(options.copyWith(migrateDownloads: value ?? false)),
+            ),
+
+            _OptionTile(
+              icon: Icons.track_changes_outlined,
+              title: l10n.migrateTracking,
+              subtitle: l10n.migrateTrackingDescription,
+              value: options.migrateTracking,
+              onChanged: (value) =>
+                  onChanged(options.copyWith(migrateTracking: value ?? false)),
+            ),
+
             // Delete source manga
             const SizedBox(height: 8),
             Container(

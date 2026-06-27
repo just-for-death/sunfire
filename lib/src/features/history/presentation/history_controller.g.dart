@@ -7,7 +7,7 @@ part of 'history_controller.dart';
 // **************************************************************************
 
 String _$historyGroupedByDateHash() =>
-    r'6f852afaf6a64418708f78b122b60a0dc1b5b004';
+    r'79ff45ddfdabf47a4dfbd83d2309da9377c53e64';
 
 /// See also [historyGroupedByDate].
 @ProviderFor(historyGroupedByDate)
@@ -44,7 +44,7 @@ final filteredHistoryGroupsProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef FilteredHistoryGroupsRef = AutoDisposeProviderRef<List<HistoryGroup>>;
-String _$readingHistoryHash() => r'357b823d0d08449c9ac1182e4a5799b6597bded2';
+String _$readingHistoryHash() => r'1d0d9b089306e44fb6d98a8605103e31b8e1dd04';
 
 /// See also [ReadingHistory].
 @ProviderFor(ReadingHistory)
@@ -264,7 +264,7 @@ final historyRetentionDaysProvider =
 );
 
 typedef _$HistoryRetentionDays = AutoDisposeNotifier<int?>;
-String _$historyEnabledHash() => r'507e1030909d91177ba95ff8198bcadfd9587a2c';
+String _$historyEnabledHash() => r'ea6a3b0263bbe974028d018a33a20195066b88f5';
 
 /// See also [HistoryEnabled].
 @ProviderFor(HistoryEnabled)

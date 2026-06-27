@@ -245,6 +245,18 @@ class AppLocalizationsVi extends AppLocalizations {
   String get downloaded => 'Đã tải xuống';
 
   @override
+  String get downloadRetryServer => 'Retry server download';
+
+  @override
+  String get downloadCancelServer => 'Cancel server download';
+
+  @override
+  String get downloadRemoveServer => 'Remove server download';
+
+  @override
+  String get downloadQueueServer => 'Download on server';
+
+  @override
   String get downloading => 'Đang tải xuống';
 
   @override
@@ -1032,6 +1044,84 @@ class AppLocalizationsVi extends AppLocalizations {
       'Thao tác này sẽ di chuyển vĩnh viễn dữ liệu manga của bạn. Không thể hoàn tác hành động này.';
 
   @override
+  String get migrationCompletedWithErrors => 'Migration completed with errors';
+
+  @override
+  String get migrationFailedGeneric => 'Migration failed';
+
+  @override
+  String migrationFailedWithDetail(String detail) {
+    return 'Migration failed: $detail';
+  }
+
+  @override
+  String migrationWarnAddToLibraryFailed(String detail) {
+    return 'Failed to add target manga to library: $detail';
+  }
+
+  @override
+  String migrationWarnCategoriesFailed(String detail) {
+    return 'Failed to migrate categories: $detail';
+  }
+
+  @override
+  String migrationWarnCategoryMigrationFailed(String detail) {
+    return 'Category migration failed: $detail';
+  }
+
+  @override
+  String migrationWarnChapterMigrateFailed(int chapterId, String detail) {
+    return 'Failed to migrate chapter $chapterId: $detail';
+  }
+
+  @override
+  String get migrationWarnNoMatchingChapters =>
+      'No matching chapters found for read status migration. This may be due to different chapter numbering between sources.';
+
+  @override
+  String migrationWarnChapterMigrationFailed(String detail) {
+    return 'Chapter migration failed: $detail';
+  }
+
+  @override
+  String migrationWarnClearCategoriesFailed(String detail) {
+    return 'Failed to clear categories for source manga: $detail';
+  }
+
+  @override
+  String migrationWarnRemoveSourceFailed(String detail) {
+    return 'Failed to remove source manga from library: $detail';
+  }
+
+  @override
+  String get migrationWarnRemovedSourceFromLibrary =>
+      'Removed original manga from library';
+
+  @override
+  String migrationWarnDownloadsMigrationFailed(String detail) {
+    return 'Offline download migration failed: $detail';
+  }
+
+  @override
+  String migrationWarnDownloadChapterSkipped(int chapterId) {
+    return 'Could not migrate offline download for chapter $chapterId';
+  }
+
+  @override
+  String migrationWarnTrackingMigrationFailed(String detail) {
+    return 'Tracking migration failed: $detail';
+  }
+
+  @override
+  String migrationWarnTrackingRecordFailed(String tracker, String detail) {
+    return 'Failed to migrate tracking for $tracker: $detail';
+  }
+
+  @override
+  String get migrationWarnTrackingBindFailed =>
+      'Could not bind to target manga';
+
+  @override
   String get deleteSourceWarning =>
       'Manga gốc sẽ bị xóa khỏi thư viện của bạn sau khi di chuyển.';
 
@@ -1260,6 +1350,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get localDownloadRetryTooltip => 'Retry offline download';
 
   @override
+  String get localDownloadCancelTooltip => 'Cancel offline download';
+
+  @override
   String get localDownloadRemoveTitle => 'Remove offline download?';
 
   @override
@@ -1446,6 +1539,23 @@ class AppLocalizationsVi extends AppLocalizations {
   String get unread => 'Chưa đọc';
 
   @override
+  String get author => 'Author';
+
+  @override
+  String get artist => 'Artist';
+
+  @override
+  String unreadChapterCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count chapters',
+      one: '1 chapter',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get update => 'Cập nhật';
 
   @override
@@ -1511,6 +1621,27 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get noHistoryFound => 'Không tìm thấy lịch sử đọc';
+
+  @override
+  String get historyLoadMore => 'Scroll for more';
+
+  @override
+  String get historyEnabledLabel => 'Reading history';
+
+  @override
+  String get historyEnabledDescription =>
+      'Track recently read chapters on the home screen';
+
+  @override
+  String get historyRetentionLabel => 'Keep history for';
+
+  @override
+  String historyRetentionDays(int days) {
+    return '$days days';
+  }
+
+  @override
+  String get historyRetentionNever => 'Forever';
 
   @override
   String get startReadingToSeeHistory =>
@@ -1614,6 +1745,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get notLoggedIn => 'Not logged in';
 
   @override
+  String get trackerTokenExpired => 'Token expired';
+
+  @override
   String get noTrackingFound => 'No tracking entries yet';
 
   @override
@@ -1661,6 +1795,16 @@ class AppLocalizationsVi extends AppLocalizations {
   @override
   String trackingChapterCount(int count) {
     return '$count chapters';
+  }
+
+  @override
+  String trackingChapterLabel(String number) {
+    return 'Ch. $number';
+  }
+
+  @override
+  String trackingChapterWithTotal(int current, int total) {
+    return 'Ch. $current/$total';
   }
 
   @override
@@ -1741,6 +1885,12 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get migrationSummaryTitle => 'Migration Summary';
+
+  @override
+  String get migrationWarningsTitle => 'Warnings';
+
+  @override
+  String get migrationManualSearch => 'Manual search';
 
   @override
   String migratedFromManga(String title) {

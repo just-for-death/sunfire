@@ -18,7 +18,7 @@ import '../presentation/downloads/controller/local_downloads_controller.dart';
 ///
 /// States:
 ///   idle, not downloaded  → outlined phone-download icon (tap → download)
-///   downloading           → circular arc + "X/Y" page counter (tap = cancel intent shown as nothing, download continues)
+///   downloading           → circular arc + page counter (tap → cancel)
 ///   downloaded            → filled green check-phone icon (tap → delete confirmation)
 ///   error                 → red error icon (tap → retry)
 class LocalDownloadButton extends HookConsumerWidget {
@@ -50,27 +50,33 @@ class LocalDownloadButton extends HookConsumerWidget {
       final hasProgress = progress.total > 0;
       final fraction = hasProgress ? progress.current / progress.total : null;
 
-      return SizedBox(
-        width: 40,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            MiniCircularProgressIndicator(
-              color: context.theme.colorScheme.primary,
-              value: fraction,
-            ),
-            if (hasProgress)
-              Text(
-                '${progress.current}/${progress.total}',
-                style: TextStyle(
-                  fontSize: 7,
-                  color: context.theme.colorScheme.primary,
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
-                ),
+      return IconButton(
+        tooltip: context.l10n.localDownloadCancelTooltip,
+        padding: KEdgeInsets.h4.size,
+        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+        onPressed: () => localNotifier.cancel(),
+        icon: SizedBox(
+          width: 40,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              MiniCircularProgressIndicator(
+                color: context.theme.colorScheme.primary,
+                value: fraction,
               ),
-          ],
+              if (hasProgress)
+                Text(
+                  '${progress.current}/${progress.total}',
+                  style: TextStyle(
+                    fontSize: 7,
+                    color: context.theme.colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                  ),
+                ),
+            ],
+          ),
         ),
       );
     }

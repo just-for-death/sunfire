@@ -27,10 +27,15 @@ final localDownloadProgressProvider =
 
 @riverpod
 class LocalChapterDownload extends _$LocalChapterDownload {
+  bool _cancelRequested = false;
+  int _downloadGeneration = 0;
+
   @override
   LocalDownloadState build({required int chapterId}) {
     return LocalDownloadState.idle;
   }
+
+  bool _isStaleDownload(int generation) => generation != _downloadGeneration;
 
   Future<bool> isDownloaded() async {
     final service = ref.read(localDownloadsServiceProvider);
@@ -42,10 +47,20 @@ class LocalChapterDownload extends _$LocalChapterDownload {
     return service.getLocalPages(chapterId);
   }
 
+  Future<void> cancel() async {
+    if (state != LocalDownloadState.downloading) return;
+    _cancelRequested = true;
+    state = LocalDownloadState.idle;
+    ref.read(localDownloadProgressProvider(chapterId).notifier).state =
+        (current: 0, total: 0);
+  }
+
   Future<void> download() async {
     if (kIsWeb) return; // no local filesystem on web
     // Allow on Android, iOS, and desktop (Linux/macOS/Windows).
 
+    final generation = ++_downloadGeneration;
+    _cancelRequested = false;
     state = LocalDownloadState.downloading;
 
     // Reset progress counter before starting.
@@ -58,19 +73,35 @@ class LocalChapterDownload extends _$LocalChapterDownload {
         ref: ref,
         chapterId: chapterId,
         onProgress: (current, total) {
+          if (_isStaleDownload(generation)) return;
           try {
             ref.read(localDownloadProgressProvider(chapterId).notifier).state =
                 (current: current, total: total);
           } catch (_) {}
         },
+        isCancelled: () =>
+            _cancelRequested || _isStaleDownload(generation),
       );
+      if (_isStaleDownload(generation)) return;
       state = LocalDownloadState.finished;
       ref.invalidate(chapterPagesProvider(chapterId: chapterId));
       ref.invalidate(localDownloadedChapterIdsProvider);
       ref.invalidate(offlineStorageSizeProvider);
       state = LocalDownloadState.idle;
+    } on DownloadCancelledException {
+      if (_isStaleDownload(generation)) return;
+      state = LocalDownloadState.idle;
+      ref.read(localDownloadProgressProvider(chapterId).notifier).state =
+          (current: 0, total: 0);
     } catch (_) {
-      state = LocalDownloadState.error;
+      if (_isStaleDownload(generation)) return;
+      if (_cancelRequested) {
+        state = LocalDownloadState.idle;
+        ref.read(localDownloadProgressProvider(chapterId).notifier).state =
+            (current: 0, total: 0);
+      } else {
+        state = LocalDownloadState.error;
+      }
     }
   }
 

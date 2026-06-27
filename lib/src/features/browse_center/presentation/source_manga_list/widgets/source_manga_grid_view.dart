@@ -44,7 +44,7 @@ class SourceMangaGridView extends ConsumerWidget {
         newPageProgressIndicatorBuilder: (context) =>
             const CenterCatalystShimmerIndicator(),
         firstPageErrorIndicatorBuilder: (context) => Emoticons(
-          title: controller.error.toString(),
+          title: context.l10n.errorSomethingWentWrong,
           button: TextButton(
             onPressed: () => controller.refresh(),
             child: Text(context.l10n.retry),

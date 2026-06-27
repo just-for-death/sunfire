@@ -293,7 +293,9 @@ class TrackerEditDialog extends HookConsumerWidget {
                   } catch (e) {
                     if (context.mounted) {
                       saving.value = false;
-                      ref.read(toastProvider)?.showError(e.toString());
+                      ref
+                          .read(toastProvider)
+                          ?.showError(context.l10n.errorSomethingWentWrong);
                     }
                   }
                 },

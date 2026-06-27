@@ -16,7 +16,51 @@ import '../../../domain/chapter_page/graphql/__generated__/fragment.graphql.dart
 
 part 'reader_controller.g.dart';
 
+/// Suwayomi stores `lastPageRead: 0` when a chapter is completed. Map that to
+/// the last page index so `isRead` and progress stay consistent in the UI.
+int _lastPageReadWhenCompleted({
+  required int pageCount,
+  int serverLastPageRead = 0,
+  int manifestLastPageRead = 0,
+}) {
+  if (pageCount <= 0) return 0;
+  final lastIndex = pageCount - 1;
+  return [
+    serverLastPageRead,
+    manifestLastPageRead,
+    lastIndex,
+  ].reduce((a, b) => a > b ? a : b);
+}
+
+ChapterDto _mergeChapterWithOfflineProgress(
+  ChapterDto server,
+  OfflineChapterManifest manifest,
+) {
+  final localAhead = (manifest.isRead && !server.isRead) ||
+      manifest.lastPageRead > server.lastPageRead;
+  if (!localAhead) return server;
+  final isRead = manifest.isRead || server.isRead;
+  final pageCount = server.pageCount > 0 ? server.pageCount : manifest.pageCount;
+  final lastPageRead = isRead
+      ? _lastPageReadWhenCompleted(
+          pageCount: pageCount,
+          serverLastPageRead: server.lastPageRead,
+          manifestLastPageRead: manifest.lastPageRead,
+        )
+      : manifest.lastPageRead;
+  return server.copyWith(
+    lastPageRead: lastPageRead,
+    isRead: isRead,
+  );
+}
+
 ChapterDto _chapterFromOfflineManifest(OfflineChapterManifest manifest) {
+  final lastPageRead = manifest.isRead
+      ? _lastPageReadWhenCompleted(
+          pageCount: manifest.pageCount,
+          manifestLastPageRead: manifest.lastPageRead,
+        )
+      : manifest.lastPageRead;
   return Fragment$ChapterDto(
     chapterNumber: manifest.chapterNumber,
     fetchedAt: '0',
@@ -24,7 +68,7 @@ ChapterDto _chapterFromOfflineManifest(OfflineChapterManifest manifest) {
     isBookmarked: false,
     isDownloaded: true,
     isRead: manifest.isRead,
-    lastPageRead: manifest.lastPageRead,
+    lastPageRead: lastPageRead,
     lastReadAt: '0',
     mangaId: manifest.mangaId,
     name: manifest.chapterName.isNotEmpty
@@ -63,7 +107,16 @@ Future<ChapterPagesDto?> _chapterPagesWithLocalFallback(
         chapter: remote.chapter.copyWith(pageCount: localPages.length),
       );
     }
-    return remote;
+    final mergedPages = <String>[];
+    for (var i = 0; i < remote.pages.length; i++) {
+      mergedPages.add(
+        i < localPages.length ? localPages[i] : remote.pages[i],
+      );
+    }
+    return remote.copyWith(
+      pages: mergedPages,
+      chapter: remote.chapter.copyWith(pageCount: mergedPages.length),
+    );
   }
 
   if (localPages == null || localPages.isEmpty) return null;
@@ -100,15 +153,21 @@ Future<ChapterDto?> _chapterWithOfflineFallback(
   Ref ref, {
   required int chapterId,
 }) async {
+  final manifest =
+      await ref.read(localDownloadsServiceProvider).getOfflineManifest(chapterId);
+
   try {
     final chapter = await ref
         .read(mangaBookRepositoryProvider)
         .getChapter(chapterId: chapterId);
-    if (chapter != null) return chapter;
+    if (chapter != null) {
+      if (manifest != null) {
+        return _mergeChapterWithOfflineProgress(chapter, manifest);
+      }
+      return chapter;
+    }
   } catch (_) {}
 
-  final manifest =
-      await ref.read(localDownloadsServiceProvider).getOfflineManifest(chapterId);
   if (manifest == null) return null;
   return _chapterFromOfflineManifest(manifest);
 }

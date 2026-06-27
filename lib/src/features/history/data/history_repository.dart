@@ -13,21 +13,83 @@ import '../../../graphql/__generated__/schema.graphql.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../../manga_book/data/manga_book/manga_book_repository.dart';
 import '../../manga_book/domain/chapter_batch/chapter_batch_model.dart';
-import '../../manga_book/domain/chapter_page/chapter_page_model.dart';
 import '../domain/history_item.dart';
 import 'graphql/__generated__/query.graphql.dart';
 
 part 'history_repository.g.dart';
+
+/// Result of a paginated history fetch using raw chapter offsets.
+class ReadingHistoryPage {
+  const ReadingHistoryPage({
+    required this.items,
+    required this.nextRawOffset,
+    required this.hasMore,
+  });
+
+  final List<HistoryItemDto> items;
+  final int nextRawOffset;
+  final bool hasMore;
+}
 
 class HistoryRepository {
   const HistoryRepository(this.client, this.mangaBookRepository);
   final GraphQLClient client;
   final MangaBookRepository mangaBookRepository;
 
-  /// Fetch reading history with pagination and filtering
-  Future<ChapterPageWithMangaDto?> getReadingHistory({
-    int pageSize = 50,
-    int pageNo = 0,
+  /// Fetch one page of deduplicated reading history (one entry per manga).
+  ///
+  /// [rawOffset] is the GraphQL offset into the raw chapter list.
+  /// [excludeMangaIds] skips mangas already loaded in prior pages.
+  Future<ReadingHistoryPage> fetchReadingHistoryPage({
+    int rawOffset = 0,
+    Set<int> excludeMangaIds = const {},
+    int targetCount = 50,
+    String? searchQuery,
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
+    const rawBatchSize = 200;
+    final collected = <HistoryItemDto>[];
+    final seenMangaIds = {...excludeMangaIds};
+    var offset = rawOffset;
+    var lastBatchFull = true;
+
+    while (collected.length < targetCount && lastBatchFull) {
+      final batch = await _fetchRawHistoryChapters(
+        rawOffset: offset,
+        rawBatchSize: rawBatchSize,
+        searchQuery: searchQuery,
+        fromDate: fromDate,
+        toDate: toDate,
+      );
+
+      if (batch.isEmpty) {
+        lastBatchFull = false;
+        break;
+      }
+
+      for (final chapter in batch) {
+        final mangaId = chapter.mangaId;
+        if (seenMangaIds.contains(mangaId)) continue;
+        seenMangaIds.add(mangaId);
+        collected.add(chapter);
+        if (collected.length >= targetCount) break;
+      }
+
+      offset += batch.length;
+      lastBatchFull = batch.length >= rawBatchSize;
+    }
+
+    return ReadingHistoryPage(
+      items: collected,
+      nextRawOffset: offset,
+      hasMore: lastBatchFull,
+    );
+  }
+
+  Future<List<HistoryItemDto>> _fetchRawHistoryChapters({
+    required int rawOffset,
+    required int rawBatchSize,
     String? searchQuery,
     DateTime? fromDate,
     DateTime? toDate,
@@ -103,8 +165,8 @@ class HistoryRepository {
         .query$GetReadingHistory(
           Options$Query$GetReadingHistory(
             variables: Variables$Query$GetReadingHistory(
-              first: pageSize * 10, // Get more results to filter duplicates
-              offset: pageNo * pageSize,
+              first: rawBatchSize,
+              offset: rawOffset,
               filter: filter,
               order: order,
             ),
@@ -112,54 +174,13 @@ class HistoryRepository {
         )
         .getData((data) => data.chapters);
 
-    // Filter to only show the most recent chapter per manga
-    if (result?.nodes != null) {
-      // First, apply client-side filtering to ensure removed chapters are excluded
-      final validChapters = result!.nodes.where((chapter) {
-        // Only include chapters with actual reading progress:
-        // 1. Fully read chapters (isRead: true), OR
-        // 2. Chapters with meaningful progress (lastPageRead > 0)
-        // This excludes chapters that were removed from history (isRead: false AND lastPageRead: 0)
-        final isFullyRead = chapter.isRead;
-        final hasProgress = chapter.lastPageRead > 0;
+    if (result?.nodes == null) return const [];
 
-        return isFullyRead || hasProgress;
-      }).toList();
-
-      final Map<int, HistoryItemDto> latestChapterPerManga = {};
-
-      for (final chapter in validChapters) {
-        final mangaId = chapter.mangaId;
-
-        // Only keep the first (most recent) chapter for each manga
-        if (!latestChapterPerManga.containsKey(mangaId)) {
-          latestChapterPerManga[mangaId] = chapter;
-        }
-      }
-
-      // Take only the requested page size from the filtered results
-      final filteredChapters = latestChapterPerManga.values.toList()
-        ..sort((a, b) {
-          final aTime = a.readAt?.millisecondsSinceEpoch ?? 0;
-          final bTime = b.readAt?.millisecondsSinceEpoch ?? 0;
-          return bTime.compareTo(aTime); // Most recent first
-        });
-
-      final startIndex = pageNo * pageSize;
-      final endIndex =
-          (startIndex + pageSize).clamp(0, filteredChapters.length);
-      final pageChapters = startIndex < filteredChapters.length
-          ? filteredChapters.sublist(startIndex, endIndex)
-          : <HistoryItemDto>[];
-
-      return ChapterPageWithMangaDto(
-        nodes: pageChapters,
-        pageInfo: result.pageInfo,
-        totalCount: latestChapterPerManga.length,
-      );
-    }
-
-    return result;
+    return result!.nodes.where((chapter) {
+      final isFullyRead = chapter.isRead;
+      final hasProgress = chapter.lastPageRead > 0;
+      return isFullyRead || hasProgress;
+    }).toList();
   }
 
   /// Get reading history for a specific manga
@@ -205,17 +226,6 @@ class HistoryRepository {
         // Note: lastReadAt cannot be cleared via this API
         // Some chapters may still appear until server is restarted
       ),
-    );
-  }
-
-  /// Clear all reading history (mark all chapters as unread)
-  /// This is a destructive operation and should be used with caution
-  Future<void> clearAllHistory() async {
-    // This would require a server-side bulk operation
-    // For now, this is a placeholder that would need server support
-    throw UnimplementedError(
-      'Clearing all history requires server-side support. '
-      'Please use individual chapter removal instead.',
     );
   }
 }

@@ -568,6 +568,30 @@ abstract class AppLocalizations {
   /// **'Downloaded'**
   String get downloaded;
 
+  /// Tooltip for retrying a failed server-side chapter download
+  ///
+  /// In en, this message translates to:
+  /// **'Retry server download'**
+  String get downloadRetryServer;
+
+  /// Tooltip for cancelling an in-progress server download
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel server download'**
+  String get downloadCancelServer;
+
+  /// Tooltip for removing a completed server download
+  ///
+  /// In en, this message translates to:
+  /// **'Remove server download'**
+  String get downloadRemoveServer;
+
+  /// Tooltip for queueing a chapter download on the server
+  ///
+  /// In en, this message translates to:
+  /// **'Download on server'**
+  String get downloadQueueServer;
+
   /// Text to show chapters downloading
   ///
   /// In en, this message translates to:
@@ -1894,6 +1918,108 @@ abstract class AppLocalizations {
   /// **'This will permanently move your manga data. This action cannot be undone.'**
   String get migrationWarning;
 
+  /// No description provided for @migrationCompletedWithErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration completed with errors'**
+  String get migrationCompletedWithErrors;
+
+  /// No description provided for @migrationFailedGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration failed'**
+  String get migrationFailedGeneric;
+
+  /// No description provided for @migrationFailedWithDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration failed: {detail}'**
+  String migrationFailedWithDetail(String detail);
+
+  /// No description provided for @migrationWarnAddToLibraryFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to add target manga to library: {detail}'**
+  String migrationWarnAddToLibraryFailed(String detail);
+
+  /// No description provided for @migrationWarnCategoriesFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to migrate categories: {detail}'**
+  String migrationWarnCategoriesFailed(String detail);
+
+  /// No description provided for @migrationWarnCategoryMigrationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Category migration failed: {detail}'**
+  String migrationWarnCategoryMigrationFailed(String detail);
+
+  /// No description provided for @migrationWarnChapterMigrateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to migrate chapter {chapterId}: {detail}'**
+  String migrationWarnChapterMigrateFailed(int chapterId, String detail);
+
+  /// No description provided for @migrationWarnNoMatchingChapters.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching chapters found for read status migration. This may be due to different chapter numbering between sources.'**
+  String get migrationWarnNoMatchingChapters;
+
+  /// No description provided for @migrationWarnChapterMigrationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapter migration failed: {detail}'**
+  String migrationWarnChapterMigrationFailed(String detail);
+
+  /// No description provided for @migrationWarnClearCategoriesFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to clear categories for source manga: {detail}'**
+  String migrationWarnClearCategoriesFailed(String detail);
+
+  /// No description provided for @migrationWarnRemoveSourceFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to remove source manga from library: {detail}'**
+  String migrationWarnRemoveSourceFailed(String detail);
+
+  /// No description provided for @migrationWarnRemovedSourceFromLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed original manga from library'**
+  String get migrationWarnRemovedSourceFromLibrary;
+
+  /// No description provided for @migrationWarnDownloadsMigrationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline download migration failed: {detail}'**
+  String migrationWarnDownloadsMigrationFailed(String detail);
+
+  /// No description provided for @migrationWarnDownloadChapterSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not migrate offline download for chapter {chapterId}'**
+  String migrationWarnDownloadChapterSkipped(int chapterId);
+
+  /// No description provided for @migrationWarnTrackingMigrationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking migration failed: {detail}'**
+  String migrationWarnTrackingMigrationFailed(String detail);
+
+  /// No description provided for @migrationWarnTrackingRecordFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to migrate tracking for {tracker}: {detail}'**
+  String migrationWarnTrackingRecordFailed(String tracker, String detail);
+
+  /// No description provided for @migrationWarnTrackingBindFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not bind to target manga'**
+  String get migrationWarnTrackingBindFailed;
+
   /// No description provided for @deleteSourceWarning.
   ///
   /// In en, this message translates to:
@@ -2320,6 +2446,12 @@ abstract class AppLocalizations {
   /// **'Retry offline download'**
   String get localDownloadRetryTooltip;
 
+  /// No description provided for @localDownloadCancelTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel offline download'**
+  String get localDownloadCancelTooltip;
+
   /// No description provided for @localDownloadRemoveTitle.
   ///
   /// In en, this message translates to:
@@ -2650,6 +2782,24 @@ abstract class AppLocalizations {
   /// **'Unread'**
   String get unread;
 
+  /// No description provided for @author.
+  ///
+  /// In en, this message translates to:
+  /// **'Author'**
+  String get author;
+
+  /// No description provided for @artist.
+  ///
+  /// In en, this message translates to:
+  /// **'Artist'**
+  String get artist;
+
+  /// No description provided for @unreadChapterCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 chapter} other{{count} chapters}}'**
+  String unreadChapterCount(int count);
+
   /// Button text to update the extension
   ///
   /// In en, this message translates to:
@@ -2775,6 +2925,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No reading history found'**
   String get noHistoryFound;
+
+  /// Hint at the bottom of the history list when more items can be loaded
+  ///
+  /// In en, this message translates to:
+  /// **'Scroll for more'**
+  String get historyLoadMore;
+
+  /// Toggle label for enabling reading history
+  ///
+  /// In en, this message translates to:
+  /// **'Reading history'**
+  String get historyEnabledLabel;
+
+  /// Subtitle for the reading history toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Track recently read chapters on the home screen'**
+  String get historyEnabledDescription;
+
+  /// Label for history retention period setting
+  ///
+  /// In en, this message translates to:
+  /// **'Keep history for'**
+  String get historyRetentionLabel;
+
+  /// No description provided for @historyRetentionDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} days'**
+  String historyRetentionDays(int days);
+
+  /// Option to keep reading history without time limit
+  ///
+  /// In en, this message translates to:
+  /// **'Forever'**
+  String get historyRetentionNever;
 
   /// No description provided for @startReadingToSeeHistory.
   ///
@@ -2962,6 +3148,12 @@ abstract class AppLocalizations {
   /// **'Not logged in'**
   String get notLoggedIn;
 
+  /// Shown when a tracker OAuth token has expired
+  ///
+  /// In en, this message translates to:
+  /// **'Token expired'**
+  String get trackerTokenExpired;
+
   /// Empty state for manga tracker sheet
   ///
   /// In en, this message translates to:
@@ -3045,6 +3237,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} chapters'**
   String trackingChapterCount(int count);
+
+  /// No description provided for @trackingChapterLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Ch. {number}'**
+  String trackingChapterLabel(String number);
+
+  /// No description provided for @trackingChapterWithTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Ch. {current}/{total}'**
+  String trackingChapterWithTotal(int current, int total);
 
   /// No description provided for @trackingLoginInSettings.
   ///
@@ -3183,6 +3387,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Migration Summary'**
   String get migrationSummaryTitle;
+
+  /// Header for migration warnings shown after completion
+  ///
+  /// In en, this message translates to:
+  /// **'Warnings'**
+  String get migrationWarningsTitle;
+
+  /// Tooltip for manually searching a manga during batch migration
+  ///
+  /// In en, this message translates to:
+  /// **'Manual search'**
+  String get migrationManualSearch;
 
   /// Bullet point showing source manga
   ///

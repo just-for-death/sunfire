@@ -37,7 +37,7 @@ extension AsyncValueExtensions<T> on AsyncValue<T> {
     Widget Function(T data) data, {
     VoidCallback? refresh,
     Widget Function(Widget)? wrapper,
-    bool showGenericError = false,
+    bool showGenericError = true,
     bool addScaffoldWrapper = false,
   }) {
     if (addScaffoldWrapper) {

@@ -108,13 +108,13 @@ class DownloadStatusIcon extends HookConsumerWidget {
         // Server download actively queued / in-progress / error.
         if (downloadUpdate.state == DownloadState.ERROR) {
           return IconButton(
-            tooltip: 'Retry server download',
+            tooltip: context.l10n.downloadRetryServer,
             onPressed: serverRetry,
             icon: const Icon(Icons.replay_rounded),
           );
         } else {
           return IconButton(
-            tooltip: 'Cancel server download',
+            tooltip: context.l10n.downloadCancelServer,
             onPressed: serverRemove,
             icon: MiniCircularProgressIndicator(
               value:
@@ -126,14 +126,14 @@ class DownloadStatusIcon extends HookConsumerWidget {
       } else if (isDownloaded) {
         // Chapter already on server — show filled check, tap to remove.
         return IconButton(
-          tooltip: 'Remove server download',
+          tooltip: context.l10n.downloadRemoveServer,
           onPressed: serverDeleteFinished,
           icon: const Icon(Icons.check_circle_rounded),
         );
       } else {
         // Not on server — show cloud-download, tap to queue.
         return IconButton(
-          tooltip: 'Download on server',
+          tooltip: context.l10n.downloadQueueServer,
           onPressed: serverAdd,
           icon: const Icon(Icons.cloud_download_outlined),
         );
