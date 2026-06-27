@@ -174,7 +174,7 @@ class _LibraryFilterChips extends ConsumerWidget {
             selected: isDownloaded == true,
             onTap: () => widgetRef
                 .read(libraryMangaFilterDownloadedProvider.notifier)
-                .update(!(isDownloaded ?? false)),
+                .update(isDownloaded == true ? null : true),
           ),
           const SizedBox(width: 8),
           _chip(
@@ -184,7 +184,7 @@ class _LibraryFilterChips extends ConsumerWidget {
             selected: isUnread == true,
             onTap: () => widgetRef
                 .read(libraryMangaFilterUnreadProvider.notifier)
-                .update(!(isUnread ?? false)),
+                .update(isUnread == true ? null : true),
           ),
           const SizedBox(width: 8),
           _chip(
@@ -194,7 +194,7 @@ class _LibraryFilterChips extends ConsumerWidget {
             selected: isCompleted == true,
             onTap: () => widgetRef
                 .read(libraryMangaFilterCompletedProvider.notifier)
-                .update(!(isCompleted ?? false)),
+                .update(isCompleted == true ? null : true),
           ),
         ],
       ),

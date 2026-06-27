@@ -11,8 +11,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../global_providers/global_providers.dart';
 import '../../../graphql/__generated__/schema.graphql.dart';
 import '../../../utils/extensions/custom_extensions.dart';
-import '../../manga_book/data/manga_book/manga_book_repository.dart';
-import '../../manga_book/domain/chapter_batch/chapter_batch_model.dart';
 import '../domain/history_item.dart';
 import 'graphql/__generated__/query.graphql.dart';
 
@@ -32,9 +30,8 @@ class ReadingHistoryPage {
 }
 
 class HistoryRepository {
-  const HistoryRepository(this.client, this.mangaBookRepository);
+  const HistoryRepository(this.client);
   final GraphQLClient client;
-  final MangaBookRepository mangaBookRepository;
 
   /// Fetch one page of deduplicated reading history (one entry per manga).
   ///
@@ -122,13 +119,15 @@ class HistoryRepository {
         if (fromDate != null)
           Input$ChapterFilterInput(
             lastReadAt: Input$LongFilterInput(
-              greaterThanOrEqualTo: fromDate.millisecondsSinceEpoch.toString(),
+              greaterThanOrEqualTo:
+                  (fromDate.millisecondsSinceEpoch ~/ 1000).toString(),
             ),
           ),
         if (toDate != null)
           Input$ChapterFilterInput(
             lastReadAt: Input$LongFilterInput(
-              lessThanOrEqualTo: toDate.millisecondsSinceEpoch.toString(),
+              lessThanOrEqualTo:
+                  (toDate.millisecondsSinceEpoch ~/ 1000).toString(),
             ),
           ),
         // Add search filtering if provided
@@ -213,23 +212,8 @@ class HistoryRepository {
         .getData((data) => data.chapters.nodes);
   }
 
-  /// Clear reading history for a specific chapter
-  Future<void> removeChapterFromHistory(int chapterId) async {
-    // Mark the chapter as unread and reset progress
-    // This should remove it from history queries since our filter requires:
-    // either isRead: true OR lastPageRead > 0
-    await mangaBookRepository.putChapter(
-      chapterId: chapterId,
-      patch: ChapterChange(
-        isRead: false, // Set to false (not fully read)
-        lastPageRead: 0, // Reset to 0 (no progress)
-        // Note: lastReadAt cannot be cleared via this API
-        // Some chapters may still appear until server is restarted
-      ),
-    );
-  }
 }
 
 @riverpod
-HistoryRepository historyRepository(Ref ref) => HistoryRepository(
-    ref.watch(graphQlClientProvider), ref.watch(mangaBookRepositoryProvider));
+HistoryRepository historyRepository(Ref ref) =>
+    HistoryRepository(ref.watch(graphQlClientProvider));

@@ -62,6 +62,7 @@ enum DBKeys {
   useDynamicColor(true),
   historyEnabled(true),
   historyRetentionDays(90),
+  historyHiddenChapterIds(<int>[]),
   // Timeout Settings
   serverRequestTimeout(5000), // milliseconds
   autoRefreshOnTimeout(false),

@@ -77,6 +77,7 @@ GraphQLClient graphQlClient(Ref ref) {
       query: Policies(fetch: FetchPolicy.noCache),
     ),
     cache: GraphQLCache(store: ref.watch(hiveStoreProvider)),
+    queryRequestTimeout: null,
   );
 }
 
@@ -104,13 +105,14 @@ GraphQLClient graphQlSubscriptionClient(Ref ref) {
       query: Policies(fetch: FetchPolicy.noCache),
     ),
     cache: GraphQLCache(store: ref.watch(hiveStoreProvider)),
+    queryRequestTimeout: null,
   );
 }
 
-/// GraphQL client with a longer timeout for tracker operations.
-/// Tracker queries call external APIs (MAL, AniList, etc.) which can be slow.
-@riverpod
-GraphQLClient trackerGraphQlClient(Ref ref) {
+GraphQLClient _graphQlClientWithTimeout(
+  Ref ref, {
+  required Duration timeout,
+}) {
   final authType = ref.watch(authTypeKeyProvider) ?? DBKeys.authType.initial;
   final credentials = ref.watch(credentialsProvider);
 
@@ -123,10 +125,7 @@ GraphQLClient trackerGraphQlClient(Ref ref) {
     ),
     followRedirects: true,
     defaultHeaders: {'Content-Type': 'application/json; charset=utf-8'},
-    httpClient: TimeoutHttpClient(
-      const Duration(seconds: 30), // tracker APIs can be slow
-      retries: 0,
-    ),
+    httpClient: TimeoutHttpClient(timeout, retries: 0),
   );
 
   if (authType == AuthType.basic && credentials.isNotBlank) {
@@ -141,8 +140,20 @@ GraphQLClient trackerGraphQlClient(Ref ref) {
       query: Policies(fetch: FetchPolicy.noCache),
     ),
     cache: GraphQLCache(store: ref.watch(hiveStoreProvider)),
+    queryRequestTimeout: null,
   );
 }
+
+/// GraphQL client with a longer timeout for tracker operations.
+/// Tracker queries call external APIs (MAL, AniList, etc.) which can be slow.
+@riverpod
+GraphQLClient trackerGraphQlClient(Ref ref) =>
+    _graphQlClientWithTimeout(ref, timeout: const Duration(seconds: 30));
+
+/// GraphQL client for slow server operations (extension install/update, etc.).
+@riverpod
+GraphQLClient longRunningGraphQlClient(Ref ref) =>
+    _graphQlClientWithTimeout(ref, timeout: const Duration(seconds: 120));
 
 @riverpod
 ValueNotifier<GraphQLClient> graphQlClientNotifier(Ref ref) {

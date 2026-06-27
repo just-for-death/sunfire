@@ -177,7 +177,7 @@ final libraryDisplayCategoryProvider =
 
 typedef _$LibraryDisplayCategory = AutoDisposeNotifier<CategoryDto?>;
 String _$categoryMangaListWithQueryAndFilterHash() =>
-    r'a11ebfb82e753019b1b854cd98bcd0cee11a5361';
+    r'4a20bb4457a9601a3f8f62746c30976b6585596a';
 
 abstract class _$CategoryMangaListWithQueryAndFilter
     extends BuildlessAutoDisposeNotifier<AsyncValue<List<MangaDto>?>> {
@@ -346,7 +346,7 @@ final libraryQueryProvider =
 
 typedef _$LibraryQuery = AutoDisposeNotifier<String?>;
 String _$libraryMangaFilterDownloadedHash() =>
-    r'85e6dc002b8d627d09f88aef898a1810a5830ce5';
+    r'8d1e361837249b23f1cfe4bffd93ee0370e45fc8';
 
 /// See also [LibraryMangaFilterDownloaded].
 @ProviderFor(LibraryMangaFilterDownloaded)
@@ -363,7 +363,7 @@ final libraryMangaFilterDownloadedProvider =
 
 typedef _$LibraryMangaFilterDownloaded = AutoDisposeNotifier<bool?>;
 String _$libraryMangaFilterUnreadHash() =>
-    r'fc473316bce2fa425ace19baeda74758258dd769';
+    r'3f6339c7c0ac96df5eb5ef21247c8cc90725bf3b';
 
 /// See also [LibraryMangaFilterUnread].
 @ProviderFor(LibraryMangaFilterUnread)
@@ -380,7 +380,7 @@ final libraryMangaFilterUnreadProvider =
 
 typedef _$LibraryMangaFilterUnread = AutoDisposeNotifier<bool?>;
 String _$libraryMangaFilterCompletedHash() =>
-    r'ac96c775a5fdbda052991140af86dc5d6e72887d';
+    r'5717f9095ef2475bb31578706a5252031d9668f2';
 
 /// See also [LibraryMangaFilterCompleted].
 @ProviderFor(LibraryMangaFilterCompleted)

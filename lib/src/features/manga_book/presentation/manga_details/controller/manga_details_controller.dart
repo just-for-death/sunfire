@@ -16,6 +16,7 @@ import '../../../../library/domain/category/category_model.dart';
 import '../../../data/local_downloads/local_downloads_service.dart';
 import '../../../data/manga_book/manga_book_repository.dart';
 import '../../../domain/chapter/chapter_model.dart';
+import '../../../domain/chapter/graphql/__generated__/fragment.graphql.dart';
 import '../../../domain/manga/manga_model.dart';
 import '../chapter_navigation_utils.dart';
 
@@ -98,13 +99,35 @@ bool Function(ChapterDto chapter) _chapterFilterPredicate({
   };
 }
 
+ChapterDto _mergeOfflineProgress(ChapterDto server, ChapterDto offline) {
+  final localAhead = (offline.isRead && !server.isRead) ||
+      offline.lastPageRead > server.lastPageRead;
+  if (!localAhead) {
+    return server.isDownloaded.ifNull()
+        ? server
+        : server.copyWith(isDownloaded: true);
+  }
+  return server.copyWith(
+    isRead: offline.isRead || server.isRead,
+    lastPageRead: offline.isRead || offline.lastPageRead > server.lastPageRead
+        ? offline.lastPageRead
+        : server.lastPageRead,
+    isDownloaded: true,
+  );
+}
+
 List<ChapterDto> _mergeOfflineChapters(
   List<ChapterDto> server,
   List<ChapterDto> offline,
 ) {
   if (offline.isEmpty) return server;
+  final offlineById = {for (final c in offline) c.id: c};
+  final merged = server.map((chapter) {
+    final local = offlineById[chapter.id];
+    if (local == null) return chapter;
+    return _mergeOfflineProgress(chapter, local);
+  }).toList();
   final serverIds = server.map((c) => c.id).toSet();
-  final merged = [...server];
   for (final chapter in offline) {
     if (!serverIds.contains(chapter.id)) merged.add(chapter);
   }

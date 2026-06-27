@@ -34,6 +34,7 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
       Future(() async {
         isMatching.value = true;
         final results = <MangaDto, MangaDto?>{};
+        final errorMessage = l10n.errorSomethingWentWrong;
         try {
           final migrationRepository = ref.read(migrationRepositoryProvider);
           for (final manga in sourceMangas) {
@@ -54,7 +55,7 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
           }
           matches.value = results;
         } catch (e) {
-          error.value = e.toString();
+          error.value = errorMessage;
         } finally {
           isMatching.value = false;
         }

@@ -94,11 +94,15 @@ class NotificationService {
           );
     }
 
-    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
-    if (launchDetails?.didNotificationLaunchApp ?? false) {
-      NotificationNavigation.scheduleTap(
-        launchDetails?.notificationResponse?.id,
-      );
+    try {
+      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+      if (launchDetails?.didNotificationLaunchApp ?? false) {
+        NotificationNavigation.scheduleTap(
+          launchDetails?.notificationResponse?.id,
+        );
+      }
+    } on UnimplementedError {
+      // Not supported on Linux and some other desktop targets.
     }
 
     _initialized = true;
