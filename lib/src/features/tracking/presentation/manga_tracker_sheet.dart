@@ -82,7 +82,7 @@ class MangaTrackerSheet extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Tracking',
+                    context.l10n.tracking,
                     style: context.textTheme.titleLarge
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
@@ -115,7 +115,7 @@ class MangaTrackerSheet extends ConsumerWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'No tracking entries yet',
+                              context.l10n.noTrackingFound,
                               style: context.textTheme.bodyMedium?.copyWith(
                                 color: context.theme.colorScheme.outline,
                               ),
@@ -139,7 +139,7 @@ class MangaTrackerSheet extends ConsumerWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: Text(
-                      'Add Tracking',
+                      context.l10n.addTracking,
                       style: context.textTheme.labelLarge?.copyWith(
                         color: context.theme.colorScheme.primary,
                       ),
@@ -202,7 +202,7 @@ class MangaTrackerSheet extends ConsumerWidget {
                       padding: const EdgeInsets.all(16),
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.login_rounded),
-                        label: const Text('Log In to a tracker in Settings'),
+                        label: Text(context.l10n.trackingLoginInSettings),
                         onPressed: () {
                           Navigator.pop(context);
                           const TrackerSettingsRoute().push(context);
@@ -256,7 +256,7 @@ class _TrackRecordTile extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _trackerLabel(record),
+                      _trackerLabel(context, record),
                       style: context.textTheme.labelSmall?.copyWith(
                         color: context.theme.colorScheme.primary,
                       ),
@@ -277,7 +277,7 @@ class _TrackRecordTile extends ConsumerWidget {
                         if (record.status != null)
                           _InfoChip(
                             icon: Icons.bookmark_rounded,
-                            label: _statusName(record),
+                            label: _statusName(context, record),
                           ),
                         if (record.lastChapterRead != null)
                           _InfoChip(
@@ -305,7 +305,7 @@ class _TrackRecordTile extends ConsumerWidget {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.sync_rounded),
-                    tooltip: 'Sync now',
+                    tooltip: context.l10n.syncNow,
                     onPressed: () async {
                       try {
                         await ref
@@ -334,7 +334,7 @@ class _TrackRecordTile extends ConsumerWidget {
     );
   }
 
-  String _statusName(TrackRecordDto r) {
+  String _statusName(BuildContext context, TrackRecordDto r) {
     if (r.status == null) return '—';
     // Use real statuses from tracker if available
     if (r.trackerStatuses != null) {
@@ -344,21 +344,23 @@ class _TrackRecordTile extends ConsumerWidget {
           .firstOrNull;
       if (match != null) return match;
     }
-    const labels = {
-      1: 'Reading',
-      2: 'Completed',
-      3: 'On Hold',
-      4: 'Dropped',
-      5: 'Plan to Read',
-      6: 'Re-reading',
+    final l10n = context.l10n;
+    final labels = {
+      1: l10n.trackingStatusReading,
+      2: l10n.trackingStatusCompleted,
+      3: l10n.trackingStatusOnHold,
+      4: l10n.trackingStatusDropped,
+      5: l10n.trackingStatusPlanToRead,
+      6: l10n.trackingStatusRereading,
     };
     return labels[r.status] ?? r.status.toString();
   }
 
-  String _trackerLabel(TrackRecordDto r) {
+  String _trackerLabel(BuildContext context, TrackRecordDto r) {
     if (r.trackerName != null) return r.trackerName!;
     const names = {1: 'MyAnimeList', 2: 'AniList', 3: 'Kitsu', 4: 'Bangumi'};
-    return names[r.trackerId] ?? 'Tracker #${r.trackerId}';
+    return names[r.trackerId] ??
+        '${context.l10n.unknownTracker} #${r.trackerId}';
   }
 
   Future<void> _confirmUnbind(BuildContext context, WidgetRef ref) async {
@@ -367,18 +369,17 @@ class _TrackRecordTile extends ConsumerWidget {
       context: context,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-          title: const Text('Remove tracking?'),
+          title: Text(context.l10n.trackingRemoveConfirm),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                  'This will remove the tracking entry from Catalyst. The entry on the tracker will not be deleted.'),
+              Text(context.l10n.trackingRemoveDescription),
               const SizedBox(height: 12),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: deleteRemote,
-                title: const Text('Also delete from tracker service'),
+                title: Text(context.l10n.trackingRemoveAlsoRemote),
                 onChanged: (v) => setState(() => deleteRemote = v!),
               ),
             ],

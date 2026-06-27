@@ -9,6 +9,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../data/local_downloads/local_downloads_service.dart';
+import '../../manga_details/controller/manga_details_controller.dart';
 import '../../reader/controller/reader_controller.dart';
 
 part 'local_downloads_controller.g.dart';
@@ -78,11 +79,17 @@ class LocalChapterDownload extends _$LocalChapterDownload {
     state = LocalDownloadState.downloading;
     try {
       final service = ref.read(localDownloadsServiceProvider);
+      final manifest = await service.getOfflineManifest(chapterId);
       await service.deleteChapter(chapterId);
       state = LocalDownloadState.idle;
       ref.invalidate(chapterPagesProvider(chapterId: chapterId));
       ref.invalidate(localDownloadedChapterIdsProvider);
       ref.invalidate(offlineStorageSizeProvider);
+      final mangaId = manifest?.mangaId;
+      if (mangaId != null && mangaId > 0) {
+        ref.invalidate(mangaWithIdProvider(mangaId: mangaId));
+        ref.invalidate(mangaChapterListProvider(mangaId: mangaId));
+      }
     } catch (_) {
       state = LocalDownloadState.error;
     }

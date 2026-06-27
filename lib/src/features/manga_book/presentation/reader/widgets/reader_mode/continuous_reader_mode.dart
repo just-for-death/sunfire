@@ -102,24 +102,20 @@ class ContinuousReaderMode extends HookConsumerWidget {
 
         if (positions.isEmpty) return;
 
-        // Don't update position if we're navigating from slider
+        // Mark as user scrolling only when the visible page index changes.
         if (!isNavigatingFromSlider.value) {
-          // Always update position for UI display (navigation bar needs this)
+          final previousIndex = currentIndex.value;
           _updatePositionForDisplay(positions, currentIndex, lastReportedIndex);
+          if (currentIndex.value != previousIndex) {
+            isUserScrolling.value = true;
+            positionUpdateTimer.value?.cancel();
+            positionUpdateTimer.value =
+                Timer(_ScrollConfig.programmaticNavigationDelay, () {
+              isUserScrolling.value = false;
+              isNavigatingFromSlider.value = false;
+            });
+          }
         }
-
-        // Mark as user scrolling to prevent programmatic navigation
-        isUserScrolling.value = true;
-
-        // Cancel any pending programmatic navigation
-        positionUpdateTimer.value?.cancel();
-
-        // Only allow programmatic navigation after extended delay
-        positionUpdateTimer.value =
-            Timer(_ScrollConfig.programmaticNavigationDelay, () {
-          isUserScrolling.value = false;
-          isNavigatingFromSlider.value = false; // Reset slider navigation flag
-        });
       }
 
       positionsListener.itemPositions.addListener(listener);

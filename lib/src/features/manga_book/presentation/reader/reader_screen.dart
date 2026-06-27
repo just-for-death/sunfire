@@ -69,7 +69,7 @@ class ReaderScreen extends HookConsumerWidget {
 
     final debounce = useRef<Timer?>(null);
     final pendingPageIndex = useRef<int?>(null);
-    final progressFlushed = useRef(false);
+    final lastFlushedPage = useRef<int?>(null);
     final resumeHintShown = useRef(false);
 
     final updateLastRead = useCallback((int currentPage) async {
@@ -97,11 +97,14 @@ class ReaderScreen extends HookConsumerWidget {
       pendingPageIndex.value = null;
     }, [chapter.valueOrNull, chapterPages.valueOrNull]);
 
+    final updateLastReadRef = useRef<Future<void> Function(int)?>(null);
+    updateLastReadRef.value = updateLastRead;
+
     final flushProgress = useCallback((int index) async {
-      if (progressFlushed.value) return;
-      progressFlushed.value = true;
+      if (lastFlushedPage.value == index) return;
       debounce.value?.cancel();
       await updateLastRead(index);
+      lastFlushedPage.value = index;
     }, [updateLastRead]);
 
     useEffect(() {
@@ -115,7 +118,7 @@ class ReaderScreen extends HookConsumerWidget {
         debounce.value?.cancel();
         final pending = pendingPageIndex.value;
         if (pending != null) {
-          unawaited(flushProgress(pending));
+          unawaited(updateLastReadRef.value?.call(pending) ?? Future.value());
         }
         ReaderSession.leave();
       };
@@ -157,6 +160,7 @@ class ReaderScreen extends HookConsumerWidget {
         if (chapterValue == null || chapterPagesValue == null) return;
 
         pendingPageIndex.value = index;
+        lastFlushedPage.value = null;
 
         final activeDebounce = debounce.value;
         if (activeDebounce?.isActive ?? false) {

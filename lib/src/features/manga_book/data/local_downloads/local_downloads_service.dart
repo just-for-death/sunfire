@@ -22,6 +22,7 @@ import '../../../../global_providers/global_providers.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../data/manga_book/manga_book_repository.dart';
 import '../../domain/chapter/chapter_model.dart';
+import '../../domain/chapter/graphql/__generated__/fragment.graphql.dart';
 import '../../domain/manga/manga_model.dart';
 
 part 'local_downloads_service.g.dart';
@@ -36,6 +37,8 @@ class OfflineChapterManifest {
     required this.mangaTitle,
     required this.pageCount,
     required this.pages,
+    this.lastPageRead = 0,
+    this.isRead = false,
   });
 
   final int chapterId;
@@ -45,6 +48,8 @@ class OfflineChapterManifest {
   final String mangaTitle;
   final int pageCount;
   final List<String> pages;
+  final int lastPageRead;
+  final bool isRead;
 
   factory OfflineChapterManifest.fromJson(Map<String, dynamic> json) {
     final pagesRaw = json['pages'];
@@ -59,6 +64,8 @@ class OfflineChapterManifest {
       pages: pagesRaw is List
           ? pagesRaw.whereType<String>().toList()
           : const [],
+      lastPageRead: json['lastPageRead'] as int? ?? 0,
+      isRead: json['isRead'] as bool? ?? false,
     );
   }
 
@@ -69,6 +76,8 @@ class OfflineChapterManifest {
         'chapterNumber': chapterNumber,
         'mangaTitle': mangaTitle,
         'pageCount': pageCount,
+        'lastPageRead': lastPageRead,
+        'isRead': isRead,
         'downloadedAt': DateTime.now().toIso8601String(),
         'pages': pages,
       };
@@ -98,8 +107,10 @@ class LocalDownloadsService {
   }
 
   Future<bool> isChapterDownloaded(int chapterId) async {
-    final manifest = await _manifestFile(chapterId);
-    return manifest.exists();
+    final manifest = await getOfflineManifest(chapterId);
+    if (manifest == null || manifest.pages.isEmpty) return false;
+    final pages = await getLocalPages(chapterId);
+    return pages != null && pages.length >= manifest.pageCount;
   }
 
   Future<OfflineChapterManifest?> getOfflineManifest(int chapterId) async {
@@ -137,6 +148,44 @@ class LocalDownloadsService {
       if (manifest?.mangaId == mangaId) return true;
     }
     return false;
+  }
+
+  ChapterDto _chapterDtoFromManifest(OfflineChapterManifest manifest) {
+    return Fragment$ChapterDto(
+      chapterNumber: manifest.chapterNumber,
+      fetchedAt: '0',
+      id: manifest.chapterId,
+      isBookmarked: false,
+      isDownloaded: true,
+      isRead: manifest.isRead,
+      lastPageRead: manifest.lastPageRead,
+      lastReadAt: '0',
+      mangaId: manifest.mangaId,
+      name: manifest.chapterName.isNotEmpty
+          ? manifest.chapterName
+          : 'Chapter ${manifest.chapterId}',
+      pageCount: manifest.pageCount,
+      sourceOrder: 0,
+      uploadDate: '0',
+      url: '',
+      meta: const [],
+    );
+  }
+
+  /// Builds a chapter list from offline manifests when the server is unavailable.
+  Future<List<ChapterDto>> getOfflineChaptersForManga(int mangaId) async {
+    if (mangaId <= 0) return const [];
+    final ids = await listDownloadedChapterIds();
+    final chapters = <ChapterDto>[];
+    for (final chapterId in ids) {
+      final manifest = await getOfflineManifest(chapterId);
+      if (manifest == null || manifest.mangaId != mangaId) continue;
+      final pages = await getLocalPages(chapterId);
+      if (pages == null || pages.isEmpty) continue;
+      chapters.add(_chapterDtoFromManifest(manifest));
+    }
+    chapters.sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
+    return chapters;
   }
 
   Future<List<String>?> getLocalPages(int chapterId) async {
@@ -207,12 +256,13 @@ class LocalDownloadsService {
 
     MangaDto? mangaMeta;
     final mangaId = chapterMeta?.mangaId;
-    if (mangaId != null && mangaId > 0) {
-      try {
-        mangaMeta = await repo.getManga(mangaId: mangaId);
-      } catch (_) {
-        mangaMeta = null;
-      }
+    if (mangaId == null || mangaId <= 0) {
+      throw StateError('Cannot download chapter without manga metadata');
+    }
+    try {
+      mangaMeta = await repo.getManga(mangaId: mangaId);
+    } catch (_) {
+      mangaMeta = null;
     }
 
     final total = chapterPages.pages.length;
@@ -267,12 +317,14 @@ class LocalDownloadsService {
       jsonEncode(
         OfflineChapterManifest(
           chapterId: chapterId,
-          mangaId: mangaId ?? 0,
+          mangaId: mangaId,
           chapterName: chapterMeta?.name ?? '',
           chapterNumber: chapterMeta?.chapterNumber ?? 0,
           mangaTitle: mangaMeta?.title ?? '',
           pageCount: total,
           pages: savedFiles,
+          lastPageRead: chapterMeta?.lastPageRead ?? 0,
+          isRead: chapterMeta?.isRead ?? false,
         ).toJson(),
       ),
     );

@@ -96,9 +96,16 @@ class MangaWithId extends _$MangaWithId {
 class MangaChapterList extends _$MangaChapterList {
   @override
   Future<List<ChapterDto>?> build({required int mangaId}) async {
-    final result =
-        await ref.watch(mangaBookRepositoryProvider).getChapterList(mangaId);
-    return result;
+    try {
+      final result =
+          await ref.read(mangaBookRepositoryProvider).getChapterList(mangaId);
+      if (result != null) return result;
+    } catch (_) {}
+
+    final offline = await ref
+        .read(localDownloadsServiceProvider)
+        .getOfflineChaptersForManga(mangaId);
+    return offline.isEmpty ? null : offline;
   }
 
   Future<void> refresh([bool onlineFetch = false]) async {
@@ -170,8 +177,8 @@ AsyncValue<List<ChapterDto>?> mangaChapterListWithFilter(
   final chapterFilterBookmark = ref.watch(mangaChapterFilterBookmarkedProvider);
   final ChapterSort sortedBy =
       ref.watch(mangaChapterSortProvider) ?? DBKeys.chapterSort.initial;
-  final sortedDirection =
-      ref.watch(mangaChapterSortDirectionProvider).ifNull(true);
+  final sortedDirection = ref.watch(mangaChapterSortDirectionProvider) ??
+      DBKeys.chapterSortDirection.initial;
 
   final chapterFilterScanlator =
       ref.watch(mangaChapterFilterScanlatorProvider(mangaId: mangaId));

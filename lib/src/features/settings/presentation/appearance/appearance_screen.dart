@@ -23,28 +23,29 @@ class AppearanceScreen extends ConsumerWidget {
       body: ListView(
         children: [
           if (!kIsWeb && !Platform.isIOS) ...[
-            const _SectionHeader(label: 'Material You'),
+            _SectionHeader(label: context.l10n.appearanceMaterialYou),
             const UseDynamicColorTile(),
             const Divider(height: 1, indent: 16, endIndent: 16),
           ],
-          const _SectionHeader(label: 'Theme'),
+          _SectionHeader(label: context.l10n.appearanceTheme),
           const AppThemeModeTile(),
           if (themeMode != ThemeMode.light) const IsTrueBlackTile(),
 
-          // Color scheme (fallback when dynamic color is off)
-          const _SectionHeader(label: 'Color Scheme'),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+          _SectionHeader(label: context.l10n.appearanceColorScheme),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
-              'Used when Dynamic Color is off or unavailable',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              context.l10n.appearanceColorSchemeHint,
+              style: TextStyle(
+                fontSize: 12,
+                color: context.theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           const AppThemeSelector(),
           const Divider(height: 1, indent: 16, endIndent: 16),
 
-          // Display
-          const _SectionHeader(label: 'Display'),
+          _SectionHeader(label: context.l10n.display),
           const GridCoverWidthSlider(),
         ],
       ),
