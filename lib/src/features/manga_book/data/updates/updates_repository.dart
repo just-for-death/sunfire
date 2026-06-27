@@ -56,31 +56,37 @@ class UpdatesRepository {
     int? categoryId,
   }) async {
     if (categoryId != null) {
-      await client.mutate$UpdateCategoryMangas(
-        Options$Mutation$UpdateCategoryMangas(
-          variables: Variables$Mutation$UpdateCategoryMangas(
-            input: Input$UpdateCategoryMangaInput(categories: [categoryId]),
-          ),
-        ),
-      );
+      await client
+          .mutate$UpdateCategoryMangas(
+            Options$Mutation$UpdateCategoryMangas(
+              variables: Variables$Mutation$UpdateCategoryMangas(
+                input: Input$UpdateCategoryMangaInput(categories: [categoryId]),
+              ),
+            ),
+          )
+          .getData((data) => data);
     } else {
-      await client.mutate$UpdateLibraryMangas(
-        Options$Mutation$UpdateLibraryMangas(
-          variables: Variables$Mutation$UpdateLibraryMangas(
-            input: Input$UpdateLibraryMangaInput(),
-          ),
-        ),
-      );
+      await client
+          .mutate$UpdateLibraryMangas(
+            Options$Mutation$UpdateLibraryMangas(
+              variables: Variables$Mutation$UpdateLibraryMangas(
+                input: Input$UpdateLibraryMangaInput(),
+              ),
+            ),
+          )
+          .getData((data) => data);
     }
   }
 
-  Future<void> stopUpdates() => client.mutate$StopCategoryUpdate(
+  Future<void> stopUpdates() => client
+      .mutate$StopCategoryUpdate(
         Options$Mutation$StopCategoryUpdate(
           variables: Variables$Mutation$StopCategoryUpdate(
             input: Input$UpdateStopInput(),
           ),
         ),
-      );
+      )
+      .getData((data) => data);
 
   Future<UpdateStatusDto?> summaryUpdates() async => client
       .query$UpdateStatusDto(Options$Query$UpdateStatusDto())

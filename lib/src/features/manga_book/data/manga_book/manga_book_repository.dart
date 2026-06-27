@@ -50,21 +50,23 @@ class MangaBookRepository {
       )
       .getData((data) => data.updateManga?.manga);
 
-  Future<void> modifyBulkChapters(ChapterBatch batch) =>
-      client.mutate$UpdateChapters(
+  Future<void> modifyBulkChapters(ChapterBatch batch) => client
+      .mutate$UpdateChapters(
         Options$Mutation$UpdateChapters(
           variables: Variables$Mutation$UpdateChapters(input: batch),
         ),
-      );
+      )
+      .getData((data) => data);
 
-  Future<void> deleteChapters(List<int> chapterIds) =>
-      client.mutate$DeleteDownloadedChapters(
+  Future<void> deleteChapters(List<int> chapterIds) => client
+      .mutate$DeleteDownloadedChapters(
         Options$Mutation$DeleteDownloadedChapters(
           variables: Variables$Mutation$DeleteDownloadedChapters(
             input: Input$DeleteDownloadedChaptersInput(ids: chapterIds),
           ),
         ),
-      );
+      )
+      .getData((data) => data);
 
   // Mangas
   Future<MangaDto?> getManga({
@@ -87,8 +89,8 @@ class MangaBookRepository {
           )
           .getData((data) => data.manga.categories.nodes);
 
-  Future<void> addMangaToCategory(int mangaId, int categoryId) =>
-      client.mutate$UpdateMangaCategories(
+  Future<void> addMangaToCategory(int mangaId, int categoryId) => client
+      .mutate$UpdateMangaCategories(
         Options$Mutation$UpdateMangaCategories(
           variables: Variables$Mutation$UpdateMangaCategories(
             updateCategoryInput: Input$UpdateMangaCategoriesInput(
@@ -99,10 +101,11 @@ class MangaBookRepository {
             ),
           ),
         ),
-      );
+      )
+      .getData((data) => data);
 
-  Future<void> removeMangaFromCategory(int mangaId, int categoryId) =>
-      client.mutate$UpdateMangaCategories(
+  Future<void> removeMangaFromCategory(int mangaId, int categoryId) => client
+      .mutate$UpdateMangaCategories(
         Options$Mutation$UpdateMangaCategories(
           variables: Variables$Mutation$UpdateMangaCategories(
             updateCategoryInput: Input$UpdateMangaCategoriesInput(
@@ -113,7 +116,8 @@ class MangaBookRepository {
             ),
           ),
         ),
-      );
+      )
+      .getData((data) => data);
 
   // Chapters
 
@@ -145,36 +149,40 @@ class MangaBookRepository {
   Future<void> putChapter({
     required int chapterId,
     required ChapterChange patch,
-  }) async =>
-      client.mutate$UpdateChapter(
-        Options$Mutation$UpdateChapter(
-          variables: Variables$Mutation$UpdateChapter(
-            input: Input$UpdateChapterInput(
-              id: chapterId,
-              patch: patch,
+  }) =>
+      client
+          .mutate$UpdateChapter(
+            Options$Mutation$UpdateChapter(
+              variables: Variables$Mutation$UpdateChapter(
+                input: Input$UpdateChapterInput(
+                  id: chapterId,
+                  patch: patch,
+                ),
+              ),
             ),
-          ),
-        ),
-      );
+          )
+          .getData((data) => data);
 
   Future<void> patchMangaMeta({
     required int mangaId,
     required String key,
     required dynamic value,
-  }) async =>
-      client.mutate$SetMangaMeta(
-        Options$Mutation$SetMangaMeta(
-          variables: Variables$Mutation$SetMangaMeta(
-            input: Input$SetMangaMetaInput(
-              meta: Input$MangaMetaTypeInput(
-                key: key,
-                mangaId: mangaId,
-                value: value,
+  }) =>
+      client
+          .mutate$SetMangaMeta(
+            Options$Mutation$SetMangaMeta(
+              variables: Variables$Mutation$SetMangaMeta(
+                input: Input$SetMangaMetaInput(
+                  meta: Input$MangaMetaTypeInput(
+                    key: key,
+                    mangaId: mangaId,
+                    value: value,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      );
+          )
+          .getData((data) => data);
 
   Future<List<ChapterDto>?> getChapterList(int mangaId) async => client
       .mutate$GetChaptersByMangaId(

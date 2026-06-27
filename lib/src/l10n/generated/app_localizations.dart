@@ -430,6 +430,18 @@ abstract class AppLocalizations {
   /// **'Close'**
   String get close;
 
+  /// Tooltip for collapsing the iPad navigation sidebar
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse sidebar'**
+  String get collapseSidebar;
+
+  /// Tooltip for expanding the iPad navigation sidebar
+  ///
+  /// In en, this message translates to:
+  /// **'Expand sidebar'**
+  String get expandSidebar;
+
   /// Section title for Cloudflare Bypass
   ///
   /// In en, this message translates to:
