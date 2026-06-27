@@ -90,6 +90,7 @@ _$MigrationProgressImpl _$$MigrationProgressImplFromJson(
       errorMessage: json['errorMessage'] as String?,
       processedItems: (json['processedItems'] as num?)?.toInt() ?? 0,
       totalItems: (json['totalItems'] as num?)?.toInt() ?? 0,
+      serverChangesApplied: json['serverChangesApplied'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$$MigrationProgressImplToJson(
@@ -101,6 +102,7 @@ Map<String, dynamic> _$$MigrationProgressImplToJson(
       'errorMessage': instance.errorMessage,
       'processedItems': instance.processedItems,
       'totalItems': instance.totalItems,
+      'serverChangesApplied': instance.serverChangesApplied,
     };
 
 const _$MigrationStepEnumMap = {

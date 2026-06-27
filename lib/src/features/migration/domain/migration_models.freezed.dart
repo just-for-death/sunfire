@@ -850,6 +850,9 @@ mixin _$MigrationProgress {
   int get processedItems => throw _privateConstructorUsedError;
   int get totalItems => throw _privateConstructorUsedError;
 
+  /// True when cancel was requested after the server had already applied changes.
+  bool get serverChangesApplied => throw _privateConstructorUsedError;
+
   /// Serializes this MigrationProgress to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
 
@@ -872,7 +875,8 @@ abstract class $MigrationProgressCopyWith<$Res> {
       MigrationStatus status,
       String? errorMessage,
       int processedItems,
-      int totalItems});
+      int totalItems,
+      bool serverChangesApplied});
 }
 
 /// @nodoc
@@ -896,6 +900,7 @@ class _$MigrationProgressCopyWithImpl<$Res, $Val extends MigrationProgress>
     Object? errorMessage = freezed,
     Object? processedItems = null,
     Object? totalItems = null,
+    Object? serverChangesApplied = null,
   }) {
     return _then(_value.copyWith(
       currentStep: null == currentStep
@@ -922,6 +927,10 @@ class _$MigrationProgressCopyWithImpl<$Res, $Val extends MigrationProgress>
           ? _value.totalItems
           : totalItems // ignore: cast_nullable_to_non_nullable
               as int,
+      serverChangesApplied: null == serverChangesApplied
+          ? _value.serverChangesApplied
+          : serverChangesApplied // ignore: cast_nullable_to_non_nullable
+              as bool,
     ) as $Val);
   }
 }
@@ -940,7 +949,8 @@ abstract class _$$MigrationProgressImplCopyWith<$Res>
       MigrationStatus status,
       String? errorMessage,
       int processedItems,
-      int totalItems});
+      int totalItems,
+      bool serverChangesApplied});
 }
 
 /// @nodoc
@@ -962,6 +972,7 @@ class __$$MigrationProgressImplCopyWithImpl<$Res>
     Object? errorMessage = freezed,
     Object? processedItems = null,
     Object? totalItems = null,
+    Object? serverChangesApplied = null,
   }) {
     return _then(_$MigrationProgressImpl(
       currentStep: null == currentStep
@@ -988,6 +999,10 @@ class __$$MigrationProgressImplCopyWithImpl<$Res>
           ? _value.totalItems
           : totalItems // ignore: cast_nullable_to_non_nullable
               as int,
+      serverChangesApplied: null == serverChangesApplied
+          ? _value.serverChangesApplied
+          : serverChangesApplied // ignore: cast_nullable_to_non_nullable
+              as bool,
     ));
   }
 }
@@ -1001,7 +1016,8 @@ class _$MigrationProgressImpl implements _MigrationProgress {
       this.status = MigrationStatus.idle,
       this.errorMessage,
       this.processedItems = 0,
-      this.totalItems = 0});
+      this.totalItems = 0,
+      this.serverChangesApplied = false});
 
   factory _$MigrationProgressImpl.fromJson(Map<String, dynamic> json) =>
       _$$MigrationProgressImplFromJson(json);
@@ -1023,9 +1039,14 @@ class _$MigrationProgressImpl implements _MigrationProgress {
   @JsonKey()
   final int totalItems;
 
+  /// True when cancel was requested after the server had already applied changes.
+  @override
+  @JsonKey()
+  final bool serverChangesApplied;
+
   @override
   String toString() {
-    return 'MigrationProgress(currentStep: $currentStep, percentage: $percentage, status: $status, errorMessage: $errorMessage, processedItems: $processedItems, totalItems: $totalItems)';
+    return 'MigrationProgress(currentStep: $currentStep, percentage: $percentage, status: $status, errorMessage: $errorMessage, processedItems: $processedItems, totalItems: $totalItems, serverChangesApplied: $serverChangesApplied)';
   }
 
   @override
@@ -1043,13 +1064,15 @@ class _$MigrationProgressImpl implements _MigrationProgress {
             (identical(other.processedItems, processedItems) ||
                 other.processedItems == processedItems) &&
             (identical(other.totalItems, totalItems) ||
-                other.totalItems == totalItems));
+                other.totalItems == totalItems) &&
+            (identical(other.serverChangesApplied, serverChangesApplied) ||
+                other.serverChangesApplied == serverChangesApplied));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, currentStep, percentage, status,
-      errorMessage, processedItems, totalItems);
+      errorMessage, processedItems, totalItems, serverChangesApplied);
 
   /// Create a copy of MigrationProgress
   /// with the given fields replaced by the non-null parameter values.
@@ -1075,7 +1098,8 @@ abstract class _MigrationProgress implements MigrationProgress {
       final MigrationStatus status,
       final String? errorMessage,
       final int processedItems,
-      final int totalItems}) = _$MigrationProgressImpl;
+      final int totalItems,
+      final bool serverChangesApplied}) = _$MigrationProgressImpl;
 
   factory _MigrationProgress.fromJson(Map<String, dynamic> json) =
       _$MigrationProgressImpl.fromJson;
@@ -1092,6 +1116,10 @@ abstract class _MigrationProgress implements MigrationProgress {
   int get processedItems;
   @override
   int get totalItems;
+
+  /// True when cancel was requested after the server had already applied changes.
+  @override
+  bool get serverChangesApplied;
 
   /// Create a copy of MigrationProgress
   /// with the given fields replaced by the non-null parameter values.

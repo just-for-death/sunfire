@@ -1942,6 +1942,30 @@ abstract class AppLocalizations {
   /// **'The migration process has been cancelled. No changes were made.'**
   String get migrationCancelledMessage;
 
+  /// No description provided for @migrationCancelledNoChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration cancelled before any changes were applied.'**
+  String get migrationCancelledNoChanges;
+
+  /// No description provided for @migrationCancelledPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel was requested after the server had already applied changes. Check your library — the migration may have completed.'**
+  String get migrationCancelledPartial;
+
+  /// No description provided for @migrationCancelledPartialBatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration stopped. {success} of {total} manga had already been migrated.'**
+  String migrationCancelledPartialBatch(int success, int total);
+
+  /// No description provided for @cancelMigrationConfirmationInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop remaining work? A migration already running on the server cannot be undone.'**
+  String get cancelMigrationConfirmationInProgress;
+
   /// No description provided for @cancelMigration.
   ///
   /// In en, this message translates to:
