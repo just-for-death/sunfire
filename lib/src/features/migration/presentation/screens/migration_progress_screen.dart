@@ -43,6 +43,7 @@ class MigrationProgressScreen extends HookConsumerWidget {
               fromMangaId: sourceManga.id,
               toMangaId: targetManga.id,
               options: options,
+              context: context,
             );
       });
       return null;

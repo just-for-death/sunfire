@@ -113,10 +113,26 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                 ? const Center(child: CircularProgressIndicator())
                 : error.value != null
                     ? Center(
-                        child: Text(
-                          'Error: ${error.value}',
-                          style:
-                              TextStyle(color: context.theme.colorScheme.error),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                l10n.errorOccurred,
+                                style: context.theme.textTheme.titleMedium
+                                    ?.copyWith(
+                                  color: context.theme.colorScheme.error,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${error.value}',
+                                style: context.theme.textTheme.bodySmall,
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
                         ),
                       )
                     : ListView.builder(
@@ -144,7 +160,7 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 4.0),
                                     child: IconButton(
-                                      tooltip: 'Manual Search',
+                                      tooltip: l10n.migrationManualSearch,
                                       icon: Icon(
                                         targetManga != null
                                             ? Icons.edit
@@ -241,16 +257,12 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
                       }
                     }
 
-                    // Show progress screen
-                    const MigrationBatchProgressRoute().push(context);
+                    ref.read(pendingBatchMigrationProvider.notifier).state = (
+                      pairs: pairsToMigrate,
+                      options: migrationOptions,
+                    );
 
-                    // Execute
-                    ref
-                        .read(migrationExecutionProvider.notifier)
-                        .executeBatchMigration(
-                          pairsToMigrate,
-                          migrationOptions,
-                        );
+                    const MigrationBatchProgressRoute().push(context);
                   },
                   icon: const Icon(Icons.move_up),
                   label: Text(l10n.migrationMigrateButtonCount(matchedCount)),

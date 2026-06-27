@@ -120,7 +120,7 @@ class TrackerLoginDialog extends HookConsumerWidget {
                         if (state.hasError) {
                           ref
                               .read(toastProvider)
-                              ?.showError(state.error.toString());
+                              ?.showError(context.l10n.errorSomethingWentWrong);
                           loading.value = false;
                         } else {
                           Navigator.pop(context, true);
@@ -132,7 +132,9 @@ class TrackerLoginDialog extends HookConsumerWidget {
                   } catch (e) {
                     if (context.mounted) {
                       loading.value = false;
-                      ref.read(toastProvider)?.showError(e.toString());
+                      ref
+                          .read(toastProvider)
+                          ?.showError(context.l10n.errorSomethingWentWrong);
                     }
                   }
                 },

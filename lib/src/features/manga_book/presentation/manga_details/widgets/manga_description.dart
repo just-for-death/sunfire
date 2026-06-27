@@ -85,7 +85,7 @@ class MangaDescription extends HookConsumerWidget {
                 ),
               _ActionChip(
                 icon: Icons.track_changes_rounded,
-                label: 'Tracking',
+                label: context.l10n.tracking,
                 onTap: () =>
                     showMangaTrackerSheet(context, mangaId, manga.title),
               ),
@@ -107,22 +107,24 @@ class MangaDescription extends HookConsumerWidget {
                 children: [
                   if (manga.source?.name.isNotBlank == true)
                     _InfoRow(
-                      label: 'Source',
+                      label: context.l10n.source,
                       value: manga.source!.name,
                       valueColor: cs.primary,
                     ),
                   _InfoRow(
-                    label: 'Status',
+                    label: context.l10n.trackingStatus,
                     value: status.toLocale(context),
                     icon: status.icon,
                   ),
                   if (manga.author.isNotBlank)
-                    _InfoRow(label: 'Author', value: manga.author!),
+                    _InfoRow(
+                        label: context.l10n.author, value: manga.author!),
                   if (manga.artist.isNotBlank && manga.artist != manga.author)
-                    _InfoRow(label: 'Artist', value: manga.artist!),
+                    _InfoRow(
+                        label: context.l10n.artist, value: manga.artist!),
                   _InfoRow(
-                    label: 'Unread',
-                    value: '$unread chapter${unread == 1 ? '' : 's'}',
+                    label: context.l10n.unread,
+                    value: context.l10n.unreadChapterCount(unread),
                   ),
                   // Progress bar hidden until chapter list known
                 ],

@@ -98,6 +98,19 @@ bool Function(ChapterDto chapter) _chapterFilterPredicate({
   };
 }
 
+List<ChapterDto> _mergeOfflineChapters(
+  List<ChapterDto> server,
+  List<ChapterDto> offline,
+) {
+  if (offline.isEmpty) return server;
+  final serverIds = server.map((c) => c.id).toSet();
+  final merged = [...server];
+  for (final chapter in offline) {
+    if (!serverIds.contains(chapter.id)) merged.add(chapter);
+  }
+  return merged;
+}
+
 @riverpod
 class MangaWithId extends _$MangaWithId {
   @override
@@ -141,15 +154,21 @@ class MangaWithId extends _$MangaWithId {
 class MangaChapterList extends _$MangaChapterList {
   @override
   Future<List<ChapterDto>?> build({required int mangaId}) async {
+    List<ChapterDto>? server;
     try {
-      final result =
+      server =
           await ref.read(mangaBookRepositoryProvider).getChapterList(mangaId);
-      if (result != null) return result;
-    } catch (_) {}
+    } catch (_) {
+      server = null;
+    }
 
     final offline = await ref
         .read(localDownloadsServiceProvider)
         .getOfflineChaptersForManga(mangaId);
+
+    if (server != null) {
+      return _mergeOfflineChapters(server, offline);
+    }
     return offline.isEmpty ? null : offline;
   }
 

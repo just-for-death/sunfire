@@ -96,7 +96,8 @@ class MangaTrackerSheet extends ConsumerWidget {
           Expanded(
             child: recordsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text(e.toString())),
+              error: (e, _) => Center(
+                  child: Text(context.l10n.errorSomethingWentWrong)),
               data: (records) => ListView(
                 controller: scrollController,
                 padding: const EdgeInsets.only(bottom: 16),
@@ -152,7 +153,7 @@ class MangaTrackerSheet extends ConsumerWidget {
                     ),
                     error: (e, _) => ListTile(
                       leading: const Icon(Icons.error_outline_rounded),
-                      title: Text(e.toString()),
+                      title: Text(context.l10n.errorSomethingWentWrong),
                     ),
                     data: (trackers) => Column(
                       children: trackers
@@ -282,9 +283,19 @@ class _TrackRecordTile extends ConsumerWidget {
                         if (record.lastChapterRead != null)
                           _InfoChip(
                             icon: Icons.menu_book_rounded,
-                            label:
-                                'Ch. ${record.lastChapterRead!.toStringAsFixed(0)}'
-                                '${record.totalChapters != null && record.totalChapters! > 0 ? '/${record.totalChapters}' : ''}',
+                            label: record.totalChapters != null &&
+                                    record.totalChapters! > 0
+                                ? context.l10n.trackingChapterWithTotal(
+                                    int.parse(
+                                      record.lastChapterRead!
+                                          .toStringAsFixed(0),
+                                    ),
+                                    record.totalChapters!,
+                                  )
+                                : context.l10n.trackingChapterLabel(
+                                    record.lastChapterRead!
+                                        .toStringAsFixed(0),
+                                  ),
                           ),
                         if (record.displayScore != null &&
                             record.displayScore!.isNotEmpty &&
@@ -314,7 +325,9 @@ class _TrackRecordTile extends ConsumerWidget {
                         ref.invalidate(mangaTrackRecordsProvider(mangaId));
                       } catch (e) {
                         if (context.mounted) {
-                          ref.read(toastProvider)?.showError(e.toString());
+                          ref
+                              .read(toastProvider)
+                              ?.showError(context.l10n.errorSomethingWentWrong);
                         }
                       }
                     },
@@ -408,7 +421,9 @@ class _TrackRecordTile extends ConsumerWidget {
       ref.invalidate(mangaTrackRecordsProvider(mangaId));
     } catch (e) {
       if (context.mounted) {
-        ref.read(toastProvider)?.showError(e.toString());
+        ref
+            .read(toastProvider)
+            ?.showError(context.l10n.errorSomethingWentWrong);
       }
     }
   }

@@ -225,7 +225,7 @@ class MigrationSearchScreen extends HookConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      error.toString(),
+                      context.l10n.errorSomethingWentWrong,
                       style: context.theme.textTheme.bodyMedium?.copyWith(
                         color: Colors.grey.shade600,
                       ),

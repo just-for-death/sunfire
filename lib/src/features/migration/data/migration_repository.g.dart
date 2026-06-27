@@ -7,7 +7,7 @@ part of 'migration_repository.dart';
 // **************************************************************************
 
 String _$migrationRepositoryHash() =>
-    r'388da64e3946aff50dd6fab6e17a2e1c63efb4d8';
+    r'8a90379d10c677d82dcf2b5a1c6ff367f52711e6';
 
 /// See also [migrationRepository].
 @ProviderFor(migrationRepository)

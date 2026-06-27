@@ -1,18 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../controller/migration_controller.dart';
 import '../../domain/migration_models.dart';
+import '../widgets/migration_progress_widgets.dart';
 
-class MigrationBatchProgressScreen extends ConsumerWidget {
+class MigrationBatchProgressScreen extends HookConsumerWidget {
   const MigrationBatchProgressScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final progress = ref.watch(migrationExecutionProvider);
+    final pending = ref.watch(pendingBatchMigrationProvider);
+
+    useEffect(() {
+      if (pending == null || progress != null) return null;
+      final job = pending;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        ref.read(pendingBatchMigrationProvider.notifier).state = null;
+        ref.read(migrationExecutionProvider.notifier).executeBatchMigration(
+              job.pairs,
+              job.options,
+              context: context,
+            );
+      });
+      return null;
+    }, [pending, progress]);
+
+    final warnings = progress?.warnings ?? const [];
 
     return PopScope(
       canPop: progress?.status == MigrationStatus.completed ||
@@ -57,6 +77,10 @@ class MigrationBatchProgressScreen extends ConsumerWidget {
                     ),
                     textAlign: TextAlign.center,
                   ),
+                  if (warnings.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    MigrationWarningsCard(warnings: warnings),
+                  ],
                 ] else if (progress?.status == MigrationStatus.error) ...[
                   Icon(Icons.error,
                       size: 80, color: context.theme.colorScheme.error),
@@ -78,6 +102,10 @@ class MigrationBatchProgressScreen extends ConsumerWidget {
                       color: context.theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  if (warnings.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    MigrationWarningsCard(warnings: warnings),
+                  ],
                 ] else ...[
                   CircularProgressIndicator(
                     value: progress != null && progress.totalItems > 0

@@ -1,1 +1,105 @@
-{}
+{
+  "ar": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "de": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "es": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "fil": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "fr": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "gan": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "gan_Hant": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "id": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "it": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "ja": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "ko": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "nb": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "nb_NO": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "nl": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "pt": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "pt_BR": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "pt_PT": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "ru": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "ta": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "th": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "tr": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "uk": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "vi": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "zh": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "zh_Hans": [
+    "migrationWarnTrackingBindFailed"
+  ],
+
+  "zh_Hant": [
+    "migrationWarnTrackingBindFailed"
+  ]
+}

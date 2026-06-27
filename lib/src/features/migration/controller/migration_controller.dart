@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -15,13 +16,24 @@ import '../../browse_center/presentation/source/controller/source_controller.dar
 import '../../history/presentation/history_controller.dart';
 import '../../library/presentation/category/controller/edit_category_controller.dart';
 import '../../library/presentation/library/controller/library_controller.dart';
+import '../../manga_book/data/local_downloads/local_downloads_service.dart';
 import '../../manga_book/domain/manga/graphql/__generated__/fragment.graphql.dart';
 import '../../manga_book/domain/manga/manga_model.dart';
 import '../../manga_book/presentation/manga_details/controller/manga_details_controller.dart';
+import '../../tracking/presentation/controller/tracker_controller.dart';
+import '../data/migration_messages.dart';
 import '../data/migration_repository.dart';
 import '../domain/migration_models.dart';
 
 part 'migration_controller.g.dart';
+
+typedef PendingBatchMigration = ({
+  Map<MangaDto, MangaDto> pairs,
+  MigrationOption options,
+});
+
+final pendingBatchMigrationProvider =
+    StateProvider<PendingBatchMigration?>((ref) => null);
 
 @riverpod
 class MigrationSources extends _$MigrationSources {
@@ -141,7 +153,9 @@ class MigrationExecution extends _$MigrationExecution {
     required int fromMangaId,
     required int toMangaId,
     required MigrationOption options,
+    BuildContext? context,
   }) async {
+    final msgs = MigrationMessages.fromContext(context);
     _cancelRequested = false;
     try {
       state = const MigrationProgress(
@@ -168,7 +182,7 @@ class MigrationExecution extends _$MigrationExecution {
 
       final result = await ref
           .read(migrationRepositoryProvider)
-          .migrateManga(fromMangaId, toMangaId, options);
+          .migrateManga(fromMangaId, toMangaId, options, msgs);
 
       if (_isCancelled) {
         final applied = result?.success == true;
@@ -181,10 +195,11 @@ class MigrationExecution extends _$MigrationExecution {
 
       // Update final progress based on result
       if (result?.success == true) {
-        state = const MigrationProgress(
+        state = MigrationProgress(
           currentStep: MigrationStep.migrationCompleted,
           percentage: 100.0,
           status: MigrationStatus.completed,
+          warnings: result?.warnings ?? const [],
         );
 
         await _invalidateCachesAfterMigration(fromMangaId, toMangaId);
@@ -202,7 +217,7 @@ class MigrationExecution extends _$MigrationExecution {
       state = MigrationProgress(
         currentStep: MigrationStep.migrationFailed,
         status: MigrationStatus.error,
-        errorMessage: e.toString(),
+        errorMessage: msgs.migrationFailed('$e'),
       );
       return null;
     }
@@ -226,8 +241,10 @@ class MigrationExecution extends _$MigrationExecution {
 
   Future<void> executeBatchMigration(
     Map<MangaDto, MangaDto> matchedMangas,
-    MigrationOption options,
-  ) async {
+    MigrationOption options, {
+    BuildContext? context,
+  }) async {
+    final msgs = MigrationMessages.fromContext(context);
     _cancelRequested = false;
     state = const MigrationProgress(
       currentStep: MigrationStep.preparingMigration,
@@ -240,6 +257,7 @@ class MigrationExecution extends _$MigrationExecution {
     int count = 0;
     int successCount = 0;
     int failedCount = 0;
+    final warnings = <String>[];
     final int total = matchedMangas.length;
 
     // Guard against empty map to prevent divide-by-zero (NaN percentage).
@@ -280,10 +298,11 @@ class MigrationExecution extends _$MigrationExecution {
 
       final result = await ref
           .read(migrationRepositoryProvider)
-          .migrateManga(fromManga.id, toManga.id, options);
+          .migrateManga(fromManga.id, toManga.id, options, msgs);
 
       if (result?.success == true) {
         successCount++;
+        warnings.addAll(result?.warnings ?? const []);
         await _invalidateCachesAfterMigration(fromManga.id, toManga.id);
       } else {
         failedCount++;
@@ -319,6 +338,10 @@ class MigrationExecution extends _$MigrationExecution {
         status: MigrationStatus.error,
         processedItems: successCount,
         totalItems: total,
+        warnings: warnings,
+        errorMessage: failedCount == total
+            ? null
+            : '$successCount/$total succeeded',
       );
       return;
     }
@@ -329,12 +352,14 @@ class MigrationExecution extends _$MigrationExecution {
       status: MigrationStatus.completed,
       processedItems: successCount,
       totalItems: total,
+      warnings: warnings,
     );
   }
 
   void reset() {
     _cancelRequested = false;
     state = null;
+    ref.read(pendingBatchMigrationProvider.notifier).state = null;
   }
 
   /// Invalidate caches after successful migration to refresh UI data
@@ -349,6 +374,10 @@ class MigrationExecution extends _$MigrationExecution {
       ref.invalidate(mangaChapterListProvider(mangaId: fromMangaId));
       ref.invalidate(mangaChapterListProvider(mangaId: toMangaId));
       ref.invalidate(readingHistoryProvider);
+      ref.invalidate(localDownloadedChapterIdsProvider);
+      ref.invalidate(offlineStorageSizeProvider);
+      ref.invalidate(mangaTrackRecordsProvider(fromMangaId));
+      ref.invalidate(mangaTrackRecordsProvider(toMangaId));
 
       // Invalidate all category manga lists to refresh library
       final categories = ref.read(categoryControllerProvider).valueOrNull ?? [];
