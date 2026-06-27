@@ -88,7 +88,7 @@ class ReaderScreen extends HookConsumerWidget {
 
       final lastPage = isReadingCompleted ? 0 : currentPage;
 
-      await AsyncValue.guard(
+      final saveResult = await AsyncValue.guard(
         () => ref.read(mangaBookRepositoryProvider).putChapter(
               chapterId: chapterValue.id,
               patch: ChapterChange(
@@ -104,21 +104,28 @@ class ReaderScreen extends HookConsumerWidget {
             isRead: isReadingCompleted,
           );
 
+      if (saveResult.hasError) return;
+
       ref.invalidate(chapterProvider(chapterId: chapterValue.id));
       pendingPageIndex.value = null;
+
+      ref.read(historyHiddenChapterIdsProvider.notifier).unhideChapter(
+            chapterValue.id,
+          );
+
+      unawaited(
+        syncTrackerProgressOnChapterComplete(
+          ref,
+          mangaId: mangaId,
+          chapterNumber: chapterValue.chapterNumber,
+        ),
+      );
 
       if (isReadingCompleted) {
         final historyEnabled = ref.read(historyEnabledProvider) ?? true;
         if (historyEnabled) {
           ref.invalidate(readingHistoryProvider);
         }
-        unawaited(
-          syncTrackerProgressOnChapterComplete(
-            ref,
-            mangaId: mangaId,
-            chapterNumber: chapterValue.chapterNumber,
-          ),
-        );
       }
     }, [chapter.valueOrNull, chapterPages.valueOrNull]);
 

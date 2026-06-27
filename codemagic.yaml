@@ -1,4 +1,4 @@
-# CodeMagic CI for Catalyst. App version: 5.0.0 (source of truth: pubspec.yaml).
+# CodeMagic CI for Catalyst. App version: 6.0.0 (source of truth: pubspec.yaml).
 workflows:
 
   # ── iOS IPA (unsigned — sideload via AltStore / Sideloadly) ────────────────
@@ -6,7 +6,7 @@ workflows:
   # or App Store Connect integration to this workflow in the Codemagic UI, or
   # signing may be applied despite this flag.
   ios-release:
-    name: iOS IPA v5.0.0 (unsigned)
+    name: iOS IPA v6.0.0 (unsigned)
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -32,7 +32,7 @@ workflows:
 
   # ── Android APKs ───────────────────────────────────────────────────────────
   android-release:
-    name: Android APKs v5.0.0
+    name: Android APKs v6.0.0
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -53,7 +53,7 @@ workflows:
 
   # ── Both platforms — triggers automatically on v* tags ────────────────────
   all-release:
-    name: iOS + Android v5.0.0 (unsigned IPA)
+    name: iOS + Android v6.0.0 (unsigned IPA)
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:

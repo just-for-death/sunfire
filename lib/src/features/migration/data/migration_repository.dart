@@ -46,6 +46,9 @@ class MigrationRepositoryImpl implements MigrationRepository {
   final GraphQLClient client;
   final LocalDownloadsService localDownloads;
   final TrackerRepository trackerRepository;
+  bool _migrationCancelled = false;
+
+  bool get _isCancelled => _migrationCancelled;
 
   @override
   Future<List<MigrationSource>?> getMigrationSources(int mangaId,
@@ -83,25 +86,48 @@ class MigrationRepositoryImpl implements MigrationRepository {
   Future<List<Fragment$MangaDto>?> searchMangaInSource(
       String sourceId, String query,
       [BuildContext? context]) async {
+    return searchMangaInSourcePaginated(sourceId, query, context: context);
+  }
+
+  /// Searches up to [maxPages] result pages for a title match.
+  Future<List<Fragment$MangaDto>?> searchMangaInSourcePaginated(
+    String sourceId,
+    String query, {
+    BuildContext? context,
+    int maxPages = 3,
+  }) async {
     try {
-      final result = await client.mutate$FetchSourceManga(
-        Options$Mutation$FetchSourceManga(
-          variables: Variables$Mutation$FetchSourceManga(
-            input: Input$FetchSourceMangaInput(
-              source: sourceId,
-              query: query,
-              page: 1,
-              type: SourceType.SEARCH,
+      final normalizedQuery = query.toLowerCase().trim();
+      final collected = <Fragment$MangaDto>[];
+      for (var page = 1; page <= maxPages; page++) {
+        final result = await client.mutate$FetchSourceManga(
+          Options$Mutation$FetchSourceManga(
+            variables: Variables$Mutation$FetchSourceManga(
+              input: Input$FetchSourceMangaInput(
+                source: sourceId,
+                query: query,
+                page: page,
+                type: SourceType.SEARCH,
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      if (result.hasException) {
-        throw result.exception!;
+        if (result.hasException) {
+          throw result.exception!;
+        }
+
+        final mangas = result.parsedData?.fetchSourceManga?.mangas ?? [];
+        if (mangas.isEmpty) break;
+
+        collected.addAll(mangas);
+        final hasExact = mangas.any(
+          (m) => m.title.toLowerCase().trim() == normalizedQuery,
+        );
+        if (hasExact) break;
       }
 
-      return result.parsedData?.fetchSourceManga?.mangas ?? [];
+      return collected;
     } catch (e) {
       final errorMessage = context?.l10n.errorSearchingMangaInSource ??
           'Failed to search manga in source';
@@ -114,6 +140,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
       int fromMangaId, int toMangaId, MigrationOption options,
       [MigrationMessages? messages]) async {
     final msgs = messages ?? MigrationMessages(null);
+    _migrationCancelled = false;
     try {
       // Get source manga information
       final sourceMangaResult = await client.query$GetManga(
@@ -163,6 +190,18 @@ class MigrationRepositoryImpl implements MigrationRepository {
         warnings.add(warning);
       }
 
+      MigrationResult? cancelledResult() {
+        if (!_isCancelled) return null;
+        return MigrationResult(
+          success: false,
+          migratedChapters: migratedChapters,
+          migratedCategories: migratedCategories,
+          migratedDownloads: migratedDownloads,
+          warnings: warnings,
+          error: msgs.migrationFailedGeneric,
+        );
+      }
+
       // Step 1: Add target manga to library if source manga is in library
       if (sourceManga.inLibrary) {
         final updateLibraryResult = await client.mutate$UpdateManga(
@@ -181,6 +220,9 @@ class MigrationRepositoryImpl implements MigrationRepository {
               '${updateLibraryResult.exception}'));
         }
       }
+
+      final afterLibrary = cancelledResult();
+      if (afterLibrary != null) return afterLibrary;
 
       // Step 2: Migrate categories if enabled
       if (options.migrateCategories && sourceManga.inLibrary) {
@@ -227,6 +269,9 @@ class MigrationRepositoryImpl implements MigrationRepository {
           recordCriticalWarning(msgs.categoryMigrationFailed('$e'));
         }
       }
+
+      final afterCategories = cancelledResult();
+      if (afterCategories != null) return afterCategories;
 
       Future<List<ChapterDto>> fetchTargetChapters() async {
         if (cachedTargetChapters != null) return cachedTargetChapters!;
@@ -337,6 +382,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
             if (chapterUpdates.isNotEmpty) {
               // Update chapters one by one to avoid overwhelming the server
               for (final updateInput in chapterUpdates) {
+                if (_isCancelled) break;
                 try {
                   final updateResult = await client.mutate$UpdateChapter(
                     Options$Mutation$UpdateChapter(
@@ -369,6 +415,9 @@ class MigrationRepositoryImpl implements MigrationRepository {
         }
       }
 
+      final afterChapters = cancelledResult();
+      if (afterChapters != null) return afterChapters;
+
       // Step 3b: Migrate offline downloads if enabled
       if (options.migrateDownloads) {
         try {
@@ -397,6 +446,9 @@ class MigrationRepositoryImpl implements MigrationRepository {
         );
         warnings.addAll(trackingResult.warnings);
       }
+
+      final afterTracking = cancelledResult();
+      if (afterTracking != null) return afterTracking;
 
       // Step 4: Remove source manga from library if deleteSource is enabled
       if (options.deleteSource && sourceManga.inLibrary) {
@@ -456,7 +508,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
 
   @override
   Future<void> cancelMigration() async {
-    // Cancellation not yet supported server-side; state is handled by the controller.
+    _migrationCancelled = true;
   }
 }
 

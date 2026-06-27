@@ -87,6 +87,10 @@ class MigrationMessages {
       _l10n?.migrationWarnTrackingBindFailed ??
       'Could not bind to target manga';
 
+  String partialFailure(int success, int total, int failed) =>
+      _l10n?.migrationPartialFailure(success, total, failed) ??
+      '$success/$total succeeded ($failed failed)';
+
   String migrationFailed(String detail) =>
       _l10n?.migrationFailedWithDetail(detail) ??
       'Migration failed: $detail';

@@ -61,18 +61,29 @@ class CategoryMangaListWithQueryAndFilter
         ref.watch(libraryMangaSortDirectionProvider).ifNull(true);
 
     bool applyMangaFilter(MangaDto manga) {
-      if (mangaFilterUnread != null &&
-          (mangaFilterUnread ^ manga.unreadCount.isGreaterThan(0))) {
+      if (mangaFilterUnread == true && !manga.unreadCount.isGreaterThan(0)) {
+        return false;
+      }
+      if (mangaFilterUnread == false &&
+          manga.unreadCount.isGreaterThan(0)) {
         return false;
       }
 
-      if (mangaFilterDownloaded != null &&
-          (mangaFilterDownloaded ^ manga.downloadCount.isGreaterThan(0))) {
+      if (mangaFilterDownloaded == true &&
+          !manga.downloadCount.isGreaterThan(0)) {
+        return false;
+      }
+      if (mangaFilterDownloaded == false &&
+          manga.downloadCount.isGreaterThan(0)) {
         return false;
       }
 
-      if (mangaFilterCompleted != null &&
-          (mangaFilterCompleted ^ (manga.status.name == "COMPLETED"))) {
+      if (mangaFilterCompleted == true &&
+          manga.status.name != 'COMPLETED') {
+        return false;
+      }
+      if (mangaFilterCompleted == false &&
+          manga.status.name == 'COMPLETED') {
         return false;
       }
 
@@ -119,21 +130,42 @@ class LibraryQuery extends _$LibraryQuery with StateProviderMixin<String?> {
 class LibraryMangaFilterDownloaded extends _$LibraryMangaFilterDownloaded
     with SharedPreferenceClientMixin<bool> {
   @override
-  bool? build() => initialize(DBKeys.mangaFilterDownloaded);
+  bool? build() {
+    final value = initialize(DBKeys.mangaFilterDownloaded);
+    if (value == false) {
+      Future.microtask(() => update(null));
+      return null;
+    }
+    return value;
+  }
 }
 
 @riverpod
 class LibraryMangaFilterUnread extends _$LibraryMangaFilterUnread
     with SharedPreferenceClientMixin<bool> {
   @override
-  bool? build() => initialize(DBKeys.mangaFilterUnread);
+  bool? build() {
+    final value = initialize(DBKeys.mangaFilterUnread);
+    if (value == false) {
+      Future.microtask(() => update(null));
+      return null;
+    }
+    return value;
+  }
 }
 
 @riverpod
 class LibraryMangaFilterCompleted extends _$LibraryMangaFilterCompleted
     with SharedPreferenceClientMixin<bool> {
   @override
-  bool? build() => initialize(DBKeys.mangaFilterCompleted);
+  bool? build() {
+    final value = initialize(DBKeys.mangaFilterCompleted);
+    if (value == false) {
+      Future.microtask(() => update(null));
+      return null;
+    }
+    return value;
+  }
 }
 
 @riverpod

@@ -34,6 +34,7 @@ class _AndroidHomeScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final historyGroups = ref.watch(filteredHistoryGroupsProvider);
     final historyState = ref.watch(readingHistoryProvider);
+    final historyEnabled = ref.watch(historyEnabledProvider) ?? true;
     final hasMore = ref.watch(historyHasMoreProvider);
     final searchQuery = ref.watch(historySearchQueryProvider);
     final searchController = useTextEditingController(text: searchQuery);
@@ -47,7 +48,12 @@ class _AndroidHomeScreen extends HookConsumerWidget {
     }, [searchQuery]);
 
     Future<void> tryLoadMore() async {
-      if (!hasMore || isLoadingMore.value || searchQuery.isNotBlank) return;
+      if (!hasMore ||
+          isLoadingMore.value ||
+          searchQuery.isNotBlank ||
+          ref.read(readingHistoryProvider.notifier).isLoadingMore) {
+        return;
+      }
       isLoadingMore.value = true;
       try {
         await ref.read(readingHistoryProvider.notifier).loadMore();
@@ -112,11 +118,22 @@ class _AndroidHomeScreen extends HookConsumerWidget {
           ),
           historyState.when(
             data: (data) {
+              if (!historyEnabled) {
+                return SliverFillRemaining(
+                  child: _HistoryDisabledState(
+                    onOpenSettings: () =>
+                        showHistorySettingsSheet(context, ref),
+                  ),
+                );
+              }
               if (data == null || data.isEmpty) {
                 return const SliverFillRemaining(child: _HistoryEmptyState());
               }
               if (historyGroups.isEmpty && searchQuery.isNotBlank) {
                 return const SliverFillRemaining(child: _HistoryNoResults());
+              }
+              if (historyGroups.isEmpty) {
+                return const SliverFillRemaining(child: _HistoryEmptyState());
               }
               return SliverPadding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
@@ -185,6 +202,44 @@ class _HistoryEmptyState extends StatelessWidget {
             Text(context.l10n.startReadingToSeeHistory,
                 style: context.theme.textTheme.bodySmall?.copyWith(
                     color: context.theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      );
+}
+
+class _HistoryDisabledState extends StatelessWidget {
+  const _HistoryDisabledState({required this.onOpenSettings});
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.history_rounded,
+                size: 64,
+                color: context.theme.colorScheme.onSurfaceVariant
+                    .withValues(alpha: 0.4)),
+            const SizedBox(height: 16),
+            Text(context.l10n.historyEnabledLabel,
+                style: context.theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                context.l10n.historyEnabledDescription,
+                style: context.theme.textTheme.bodySmall?.copyWith(
+                  color: context.theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: onOpenSettings,
+              icon: const Icon(Icons.settings_rounded),
+              label: Text(context.l10n.settings),
+            ),
           ],
         ),
       );

@@ -23,6 +23,7 @@ class IOSHomeScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final historyGroups = ref.watch(filteredHistoryGroupsProvider);
     final historyState = ref.watch(readingHistoryProvider);
+    final historyEnabled = ref.watch(historyEnabledProvider) ?? true;
     final hasMore = ref.watch(historyHasMoreProvider);
     final searchQuery = ref.watch(historySearchQueryProvider);
     final searchController = useTextEditingController(text: searchQuery);
@@ -38,7 +39,12 @@ class IOSHomeScreen extends HookConsumerWidget {
     }, [searchQuery]);
 
     Future<void> tryLoadMore() async {
-      if (!hasMore || isLoadingMore.value || searchQuery.isNotBlank) return;
+      if (!hasMore ||
+          isLoadingMore.value ||
+          searchQuery.isNotBlank ||
+          ref.read(readingHistoryProvider.notifier).isLoadingMore) {
+        return;
+      }
       isLoadingMore.value = true;
       try {
         await ref.read(readingHistoryProvider.notifier).loadMore();
@@ -137,7 +143,46 @@ class IOSHomeScreen extends HookConsumerWidget {
                 ),
               ),
             ),
-            if (historyGroups.isNotEmpty) ...[
+            if (!historyEnabled)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        CupertinoIcons.time,
+                        size: 56,
+                        color: (isDark ? Colors.white : Colors.black)
+                            .withValues(alpha: 0.2),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        context.l10n.historyEnabledLabel,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: (isDark ? Colors.white : Colors.black)
+                              .withValues(alpha: 0.6),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          context.l10n.historyEnabledDescription,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: (isDark ? Colors.white : Colors.black)
+                                .withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (historyGroups.isNotEmpty) ...[
               _ContinueReadingCarousel(groups: historyGroups),
               SliverToBoxAdapter(
                 child: Padding(
