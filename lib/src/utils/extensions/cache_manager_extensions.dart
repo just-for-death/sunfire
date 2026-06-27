@@ -20,6 +20,9 @@ import 'custom_extensions.dart';
 extension CacheManagerExtension on CacheManager {
   Future<File> getServerFile(WidgetRef ref, String url,
       {bool appendApiToUrl = true}) async {
+    if (url.startsWith('file://')) {
+      return File(Uri.parse(url).toFilePath());
+    }
     final authType = ref.read(authTypeKeyProvider);
     final basicToken = ref.read(credentialsProvider);
     final baseApi = "${Endpoints.baseApi(

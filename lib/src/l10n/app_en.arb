@@ -147,6 +147,12 @@
     "@close": {
         "description": "Text for close button"
     },
+    "@collapseSidebar": {
+        "description": "Tooltip for collapsing the iPad navigation sidebar"
+    },
+    "@expandSidebar": {
+        "description": "Tooltip for expanding the iPad navigation sidebar"
+    },
     "@cloudflareBypass": {
         "description": "Section title for Cloudflare Bypass"
     },
@@ -986,6 +992,8 @@
     "client": "Client",
     "clientVersion": "Client version",
     "close": "Close",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
     "cloudflareBypass": "Cloudflare Bypass",
     "completed": "Completed",
     "copied": "Copied!",

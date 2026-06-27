@@ -169,6 +169,12 @@ class AppLocalizationsTa extends AppLocalizations {
   String get close => 'மூடு';
 
   @override
+  String get collapseSidebar => 'Collapse sidebar';
+
+  @override
+  String get expandSidebar => 'Expand sidebar';
+
+  @override
   String get cloudflareBypass => 'கிளவுட்ஃப்ளேர் பைபாச்';
 
   @override

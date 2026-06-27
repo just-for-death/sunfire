@@ -165,6 +165,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get close => '閉じる';
 
   @override
+  String get collapseSidebar => 'Collapse sidebar';
+
+  @override
+  String get expandSidebar => 'Expand sidebar';
+
+  @override
   String get cloudflareBypass => 'Cloudflare バイパス';
 
   @override
