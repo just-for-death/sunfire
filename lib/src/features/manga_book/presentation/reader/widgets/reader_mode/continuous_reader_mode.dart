@@ -84,7 +84,7 @@ class ContinuousReaderMode extends HookConsumerWidget {
     final ObjectRef<Timer?> positionUpdateTimer = useRef<Timer?>(null);
     final ValueNotifier<bool> isUserScrolling = useState(false);
     final ValueNotifier<bool> isNavigatingFromSlider = useState(false);
-    final ValueNotifier<int> lastReportedIndex = useState(-1);
+    final ValueNotifier<int> lastReportedIndex = useState(initialIndex);
 
     // Dispose timer properly
     useEffect(() {

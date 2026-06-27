@@ -58,6 +58,7 @@ dependencies:
   shimmer: ^3.0.0
   url_launcher: ^6.1.6
   flutter_local_notifications: ^18.0.0
+  flutter_native_splash: ^2.2.14
   wakelock_plus: ^1.2.8
   web_socket_channel: ^3.0.0
 
@@ -67,7 +68,6 @@ dev_dependencies:
   flutter_gen_runner: ^5.1.0+1
   flutter_launcher_icons: ^0.14.1
   flutter_lints: ^5.0.0
-  flutter_native_splash: ^2.2.14
   flutter_test:
     sdk: flutter
   freezed: ^2.2.1

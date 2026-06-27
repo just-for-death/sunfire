@@ -78,9 +78,8 @@ class NavigationShellScreen extends HookConsumerWidget {
         showOfflineBanner: false,
         child: IOSNavigationShell(
           onDestinationSelected: onDestinationSelected,
-          compactBottomNav:
-              !AppBreakpoints.isTabletLayout(context) &&
-              AppBreakpoints.isCompactNav(context),
+          compactBottomNav: AppBreakpoints.isCompactNav(context) ||
+              AppBreakpoints.useCompactShellOnIPad(context),
           child: child,
         ),
       );
@@ -142,7 +141,6 @@ class NavigationShellScreen extends HookConsumerWidget {
             Expanded(child: child),
           ],
         ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         bottomNavigationBar: SmallScreenNavigationBar(
           selectedBranchIndex: child.currentIndex,
           compact: compactBottomNav,
