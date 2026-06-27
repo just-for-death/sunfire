@@ -56,7 +56,7 @@ class TrackerEditDialog extends HookConsumerWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              record.trackerName ?? 'Tracker',
+              record.trackerName ?? context.l10n.unknownTracker,
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -81,7 +81,8 @@ class TrackerEditDialog extends HookConsumerWidget {
               const SizedBox(height: 8),
 
               // Status dropdown — uses tracker's real statuses if available
-              Text('Status', style: context.textTheme.labelMedium),
+              Text(context.l10n.trackingStatus,
+                  style: context.textTheme.labelMedium),
               const SizedBox(height: 4),
               DropdownButtonFormField<int?>(
                 initialValue: statusValue.value,
@@ -90,19 +91,33 @@ class TrackerEditDialog extends HookConsumerWidget {
                   isDense: true,
                 ),
                 items: [
-                  const DropdownMenuItem(
-                      value: null, child: Text('— Not set —')),
+                  DropdownMenuItem(
+                      value: null, child: Text(context.l10n.trackingNotSet)),
                   ...(record.trackerStatuses?.isNotEmpty == true
                       ? record.trackerStatuses!.map((s) =>
                           DropdownMenuItem(value: s.value, child: Text(s.name)))
-                      : const [
-                          DropdownMenuItem(value: 1, child: Text('Reading')),
-                          DropdownMenuItem(value: 2, child: Text('Completed')),
-                          DropdownMenuItem(value: 3, child: Text('On Hold')),
-                          DropdownMenuItem(value: 4, child: Text('Dropped')),
+                      : [
                           DropdownMenuItem(
-                              value: 5, child: Text('Plan to Read')),
-                          DropdownMenuItem(value: 6, child: Text('Re-reading')),
+                              value: 1,
+                              child: Text(context.l10n.trackingStatusReading)),
+                          DropdownMenuItem(
+                              value: 2,
+                              child:
+                                  Text(context.l10n.trackingStatusCompleted)),
+                          DropdownMenuItem(
+                              value: 3,
+                              child: Text(context.l10n.trackingStatusOnHold)),
+                          DropdownMenuItem(
+                              value: 4,
+                              child: Text(context.l10n.trackingStatusDropped)),
+                          DropdownMenuItem(
+                              value: 5,
+                              child:
+                                  Text(context.l10n.trackingStatusPlanToRead)),
+                          DropdownMenuItem(
+                              value: 6,
+                              child:
+                                  Text(context.l10n.trackingStatusRereading)),
                         ]),
                 ],
                 onChanged: (v) => statusValue.value = v,
@@ -110,7 +125,8 @@ class TrackerEditDialog extends HookConsumerWidget {
               const SizedBox(height: 12),
 
               // Last chapter
-              Text('Last Chapter Read', style: context.textTheme.labelMedium),
+              Text(context.l10n.trackingLastChapter,
+                  style: context.textTheme.labelMedium),
               const SizedBox(height: 4),
               TextField(
                 controller: chapterController,
@@ -132,7 +148,8 @@ class TrackerEditDialog extends HookConsumerWidget {
               const SizedBox(height: 12),
 
               // Score
-              Text('Score', style: context.textTheme.labelMedium),
+              Text(context.l10n.trackingScore,
+                  style: context.textTheme.labelMedium),
               const SizedBox(height: 4),
               record.trackerScores?.isNotEmpty == true
                   ? DropdownButtonFormField<String?>(
@@ -145,8 +162,9 @@ class TrackerEditDialog extends HookConsumerWidget {
                         isDense: true,
                       ),
                       items: [
-                        const DropdownMenuItem<String?>(
-                            value: null, child: Text('— Not set —')),
+                        DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text(context.l10n.trackingNotSet)),
                         ...record.trackerScores!.map((s) =>
                             DropdownMenuItem<String?>(
                                 value: s, child: Text(s))),
@@ -172,15 +190,15 @@ class TrackerEditDialog extends HookConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Start Date',
+                        Text(context.l10n.trackingStartDate,
                             style: context.textTheme.labelMedium),
                         const SizedBox(height: 4),
                         TextField(
                           controller: startDateController,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            border: const OutlineInputBorder(),
                             isDense: true,
-                            hintText: 'YYYY-MM-DD',
+                            hintText: context.l10n.trackingDateHint,
                           ),
                           readOnly: true,
                           onTap: () async {
@@ -204,15 +222,15 @@ class TrackerEditDialog extends HookConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Finish Date',
+                        Text(context.l10n.trackingFinishDate,
                             style: context.textTheme.labelMedium),
                         const SizedBox(height: 4),
                         TextField(
                           controller: finishDateController,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            border: const OutlineInputBorder(),
                             isDense: true,
-                            hintText: 'YYYY-MM-DD',
+                            hintText: context.l10n.trackingDateHint,
                           ),
                           readOnly: true,
                           onTap: () async {

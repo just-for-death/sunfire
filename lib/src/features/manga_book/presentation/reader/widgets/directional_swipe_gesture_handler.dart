@@ -36,6 +36,8 @@ class DirectionalSwipeGestureHandler extends HookWidget {
     required this.prevNextChapterPair,
     required this.onNextPage,
     required this.onPreviousPage,
+    this.onNextChapter,
+    this.onPreviousChapter,
     required this.pageController,
   });
 
@@ -55,6 +57,8 @@ class DirectionalSwipeGestureHandler extends HookWidget {
   final ({ChapterDto? first, ChapterDto? second})? prevNextChapterPair;
   final VoidCallback onNextPage;
   final VoidCallback onPreviousPage;
+  final VoidCallback? onNextChapter;
+  final VoidCallback? onPreviousChapter;
   final PageController? pageController;
 
   @override
@@ -139,13 +143,8 @@ class DirectionalSwipeGestureHandler extends HookWidget {
         resolvedReaderMode == ReaderMode.webtoon ||
             resolvedReaderMode == ReaderMode.continuousVertical;
 
-    // Resolve current page index for edge checks.
-    if (!lastPageSwipeEnabled) {
-      return;
-    }
-    final realTimePageIndex = pageController?.page?.round() ??
-        livePageIndex?.value ??
-        currentIndex;
+    // Resolve current page index for edge checks (logical page, not spread index).
+    final realTimePageIndex = livePageIndex?.value ?? currentIndex;
 
     final pagePosition = LastPageSwipeUtils.detectPagePosition(
       currentIndex: realTimePageIndex,
@@ -266,12 +265,16 @@ class DirectionalSwipeGestureHandler extends HookWidget {
   void _navigateToNextChapterWithFallback(BuildContext context) {
     if (prevNextChapterPair?.first != null) {
       try {
-        ReaderRoute(
-          mangaId: mangaId,
-          chapterId: prevNextChapterPair!.first!.id,
-          transVertical: scrollDirection != Axis.vertical,
-          toPrev: _chapterToPrev(goingToPrevious: false),
-        ).pushReplacement(context);
+        if (onNextChapter != null) {
+          onNextChapter!();
+        } else {
+          ReaderRoute(
+            mangaId: mangaId,
+            chapterId: prevNextChapterPair!.first!.id,
+            transVertical: scrollDirection != Axis.vertical,
+            toPrev: _chapterToPrev(goingToPrevious: false),
+          ).pushReplacement(context);
+        }
       } catch (e) {
         onNextPage();
       }
@@ -284,12 +287,16 @@ class DirectionalSwipeGestureHandler extends HookWidget {
   void _navigateToPreviousChapterWithFallback(BuildContext context) {
     if (prevNextChapterPair?.second != null) {
       try {
-        ReaderRoute(
-          mangaId: mangaId,
-          chapterId: prevNextChapterPair!.second!.id,
-          toPrev: _chapterToPrev(goingToPrevious: true),
-          transVertical: scrollDirection != Axis.vertical,
-        ).pushReplacement(context);
+        if (onPreviousChapter != null) {
+          onPreviousChapter!();
+        } else {
+          ReaderRoute(
+            mangaId: mangaId,
+            chapterId: prevNextChapterPair!.second!.id,
+            toPrev: _chapterToPrev(goingToPrevious: true),
+            transVertical: scrollDirection != Axis.vertical,
+          ).pushReplacement(context);
+        }
       } catch (e) {
         onPreviousPage();
       }
@@ -300,12 +307,25 @@ class DirectionalSwipeGestureHandler extends HookWidget {
 
   /// Perform appropriate page navigation based on direction
   void _performPageNavigation(SwipeDirection direction) {
+    final isRTL = _isRTLReaderMode(resolvedReaderMode);
     switch (direction) {
       case SwipeDirection.left:
+        if (isRTL) {
+          onPreviousPage();
+        } else {
+          onNextPage();
+        }
+        break;
+      case SwipeDirection.right:
+        if (isRTL) {
+          onNextPage();
+        } else {
+          onPreviousPage();
+        }
+        break;
       case SwipeDirection.up:
         onNextPage();
         break;
-      case SwipeDirection.right:
       case SwipeDirection.down:
         onPreviousPage();
         break;
@@ -337,7 +357,7 @@ class DirectionalSwipeGestureHandler extends HookWidget {
     }
 
     final pagePosition = LastPageSwipeUtils.detectPagePosition(
-      currentIndex: currentIndex,
+      currentIndex: livePageIndex?.value ?? currentIndex,
       chapterPages: chapterPages,
     );
 

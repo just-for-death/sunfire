@@ -53,7 +53,7 @@ class TrackerSearchScreen extends HookConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Add Tracking — ${tracker.name}'),
+        title: Text(context.l10n.trackingAddForTracker(tracker.name)),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(
@@ -62,7 +62,7 @@ class TrackerSearchScreen extends HookConsumerWidget {
               controller: queryController,
               autofocus: true,
               decoration: InputDecoration(
-                hintText: 'Search on ${tracker.name}...',
+                hintText: context.l10n.trackingSearchOnTracker(tracker.name),
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: queryController.text.isNotEmpty
                     ? IconButton(
@@ -105,7 +105,7 @@ class TrackerSearchScreen extends HookConsumerWidget {
                       const Icon(Icons.error_outline_rounded, size: 48),
                       const SizedBox(height: 12),
                       Text(
-                        _friendlyError(e.toString()),
+                        _friendlyError(context, e.toString()),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 12),
@@ -124,13 +124,13 @@ class TrackerSearchScreen extends HookConsumerWidget {
                 ),
               ),
               data: (items) => items.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.search_off_rounded, size: 48),
-                          SizedBox(height: 12),
-                          Text('No results found'),
+                          const Icon(Icons.search_off_rounded, size: 48),
+                          const SizedBox(height: 12),
+                          Text(context.l10n.noResultsFound),
                         ],
                       ),
                     )
@@ -150,15 +150,16 @@ class TrackerSearchScreen extends HookConsumerWidget {
   }
 
   /// Convert server/network errors to user-friendly messages.
-  String _friendlyError(String raw) {
+  String _friendlyError(BuildContext context, String raw) {
+    final l10n = context.l10n;
     if (raw.contains('Collection is empty')) {
-      return 'Could not bind — make sure you are logged in to ${tracker.name} in Settings → Trackers.';
+      return l10n.trackingBindEmptyCollection(tracker.name);
     }
     if (raw.contains('TimeoutException') || raw.contains('No stream event')) {
-      return 'Search timed out. ${tracker.name} may be slow — please retry.';
+      return l10n.trackingSearchTimeout(tracker.name);
     }
     if (raw.contains('SocketException') || raw.contains('Failed host lookup')) {
-      return 'No internet connection.';
+      return l10n.trackingNoInternet;
     }
     return raw;
   }
@@ -226,7 +227,7 @@ class _TrackerSearchResultTile extends ConsumerWidget {
             Text(result.startDate!,
                 style: Theme.of(context).textTheme.bodySmall),
           if (result.totalChapters != null && result.totalChapters! > 0)
-            Text('${result.totalChapters} chapters',
+            Text(context.l10n.trackingChapterCount(result.totalChapters!),
                 style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
@@ -238,8 +239,8 @@ class _TrackerSearchResultTile extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Add Tracking'),
-        content: Text('Track "${result.title}" on $trackerName?'),
+        title: Text(context.l10n.addTracking),
+        content: Text(context.l10n.trackingAddConfirm(result.title, trackerName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -247,7 +248,7 @@ class _TrackerSearchResultTile extends ConsumerWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Add Tracking'),
+            child: Text(context.l10n.addTracking),
           ),
         ],
       ),
@@ -263,7 +264,7 @@ class _TrackerSearchResultTile extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         final msg = e.toString().contains('Collection is empty')
-            ? 'Not logged in to $trackerName. Go to Settings → Trackers.'
+            ? context.l10n.trackingBindLoginRequired(trackerName)
             : e.toString();
         ref.read(toastProvider)?.showError(msg);
       }
