@@ -20,6 +20,7 @@ import '../../../history/presentation/history_controller.dart';
 import '../../../settings/presentation/reader/widgets/reader_ignore_safe_area_tile/reader_ignore_safe_area_tile.dart';
 import '../../../settings/presentation/reader/widgets/reader_mode_tile/reader_mode_tile.dart';
 import '../../../settings/presentation/reader/widgets/reader_orientation_tile/reader_orientation_tile.dart';
+import '../../data/local_downloads/local_downloads_service.dart';
 import '../../data/manga_book/manga_book_repository.dart';
 import '../../domain/chapter/chapter_model.dart';
 import '../../domain/chapter_batch/chapter_batch_model.dart';
@@ -83,17 +84,26 @@ class ReaderScreen extends HookConsumerWidget {
       final isReadingCompleted =
           pageCount > 0 && currentPage >= (pageCount - 1);
 
+      final lastPage = isReadingCompleted ? 0 : currentPage;
+
       await AsyncValue.guard(
         () => ref.read(mangaBookRepositoryProvider).putChapter(
               chapterId: chapterValue.id,
               patch: ChapterChange(
-                lastPageRead: isReadingCompleted ? 0 : currentPage,
+                lastPageRead: lastPage,
                 isRead: isReadingCompleted,
               ),
             ),
       );
 
+      await ref.read(localDownloadsServiceProvider).updateReadingProgress(
+            chapterValue.id,
+            lastPageRead: lastPage,
+            isRead: isReadingCompleted,
+          );
+
       ref.invalidate(readingHistoryProvider);
+      ref.invalidate(chapterProvider(chapterId: chapterValue.id));
       pendingPageIndex.value = null;
     }, [chapter.valueOrNull, chapterPages.valueOrNull]);
 

@@ -153,10 +153,12 @@ class TrackerEditDialog extends HookConsumerWidget {
               const SizedBox(height: 4),
               record.trackerScores?.isNotEmpty == true
                   ? DropdownButtonFormField<String?>(
-                      initialValue:
-                          record.trackerScores!.contains(scoreController.text)
-                              ? scoreController.text
-                              : null,
+                      initialValue: record.trackerScores == null
+                          ? null
+                          : _matchTrackerScore(
+                              scoreController.text,
+                              record.trackerScores!,
+                            ),
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         isDense: true,
@@ -273,15 +275,15 @@ class TrackerEditDialog extends HookConsumerWidget {
                           lastChapterRead: chapterController.text.isNotEmpty
                               ? double.tryParse(chapterController.text)
                               : null,
-                          scoreString: scoreController.text.isNotEmpty
-                              ? scoreController.text.trim()
-                              : null,
-                          startDate: startDateController.text.isNotEmpty
-                              ? startDateController.text.trim()
-                              : null,
-                          finishDate: finishDateController.text.isNotEmpty
-                              ? finishDateController.text.trim()
-                              : null,
+                          scoreString: scoreController.text.trim().isEmpty
+                              ? ''
+                              : scoreController.text.trim(),
+                          startDate: startDateController.text.isEmpty
+                              ? ''
+                              : startDateController.text.trim(),
+                          finishDate: finishDateController.text.isEmpty
+                              ? ''
+                              : finishDateController.text.trim(),
                         );
                     ref.invalidate(mangaTrackRecordsProvider(mangaId));
                     if (context.mounted) {
@@ -313,5 +315,19 @@ class TrackerEditDialog extends HookConsumerWidget {
     } catch (_) {
       return DateTime.now();
     }
+  }
+
+  String? _matchTrackerScore(String score, List<String> scores) {
+    if (score.isEmpty) return null;
+    if (scores.contains(score)) return score;
+    final trimmed = score.replaceAll(RegExp(r'\.0+$'), '');
+    if (scores.contains(trimmed)) return trimmed;
+    final parsed = double.tryParse(score);
+    if (parsed != null) {
+      for (final candidate in scores) {
+        if (double.tryParse(candidate) == parsed) return candidate;
+      }
+    }
+    return null;
   }
 }
