@@ -86,11 +86,6 @@ class MangaDetailsScreen extends HookConsumerWidget {
       }
     }, [context, mangaRefresh, chapterListRefresh, mangaProvider, chapterListProvider]);
 
-    useEffect(() {
-      if (filteredChapterList.isNotLoading && manga.isNotLoading) refresh();
-      return;
-    }, []);
-
     // Migration function
     void startMigration(BuildContext context, dynamic manga) {
       if (manga == null) return;

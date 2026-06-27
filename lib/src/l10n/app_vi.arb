@@ -1774,5 +1774,197 @@
     "migrationCancelledNoChanges": "Migration cancelled before any changes were applied.",
     "migrationCancelledPartial": "Cancel was requested after the server had already applied changes. Check your library — the migration may have completed.",
     "migrationCancelledPartialBatch": "Migration stopped. {success} of {total} manga had already been migrated.",
-    "cancelMigrationConfirmationInProgress": "Stop remaining work? A migration already running on the server cannot be undone."
+    "cancelMigrationConfirmationInProgress": "Stop remaining work? A migration already running on the server cannot be undone.",
+    "historyLoadMore": "Scroll for more",
+    "downloadRetryServer": "Retry server download",
+    "downloadCancelServer": "Cancel server download",
+    "downloadRemoveServer": "Remove server download",
+    "downloadQueueServer": "Download on server",
+    "trackingChapterLabel": "Ch. {number}",
+    "trackingChapterWithTotal": "Ch. {current}/{total}",
+    "migrationWarningsTitle": "Warnings",
+    "migrationManualSearch": "Manual search",
+    "@historyLoadMore": {
+        "description": "Hint at the bottom of the history list when more items can be loaded"
+    },
+    "@downloadRetryServer": {
+        "description": "Tooltip for retrying a failed server-side chapter download"
+    },
+    "@downloadCancelServer": {
+        "description": "Tooltip for cancelling an in-progress server download"
+    },
+    "@downloadRemoveServer": {
+        "description": "Tooltip for removing a completed server download"
+    },
+    "@downloadQueueServer": {
+        "description": "Tooltip for queueing a chapter download on the server"
+    },
+    "@trackingChapterLabel": {
+        "placeholders": {
+            "number": {
+                "type": "String"
+            }
+        }
+    },
+    "@trackingChapterWithTotal": {
+        "placeholders": {
+            "current": {
+                "type": "int"
+            },
+            "total": {
+                "type": "int"
+            }
+        }
+    },
+    "@migrationWarningsTitle": {
+        "description": "Header for migration warnings shown after completion"
+    },
+    "@migrationManualSearch": {
+        "description": "Tooltip for manually searching a manga during batch migration"
+    },
+    "localDownloadCancelTooltip": "Cancel offline download",
+    "author": "Author",
+    "artist": "Artist",
+    "unreadChapterCount": "{count, plural, =1{1 chapter} other{{count} chapters}}",
+    "@unreadChapterCount": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "trackerTokenExpired": "Token expired",
+    "@trackerTokenExpired": {
+        "description": "Shown when a tracker OAuth token has expired"
+    },
+    "historyEnabledLabel": "Reading history",
+    "historyEnabledDescription": "Track recently read chapters on the home screen",
+    "historyRetentionLabel": "Keep history for",
+    "historyRetentionDays": "{days} days",
+    "historyRetentionNever": "Forever",
+    "@historyEnabledLabel": {
+        "description": "Toggle label for enabling reading history"
+    },
+    "@historyEnabledDescription": {
+        "description": "Subtitle for the reading history toggle"
+    },
+    "@historyRetentionLabel": {
+        "description": "Label for history retention period setting"
+    },
+    "@historyRetentionDays": {
+        "placeholders": {
+            "days": {
+                "type": "int"
+            }
+        }
+    },
+    "@historyRetentionNever": {
+        "description": "Option to keep reading history without time limit"
+    },
+    "migrationCompletedWithErrors": "Migration completed with errors",
+    "migrationFailedGeneric": "Migration failed",
+    "migrationFailedWithDetail": "Migration failed: {detail}",
+    "migrationWarnAddToLibraryFailed": "Failed to add target manga to library: {detail}",
+    "migrationWarnCategoriesFailed": "Failed to migrate categories: {detail}",
+    "migrationWarnCategoryMigrationFailed": "Category migration failed: {detail}",
+    "migrationWarnChapterMigrateFailed": "Failed to migrate chapter {chapterId}: {detail}",
+    "migrationWarnNoMatchingChapters": "No matching chapters found for read status migration. This may be due to different chapter numbering between sources.",
+    "migrationWarnChapterMigrationFailed": "Chapter migration failed: {detail}",
+    "migrationWarnClearCategoriesFailed": "Failed to clear categories for source manga: {detail}",
+    "migrationWarnRemoveSourceFailed": "Failed to remove source manga from library: {detail}",
+    "migrationWarnRemovedSourceFromLibrary": "Removed original manga from library",
+    "migrationWarnDownloadsMigrationFailed": "Offline download migration failed: {detail}",
+    "migrationWarnDownloadChapterSkipped": "Could not migrate offline download for chapter {chapterId}",
+    "migrationWarnTrackingMigrationFailed": "Tracking migration failed: {detail}",
+    "migrationWarnTrackingRecordFailed": "Failed to migrate tracking for {tracker}: {detail}",
+    "@migrationFailedWithDetail": {
+        "placeholders": {
+            "detail": {
+                "type": "String"
+            }
+        }
+    },
+    "@migrationWarnAddToLibraryFailed": {
+        "placeholders": {
+            "detail": {
+                "type": "String"
+            }
+        }
+    },
+    "@migrationWarnCategoriesFailed": {
+        "placeholders": {
+            "detail": {
+                "type": "String"
+            }
+        }
+    },
+    "@migrationWarnCategoryMigrationFailed": {
+        "placeholders": {
+            "detail": {
+                "type": "String"
+            }
+        }
+    },
+    "@migrationWarnChapterMigrateFailed": {
+        "placeholders": {
+            "chapterId": {
+                "type": "int"
+            },
+            "detail": {
+                "type": "String"
+            }
+        }
+    },
+    "@migrationWarnChapterMigrationFailed": {
+        "placeholders": {
+            "detail": {
+                "type": "String"
+            }
+        }
+    },
+    "@migrationWarnClearCategoriesFailed": {
+        "placeholders": {
+            "detail": {
+                "type": "String"
+            }
+        }
+    },
+    "@migrationWarnRemoveSourceFailed": {
+        "placeholders": {
+            "detail": {
+                "type": "String"
+            }
+        }
+    },
+    "@migrationWarnDownloadsMigrationFailed": {
+        "placeholders": {
+            "detail": {
+                "type": "String"
+            }
+        }
+    },
+    "@migrationWarnDownloadChapterSkipped": {
+        "placeholders": {
+            "chapterId": {
+                "type": "int"
+            }
+        }
+    },
+    "@migrationWarnTrackingMigrationFailed": {
+        "placeholders": {
+            "detail": {
+                "type": "String"
+            }
+        }
+    },
+    "@migrationWarnTrackingRecordFailed": {
+        "placeholders": {
+            "tracker": {
+                "type": "String"
+            },
+            "detail": {
+                "type": "String"
+            }
+        }
+    }
 }

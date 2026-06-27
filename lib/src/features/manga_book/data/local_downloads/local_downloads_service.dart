@@ -83,6 +83,10 @@ class OfflineChapterManifest {
       };
 }
 
+class DownloadCancelledException implements Exception {
+  const DownloadCancelledException();
+}
+
 class LocalDownloadsService {
   const LocalDownloadsService();
 
@@ -91,14 +95,89 @@ class LocalDownloadsService {
   static const _manifestFileName = 'manifest.json';
 
   Future<Directory> _chapterDir(int chapterId) async {
-    final baseDir = await getApplicationDocumentsDirectory();
-    final dir = Directory(
-      p.join(baseDir.path, _rootFolderName, _chaptersFolderName, '$chapterId'),
-    );
+    final dir = await _chapterDirIfExists(chapterId);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
     return dir;
+  }
+
+  Future<Directory> _chapterDirIfExists(int chapterId) async {
+    final baseDir = await getApplicationDocumentsDirectory();
+    return Directory(
+      p.join(baseDir.path, _rootFolderName, _chaptersFolderName, '$chapterId'),
+    );
+  }
+
+  /// Moves offline downloads from source manga chapters to matching target chapters.
+  Future<({int migrated, List<String> warnings})> migrateDownloadsToManga({
+    required int fromMangaId,
+    required int toMangaId,
+    required String targetMangaTitle,
+    required List<ChapterDto> targetChapters,
+    required String Function(int chapterId) onChapterSkipped,
+  }) async {
+    final warnings = <String>[];
+    var migrated = 0;
+    final offlineChapters = await getOfflineChaptersForManga(fromMangaId);
+
+    for (final source in offlineChapters) {
+      final manifest = await getOfflineManifest(source.id);
+      if (manifest == null) continue;
+
+      ChapterDto? target = targetChapters
+          .where(
+            (c) => (c.chapterNumber - source.chapterNumber).abs() < 0.01,
+          )
+          .firstOrNull;
+
+      if (target == null && source.name.isNotEmpty) {
+        final sourceName = source.name.toLowerCase().trim();
+        target = targetChapters
+            .where((c) => c.name.toLowerCase().trim() == sourceName)
+            .firstOrNull;
+      }
+
+      if (target == null) {
+        warnings.add(onChapterSkipped(source.id));
+        continue;
+      }
+
+      if (target.id == source.id && manifest.mangaId == toMangaId) {
+        migrated++;
+        continue;
+      }
+
+      final fromDir = await _chapterDirIfExists(source.id);
+      if (!await fromDir.exists()) continue;
+
+      final toDir = await _chapterDirIfExists(target.id);
+      if (await toDir.exists()) {
+        await deleteChapter(source.id);
+        warnings.add(onChapterSkipped(source.id));
+        continue;
+      }
+
+      await fromDir.rename(toDir.path);
+
+      final updated = OfflineChapterManifest(
+        chapterId: target.id,
+        mangaId: toMangaId,
+        chapterName: target.name,
+        chapterNumber: target.chapterNumber,
+        mangaTitle: targetMangaTitle,
+        pageCount: manifest.pageCount,
+        pages: manifest.pages,
+        lastPageRead: manifest.lastPageRead,
+        isRead: manifest.isRead,
+      );
+      await File(p.join(toDir.path, _manifestFileName)).writeAsString(
+        jsonEncode(updated.toJson()),
+      );
+      migrated++;
+    }
+
+    return (migrated: migrated, warnings: warnings);
   }
 
   Future<File> _manifestFile(int chapterId) async {
@@ -151,6 +230,12 @@ class LocalDownloadsService {
   }
 
   ChapterDto _chapterDtoFromManifest(OfflineChapterManifest manifest) {
+    final lastPageRead = manifest.isRead && manifest.pageCount > 0
+        ? [
+            manifest.lastPageRead,
+            manifest.pageCount - 1,
+          ].reduce((a, b) => a > b ? a : b)
+        : manifest.lastPageRead;
     return Fragment$ChapterDto(
       chapterNumber: manifest.chapterNumber,
       fetchedAt: '0',
@@ -158,7 +243,7 @@ class LocalDownloadsService {
       isBookmarked: false,
       isDownloaded: true,
       isRead: manifest.isRead,
-      lastPageRead: manifest.lastPageRead,
+      lastPageRead: lastPageRead,
       lastReadAt: '0',
       mangaId: manifest.mangaId,
       name: manifest.chapterName.isNotEmpty
@@ -261,6 +346,7 @@ class LocalDownloadsService {
     required Ref ref,
     required int chapterId,
     void Function(int current, int total)? onProgress,
+    bool Function()? isCancelled,
   }) async {
     final repo = ref.read(mangaBookRepositoryProvider);
     final chapterPages = await repo.getChapterPages(chapterId: chapterId);
@@ -303,6 +389,9 @@ class LocalDownloadsService {
     final savedFiles = <String>[];
     try {
       for (int i = 0; i < total; i++) {
+        if (isCancelled?.call() == true) {
+          throw const DownloadCancelledException();
+        }
         final pageUrl = chapterPages.pages[i];
         final fullUrl = '$baseApi$pageUrl';
         final response = await http

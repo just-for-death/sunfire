@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../../../widgets/emoticons.dart';
 import 'history_controller.dart';
+import 'history_settings_sheet.dart';
 import 'ios/ios_home_screen.dart';
 import 'widgets/history_group_widget.dart';
 
@@ -32,8 +34,10 @@ class _AndroidHomeScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final historyGroups = ref.watch(filteredHistoryGroupsProvider);
     final historyState = ref.watch(readingHistoryProvider);
+    final hasMore = ref.watch(historyHasMoreProvider);
     final searchQuery = ref.watch(historySearchQueryProvider);
     final searchController = useTextEditingController(text: searchQuery);
+    final isLoadingMore = useState(false);
 
     useEffect(() {
       if (searchController.text != searchQuery) {
@@ -42,8 +46,25 @@ class _AndroidHomeScreen extends HookConsumerWidget {
       return null;
     }, [searchQuery]);
 
+    Future<void> tryLoadMore() async {
+      if (!hasMore || isLoadingMore.value || searchQuery.isNotBlank) return;
+      isLoadingMore.value = true;
+      try {
+        await ref.read(readingHistoryProvider.notifier).loadMore();
+      } finally {
+        isLoadingMore.value = false;
+      }
+    }
+
     return Scaffold(
-      body: CustomScrollView(
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.metrics.extentAfter < 240) {
+            unawaited(tryLoadMore());
+          }
+          return false;
+        },
+        child: CustomScrollView(
         slivers: [
           SliverAppBar(
             floating: true,
@@ -71,6 +92,10 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                     onPressed: () =>
                         ref.read(readingHistoryProvider.notifier).refresh(),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.settings_rounded),
+                    onPressed: () => showHistorySettingsSheet(context, ref),
+                  ),
                 ],
                 onChanged: (v) => ref
                     .read(historySearchQueryProvider.notifier)
@@ -96,13 +121,32 @@ class _AndroidHomeScreen extends HookConsumerWidget {
               return SliverPadding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
                 sliver: SliverList.builder(
-                  itemCount: historyGroups.length,
-                  itemBuilder: (context, i) => HistoryGroupWidget(
-                    group: historyGroups[i],
-                    onRemoveItem: (id) => ref
-                        .read(readingHistoryProvider.notifier)
-                        .removeFromHistory(id),
-                  ),
+                  itemCount: historyGroups.length + (hasMore ? 1 : 0),
+                  itemBuilder: (context, i) {
+                    if (i == historyGroups.length) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: isLoadingMore.value
+                              ? const CircularProgressIndicator()
+                              : Text(
+                                  context.l10n.historyLoadMore,
+                                  style: context.theme.textTheme.bodySmall
+                                      ?.copyWith(
+                                    color: context
+                                        .theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                        ),
+                      );
+                    }
+                    return HistoryGroupWidget(
+                      group: historyGroups[i],
+                      onRemoveItem: (id) => ref
+                          .read(readingHistoryProvider.notifier)
+                          .removeFromHistory(id),
+                    );
+                  },
                 ),
               );
             },
@@ -111,13 +155,13 @@ class _AndroidHomeScreen extends HookConsumerWidget {
             ),
             error: (e, _) => SliverFillRemaining(
               child: _HistoryErrorState(
-                error: e,
                 onRetry: () =>
                     ref.read(readingHistoryProvider.notifier).refresh(),
               ),
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -166,8 +210,7 @@ class _HistoryNoResults extends StatelessWidget {
 }
 
 class _HistoryErrorState extends StatelessWidget {
-  const _HistoryErrorState({required this.error, required this.onRetry});
-  final Object error;
+  const _HistoryErrorState({required this.onRetry});
   final VoidCallback onRetry;
   @override
   Widget build(BuildContext context) => Center(
@@ -176,7 +219,7 @@ class _HistoryErrorState extends StatelessWidget {
           children: [
             const Emoticons(iconData: Icons.error_outline),
             const SizedBox(height: 16),
-            Text(error.toString(),
+            Text(context.l10n.errorSomethingWentWrong,
                 style: context.theme.textTheme.bodySmall,
                 textAlign: TextAlign.center),
             const SizedBox(height: 16),

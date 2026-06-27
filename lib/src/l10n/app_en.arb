@@ -1009,6 +1009,22 @@
     "downloadLocation": "Download location",
     "downloadLocationHint": "The path to the directory on the server where downloaded files should get saved in",
     "downloaded": "Downloaded",
+    "downloadRetryServer": "Retry server download",
+    "@downloadRetryServer": {
+        "description": "Tooltip for retrying a failed server-side chapter download"
+    },
+    "downloadCancelServer": "Cancel server download",
+    "@downloadCancelServer": {
+        "description": "Tooltip for cancelling an in-progress server download"
+    },
+    "downloadRemoveServer": "Remove server download",
+    "@downloadRemoveServer": {
+        "description": "Tooltip for removing a completed server download"
+    },
+    "downloadQueueServer": "Download on server",
+    "@downloadQueueServer": {
+        "description": "Tooltip for queueing a chapter download on the server"
+    },
     "downloading": "Downloading",
     "downloads": "Downloads",
     "edit": "Edit",
@@ -1260,6 +1276,65 @@
     "searchError": "Search error",
     "importantNotice": "Important Notice",
     "migrationWarning": "This will permanently move your manga data. This action cannot be undone.",
+    "migrationCompletedWithErrors": "Migration completed with errors",
+    "migrationFailedGeneric": "Migration failed",
+    "migrationFailedWithDetail": "Migration failed: {detail}",
+    "@migrationFailedWithDetail": {
+        "placeholders": { "detail": { "type": "String" } }
+    },
+    "migrationWarnAddToLibraryFailed": "Failed to add target manga to library: {detail}",
+    "@migrationWarnAddToLibraryFailed": {
+        "placeholders": { "detail": { "type": "String" } }
+    },
+    "migrationWarnCategoriesFailed": "Failed to migrate categories: {detail}",
+    "@migrationWarnCategoriesFailed": {
+        "placeholders": { "detail": { "type": "String" } }
+    },
+    "migrationWarnCategoryMigrationFailed": "Category migration failed: {detail}",
+    "@migrationWarnCategoryMigrationFailed": {
+        "placeholders": { "detail": { "type": "String" } }
+    },
+    "migrationWarnChapterMigrateFailed": "Failed to migrate chapter {chapterId}: {detail}",
+    "@migrationWarnChapterMigrateFailed": {
+        "placeholders": {
+            "chapterId": { "type": "int" },
+            "detail": { "type": "String" }
+        }
+    },
+    "migrationWarnNoMatchingChapters": "No matching chapters found for read status migration. This may be due to different chapter numbering between sources.",
+    "migrationWarnChapterMigrationFailed": "Chapter migration failed: {detail}",
+    "@migrationWarnChapterMigrationFailed": {
+        "placeholders": { "detail": { "type": "String" } }
+    },
+    "migrationWarnClearCategoriesFailed": "Failed to clear categories for source manga: {detail}",
+    "@migrationWarnClearCategoriesFailed": {
+        "placeholders": { "detail": { "type": "String" } }
+    },
+    "migrationWarnRemoveSourceFailed": "Failed to remove source manga from library: {detail}",
+    "@migrationWarnRemoveSourceFailed": {
+        "placeholders": { "detail": { "type": "String" } }
+    },
+    "migrationWarnRemovedSourceFromLibrary": "Removed original manga from library",
+    "migrationWarnDownloadsMigrationFailed": "Offline download migration failed: {detail}",
+    "@migrationWarnDownloadsMigrationFailed": {
+        "placeholders": { "detail": { "type": "String" } }
+    },
+    "migrationWarnDownloadChapterSkipped": "Could not migrate offline download for chapter {chapterId}",
+    "@migrationWarnDownloadChapterSkipped": {
+        "placeholders": { "chapterId": { "type": "int" } }
+    },
+    "migrationWarnTrackingMigrationFailed": "Tracking migration failed: {detail}",
+    "@migrationWarnTrackingMigrationFailed": {
+        "placeholders": { "detail": { "type": "String" } }
+    },
+    "migrationWarnTrackingRecordFailed": "Failed to migrate tracking for {tracker}: {detail}",
+    "@migrationWarnTrackingRecordFailed": {
+        "placeholders": {
+            "tracker": { "type": "String" },
+            "detail": { "type": "String" }
+        }
+    },
+    "migrationWarnTrackingBindFailed": "Could not bind to target manga",
     "deleteSourceWarning": "The original manga will be removed from your library after migration.",
     "confirmMigration": "Confirm Migration",
     "migrationConfirmationMessage": "Are you sure you want to migrate this manga? This action cannot be undone.",
@@ -1337,6 +1412,7 @@
     "localDownloadToDevice": "Download offline to device",
     "localDownloadRemoveTooltip": "Remove offline download",
     "localDownloadRetryTooltip": "Retry offline download",
+    "localDownloadCancelTooltip": "Cancel offline download",
     "localDownloadRemoveTitle": "Remove offline download?",
     "localDownloadRemoveBody": "This chapter will be removed from your device. You can download it again anytime.",
     "deleteOfflineDownloadsTitle": "Delete offline downloads?",
@@ -1444,6 +1520,14 @@
     "unknownManga": "Unknown Manga",
     "unknownSource": "Unknown Source",
     "unread": "Unread",
+    "author": "Author",
+    "artist": "Artist",
+    "unreadChapterCount": "{count, plural, =1{1 chapter} other{{count} chapters}}",
+    "@unreadChapterCount": {
+        "placeholders": {
+            "count": { "type": "int" }
+        }
+    },
     "update": "Update",
     "updateCompleted": "Update Completed",
     "updateFailed": "Failed to update {property}",
@@ -1465,6 +1549,32 @@
     "historyRecent": "Recent",
     "searchHistory": "Search history...",
     "noHistoryFound": "No reading history found",
+    "historyLoadMore": "Scroll for more",
+    "@historyLoadMore": {
+        "description": "Hint at the bottom of the history list when more items can be loaded"
+    },
+    "historyEnabledLabel": "Reading history",
+    "@historyEnabledLabel": {
+        "description": "Toggle label for enabling reading history"
+    },
+    "historyEnabledDescription": "Track recently read chapters on the home screen",
+    "@historyEnabledDescription": {
+        "description": "Subtitle for the reading history toggle"
+    },
+    "historyRetentionLabel": "Keep history for",
+    "@historyRetentionLabel": {
+        "description": "Label for history retention period setting"
+    },
+    "historyRetentionDays": "{days} days",
+    "@historyRetentionDays": {
+        "placeholders": {
+            "days": { "type": "int" }
+        }
+    },
+    "historyRetentionNever": "Forever",
+    "@historyRetentionNever": {
+        "description": "Option to keep reading history without time limit"
+    },
     "startReadingToSeeHistory": "Start reading manga to see your history here",
     "noSearchResults": "No search results",
     "tryDifferentSearchTerm": "Try a different search term",
@@ -1558,6 +1668,10 @@
     "@notLoggedIn": {
         "description": "Status label for not-logged-in tracker"
     },
+    "trackerTokenExpired": "Token expired",
+    "@trackerTokenExpired": {
+        "description": "Shown when a tracker OAuth token has expired"
+    },
     "noTrackingFound": "No tracking entries yet",
     "@noTrackingFound": {
         "description": "Empty state for manga tracker sheet"
@@ -1600,6 +1714,19 @@
     "@trackingChapterCount": {
         "placeholders": {
             "count": { "type": "int" }
+        }
+    },
+    "trackingChapterLabel": "Ch. {number}",
+    "@trackingChapterLabel": {
+        "placeholders": {
+            "number": { "type": "String" }
+        }
+    },
+    "trackingChapterWithTotal": "Ch. {current}/{total}",
+    "@trackingChapterWithTotal": {
+        "placeholders": {
+            "current": { "type": "int" },
+            "total": { "type": "int" }
         }
     },
     "trackingLoginInSettings": "Log in to a tracker in Settings",
@@ -1662,6 +1789,14 @@
     "migrationSummaryTitle": "Migration Summary",
     "@migrationSummaryTitle": {
         "description": "Header for migration summary section"
+    },
+    "migrationWarningsTitle": "Warnings",
+    "@migrationWarningsTitle": {
+        "description": "Header for migration warnings shown after completion"
+    },
+    "migrationManualSearch": "Manual search",
+    "@migrationManualSearch": {
+        "description": "Tooltip for manually searching a manga during batch migration"
     },
     "migratedFromManga": "Migrated from: {title}",
     "@migratedFromManga": {
