@@ -38,7 +38,14 @@ class MigrationProgressScreen extends HookConsumerWidget {
     final migrationProgress = ref.watch(migrationExecutionProvider);
 
     useEffect(() {
+      final current = ref.read(migrationExecutionProvider);
+      if (current?.status == MigrationStatus.migrating ||
+          current?.status == MigrationStatus.preparing ||
+          current?.status == MigrationStatus.completed) {
+        return null;
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
         ref.read(migrationExecutionProvider.notifier).executeMigration(
               fromMangaId: sourceManga.id,
               toMangaId: targetManga.id,

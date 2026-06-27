@@ -44,7 +44,7 @@ final filteredHistoryGroupsProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef FilteredHistoryGroupsRef = AutoDisposeProviderRef<List<HistoryGroup>>;
-String _$readingHistoryHash() => r'1d0d9b089306e44fb6d98a8605103e31b8e1dd04';
+String _$readingHistoryHash() => r'8a06ed451847c52d1f197bd086f4225769f28361';
 
 /// See also [ReadingHistory].
 @ProviderFor(ReadingHistory)
@@ -248,7 +248,7 @@ final historySearchQueryProvider =
 
 typedef _$HistorySearchQuery = AutoDisposeNotifier<String>;
 String _$historyRetentionDaysHash() =>
-    r'110a7c6e622ef483f4012759d908fc453c1e1634';
+    r'a7e24a4642bc7abc97c337a03067a48b3a218d4d';
 
 /// See also [HistoryRetentionDays].
 @ProviderFor(HistoryRetentionDays)
@@ -264,7 +264,7 @@ final historyRetentionDaysProvider =
 );
 
 typedef _$HistoryRetentionDays = AutoDisposeNotifier<int?>;
-String _$historyEnabledHash() => r'ea6a3b0263bbe974028d018a33a20195066b88f5';
+String _$historyEnabledHash() => r'c67b4ed255267c3f959f61b46226e81115a12b30';
 
 /// See also [HistoryEnabled].
 @ProviderFor(HistoryEnabled)
@@ -280,5 +280,22 @@ final historyEnabledProvider =
 );
 
 typedef _$HistoryEnabled = AutoDisposeNotifier<bool?>;
+String _$historyHiddenChapterIdsHash() =>
+    r'706bc4466e978c1c650a30ebb87a1879a56ab934';
+
+/// See also [HistoryHiddenChapterIds].
+@ProviderFor(HistoryHiddenChapterIds)
+final historyHiddenChapterIdsProvider =
+    AutoDisposeNotifierProvider<HistoryHiddenChapterIds, List<int>?>.internal(
+  HistoryHiddenChapterIds.new,
+  name: r'historyHiddenChapterIdsProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$historyHiddenChapterIdsHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+typedef _$HistoryHiddenChapterIds = AutoDisposeNotifier<List<int>?>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

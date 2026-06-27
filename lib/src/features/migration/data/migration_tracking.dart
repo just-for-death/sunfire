@@ -21,19 +21,29 @@ Future<({int migrated, List<String> warnings})> migrateTrackingRecords({
           record.remoteId,
         );
         if (bound != null) {
-          await trackerRepository.updateTrack(
-            recordId: bound.id,
-            status: record.status,
-            lastChapterRead: record.lastChapterRead,
-            scoreString: record.displayScore,
-            startDate: record.startDate,
-            finishDate: record.finishDate,
-          );
-          await trackerRepository.unbindTrack(
-            record.id,
-            deleteRemoteTrack: false,
-          );
-          migrated++;
+          try {
+            await trackerRepository.updateTrack(
+              recordId: bound.id,
+              status: record.status,
+              lastChapterRead: record.lastChapterRead,
+              scoreString: record.displayScore,
+              startDate: record.startDate,
+              finishDate: record.finishDate,
+            );
+            await trackerRepository.unbindTrack(
+              record.id,
+              deleteRemoteTrack: false,
+            );
+            migrated++;
+          } catch (e) {
+            try {
+              await trackerRepository.unbindTrack(
+                bound.id,
+                deleteRemoteTrack: false,
+              );
+            } catch (_) {}
+            warnings.add(messages.trackingRecordFailed(trackerLabel, '$e'));
+          }
         } else {
           warnings.add(
             messages.trackingRecordFailed(
