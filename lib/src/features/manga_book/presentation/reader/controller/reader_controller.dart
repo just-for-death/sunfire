@@ -23,8 +23,8 @@ ChapterDto _chapterFromOfflineManifest(OfflineChapterManifest manifest) {
     id: manifest.chapterId,
     isBookmarked: false,
     isDownloaded: true,
-    isRead: false,
-    lastPageRead: 0,
+    isRead: manifest.isRead,
+    lastPageRead: manifest.lastPageRead,
     lastReadAt: '0',
     mangaId: manifest.mangaId,
     name: manifest.chapterName.isNotEmpty
@@ -57,10 +57,13 @@ Future<ChapterPagesDto?> _chapterPagesWithLocalFallback(
 
   if (remote != null) {
     if (localPages == null || localPages.isEmpty) return remote;
-    return remote.copyWith(
-      pages: localPages,
-      chapter: remote.chapter.copyWith(pageCount: localPages.length),
-    );
+    if (localPages.length >= remote.pages.length) {
+      return remote.copyWith(
+        pages: localPages,
+        chapter: remote.chapter.copyWith(pageCount: localPages.length),
+      );
+    }
+    return remote;
   }
 
   if (localPages == null || localPages.isEmpty) return null;

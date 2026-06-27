@@ -88,8 +88,12 @@ Future<void> openReaderFromHistoryItem(
 
   final existing = ref.read(mangaChapterListProvider(mangaId: item.mangaId));
   if (existing is AsyncData) {
-    resolveAndOpen();
-    return;
+    final list = existing.value;
+    final chapterFound = list?.any((c) => c.id == item.id) ?? false;
+    if (chapterFound) {
+      resolveAndOpen();
+      return;
+    }
   }
 
   unawaited(

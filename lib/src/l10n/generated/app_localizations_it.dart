@@ -1601,6 +1601,106 @@ class AppLocalizationsIt extends AppLocalizations {
   String get syncNow => 'Sync now';
 
   @override
+  String get trackingNotSet => '— Not set —';
+
+  @override
+  String get trackingStatusReading => 'Reading';
+
+  @override
+  String get trackingStatusCompleted => 'Completed';
+
+  @override
+  String get trackingStatusOnHold => 'On Hold';
+
+  @override
+  String get trackingStatusDropped => 'Dropped';
+
+  @override
+  String get trackingStatusPlanToRead => 'Plan to Read';
+
+  @override
+  String get trackingStatusRereading => 'Re-reading';
+
+  @override
+  String trackingAddForTracker(String tracker) {
+    return 'Add Tracking — $tracker';
+  }
+
+  @override
+  String trackingSearchOnTracker(String tracker) {
+    return 'Search on $tracker...';
+  }
+
+  @override
+  String trackingAddConfirm(String title, String tracker) {
+    return 'Track \"$title\" on $tracker?';
+  }
+
+  @override
+  String trackingChapterCount(int count) {
+    return '$count chapters';
+  }
+
+  @override
+  String get trackingLoginInSettings => 'Log in to a tracker in Settings';
+
+  @override
+  String trackingBindLoginRequired(String tracker) {
+    return 'Not logged in to $tracker. Go to Settings → Trackers.';
+  }
+
+  @override
+  String trackingBindEmptyCollection(String tracker) {
+    return 'Could not bind — make sure you are logged in to $tracker in Settings → Trackers.';
+  }
+
+  @override
+  String trackingSearchTimeout(String tracker) {
+    return 'Search timed out. $tracker may be slow — please retry.';
+  }
+
+  @override
+  String get trackingNoInternet => 'No internet connection.';
+
+  @override
+  String get trackingDateHint => 'YYYY-MM-DD';
+
+  @override
+  String get unknownTracker => 'Tracker';
+
+  @override
+  String get mangaRelated => 'Related';
+
+  @override
+  String get mangaRecommendations => 'Recommendations';
+
+  @override
+  String get appearanceMaterialYou => 'Material You';
+
+  @override
+  String get appearanceTheme => 'Theme';
+
+  @override
+  String get appearanceColorScheme => 'Color Scheme';
+
+  @override
+  String get appearanceColorSchemeHint =>
+      'Used when Dynamic Color is off or unavailable';
+
+  @override
+  String get appearanceMaterialSchemes => 'Material Schemes';
+
+  @override
+  String get appearanceKomikkuCustomSchemes => 'Komikku Custom Schemes';
+
+  @override
+  String get appearanceDynamicColor => 'Dynamic Color';
+
+  @override
+  String get appearanceDynamicColorSubtitle =>
+      'Use wallpaper colors (Android 12+)';
+
+  @override
   String get mangaComparison => 'Manga Comparison';
 
   @override
