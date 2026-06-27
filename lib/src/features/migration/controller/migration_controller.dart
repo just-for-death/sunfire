@@ -212,15 +212,14 @@ class MigrationExecution extends _$MigrationExecution {
     _cancelRequested = true;
     try {
       await ref.read(migrationRepositoryProvider).cancelMigration();
-      state = const MigrationProgress(
-        currentStep: MigrationStep.migrationCancelled,
+    } catch (_) {}
+    final current = state;
+    if (current != null &&
+        (current.status == MigrationStatus.migrating ||
+            current.status == MigrationStatus.preparing)) {
+      state = current.copyWith(
         status: MigrationStatus.cancelled,
-      );
-    } catch (e) {
-      // Handle cancellation error - for now just set to cancelled since cancellation isn't implemented
-      state = const MigrationProgress(
         currentStep: MigrationStep.migrationCancelled,
-        status: MigrationStatus.cancelled,
       );
     }
   }
@@ -328,7 +327,7 @@ class MigrationExecution extends _$MigrationExecution {
       currentStep: MigrationStep.migrationCompleted,
       percentage: 100.0,
       status: MigrationStatus.completed,
-      processedItems: total,
+      processedItems: successCount,
       totalItems: total,
     );
   }
