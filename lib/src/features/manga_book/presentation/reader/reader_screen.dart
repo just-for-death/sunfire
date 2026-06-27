@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../../constants/enum.dart';
@@ -20,6 +21,7 @@ import '../../../history/presentation/history_controller.dart';
 import '../../../settings/presentation/reader/widgets/reader_ignore_safe_area_tile/reader_ignore_safe_area_tile.dart';
 import '../../../settings/presentation/reader/widgets/reader_mode_tile/reader_mode_tile.dart';
 import '../../../settings/presentation/reader/widgets/reader_orientation_tile/reader_orientation_tile.dart';
+import '../../../tracking/tracker_progress_sync.dart';
 import '../../data/local_downloads/local_downloads_service.dart';
 import '../../data/manga_book/manga_book_repository.dart';
 import '../../domain/chapter/chapter_model.dart';
@@ -102,9 +104,22 @@ class ReaderScreen extends HookConsumerWidget {
             isRead: isReadingCompleted,
           );
 
-      ref.invalidate(readingHistoryProvider);
       ref.invalidate(chapterProvider(chapterId: chapterValue.id));
       pendingPageIndex.value = null;
+
+      if (isReadingCompleted) {
+        final historyEnabled = ref.read(historyEnabledProvider) ?? true;
+        if (historyEnabled) {
+          ref.invalidate(readingHistoryProvider);
+        }
+        unawaited(
+          syncTrackerProgressOnChapterComplete(
+            ref,
+            mangaId: mangaId,
+            chapterNumber: chapterValue.chapterNumber,
+          ),
+        );
+      }
     }, [chapter.valueOrNull, chapterPages.valueOrNull]);
 
     final updateLastReadRef = useRef<Future<void> Function(int)?>(null);
@@ -281,7 +296,7 @@ class ReaderScreen extends HookConsumerWidget {
 
       if (manga.hasError) {
         return Emoticons(
-          title: manga.error.toString(),
+          title: context.l10n.errorSomethingWentWrong,
           button: TextButton(
             onPressed: () => ref.refresh(mangaProvider.future),
             child: Text(context.l10n.refresh),
@@ -290,7 +305,7 @@ class ReaderScreen extends HookConsumerWidget {
       }
       if (chapter.hasError) {
         return Emoticons(
-          title: chapter.error.toString(),
+          title: context.l10n.errorSomethingWentWrong,
           button: TextButton(
             onPressed: () => ref.refresh(chapterProviderWithIndex.future),
             child: Text(context.l10n.refresh),
@@ -299,7 +314,7 @@ class ReaderScreen extends HookConsumerWidget {
       }
       if (chapterPages.hasError) {
         return Emoticons(
-          title: chapterPages.error.toString(),
+          title: context.l10n.errorSomethingWentWrong,
           button: TextButton(
             onPressed: () =>
                 ref.refresh(chapterPagesProvider(chapterId: chapterId).future),

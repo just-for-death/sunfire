@@ -852,6 +852,7 @@ mixin _$MigrationProgress {
 
   /// True when cancel was requested after the server had already applied changes.
   bool get serverChangesApplied => throw _privateConstructorUsedError;
+  List<String> get warnings => throw _privateConstructorUsedError;
 
   /// Serializes this MigrationProgress to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -876,7 +877,8 @@ abstract class $MigrationProgressCopyWith<$Res> {
       String? errorMessage,
       int processedItems,
       int totalItems,
-      bool serverChangesApplied});
+      bool serverChangesApplied,
+      List<String> warnings});
 }
 
 /// @nodoc
@@ -901,6 +903,7 @@ class _$MigrationProgressCopyWithImpl<$Res, $Val extends MigrationProgress>
     Object? processedItems = null,
     Object? totalItems = null,
     Object? serverChangesApplied = null,
+    Object? warnings = null,
   }) {
     return _then(_value.copyWith(
       currentStep: null == currentStep
@@ -931,6 +934,10 @@ class _$MigrationProgressCopyWithImpl<$Res, $Val extends MigrationProgress>
           ? _value.serverChangesApplied
           : serverChangesApplied // ignore: cast_nullable_to_non_nullable
               as bool,
+      warnings: null == warnings
+          ? _value.warnings
+          : warnings // ignore: cast_nullable_to_non_nullable
+              as List<String>,
     ) as $Val);
   }
 }
@@ -950,7 +957,8 @@ abstract class _$$MigrationProgressImplCopyWith<$Res>
       String? errorMessage,
       int processedItems,
       int totalItems,
-      bool serverChangesApplied});
+      bool serverChangesApplied,
+      List<String> warnings});
 }
 
 /// @nodoc
@@ -973,6 +981,7 @@ class __$$MigrationProgressImplCopyWithImpl<$Res>
     Object? processedItems = null,
     Object? totalItems = null,
     Object? serverChangesApplied = null,
+    Object? warnings = null,
   }) {
     return _then(_$MigrationProgressImpl(
       currentStep: null == currentStep
@@ -1003,6 +1012,10 @@ class __$$MigrationProgressImplCopyWithImpl<$Res>
           ? _value.serverChangesApplied
           : serverChangesApplied // ignore: cast_nullable_to_non_nullable
               as bool,
+      warnings: null == warnings
+          ? _value._warnings
+          : warnings // ignore: cast_nullable_to_non_nullable
+              as List<String>,
     ));
   }
 }
@@ -1017,7 +1030,9 @@ class _$MigrationProgressImpl implements _MigrationProgress {
       this.errorMessage,
       this.processedItems = 0,
       this.totalItems = 0,
-      this.serverChangesApplied = false});
+      this.serverChangesApplied = false,
+      final List<String> warnings = const <String>[]})
+      : _warnings = warnings;
 
   factory _$MigrationProgressImpl.fromJson(Map<String, dynamic> json) =>
       _$$MigrationProgressImplFromJson(json);
@@ -1043,10 +1058,18 @@ class _$MigrationProgressImpl implements _MigrationProgress {
   @override
   @JsonKey()
   final bool serverChangesApplied;
+  final List<String> _warnings;
+  @override
+  @JsonKey()
+  List<String> get warnings {
+    if (_warnings is EqualUnmodifiableListView) return _warnings;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_warnings);
+  }
 
   @override
   String toString() {
-    return 'MigrationProgress(currentStep: $currentStep, percentage: $percentage, status: $status, errorMessage: $errorMessage, processedItems: $processedItems, totalItems: $totalItems, serverChangesApplied: $serverChangesApplied)';
+    return 'MigrationProgress(currentStep: $currentStep, percentage: $percentage, status: $status, errorMessage: $errorMessage, processedItems: $processedItems, totalItems: $totalItems, serverChangesApplied: $serverChangesApplied, warnings: $warnings)';
   }
 
   @override
@@ -1066,13 +1089,22 @@ class _$MigrationProgressImpl implements _MigrationProgress {
             (identical(other.totalItems, totalItems) ||
                 other.totalItems == totalItems) &&
             (identical(other.serverChangesApplied, serverChangesApplied) ||
-                other.serverChangesApplied == serverChangesApplied));
+                other.serverChangesApplied == serverChangesApplied) &&
+            const DeepCollectionEquality().equals(other._warnings, _warnings));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, currentStep, percentage, status,
-      errorMessage, processedItems, totalItems, serverChangesApplied);
+  int get hashCode => Object.hash(
+      runtimeType,
+      currentStep,
+      percentage,
+      status,
+      errorMessage,
+      processedItems,
+      totalItems,
+      serverChangesApplied,
+      const DeepCollectionEquality().hash(_warnings));
 
   /// Create a copy of MigrationProgress
   /// with the given fields replaced by the non-null parameter values.
@@ -1099,7 +1131,8 @@ abstract class _MigrationProgress implements MigrationProgress {
       final String? errorMessage,
       final int processedItems,
       final int totalItems,
-      final bool serverChangesApplied}) = _$MigrationProgressImpl;
+      final bool serverChangesApplied,
+      final List<String> warnings}) = _$MigrationProgressImpl;
 
   factory _MigrationProgress.fromJson(Map<String, dynamic> json) =
       _$MigrationProgressImpl.fromJson;
@@ -1120,6 +1153,8 @@ abstract class _MigrationProgress implements MigrationProgress {
   /// True when cancel was requested after the server had already applied changes.
   @override
   bool get serverChangesApplied;
+  @override
+  List<String> get warnings;
 
   /// Create a copy of MigrationProgress
   /// with the given fields replaced by the non-null parameter values.

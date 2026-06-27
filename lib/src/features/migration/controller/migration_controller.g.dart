@@ -645,7 +645,7 @@ class _MigrationSearchProviderElement
 }
 
 String _$migrationExecutionHash() =>
-    r'81087f5dc238b0632a61ec6646e309536d7875b2';
+    r'35a5408bf1d15aa18bd53cdd3fd57c0d720508af';
 
 /// See also [MigrationExecution].
 @ProviderFor(MigrationExecution)

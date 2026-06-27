@@ -74,6 +74,8 @@ class BackupAndRestoreSection extends HookConsumerWidget {
     }
 
     if (restoreBackup) {
+      if (!context.mounted) return backupId;
+      final restoreErrorMessage = context.l10n.errorSomethingWentWrong;
       // Reuse the already-converted backupFile — no need to read the file
       // from disk a second time.
       final backupResponse = (await AsyncValue.guard(() => ref
@@ -81,7 +83,7 @@ class BackupAndRestoreSection extends HookConsumerWidget {
           .restoreBackup(backupFile)));
 
       if (backupResponse.hasError) {
-        toast?.showError(backupResponse.error.toString());
+        toast?.showError(restoreErrorMessage);
       } else {
         if (backupResponse.hasValue) {
           backupId = backupResponse.value;

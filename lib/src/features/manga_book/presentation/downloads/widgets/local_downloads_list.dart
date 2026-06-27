@@ -114,7 +114,7 @@ class LocalDownloadsList extends ConsumerWidget {
                 error: (e, _) => ListTile(
                   leading: const Icon(Icons.download_done_rounded),
                   title: Text(context.l10n.offlineChapterId(chapterId)),
-                  subtitle: Text(e.toString()),
+                  subtitle: Text(context.l10n.errorSomethingWentWrong),
                 ),
               );
             },
@@ -122,7 +122,8 @@ class LocalDownloadsList extends ConsumerWidget {
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text(e.toString())),
+      error: (e, _) =>
+          Center(child: Text(context.l10n.errorSomethingWentWrong)),
     );
   }
 }
