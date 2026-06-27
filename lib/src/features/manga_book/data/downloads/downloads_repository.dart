@@ -23,46 +23,55 @@ class DownloadsRepository {
   final GraphQLClient client;
   final GraphQLClient subscriptionClient;
   // Downloads
-  Future<void> startDownloads() => client.mutate$StartDownloader(
+  Future<void> startDownloads() => client
+      .mutate$StartDownloader(
         Options$Mutation$StartDownloader(
           variables: Variables$Mutation$StartDownloader(
             input: Input$StartDownloaderInput(),
           ),
         ),
-      );
+      )
+      .getData((data) => data);
 
-  Future<void> stopDownloads() => client.mutate$StopDownloader(
+  Future<void> stopDownloads() => client
+      .mutate$StopDownloader(
         Options$Mutation$StopDownloader(
           variables: Variables$Mutation$StopDownloader(
             input: Input$StopDownloaderInput(),
           ),
         ),
-      );
-  Future<void> clearDownloads() => client.mutate$ClearDownloader(
+      )
+      .getData((data) => data);
+
+  Future<void> clearDownloads() => client
+      .mutate$ClearDownloader(
         Options$Mutation$ClearDownloader(
           variables: Variables$Mutation$ClearDownloader(
             input: Input$ClearDownloaderInput(),
           ),
         ),
-      );
+      )
+      .getData((data) => data);
 
-  Future<void> addChaptersBatchToDownloadQueue(List<int> chapterIds) =>
-      client.mutate$EnqueueChapterDownloads(
+  Future<void> addChaptersBatchToDownloadQueue(List<int> chapterIds) => client
+      .mutate$EnqueueChapterDownloads(
         Options$Mutation$EnqueueChapterDownloads(
           variables: Variables$Mutation$EnqueueChapterDownloads(
             input: Input$EnqueueChapterDownloadsInput(ids: chapterIds),
           ),
         ),
-      );
+      )
+      .getData((data) => data);
 
-  Future<void> removeChapterFromDownloadQueue(int chapterId) =>
-      client.mutate$DequeueChapterDownloads(
+  Future<void> removeChapterFromDownloadQueue(int chapterId) => client
+      .mutate$DequeueChapterDownloads(
         Options$Mutation$DequeueChapterDownloads(
           variables: Variables$Mutation$DequeueChapterDownloads(
             input: Input$DequeueChapterDownloadInput(id: chapterId),
           ),
         ),
-      );
+      )
+      .getData((data) => data);
 
   Future<DownloadStatusDto?> reorderDownload(int chapterId, int to) => client
       .mutate$ReorderChapterDownload(

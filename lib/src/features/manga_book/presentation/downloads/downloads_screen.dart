@@ -8,6 +8,7 @@ import '../../../../widgets/emoticons.dart';
 import '../../data/downloads/downloads_repository.dart';
 import '../../data/local_downloads/local_downloads_service.dart';
 import '../../domain/downloads/downloads_model.dart';
+import '../manga_details/controller/manga_details_controller.dart';
 import '../reader/controller/reader_controller.dart';
 import 'controller/downloads_controller.dart';
 import 'widgets/download_progress_list_tile.dart';
@@ -72,11 +73,19 @@ class DownloadsScreen extends ConsumerWidget {
                           false;
                       if (!ok) return;
                       final service = ref.read(localDownloadsServiceProvider);
+                      final mangaIds = <int>{};
                       for (final id in ids) {
+                        final manifest = await service.getOfflineManifest(id);
+                        if (manifest != null) mangaIds.add(manifest.mangaId);
                         await service.deleteChapter(id);
                         ref.invalidate(chapterPagesProvider(chapterId: id));
                       }
+                      for (final mangaId in mangaIds) {
+                        ref.invalidate(mangaChapterListProvider(mangaId: mangaId));
+                        ref.invalidate(mangaWithIdProvider(mangaId: mangaId));
+                      }
                       ref.invalidate(localDownloadedChapterIdsProvider);
+                      ref.invalidate(localDownloadedMangaIdsProvider);
                       ref.invalidate(offlineStorageSizeProvider);
                     },
                     icon: const Icon(Icons.delete_outline_rounded),

@@ -228,6 +228,16 @@ class LocalDownloadsService {
     return false;
   }
 
+  Future<Set<int>> listOfflineMangaIds() async {
+    final ids = await listDownloadedChapterIds();
+    final mangaIds = <int>{};
+    for (final chapterId in ids) {
+      final manifest = await getOfflineManifest(chapterId);
+      if (manifest != null) mangaIds.add(manifest.mangaId);
+    }
+    return mangaIds;
+  }
+
   ChapterDto _chapterDtoFromManifest(OfflineChapterManifest manifest) {
     final lastPageRead = manifest.isRead && manifest.pageCount > 0
         ? [
@@ -475,6 +485,12 @@ LocalDownloadsService localDownloadsService(Ref ref) =>
 @riverpod
 Future<List<int>> localDownloadedChapterIds(Ref ref) =>
     ref.watch(localDownloadsServiceProvider).listDownloadedChapterIds();
+
+/// Manga IDs that have at least one Catalyst offline chapter download.
+final localDownloadedMangaIdsProvider = FutureProvider<Set<int>>((ref) async {
+  await ref.watch(localDownloadedChapterIdsProvider.future);
+  return ref.read(localDownloadsServiceProvider).listOfflineMangaIds();
+});
 
 /// Total bytes consumed by offline downloads.
 /// Re-evaluates whenever the downloaded-chapters list changes.

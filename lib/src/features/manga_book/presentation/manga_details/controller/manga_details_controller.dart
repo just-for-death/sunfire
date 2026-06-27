@@ -103,15 +103,25 @@ ChapterDto _mergeOfflineProgress(ChapterDto server, ChapterDto offline) {
   final localAhead = (offline.isRead && !server.isRead) ||
       offline.lastPageRead > server.lastPageRead;
   if (!localAhead) {
-    return server.isDownloaded.ifNull()
-        ? server
-        : server.copyWith(isDownloaded: true);
+    return server.isDownloaded.ifNull() || offline.isDownloaded.ifNull()
+        ? server.copyWith(isDownloaded: true)
+        : server;
   }
+  final isRead = offline.isRead || server.isRead;
+  final pageCount =
+      server.pageCount > 0 ? server.pageCount : offline.pageCount;
+  final lastPageRead = isRead
+      ? [
+          server.lastPageRead,
+          offline.lastPageRead,
+          if (pageCount > 0) pageCount - 1 else 0,
+        ].reduce((a, b) => a > b ? a : b)
+      : offline.lastPageRead > server.lastPageRead
+          ? offline.lastPageRead
+          : server.lastPageRead;
   return server.copyWith(
-    isRead: offline.isRead || server.isRead,
-    lastPageRead: offline.isRead || offline.lastPageRead > server.lastPageRead
-        ? offline.lastPageRead
-        : server.lastPageRead,
+    isRead: isRead,
+    lastPageRead: lastPageRead,
     isDownloaded: true,
   );
 }
@@ -200,9 +210,18 @@ class MangaChapterList extends _$MangaChapterList {
         () => ref.read(mangaBookRepositoryProvider).getChapterList(mangaId));
     if (result.hasError) {
       state = result.copyWithPrevious(state);
-    } else {
-      state = result;
+      return;
     }
+    final offline = await ref
+        .read(localDownloadsServiceProvider)
+        .getOfflineChaptersForManga(mangaId);
+    final serverChapters = result.valueOrNull;
+    final merged = serverChapters != null
+        ? _mergeOfflineChapters(serverChapters, offline)
+        : offline.isEmpty
+            ? null
+            : offline;
+    state = AsyncData<List<ChapterDto>?>(merged);
   }
 
   void updateChapter(int index, ChapterDto chapter) {

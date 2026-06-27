@@ -8,6 +8,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:go_router/go_router.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -22,12 +23,23 @@ import 'src/global_providers/global_providers.dart';
 import 'src/utils/platform/mobile_permissions.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
   final packageInfo = await PackageInfo.fromPlatform();
   final sharedPreferences = await SharedPreferences.getInstance();
-  await BasicCredentialsStore.instance.init(sharedPreferences);
-  await initHiveForFlutter();
-  await NotificationService.instance.init();
+  try {
+    await BasicCredentialsStore.instance
+        .init(sharedPreferences)
+        .timeout(const Duration(seconds: 5));
+  } catch (e, st) {
+    debugPrint('BasicCredentialsStore init failed: $e\n$st');
+  }
+  try {
+    await initHiveForFlutter().timeout(const Duration(seconds: 10));
+  } catch (e, st) {
+    debugPrint('Hive init failed: $e\n$st');
+  }
 
   SystemChrome.setPreferredOrientations(DeviceOrientation.values);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -38,9 +50,55 @@ Future<void> main() async {
       overrides: [
         packageInfoProvider.overrideWithValue(packageInfo),
         sharedPreferencesProvider.overrideWithValue(sharedPreferences),
-        hiveStoreProvider.overrideWithValue(HiveStore())
+        hiveStoreProvider.overrideWithValue(HiveStore()),
       ],
-      child: const CatalystApp(),
+      child: const _AppRoot(),
     ),
   );
+  unawaited(_initNotificationsDeferred());
+}
+
+Future<void> _initNotificationsDeferred() async {
+  try {
+    await NotificationService.instance
+        .init()
+        .timeout(const Duration(seconds: 8));
+  } catch (e, st) {
+    debugPrint('NotificationService init failed: $e\n$st');
+  }
+}
+
+/// Removes the native splash after the first frame so release builds cannot
+/// hang indefinitely on the launch screen if startup is slow.
+class _AppRoot extends StatefulWidget {
+  const _AppRoot();
+
+  @override
+  State<_AppRoot> createState() => _AppRootState();
+}
+
+class _AppRootState extends State<_AppRoot> {
+  Timer? _splashFallback;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _removeSplash());
+    _splashFallback = Timer(const Duration(seconds: 12), _removeSplash);
+  }
+
+  void _removeSplash() {
+    _splashFallback?.cancel();
+    _splashFallback = null;
+    FlutterNativeSplash.remove();
+  }
+
+  @override
+  void dispose() {
+    _splashFallback?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const CatalystApp();
 }

@@ -44,9 +44,7 @@ class DownloadsMap extends _$DownloadsMap {
           break;
       }
     }
-    if (stateOrNull != null) {
-      state = currState;
-    }
+    state = currState;
   }
 
   @override
@@ -94,11 +92,13 @@ AsyncValue<DownloaderState?> downloaderState(Ref ref) {
 @riverpod
 bool showDownloadsFAB(Ref ref) {
   final downloads = ref.watch(downloadUpdatesProvider);
-  return downloads.valueOrNull?.state == DownloaderState.STARTED ||
-      (downloads.valueOrNull?.updates).isNotBlank &&
-          downloads.valueOrNull!.updates.any(
+  final data = downloads.valueOrNull;
+  if (data == null) return false;
+  return data.state == DownloaderState.STARTED ||
+      (data.updates.isNotBlank &&
+          data.updates.any(
             (element) =>
                 element.download.state != DownloadState.ERROR ||
                 element.download.tries != 3,
-          );
+          ));
 }

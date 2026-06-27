@@ -204,7 +204,7 @@ class ReaderScreen extends HookConsumerWidget {
             : chapterValue.pageCount;
 
         if (index >= (pageCount - 1) && pageCount > 0) {
-          updateLastRead(index);
+          await updateLastRead(index);
         } else {
           debounce.value = Timer(
             const Duration(seconds: 2),
