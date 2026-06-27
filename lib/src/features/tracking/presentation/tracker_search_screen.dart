@@ -46,6 +46,8 @@ class TrackerSearchScreen extends HookConsumerWidget {
 
     useEffect(() => () => debounce.value?.cancel(), []);
 
+    useListenable(queryController);
+
     final results = ref.watch(trackerSearchProvider((
       trackerId: tracker.id,
       query: submittedQuery.value,

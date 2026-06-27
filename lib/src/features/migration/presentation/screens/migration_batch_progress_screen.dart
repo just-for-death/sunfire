@@ -51,7 +51,7 @@ class MigrationBatchProgressScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    l10n.migrationSuccessMangaCount(progress!.totalItems),
+                    l10n.migrationSuccessMangaCount(progress!.processedItems),
                     style: context.theme.textTheme.bodyLarge?.copyWith(
                       color: context.theme.colorScheme.onSurfaceVariant,
                     ),

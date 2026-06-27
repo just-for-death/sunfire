@@ -258,22 +258,16 @@ ChapterDto? firstUnreadInFilteredChapterList(
   Ref ref, {
   required int mangaId,
 }) {
-  final isAscSorted = ref.watch(mangaChapterSortDirectionProvider) ??
-      DBKeys.chapterSortDirection.initial;
   final filteredList = ref
       .watch(mangaChapterListWithFilterProvider(mangaId: mangaId))
       .valueOrNull;
   if (filteredList == null) {
     return null;
-  } else {
-    if (isAscSorted) {
-      return filteredList
-          .firstWhereOrNull((element) => !element.isRead.ifNull(true));
-    } else {
-      return filteredList
-          .lastWhereOrNull((element) => !element.isRead.ifNull(true));
-    }
   }
+  // Filtered list is already sorted in reading order — first unread is always
+  // the first match regardless of ascending/descending display sort.
+  return filteredList
+      .firstWhereOrNull((element) => !element.isRead.ifNull(false));
 }
 
 @riverpod
