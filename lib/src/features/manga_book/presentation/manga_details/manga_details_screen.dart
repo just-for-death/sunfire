@@ -164,9 +164,7 @@ class MangaDetailsScreen extends HookConsumerWidget {
                         icon: const Icon(Icons.refresh_rounded),
                       ),
                       IconButton(
-                        onPressed: () => showDialog(
-                          context: context,
-                          builder: (context) =>
+                        onPressed: () => context.showAdaptiveAppDialog(builder: (context) =>
                               EditMangaCategoryDialog(mangaId: mangaId),
                         ),
                         icon: const Icon(Icons.category_rounded),
@@ -219,9 +217,7 @@ class MangaDetailsScreen extends HookConsumerWidget {
                             onTap: () => Future.microtask(
                               () {
                                 if (!context.mounted) return null;
-                                return showDialog(
-                                  context: context,
-                                  builder: (context) =>
+                                return context.showAdaptiveAppDialog(builder: (context) =>
                                       EditMangaCategoryDialog(mangaId: mangaId),
                                 );
                               },

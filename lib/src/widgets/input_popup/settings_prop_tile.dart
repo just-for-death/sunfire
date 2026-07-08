@@ -69,9 +69,7 @@ class SettingsPropTile extends StatelessWidget {
           onTap,
           AppUtils.returnIf(
             type.onChanged != null,
-            () => showDialog(
-              context: context,
-              builder: (context) => SettingsPropPopUp(
+            () => context.showAdaptiveAppDialog(builder: (context) => SettingsPropPopUp(
                 title: title,
                 description: description,
                 type: type,

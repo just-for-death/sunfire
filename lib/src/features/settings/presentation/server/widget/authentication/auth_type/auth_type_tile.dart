@@ -23,9 +23,7 @@ class AuthTypeTile extends ConsumerWidget {
       leading: const Icon(Icons.security_rounded),
       subtitle: authType != null ? Text(authType.toLocale(context)) : null,
       title: Text(context.l10n.authType),
-      onTap: () => showDialog(
-        context: context,
-        builder: (context) => RadioListPopup<AuthType>(
+      onTap: () => context.showAdaptiveAppDialog(builder: (context) => RadioListPopup<AuthType>(
           title: context.l10n.authType,
           optionList: AuthType.values,
           getOptionTitle: (value) => value.toLocale(context),

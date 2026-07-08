@@ -37,29 +37,12 @@ class SourceMangaDisplayView extends ConsumerWidget {
         DBKeys.sourceDisplayMode.initial;
     toggleFavorite(MangaDto item) async {
       if (item.inLibrary.ifNull()) {
-        bool removeManga = false;
-        await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: item.title.isNotBlank ? Text(item.title) : null,
-            content: Text(
-              context.l10n.removeFromLibrary,
-              style: context.textTheme.bodyLarge,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(context.l10n.cancel),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  removeManga = true;
-                },
-                child: Text(context.l10n.remove),
-              ),
-            ],
-          ),
+        final removeManga = await context.showAdaptiveConfirm(
+          title: item.title.isNotBlank ? item.title : context.l10n.remove,
+          content: context.l10n.removeFromLibrary,
+          confirmLabel: context.l10n.remove,
+          cancelLabel: context.l10n.cancel,
+          isDestructive: true,
         );
         return removeManga
             ? await AsyncValue.guard(() => ref

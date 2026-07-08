@@ -17,6 +17,7 @@ import 'routes/router_config.dart';
 import 'theme/catalyst_custom_schemes.dart';
 import 'theme/catalyst_ui_tokens.dart';
 import 'utils/extensions/custom_extensions.dart';
+import 'utils/platform/deep_link_listener.dart';
 import 'utils/platform/system_ui_style.dart';
 
 class CatalystApp extends ConsumerWidget {
@@ -30,61 +31,58 @@ class CatalystApp extends ConsumerWidget {
   }) {
     if (dynamic == null) return base;
 
-    final harmonized = ColorScheme.fromSeed(
-      seedColor: dynamic.primary,
-      brightness: isDark ? Brightness.dark : Brightness.light,
-    );
+    final scheme = dynamic;
 
     return base.copyWith(
-      colorScheme: harmonized,
+      colorScheme: scheme,
       scaffoldBackgroundColor:
-          isTrueBlack && isDark ? Colors.black : harmonized.surface,
-      cardColor: harmonized.surfaceContainerLow,
-      canvasColor: harmonized.surface,
+          isTrueBlack && isDark ? Colors.black : scheme.surface,
+      cardColor: scheme.surfaceContainerLow,
+      canvasColor: scheme.surface,
       navigationBarTheme: NavigationBarThemeData(
-        indicatorColor: harmonized.secondaryContainer,
+        indicatorColor: scheme.secondaryContainer,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return IconThemeData(color: harmonized.onSecondaryContainer);
+            return IconThemeData(color: scheme.onSecondaryContainer);
           }
-          return IconThemeData(color: harmonized.onSurfaceVariant);
+          return IconThemeData(color: scheme.onSurfaceVariant);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return TextStyle(
-              color: harmonized.onSurface,
+              color: scheme.onSurface,
               fontWeight: FontWeight.w600,
               fontSize: 12,
             );
           }
-          return TextStyle(color: harmonized.onSurfaceVariant, fontSize: 12);
+          return TextStyle(color: scheme.onSurfaceVariant, fontSize: 12);
         }),
-        backgroundColor: harmonized.surfaceContainer,
+        backgroundColor: scheme.surfaceContainer,
         elevation: 0,
         height: 72,
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
       ),
       appBarTheme: base.appBarTheme.copyWith(
-        backgroundColor: harmonized.surface,
-        foregroundColor: harmonized.onSurface,
-        surfaceTintColor: harmonized.surfaceTint,
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
+        surfaceTintColor: scheme.surfaceTint,
         elevation: 0,
       ),
       chipTheme: ChipThemeData(
-        selectedColor: harmonized.secondaryContainer,
-        checkmarkColor: harmonized.onSecondaryContainer,
+        selectedColor: scheme.secondaryContainer,
+        checkmarkColor: scheme.onSecondaryContainer,
         shape: RoundedRectangleBorder(borderRadius: CatalystUiTokens.chipRadius),
         side: BorderSide.none,
       ),
       tabBarTheme: TabBarThemeData(
-        labelColor: harmonized.primary,
-        unselectedLabelColor: harmonized.onSurfaceVariant,
-        indicatorColor: harmonized.primary,
+        labelColor: scheme.primary,
+        unselectedLabelColor: scheme.onSurfaceVariant,
+        indicatorColor: scheme.primary,
         tabAlignment: TabAlignment.center,
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: harmonized.primaryContainer,
-        foregroundColor: harmonized.onPrimaryContainer,
+        backgroundColor: scheme.primaryContainer,
+        foregroundColor: scheme.onPrimaryContainer,
       ),
       cardTheme: CardThemeData(
         shape: RoundedRectangleBorder(borderRadius: CatalystUiTokens.cardRadius),
@@ -159,9 +157,11 @@ class CatalystApp extends ConsumerWidget {
           return MaterialApp.router(
             builder: (context, child) {
               final brightness = Theme.of(context).brightness;
-              return AnnotatedRegion<SystemUiOverlayStyle>(
-                value: SystemUiStyle.forBrightness(brightness),
-                child: FToastBuilder()(context, child),
+              return DeepLinkListener(
+                child: AnnotatedRegion<SystemUiOverlayStyle>(
+                  value: SystemUiStyle.forBrightness(brightness),
+                  child: FToastBuilder()(context, child),
+                ),
               );
             },
             onGenerateTitle: (context) => context.l10n.appTitle,

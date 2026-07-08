@@ -45,6 +45,7 @@ class DownloadsScreen extends ConsumerWidget {
           IconButton(
             onPressed: () => ref.invalidate(localDownloadedChapterIdsProvider),
             icon: const Icon(Icons.refresh_rounded),
+            tooltip: context.l10n.retry,
           ),
           if (downloadsChapterIds.isNotBlank)
             IconButton(
@@ -52,31 +53,20 @@ class DownloadsScreen extends ConsumerWidget {
                 ref.read(downloadsRepositoryProvider).clearDownloads,
               ),
               icon: const Icon(Icons.delete_sweep_rounded),
+              tooltip: context.l10n.remove,
             ),
           localDownloadedIds.maybeWhen(
             data: (ids) => ids.isNotEmpty
                 ? IconButton(
                     onPressed: () async {
-                      final ok = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: Text(context.l10n.deleteOfflineDownloadsTitle),
-                              content: Text(
-                                context.l10n.deleteOfflineDownloadsBody(ids.length),
-                              ),
-                              actions: [
-                                TextButton(
-                                    onPressed: () =>
-                                        Navigator.of(ctx).pop(false),
-                                    child: Text(context.l10n.cancel)),
-                                FilledButton(
-                                    onPressed: () =>
-                                        Navigator.of(ctx).pop(true),
-                                    child: Text(context.l10n.remove)),
-                              ],
-                            ),
-                          ) ??
-                          false;
+                      final ok = await context.showAdaptiveConfirm(
+                            title: context.l10n.deleteOfflineDownloadsTitle,
+                            content: context.l10n
+                                .deleteOfflineDownloadsBody(ids.length),
+                            confirmLabel: context.l10n.remove,
+                            cancelLabel: context.l10n.cancel,
+                            isDestructive: true,
+                          );
                       if (!ok) return;
                       final service = ref.read(localDownloadsServiceProvider);
                       final mangaIds = <int>{};

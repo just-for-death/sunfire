@@ -8,7 +8,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
@@ -17,6 +16,7 @@ import '../../../../../../constants/enum.dart';
 import '../../../../../../utils/extensions/cache_manager_extensions.dart';
 import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/misc/app_utils.dart';
+import '../../../../../../utils/misc/manga_cache_manager.dart';
 import '../../../../../../widgets/custom_circular_progress_indicator.dart';
 import '../../../../../../widgets/server_image.dart';
 import '../../../../../settings/presentation/reader/widgets/reader_double_page_spread_tile/reader_double_page_spread_tile.dart';
@@ -51,7 +51,7 @@ class SinglePageReaderMode extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cacheManager = useMemoized(() => DefaultCacheManager());
+    final cacheManager = useMemoized(() => MangaCacheManager.instance);
     final spreadSetting = ref.watch(readerDoublePageSpreadKeyProvider) ??
         ReaderDoublePageSpread.auto;
     final spreadEnabled = SpreadPageUtils.shouldEnable(
@@ -124,6 +124,15 @@ class SinglePageReaderMode extends HookConsumerWidget {
       scrollController.addListener(listener);
       return () => scrollController.removeListener(listener);
     }, [scrollController, spreadEnabled, pageCount]);
+
+    final lastReportedPage = useRef<int?>(null);
+    useEffect(() {
+      final page = currentIndex.value;
+      if (lastReportedPage.value == page) return null;
+      lastReportedPage.value = page;
+      onPageChanged?.call(page);
+      return null;
+    }, [currentIndex.value]);
 
     useEffect(() {
       final target = spreadEnabled
@@ -231,10 +240,11 @@ class SinglePageReaderMode extends HookConsumerWidget {
   }
 
   Widget _buildPageImage(BuildContext context, WidgetRef ref, String pageUrl) {
+    final layout = MediaQuery.sizeOf(context);
     final image = ServerImage(
       showReloadButton: true,
       fit: BoxFit.contain,
-      size: Size.fromHeight(context.height),
+      size: Size(layout.width, layout.height),
       appendApiToUrl: false,
       imageUrl: pageUrl,
       progressIndicatorBuilder: (context, url, downloadProgress) =>

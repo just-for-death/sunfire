@@ -37,9 +37,7 @@ class ReaderDoublePageSpreadTile extends ConsumerWidget {
       leading: const Icon(Icons.menu_book_rounded),
       title: Text(context.l10n.readerDoublePageSpread),
       subtitle: spread != null ? Text(spread.toLocale(context)) : null,
-      onTap: () => showDialog(
-        context: context,
-        builder: (context) => RadioListPopup<ReaderDoublePageSpread>(
+      onTap: () => context.showAdaptiveAppDialog(builder: (context) => RadioListPopup<ReaderDoublePageSpread>(
           title: context.l10n.readerDoublePageSpread,
           optionList: ReaderDoublePageSpread.values,
           value: spread ?? ReaderDoublePageSpread.auto,

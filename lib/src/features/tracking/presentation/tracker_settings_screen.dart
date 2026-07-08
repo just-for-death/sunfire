@@ -128,22 +128,12 @@ class _TrackerTile extends ConsumerWidget {
               icon: const Icon(Icons.logout_rounded, size: 18),
               label: Text(context.l10n.logOut),
               onPressed: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: Text(context.l10n.logOut),
-                    content: Text(context.l10n.trackerLogOutConfirm(tracker.name)),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text(context.l10n.cancel),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text(context.l10n.logOut),
-                      ),
-                    ],
-                  ),
+                final confirmed = await context.showAdaptiveConfirm(
+                  title: context.l10n.logOut,
+                  content: context.l10n.trackerLogOutConfirm(tracker.name),
+                  confirmLabel: context.l10n.logOut,
+                  cancelLabel: context.l10n.cancel,
+                  isDestructive: true,
                 );
                 if (confirmed == true && context.mounted) {
                   await ref
@@ -162,9 +152,7 @@ class _TrackerTile extends ConsumerWidget {
               icon: const Icon(Icons.login_rounded, size: 18),
               label: Text(context.l10n.logIn),
               onPressed: () async {
-                await showDialog(
-                  context: context,
-                  builder: (_) => TrackerLoginDialog(tracker: tracker),
+                await context.showAdaptiveAppDialog(builder: (_) => TrackerLoginDialog(tracker: tracker),
                 );
               },
             ),

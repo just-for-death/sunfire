@@ -5,9 +5,10 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'dart:async';
+import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_android_volume_keydown/flutter_android_volume_keydown.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -23,11 +24,11 @@ import '../../../../../constants/enum.dart';
 import '../../../../../constants/reader_keyboard_shortcuts.dart';
 import '../../../../../global_providers/global_providers.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
-import '../../../../../utils/platform/platform_ui.dart';
-import '../../../../../widgets/shell/ios/glass_app_bar.dart';
 import '../../../../../utils/launch_url_in_web.dart';
 import '../../../../../utils/misc/toast/toast.dart';
+import '../../../../../utils/platform/platform_ui.dart';
 import '../../../../../widgets/popup_widgets/radio_list_popup.dart';
+import '../../../../../widgets/shell/ios/glass_app_bar.dart';
 import '../../../../settings/presentation/reader/widgets/reader_brightness_slider/reader_brightness_slider.dart';
 import '../../../../settings/presentation/reader/widgets/reader_haptics_tile/reader_haptics_tile.dart';
 import '../../../../settings/presentation/reader/widgets/reader_initial_overlay_tile/reader_initial_overlay_tile.dart';
@@ -193,9 +194,7 @@ class ReaderWrapper extends HookConsumerWidget {
     );
 
     final showReaderModePopup = useCallback(
-      () => showDialog(
-        context: context,
-        builder: (context) => RadioListPopup<ReaderMode>(
+      () => context.showAdaptiveAppDialog(builder: (context) => RadioListPopup<ReaderMode>(
           optionList: ReaderMode.values,
           getOptionTitle: (value) => value.toLocale(context),
           value: mangaReaderMode,
@@ -217,9 +216,7 @@ class ReaderWrapper extends HookConsumerWidget {
     );
 
     final showReaderNavigationLayoutPopup = useCallback(
-      () => showDialog(
-        context: context,
-        builder: (context) => RadioListPopup<ReaderNavigationLayout>(
+      () => context.showAdaptiveAppDialog(builder: (context) => RadioListPopup<ReaderNavigationLayout>(
           optionList: ReaderNavigationLayout.values,
           getOptionTitle: (value) => value.toLocale(context),
           title: context.l10n.readerNavigationLayout,
@@ -354,7 +351,7 @@ class ReaderWrapper extends HookConsumerWidget {
 
     useEffect(() {
       StreamSubscription<HardwareButton>? subscription;
-      if (volumeTap) {
+      if (!kIsWeb && Platform.isAndroid && volumeTap) {
         subscription = FlutterAndroidVolumeKeydown.stream.listen(
           (event) => (switch (event) {
             HardwareButton.volume_up =>
@@ -366,6 +363,76 @@ class ReaderWrapper extends HookConsumerWidget {
       }
       return () => subscription?.cancel();
     }, [volumeTap, volumeTapInvert, enhancedOnNext, enhancedOnPrevious]);
+
+    void openReaderSettings() {
+      if (isCupertinoPlatform) {
+        showAdaptiveBottomSheet(
+          context: context,
+          builder: (ctx) => SafeArea(
+            child: Material(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.close_rounded),
+                    onTap: () => Navigator.pop(ctx),
+                  ),
+                  ListTile(
+                    style: ListTileStyle.drawer,
+                    leading: const Icon(Icons.app_settings_alt_outlined),
+                    title: Text(context.l10n.readerMode),
+                    subtitle: Text(mangaReaderMode.toLocale(context)),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      showReaderModePopup();
+                    },
+                  ),
+                  ListTile(
+                    style: ListTileStyle.drawer,
+                    leading: const Icon(Icons.touch_app_rounded),
+                    title: Text(context.l10n.readerNavigationLayout),
+                    subtitle:
+                        Text(mangaReaderNavigationLayout.toLocale(context)),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      showReaderNavigationLayoutPopup();
+                    },
+                  ),
+                  AsyncReaderPaddingSlider(
+                    readerPadding: mangaReaderPadding,
+                    onChanged: (value) {
+                      AsyncValue.guard(
+                        () => ref.read(mangaBookRepositoryProvider).patchMangaMeta(
+                              mangaId: manga.id,
+                              key: MangaMetaKeys.readerPadding.key,
+                              value: value,
+                            ),
+                      );
+                      ref.invalidate(mangaWithIdProvider(mangaId: manga.id));
+                    },
+                  ),
+                  AsyncReaderMagnifierSizeSlider(
+                    readerMagnifierSize: mangaReaderMagnifierSize,
+                    onChanged: (value) {
+                      AsyncValue.guard(
+                        () => ref.read(mangaBookRepositoryProvider).patchMangaMeta(
+                              mangaId: manga.id,
+                              key: MangaMetaKeys.readerMagnifierSize.key,
+                              value: value,
+                            ),
+                      );
+                      ref.invalidate(mangaWithIdProvider(mangaId: manga.id));
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+      Scaffold.of(context).openEndDrawer();
+    }
 
     return Theme(
       data: context.theme.copyWith(
@@ -415,7 +482,9 @@ class ReaderWrapper extends HookConsumerWidget {
         extendBodyBehindAppBar: true,
         extendBody: true,
         endDrawerEnableOpenDragGesture: false,
-        endDrawer: Drawer(
+        endDrawer: isCupertinoPlatform
+            ? null
+            : Drawer(
           width: kDrawerWidth,
           shape: const RoundedRectangleBorder(),
           child: ListView(
@@ -571,8 +640,7 @@ class ReaderWrapper extends HookConsumerWidget {
                                     minHeight: 44,
                                   ),
                                   tooltip: context.l10n.settings,
-                                  onPressed: () =>
-                                      Scaffold.of(context).openEndDrawer(),
+                                  onPressed: openReaderSettings,
                                   icon: const Icon(Icons.settings_rounded),
                                 );
                               }),

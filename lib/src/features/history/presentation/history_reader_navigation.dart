@@ -26,6 +26,23 @@ List<HistoryItemDto> inProgressHistoryItems(List<HistoryGroup> groups) =>
         .take(10)
         .toList();
 
+/// History list groups with carousel items removed to avoid duplicate rows.
+List<HistoryGroup> historyGroupsExcludingCarousel(List<HistoryGroup> groups) {
+  final carouselIds =
+      inProgressHistoryItems(groups).map((item) => item.id).toSet();
+  if (carouselIds.isEmpty) return groups;
+  return groups
+      .map(
+        (group) => group.copyWith(
+          items: group.items
+              .where((item) => !carouselIds.contains(item.id))
+              .toList(),
+        ),
+      )
+      .where((group) => group.isNotEmpty)
+      .toList();
+}
+
 /// Opens the reader for a history item, advancing to the next chapter when finished.
 Future<void> openReaderFromHistoryItem(
   BuildContext context,

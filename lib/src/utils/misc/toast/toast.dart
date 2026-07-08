@@ -23,6 +23,8 @@ class Toast {
   final BuildContext _context;
   late FToast _fToast;
 
+  BuildContext get context => _context;
+
   void show(
     String msg, {
     bool withMicrotask = false,

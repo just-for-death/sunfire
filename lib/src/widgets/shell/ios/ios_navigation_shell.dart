@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -10,6 +11,7 @@ import '../../../constants/navigation_bar_data.dart';
 import '../../../global_providers/global_providers.dart';
 import '../../../routes/router_config.dart';
 import '../../../utils/extensions/custom_extensions.dart';
+import '../../../utils/platform/platform_ui.dart';
 import '../nav_badge_providers.dart';
 import '../nav_overflow_menu.dart';
 import '../shell_banner_stack.dart';
@@ -123,6 +125,7 @@ class _GlassTabBar extends ConsumerWidget {
   }
 
   void _onTap(BuildContext context, int displayIndex) {
+    adaptiveSelectionHaptic();
     if (compact && displayIndex == 4) {
       showCompactNavOverflowMenu(context, shell);
       return;
@@ -464,8 +467,8 @@ class _GlassSidebar extends ConsumerWidget {
                             : context.l10n.expandSidebar,
                         icon: Icon(
                           expanded
-                              ? Icons.chevron_left_rounded
-                              : Icons.chevron_right_rounded,
+                              ? CupertinoIcons.chevron_back
+                              : CupertinoIcons.chevron_forward,
                           color: isDark
                               ? Colors.white.withValues(alpha: 0.7)
                               : Colors.black.withValues(alpha: 0.6),
