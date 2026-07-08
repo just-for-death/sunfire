@@ -1,9 +1,11 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../features/settings/presentation/server/server_connectivity.dart';
 import '../../utils/extensions/custom_extensions.dart';
+import '../../utils/platform/platform_ui.dart';
 import 'notification_permission_banner.dart';
 import 'top_state_banners.dart';
 
@@ -49,7 +51,9 @@ class ShellBannerStack extends HookConsumerWidget {
                 child: Row(
                   children: [
                     Icon(
-                      Icons.cloud_off_rounded,
+                      isCupertinoPlatform
+                          ? CupertinoIcons.wifi_slash
+                          : Icons.cloud_off_rounded,
                       size: 18,
                       color: cs.onErrorContainer,
                     ),

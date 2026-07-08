@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
+import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/server_image.dart';
 import '../../domain/history_item.dart';
 import '../../domain/history_menu_action.dart';
@@ -32,7 +33,7 @@ class HistoryItemTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = context.theme.colorScheme;
-    return GestureDetector(
+    final tile = GestureDetector(
       onTap: onTap ?? () => _navigateToReader(context, ref),
       onLongPress: () => _showMenu(context),
       child: ClipRRect(
@@ -103,10 +104,48 @@ class HistoryItemTile extends ConsumerWidget {
         ),
       ),
     );
+
+    if (isCupertinoPlatform) return tile;
+
+    return Dismissible(
+      key: ValueKey('history-${item.id}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 16),
+        decoration: BoxDecoration(
+          color: cs.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(Icons.delete_outline_rounded, color: cs.onErrorContainer),
+      ),
+      confirmDismiss: (_) async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(context.l10n.removeFromHistory),
+            content: Text(context.l10n.removeFromHistoryConfirmation),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(context.l10n.cancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(context.l10n.remove),
+              ),
+            ],
+          ),
+        );
+        return confirmed ?? false;
+      },
+      onDismissed: (_) => onRemove(),
+      child: tile,
+    );
   }
 
   void _showMenu(BuildContext context) {
-    showModalBottomSheet(
+    showAdaptiveBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(

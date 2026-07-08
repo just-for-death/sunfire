@@ -1,13 +1,15 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../utils/extensions/custom_extensions.dart';
+import '../../../utils/platform/platform_ui.dart';
+import '../../../widgets/settings/adaptive_list_tile.dart';
 import 'history_controller.dart';
 
 void showHistorySettingsSheet(BuildContext context, WidgetRef ref) {
-  showModalBottomSheet<void>(
+  showAdaptiveBottomSheet<void>(
     context: context,
-    showDragHandle: true,
     builder: (ctx) => Consumer(
       builder: (context, ref, _) {
         final enabled = ref.watch(historyEnabledProvider) ?? true;
@@ -16,23 +18,27 @@ void showHistorySettingsSheet(BuildContext context, WidgetRef ref) {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SwitchListTile(
+              AdaptiveSwitchListTile(
                 title: Text(context.l10n.historyEnabledLabel),
                 subtitle: Text(context.l10n.historyEnabledDescription),
                 value: enabled,
                 onChanged: (v) =>
                     ref.read(historyEnabledProvider.notifier).setEnabled(v),
               ),
-              ListTile(
+              AdaptiveListTile(
                 title: Text(context.l10n.historyRetentionLabel),
                 subtitle: Text(_retentionLabel(context, retention)),
               ),
               ...([0, 30, 90, 180, 365].map(
-                (days) => ListTile(
+                (days) => AdaptiveListTile(
                   title: Text(_retentionLabel(context, days)),
                   trailing: retention == days
-                      ? Icon(Icons.check_rounded,
-                          color: Theme.of(context).colorScheme.primary)
+                      ? Icon(
+                          isCupertinoPlatform
+                              ? CupertinoIcons.check_mark
+                              : Icons.check_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
                       : null,
                   enabled: enabled,
                   onTap: enabled
