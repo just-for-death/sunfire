@@ -5,6 +5,7 @@ import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/misc/app_utils.dart';
 import '../../../../../../utils/misc/toast/toast.dart';
 import '../../../../../../widgets/section_title.dart';
+import '../../../../../../widgets/settings/adaptive_list_tile.dart';
 import '../../../../controller/server_controller.dart';
 import '../../../../domain/settings/settings.dart';
 import '../../data/server_settings_repository.dart';
@@ -19,7 +20,7 @@ class MiscSettingsSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionTitle(title: context.l10n.misc),
-        SwitchListTile(
+        AdaptiveSwitchListTile(
           title: Text(context.l10n.debugLogs),
           value: miscSettingsDto.debugLogsEnabled,
           onChanged: (isEnabled) async {
@@ -31,7 +32,7 @@ class MiscSettingsSection extends ConsumerWidget {
             }
           },
         ),
-        SwitchListTile(
+        AdaptiveSwitchListTile(
           title: Text(context.l10n.systemTrayIcon),
           subtitle: Text(context.l10n.systemTrayIcon),
           value: miscSettingsDto.systemTrayEnabled,

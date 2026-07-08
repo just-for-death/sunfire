@@ -7,10 +7,12 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../utils/extensions/custom_extensions.dart';
+import '../../../utils/platform/platform_ui.dart';
 import '../../../widgets/emoticons.dart';
 import 'history_controller.dart';
 import 'history_settings_sheet.dart';
 import 'ios/ios_home_screen.dart';
+import 'widgets/continue_reading_carousel.dart';
 import 'widgets/history_group_widget.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -135,36 +137,46 @@ class _AndroidHomeScreen extends HookConsumerWidget {
               if (historyGroups.isEmpty) {
                 return const SliverFillRemaining(child: _HistoryEmptyState());
               }
-              return SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
-                sliver: SliverList.builder(
-                  itemCount: historyGroups.length + (hasMore ? 1 : 0),
-                  itemBuilder: (context, i) {
-                    if (i == historyGroups.length) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Center(
-                          child: isLoadingMore.value
-                              ? const CircularProgressIndicator()
-                              : Text(
-                                  context.l10n.historyLoadMore,
-                                  style: context.theme.textTheme.bodySmall
-                                      ?.copyWith(
-                                    color: context
-                                        .theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                        ),
-                      );
-                    }
-                    return HistoryGroupWidget(
-                      group: historyGroups[i],
-                      onRemoveItem: (id) => ref
-                          .read(readingHistoryProvider.notifier)
-                          .removeFromHistory(id),
-                    );
-                  },
-                ),
+              return SliverMainAxisGroup(
+                slivers: [
+                  ContinueReadingCarousel(groups: historyGroups),
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      12,
+                      8,
+                      12,
+                      scrollBottomInset(),
+                    ),
+                    sliver: SliverList.builder(
+                      itemCount: historyGroups.length + (hasMore ? 1 : 0),
+                      itemBuilder: (context, i) {
+                        if (i == historyGroups.length) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: isLoadingMore.value
+                                  ? const CircularProgressIndicator()
+                                  : Text(
+                                      context.l10n.historyLoadMore,
+                                      style: context.theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                        color: context
+                                            .theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                            ),
+                          );
+                        }
+                        return HistoryGroupWidget(
+                          group: historyGroups[i],
+                          onRemoveItem: (id) => ref
+                              .read(readingHistoryProvider.notifier)
+                              .removeFromHistory(id),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               );
             },
             loading: () => const SliverFillRemaining(

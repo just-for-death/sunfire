@@ -1,11 +1,13 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 
 import '../../utils/extensions/custom_extensions.dart';
 import '../../utils/platform/mobile_permissions.dart';
+import '../../utils/platform/platform_ui.dart';
 
 /// Prompts the user when notification permission is missing on mobile.
 class NotificationPermissionBanner extends HookWidget {
@@ -59,7 +61,9 @@ class NotificationPermissionBanner extends HookWidget {
             child: Row(
               children: [
                 Icon(
-                  Icons.notifications_off_outlined,
+                  isCupertinoPlatform
+                      ? CupertinoIcons.bell_slash
+                      : Icons.notifications_off_outlined,
                   size: 18,
                   color: cs.onTertiaryContainer,
                 ),
@@ -82,7 +86,9 @@ class NotificationPermissionBanner extends HookWidget {
                       await refresh();
                     },
                     icon: Icon(
-                      Icons.settings_outlined,
+                      isCupertinoPlatform
+                          ? CupertinoIcons.settings
+                          : Icons.settings_outlined,
                       color: cs.onTertiaryContainer,
                     ),
                     tooltip: context.l10n.notificationsOpenSettingsA11y,
@@ -97,7 +103,9 @@ class NotificationPermissionBanner extends HookWidget {
                       await refresh();
                     },
                     icon: Icon(
-                      Icons.notifications_active_outlined,
+                      isCupertinoPlatform
+                          ? CupertinoIcons.bell
+                          : Icons.notifications_active_outlined,
                       color: cs.onTertiaryContainer,
                     ),
                     tooltip: context.l10n.notificationsEnableA11y,
@@ -108,7 +116,9 @@ class NotificationPermissionBanner extends HookWidget {
                 IconButton(
                   onPressed: () => dismissed.value = true,
                   icon: Icon(
-                    Icons.close_rounded,
+                    isCupertinoPlatform
+                        ? CupertinoIcons.xmark
+                        : Icons.close_rounded,
                     color: cs.onTertiaryContainer,
                   ),
                   tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
