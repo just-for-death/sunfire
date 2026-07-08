@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import '../../../../../theme/komikku_ui_tokens.dart';
+import '../../../../../theme/catalyst_ui_tokens.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../widgets/server_image.dart';
 
@@ -35,8 +35,8 @@ class PanoramaCover extends HookConsumerWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(KomikkuUiTokens.space24),
-          bottomRight: Radius.circular(KomikkuUiTokens.space24),
+          bottomLeft: Radius.circular(CatalystUiTokens.space24),
+          bottomRight: Radius.circular(CatalystUiTokens.space24),
         ),
         boxShadow: [
           BoxShadow(

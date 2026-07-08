@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -352,7 +352,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
 
               if (matchingChapter == null) continue;
 
-              // Never downgrade a fully-read target chapter (Suwayomi uses
+              // Never downgrade a fully-read target chapter (the server uses
               // lastPageRead: 0 when isRead is true).
               if (matchingChapter.isRead && !sourceChapter.isRead) continue;
 

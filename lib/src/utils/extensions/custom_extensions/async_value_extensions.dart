@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -60,7 +60,7 @@ extension AsyncValueExtensions<T> on AsyncValue<T> {
           Emoticons(
             title: showGenericError
                 ? context.l10n.errorSomethingWentWrong
-                : error.toString(),
+                : userFacingError(context, error),
             button: refresh != null
                 ? TextButton(
                     onPressed: refresh,

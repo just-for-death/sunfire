@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../../../../../constants/endpoints.dart';
 import '../../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../../utils/launch_url_in_web.dart';
+import '../../../../../../../utils/misc/user_facing_error.dart';
 import '../../../../../../../utils/misc/toast/toast.dart';
 import '../../../../../../../widgets/async_buttons/async_elevated_button.dart';
 import '../../../../../../../widgets/popup_widgets/pop_button.dart';
@@ -51,7 +52,10 @@ class CreateBackupDialog extends HookConsumerWidget {
             if (backupUrl.hasError || backupUrl.valueOrNull.isBlank) {
               {
                 toast?.showError(
-                  backupUrl.error?.toString() ?? context.l10n.errorBackupCreate,
+                  userFacingError(context, backupUrl.error) !=
+                          context.l10n.errorSomethingWentWrong
+                      ? userFacingError(context, backupUrl.error)
+                      : context.l10n.errorBackupCreate,
                 );
               }
               return;
