@@ -9,7 +9,9 @@ import '../../../../theme/komikku_ui_tokens.dart';
 
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/misc/toast/toast.dart';
+import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/emoticons.dart';
+import '../../../../widgets/shell/ios/glass_app_bar.dart';
 import '../../../manga_book/widgets/update_status_popup_menu.dart';
 import '../category/controller/edit_category_controller.dart';
 import 'category_manga_list.dart';
@@ -47,7 +49,27 @@ class LibraryScreen extends HookConsumerWidget {
           initialIndex:
               min(categoryId.getValueOnNullOrNegative(), data.length - 1),
           child: Scaffold(
-            appBar: AppBar(
+            backgroundColor: isCupertinoPlatform
+                ? context.theme.scaffoldBackgroundColor
+                : null,
+            extendBodyBehindAppBar: isCupertinoPlatform,
+            appBar: adaptiveGlassAppBar(
+              context: context,
+              bottom: PreferredSize(
+                preferredSize: Size.fromHeight(data.length > 1 ? 96 : 48),
+                child: Column(
+                  children: [
+                    _LibraryFilterChips(ref: ref),
+                    if (data.length > 1)
+                      TabBar(
+                        isScrollable: true,
+                        tabAlignment: TabAlignment.start,
+                        tabs: data.map((e) => Tab(text: e.name)).toList(),
+                        dividerColor: Colors.transparent,
+                      ),
+                  ],
+                ),
+              ),
               centerTitle: false,
               titleSpacing: 16,
               title: !showSearch.value
@@ -73,22 +95,6 @@ class LibraryScreen extends HookConsumerWidget {
                         context.theme.colorScheme.surfaceContainerHigh,
                       ),
                     ),
-              bottom: PreferredSize(
-                preferredSize: Size.fromHeight(data.length > 1 ? 96 : 48),
-                child: Column(
-                  children: [
-                    // Futon-style filter chips
-                    _LibraryFilterChips(ref: ref),
-                    if (data.length > 1)
-                      TabBar(
-                        isScrollable: true,
-                        tabAlignment: TabAlignment.start,
-                        tabs: data.map((e) => Tab(text: e.name)).toList(),
-                        dividerColor: Colors.transparent,
-                      ),
-                  ],
-                ),
-              ),
               actions: showSearch.value
                   ? [const SizedBox.shrink()]
                   : [
@@ -102,12 +108,8 @@ class LibraryScreen extends HookConsumerWidget {
                             if (context.isTablet) {
                               Scaffold.of(context).openEndDrawer();
                             } else {
-                              showModalBottomSheet(
+                              showAdaptiveBottomSheet(
                                 context: context,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: KBorderRadius.rT16.radius,
-                                ),
-                                clipBehavior: Clip.hardEdge,
                                 builder: (_) => const LibraryMangaOrganizer(),
                               );
                             }

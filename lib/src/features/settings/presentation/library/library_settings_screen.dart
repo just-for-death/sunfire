@@ -15,6 +15,7 @@ import '../../../../widgets/emoticons.dart';
 import '../../../../widgets/input_popup/domain/settings_prop_type.dart';
 import '../../../../widgets/input_popup/settings_prop_tile.dart';
 import '../../../../widgets/section_title.dart';
+import '../../../../widgets/settings/adaptive_list_tile.dart';
 import '../../../../widgets/settings/settings_subpage_scaffold.dart';
 import '../../controller/server_controller.dart';
 import '../../domain/settings/settings.dart';
@@ -67,7 +68,7 @@ class LibrarySettingsScreen extends ConsumerWidget {
               return ListView(
                 children: [
                   SectionTitle(title: context.l10n.general),
-                  ListTile(
+                  AdaptiveListTile(
                     title: Text(context.l10n.categories),
                     leading: const Icon(Icons.label_rounded),
                     onTap: () => const EditCategoriesRoute().go(context),

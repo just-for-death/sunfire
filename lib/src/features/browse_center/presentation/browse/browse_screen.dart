@@ -5,7 +5,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../../routes/router_config.dart';
 import '../../../../theme/komikku_ui_tokens.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
+import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/server_image.dart';
+import '../../../../widgets/shell/ios/glass_app_bar.dart';
 import '../../domain/source/source_model.dart';
 import '../extension/controller/extension_controller.dart';
 import '../extension/widgets/extension_language_filter_dialog.dart';
@@ -60,12 +62,21 @@ class BrowseScreen extends HookConsumerWidget {
     final isExtensions = tabController.index == 1;
 
     return Scaffold(
+      backgroundColor: isCupertinoPlatform
+          ? context.theme.scaffoldBackgroundColor
+          : null,
+      extendBodyBehindAppBar: isCupertinoPlatform,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
             floating: true,
             snap: true,
             forceElevated: innerBoxIsScrolled,
+            backgroundColor:
+                isCupertinoPlatform ? Colors.transparent : null,
+            elevation: isCupertinoPlatform ? 0 : null,
+            scrolledUnderElevation: isCupertinoPlatform ? 0 : null,
+            flexibleSpace: glassAppBarFlexibleSpace(context),
             titleSpacing: 16,
             title: showSearch.value
                 ? SearchBar(

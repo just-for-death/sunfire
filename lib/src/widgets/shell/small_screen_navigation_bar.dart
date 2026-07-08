@@ -37,12 +37,12 @@ class SmallScreenNavigationBar extends ConsumerWidget {
     NavigationBarData data,
     int updateCount,
   ) {
-    Widget icon = Icon(data.icon);
-    Widget selectedIcon = Icon(data.activeIcon);
+    Widget icon = Icon(data.navIcon(context));
+    Widget selectedIcon = Icon(data.navActiveIcon(context));
     if (data.badgeType == NavBadgeType.updates && updateCount > 0) {
-      icon = Badge.count(count: updateCount, child: Icon(data.icon));
+      icon = Badge.count(count: updateCount, child: Icon(data.navIcon(context)));
       selectedIcon =
-          Badge.count(count: updateCount, child: Icon(data.activeIcon));
+          Badge.count(count: updateCount, child: Icon(data.navActiveIcon(context)));
     }
     return NavigationDestination(
       icon: icon,

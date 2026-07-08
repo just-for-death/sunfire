@@ -7,10 +7,12 @@ import 'package:intl/intl.dart';
 
 import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
+import '../../../../utils/platform/platform_ui.dart';
 import '../../../../utils/hooks/paging_controller_hook.dart';
 import '../../../../widgets/custom_circular_progress_indicator.dart';
 import '../../../../widgets/emoticons.dart';
 import '../../../../widgets/server_image.dart';
+import '../../../../widgets/shell/ios/glass_app_bar.dart';
 import '../../data/updates/updates_repository.dart';
 import '../../domain/chapter/chapter_model.dart';
 import '../../domain/chapter/graphql/__generated__/fragment.graphql.dart';
@@ -71,6 +73,10 @@ class UpdatesScreen extends HookConsumerWidget {
     }, [isChecking]);
 
     return Scaffold(
+      backgroundColor: isCupertinoPlatform
+          ? context.theme.scaffoldBackgroundColor
+          : null,
+      extendBodyBehindAppBar: isCupertinoPlatform,
       floatingActionButton:
           selectedChapters.value.isEmpty ? const UpdateStatusFab() : null,
       appBar: selectedChapters.value.isNotEmpty
@@ -82,8 +88,8 @@ class UpdatesScreen extends HookConsumerWidget {
               title:
                   Text(context.l10n.numSelected(selectedChapters.value.length)),
             )
-          : AppBar(
-              titleSpacing: 16,
+          : adaptiveGlassAppBar(
+              context: context,
               title: Text(
                 context.l10n.updates,
                 style: context.theme.textTheme.headlineSmall
@@ -103,6 +109,11 @@ class UpdatesScreen extends HookConsumerWidget {
           controller.refresh();
         },
         child: PagedListView(
+          padding: EdgeInsets.only(
+            bottom: selectedChapters.value.isEmpty
+                ? scrollBottomInset(hasFab: true)
+                : 0,
+          ),
           pagingController: controller,
           builderDelegate: PagedChildBuilderDelegate<ChapterWithMangaDto>(
             firstPageProgressIndicatorBuilder: (_) =>
