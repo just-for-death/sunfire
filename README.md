@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/icons/launcher/catalyst_icon.png" width="120" alt="Catalyst Icon"/>
   <h1>Catalyst</h1>
-  <p>A fast, beautiful manga reader for <a href="https://github.com/Suwayomi/Suwayomi-Server">Suwayomi Server</a></p>
+  <p>A fast, beautiful manga reader for your self-hosted library</p>
 
   <a href="https://github.com/just-for-death/catalyst/releases/latest">
     <img src="https://img.shields.io/github/v/release/just-for-death/catalyst?style=flat-square&color=7c3aed&label=Latest" alt="Latest Release"/>
@@ -113,7 +113,7 @@ Catalyst stands on the shoulders of several great open-source projects. Huge tha
 
 ## Security notes
 
-Catalyst talks to **your** Suwayomi server using a URL you configure.
+Catalyst talks to **your** manga server using a URL you configure.
 
 - **HTTP on a trusted LAN** is common for self-hosted setups. If the server is reachable from untrusted networks, prefer **HTTPS** so traffic and Basic auth are not sent in the clear.
 - **Basic authentication**: credentials are stored in the **OS secure store** (Keychain / Keystore) after migration from older preference storage.

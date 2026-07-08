@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -369,6 +369,15 @@ class ReaderScreen extends HookConsumerWidget {
           button: TextButton(
             onPressed: () => ref.refresh(chapterProviderWithIndex.future),
             child: Text(context.l10n.refresh),
+          ),
+        );
+      }
+      if (chapterData.mangaId != mangaId) {
+        return Emoticons(
+          title: context.l10n.invalidChapterLink,
+          button: TextButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            child: Text(context.l10n.close),
           ),
         );
       }

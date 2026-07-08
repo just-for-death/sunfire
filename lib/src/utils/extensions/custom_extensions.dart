@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -21,6 +21,7 @@ import '../../widgets/emoticons.dart';
 import '../callbacks.dart';
 import '../logger/logger.dart';
 import '../misc/app_utils.dart';
+import '../misc/user_facing_error.dart';
 import '../misc/toast/toast.dart';
 
 part 'custom_extensions/async_value_extensions.dart';

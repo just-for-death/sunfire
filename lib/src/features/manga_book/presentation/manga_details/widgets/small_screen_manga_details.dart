@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import '../../../../../theme/komikku_ui_tokens.dart';
+import '../../../../../theme/catalyst_ui_tokens.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../widgets/emoticons.dart';
 import '../../../data/manga_book/manga_book_repository.dart';
@@ -70,7 +70,7 @@ class SmallScreenMangaDetails extends ConsumerWidget {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: KomikkuUiTokens.screenPadding,
+              padding: CatalystUiTokens.screenPadding,
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 260),
                 switchInCurve: Curves.easeOutCubic,

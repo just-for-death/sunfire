@@ -189,7 +189,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get createBackupDescription =>
-      'Kütüphaneyi Tachidesk yedeği olarak yedekle';
+      'Kütüphaneyi kütüphane yedeği olarak yedekle';
 
   @override
   String get createBackupTitle => 'Yedek oluştur';
@@ -1243,7 +1243,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get restore => 'Restore';
 
   @override
-  String get restoreBackupDescription => 'Restore Tachidesk from backup';
+  String get restoreBackupDescription => 'Restore library from a backup';
 
   @override
   String get restoreBackupTitle => 'Restore Backup';
@@ -1313,7 +1313,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get serverUnreachableBody =>
-      'Make sure Suwayomi Server is running and the URL is correct in Settings.';
+      'Make sure your manga server is running and the URL is correct in Settings.';
 
   @override
   String get serverRetryButton => 'Retry';
@@ -1857,7 +1857,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get appearanceMaterialSchemes => 'Material Schemes';
 
   @override
-  String get appearanceKomikkuCustomSchemes => 'Komikku Custom Schemes';
+  String get appearanceCatalystCustomSchemes => 'Catalyst Custom Schemes';
 
   @override
   String get appearanceDynamicColor => 'Dynamic Color';

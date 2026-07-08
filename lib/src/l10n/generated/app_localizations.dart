@@ -469,7 +469,7 @@ abstract class AppLocalizations {
   /// Button text description to create backup
   ///
   /// In en, this message translates to:
-  /// **'Backup library as a Tachidesk backup'**
+  /// **'Create a backup of your library'**
   String get createBackupDescription;
 
   /// Button text to create backup
@@ -2251,7 +2251,7 @@ abstract class AppLocalizations {
   /// Button text description to create backup
   ///
   /// In en, this message translates to:
-  /// **'Restore Tachidesk from backup'**
+  /// **'Restore your library from a backup file'**
   String get restoreBackupDescription;
 
   /// Button text to create backup
@@ -2389,7 +2389,7 @@ abstract class AppLocalizations {
   /// No description provided for @serverUnreachableBody.
   ///
   /// In en, this message translates to:
-  /// **'Make sure Suwayomi Server is running and the URL is correct in Settings.'**
+  /// **'Make sure your manga server is running and the URL is correct in Settings.'**
   String get serverUnreachableBody;
 
   /// No description provided for @serverRetryButton.
@@ -3346,11 +3346,11 @@ abstract class AppLocalizations {
   /// **'Material Schemes'**
   String get appearanceMaterialSchemes;
 
-  /// No description provided for @appearanceKomikkuCustomSchemes.
+  /// No description provided for @appearanceCatalystCustomSchemes.
   ///
   /// In en, this message translates to:
-  /// **'Komikku Custom Schemes'**
-  String get appearanceKomikkuCustomSchemes;
+  /// **'Catalyst Custom Schemes'**
+  String get appearanceCatalystCustomSchemes;
 
   /// No description provided for @appearanceDynamicColor.
   ///

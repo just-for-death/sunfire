@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,7 +9,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../constants/app_sizes.dart';
 import '../../../features/manga_book/domain/manga/manga_model.dart';
-import '../../../theme/komikku_ui_tokens.dart';
+import '../../../theme/catalyst_ui_tokens.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../providers/manga_cover_providers.dart';
 
@@ -114,8 +114,8 @@ class MangaBadge extends StatelessWidget {
       shape: const RoundedRectangleBorder(),
       child: Padding(
         padding: const EdgeInsets.symmetric(
-          horizontal: KomikkuUiTokens.space8,
-          vertical: KomikkuUiTokens.space4,
+          horizontal: CatalystUiTokens.space8,
+          vertical: CatalystUiTokens.space4,
         ),
         child: text.isNotBlank
             ? Text(

@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -489,6 +489,7 @@ class ReaderWrapper extends HookConsumerWidget {
                                 minWidth: 44,
                                 minHeight: 44,
                               ),
+                              tooltip: context.l10n.previousChapter(''),
                               onPressed: nextPrevChapterPair?.second != null
                                   ? () => navigateToChapter(
                                         nextPrevChapterPair!.second!.id,
@@ -517,6 +518,7 @@ class ReaderWrapper extends HookConsumerWidget {
                                 minWidth: 44,
                                 minHeight: 44,
                               ),
+                              tooltip: context.l10n.nextChapter(''),
                               onPressed: nextPrevChapterPair?.first != null
                                   ? () => navigateToChapter(
                                         nextPrevChapterPair!.first!.id,
@@ -557,6 +559,7 @@ class ReaderWrapper extends HookConsumerWidget {
                                   minWidth: 44,
                                   minHeight: 44,
                                 ),
+                                tooltip: context.l10n.readerMode,
                                 icon:
                                     const Icon(Icons.app_settings_alt_outlined),
                                 onPressed: () => showReaderModePopup(),
@@ -567,6 +570,7 @@ class ReaderWrapper extends HookConsumerWidget {
                                     minWidth: 44,
                                     minHeight: 44,
                                   ),
+                                  tooltip: context.l10n.settings,
                                   onPressed: () =>
                                       Scaffold.of(context).openEndDrawer(),
                                   icon: const Icon(Icons.settings_rounded),

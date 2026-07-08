@@ -190,7 +190,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get createBackupDescription =>
-      'Salvar a biblioteca como um backup do Tachidesk';
+      'Salvar a biblioteca como um backup do server';
 
   @override
   String get createBackupTitle => 'Criar Backup';
@@ -1255,7 +1255,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get restoreBackupDescription =>
-      'Restaurar Tachidesk pela cópia de segurança';
+      'Restaurar server pela cópia de segurança';
 
   @override
   String get restoreBackupTitle => 'Restaurar cópia de segurança';
@@ -1325,7 +1325,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get serverUnreachableBody =>
-      'Make sure Suwayomi Server is running and the URL is correct in Settings.';
+      'Make sure your manga server is running and the URL is correct in Settings.';
 
   @override
   String get serverRetryButton => 'Retry';
@@ -1870,7 +1870,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get appearanceMaterialSchemes => 'Material Schemes';
 
   @override
-  String get appearanceKomikkuCustomSchemes => 'Komikku Custom Schemes';
+  String get appearanceCatalystCustomSchemes => 'Catalyst Custom Schemes';
 
   @override
   String get appearanceDynamicColor => 'Dynamic Color';
@@ -2105,7 +2105,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get createBackupDescription => 'Backup library as a Tachidesk backup';
+  String get createBackupDescription => 'Backup library as a library backup';
 
   @override
   String get createBackupTitle => 'Create Backup';
@@ -3155,7 +3155,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get restore => 'Restore';
 
   @override
-  String get restoreBackupDescription => 'Restore Tachidesk from backup';
+  String get restoreBackupDescription => 'Restore library from a backup';
 
   @override
   String get restoreBackupTitle => 'Restore Backup';
@@ -3225,7 +3225,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get serverUnreachableBody =>
-      'Make sure Suwayomi Server is running and the URL is correct in Settings.';
+      'Make sure your manga server is running and the URL is correct in Settings.';
 
   @override
   String get serverRetryButton => 'Retry';
@@ -3769,7 +3769,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get appearanceMaterialSchemes => 'Material Schemes';
 
   @override
-  String get appearanceKomikkuCustomSchemes => 'Komikku Custom Schemes';
+  String get appearanceCatalystCustomSchemes => 'Catalyst Custom Schemes';
 
   @override
   String get appearanceDynamicColor => 'Dynamic Color';
@@ -4005,7 +4005,7 @@ class AppLocalizationsPtPt extends AppLocalizationsPt {
 
   @override
   String get createBackupDescription =>
-      'Cópia da Biblioteca como cópia de segurança de Tachidesk';
+      'Cópia da Biblioteca como cópia de segurança de server';
 
   @override
   String get createBackupTitle => 'Criar cópia de segurança';
@@ -5059,7 +5059,7 @@ class AppLocalizationsPtPt extends AppLocalizationsPt {
 
   @override
   String get restoreBackupDescription =>
-      'Restaurar Tachidesk pela cópia de segurança';
+      'Restaurar server pela cópia de segurança';
 
   @override
   String get restoreBackupTitle => 'Restaurar cópia de segurança';
@@ -5129,7 +5129,7 @@ class AppLocalizationsPtPt extends AppLocalizationsPt {
 
   @override
   String get serverUnreachableBody =>
-      'Make sure Suwayomi Server is running and the URL is correct in Settings.';
+      'Make sure your manga server is running and the URL is correct in Settings.';
 
   @override
   String get serverRetryButton => 'Retry';
@@ -5673,7 +5673,7 @@ class AppLocalizationsPtPt extends AppLocalizationsPt {
   String get appearanceMaterialSchemes => 'Material Schemes';
 
   @override
-  String get appearanceKomikkuCustomSchemes => 'Komikku Custom Schemes';
+  String get appearanceCatalystCustomSchemes => 'Catalyst Custom Schemes';
 
   @override
   String get appearanceDynamicColor => 'Dynamic Color';

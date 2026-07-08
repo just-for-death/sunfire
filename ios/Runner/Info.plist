@@ -61,7 +61,7 @@
 		<key>UIMainStoryboardFile</key>
 		<string>Main</string>
 		<key>NSLocalNetworkUsageDescription</key>
-		<string>Catalyst connects to your Suwayomi server on your local network.</string>
+		<string>Catalyst connects to your manga server on your local network.</string>
 		<key>NSUserNotificationsUsageDescription</key>
 		<string>Catalyst sends notifications when new manga chapters are available from your server.</string>
 		<key>NSPhotoLibraryUsageDescription</key>

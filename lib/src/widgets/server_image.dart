@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -82,6 +82,22 @@ class ServerImage extends HookConsumerWidget {
     )}"
         "$imageUrl";
 
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    int? memCacheWidth;
+    int? memCacheHeight;
+    if (size != null) {
+      if (size!.width.isFinite && size!.width > 0) {
+        memCacheWidth = (size!.width * dpr).round();
+      }
+      if (size!.height.isFinite && size!.height > 0) {
+        memCacheHeight = (size!.height * dpr).round();
+      }
+    } else if (fit == BoxFit.fitWidth) {
+      memCacheWidth = (MediaQuery.sizeOf(context).width * dpr).round();
+    } else if (fit == BoxFit.fitHeight) {
+      memCacheHeight = (MediaQuery.sizeOf(context).height * dpr).round();
+    }
+
     final Map<String, String>? httpHeaders =
         (authType == AuthType.basic && basicToken != null)
             ? ({"Authorization": basicToken})
@@ -148,6 +164,8 @@ class ServerImage extends HookConsumerWidget {
       httpHeaders: httpHeaders,
       width: size?.width,
       fit: fit ?? BoxFit.cover,
+      memCacheWidth: memCacheWidth,
+      memCacheHeight: memCacheHeight,
       imageRenderMethodForWeb: renderMethod,
       progressIndicatorBuilder: finalProgressIndicatorBuilder,
       errorWidget: errorWidget,
