@@ -125,7 +125,10 @@ class ReaderScreen extends HookConsumerWidget {
             isRead: isReadingCompleted,
           );
 
-      if (saveResult.hasError) return;
+      if (saveResult.hasError) {
+        ref.invalidate(chapterProvider(chapterId: chapterValue.id));
+        return;
+      }
 
       ref.invalidate(chapterProvider(chapterId: chapterValue.id));
       pendingPageIndex.value = null;
@@ -213,7 +216,6 @@ class ReaderScreen extends HookConsumerWidget {
         if (chapterValue == null || chapterPagesValue == null) return;
 
         pendingPageIndex.value = index;
-        lastFlushedPage.value = null;
 
         final activeDebounce = debounce.value;
         if (activeDebounce?.isActive ?? false) {

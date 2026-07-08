@@ -19,9 +19,7 @@ void appUpdateDialog({
   required Toast? toast,
   String? url,
 }) =>
-    showDialog(
-      context: context,
-      builder: (context) {
+    context.showAdaptiveAppDialog(builder: (context) {
         return AlertDialog(
           title: Text(context.l10n.newUpdateAvailable),
           content: Text(context.l10n.versionAvailable(title, newRelease)),

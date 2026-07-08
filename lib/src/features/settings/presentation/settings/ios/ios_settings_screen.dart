@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../../../constants/gen/assets.gen.dart';
 import '../../../../../routes/router_config.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
+import '../../../../../utils/platform/platform_ui.dart';
 import '../../../../../widgets/shell/ios/glass_app_bar.dart';
 
 class IOSSettingsScreen extends StatelessWidget {
@@ -25,7 +26,9 @@ class IOSSettingsScreen extends StatelessWidget {
         slivers: [
           GlassSliverAppBar(title: context.l10n.settings),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+            padding: scrollBottomPadding(context, horizontal: 16).copyWith(
+              top: 16,
+            ),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 // App icon + name header

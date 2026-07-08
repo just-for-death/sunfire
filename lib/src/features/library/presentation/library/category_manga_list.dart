@@ -80,9 +80,7 @@ class CategoryMangaList extends HookConsumerWidget {
                 },
                 onLongPress: () {
                   if (!isSelectionMode) {
-                    showDialog(
-                      context: context,
-                      builder: (context) => EditMangaCategoryDialog(
+                    context.showAdaptiveAppDialog(builder: (context) => EditMangaCategoryDialog(
                         mangaId: data[index].id,
                         title: data[index].title,
                       ),
@@ -112,9 +110,7 @@ class CategoryMangaList extends HookConsumerWidget {
                 },
                 onLongPress: () {
                   if (!isSelectionMode) {
-                    showDialog(
-                      context: context,
-                      builder: (context) => EditMangaCategoryDialog(
+                    context.showAdaptiveAppDialog(builder: (context) => EditMangaCategoryDialog(
                         mangaId: data[index].id,
                         title: data[index].title,
                       ),
@@ -145,9 +141,7 @@ class CategoryMangaList extends HookConsumerWidget {
                 },
                 onLongPress: () {
                   if (!isSelectionMode) {
-                    showDialog(
-                      context: context,
-                      builder: (context) => EditMangaCategoryDialog(
+                    context.showAdaptiveAppDialog(builder: (context) => EditMangaCategoryDialog(
                         mangaId: data[index].id,
                         title: data[index].title,
                       ),

@@ -5,8 +5,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../../../../../constants/endpoints.dart';
 import '../../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../../utils/launch_url_in_web.dart';
-import '../../../../../../../utils/misc/user_facing_error.dart';
 import '../../../../../../../utils/misc/toast/toast.dart';
+import '../../../../../../../utils/misc/user_facing_error.dart';
 import '../../../../../../../widgets/async_buttons/async_elevated_button.dart';
 import '../../../../../../../widgets/popup_widgets/pop_button.dart';
 import '../../../../server/widget/client/server_port_tile/server_port_tile.dart';
@@ -74,7 +74,7 @@ class CreateBackupDialog extends HookConsumerWidget {
             );
             context.navPop();
           },
-          child: Text(context.l10n.restore),
+          child: Text(context.l10n.createBackupTitle),
         ),
       ],
     );

@@ -127,22 +127,12 @@ class LocalDownloadButton extends HookConsumerWidget {
     BuildContext context,
     LocalChapterDownload notifier,
   ) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.l10n.localDownloadRemoveTitle),
-        content: Text(context.l10n.localDownloadRemoveBody),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(context.l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(context.l10n.remove),
-          ),
-        ],
-      ),
+    final ok = await context.showAdaptiveConfirm(
+      title: context.l10n.localDownloadRemoveTitle,
+      content: context.l10n.localDownloadRemoveBody,
+      confirmLabel: context.l10n.remove,
+      cancelLabel: context.l10n.cancel,
+      isDestructive: true,
     );
     if (ok == true) {
       await notifier.delete();

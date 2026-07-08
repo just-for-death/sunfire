@@ -14,7 +14,7 @@ extension AsyncValueExtensions<T> on AsyncValue<T> {
       whenOrNull(
         error: (error, stackTrace) {
           toast.close();
-          toast.showError(message ?? 'Something went wrong');
+          toast.showError(message ?? toast.context.l10n.errorSomethingWentWrong);
         },
       );
     }

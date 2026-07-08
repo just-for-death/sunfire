@@ -6,6 +6,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -13,6 +14,7 @@ import '../../constants/db_keys.dart';
 import '../../constants/endpoints.dart';
 import '../../constants/enum.dart';
 import '../../global_providers/global_providers.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../utils/extensions/custom_extensions.dart';
 import '../browse_center/data/extension_repository/extension_repository.dart';
 import '../manga_book/data/updates/updates_repository.dart';
@@ -104,7 +106,13 @@ class ChapterUpdateNotifier extends _$ChapterUpdateNotifier {
 
   void _fireMangaNotification(MangaDto manga, int count) {
     final svc = ref.read(notificationServiceProvider);
-    svc.showMangaUpdateNotification(manga: manga, chaptersCount: count);
+    final locale = ref.read(l10nProvider) ?? const Locale('en');
+    final l10n = lookupAppLocalizations(locale);
+    svc.showMangaUpdateNotification(
+      manga: manga,
+      chaptersCount: count,
+      body: l10n.notificationNewChaptersBody(count),
+    );
   }
 
   /// Can be called externally to force a check (e.g., after a manual refresh).
@@ -175,7 +183,13 @@ class ExtensionUpdateNotifier extends _$ExtensionUpdateNotifier {
       if (updateCount != _lastNotifiedCount) {
         _lastNotifiedCount = updateCount;
         final svc = ref.read(notificationServiceProvider);
-        await svc.showExtensionUpdateNotification(updateCount: updateCount);
+        final locale = ref.read(l10nProvider) ?? const Locale('en');
+        final l10n = lookupAppLocalizations(locale);
+        await svc.showExtensionUpdateNotification(
+          updateCount: updateCount,
+          title: l10n.notificationExtensionUpdatesTitle,
+          body: l10n.notificationExtensionUpdatesBody(updateCount),
+        );
       }
     } catch (_) {
       // Network errors during background poll should be silent

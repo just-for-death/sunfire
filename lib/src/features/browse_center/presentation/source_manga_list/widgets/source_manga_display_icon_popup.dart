@@ -22,9 +22,7 @@ class SourceMangaDisplayIconPopup extends ConsumerWidget {
         DBKeys.sourceDisplayMode.initial;
     return IconButton(
       icon: Icon(displayMode?.icon),
-      onPressed: () => showDialog(
-        context: context,
-        builder: (context) => RadioListPopup<DisplayMode>(
+      onPressed: () => context.showAdaptiveAppDialog(builder: (context) => RadioListPopup<DisplayMode>(
           optionList: DisplayMode.sourceDisplayList,
           getOptionTitle: (value) => value.toLocale(context),
           title: context.l10n.displayMode,

@@ -35,9 +35,7 @@ class ReaderModeTile extends ConsumerWidget {
       leading: const Icon(Icons.app_settings_alt_rounded),
       subtitle: readerMode != null ? Text(readerMode.toLocale(context)) : null,
       title: Text(context.l10n.readerMode),
-      onTap: () => showDialog(
-        context: context,
-        builder: (context) => RadioListPopup<ReaderMode>(
+      onTap: () => context.showAdaptiveAppDialog(builder: (context) => RadioListPopup<ReaderMode>(
           title: context.l10n.readerMode,
           optionList: ReaderMode.values.sublist(1),
           getOptionTitle: (value) => value.toLocale(context),

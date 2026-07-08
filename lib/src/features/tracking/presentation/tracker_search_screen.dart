@@ -244,22 +244,11 @@ class _TrackerSearchResultTile extends ConsumerWidget {
   }
 
   Future<void> _bind(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.l10n.addTracking),
-        content: Text(context.l10n.trackingAddConfirm(result.title, trackerName)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.l10n.addTracking),
-          ),
-        ],
-      ),
+    final confirmed = await context.showAdaptiveConfirm(
+      title: context.l10n.addTracking,
+      content: context.l10n.trackingAddConfirm(result.title, trackerName),
+      confirmLabel: context.l10n.addTracking,
+      cancelLabel: context.l10n.cancel,
     );
     if (confirmed != true) return;
     if (!context.mounted) return;

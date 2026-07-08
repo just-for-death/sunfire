@@ -7,8 +7,8 @@ import 'package:intl/intl.dart';
 
 import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
-import '../../../../utils/platform/platform_ui.dart';
 import '../../../../utils/hooks/paging_controller_hook.dart';
+import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/custom_circular_progress_indicator.dart';
 import '../../../../widgets/emoticons.dart';
 import '../../../../widgets/server_image.dart';

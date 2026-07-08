@@ -1,6 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:catalyst/src/routes/route_redirect.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('redirectPathForUri rejects non-numeric manga id', () {
@@ -28,6 +27,20 @@ void main() {
     expect(
       redirectPathForUri(Uri.parse('/library/abc')),
       '/library/0',
+    );
+  });
+
+  test('deepLinkPathFromUri maps catalyst scheme to app path', () {
+    expect(
+      deepLinkPathFromUri(Uri.parse('catalyst://manga/5/chapter/12')),
+      '/manga/5/chapter/12',
+    );
+  });
+
+  test('deepLinkPathFromUri maps library deep link', () {
+    expect(
+      deepLinkPathFromUri(Uri.parse('catalyst://library/3')),
+      '/library/3',
     );
   });
 }

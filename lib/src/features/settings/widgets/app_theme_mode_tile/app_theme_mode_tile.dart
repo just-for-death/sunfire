@@ -45,9 +45,7 @@ class AppThemeModeTile extends ConsumerWidget {
       ),
       subtitle: themeMode != null ? Text(themeMode.toLocale(context)) : null,
       title: Text(context.l10n.appTheme),
-      onTap: () => showDialog(
-        context: context,
-        builder: (context) => RadioListPopup<ThemeMode>(
+      onTap: () => context.showAdaptiveAppDialog(builder: (context) => RadioListPopup<ThemeMode>(
           title: context.l10n.appTheme,
           optionList: ThemeMode.values,
           value: themeMode ?? ThemeMode.system,

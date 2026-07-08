@@ -24,8 +24,7 @@ class ExtensionRepositoryScreen extends ConsumerWidget {
     onRefresh() => ref.refresh(settingsProvider.future);
 
     Future<void> addRepository() async {
-      String? newUrl = await showDialog<String?>(
-        context: context,
+      String? newUrl = await context.showAdaptiveAppDialog<String?>(
         builder: (context) => TextFieldDialog(
           title: context.l10n.extensionRepository,
           hintText: context.l10n.enterProp(context.l10n.extensionRepository),

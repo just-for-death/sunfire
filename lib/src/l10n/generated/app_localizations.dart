@@ -2440,6 +2440,24 @@ abstract class AppLocalizations {
   /// **'Enable notifications'**
   String get notificationsEnableA11y;
 
+  /// No description provided for @notificationNewChaptersBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 new chapter available} other{{count} new chapters available}}'**
+  String notificationNewChaptersBody(int count);
+
+  /// No description provided for @notificationExtensionUpdatesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Extension Updates Available'**
+  String get notificationExtensionUpdatesTitle;
+
+  /// No description provided for @notificationExtensionUpdatesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 extension has updates — check Browse} other{{count} extensions have updates — check Browse}}'**
+  String notificationExtensionUpdatesBody(int count);
+
   /// No description provided for @localDownloadToDevice.
   ///
   /// In en, this message translates to:
