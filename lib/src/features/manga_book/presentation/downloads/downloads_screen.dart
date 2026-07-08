@@ -4,7 +4,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/misc/toast/toast.dart';
+import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/emoticons.dart';
+import '../../../../widgets/shell/ios/glass_app_bar.dart';
 import '../../data/downloads/downloads_repository.dart';
 import '../../data/local_downloads/local_downloads_service.dart';
 import '../../domain/downloads/downloads_model.dart';
@@ -28,8 +30,12 @@ class DownloadsScreen extends ConsumerWidget {
     final cs = context.theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 16,
+      backgroundColor: isCupertinoPlatform
+          ? context.theme.scaffoldBackgroundColor
+          : null,
+      extendBodyBehindAppBar: isCupertinoPlatform,
+      appBar: adaptiveGlassAppBar(
+        context: context,
         title: Text(
           context.l10n.downloads,
           style: context.theme.textTheme.headlineSmall
@@ -150,7 +156,12 @@ class DownloadsScreen extends ConsumerWidget {
                         onRefresh: () =>
                             ref.refresh(downloadStatusProvider.future),
                         child: ListView(
-                          padding: const EdgeInsets.fromLTRB(0, 8, 0, 96),
+                          padding: EdgeInsets.fromLTRB(
+                            0,
+                            8,
+                            0,
+                            scrollBottomInset(hasFab: showDownloadsFAB),
+                          ),
                           children: [
                             if (inProgress.isNotEmpty) ...[
                               _SectionHeader(

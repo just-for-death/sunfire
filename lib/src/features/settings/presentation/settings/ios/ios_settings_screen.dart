@@ -13,13 +13,11 @@ class IOSSettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
     final cs = context.theme.colorScheme;
-    final bg = isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF2F2F7);
-    final textColor = isDark ? Colors.white : Colors.black;
+    final textColor = cs.onSurface;
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: context.theme.scaffoldBackgroundColor,
       extendBodyBehindAppBar: true,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(

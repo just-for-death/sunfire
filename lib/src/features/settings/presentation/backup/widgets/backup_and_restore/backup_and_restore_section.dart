@@ -8,6 +8,7 @@ import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/misc/file_picker_utils.dart';
 import '../../../../../../utils/misc/toast/toast.dart';
 import '../../../../../../widgets/section_title.dart';
+import '../../../../../../widgets/settings/adaptive_list_tile.dart';
 import '../../../../domain/settings/settings.dart';
 import '../../data/backup_settings_repository.dart';
 import 'widgets/backup_missing_dialog.dart';
@@ -104,7 +105,7 @@ class BackupAndRestoreSection extends HookConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionTitle(title: context.l10n.backupAndRestore),
-        ListTile(
+        AdaptiveListTile(
           title: Text(context.l10n.createBackupTitle),
           subtitle: Text(context.l10n.createBackupDescription),
           leading: const Icon(Icons.backup_rounded),
@@ -115,7 +116,7 @@ class BackupAndRestoreSection extends HookConsumerWidget {
             );
           },
         ),
-        ListTile(
+        AdaptiveListTile(
           title: Text(context.l10n.restoreBackupTitle),
           subtitle: Text(context.l10n.restoreBackupDescription),
           leading: const Icon(Icons.restore_rounded),

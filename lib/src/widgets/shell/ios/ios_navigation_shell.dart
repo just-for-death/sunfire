@@ -172,7 +172,7 @@ class _GlassTabBar extends ConsumerWidget {
                   final selected = i == _displaySelectedIndex;
                   final label = item.label(context);
                   Widget icon = Icon(
-                    selected ? item.activeIcon : item.icon,
+                    selected ? item.navActiveIcon(context) : item.navIcon(context),
                     size: iconSize,
                     color: selected
                         ? cs.primary
@@ -368,7 +368,7 @@ class _GlassSidebar extends ConsumerWidget {
 
     Widget navIcon(NavigationBarData item, bool selected) {
       Widget icon = Icon(
-        selected ? item.activeIcon : item.icon,
+        selected ? item.navActiveIcon(context) : item.navIcon(context),
         size: rowIconSize,
         color: selected
             ? cs.primary

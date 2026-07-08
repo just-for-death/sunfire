@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
+import '../../../../widgets/settings/adaptive_list_tile.dart';
 import 'ios/ios_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -72,6 +73,11 @@ class MaterialSettingsScreen extends StatelessWidget {
             title: Text(context.l10n.trackers),
             leading: const Icon(Icons.track_changes_rounded),
             onTap: () => const TrackerSettingsRoute().go(context),
+          ),
+          AdaptiveListTile(
+            title: Text(context.l10n.about),
+            leading: const Icon(Icons.info_outline_rounded),
+            onTap: () => const AboutRoute().go(context),
           ),
         ],
       ),
