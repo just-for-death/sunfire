@@ -171,9 +171,7 @@ class MigrationPreviewScreen extends ConsumerWidget {
   void _showMigrationConfirmation(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+    context.showAdaptiveAppDialog(builder: (context) => AlertDialog(
         title: Text(l10n.confirmMigration),
         content: Column(
           mainAxisSize: MainAxisSize.min,

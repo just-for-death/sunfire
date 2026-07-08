@@ -123,9 +123,7 @@ class LibrarySettingsScreen extends ConsumerWidget {
                           ? skipUpdatingEntriesList.join(", ")
                           : context.l10n.none,
                     ),
-                    onTap: () => showDialog(
-                      context: context,
-                      builder: (context) => const SkipUpdatingEntriesPopup(),
+                    onTap: () => context.showAdaptiveAppDialog(builder: (context) => const SkipUpdatingEntriesPopup(),
                     ),
                   ),
                   // SectionTitle(title: context.l10n.advanced),

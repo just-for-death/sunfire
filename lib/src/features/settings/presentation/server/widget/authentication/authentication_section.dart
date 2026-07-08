@@ -24,9 +24,7 @@ class AuthenticationSection extends ConsumerWidget {
             leading: const Icon(Icons.password_rounded),
             title: Text(context.l10n.credentials),
             onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => const CredentialsPopup(),
+              context.showAdaptiveAppDialog(builder: (context) => const CredentialsPopup(),
               );
             },
           ),

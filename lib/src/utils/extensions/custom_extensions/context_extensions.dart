@@ -231,6 +231,17 @@ extension ContextExtensions on BuildContext {
   }
 
   Future<T?> pushBottomSheet<T>(Widget sheet) async {
+    if (isCupertinoPlatform) {
+      return showCupertinoModalPopup<T>(
+        context: this,
+        useRootNavigator: true,
+        builder: (context) => Padding(
+          padding:
+              EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: sheet,
+        ),
+      );
+    }
     return showModalBottomSheet<T>(
       context: this,
       useSafeArea: true,
@@ -247,6 +258,34 @@ extension ContextExtensions on BuildContext {
       ),
     );
   }
+
+  Future<T?> showAdaptiveAppDialog<T>({
+    required WidgetBuilder builder,
+    bool useRootNavigator = true,
+    bool barrierDismissible = true,
+  }) =>
+      showAdaptiveDialog<T>(
+        context: this,
+        builder: builder,
+        useRootNavigator: useRootNavigator,
+        barrierDismissible: barrierDismissible,
+      );
+
+  Future<bool> showAdaptiveConfirm({
+    required String title,
+    String? content,
+    String? confirmLabel,
+    String? cancelLabel,
+    bool isDestructive = false,
+  }) =>
+      showAdaptiveConfirmDialog(
+        context: this,
+        title: title,
+        content: content,
+        confirmLabel: confirmLabel,
+        cancelLabel: cancelLabel,
+        isDestructive: isDestructive,
+      );
 
   Future<T?> showFullScreenDialog<T>(Widget dialog) async {
     return showDialog<T>(

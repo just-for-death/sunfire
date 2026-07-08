@@ -6,8 +6,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/misc/file_picker_utils.dart';
-import '../../../../../../utils/misc/user_facing_error.dart';
 import '../../../../../../utils/misc/toast/toast.dart';
+import '../../../../../../utils/misc/user_facing_error.dart';
 import '../../../../../../widgets/section_title.dart';
 import '../../../../../../widgets/settings/adaptive_list_tile.dart';
 import '../../../../domain/settings/settings.dart';
@@ -65,8 +65,7 @@ class BackupAndRestoreSection extends HookConsumerWidget {
     String? backupId;
     bool restoreBackup = true;
     if (validateResult.valueOrNull.isNotBlank && context.mounted) {
-      restoreBackup = (await showDialog<bool>(
-        context: context,
+      restoreBackup = (await context.showAdaptiveAppDialog<bool>(
         builder: (context) =>
             BackupMissingDialog(backupMissing: validateResult.valueOrNull!),
       ))
@@ -109,9 +108,7 @@ class BackupAndRestoreSection extends HookConsumerWidget {
           subtitle: Text(context.l10n.createBackupDescription),
           leading: const Icon(Icons.backup_rounded),
           onTap: () {
-            showDialog(
-              context: context,
-              builder: (context) => const CreateBackupDialog(),
+            context.showAdaptiveAppDialog(builder: (context) => const CreateBackupDialog(),
             );
           },
         ),

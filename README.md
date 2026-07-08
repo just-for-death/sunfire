@@ -11,7 +11,7 @@
   </a>
   <img src="https://img.shields.io/badge/Flutter-3.x-blue?style=flat-square&logo=flutter" alt="Flutter"/>
   <img src="https://img.shields.io/badge/Android-5.0%2B-green?style=flat-square&logo=android" alt="Android"/>
-  <img src="https://img.shields.io/badge/iOS-14%2B-black?style=flat-square&logo=apple" alt="iOS"/>
+  <img src="https://img.shields.io/badge/iOS-13%2B-black?style=flat-square&logo=apple" alt="iOS"/>
   <img src="https://img.shields.io/badge/Linux-GTK-lightgrey?style=flat-square&logo=linux" alt="Linux"/>
 </div>
 
@@ -28,7 +28,7 @@ Catalyst is a Flutter frontend for [Suwayomi Server](https://github.com/Suwayomi
 ## Features
 
 ### Reading & library
-- **Full reader** — Continuous webtoon, single page, LTR/RTL, spread mode, volume key support
+- **Full reader** — Continuous webtoon, single page, LTR/RTL, spread mode, Android volume-key paging
 - **Redesigned screens** — History, Library with filter chips, Explore, Feed (updates), Downloads
 - **Material You** — Dynamic colour from your wallpaper on Android 12+
 - **iOS & iPad UI** — Cupertino shell with frosted glass tab bar and sidebar on iPad
@@ -85,7 +85,7 @@ flutter build ipa --release --no-codesign                    # unsigned IPA (mac
 flutter run -d linux                                       # Linux desktop
 ```
 
-Release Android builds use R8 minification. If Gradle fails at `minifyReleaseWithR8`, ensure `android/app/proguard-rules.pro` includes the Play Core `-dontwarn` rules shipped in this repo.
+Release Android builds ship with R8 minification disabled (`minifyEnabled false`) because it previously broke the release splash screen. ProGuard rules in `android/app/proguard-rules.pro` are kept for when minification is re-enabled.
 
 CI builds are defined in [`codemagic.yaml`](codemagic.yaml) (`ios-release`, `android-release`, and tag-triggered `all-release`).
 

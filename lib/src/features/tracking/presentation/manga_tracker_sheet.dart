@@ -232,9 +232,7 @@ class _TrackRecordTile extends ConsumerWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () async {
-          await showDialog(
-            context: context,
-            builder: (_) => TrackerEditDialog(record: record, mangaId: mangaId),
+          await context.showAdaptiveAppDialog(builder: (_) => TrackerEditDialog(record: record, mangaId: mangaId),
           );
         },
         child: Padding(
@@ -378,8 +376,7 @@ class _TrackRecordTile extends ConsumerWidget {
 
   Future<void> _confirmUnbind(BuildContext context, WidgetRef ref) async {
     bool deleteRemote = false;
-    final confirmed = await showDialog<bool>(
-      context: context,
+    final confirmed = await context.showAdaptiveAppDialog<bool>(
       builder: (_) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
           title: Text(context.l10n.trackingRemoveConfirm),

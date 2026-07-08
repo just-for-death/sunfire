@@ -75,9 +75,7 @@ class SourcePreferenceToWidget extends StatelessWidget {
           key: Key(key),
           title: Text(title ?? ""),
           subtitle: currentValue.isNotBlank ? Text(currentValue!) : null,
-          onTap: () => showDialog(
-            context: context,
-            builder: (context) => RadioListPopup<String>(
+          onTap: () => context.showAdaptiveAppDialog(builder: (context) => RadioListPopup<String>(
               title: title ?? "",
               optionList: entryValues.toList(),
               value: currentValue ?? defaultValue ?? "",
@@ -105,9 +103,7 @@ class SourcePreferenceToWidget extends StatelessWidget {
           key: Key(key),
           title: Text(title ?? ""),
           subtitle: summary.isNotBlank ? Text(summary!) : null,
-          onTap: () => showDialog(
-            context: context,
-            builder: (context) => MultiSelectPopup<String>(
+          onTap: () => context.showAdaptiveAppDialog(builder: (context) => MultiSelectPopup<String>(
               title: title ?? "",
               optionList: entryValues.toList(),
               values: currentValue?.toList() ?? defaultValue?.toList() ?? [],
@@ -135,9 +131,7 @@ class SourcePreferenceToWidget extends StatelessWidget {
           key: Key(key),
           title: Text(title ?? ""),
           subtitle: summary.isNotBlank ? Text(summary!) : null,
-          onTap: () => showDialog(
-            context: context,
-            builder: (context) => TextFieldPopup(
+          onTap: () => context.showAdaptiveAppDialog(builder: (context) => TextFieldPopup(
               title: dialogTitle ?? title ?? "",
               subtitle: dialogMessage ?? summary ?? "",
               onChange: (value) async {

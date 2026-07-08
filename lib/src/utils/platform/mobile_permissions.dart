@@ -33,7 +33,7 @@ abstract final class MobilePermissions {
       final granted = await iosPlugin.requestPermissions(
         alert: true,
         badge: true,
-        sound: false,
+        sound: true,
       );
       return granted ?? false;
     }
@@ -70,8 +70,12 @@ abstract final class MobilePermissions {
       return (await Permission.notification.status).isPermanentlyDenied;
     }
 
-    // iOS does not re-prompt after denial.
-    return true;
+    if (Platform.isIOS) {
+      final status = await Permission.notification.status;
+      return status.isPermanentlyDenied;
+    }
+
+    return false;
   }
 
   /// Opens system settings when notification permission was permanently denied.

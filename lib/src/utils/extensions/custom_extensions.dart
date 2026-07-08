@@ -6,8 +6,9 @@
 
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide showAdaptiveDialog;
 import 'package:go_router/go_router.dart';
 import "package:gql/language.dart" show printNode;
 import 'package:graphql/client.dart';
@@ -21,8 +22,9 @@ import '../../widgets/emoticons.dart';
 import '../callbacks.dart';
 import '../logger/logger.dart';
 import '../misc/app_utils.dart';
-import '../misc/user_facing_error.dart';
 import '../misc/toast/toast.dart';
+import '../misc/user_facing_error.dart';
+import '../platform/platform_ui.dart';
 
 part 'custom_extensions/async_value_extensions.dart';
 part 'custom_extensions/bool_extensions.dart';
