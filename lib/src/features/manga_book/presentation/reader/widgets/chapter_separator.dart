@@ -10,7 +10,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../../constants/app_sizes.dart';
 import '../../../../../constants/enum.dart';
-import '../../../../../routes/router_config.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../settings/presentation/reader/widgets/reader_mode_tile/reader_mode_tile.dart';
 import '../../../../settings/presentation/reader/widgets/reader_navigation_layout_tile/reader_navigation_layout_tile.dart';
@@ -18,6 +17,7 @@ import '../../../domain/chapter/chapter_model.dart';
 import '../../../domain/manga/manga_model.dart';
 import '../../manga_details/controller/manga_details_controller.dart';
 import '../utils/last_page_swipe_utils.dart';
+import '../utils/reader_chapter_navigation.dart';
 
 class ChapterSeparator extends ConsumerWidget {
   const ChapterSeparator({
@@ -70,12 +70,14 @@ class ChapterSeparator extends ConsumerWidget {
               Padding(
                 padding: KEdgeInsets.v16.size,
                 child: FilledButton(
-                  onPressed: () => ReaderRoute(
+                  onPressed: () => navigateToReaderChapter(
+                    context,
+                    ref,
                     mangaId: nextPrevChapterPair!.second!.mangaId,
                     chapterId: nextPrevChapterPair.second!.id,
                     toPrev: !isRTL,
                     transVertical: transVertical,
-                  ).pushReplacement(context),
+                  ),
                   child: Text(
                     context.l10n.previousChapter(
                       nextPrevChapterPair?.second?.name ?? "",
@@ -103,12 +105,14 @@ class ChapterSeparator extends ConsumerWidget {
               Padding(
                 padding: KEdgeInsets.v16.size,
                 child: FilledButton(
-                  onPressed: () => ReaderRoute(
+                  onPressed: () => navigateToReaderChapter(
+                    context,
+                    ref,
                     mangaId: nextPrevChapterPair!.first!.mangaId,
                     chapterId: nextPrevChapterPair.first!.id,
                     toPrev: isRTL,
                     transVertical: transVertical,
-                  ).pushReplacement(context),
+                  ),
                   child: Text(
                     context.l10n.nextChapter(
                       nextPrevChapterPair?.first?.name ?? "",
