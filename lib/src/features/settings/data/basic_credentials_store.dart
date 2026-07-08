@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,7 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../constants/db_keys.dart';
 
-/// Persists the HTTP `Authorization` header value for Suwayomi Basic auth.
+/// Persists the HTTP `Authorization` header value for server Basic auth.
 ///
 /// Values written by older builds under [DBKeys.basicCredentials] in
 /// SharedPreferences are migrated once into the platform secure store.

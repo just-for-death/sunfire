@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class KomikkuUiTokens {
-  KomikkuUiTokens._();
+class CatalystUiTokens {
+  CatalystUiTokens._();
 
   static const double space4 = 4;
   static const double space8 = 8;

@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -40,7 +40,6 @@ class NotificationService {
     _headers = headers;
   }
 
-  static const int _chapterUpdateId = 1001;
   static const int _extensionUpdateId = 1002;
 
   // Android notification channel IDs
@@ -99,6 +98,7 @@ class NotificationService {
       if (launchDetails?.didNotificationLaunchApp ?? false) {
         NotificationNavigation.scheduleTap(
           launchDetails?.notificationResponse?.id,
+          payload: launchDetails?.notificationResponse?.payload,
         );
       }
     } on UnimplementedError {
@@ -109,7 +109,10 @@ class NotificationService {
   }
 
   void _onNotificationTap(NotificationResponse response) {
-    NotificationNavigation.handleTap(response.id);
+    NotificationNavigation.handleTap(
+      response.id,
+      payload: response.payload,
+    );
   }
 
   /// Show a notification for a specific manga update.
@@ -157,6 +160,7 @@ class NotificationService {
       2000 + manga.id.toInt(),
       manga.title,
       body,
+      payload: 'manga:${manga.id}',
       NotificationDetails(
         linux: LinuxNotificationDetails(
           category: LinuxNotificationCategory.transferComplete,
@@ -177,42 +181,6 @@ class NotificationService {
           attachments: iconPath != null
               ? [DarwinNotificationAttachment(iconPath)]
               : null,
-        ),
-      ),
-    );
-  }
-
-  /// Show a generic notification for library updates.
-  @Deprecated('Use showMangaUpdateNotification instead for specific manga art')
-  Future<void> showChapterUpdateNotification({
-    required int newChaptersCount,
-  }) async {
-    if (!_initialized) await init();
-    if (newChaptersCount <= 0) return;
-    if (!await MobilePermissions.ensureNotificationPermission()) return;
-
-    final body =
-        '$newChaptersCount new ${newChaptersCount == 1 ? 'chapter' : 'chapters'} available';
-
-    await _plugin.show(
-      _chapterUpdateId,
-      'Library Updated',
-      body,
-      NotificationDetails(
-        linux: LinuxNotificationDetails(
-          category: LinuxNotificationCategory.transferComplete,
-        ),
-        android: AndroidNotificationDetails(
-          _updatesChannelId,
-          _updatesChannelName,
-          channelDescription: _updatesChannelDescription,
-          importance: Importance.defaultImportance,
-          priority: Priority.defaultPriority,
-        ),
-        iOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: false,
         ),
       ),
     );

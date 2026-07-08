@@ -5,7 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../../../constants/db_keys.dart';
-import '../../../../../../theme/komikko_custom_schemes.dart';
+import '../../../../../../theme/catalyst_custom_schemes.dart';
 import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/mixin/shared_preferences_client_mixin.dart';
 import 'custom_scheme_provider.dart';
@@ -83,12 +83,12 @@ class AppThemeSelector extends HookConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  context.l10n.appearanceKomikkuCustomSchemes,
+                  context.l10n.appearanceCatalystCustomSchemes,
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Builder(builder: (context) {
-                  final customSchemeNames = KomikkuCustomSchemes.lightSchemes.keys.toList();
+                  final customSchemeNames = CatalystCustomSchemes.lightSchemes.keys.toList();
                   final selectedCustomScheme = ref.watch(customFlexSchemeProvider);
                   return SizedBox(
                     height: 80,
@@ -97,7 +97,7 @@ class AppThemeSelector extends HookConsumerWidget {
                       itemCount: customSchemeNames.length,
                       itemBuilder: (context, idx) {
                         final name = customSchemeNames[idx];
-                        final schemeColor = KomikkuCustomSchemes.lightSchemes[name]!;
+                        final schemeColor = CatalystCustomSchemes.lightSchemes[name]!;
                         return Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                           child: Tooltip(

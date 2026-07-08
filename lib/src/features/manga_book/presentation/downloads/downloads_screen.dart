@@ -152,49 +152,66 @@ class DownloadsScreen extends ConsumerWidget {
                               ref.watch(downloadsFromIdProvider(id))?.state !=
                               DownloadState.DOWNLOADING)
                           .toList();
+
+                      final rows = <_DownloadListRow>[
+                        if (inProgress.isNotEmpty) ...[
+                          _DownloadListRow.header(
+                            context.l10n.downloadsInProgress,
+                            Icons.downloading_rounded,
+                          ),
+                          ...inProgress.map(
+                            (id) => _DownloadListRow.tile(
+                              chapterId: id,
+                              index: inProgress.indexOf(id),
+                              listLength: inProgress.length,
+                            ),
+                          ),
+                        ],
+                        if (queued.isNotEmpty) ...[
+                          _DownloadListRow.header(
+                            context.l10n.downloadsQueued,
+                            Icons.queue_rounded,
+                          ),
+                          ...queued.map(
+                            (id) => _DownloadListRow.tile(
+                              chapterId: id,
+                              index: queued.indexOf(id),
+                              listLength: queued.length,
+                            ),
+                          ),
+                        ],
+                      ];
+
                       return RefreshIndicator(
                         onRefresh: () =>
                             ref.refresh(downloadStatusProvider.future),
-                        child: ListView(
+                        child: ListView.builder(
                           padding: EdgeInsets.fromLTRB(
                             0,
                             8,
                             0,
                             scrollBottomInset(hasFab: showDownloadsFAB),
                           ),
-                          children: [
-                            if (inProgress.isNotEmpty) ...[
-                              _SectionHeader(
-                                  label: context.l10n.downloadsInProgress,
-                                  icon: Icons.downloading_rounded),
-                              ...inProgress
-                                  .asMap()
-                                  .entries
-                                  .map((e) => DownloadProgressListTile(
-                                        key: ValueKey(e.value),
-                                        index: e.key,
-                                        downloadsCount: inProgress.length,
-                                        chapterId: e.value,
-                                        toast: toast,
-                                      )),
-                            ],
-                            if (queued.isNotEmpty) ...[
-                              _SectionHeader(
-                                  label: context.l10n.downloadsQueued,
-                                  icon: Icons.queue_rounded),
-                              ...queued
-                                  .asMap()
-                                  .entries
-                                  .map((e) => DownloadProgressListTile(
-                                        key: ValueKey(e.value),
-                                        index: e.key,
-                                        downloadsCount: queued.length,
-                                        chapterId: e.value,
-                                        toast: toast,
-                                      )),
-                            ],
-                            const Gap(104),
-                          ],
+                          itemCount: rows.length + 1,
+                          itemBuilder: (context, i) {
+                            if (i >= rows.length) {
+                              return const Gap(104);
+                            }
+                            final row = rows[i];
+                            if (row.isHeader) {
+                              return _SectionHeader(
+                                label: row.label!,
+                                icon: row.icon!,
+                              );
+                            }
+                            return DownloadProgressListTile(
+                              key: ValueKey(row.chapterId),
+                              index: row.index!,
+                              downloadsCount: row.listLength!,
+                              chapterId: row.chapterId!,
+                              toast: toast,
+                            );
+                          },
                         ),
                       );
                     },
@@ -210,6 +227,28 @@ class DownloadsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _DownloadListRow {
+  const _DownloadListRow.header(this.label, this.icon)
+      : chapterId = null,
+        index = null,
+        listLength = null;
+
+  const _DownloadListRow.tile({
+    required this.chapterId,
+    required this.index,
+    required this.listLength,
+  })  : label = null,
+        icon = null;
+
+  final String? label;
+  final IconData? icon;
+  final int? chapterId;
+  final int? index;
+  final int? listLength;
+
+  bool get isHeader => label != null;
 }
 
 class _SectionHeader extends StatelessWidget {

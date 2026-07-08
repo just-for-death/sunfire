@@ -4,11 +4,27 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../routes/router_config.dart';
 import '../../manga_book/data/local_downloads/local_downloads_service.dart';
 import '../../manga_book/presentation/manga_details/controller/manga_details_controller.dart';
+import '../domain/history_group.dart';
 import '../domain/history_item.dart';
 
 bool historyItemIsCompleted(HistoryItemDto item) =>
     item.isRead == true ||
     (item.pageCount > 0 && item.lastPageRead >= item.pageCount - 1);
+
+/// Read progress for history UI (0.0–1.0). Completed chapters show full bar.
+double historyItemReadProgress(HistoryItemDto item) {
+  if (historyItemIsCompleted(item)) return 1.0;
+  if (item.pageCount <= 0) return 0.0;
+  return (item.lastPageRead / item.pageCount).clamp(0.0, 1.0);
+}
+
+/// In-progress chapters for the continue-reading carousel.
+List<HistoryItemDto> inProgressHistoryItems(List<HistoryGroup> groups) =>
+    groups
+        .expand((g) => g.items)
+        .where((item) => !historyItemIsCompleted(item))
+        .take(10)
+        .toList();
 
 /// Opens the reader for a history item, advancing to the next chapter when finished.
 Future<void> openReaderFromHistoryItem(

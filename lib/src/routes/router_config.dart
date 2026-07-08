@@ -1,4 +1,5 @@
 import 'package:flex_color_scheme/flex_color_scheme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -45,6 +46,7 @@ import '../features/settings/presentation/settings/settings_screen.dart';
 import '../features/tracking/presentation/tracker_settings_screen.dart';
 import '../utils/extensions/custom_extensions.dart';
 import '../widgets/shell/navigation_shell_screen.dart';
+import 'route_redirect.dart';
 
 part 'router_config.g.dart';
 part 'sub_routes/browser_routes.dart';
@@ -117,10 +119,18 @@ abstract class Routes {
 GoRouter routerConfig(ref) {
   return GoRouter(
     routes: $appRoutes,
-    debugLogDiagnostics: true,
+    debugLogDiagnostics: kDebugMode,
+    redirect: routeRedirect,
     initialLocation: const HistoryTabRoute().location,
     navigatorKey: rootNavigatorKey,
-    onException: (_, state, router) => router.go(const HistoryTabRoute().location),
+    onException: (context, state, router) {
+      final location = state.uri.toString();
+      if (location.contains('/manga/') && location.contains('/chapter/')) {
+        router.go(const ReaderRoute(mangaId: 0, chapterId: 0).location);
+        return;
+      }
+      router.go(const HistoryTabRoute().location);
+    },
   );
 }
 

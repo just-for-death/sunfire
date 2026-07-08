@@ -3,7 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../routes/router_config.dart';
-import '../../../../theme/komikku_ui_tokens.dart';
+import '../../../../theme/catalyst_ui_tokens.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/server_image.dart';
@@ -235,9 +235,9 @@ class _QuickActionGrid extends ConsumerWidget {
                 height: 36,
                 child: Material(
                   color: cs.surfaceContainerHigh,
-                  borderRadius: KomikkuUiTokens.chipRadius,
+                  borderRadius: CatalystUiTokens.chipRadius,
                   child: InkWell(
-                    borderRadius: KomikkuUiTokens.chipRadius,
+                    borderRadius: CatalystUiTokens.chipRadius,
                     onTap: a.onTap,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14),

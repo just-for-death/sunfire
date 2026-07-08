@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -13,6 +13,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../utils/extensions/custom_extensions.dart';
 import '../../../utils/misc/toast/toast.dart';
+import '../../../utils/misc/user_facing_error.dart';
 import '../data/tracker_repository.dart';
 import '../domain/tracker_model.dart';
 import 'controller/tracker_controller.dart';
@@ -168,7 +169,7 @@ class TrackerSearchScreen extends HookConsumerWidget {
     if (raw.contains('SocketException') || raw.contains('Failed host lookup')) {
       return l10n.trackingNoInternet;
     }
-    return raw;
+    return l10n.errorSomethingWentWrong;
   }
 }
 
@@ -276,7 +277,7 @@ class _TrackerSearchResultTile extends ConsumerWidget {
                 err.contains('Not logged in') ||
                 err.contains('Collection is empty')
             ? context.l10n.trackingBindLoginRequired(trackerName)
-            : err;
+            : userFacingError(context, e);
         ref.read(toastProvider)?.showError(msg);
       }
     }
