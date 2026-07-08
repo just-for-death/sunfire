@@ -1278,7 +1278,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get serverUnreachableBody =>
-      'Make sure Suwayomi Server is running and the URL is correct in Settings.';
+      'Make sure your manga server is running and the URL is correct in Settings.';
 
   @override
   String get serverRetryButton => 'Retry';
@@ -1820,7 +1820,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appearanceMaterialSchemes => 'Material Schemes';
 
   @override
-  String get appearanceKomikkuCustomSchemes => 'Komikku Custom Schemes';
+  String get appearanceCatalystCustomSchemes => 'Catalyst Custom Schemes';
 
   @override
   String get appearanceDynamicColor => 'Dynamic Color';
@@ -3167,7 +3167,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get serverUnreachableBody =>
-      'Make sure Suwayomi Server is running and the URL is correct in Settings.';
+      'Make sure your manga server is running and the URL is correct in Settings.';
 
   @override
   String get serverRetryButton => 'Retry';
@@ -3711,7 +3711,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get appearanceMaterialSchemes => 'Material Schemes';
 
   @override
-  String get appearanceKomikkuCustomSchemes => 'Komikku Custom Schemes';
+  String get appearanceCatalystCustomSchemes => 'Catalyst Custom Schemes';
 
   @override
   String get appearanceDynamicColor => 'Dynamic Color';
@@ -3943,7 +3943,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String get createBackupDescription => '以 Tachidesk 備份檔備份書架';
+  String get createBackupDescription => '以 server 備份檔備份書架';
 
   @override
   String get createBackupTitle => '建立備份';
@@ -4977,7 +4977,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get restore => '還原';
 
   @override
-  String get restoreBackupDescription => '從 Tachidesk 備份中還原';
+  String get restoreBackupDescription => '從 server 備份中還原';
 
   @override
   String get restoreBackupTitle => '還原備份';
@@ -5047,7 +5047,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get serverUnreachableBody =>
-      'Make sure Suwayomi Server is running and the URL is correct in Settings.';
+      'Make sure your manga server is running and the URL is correct in Settings.';
 
   @override
   String get serverRetryButton => 'Retry';
@@ -5591,7 +5591,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get appearanceMaterialSchemes => 'Material Schemes';
 
   @override
-  String get appearanceKomikkuCustomSchemes => 'Komikku Custom Schemes';
+  String get appearanceCatalystCustomSchemes => 'Catalyst Custom Schemes';
 
   @override
   String get appearanceDynamicColor => 'Dynamic Color';

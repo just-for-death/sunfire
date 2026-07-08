@@ -188,7 +188,7 @@ class AppLocalizationsNb extends AppLocalizations {
   }
 
   @override
-  String get createBackupDescription => 'Backup library as a Tachidesk backup';
+  String get createBackupDescription => 'Backup library as a library backup';
 
   @override
   String get createBackupTitle => 'Create Backup';
@@ -1242,7 +1242,7 @@ class AppLocalizationsNb extends AppLocalizations {
   String get restore => 'Restore';
 
   @override
-  String get restoreBackupDescription => 'Restore Tachidesk from backup';
+  String get restoreBackupDescription => 'Restore library from a backup';
 
   @override
   String get restoreBackupTitle => 'Restore Backup';
@@ -1312,7 +1312,7 @@ class AppLocalizationsNb extends AppLocalizations {
 
   @override
   String get serverUnreachableBody =>
-      'Make sure Suwayomi Server is running and the URL is correct in Settings.';
+      'Make sure your manga server is running and the URL is correct in Settings.';
 
   @override
   String get serverRetryButton => 'Retry';
@@ -1856,7 +1856,7 @@ class AppLocalizationsNb extends AppLocalizations {
   String get appearanceMaterialSchemes => 'Material Schemes';
 
   @override
-  String get appearanceKomikkuCustomSchemes => 'Komikku Custom Schemes';
+  String get appearanceCatalystCustomSchemes => 'Catalyst Custom Schemes';
 
   @override
   String get appearanceDynamicColor => 'Dynamic Color';
@@ -2092,7 +2092,7 @@ class AppLocalizationsNbNo extends AppLocalizationsNb {
 
   @override
   String get createBackupDescription =>
-      'Sikkerhetskopier bibliotek som Tachidesk-sikkerhetskopi';
+      'Sikkerhetskopier bibliotek som biblioteksikkerhetskopi';
 
   @override
   String get createBackupTitle => 'Opprett sikkerhetskopi';
@@ -3142,7 +3142,7 @@ class AppLocalizationsNbNo extends AppLocalizationsNb {
   String get restore => 'Restore';
 
   @override
-  String get restoreBackupDescription => 'Restore Tachidesk from backup';
+  String get restoreBackupDescription => 'Restore library from a backup';
 
   @override
   String get restoreBackupTitle => 'Restore Backup';
@@ -3212,7 +3212,7 @@ class AppLocalizationsNbNo extends AppLocalizationsNb {
 
   @override
   String get serverUnreachableBody =>
-      'Make sure Suwayomi Server is running and the URL is correct in Settings.';
+      'Make sure your manga server is running and the URL is correct in Settings.';
 
   @override
   String get serverRetryButton => 'Retry';
@@ -3756,7 +3756,7 @@ class AppLocalizationsNbNo extends AppLocalizationsNb {
   String get appearanceMaterialSchemes => 'Material Schemes';
 
   @override
-  String get appearanceKomikkuCustomSchemes => 'Komikku Custom Schemes';
+  String get appearanceCatalystCustomSchemes => 'Catalyst Custom Schemes';
 
   @override
   String get appearanceDynamicColor => 'Dynamic Color';

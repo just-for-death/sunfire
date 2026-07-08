@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -67,9 +67,8 @@ class ContinuousReaderMode extends HookConsumerWidget {
     final ItemPositionsListener positionsListener =
         useMemoized(() => ItemPositionsListener.create());
 
-    final int pageCount = chapterPages.pages.isNotEmpty
-        ? chapterPages.pages.length
-        : chapterPages.chapter.pageCount;
+    final int pageCount =
+        chapterPages.pages.isNotEmpty ? chapterPages.pages.length : 1;
 
     final int initialIndex = _clampPageIndex(
       chapter.isRead.ifNull()
@@ -193,17 +192,14 @@ class ContinuousReaderMode extends HookConsumerWidget {
         initialScrollIndex: initialIndex,
         scrollDirection: scrollDirection,
         reverse: reverse,
-        itemCount: pageCount > 0 ? pageCount : 1,
+        itemCount: pageCount,
         minCacheExtent: scrollDirection == Axis.vertical
-            ? context.height * 2
-            : context.width * 2,
+            ? context.height
+            : context.width,
         separatorBuilder: (BuildContext context, int index) =>
             showSeparator ? const Gap(16) : const SizedBox.shrink(),
         itemBuilder: (BuildContext context, int index) {
           if (chapterPages.pages.isEmpty) {
-            return const Center(child: CenterCatalystShimmerIndicator());
-          }
-          if (index >= chapterPages.pages.length) {
             return const Center(child: CenterCatalystShimmerIndicator());
           }
 

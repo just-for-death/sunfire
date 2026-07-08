@@ -34,7 +34,7 @@
   ],
   "licenser.license": "MPLv2",
   "licenser.projectName": "Catalyst",
-  "licenser.author": "Contributors to the Suwayomi project",
+  "licenser.author": "Contributors to the Catalyst project",
   "editor.wordSeparators": "`~!@#%^&*()-=+[{]}\\|;:'\",.<>/?",
   "files.exclude": {
     "**/*.g.dart": true

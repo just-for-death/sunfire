@@ -1,14 +1,14 @@
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
 
-/// All Komikku‑inspired custom FlexSchemeColor palettes.
+/// Catalyst custom FlexSchemeColor palettes.
 /// Each key in [allSchemes] provides a unique name; the value is a record
 /// of (light, dark) FlexSchemeColor objects.
 ///
 /// [lightSchemes] and [darkSchemes] are the flat maps used by the UI picker
 /// and by CatalystApp to build the theme.
-class KomikkuCustomSchemes {
-  KomikkuCustomSchemes._();
+class CatalystCustomSchemes {
+  CatalystCustomSchemes._();
 
   // ─── Catppuccin ──────────────────────────────────────────────────────────
   static const FlexSchemeColor catppuccinLight = FlexSchemeColor(
@@ -136,8 +136,8 @@ class KomikkuCustomSchemes {
     tertiaryContainer: Color(0xFF775930),
   );
 
-  // ─── Tachiyomi ───────────────────────────────────────────────────────────
-  static const FlexSchemeColor tachiyomiLight = FlexSchemeColor(
+  // ─── Classic Crimson ─────────────────────────────────────────────────────
+  static const FlexSchemeColor classicCrimsonLight = FlexSchemeColor(
     primary: Color(0xFF4378D2),
     primaryContainer: Color(0xFFD9E2FF),
     secondary: Color(0xFF1976D2),
@@ -145,7 +145,7 @@ class KomikkuCustomSchemes {
     tertiary: Color(0xFF7C4DFF),
     tertiaryContainer: Color(0xFFEDE7F6),
   );
-  static const FlexSchemeColor tachiyomiDark = FlexSchemeColor(
+  static const FlexSchemeColor classicCrimsonDark = FlexSchemeColor(
     primary: Color(0xFF82AAFF),
     primaryContainer: Color(0xFF1B3362),
     secondary: Color(0xFF64B5F6),
@@ -255,7 +255,7 @@ class KomikkuCustomSchemes {
     'Midnight Dusk': midnightDuskLight,
     'Green Apple': greenAppleLight,
     'Strawberry': strawberryLight,
-    'Tachiyomi': tachiyomiLight,
+    'Classic Crimson': classicCrimsonLight,
     'Teal Turquoise': tealTurquoiseLight,
     'Yotsuba': yotsubaLight,
     'Yin & Yang': yinYangLight,
@@ -272,7 +272,7 @@ class KomikkuCustomSchemes {
     'Midnight Dusk': midnightDuskDark,
     'Green Apple': greenAppleDark,
     'Strawberry': strawberryDark,
-    'Tachiyomi': tachiyomiDark,
+    'Classic Crimson': classicCrimsonDark,
     'Teal Turquoise': tealTurquoiseDark,
     'Yotsuba': yotsubaDark,
     'Yin & Yang': yinYangDark,

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../../../utils/platform/platform_ui.dart';
 
-/// A frosted-glass large-title app bar matching Aidoku/iOS 26 style.
+/// A frosted-glass large-title app bar matching Catalyst's iOS style.
 /// Drops in as a SliverPersistentHeader in a CustomScrollView.
 class GlassSliverAppBar extends StatelessWidget {
   const GlassSliverAppBar({

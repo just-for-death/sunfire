@@ -20,7 +20,7 @@ class HistoryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // iOS → Aidoku-style glass home screen
+    // iOS → Catalyst glass home screen
     if (!kIsWeb && Platform.isIOS) {
       return const IOSHomeScreen();
     }

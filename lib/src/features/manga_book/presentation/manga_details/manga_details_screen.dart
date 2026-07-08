@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Contributors to the Suwayomi project
+// Copyright (c) 2022 Contributors to the Catalyst project
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -35,6 +35,17 @@ class MangaDetailsScreen extends HookConsumerWidget {
   final int? categoryId;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (mangaId <= 0) {
+      return Scaffold(
+        body: Emoticons(
+          title: context.l10n.errorSomethingWentWrong,
+          button: TextButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            child: Text(context.l10n.close),
+          ),
+        ),
+      );
+    }
     // Providers as Class for this screen
     final mangaProvider = mangaWithIdProvider(mangaId: mangaId);
     final chapterListProvider = mangaChapterListProvider(mangaId: mangaId);
