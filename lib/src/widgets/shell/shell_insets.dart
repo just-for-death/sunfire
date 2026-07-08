@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
 
-/// Applies bottom safe padding when content sits above a fixed navigation bar.
+import '../../utils/platform/platform_ui.dart';
+
+/// Applies bottom padding so scroll content clears the tab bar / FAB.
 class ShellBottomInset extends StatelessWidget {
   const ShellBottomInset({
     super.key,
     required this.child,
+    this.hasFab = false,
     this.extraBottom = 0,
   });
 
   final Widget child;
+  final bool hasFab;
   final double extraBottom;
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom + extraBottom;
-    if (bottom <= 0) return child;
+    final bottom = scrollBottomInset(hasFab: hasFab) + extraBottom;
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
       child: child,

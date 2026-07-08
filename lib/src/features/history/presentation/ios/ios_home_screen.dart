@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -10,11 +9,11 @@ import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../widgets/server_image.dart';
 import '../../../../widgets/shell/ios/glass_app_bar.dart';
-import '../../domain/history_group.dart';
 import '../../domain/history_item.dart';
 import '../history_controller.dart';
 import '../history_reader_navigation.dart';
 import '../history_settings_sheet.dart';
+import '../widgets/continue_reading_carousel.dart';
 
 class IOSHomeScreen extends HookConsumerWidget {
   const IOSHomeScreen({super.key});
@@ -59,8 +58,7 @@ class IOSHomeScreen extends HookConsumerWidget {
     );
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF2F2F7),
+      backgroundColor: context.theme.scaffoldBackgroundColor,
       extendBodyBehindAppBar: true,
       body: historyState.when(
         loading: () => const Center(child: CupertinoActivityIndicator()),
@@ -183,7 +181,10 @@ class IOSHomeScreen extends HookConsumerWidget {
                 ),
               )
             else if (historyGroups.isNotEmpty) ...[
-              _ContinueReadingCarousel(groups: historyGroups),
+              ContinueReadingCarousel(
+                groups: historyGroups,
+                useCupertinoStyle: true,
+              ),
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
@@ -274,133 +275,6 @@ class IOSHomeScreen extends HookConsumerWidget {
               ),
           ],
         ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ContinueReadingCarousel extends StatelessWidget {
-  const _ContinueReadingCarousel({required this.groups});
-  final List<HistoryGroup> groups;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
-    final allItems = groups.expand((g) => g.items).take(10).toList();
-    if (allItems.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
-
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: Text(
-              context.l10n.historyContinueReading,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : Colors.black,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ),
-          SizedBox(
-            height: 200,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              physics: const BouncingScrollPhysics(),
-              itemCount: allItems.length,
-              itemBuilder: (context, i) =>
-                  _CarouselCard(item: allItems[i], isDark: isDark),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CarouselCard extends ConsumerWidget {
-  const _CarouselCard({required this.item, required this.isDark});
-  final HistoryItemDto item;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final progress = item.pageCount > 0
-        ? (item.lastPageRead / item.pageCount).clamp(0.0, 1.0)
-        : 0.0;
-
-    return GestureDetector(
-      onTap: () => openReaderFromHistoryItem(context, ref, item),
-      child: Container(
-        width: 120,
-        margin: const EdgeInsets.only(right: 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              ServerImage(
-                imageUrl: item.manga.thumbnailUrl ?? '',
-                fit: BoxFit.cover,
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(8, 20, 8, 8),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.75),
-                          ],
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.manga.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              height: 1.2,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(2),
-                            child: LinearProgressIndicator(
-                              value: progress,
-                              minHeight: 3,
-                              backgroundColor:
-                                  Colors.white.withValues(alpha: 0.25),
-                              valueColor:
-                                  const AlwaysStoppedAnimation(Colors.white),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

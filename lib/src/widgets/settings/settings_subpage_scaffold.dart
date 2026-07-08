@@ -33,10 +33,8 @@ class SettingsSubpageScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (_useCupertino) {
-      final isDark = context.isDarkMode;
       return CupertinoPageScaffold(
-        backgroundColor:
-            isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF2F2F7),
+        backgroundColor: context.theme.scaffoldBackgroundColor,
         navigationBar: CupertinoNavigationBar(
           leading: context.canPop()
               ? CupertinoButton(
@@ -49,7 +47,7 @@ class SettingsSubpageScaffold extends StatelessWidget {
           trailing: actions != null && actions!.isNotEmpty
               ? Row(mainAxisSize: MainAxisSize.min, children: actions!)
               : null,
-          backgroundColor: isDark
+          backgroundColor: context.isDarkMode
               ? Colors.black.withValues(alpha: 0.72)
               : Colors.white.withValues(alpha: 0.72),
         ),

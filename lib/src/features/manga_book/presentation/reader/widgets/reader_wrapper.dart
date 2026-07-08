@@ -7,6 +7,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_android_volume_keydown/flutter_android_volume_keydown.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -22,6 +23,8 @@ import '../../../../../constants/enum.dart';
 import '../../../../../constants/reader_keyboard_shortcuts.dart';
 import '../../../../../global_providers/global_providers.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
+import '../../../../../utils/platform/platform_ui.dart';
+import '../../../../../widgets/shell/ios/glass_app_bar.dart';
 import '../../../../../utils/launch_url_in_web.dart';
 import '../../../../../utils/misc/toast/toast.dart';
 import '../../../../../widgets/popup_widgets/radio_list_popup.dart';
@@ -373,7 +376,8 @@ class ReaderWrapper extends HookConsumerWidget {
       ),
       child: Scaffold(
         appBar: visibility.value
-            ? AppBar(
+            ? adaptiveGlassAppBar(
+                context: context,
                 title: ListTile(
                   title: (manga.title).isNotBlank
                       ? Text(
@@ -388,7 +392,6 @@ class ReaderWrapper extends HookConsumerWidget {
                         )
                       : null,
                 ),
-                elevation: 0,
                 actions: [
                   chapter.realUrl.isBlank
                       ? const SizedBox.shrink()
@@ -400,7 +403,11 @@ class ReaderWrapper extends HookConsumerWidget {
                               ref.read(toastProvider),
                             );
                           },
-                          icon: const Icon(Icons.public_rounded),
+                          icon: Icon(
+                            isCupertinoPlatform
+                                ? CupertinoIcons.globe
+                                : Icons.public_rounded,
+                          ),
                         )
                 ],
               )

@@ -11,6 +11,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../../../constants/app_sizes.dart';
 import '../../../../../constants/enum.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
+import '../../../../../utils/platform/platform_ui.dart';
 import '../../../../settings/presentation/reader/widgets/reader_mode_tile/reader_mode_tile.dart';
 import '../../../../settings/presentation/reader/widgets/reader_navigation_layout_tile/reader_navigation_layout_tile.dart';
 import '../../../domain/chapter/chapter_model.dart';
@@ -69,7 +70,8 @@ class ChapterSeparator extends ConsumerWidget {
                 isPreviousChapterSeparator)
               Padding(
                 padding: KEdgeInsets.v16.size,
-                child: FilledButton(
+                child: adaptivePrimaryButton(
+                  context: context,
                   onPressed: () => navigateToReaderChapter(
                     context,
                     ref,
@@ -104,7 +106,8 @@ class ChapterSeparator extends ConsumerWidget {
                 !isPreviousChapterSeparator)
               Padding(
                 padding: KEdgeInsets.v16.size,
-                child: FilledButton(
+                child: adaptivePrimaryButton(
+                  context: context,
                   onPressed: () => navigateToReaderChapter(
                     context,
                     ref,

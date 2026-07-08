@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../../utils/extensions/custom_extensions.dart';
+import '../../../utils/platform/platform_ui.dart';
 
 /// A frosted-glass large-title app bar matching Aidoku/iOS 26 style.
 /// Drops in as a SliverPersistentHeader in a CustomScrollView.
@@ -201,4 +202,70 @@ class GlassCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Frosted flexible space for [SliverAppBar] on iOS.
+Widget? glassAppBarFlexibleSpace(BuildContext context) {
+  if (!isCupertinoPlatform) return null;
+  final isDark = context.isDarkMode;
+  return ClipRect(
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+      child: Container(
+        color: isDark
+            ? Colors.black.withValues(alpha: 0.5)
+            : Colors.white.withValues(alpha: 0.72),
+      ),
+    ),
+  );
+}
+
+/// Material [AppBar] on Android; frosted glass [AppBar] on iOS.
+PreferredSizeWidget adaptiveGlassAppBar({
+  required BuildContext context,
+  Widget? title,
+  List<Widget>? actions,
+  PreferredSizeWidget? bottom,
+  Widget? leading,
+  bool automaticallyImplyLeading = true,
+  bool centerTitle = false,
+  double? titleSpacing,
+  double? elevation,
+}) {
+  if (!isCupertinoPlatform) {
+    return AppBar(
+      title: title,
+      actions: actions,
+      bottom: bottom,
+      leading: leading,
+      automaticallyImplyLeading: automaticallyImplyLeading,
+      centerTitle: centerTitle,
+      titleSpacing: titleSpacing,
+      elevation: elevation,
+    );
+  }
+
+  final isDark = context.isDarkMode;
+  return AppBar(
+    title: title,
+    actions: actions,
+    bottom: bottom,
+    leading: leading,
+    automaticallyImplyLeading: automaticallyImplyLeading,
+    centerTitle: centerTitle,
+    titleSpacing: titleSpacing,
+    backgroundColor: Colors.transparent,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+    flexibleSpace: ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          color: isDark
+              ? Colors.black.withValues(alpha: 0.5)
+              : Colors.white.withValues(alpha: 0.72),
+        ),
+      ),
+    ),
+  );
 }
