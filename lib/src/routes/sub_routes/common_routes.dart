@@ -44,9 +44,9 @@ class ReaderRoute extends GoRouteData {
         chapterId: chapterId,
         showReaderLayoutAnimation: showReaderLayoutAnimation,
       ),
-      transitionDuration: disableAnimations ? Duration.zero : const Duration(milliseconds: 300),
+      transitionDuration: disableAnimations ? Duration.zero : const Duration(milliseconds: 200),
       reverseTransitionDuration:
-          disableAnimations ? Duration.zero : const Duration(milliseconds: 300),
+          disableAnimations ? Duration.zero : const Duration(milliseconds: 200),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         if (disableAnimations) return child;
         Offset offset = Offset.zero;
@@ -58,11 +58,17 @@ class ReaderRoute extends GoRouteData {
           offset *= -1;
         }
 
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+
         return SlideTransition(
           position: Tween<Offset>(
             begin: offset,
             end: Offset.zero,
-          ).animate(animation),
+          ).animate(curved),
           child: child,
         );
       },
