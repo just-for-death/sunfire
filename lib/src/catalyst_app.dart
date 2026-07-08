@@ -14,8 +14,8 @@ import 'features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
 import 'global_providers/global_providers.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'routes/router_config.dart';
-import 'theme/komikko_custom_schemes.dart';
-import 'theme/komikku_ui_tokens.dart';
+import 'theme/catalyst_custom_schemes.dart';
+import 'theme/catalyst_ui_tokens.dart';
 import 'utils/extensions/custom_extensions.dart';
 import 'utils/platform/system_ui_style.dart';
 
@@ -73,7 +73,7 @@ class CatalystApp extends ConsumerWidget {
       chipTheme: ChipThemeData(
         selectedColor: harmonized.secondaryContainer,
         checkmarkColor: harmonized.onSecondaryContainer,
-        shape: RoundedRectangleBorder(borderRadius: KomikkuUiTokens.chipRadius),
+        shape: RoundedRectangleBorder(borderRadius: CatalystUiTokens.chipRadius),
         side: BorderSide.none,
       ),
       tabBarTheme: TabBarThemeData(
@@ -87,7 +87,7 @@ class CatalystApp extends ConsumerWidget {
         foregroundColor: harmonized.onPrimaryContainer,
       ),
       cardTheme: CardThemeData(
-        shape: RoundedRectangleBorder(borderRadius: KomikkuUiTokens.cardRadius),
+        shape: RoundedRectangleBorder(borderRadius: CatalystUiTokens.cardRadius),
         elevation: 0,
       ),
     );
@@ -108,9 +108,9 @@ class CatalystApp extends ConsumerWidget {
     ref.watch(extensionUpdateNotifierProvider);
 
     final customSchemeName = ref.watch(customFlexSchemeProvider);
-    final baseLight = customSchemeName != null && KomikkuCustomSchemes.lightSchemes.containsKey(customSchemeName)
+    final baseLight = customSchemeName != null && CatalystCustomSchemes.lightSchemes.containsKey(customSchemeName)
         ? FlexThemeData.light(
-            colors: KomikkuCustomSchemes.lightSchemes[customSchemeName]!,
+            colors: CatalystCustomSchemes.lightSchemes[customSchemeName]!,
             useMaterial3: true,
             useMaterial3ErrorColors: true,
           )
@@ -122,9 +122,9 @@ class CatalystApp extends ConsumerWidget {
             tabBarTheme: const TabBarThemeData(tabAlignment: TabAlignment.center),
           );
 
-    final baseDark = customSchemeName != null && KomikkuCustomSchemes.darkSchemes.containsKey(customSchemeName)
+    final baseDark = customSchemeName != null && CatalystCustomSchemes.darkSchemes.containsKey(customSchemeName)
         ? FlexThemeData.dark(
-            colors: KomikkuCustomSchemes.darkSchemes[customSchemeName]!,
+            colors: CatalystCustomSchemes.darkSchemes[customSchemeName]!,
             useMaterial3: true,
             useMaterial3ErrorColors: true,
             darkIsTrueBlack: isTrueBlack,

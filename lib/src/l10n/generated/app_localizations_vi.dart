@@ -188,8 +188,7 @@ class AppLocalizationsVi extends AppLocalizations {
   }
 
   @override
-  String get createBackupDescription =>
-      'Sao lưu thư viện bằng định dạng Tachiyomi';
+  String get createBackupDescription => 'Tạo bản sao lưu thư viện';
 
   @override
   String get createBackupTitle => 'Tạo bản sao lưu';
@@ -1249,7 +1248,7 @@ class AppLocalizationsVi extends AppLocalizations {
   String get restore => 'Khôi phục';
 
   @override
-  String get restoreBackupDescription => 'Khôi phục Suwayomi từ bản sao lưu';
+  String get restoreBackupDescription => 'Khôi phục thư viện từ bản sao lưu';
 
   @override
   String get restoreBackupTitle => 'Khôi phục bản sao lưu';
@@ -1319,7 +1318,7 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get serverUnreachableBody =>
-      'Make sure Suwayomi Server is running and the URL is correct in Settings.';
+      'Make sure your manga server is running and the URL is correct in Settings.';
 
   @override
   String get serverRetryButton => 'Retry';
@@ -1863,7 +1862,7 @@ class AppLocalizationsVi extends AppLocalizations {
   String get appearanceMaterialSchemes => 'Material Schemes';
 
   @override
-  String get appearanceKomikkuCustomSchemes => 'Komikku Custom Schemes';
+  String get appearanceCatalystCustomSchemes => 'Catalyst Custom Schemes';
 
   @override
   String get appearanceDynamicColor => 'Dynamic Color';

@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../../utils/misc/file_picker_utils.dart';
+import '../../../../../../utils/misc/user_facing_error.dart';
 import '../../../../../../utils/misc/toast/toast.dart';
 import '../../../../../../widgets/section_title.dart';
 import '../../../../../../widgets/settings/adaptive_list_tile.dart';
@@ -29,9 +30,7 @@ class BackupAndRestoreSection extends HookConsumerWidget {
       return null;
     }
     if (asyncPickedFile.hasError || asyncPickedFile.value == null) {
-      toast?.showError(
-        asyncPickedFile.error?.toString() ?? context.l10n.errorFilePick,
-      );
+      toast?.showError(userFacingError(context, asyncPickedFile.error));
       return null;
     }
     return asyncPickedFile.value;

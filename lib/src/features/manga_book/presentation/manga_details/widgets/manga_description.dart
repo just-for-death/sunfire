@@ -5,7 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../../constants/enum.dart';
 import '../../../../../routes/router_config.dart';
-import '../../../../../theme/komikku_ui_tokens.dart';
+import '../../../../../theme/catalyst_ui_tokens.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../utils/launch_url_in_web.dart';
 import '../../../../../utils/misc/toast/toast.dart';
@@ -44,9 +44,9 @@ class MangaDescription extends HookConsumerWidget {
         // ── Action Buttons
         Padding(
           padding: const EdgeInsets.fromLTRB(
-            KomikkuUiTokens.space16,
-            KomikkuUiTokens.space16,
-            KomikkuUiTokens.space16,
+            CatalystUiTokens.space16,
+            CatalystUiTokens.space16,
+            CatalystUiTokens.space16,
             0,
           ),
           child: Wrap(
@@ -97,10 +97,10 @@ class MangaDescription extends HookConsumerWidget {
 
         // ── Info card (Futon style)
         Padding(
-          padding: KomikkuUiTokens.screenPadding,
+          padding: CatalystUiTokens.screenPadding,
           child: Material(
             color: cs.surfaceContainerHigh,
-            borderRadius: KomikkuUiTokens.cardRadius,
+            borderRadius: CatalystUiTokens.cardRadius,
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
@@ -134,7 +134,7 @@ class MangaDescription extends HookConsumerWidget {
         ),
         const SizedBox(height: 10),
         Padding(
-          padding: KomikkuUiTokens.screenPadding,
+          padding: CatalystUiTokens.screenPadding,
           child: Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -164,7 +164,7 @@ class MangaDescription extends HookConsumerWidget {
         if (manga.description.isNotBlank) ...[
           const SizedBox(height: 12),
           Padding(
-            padding: KomikkuUiTokens.screenPadding,
+            padding: CatalystUiTokens.screenPadding,
             child: Stack(
               alignment: AlignmentDirectional.bottomStart,
               children: [
@@ -212,7 +212,7 @@ class MangaDescription extends HookConsumerWidget {
         if (isExpanded.value && manga.genre.isNotBlank) ...[
           const SizedBox(height: 10),
           Padding(
-            padding: KomikkuUiTokens.screenPadding,
+            padding: CatalystUiTokens.screenPadding,
             child: Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -231,7 +231,7 @@ class MangaDescription extends HookConsumerWidget {
         if (isExpanded.value) ...[
           const SizedBox(height: 10),
           Padding(
-            padding: KomikkuUiTokens.screenPadding,
+            padding: CatalystUiTokens.screenPadding,
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -333,7 +333,7 @@ class _ActionChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: filled ? cs.primaryContainer : cs.surfaceContainerHigh,
-          borderRadius: KomikkuUiTokens.chipRadius,
+          borderRadius: CatalystUiTokens.chipRadius,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -376,7 +376,7 @@ class _StatChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest,
-        borderRadius: KomikkuUiTokens.chipRadius,
+        borderRadius: CatalystUiTokens.chipRadius,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

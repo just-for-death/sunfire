@@ -20,7 +20,7 @@ class ContinueReadingCarousel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final allItems = groups.expand((g) => g.items).take(10).toList();
+    final allItems = inProgressHistoryItems(groups);
     if (allItems.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
 
     final cs = context.theme.colorScheme;
@@ -81,11 +81,13 @@ class _CarouselCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final progress = item.pageCount > 0
-        ? (item.lastPageRead / item.pageCount).clamp(0.0, 1.0)
-        : 0.0;
+    final progress = historyItemReadProgress(item);
+    final completed = historyItemIsCompleted(item);
 
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: '${item.manga.title}, ${(progress * 100).round()}%',
+      child: GestureDetector(
       onTap: () => openReaderFromHistoryItem(context, ref, item),
       child: Container(
         width: 120,
@@ -136,7 +138,9 @@ class _CarouselCard extends ConsumerWidget {
                         value: progress,
                         minHeight: 3,
                         backgroundColor: Colors.white24,
-                        color: colorScheme.primary,
+                        color: completed
+                            ? colorScheme.secondary
+                            : colorScheme.primary,
                       ),
                     ),
                   ],
@@ -146,6 +150,7 @@ class _CarouselCard extends ConsumerWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }
