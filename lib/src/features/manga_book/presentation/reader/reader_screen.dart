@@ -30,6 +30,7 @@ import '../../domain/chapter_page/chapter_page_model.dart';
 import '../../domain/manga/manga_model.dart';
 import '../manga_details/controller/manga_details_controller.dart';
 import 'controller/reader_controller.dart';
+import 'utils/reader_chapter_navigation.dart';
 import 'utils/reader_session.dart';
 import 'widgets/reader_mode/continuous_reader_mode.dart';
 import 'widgets/reader_mode/single_page_reader_mode.dart';
@@ -66,6 +67,17 @@ class ReaderScreen extends HookConsumerWidget {
     final chapterPages = ref.watch(chapterPagesProvider(chapterId: chapterId));
     final manga = ref.watch(mangaProvider);
     final chapter = ref.watch(chapterProviderWithIndex);
+    final chapterListEntry = ref
+        .watch(mangaChapterListProvider(mangaId: mangaId))
+        .valueOrNull
+        ?.where((c) => c.id == chapterId)
+        .firstOrNull;
+    final nextPrevPair = ref.watch(
+      getNextAndPreviousChaptersProvider(
+        mangaId: mangaId,
+        chapterId: chapterId,
+      ),
+    );
     final defaultReaderMode = ref.watch(readerModeKeyProvider);
     final ignoreSafeArea = ref.watch(readerIgnoreSafeAreaProvider).ifNull();
     final orientationLock = ref.watch(readerOrientationLockKeyProvider);
@@ -74,6 +86,15 @@ class ReaderScreen extends HookConsumerWidget {
     final pendingPageIndex = useRef<int?>(null);
     final lastFlushedPage = useRef<int?>(null);
     final resumeHintShown = useRef(false);
+
+    useEffect(() {
+      prefetchAdjacentReaderChapters(
+        ref,
+        next: nextPrevPair?.first,
+        previous: nextPrevPair?.second,
+      );
+      return null;
+    }, [nextPrevPair?.first?.id, nextPrevPair?.second?.id]);
 
     final updateLastRead = useCallback((int currentPage) async {
       final chapterValue = chapter.valueOrNull;
@@ -293,8 +314,8 @@ class ReaderScreen extends HookConsumerWidget {
     }
 
     Widget buildBody() {
+      final chapterData = chapter.valueOrNull ?? chapterListEntry;
       final isInitialLoading = (manga.isLoading && !manga.hasValue) ||
-          (chapter.isLoading && !chapter.hasValue) ||
           (chapterPages.isLoading && !chapterPages.hasValue);
 
       if (isInitialLoading) {
@@ -310,7 +331,7 @@ class ReaderScreen extends HookConsumerWidget {
           ),
         );
       }
-      if (chapter.hasError) {
+      if (chapter.hasError && chapterData == null) {
         return Emoticons(
           title: context.l10n.errorSomethingWentWrong,
           button: TextButton(
@@ -331,7 +352,6 @@ class ReaderScreen extends HookConsumerWidget {
       }
 
       final mangaData = manga.valueOrNull;
-      final chapterData = chapter.valueOrNull;
       final chapterPagesData = chapterPages.valueOrNull;
 
       if (mangaData == null) {

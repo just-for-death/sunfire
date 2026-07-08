@@ -21,7 +21,6 @@ import '../../../../../constants/db_keys.dart';
 import '../../../../../constants/enum.dart';
 import '../../../../../constants/reader_keyboard_shortcuts.dart';
 import '../../../../../global_providers/global_providers.dart';
-import '../../../../../routes/router_config.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../../../utils/launch_url_in_web.dart';
 import '../../../../../utils/misc/toast/toast.dart';
@@ -46,6 +45,7 @@ import '../../../widgets/chapter_actions/single_chapter_action_icon.dart';
 import '../../manga_details/controller/manga_details_controller.dart';
 import '../controller/reader_controller.dart';
 import '../utils/last_page_swipe_utils.dart';
+import '../utils/reader_chapter_navigation.dart';
 import '../utils/reader_haptics.dart';
 import '../utils/reader_session.dart';
 import 'directional_swipe_gesture_handler.dart';
@@ -134,6 +134,15 @@ class ReaderWrapper extends HookConsumerWidget {
         chapterId: chapter.id,
       ),
     );
+
+    useEffect(() {
+      prefetchAdjacentReaderChapters(
+        ref,
+        next: nextPrevChapterPair?.first,
+        previous: nextPrevChapterPair?.second,
+      );
+      return null;
+    }, [nextPrevChapterPair?.first?.id, nextPrevChapterPair?.second?.id]);
     final invertTap = ref.watch(invertTapProvider).ifNull();
 
     final bool volumeTap = ref.watch(volumeTapProvider).ifNull();
@@ -246,11 +255,13 @@ class ReaderWrapper extends HookConsumerWidget {
         final now = DateTime.now();
         final lastNav = lastChapterNavAt.value;
         if (lastNav != null &&
-            now.difference(lastNav) < const Duration(milliseconds: 600)) {
+            now.difference(lastNav) < const Duration(milliseconds: 200)) {
           return;
         }
         lastChapterNavAt.value = now;
-        ReaderRoute(
+        navigateToReaderChapter(
+          context,
+          ref,
           mangaId: manga.id,
           chapterId: chapterId,
           transVertical: _chapterTransVertical(scrollDirection),
@@ -258,7 +269,7 @@ class ReaderWrapper extends HookConsumerWidget {
             readerMode: resolvedReaderMode,
             goingToPrevious: goingToPrevious,
           ),
-        ).pushReplacement(context);
+        );
       },
       [resolvedReaderMode, scrollDirection, manga.id],
     );
