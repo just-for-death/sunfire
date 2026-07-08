@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../routes/router_config.dart';
+import '../manga_book/data/local_downloads/local_downloads_service.dart';
+import '../manga_book/domain/chapter/chapter_model.dart';
 import '../manga_book/presentation/manga_details/controller/manga_details_controller.dart';
 
 /// Routes notification taps to the correct shell tab / screen.
@@ -97,6 +99,19 @@ abstract final class NotificationNavigation {
     return int.tryParse(payload.substring(6));
   }
 
+  /// Picks the best chapter to open: in-progress unread → unread → latest.
+  static ChapterDto? _pickReaderChapter(List<ChapterDto> chapters) {
+    if (chapters.isEmpty) return null;
+    final unread = chapters.where((c) => c.isRead != true).toList();
+    if (unread.isNotEmpty) {
+      final inProgress =
+          unread.where((c) => c.lastPageRead > 0).toList(growable: false);
+      if (inProgress.isNotEmpty) return inProgress.first;
+      return unread.first;
+    }
+    return chapters.last;
+  }
+
   static Future<void> _openMangaOrReader(
     BuildContext context,
     int mangaId,
@@ -108,15 +123,29 @@ abstract final class NotificationNavigation {
           await container.read(mangaChapterListProvider(mangaId: mangaId).future);
       if (!context.mounted) return;
 
-      final unread = chapters?.where((c) => c.isRead != true).firstOrNull;
-      final target = unread ?? chapters?.firstOrNull;
+      final target = chapters == null ? null : _pickReaderChapter(chapters);
       if (target != null) {
         await ReaderRoute(mangaId: mangaId, chapterId: target.id)
             .push(context);
         return;
       }
     } catch (_) {
-      // Fall back to manga details.
+      // Fall back to offline chapters or manga details.
+      try {
+        final container = ProviderScope.containerOf(context);
+        final offlineChapters = await container
+            .read(localDownloadsServiceProvider)
+            .getOfflineChaptersForManga(mangaId);
+        if (!context.mounted) return;
+        final target = _pickReaderChapter(offlineChapters);
+        if (target != null) {
+          await ReaderRoute(mangaId: mangaId, chapterId: target.id)
+              .push(context);
+          return;
+        }
+      } catch (_) {
+        // Ignore offline lookup errors.
+      }
     }
     if (context.mounted) {
       context.go(MangaRoute(mangaId: mangaId).location);

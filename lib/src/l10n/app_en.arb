@@ -1417,6 +1417,23 @@
     "notificationsDisabledBanner": "Notifications are off — chapter updates won't alert you",
     "notificationsOpenSettingsA11y": "Open notification settings",
     "notificationsEnableA11y": "Enable notifications",
+    "notificationNewChaptersBody": "{count, plural, =1{1 new chapter available} other{{count} new chapters available}}",
+    "@notificationNewChaptersBody": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "notificationExtensionUpdatesTitle": "Extension Updates Available",
+    "notificationExtensionUpdatesBody": "{count, plural, =1{1 extension has updates — check Browse} other{{count} extensions have updates — check Browse}}",
+    "@notificationExtensionUpdatesBody": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
     "localDownloadToDevice": "Download offline to device",
     "localDownloadRemoveTooltip": "Remove offline download",
     "localDownloadRetryTooltip": "Retry offline download",

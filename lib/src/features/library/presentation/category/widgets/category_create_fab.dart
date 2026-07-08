@@ -23,9 +23,7 @@ class CategoryCreateFab extends HookConsumerWidget {
       onPressed: isLoading.value
           ? null
           : () {
-              showDialog(
-                context: context,
-                builder: (context) => EditCategoryDialog(
+              context.showAdaptiveAppDialog(builder: (context) => EditCategoryDialog(
                   createCategory: (newCategory) async {
                     try {
                       isLoading.value = (true);

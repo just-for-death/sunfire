@@ -10,6 +10,7 @@ import '../../../utils/extensions/custom_extensions.dart';
 import '../../../utils/platform/platform_ui.dart';
 import '../../../widgets/emoticons.dart';
 import 'history_controller.dart';
+import 'history_reader_navigation.dart';
 import 'history_settings_sheet.dart';
 import 'ios/ios_home_screen.dart';
 import 'widgets/continue_reading_carousel.dart';
@@ -35,6 +36,10 @@ class _AndroidHomeScreen extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final historyGroups = ref.watch(filteredHistoryGroupsProvider);
+    final listHistoryGroups = useMemoized(
+      () => historyGroupsExcludingCarousel(historyGroups),
+      [historyGroups],
+    );
     final historyState = ref.watch(readingHistoryProvider);
     final historyEnabled = ref.watch(historyEnabledProvider) ?? true;
     final hasMore = ref.watch(historyHasMoreProvider);
@@ -140,6 +145,7 @@ class _AndroidHomeScreen extends HookConsumerWidget {
               return SliverMainAxisGroup(
                 slivers: [
                   ContinueReadingCarousel(groups: historyGroups),
+                  if (listHistoryGroups.isNotEmpty)
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
                       12,
@@ -148,9 +154,9 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                       scrollBottomInset(),
                     ),
                     sliver: SliverList.builder(
-                      itemCount: historyGroups.length + (hasMore ? 1 : 0),
+                      itemCount: listHistoryGroups.length + (hasMore ? 1 : 0),
                       itemBuilder: (context, i) {
-                        if (i == historyGroups.length) {
+                        if (i == listHistoryGroups.length) {
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             child: Center(
@@ -168,7 +174,7 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                           );
                         }
                         return HistoryGroupWidget(
-                          group: historyGroups[i],
+                          group: listHistoryGroups[i],
                           onRemoveItem: (id) => ref
                               .read(readingHistoryProvider.notifier)
                               .removeFromHistory(id),

@@ -47,6 +47,21 @@
 		<string>????</string>
 		<key>CFBundleVersion</key>
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLName</key>
+				<string>com.catalyst.app</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>catalyst</string>
+				</array>
+			</dict>
+		</array>
+		<key>ITSAppUsesNonExemptEncryption</key>
+		<false/>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
 		<key>NSAppTransportSecurity</key>
@@ -65,7 +80,7 @@
 		<key>NSUserNotificationsUsageDescription</key>
 		<string>Catalyst sends notifications when new manga chapters are available from your server.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Catalyst needs photo library access to import backup files and images.</string>
+		<string>Catalyst needs access to import backup files and documents.</string>
 		<key>UIStatusBarHidden</key>
 		<false/>
 		<key>UISupportedInterfaceOrientations</key>

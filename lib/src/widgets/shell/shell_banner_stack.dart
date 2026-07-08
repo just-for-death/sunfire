@@ -74,7 +74,9 @@ class ShellBannerStack extends HookConsumerWidget {
                           .read(serverConnectivityProvider.notifier)
                           .checkServer(),
                       icon: Icon(
-                        Icons.refresh_rounded,
+                        isCupertinoPlatform
+                            ? CupertinoIcons.refresh
+                            : Icons.refresh_rounded,
                         color: cs.onErrorContainer,
                       ),
                       tooltip: context.l10n.serverOfflineRetryA11y,
@@ -85,7 +87,9 @@ class ShellBannerStack extends HookConsumerWidget {
                     IconButton(
                       onPressed: () => bannerDismissed.value = true,
                       icon: Icon(
-                        Icons.close_rounded,
+                        isCupertinoPlatform
+                            ? CupertinoIcons.xmark
+                            : Icons.close_rounded,
                         color: cs.onErrorContainer,
                       ),
                       tooltip: context.l10n.serverOfflineDismissA11y,

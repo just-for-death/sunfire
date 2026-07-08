@@ -117,28 +117,12 @@ class MigrationProgressScreen extends HookConsumerWidget {
       BuildContext context, WidgetRef ref) async {
     final l10n = context.l10n;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.cancelMigration),
-        content: Text(
-          l10n.cancelMigrationConfirmationInProgress,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.no),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: Text(l10n.yes),
-          ),
-        ],
-      ),
+    final confirmed = await context.showAdaptiveConfirm(
+      title: l10n.cancelMigration,
+      content: l10n.cancelMigrationConfirmationInProgress,
+      confirmLabel: l10n.yes,
+      cancelLabel: l10n.no,
+      isDestructive: true,
     );
 
     if (confirmed == true && context.mounted) {
