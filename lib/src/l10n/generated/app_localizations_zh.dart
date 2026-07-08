@@ -1306,6 +1306,31 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationsEnableA11y => 'Enable notifications';
 
   @override
+  String notificationNewChaptersBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count new chapters available',
+      one: '1 new chapter available',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get notificationExtensionUpdatesTitle => 'Extension Updates Available';
+
+  @override
+  String notificationExtensionUpdatesBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count extensions have updates — check Browse',
+      one: '1 extension has updates — check Browse',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get localDownloadToDevice => 'Download offline to device';
 
   @override

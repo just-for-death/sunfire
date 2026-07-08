@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
@@ -119,26 +121,13 @@ class HistoryItemTile extends ConsumerWidget {
         ),
         child: Icon(Icons.delete_outline_rounded, color: cs.onErrorContainer),
       ),
-      confirmDismiss: (_) async {
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text(context.l10n.removeFromHistory),
-            content: Text(context.l10n.removeFromHistoryConfirmation),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(context.l10n.cancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(context.l10n.remove),
-              ),
-            ],
-          ),
-        );
-        return confirmed ?? false;
-      },
+      confirmDismiss: (_) => context.showAdaptiveConfirm(
+        title: context.l10n.removeFromHistory,
+        content: context.l10n.removeFromHistoryConfirmation,
+        confirmLabel: context.l10n.remove,
+        cancelLabel: context.l10n.cancel,
+        isDestructive: true,
+      ),
       onDismissed: (_) => onRemove(),
       child: tile,
     );
@@ -165,7 +154,15 @@ class HistoryItemTile extends ConsumerWidget {
                     Navigator.pop(ctx);
                     switch (action) {
                       case HistoryMenuAction.removeFromHistory:
-                        _showRemoveDialog(context);
+                        unawaited(context.showAdaptiveConfirm(
+                          title: context.l10n.removeFromHistory,
+                          content: context.l10n.removeFromHistoryConfirmation,
+                          confirmLabel: context.l10n.remove,
+                          cancelLabel: context.l10n.cancel,
+                          isDestructive: true,
+                        ).then((confirmed) {
+                          if (confirmed) onRemove();
+                        }));
                       case HistoryMenuAction.viewManga:
                         _navigateToManga(context);
                     }
@@ -173,28 +170,6 @@ class HistoryItemTile extends ConsumerWidget {
                 )),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showRemoveDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.l10n.removeFromHistory),
-        content: Text(context.l10n.removeFromHistoryConfirmation),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(context.l10n.cancel)),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              onRemove();
-            },
-            child: Text(context.l10n.remove),
-          ),
-        ],
       ),
     );
   }

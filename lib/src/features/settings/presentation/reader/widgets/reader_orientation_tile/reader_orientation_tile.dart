@@ -37,9 +37,7 @@ class ReaderOrientationTile extends ConsumerWidget {
       leading: const Icon(Icons.screen_rotation_rounded),
       title: Text(context.l10n.readerOrientationLock),
       subtitle: lock != null ? Text(lock.toLocale(context)) : null,
-      onTap: () => showDialog(
-        context: context,
-        builder: (context) => RadioListPopup<ReaderOrientationLock>(
+      onTap: () => context.showAdaptiveAppDialog(builder: (context) => RadioListPopup<ReaderOrientationLock>(
           title: context.l10n.readerOrientationLock,
           optionList: ReaderOrientationLock.values,
           value: lock ?? ReaderOrientationLock.auto,

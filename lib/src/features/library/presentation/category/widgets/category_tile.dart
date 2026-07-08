@@ -10,7 +10,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../../constants/app_sizes.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
-import '../../../../../widgets/popup_widgets/pop_button.dart';
 import '../../../domain/category/category_model.dart';
 import '../controller/edit_category_controller.dart';
 import 'edit_category_dialog.dart';
@@ -63,9 +62,7 @@ class CategoryTile extends HookConsumerWidget {
                 const Spacer(),
                 IconButton(
                   visualDensity: VisualDensity.compact,
-                  onPressed: () => showDialog(
-                    context: context,
-                    builder: (context) => EditCategoryDialog(
+                  onPressed: () => context.showAdaptiveAppDialog(builder: (context) => EditCategoryDialog(
                       category: category,
                       editCategory: (updated) => ref
                           .read(categoryControllerProvider.notifier)
@@ -78,27 +75,20 @@ class CategoryTile extends HookConsumerWidget {
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   onPressed: !isDefault
-                      ? () => showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: Text(context.l10n.deleteCategoryTitle),
-                              content:
-                                  Text(context.l10n.deleteCategoryDescription),
-                              actions: [
-                                const PopButton(),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    ref
-                                        .read(
-                                            categoryControllerProvider.notifier)
-                                        .deleteCategory(category.id);
-                                    Navigator.pop(context);
-                                  },
-                                  child: Text(context.l10n.delete),
-                                ),
-                              ],
-                            ),
-                          )
+                      ? () async {
+                          final confirmed = await context.showAdaptiveConfirm(
+                            title: context.l10n.deleteCategoryTitle,
+                            content: context.l10n.deleteCategoryDescription,
+                            confirmLabel: context.l10n.delete,
+                            cancelLabel: context.l10n.cancel,
+                            isDestructive: true,
+                          );
+                          if (confirmed) {
+                            ref
+                                .read(categoryControllerProvider.notifier)
+                                .deleteCategory(category.id);
+                          }
+                        }
                       : null,
                   icon: const Icon(Icons.delete_rounded),
                   color: Colors.grey,

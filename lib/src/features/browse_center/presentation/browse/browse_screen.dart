@@ -122,9 +122,7 @@ class BrowseScreen extends HookConsumerWidget {
                     ),
                     if (isExtensions) const InstallExtensionFile(),
                     IconButton(
-                      onPressed: () => showDialog(
-                        context: context,
-                        builder: (context) => isExtensions
+                      onPressed: () => context.showAdaptiveAppDialog(builder: (context) => isExtensions
                             ? const ExtensionLanguageFilterDialog()
                             : const SourceLanguageFilter(),
                       ),

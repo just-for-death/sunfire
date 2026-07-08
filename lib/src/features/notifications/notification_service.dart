@@ -58,7 +58,7 @@ class NotificationService {
 
     const initSettings = InitializationSettings(
       linux: LinuxInitializationSettings(defaultActionName: 'Open'),
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings('@mipmap/launcher_icon'),
       iOS: DarwinInitializationSettings(),
       macOS: DarwinInitializationSettings(),
     );
@@ -119,6 +119,7 @@ class NotificationService {
   Future<void> showMangaUpdateNotification({
     required MangaDto manga,
     required int chaptersCount,
+    required String body,
   }) async {
     if (!_initialized) await init();
     if (chaptersCount <= 0) return;
@@ -151,15 +152,14 @@ class NotificationService {
       }
     }
 
-    final body =
-        '$chaptersCount new ${chaptersCount == 1 ? 'chapter' : 'chapters'} available';
+    final bodyText = body;
 
     await _plugin.show(
       // Use manga ID as the notification ID to allow multiple separate notifications.
       // We offset it to avoid collisions with other static notification IDs.
       2000 + manga.id.toInt(),
       manga.title,
-      body,
+      bodyText,
       payload: 'manga:${manga.id}',
       NotificationDetails(
         linux: LinuxNotificationDetails(
@@ -177,7 +177,7 @@ class NotificationService {
         iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
-          presentSound: false,
+          presentSound: true,
           attachments: iconPath != null
               ? [DarwinNotificationAttachment(iconPath)]
               : null,
@@ -189,17 +189,16 @@ class NotificationService {
   /// Show a notification when extensions have pending updates.
   Future<void> showExtensionUpdateNotification({
     required int updateCount,
+    required String title,
+    required String body,
   }) async {
     if (!_initialized) await init();
     if (updateCount <= 0) return;
     if (!await MobilePermissions.ensureNotificationPermission()) return;
 
-    final body =
-        '$updateCount ${updateCount == 1 ? 'extension has' : 'extensions have'} updates — check Browse';
-
     await _plugin.show(
       _extensionUpdateId,
-      'Extension Updates Available',
+      title,
       body,
       NotificationDetails(
         linux: LinuxNotificationDetails(
@@ -215,7 +214,7 @@ class NotificationService {
         iOS: const DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
-          presentSound: false,
+          presentSound: true,
         ),
       ),
     );
