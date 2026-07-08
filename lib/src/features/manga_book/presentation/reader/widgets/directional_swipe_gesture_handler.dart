@@ -14,6 +14,7 @@ import '../../../../../utils/extensions/custom_extensions.dart';
 import '../../../domain/chapter/chapter_model.dart';
 import '../../../domain/chapter_page/chapter_page_model.dart';
 import '../utils/last_page_swipe_utils.dart';
+import '../utils/reader_session.dart';
 
 /// A specialized widget for handling directional swipe gestures in the reader
 /// Extracted from ReaderView to improve performance and maintainability
@@ -267,6 +268,7 @@ class DirectionalSwipeGestureHandler extends HookWidget {
         if (onNextChapter != null) {
           onNextChapter!();
         } else {
+          ReaderSession.enter();
           ReaderRoute(
             mangaId: mangaId,
             chapterId: prevNextChapterPair!.first!.id,
@@ -289,6 +291,7 @@ class DirectionalSwipeGestureHandler extends HookWidget {
         if (onPreviousChapter != null) {
           onPreviousChapter!();
         } else {
+          ReaderSession.enter();
           ReaderRoute(
             mangaId: mangaId,
             chapterId: prevNextChapterPair!.second!.id,
