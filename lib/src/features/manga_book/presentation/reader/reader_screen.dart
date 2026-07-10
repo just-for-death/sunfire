@@ -72,6 +72,8 @@ class ReaderScreen extends HookConsumerWidget {
         .valueOrNull
         ?.where((c) => c.id == chapterId)
         .firstOrNull;
+    // Same fallback as [buildBody] — list entry when chapter detail provider fails.
+    final resolvedChapter = chapter.valueOrNull ?? chapterListEntry;
     final nextPrevPair = ref.watch(
       getNextAndPreviousChaptersProvider(
         mangaId: mangaId,
@@ -97,7 +99,7 @@ class ReaderScreen extends HookConsumerWidget {
     }, [nextPrevPair?.first?.id, nextPrevPair?.second?.id]);
 
     final updateLastRead = useCallback((int currentPage) async {
-      final chapterValue = chapter.valueOrNull;
+      final chapterValue = resolvedChapter;
       final chapterPagesValue = chapterPages.valueOrNull;
       if (chapterValue == null || chapterPagesValue == null) return;
 
@@ -151,7 +153,7 @@ class ReaderScreen extends HookConsumerWidget {
           ref.invalidate(readingHistoryProvider);
         }
       }
-    }, [chapter.valueOrNull, chapterPages.valueOrNull]);
+    }, [resolvedChapter, chapterPages.valueOrNull]);
 
     final updateLastReadRef = useRef<Future<void> Function(int)?>(null);
     updateLastReadRef.value = updateLastRead;
@@ -186,7 +188,7 @@ class ReaderScreen extends HookConsumerWidget {
     }, [orientationLock]);
 
     useEffect(() {
-      final chapterData = chapter.valueOrNull;
+      final chapterData = resolvedChapter;
       final chapterPagesData = chapterPages.valueOrNull;
       if (resumeHintShown.value ||
           chapterData == null ||
@@ -207,11 +209,11 @@ class ReaderScreen extends HookConsumerWidget {
             );
       });
       return null;
-    }, [chapter.valueOrNull?.id, chapterPages.valueOrNull?.pages.length]);
+    }, [resolvedChapter?.id, chapterPages.valueOrNull?.pages.length]);
 
     final onPageChanged = useCallback<AsyncValueSetter<int>>(
       (int index) async {
-        final chapterValue = chapter.valueOrNull;
+        final chapterValue = resolvedChapter;
         final chapterPagesValue = chapterPages.valueOrNull;
         if (chapterValue == null || chapterPagesValue == null) return;
 
@@ -235,7 +237,7 @@ class ReaderScreen extends HookConsumerWidget {
           );
         }
       },
-      [chapter, chapterPages],
+      [resolvedChapter, chapterPages, updateLastRead],
     );
 
     Widget buildReader({
@@ -316,7 +318,7 @@ class ReaderScreen extends HookConsumerWidget {
     }
 
     Widget buildBody() {
-      final chapterData = chapter.valueOrNull ?? chapterListEntry;
+      final chapterData = resolvedChapter;
       final isInitialLoading = (manga.isLoading && !manga.hasValue) ||
           (chapterPages.isLoading && !chapterPages.hasValue);
 

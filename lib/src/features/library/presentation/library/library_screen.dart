@@ -5,14 +5,17 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../constants/app_sizes.dart';
+import '../../../../global_providers/tablet_selection_providers.dart';
+import '../../../../routes/router_config.dart';
 import '../../../../theme/catalyst_ui_tokens.dart';
-
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/misc/toast/toast.dart';
 import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/emoticons.dart';
+import '../../../../widgets/layout/tablet_split_layout.dart';
 import '../../../../widgets/shell/ios/glass_app_bar.dart';
 import '../../../manga_book/widgets/update_status_popup_menu.dart';
+import '../../domain/category/category_model.dart';
 import '../category/controller/edit_category_controller.dart';
 import 'category_manga_list.dart';
 import 'controller/library_controller.dart';
@@ -42,6 +45,13 @@ class LibraryScreen extends HookConsumerWidget {
               onPressed: () => ref.refresh(categoryControllerProvider.future),
               child: Text(context.l10n.refresh),
             ),
+          );
+        }
+        if (TabletSplitLayout.shouldUse(context)) {
+          return _LibraryTabletSplit(
+            categories: data!,
+            initialCategoryId: categoryId,
+            showSearch: showSearch,
           );
         }
         return DefaultTabController(
@@ -217,6 +227,109 @@ class _LibraryFilterChips extends ConsumerWidget {
       onSelected: (_) => onTap(),
       showCheckmark: false,
       shape: RoundedRectangleBorder(borderRadius: CatalystUiTokens.chipRadius),
+    );
+  }
+}
+
+class _LibraryTabletSplit extends HookConsumerWidget {
+  const _LibraryTabletSplit({
+    required this.categories,
+    required this.initialCategoryId,
+    required this.showSearch,
+  });
+
+  final List<CategoryDto> categories;
+  final int initialCategoryId;
+  final ValueNotifier<bool> showSearch;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stored = ref.watch(tabletLibraryCategorySelectionProvider);
+    final initialIndex = min(
+      initialCategoryId.getValueOnNullOrNegative(),
+      categories.length - 1,
+    );
+    final selectedId = stored ?? categories[initialIndex].id;
+
+    useEffect(() {
+      if (stored == null && categories.isNotEmpty) {
+        Future.microtask(() {
+          ref.read(tabletLibraryCategorySelectionProvider.notifier).state =
+              categories[initialIndex].id;
+        });
+      }
+      return null;
+    }, [categories]);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: !showSearch.value
+            ? Text(context.l10n.library)
+            : SearchBar(
+                hintText: context.l10n.library,
+                leading: const Icon(Icons.search_rounded),
+                onChanged: (val) =>
+                    ref.read(libraryQueryProvider.notifier).update(val),
+                trailing: [
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () {
+                      ref.read(libraryQueryProvider.notifier).update('');
+                      showSearch.value = false;
+                    },
+                  ),
+                ],
+                elevation: const WidgetStatePropertyAll(0),
+                backgroundColor: WidgetStatePropertyAll(
+                  context.theme.colorScheme.surfaceContainerHigh,
+                ),
+              ),
+        actions: showSearch.value
+            ? [const SizedBox.shrink()]
+            : [
+                IconButton(
+                  onPressed: () => showSearch.value = true,
+                  icon: const Icon(Icons.search_rounded),
+                ),
+                Builder(
+                  builder: (context) => IconButton(
+                    onPressed: () => Scaffold.of(context).openEndDrawer(),
+                    icon: const Icon(Icons.tune_rounded),
+                  ),
+                ),
+                UpdateStatusPopupMenu(
+                  getCategory: () =>
+                      categories.where((c) => c.id == selectedId).firstOrNull,
+                ),
+              ],
+      ),
+      endDrawer: const Drawer(
+        width: kDrawerWidth,
+        shape: RoundedRectangleBorder(),
+        child: LibraryMangaOrganizer(),
+      ),
+      body: TabletSplitLayout(
+        master: ListView(
+          children: categories.map((category) {
+            final selected = category.id == selectedId;
+            return ListTile(
+              selected: selected,
+              title: Text(category.name),
+              trailing: Text('${category.mangas.totalCount}'),
+              onTap: () {
+                ref
+                    .read(tabletLibraryCategorySelectionProvider.notifier)
+                    .state = category.id;
+                LibraryRoute(categoryId: category.id).go(context);
+              },
+            );
+          }).toList(),
+        ),
+        detail: CategoryMangaList(
+          categoryId: selectedId.getValueOnNullOrNegative(),
+        ),
+        showDetail: true,
+      ),
     );
   }
 }
