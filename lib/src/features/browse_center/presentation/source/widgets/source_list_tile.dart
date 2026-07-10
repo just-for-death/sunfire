@@ -8,8 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../../constants/app_sizes.dart';
+import '../../../../../global_providers/tablet_selection_providers.dart';
 import '../../../../../routes/router_config.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
+import '../../../../../widgets/layout/tablet_split_layout.dart';
 import '../../../../../widgets/server_image.dart';
 import '../../../domain/source/source_model.dart';
 import '../controller/source_controller.dart';
@@ -19,16 +21,34 @@ class SourceListTile extends ConsumerWidget {
 
   final SourceDto source;
 
+  void _openSource(
+    BuildContext context,
+    WidgetRef ref,
+    SourceType sourceType,
+  ) {
+    ref.read(sourceLastUsedProvider.notifier).update(source.id);
+    if (TabletSplitLayout.shouldUse(context)) {
+      ref.read(tabletBrowseSourceSelectionProvider.notifier).state = (
+        sourceId: source.id,
+        sourceType: sourceType,
+      );
+      return;
+    }
+    SourceTypeRoute(
+      sourceId: source.id,
+      sourceType: sourceType,
+    ).go(context);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final selection = ref.watch(tabletBrowseSourceSelectionProvider);
+    final isSelected = TabletSplitLayout.shouldUse(context) &&
+        selection?.sourceId == source.id;
+
     return ListTile(
-      onTap: (() async {
-        ref.read(sourceLastUsedProvider.notifier).update(source.id);
-        SourceTypeRoute(
-          sourceId: source.id,
-          sourceType: SourceType.POPULAR,
-        ).go(context);
-      }),
+      selected: isSelected,
+      onTap: () => _openSource(context, ref, SourceType.POPULAR),
       leading: ClipRRect(
         borderRadius: KBorderRadius.r8.radius,
         child: ServerImage(
@@ -42,13 +62,8 @@ class SourceListTile extends ConsumerWidget {
           : null,
       trailing: (source.supportsLatest.ifNull())
           ? TextButton(
-              onPressed: () async {
-                ref.read(sourceLastUsedProvider.notifier).update(source.id);
-                SourceTypeRoute(
-                  sourceId: source.id,
-                  sourceType: SourceType.LATEST,
-                ).go(context);
-              },
+              onPressed: () =>
+                  _openSource(context, ref, SourceType.LATEST),
               child: Text(context.l10n.latest),
             )
           : null,

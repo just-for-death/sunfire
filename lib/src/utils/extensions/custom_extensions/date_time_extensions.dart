@@ -28,7 +28,7 @@ enum DateGroupKeys implements LocaleEnum {
       case yesterday:
         return context.l10n.yesterday;
       case recentlyRead:
-        return context.l10n.recentlyRead;
+        return context.l10n.historyRecent;
     }
   }
 }
