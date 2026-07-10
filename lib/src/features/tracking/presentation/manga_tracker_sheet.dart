@@ -11,6 +11,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../routes/router_config.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../../../utils/misc/toast/toast.dart';
+import '../../../utils/platform/platform_ui.dart';
 import '../data/tracker_repository.dart';
 import '../domain/tracker_model.dart';
 import 'controller/tracker_controller.dart';
@@ -23,13 +24,9 @@ Future<void> showMangaTrackerSheet(
   int mangaId,
   String mangaTitle,
 ) {
-  return showModalBottomSheet(
+  return showAdaptiveBottomSheet(
     context: context,
     isScrollControlled: true,
-    useSafeArea: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
     builder: (_) => MangaTrackerSheet(
       mangaId: mangaId,
       mangaTitle: mangaTitle,

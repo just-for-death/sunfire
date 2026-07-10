@@ -62,7 +62,7 @@ class HistoryGroup with _$HistoryGroup {
     } else if (title == DateGroupKeys.yesterday.value) {
       return context.l10n.yesterday;
     } else if (title == DateGroupKeys.recentlyRead.value) {
-      return context.l10n.recentlyRead;
+      return context.l10n.historyRecent;
     }
 
     // Handle weekday keys
