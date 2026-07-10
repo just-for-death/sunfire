@@ -85,7 +85,7 @@ flutter build ipa --release --no-codesign                    # unsigned IPA (mac
 flutter run -d linux                                       # Linux desktop
 ```
 
-Release Android builds ship with R8 minification disabled (`minifyEnabled false`) because it previously broke the release splash screen. ProGuard rules in `android/app/proguard-rules.pro` are kept for when minification is re-enabled.
+Release Android builds use R8 minification (`minifyEnabled true`). If Gradle fails at `minifyReleaseWithR8` or the app hangs on splash, check `android/app/proguard-rules.pro` for missing `-keep` rules.
 
 CI builds are defined in [`codemagic.yaml`](codemagic.yaml) (`ios-release`, `android-release`, and tag-triggered `all-release`).
 

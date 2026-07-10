@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../domain/history_group.dart';
+import '../../domain/history_item.dart';
 import 'history_item_tile.dart';
 
 class HistoryGroupWidget extends StatelessWidget {
@@ -9,10 +10,12 @@ class HistoryGroupWidget extends StatelessWidget {
     super.key,
     required this.group,
     required this.onRemoveItem,
+    this.onItemTap,
   });
 
   final HistoryGroup group;
   final Function(int chapterId) onRemoveItem;
+  final ValueChanged<HistoryItemDto>? onItemTap;
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +49,9 @@ class HistoryGroupWidget extends StatelessWidget {
           itemBuilder: (context, i) => HistoryItemTile(
             item: group.items[i],
             onRemove: () => onRemoveItem(group.items[i].id),
+            onTap: onItemTap != null
+                ? () => onItemTap!(group.items[i])
+                : null,
           ),
         ),
         const SizedBox(height: 4),

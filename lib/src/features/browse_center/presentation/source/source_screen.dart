@@ -9,9 +9,13 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../constants/language_list.dart';
+import '../../../../global_providers/tablet_selection_providers.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/misc/toast/toast.dart';
 import '../../../../widgets/emoticons.dart';
+import '../../../../widgets/layout/tablet_split_layout.dart';
+import '../../domain/source/source_model.dart';
+import '../source_manga_list/source_manga_list_screen.dart';
 import 'controller/source_controller.dart';
 import 'widgets/source_list_tile.dart';
 
@@ -53,10 +57,54 @@ class SourceScreen extends HookConsumerWidget {
             ),
           );
         }
-        return RefreshIndicator(
+        final sourceList = RefreshIndicator(
           onRefresh: refresh,
           child: CustomScrollView(
-            slivers: [
+            slivers: _sourceSlivers(
+              context,
+              lastUsed: lastUsed,
+              allSource: allSource,
+              sourceMap: sourceMap,
+              localSource: localSource,
+            ),
+          ),
+        );
+
+        if (TabletSplitLayout.shouldUse(context)) {
+          final selection = ref.watch(tabletBrowseSourceSelectionProvider);
+          return TabletSplitLayout(
+            master: sourceList,
+            detail: selection != null
+                ? SourceMangaListScreen(
+                    sourceId: selection.sourceId,
+                    sourceType: selection.sourceType,
+                  )
+                : Center(
+                    child: Text(
+                      context.l10n.selectSource,
+                      style: context.theme.textTheme.titleMedium?.copyWith(
+                        color: context.theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+            showDetail: selection != null,
+          );
+        }
+
+        return sourceList;
+      },
+      refresh: refresh,
+    );
+  }
+
+  static List<Widget> _sourceSlivers(
+    BuildContext context, {
+    required List<SourceDto>? lastUsed,
+    required List<SourceDto>? allSource,
+    required Map<String, List<SourceDto>> sourceMap,
+    required List<SourceDto>? localSource,
+  }) {
+    return [
               if (lastUsed.isNotBlank) ...[
                 SliverToBoxAdapter(
                   child: Padding(
@@ -144,11 +192,6 @@ class SourceScreen extends HookConsumerWidget {
                   child: SourceListTile(source: localSource!.first),
                 )
               ],
-            ],
-          ),
-        );
-      },
-      refresh: refresh,
-    );
+    ];
   }
 }

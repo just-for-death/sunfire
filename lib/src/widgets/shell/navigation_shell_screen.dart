@@ -14,6 +14,7 @@ import '../../features/about/presentation/about/widget/app_update_dialog.dart';
 import '../../features/settings/presentation/server/server_connectivity.dart';
 import '../../utils/extensions/custom_extensions.dart';
 import '../../utils/misc/toast/toast.dart';
+import 'android/android_navigation_shell.dart';
 import 'big_screen_navigation_bar.dart';
 import 'ios/ios_navigation_shell.dart';
 import 'shell_banner_stack.dart';
@@ -85,7 +86,20 @@ class NavigationShellScreen extends HookConsumerWidget {
       );
     }
 
-    // Android tablet → rail
+    // Android → glass shell (phone bottom nav, tablet rail)
+    final isAndroid = !kIsWeb && Platform.isAndroid;
+    if (isAndroid) {
+      return ServerAwareWrapper(
+        showOfflineBanner: false,
+        child: AndroidNavigationShell(
+          onDestinationSelected: onDestinationSelected,
+          compactBottomNav: AppBreakpoints.isCompactNav(context),
+          child: child,
+        ),
+      );
+    }
+
+    // Desktop / other → Material You bottom nav or rail
     if (AppBreakpoints.isTabletLayout(context)) {
       return ServerAwareWrapper(
         showOfflineBanner: false,
@@ -120,7 +134,7 @@ class NavigationShellScreen extends HookConsumerWidget {
       );
     }
 
-    // Android phone → Material You bottom nav
+    // Desktop / other → Material You bottom nav or rail
     final compactBottomNav = AppBreakpoints.isCompactNav(context);
     return ServerAwareWrapper(
       showOfflineBanner: false,

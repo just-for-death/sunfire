@@ -38,8 +38,35 @@ Future<T?> showAdaptiveBottomSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool useRootNavigator = true,
+  bool isScrollControlled = false,
+  double scrollControlledHeightFactor = 0.92,
+  bool? useSafeArea,
 }) {
+  final effectiveUseSafeArea = useSafeArea ?? isScrollControlled;
+
   if (isCupertinoPlatform) {
+    if (isScrollControlled) {
+      return showCupertinoModalPopup<T>(
+        context: context,
+        useRootNavigator: useRootNavigator,
+        builder: (ctx) => Align(
+          alignment: Alignment.bottomCenter,
+          child: FractionallySizedBox(
+            heightFactor: scrollControlledHeightFactor,
+            widthFactor: 1,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+              child: Material(
+                color: CupertinoColors.systemBackground.resolveFrom(ctx),
+                child: effectiveUseSafeArea
+                    ? SafeArea(top: true, child: builder(ctx))
+                    : builder(ctx),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return showCupertinoModalPopup<T>(
       context: context,
       useRootNavigator: useRootNavigator,
@@ -49,6 +76,8 @@ Future<T?> showAdaptiveBottomSheet<T>({
   return showModalBottomSheet<T>(
     context: context,
     useRootNavigator: useRootNavigator,
+    isScrollControlled: isScrollControlled,
+    useSafeArea: effectiveUseSafeArea,
     showDragHandle: true,
     builder: builder,
   );
