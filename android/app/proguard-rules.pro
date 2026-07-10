@@ -50,3 +50,22 @@
 # path_provider / file access plugins
 -keep class io.flutter.plugins.pathprovider.** { *; }
 -keep class io.flutter.plugins.sharedpreferences.** { *; }
+
+# Android 12+ splash screen
+-keep class androidx.core.splashscreen.** { *; }
+
+# flutter_native_splash
+-keep class net.jonhanson.flutter_native_splash.** { *; }
+
+# app_links / deep linking
+-keep class com.llfbandit.app_links.** { *; }
+
+# volume key plugin
+-keep class dev.darttools.flutter_android_volume_keydown.** { *; }
+
+# cached_network_image / flutter_cache_manager
+-keep class com.github.bluefireteam.** { *; }
+-dontwarn com.github.bluefireteam.**
+
+# wakelock
+-keep class dev.fluttercommunity.plus.wakelock.** { *; }

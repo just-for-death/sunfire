@@ -6,14 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../global_providers/tablet_selection_providers.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../../../utils/platform/platform_ui.dart';
 import '../../../widgets/emoticons.dart';
+import '../../../widgets/layout/tablet_split_layout.dart';
+import '../domain/history_item.dart';
 import 'history_controller.dart';
 import 'history_reader_navigation.dart';
 import 'history_settings_sheet.dart';
 import 'ios/ios_home_screen.dart';
 import 'widgets/continue_reading_carousel.dart';
+import 'widgets/history_detail_pane.dart';
 import 'widgets/history_group_widget.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -69,8 +73,28 @@ class _AndroidHomeScreen extends HookConsumerWidget {
       }
     }
 
-    return Scaffold(
-      body: NotificationListener<ScrollNotification>(
+    final isTabletSplit = TabletSplitLayout.shouldUse(context);
+    final selectedItem = ref.watch(tabletHistorySelectionProvider);
+
+    useEffect(() {
+      if (!isTabletSplit || listHistoryGroups.isEmpty) return null;
+      if (selectedItem == null) {
+        final first =
+            listHistoryGroups.expand((g) => g.items).firstOrNull;
+        if (first != null) {
+          Future.microtask(() {
+            ref.read(tabletHistorySelectionProvider.notifier).state = first;
+          });
+        }
+      }
+      return null;
+    }, [isTabletSplit, listHistoryGroups]);
+
+    void onHistoryItemTap(HistoryItemDto item) {
+      ref.read(tabletHistorySelectionProvider.notifier).state = item;
+    }
+
+    final scrollContent = NotificationListener<ScrollNotification>(
         onNotification: (notification) {
           if (notification.metrics.extentAfter < 240) {
             unawaited(tryLoadMore());
@@ -178,6 +202,8 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                           onRemoveItem: (id) => ref
                               .read(readingHistoryProvider.notifier)
                               .removeFromHistory(id),
+                          onItemTap:
+                              isTabletSplit ? onHistoryItemTap : null,
                         );
                       },
                     ),
@@ -197,7 +223,18 @@ class _AndroidHomeScreen extends HookConsumerWidget {
           ),
         ],
         ),
-      ),
+      );
+
+    return Scaffold(
+      body: isTabletSplit
+          ? TabletSplitLayout(
+              master: scrollContent,
+              detail: selectedItem != null
+                  ? HistoryDetailPane(item: selectedItem)
+                  : const SizedBox.shrink(),
+              showDetail: selectedItem != null,
+            )
+          : scrollContent,
     );
   }
 }
