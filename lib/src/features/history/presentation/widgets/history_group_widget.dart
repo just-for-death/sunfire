@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../constants/app_sizes.dart';
-import '../../../../theme/catalyst_ui_tokens.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../domain/history_group.dart';
 import 'history_item_tile.dart';
@@ -23,25 +21,23 @@ class HistoryGroupWidget extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
           child: Text(
             group.getLocalizedTitle(context),
-            style: context.theme.textTheme.labelLarge?.copyWith(
+            style: context.theme.textTheme.titleSmall?.copyWith(
               color: context.theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
+              letterSpacing: 0.3,
             ),
           ),
         ),
-        GridView.builder(
+        ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: mangaCoverGridDelegate(
-            CatalystUiTokens.gridPreferredItemWidth,
-            showTitle: false,
-          ),
           itemCount: group.items.length,
+          separatorBuilder: (_, __) => const Divider(height: 1, indent: 82),
           itemBuilder: (context, i) => HistoryItemTile(
+            key: ValueKey('history-item-${group.items[i].id}'),
             item: group.items[i],
             onRemove: () => onRemoveItem(group.items[i].id),
           ),

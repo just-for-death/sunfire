@@ -1,10 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../routes/router_config.dart';
-import '../../../../theme/catalyst_ui_tokens.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/server_image.dart';
@@ -24,94 +24,138 @@ class HistoryItemTile extends ConsumerWidget {
 
   bool get _isCompleted => historyItemIsCompleted(item);
 
-  int get _readPercentInt => (historyItemReadProgress(item) * 100).round();
+  String _formatTime(DateTime dt) {
+    final hour = dt.hour.toString().padLeft(2, '0');
+    final minute = dt.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = context.theme.colorScheme;
-    const radius = CatalystUiTokens.coverRadius;
-    final tile = Stack(
-      fit: StackFit.expand,
-      children: [
-        ClipRRect(
-          borderRadius: radius,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Cover image
-              ServerImage(
-                imageUrl: item.manga.thumbnailUrl ?? '',
-                fit: BoxFit.cover,
-              ),
-              // Gradient overlay at bottom
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(6, 24, 6, 6),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.85),
-                      ],
-                    ),
-                  ),
-                  child: Text(
-                    item.manga.title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      height: 1.2,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+    final progress = historyItemReadProgress(item);
+
+    final tile = InkWell(
+      onTap: () => _navigateToReader(context, ref),
+      onLongPress: () => _showMenu(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            // Manga cover thumbnail
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 52,
+                height: 74,
+                child: ServerImage(
+                  imageUrl: item.manga.thumbnailUrl ?? '',
+                  fit: BoxFit.cover,
                 ),
               ),
-              // Read % badge (top-right) — Futon style
-              if (item.pageCount > 0)
-                Positioned(
-                  top: 6,
-                  right: 6,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _isCompleted
-                          ? cs.secondary.withValues(alpha: 0.9)
-                          : cs.primary.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(20),
+            ),
+            const SizedBox(width: 14),
+            // Details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.manga.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
                     ),
-                    child: Text(
-                      _isCompleted ? '✓' : '$_readPercentInt%',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    item.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      if (item.pageCount > 0) ...[
+                        Text(
+                          _isCompleted
+                              ? context.l10n.completed
+                              : 'Page ${item.lastPageRead + 1}/${item.pageCount}',
+                          style: context.theme.textTheme.labelSmall?.copyWith(
+                            color: _isCompleted ? cs.primary : cs.outline,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      if (item.readAt != null)
+                        Text(
+                          _formatTime(item.readAt!),
+                          style: context.theme.textTheme.labelSmall?.copyWith(
+                            color: cs.outline,
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (progress > 0 && !_isCompleted) ...[
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 3,
+                        backgroundColor: cs.surfaceContainerHighest,
+                        valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
                       ),
                     ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        // Hover / ripple / focus affordance for pointer devices.
-        Positioned.fill(
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              borderRadius: radius,
-              onTap: () => _navigateToReader(context, ref),
-              onLongPress: () => _showMenu(context),
+                  ],
+                ],
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            // Play / Resume Button
+            IconButton(
+              onPressed: () => _navigateToReader(context, ref),
+              icon: Icon(
+                isCupertinoPlatform
+                    ? CupertinoIcons.play_circle_fill
+                    : Icons.play_circle_fill_rounded,
+                color: cs.primary,
+                size: 32,
+              ),
+              tooltip: context.l10n.historyContinueReading,
+            ),
+            // Delete Action
+            IconButton(
+              onPressed: () async {
+                final ok = await context.showAdaptiveConfirm(
+                  title: context.l10n.removeFromHistory,
+                  content: context.l10n.removeFromHistoryConfirmation,
+                  confirmLabel: context.l10n.remove,
+                  cancelLabel: context.l10n.cancel,
+                  isDestructive: true,
+                );
+                if (ok) onRemove();
+              },
+              icon: Icon(
+                isCupertinoPlatform
+                    ? CupertinoIcons.trash
+                    : Icons.delete_outline_rounded,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                size: 20,
+              ),
+              tooltip: context.l10n.remove,
+            ),
+          ],
         ),
-      ],
+      ),
     );
 
     if (isCupertinoPlatform) return tile;
@@ -121,11 +165,8 @@ class HistoryItemTile extends ConsumerWidget {
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 16),
-        decoration: BoxDecoration(
-          color: cs.errorContainer,
-          borderRadius: CatalystUiTokens.coverRadius,
-        ),
+        padding: const EdgeInsets.only(right: 20),
+        color: cs.errorContainer,
         child: Icon(Icons.delete_outline_rounded, color: cs.onErrorContainer),
       ),
       confirmDismiss: (_) => context.showAdaptiveConfirm(
