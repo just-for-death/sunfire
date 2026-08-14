@@ -14,8 +14,8 @@ import 'features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
 import 'global_providers/global_providers.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'routes/router_config.dart';
+import 'theme/catalyst_component_themes.dart';
 import 'theme/catalyst_custom_schemes.dart';
-import 'theme/catalyst_ui_tokens.dart';
 import 'utils/extensions/custom_extensions.dart';
 import 'utils/platform/deep_link_listener.dart';
 import 'utils/platform/system_ui_style.dart';
@@ -23,71 +23,15 @@ import 'utils/platform/system_ui_style.dart';
 class CatalystApp extends ConsumerWidget {
   const CatalystApp({super.key});
 
-  ThemeData _applyDynamicColor({
+  ThemeData _buildTheme({
     required ThemeData base,
-    required ColorScheme? dynamic,
-    required bool isDark,
+    required ColorScheme? dynamicScheme,
     required bool isTrueBlack,
   }) {
-    if (dynamic == null) return base;
-
-    final scheme = dynamic;
-
-    return base.copyWith(
-      colorScheme: scheme,
-      scaffoldBackgroundColor:
-          isTrueBlack && isDark ? Colors.black : scheme.surface,
-      cardColor: scheme.surfaceContainerLow,
-      canvasColor: scheme.surface,
-      navigationBarTheme: NavigationBarThemeData(
-        indicatorColor: scheme.secondaryContainer,
-        iconTheme: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return IconThemeData(color: scheme.onSecondaryContainer);
-          }
-          return IconThemeData(color: scheme.onSurfaceVariant);
-        }),
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return TextStyle(
-              color: scheme.onSurface,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            );
-          }
-          return TextStyle(color: scheme.onSurfaceVariant, fontSize: 12);
-        }),
-        backgroundColor: scheme.surfaceContainer,
-        elevation: 0,
-        height: 72,
-        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-      ),
-      appBarTheme: base.appBarTheme.copyWith(
-        backgroundColor: scheme.surface,
-        foregroundColor: scheme.onSurface,
-        surfaceTintColor: scheme.surfaceTint,
-        elevation: 0,
-      ),
-      chipTheme: ChipThemeData(
-        selectedColor: scheme.secondaryContainer,
-        checkmarkColor: scheme.onSecondaryContainer,
-        shape: RoundedRectangleBorder(borderRadius: CatalystUiTokens.chipRadius),
-        side: BorderSide.none,
-      ),
-      tabBarTheme: TabBarThemeData(
-        labelColor: scheme.primary,
-        unselectedLabelColor: scheme.onSurfaceVariant,
-        indicatorColor: scheme.primary,
-        tabAlignment: TabAlignment.center,
-      ),
-      floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: scheme.primaryContainer,
-        foregroundColor: scheme.onPrimaryContainer,
-      ),
-      cardTheme: CardThemeData(
-        shape: RoundedRectangleBorder(borderRadius: CatalystUiTokens.cardRadius),
-        elevation: 0,
-      ),
+    return buildCatalystTheme(
+      base: base,
+      scheme: dynamicScheme ?? base.colorScheme,
+      isTrueBlack: isTrueBlack,
     );
   }
 
@@ -141,16 +85,14 @@ class CatalystApp extends ConsumerWidget {
       child: DynamicColorBuilder(
         builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
           // When toggle is off, pass null so base flex theme is used unchanged
-          final lightTheme = _applyDynamicColor(
+          final lightTheme = _buildTheme(
             base: baseLight,
-            dynamic: useDynamic ? lightDynamic : null,
-            isDark: false,
+            dynamicScheme: useDynamic ? lightDynamic : null,
             isTrueBlack: false,
           );
-          final darkTheme = _applyDynamicColor(
+          final darkTheme = _buildTheme(
             base: baseDark,
-            dynamic: useDynamic ? darkDynamic : null,
-            isDark: true,
+            dynamicScheme: useDynamic ? darkDynamic : null,
             isTrueBlack: isTrueBlack,
           );
 

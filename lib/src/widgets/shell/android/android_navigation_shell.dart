@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -13,8 +11,8 @@ import '../nav_badge_providers.dart';
 import '../nav_overflow_menu.dart';
 import '../shell_banner_stack.dart';
 
-/// Android navigation shell — frosted glass bottom nav on phone,
-/// glass rail + detail on tablet.
+/// Android navigation shell — Material 3 bottom nav on phone,
+/// navigation rail + detail on tablet.
 class AndroidNavigationShell extends StatelessWidget {
   const AndroidNavigationShell({
     super.key,
@@ -29,7 +27,8 @@ class AndroidNavigationShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (AppBreakpoints.isTabletLayout(context)) {
+    if (AppBreakpoints.isTabletLayout(context) &&
+        !AppBreakpoints.useCompactShellOnNarrowTablet(context)) {
       return _AndroidTabletGlassShell(
         onDestinationSelected: onDestinationSelected,
         child: child,
@@ -79,7 +78,7 @@ class _AndroidPhoneGlassShell extends StatelessWidget {
           Expanded(child: child),
         ],
       ),
-      bottomNavigationBar: _AndroidGlassBottomBar(
+      bottomNavigationBar: _AndroidBottomNavBar(
         selectedBranchIndex: child.currentIndex,
         navList: navList,
         shell: child,
@@ -90,8 +89,8 @@ class _AndroidPhoneGlassShell extends StatelessWidget {
   }
 }
 
-class _AndroidGlassBottomBar extends ConsumerWidget {
-  const _AndroidGlassBottomBar({
+class _AndroidBottomNavBar extends ConsumerWidget {
+  const _AndroidBottomNavBar({
     required this.selectedBranchIndex,
     required this.navList,
     required this.shell,
@@ -123,85 +122,29 @@ class _AndroidGlassBottomBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final updateCount = ref.watch(navUpdatesBadgeCountProvider);
-    final cs = context.theme.colorScheme;
-    final isDark = context.isDarkMode;
-    final textScaler = MediaQuery.textScalerOf(context)
-        .clamp(minScaleFactor: 0.85, maxScaleFactor: 2.0);
-    final barHeight = textScaler.scale(64.0).clamp(60.0, 80.0);
-    final iconSize = textScaler.scale(24.0).clamp(22.0, 30.0);
-    final labelFontSize = textScaler.scale(12.0).clamp(10.0, 14.0);
 
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: cs.surface.withValues(alpha: isDark ? 0.82 : 0.88),
-            border: Border(
-              top: BorderSide(
-                color: cs.outlineVariant.withValues(alpha: 0.4),
-                width: 0.5,
-              ),
-            ),
+    return NavigationBar(
+      selectedIndex: _displaySelectedIndex,
+      onDestinationSelected: (index) => _onTap(context, index),
+      destinations: [
+        for (final item in navList)
+          NavigationDestination(
+            icon: _withBadge(item, updateCount, item.navIcon(context)),
+            selectedIcon:
+                _withBadge(item, updateCount, item.navActiveIcon(context)),
+            label: item.label(context),
+            tooltip: item.label(context),
           ),
-          child: SafeArea(
-            top: false,
-            child: SizedBox(
-              height: barHeight,
-              child: Row(
-                children: List.generate(navList.length, (i) {
-                  final item = navList[i];
-                  final selected = i == _displaySelectedIndex;
-                  final label = item.label(context);
-                  Widget icon = Icon(
-                    selected ? item.navActiveIcon(context) : item.navIcon(context),
-                    size: iconSize,
-                    color: selected
-                        ? cs.primary
-                        : cs.onSurfaceVariant,
-                  );
-                  if (item.badgeType == NavBadgeType.updates &&
-                      updateCount > 0) {
-                    icon = Badge.count(count: updateCount, child: icon);
-                  }
-                  return Expanded(
-                    child: Semantics(
-                      button: true,
-                      selected: selected,
-                      label: label,
-                      child: InkWell(
-                        onTap: () => _onTap(context, i),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            icon,
-                            const SizedBox(height: 2),
-                            Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: labelFontSize,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                                color: selected
-                                    ? cs.primary
-                                    : cs.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
-        ),
-      ),
+      ],
     );
+  }
+
+  Widget _withBadge(NavigationBarData item, int updateCount, IconData icon) {
+    final child = Icon(icon);
+    if (item.badgeType != NavBadgeType.updates || updateCount <= 0) {
+      return child;
+    }
+    return Badge.count(count: updateCount, child: child);
   }
 }
 
@@ -219,17 +162,11 @@ class _AndroidTabletGlassShell extends StatelessWidget {
     return Scaffold(
       body: Row(
         children: [
-          ClipRect(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: ColoredBox(
-                color: context.theme.colorScheme.surfaceContainerLow
-                    .withValues(alpha: 0.92),
-                child: BigScreenNavigationBar(
-                  selectedIndex: child.currentIndex,
-                  onDestinationSelected: onDestinationSelected,
-                ),
-              ),
+          ColoredBox(
+            color: context.theme.colorScheme.surfaceContainerLow,
+            child: BigScreenNavigationBar(
+              selectedIndex: child.currentIndex,
+              onDestinationSelected: onDestinationSelected,
             ),
           ),
           Expanded(

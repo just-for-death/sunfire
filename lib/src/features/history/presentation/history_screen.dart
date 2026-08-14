@@ -61,7 +61,6 @@ class _AndroidHomeScreen extends HookConsumerWidget {
     Future<void> tryLoadMore() async {
       if (!hasMore ||
           isLoadingMore.value ||
-          searchQuery.isNotBlank ||
           ref.read(readingHistoryProvider.notifier).isLoadingMore) {
         return;
       }
@@ -73,22 +72,58 @@ class _AndroidHomeScreen extends HookConsumerWidget {
       }
     }
 
+    useEffect(() {
+      if (searchQuery.isBlank) return null;
+      if (historyGroups.isNotEmpty) return null;
+      if (!hasMore || isLoadingMore.value) return null;
+      // Client-side search only covers loaded pages — keep paging until a
+      // match appears or the server reports no more history.
+      Future.microtask(() => tryLoadMore());
+      return null;
+    }, [searchQuery, historyGroups, hasMore]);
+
     final isTabletSplit = TabletSplitLayout.shouldUse(context);
     final selectedItem = ref.watch(tabletHistorySelectionProvider);
 
+    // Carousel items are selectable too, so validate against every item rather
+    // than only the ones left in the list section.
+    final selectableItems = useMemoized(
+      () => historyGroups.expand((g) => g.items).toList(),
+      [historyGroups],
+    );
+
+    // The provider holds a snapshot taken at tap time. Re-resolve it by id so
+    // the pane shows current progress after a chapter is read.
+    final selectedId = selectedItem?.id;
+    final liveSelectedItem = useMemoized(
+      () {
+        if (selectedId == null) return null;
+        for (final item in selectableItems) {
+          if (item.id == selectedId) return item;
+        }
+        return null;
+      },
+      [selectableItems, selectedId],
+    );
+
     useEffect(() {
-      if (!isTabletSplit || listHistoryGroups.isEmpty) return null;
-      if (selectedItem == null) {
-        final first =
-            listHistoryGroups.expand((g) => g.items).firstOrNull;
-        if (first != null) {
+      if (!isTabletSplit) return null;
+      if (selectableItems.isEmpty) {
+        if (selectedItem != null) {
           Future.microtask(() {
-            ref.read(tabletHistorySelectionProvider.notifier).state = first;
+            ref.read(tabletHistorySelectionProvider.notifier).state = null;
           });
         }
+        return null;
+      }
+      if (liveSelectedItem == null) {
+        Future.microtask(() {
+          ref.read(tabletHistorySelectionProvider.notifier).state =
+              selectableItems.first;
+        });
       }
       return null;
-    }, [isTabletSplit, listHistoryGroups]);
+    }, [isTabletSplit, selectableItems, liveSelectedItem]);
 
     void onHistoryItemTap(HistoryItemDto item) {
       ref.read(tabletHistorySelectionProvider.notifier).state = item;
@@ -161,6 +196,11 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                 return const SliverFillRemaining(child: _HistoryEmptyState());
               }
               if (historyGroups.isEmpty && searchQuery.isNotBlank) {
+                if (hasMore) {
+                  return const SliverFillRemaining(
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
                 return const SliverFillRemaining(child: _HistoryNoResults());
               }
               if (historyGroups.isEmpty) {
@@ -168,14 +208,19 @@ class _AndroidHomeScreen extends HookConsumerWidget {
               }
               return SliverMainAxisGroup(
                 slivers: [
-                  ContinueReadingCarousel(groups: historyGroups),
+                  ContinueReadingCarousel(
+                    groups: historyGroups,
+                    onItemTap: isTabletSplit ? onHistoryItemTap : null,
+                    selectedItemId:
+                        isTabletSplit ? liveSelectedItem?.id : null,
+                  ),
                   if (listHistoryGroups.isNotEmpty)
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
                       12,
                       8,
                       12,
-                      scrollBottomInset(),
+                      scrollBottomInset(context: context),
                     ),
                     sliver: SliverList.builder(
                       itemCount: listHistoryGroups.length + (hasMore ? 1 : 0),
@@ -204,6 +249,8 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                               .removeFromHistory(id),
                           onItemTap:
                               isTabletSplit ? onHistoryItemTap : null,
+                          selectedItemId:
+                              isTabletSplit ? liveSelectedItem?.id : null,
                         );
                       },
                     ),
@@ -229,10 +276,13 @@ class _AndroidHomeScreen extends HookConsumerWidget {
       body: isTabletSplit
           ? TabletSplitLayout(
               master: scrollContent,
-              detail: selectedItem != null
-                  ? HistoryDetailPane(item: selectedItem)
+              detail: liveSelectedItem != null
+                  ? HistoryDetailPane(
+                      key: ValueKey(liveSelectedItem.id),
+                      item: liveSelectedItem,
+                    )
                   : const SizedBox.shrink(),
-              showDetail: selectedItem != null,
+              showDetail: liveSelectedItem != null,
             )
           : scrollContent,
     );

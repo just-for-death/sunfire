@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../theme/catalyst_ui_tokens.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../domain/history_group.dart';
 import '../../domain/history_item.dart';
@@ -11,11 +12,13 @@ class HistoryGroupWidget extends StatelessWidget {
     required this.group,
     required this.onRemoveItem,
     this.onItemTap,
+    this.selectedItemId,
   });
 
   final HistoryGroup group;
   final Function(int chapterId) onRemoveItem;
   final ValueChanged<HistoryItemDto>? onItemTap;
+  final int? selectedItemId;
 
   @override
   Widget build(BuildContext context) {
@@ -41,9 +44,9 @@ class HistoryGroupWidget extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
-            childAspectRatio: 0.6,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
+            childAspectRatio: CatalystUiTokens.coverAspectRatio,
+            crossAxisSpacing: CatalystUiTokens.gridSpacing,
+            mainAxisSpacing: CatalystUiTokens.gridSpacing,
           ),
           itemCount: group.items.length,
           itemBuilder: (context, i) => HistoryItemTile(
@@ -52,6 +55,8 @@ class HistoryGroupWidget extends StatelessWidget {
             onTap: onItemTap != null
                 ? () => onItemTap!(group.items[i])
                 : null,
+            isSelected: selectedItemId != null &&
+                group.items[i].id == selectedItemId,
           ),
         ),
         const SizedBox(height: 4),

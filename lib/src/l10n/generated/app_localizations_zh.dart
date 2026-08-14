@@ -219,6 +219,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discord => 'DIscord';
 
   @override
+  String get details => 'Details';
+
+  @override
+  String get genres => 'Genres';
+
+  @override
+  String get scanlator => 'Scanlator';
+
+  @override
   String get display => '显示';
 
   @override

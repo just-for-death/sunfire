@@ -13,10 +13,19 @@ class ContinueReadingCarousel extends StatelessWidget {
     super.key,
     required this.groups,
     this.useCupertinoStyle = false,
+    this.onItemTap,
+    this.selectedItemId,
   });
 
   final List<HistoryGroup> groups;
   final bool useCupertinoStyle;
+
+  /// When set, tapping a card selects it (tablet master–detail) instead of
+  /// jumping straight into the reader.
+  final ValueChanged<HistoryItemDto>? onItemTap;
+
+  /// Chapter id of the currently selected card in the tablet detail pane.
+  final int? selectedItemId;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +58,7 @@ class ContinueReadingCarousel extends StatelessWidget {
             child: Text(context.l10n.historyContinueReading, style: titleStyle),
           ),
           SizedBox(
-            height: 200,
+            height: 180,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -59,6 +68,11 @@ class ContinueReadingCarousel extends StatelessWidget {
                 item: allItems[i],
                 useCupertinoStyle: useCupertinoStyle,
                 colorScheme: cs,
+                onTap: onItemTap != null
+                    ? () => onItemTap!(allItems[i])
+                    : null,
+                isSelected: selectedItemId != null &&
+                    allItems[i].id == selectedItemId,
               ),
             ),
           ),
@@ -73,84 +87,113 @@ class _CarouselCard extends ConsumerWidget {
     required this.item,
     required this.useCupertinoStyle,
     required this.colorScheme,
+    this.onTap,
+    this.isSelected = false,
   });
 
   final HistoryItemDto item;
   final bool useCupertinoStyle;
   final ColorScheme colorScheme;
+  final VoidCallback? onTap;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final progress = historyItemReadProgress(item);
     final completed = historyItemIsCompleted(item);
+    final radius = BorderRadius.circular(useCupertinoStyle ? 14 : 12);
 
     return Semantics(
       button: true,
+      selected: isSelected,
       label: '${item.manga.title}, ${(progress * 100).round()}%',
-      child: GestureDetector(
-      onTap: () => openReaderFromHistoryItem(context, ref, item),
       child: Container(
-        width: 120,
+        width: 130,
         margin: const EdgeInsets.only(right: 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(useCupertinoStyle ? 14 : 12),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              ServerImage(
-                imageUrl: item.manga.thumbnailUrl ?? '',
-                fit: BoxFit.cover,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRRect(
+              borderRadius: radius,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ServerImage(
+                    imageUrl: item.manga.thumbnailUrl ?? '',
+                    fit: BoxFit.cover,
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.75),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 8,
+                    right: 8,
+                    bottom: 8,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          item.manga.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 3,
+                            backgroundColor: Colors.white24,
+                            color: completed
+                                ? colorScheme.secondary
+                                : colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.75),
-                    ],
+            ),
+            Positioned.fill(
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  borderRadius: radius,
+                  onTap: onTap ??
+                      () => openReaderFromHistoryItem(context, ref, item),
+                ),
+              ),
+            ),
+            if (isSelected)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: radius,
+                      border: Border.all(color: colorScheme.primary, width: 3),
+                    ),
                   ),
                 ),
               ),
-              Positioned(
-                left: 8,
-                right: 8,
-                bottom: 8,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      item.manga.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 3,
-                        backgroundColor: Colors.white24,
-                        color: completed
-                            ? colorScheme.secondary
-                            : colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
-    ),
     );
   }
 }

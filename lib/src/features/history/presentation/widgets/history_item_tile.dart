@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../routes/router_config.dart';
+import '../../../../theme/catalyst_ui_tokens.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/server_image.dart';
@@ -17,94 +18,115 @@ class HistoryItemTile extends ConsumerWidget {
     required this.item,
     required this.onRemove,
     this.onTap,
+    this.isSelected = false,
   });
 
   final HistoryItemDto item;
   final VoidCallback onRemove;
   final VoidCallback? onTap;
+  final bool isSelected;
 
-  bool get _isCompleted =>
-      item.isRead == true ||
-      (item.pageCount > 0 && item.lastPageRead >= item.pageCount - 1);
+  bool get _isCompleted => historyItemIsCompleted(item);
 
-  double get _readPercent =>
-      item.pageCount > 0 ? (item.lastPageRead / item.pageCount).clamp(0, 1) : 0;
-
-  int get _readPercentInt => (_readPercent * 100).round();
+  int get _readPercentInt => (historyItemReadProgress(item) * 100).round();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = context.theme.colorScheme;
-    final tile = GestureDetector(
-      onTap: onTap ?? () => _navigateToReader(context, ref),
-      onLongPress: () => _showMenu(context),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Cover image
-            ServerImage(
-              imageUrl: item.manga.thumbnailUrl ?? '',
-              fit: BoxFit.cover,
-            ),
-            // Gradient overlay at bottom
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(6, 24, 6, 6),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.85),
-                    ],
-                  ),
-                ),
-                child: Text(
-                  item.manga.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    height: 1.2,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+    const radius = CatalystUiTokens.coverRadius;
+    final tile = Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(
+          borderRadius: radius,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Cover image
+              ServerImage(
+                imageUrl: item.manga.thumbnailUrl ?? '',
+                fit: BoxFit.cover,
               ),
-            ),
-            // Read % badge (top-right) — Futon style
-            if (item.pageCount > 0)
+              // Gradient overlay at bottom
               Positioned(
-                top: 6,
-                right: 6,
+                left: 0,
+                right: 0,
+                bottom: 0,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  padding: const EdgeInsets.fromLTRB(6, 24, 6, 6),
                   decoration: BoxDecoration(
-                    color: _isCompleted
-                        ? cs.secondary.withValues(alpha: 0.9)
-                        : cs.primary.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(20),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.85),
+                      ],
+                    ),
                   ),
                   child: Text(
-                    _isCompleted ? '✓' : '$_readPercentInt%',
+                    item.manga.title,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              // Read % badge (top-right) — Futon style
+              if (item.pageCount > 0)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _isCompleted
+                          ? cs.secondary.withValues(alpha: 0.9)
+                          : cs.primary.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _isCompleted ? '✓' : '$_readPercentInt%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
-      ),
+        // Hover / ripple / focus affordance for pointer devices.
+        Positioned.fill(
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              borderRadius: radius,
+              onTap: onTap ?? () => _navigateToReader(context, ref),
+              onLongPress: () => _showMenu(context),
+            ),
+          ),
+        ),
+        if (isSelected)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(color: cs.primary, width: 3),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
 
     if (isCupertinoPlatform) return tile;
@@ -117,7 +139,7 @@ class HistoryItemTile extends ConsumerWidget {
         padding: const EdgeInsets.only(right: 16),
         decoration: BoxDecoration(
           color: cs.errorContainer,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: CatalystUiTokens.coverRadius,
         ),
         child: Icon(Icons.delete_outline_rounded, color: cs.onErrorContainer),
       ),

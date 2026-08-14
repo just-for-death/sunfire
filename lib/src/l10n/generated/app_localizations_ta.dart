@@ -227,6 +227,15 @@ class AppLocalizationsTa extends AppLocalizations {
   String get discord => 'முரண்பாடு';
 
   @override
+  String get details => 'Details';
+
+  @override
+  String get genres => 'Genres';
+
+  @override
+  String get scanlator => 'Scanlator';
+
+  @override
   String get display => 'காட்சி';
 
   @override

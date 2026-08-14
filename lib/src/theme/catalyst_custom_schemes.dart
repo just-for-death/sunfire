@@ -244,10 +244,29 @@ class CatalystCustomSchemes {
     tertiaryContainer: Color(0xFF212121),
   );
 
+  // ─── Usagi Blue ──────────────────────────────────────────────────────────
+  static const FlexSchemeColor usagiBlueLight = FlexSchemeColor(
+    primary: Color(0xFF0059C8),
+    primaryContainer: Color(0xFFD9E2FF),
+    secondary: Color(0xFF575E71),
+    secondaryContainer: Color(0xFFDBE2F9),
+    tertiary: Color(0xFF725573),
+    tertiaryContainer: Color(0xFFFDD7FB),
+  );
+  static const FlexSchemeColor usagiBlueDark = FlexSchemeColor(
+    primary: Color(0xFFABC7FF),
+    primaryContainer: Color(0xFF00458F),
+    secondary: Color(0xFFBEC6DC),
+    secondaryContainer: Color(0xFF3E4759),
+    tertiary: Color(0xFFDDBCE0),
+    tertiaryContainer: Color(0xFF573E5C),
+  );
+
   // ─── Maps ────────────────────────────────────────────────────────────────
 
   /// All light scheme colors keyed by display name.
   static const Map<String, FlexSchemeColor> lightSchemes = {
+    'Usagi Blue': usagiBlueLight,
     'Catppuccin': catppuccinLight,
     'Nord': nordLight,
     'Cloudflare': cloudflareLight,
@@ -265,6 +284,7 @@ class CatalystCustomSchemes {
 
   /// All dark scheme colors keyed by display name (same keys as [lightSchemes]).
   static const Map<String, FlexSchemeColor> darkSchemes = {
+    'Usagi Blue': usagiBlueDark,
     'Catppuccin': catppuccinDark,
     'Nord': nordDark,
     'Cloudflare': cloudflareDark,
