@@ -14,9 +14,13 @@ const double kTabBarScrollBottomInset = 96;
 /// Extra bottom inset when a FAB floats over the list.
 const double kFabScrollBottomInset = 96;
 
-double scrollBottomInset({bool hasFab = false}) {
+double scrollBottomInset({
+  bool hasFab = false,
+  BuildContext? context,
+}) {
   final base = hasFab ? kFabScrollBottomInset : kTabBarScrollBottomInset;
-  return base;
+  if (context == null) return base;
+  return base + MediaQuery.paddingOf(context).bottom;
 }
 
 /// Scroll padding that includes safe-area and tab bar clearance.
@@ -29,7 +33,7 @@ EdgeInsets scrollBottomPadding(
     horizontal,
     0,
     horizontal,
-    scrollBottomInset(hasFab: hasFab) + MediaQuery.paddingOf(context).bottom,
+    scrollBottomInset(hasFab: hasFab, context: context),
   );
 }
 
@@ -59,7 +63,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
               child: Material(
                 color: CupertinoColors.systemBackground.resolveFrom(ctx),
                 child: effectiveUseSafeArea
-                    ? SafeArea(top: true, child: builder(ctx))
+                    ? SafeArea(child: builder(ctx))
                     : builder(ctx),
               ),
             ),

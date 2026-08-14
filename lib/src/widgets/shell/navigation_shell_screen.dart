@@ -80,7 +80,7 @@ class NavigationShellScreen extends HookConsumerWidget {
         child: IOSNavigationShell(
           onDestinationSelected: onDestinationSelected,
           compactBottomNav: AppBreakpoints.isCompactNav(context) ||
-              AppBreakpoints.useCompactShellOnIPad(context),
+              AppBreakpoints.useCompactShellOnNarrowTablet(context),
           child: child,
         ),
       );
@@ -93,14 +93,16 @@ class NavigationShellScreen extends HookConsumerWidget {
         showOfflineBanner: false,
         child: AndroidNavigationShell(
           onDestinationSelected: onDestinationSelected,
-          compactBottomNav: AppBreakpoints.isCompactNav(context),
+          compactBottomNav: AppBreakpoints.isCompactNav(context) ||
+              AppBreakpoints.useCompactShellOnNarrowTablet(context),
           child: child,
         ),
       );
     }
 
     // Desktop / other → Material You bottom nav or rail
-    if (AppBreakpoints.isTabletLayout(context)) {
+    if (AppBreakpoints.isTabletLayout(context) &&
+        !AppBreakpoints.useCompactShellOnNarrowTablet(context)) {
       return ServerAwareWrapper(
         showOfflineBanner: false,
         child: Scaffold(

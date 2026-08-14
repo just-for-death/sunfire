@@ -10,9 +10,11 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 
 import '../../../../constants/app_sizes.dart';
+import '../../../../global_providers/tablet_selection_providers.dart';
 import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/hooks/paging_controller_hook.dart';
+import '../../../../widgets/layout/tablet_split_layout.dart';
 import '../../../../widgets/search_field.dart';
 import '../../../manga_book/domain/manga/manga_model.dart';
 import '../../data/source_repository/source_repository.dart';
@@ -34,6 +36,29 @@ class SourceMangaListScreen extends HookConsumerWidget {
   final String sourceId;
   final SourceType sourceType;
   final String? initialQuery;
+
+  void _switchSourceType(
+    BuildContext context,
+    WidgetRef ref,
+    SourceType type, {
+    String? query,
+  }) {
+    // Same type with no new query → no-op (avoids wiping an active SEARCH).
+    if (sourceType == type && query == null) return;
+    if (TabletSplitLayout.shouldUse(context)) {
+      ref.read(tabletBrowseSourceSelectionProvider.notifier).state = (
+        sourceId: sourceId,
+        sourceType: type,
+        query: query,
+      );
+      return;
+    }
+    SourceTypeRoute(
+      sourceId: sourceId,
+      sourceType: type,
+      query: query,
+    ).go(context);
+  }
 
   void _fetchPage(
     SourceRepository repository,
@@ -125,34 +150,22 @@ class SourceMangaListScreen extends HookConsumerWidget {
                     SourceTypeSelectableChip(
                       value: SourceType.POPULAR,
                       groupValue: sourceType,
-                      onSelected: (val) {
-                        if (sourceType == SourceType.POPULAR) return;
-                        SourceTypeRoute(
-                          sourceId: sourceId,
-                          sourceType: SourceType.POPULAR,
-                        ).go(context);
-                      },
+                      onSelected: (val) =>
+                          _switchSourceType(context, ref, SourceType.POPULAR),
                     ),
                     if ((data?.supportsLatest).ifNull())
                       SourceTypeSelectableChip(
                         value: SourceType.LATEST,
                         groupValue: sourceType,
-                        onSelected: (val) {
-                          if (sourceType == SourceType.LATEST) return;
-                          SourceTypeRoute(
-                            sourceId: sourceId,
-                            sourceType: SourceType.LATEST,
-                          ).go(context);
-                        },
+                        onSelected: (val) =>
+                            _switchSourceType(context, ref, SourceType.LATEST),
                       ),
                     Builder(
                       builder: (context) => SourceTypeSelectableChip(
                         value: SourceType.SEARCH,
                         groupValue: sourceType,
-                        onSelected: (val) => SourceTypeRoute(
-                          sourceId: sourceId,
-                          sourceType: SourceType.SEARCH,
-                        ).go(context),
+                        onSelected: (val) =>
+                            _switchSourceType(context, ref, SourceType.SEARCH),
                       ),
                     ),
                   ],
@@ -170,11 +183,12 @@ class SourceMangaListScreen extends HookConsumerWidget {
                           controller.refresh();
                         } else {
                           if (val == null) return;
-                          SourceTypeRoute(
-                            sourceId: sourceId,
-                            sourceType: SourceType.SEARCH,
+                          _switchSourceType(
+                            context,
+                            ref,
+                            SourceType.SEARCH,
                             query: val,
-                          ).go(context);
+                          );
                         }
                       },
                     ),
