@@ -55,7 +55,7 @@ Head to [**Releases**](https://github.com/just-for-death/catalyst/releases/lates
 | `app-arm64-v8a-release.apk` | **Most Android phones** (2016+, recommended) |
 | `app-armeabi-v7a-release.apk` | Older 32-bit ARM Android |
 | `app-x86_64-release.apk` | Android emulators / x86 tablets |
-| `Catalyst-v7.0.0-unsigned.ipa` | **iPhone / iPad** — sideload via [AltStore](https://altstore.io/) or [Sideloadly](https://sideloadly.io/) (not App Store) |
+| `Catalyst-v7.5.0-unsigned.ipa` | **iPhone / iPad** — sideload via [AltStore](https://altstore.io/) or [Sideloadly](https://sideloadly.io/) (not App Store) |
 
 Most users need **one** Android APK (`arm64`) plus the IPA if they use iOS.
 
