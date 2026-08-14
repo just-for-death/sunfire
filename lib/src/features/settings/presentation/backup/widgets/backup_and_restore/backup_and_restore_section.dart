@@ -75,11 +75,17 @@ class BackupAndRestoreSection extends HookConsumerWidget {
     if (restoreBackup) {
       if (!context.mounted) return backupId;
       final restoreErrorMessage = context.l10n.errorSomethingWentWrong;
-      // Reuse the already-converted backupFile — no need to read the file
-      // from disk a second time.
+      // A MultipartFile can only be finalized once, and validate above already
+      // consumed `backupFile`, so restore needs a freshly-read one.
+      final asyncRestoreFile = await AsyncValue.guard(
+          () => FilePickerUtils.convertToMultipartFile(pickedFile, "backup"));
+      if (asyncRestoreFile.hasError || asyncRestoreFile.value == null) {
+        asyncRestoreFile.showToastOnError(toast);
+        return null;
+      }
       final backupResponse = (await AsyncValue.guard(() => ref
           .read(backupSettingsRepositoryProvider)
-          .restoreBackup(backupFile)));
+          .restoreBackup(asyncRestoreFile.value!)));
 
       if (backupResponse.hasError) {
         toast?.showError(restoreErrorMessage);

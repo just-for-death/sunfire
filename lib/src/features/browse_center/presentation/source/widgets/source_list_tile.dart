@@ -16,6 +16,29 @@ import '../../../../../widgets/server_image.dart';
 import '../../../domain/source/source_model.dart';
 import '../controller/source_controller.dart';
 
+/// Opens a source in the tablet detail pane when there is one, and as a
+/// full-screen route otherwise.
+///
+/// `SourceTypeRoute` sits on the root navigator, so going there on a tablet
+/// would cover the split layout instead of filling its detail side.
+void openSource(
+  BuildContext context,
+  WidgetRef ref, {
+  required String sourceId,
+  required SourceType sourceType,
+}) {
+  ref.read(sourceLastUsedProvider.notifier).update(sourceId);
+  if (TabletSplitLayout.shouldUse(context)) {
+    ref.read(tabletBrowseSourceSelectionProvider.notifier).state = (
+      sourceId: sourceId,
+      sourceType: sourceType,
+      query: null,
+    );
+    return;
+  }
+  SourceTypeRoute(sourceId: sourceId, sourceType: sourceType).go(context);
+}
+
 class SourceListTile extends ConsumerWidget {
   const SourceListTile({super.key, required this.source});
 
@@ -25,21 +48,13 @@ class SourceListTile extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     SourceType sourceType,
-  ) {
-    ref.read(sourceLastUsedProvider.notifier).update(source.id);
-    if (TabletSplitLayout.shouldUse(context)) {
-      ref.read(tabletBrowseSourceSelectionProvider.notifier).state = (
+  ) =>
+      openSource(
+        context,
+        ref,
         sourceId: source.id,
         sourceType: sourceType,
-        query: null,
       );
-      return;
-    }
-    SourceTypeRoute(
-      sourceId: source.id,
-      sourceType: sourceType,
-    ).go(context);
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

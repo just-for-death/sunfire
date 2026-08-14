@@ -59,6 +59,11 @@ class ReadingHistory extends _$ReadingHistory {
     final enabled = ref.watch(historyEnabledProvider) ?? true;
     if (!enabled) {
       ref.keepAlive();
+      // Otherwise scroll/search triggers keep paging in a history that the user
+      // turned off.
+      Future.microtask(
+        () => ref.read(historyHasMoreProvider.notifier).state = false,
+      );
       return const [];
     }
 
@@ -87,6 +92,7 @@ class ReadingHistory extends _$ReadingHistory {
   }
 
   Future<void> loadMore() async {
+    if (!(ref.read(historyEnabledProvider) ?? true)) return;
     if (_loadingMore || !ref.read(historyHasMoreProvider)) return;
     final currentItems = state.valueOrNull;
     if (currentItems == null) return;

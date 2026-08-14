@@ -12,6 +12,8 @@ import '../../../../constants/app_sizes.dart';
 import '../../../../constants/enum.dart';
 import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
+import '../../../../utils/misc/toast/toast.dart';
+import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/emoticons.dart';
 import '../../../../widgets/manga_cover/grid/manga_cover_grid_tile.dart';
 import '../../../../widgets/manga_cover/list/manga_cover_descriptive_list_tile.dart';
@@ -37,7 +39,6 @@ class CategoryMangaList extends HookConsumerWidget {
       return;
     }, []);
     final selectedIds = useState<Set<int>>({});
-    final isSelectionMode = selectedIds.value.isNotEmpty;
 
     void toggleSelection(int id) {
       final newSet = Set<int>.from(selectedIds.value);
@@ -52,6 +53,14 @@ class CategoryMangaList extends HookConsumerWidget {
     return mangaList.showUiWhenData(
       context,
       (data) {
+        // Filters and refreshes can hide already-selected manga; ignoring the
+        // ones that are gone keeps the count honest and the bulk actions safe.
+        final visibleIds = {for (final manga in data ?? const []) manga.id};
+        final selected =
+            selectedIds.value.where(visibleIds.contains).toSet();
+        final isSelectionMode = selected.isNotEmpty;
+        final listPadding = scrollBottomPadding(context);
+
         if (data.isBlank) {
           return Emoticons(
             title: context.l10n.noCategoryMangaFound,
@@ -63,11 +72,12 @@ class CategoryMangaList extends HookConsumerWidget {
         }
         final Widget mangaListWidget = switch (displayMode) {
           DisplayMode.list || null => ListView.builder(
+              padding: listPadding,
               itemExtent: 96,
               itemCount: (data?.length).getValueOnNullOrNegative(),
               itemBuilder: (context, index) => MangaCoverListTile(
                 manga: data![index],
-                isSelected: selectedIds.value.contains(data[index].id),
+                isSelected: selected.contains(data[index].id),
                 onPressed: () {
                   if (isSelectionMode) {
                     toggleSelection(data[index].id);
@@ -93,11 +103,12 @@ class CategoryMangaList extends HookConsumerWidget {
               ),
             ),
           DisplayMode.grid => GridView.builder(
+              padding: listPadding,
               gridDelegate: mangaCoverGridDelegate(gridWidth),
               itemCount: (data?.length).getValueOnNullOrNegative(),
               itemBuilder: (context, index) => MangaCoverGridTile(
                 manga: data![index],
-                isSelected: selectedIds.value.contains(data[index].id),
+                isSelected: selected.contains(data[index].id),
                 onPressed: () {
                   if (isSelectionMode) {
                     toggleSelection(data[index].id);
@@ -124,11 +135,12 @@ class CategoryMangaList extends HookConsumerWidget {
               ),
             ),
           DisplayMode.descriptiveList => ListView.builder(
+              padding: listPadding,
               itemExtent: 176,
               itemCount: (data?.length).getValueOnNullOrNegative(),
               itemBuilder: (context, index) => MangaCoverDescriptiveListTile(
                 manga: data![index],
-                isSelected: selectedIds.value.contains(data[index].id),
+                isSelected: selected.contains(data[index].id),
                 onPressed: () {
                   if (isSelectionMode) {
                     toggleSelection(data[index].id);
@@ -163,7 +175,7 @@ class CategoryMangaList extends HookConsumerWidget {
             ),
             if (isSelectionMode)
               Positioned(
-                bottom: 16,
+                bottom: 16 + listPadding.bottom,
                 left: 16,
                 right: 16,
                 child: Material(
@@ -176,7 +188,7 @@ class CategoryMangaList extends HookConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '${selectedIds.value.length} selected',
+                          '${selected.length} selected',
                           style: context.theme.textTheme.titleMedium?.copyWith(
                             color: context.theme.colorScheme.onPrimaryContainer,
                             fontWeight: FontWeight.bold,
@@ -187,12 +199,22 @@ class CategoryMangaList extends HookConsumerWidget {
                             IconButton(
                               icon: Icon(Icons.delete_outline_rounded, color: context.theme.colorScheme.error),
                               onPressed: () async {
-                                final ids = selectedIds.value.toList();
+                                final ids = selected.toList();
                                 selectedIds.value = {};
-                                for (final id in ids) {
-                                  await ref.read(mangaBookRepositoryProvider).removeMangaFromLibrary(id);
+                                final repository =
+                                    ref.read(mangaBookRepositoryProvider);
+                                try {
+                                  for (final id in ids) {
+                                    await repository
+                                        .removeMangaFromLibrary(id);
+                                  }
+                                } catch (e) {
+                                  ref
+                                      .read(toastProvider)
+                                      ?.showError(e.toString());
+                                } finally {
+                                  refresh();
                                 }
-                                refresh();
                               },
                             ),
                             IconButton(

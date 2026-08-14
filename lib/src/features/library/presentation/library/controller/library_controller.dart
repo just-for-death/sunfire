@@ -16,27 +16,27 @@ import '../../../../manga_book/data/local_downloads/local_downloads_service.dart
 import '../../../../manga_book/domain/manga/manga_model.dart';
 import '../../../data/category_repository.dart';
 import '../../../domain/category/category_model.dart';
+import 'library_filter_utils.dart';
 
 part 'library_controller.g.dart';
 
-/// Parse a [fetchedAt] string which may be either a Unix timestamp integer
-/// (e.g. "1710500000") or an ISO-8601 date string (e.g. "2024-03-15T10:30:00").
-/// Returns milliseconds since epoch for comparison, or 0 as a safe fallback.
-int _parseFetchedAt(String? fetchedAt) {
-  if (fetchedAt == null || fetchedAt.isEmpty) return 0;
-  // Try Unix timestamp first (seconds since epoch)
-  final asInt = int.tryParse(fetchedAt);
-  if (asInt != null) return asInt * 1000; // convert seconds → ms
-  // Fall back to ISO-8601
-  final asDate = DateTime.tryParse(fetchedAt);
-  if (asDate != null) return asDate.millisecondsSinceEpoch;
-  return 0;
-}
-
 @riverpod
-Future<List<MangaDto>?> categoryMangaList(Ref ref, int categoryId) => ref
-    .watch(categoryRepositoryProvider)
-    .getMangasFromCategory(categoryId: categoryId);
+Future<List<MangaDto>?> categoryMangaList(Ref ref, int categoryId) async {
+  final service = ref.watch(localDownloadsServiceProvider);
+
+  if (categoryId == kOfflineLibraryCategoryId) {
+    return service.listOfflineManga();
+  }
+
+  try {
+    return await ref
+        .watch(categoryRepositoryProvider)
+        .getMangasFromCategory(categoryId: categoryId);
+  } catch (_) {
+    final offline = await service.listOfflineManga();
+    return offline.isEmpty ? null : offline;
+  }
+}
 
 @riverpod
 class LibraryDisplayCategory extends _$LibraryDisplayCategory
@@ -63,56 +63,21 @@ class CategoryMangaListWithQueryAndFilter
     final offlineMangaIds =
         ref.watch(localDownloadedMangaIdsProvider).valueOrNull ?? const {};
 
-    bool applyMangaFilter(MangaDto manga) {
-      if (mangaFilterUnread == true && !manga.unreadCount.isGreaterThan(0)) {
-        return false;
-      }
-      if (mangaFilterUnread == false &&
-          manga.unreadCount.isGreaterThan(0)) {
-        return false;
-      }
+    bool applyMangaFilter(MangaDto manga) => libraryMangaPassesFilter(
+          manga,
+          filterUnread: mangaFilterUnread,
+          filterDownloaded: mangaFilterDownloaded,
+          filterCompleted: mangaFilterCompleted,
+          query: query,
+          offlineMangaIds: offlineMangaIds,
+        );
 
-      if (mangaFilterDownloaded == true) {
-        final hasDownloads = manga.downloadCount.isGreaterThan(0) ||
-            offlineMangaIds.contains(manga.id);
-        if (!hasDownloads) return false;
-      }
-      if (mangaFilterDownloaded == false) {
-        final hasDownloads = manga.downloadCount.isGreaterThan(0) ||
-            offlineMangaIds.contains(manga.id);
-        if (hasDownloads) return false;
-      }
-
-      if (mangaFilterCompleted == true &&
-          manga.status.name != 'COMPLETED') {
-        return false;
-      }
-      if (mangaFilterCompleted == false &&
-          manga.status.name == 'COMPLETED') {
-        return false;
-      }
-
-      if (!manga.query(query)) {
-        return false;
-      }
-
-      return true;
-    }
-
-    int applyMangaSort(MangaDto m1, MangaDto m2) {
-      final sortDirToggle = (sortedDirection ? 1 : -1);
-      return (switch (sortedBy) {
-            MangaSort.alphabetical => (m1.title).compareTo(m2.title),
-            MangaSort.unread => (m1.unreadCount.getValueOnNullOrNegative())
-                .compareTo(m2.unreadCount.getValueOnNullOrNegative()),
-            MangaSort.dateAdded => (m1.inLibraryAt.getValueOnNullOrNegative())
-                .compareTo(m2.inLibraryAt.getValueOnNullOrNegative()),
-            MangaSort.lastUpdated =>
-              _parseFetchedAt(m1.latestFetchedChapter?.fetchedAt).compareTo(
-                  _parseFetchedAt(m2.latestFetchedChapter?.fetchedAt)),
-          }) *
-          sortDirToggle;
-    }
+    int applyMangaSort(MangaDto m1, MangaDto m2) => compareLibraryManga(
+          m1,
+          m2,
+          sortedBy: sortedBy,
+          ascending: sortedDirection,
+        );
 
     return mangaList.map<AsyncValue<List<MangaDto>?>>(
       data: (e) => AsyncData(e.valueOrNull?.where(applyMangaFilter).toList()
@@ -135,42 +100,23 @@ class LibraryQuery extends _$LibraryQuery with StateProviderMixin<String?> {
 class LibraryMangaFilterDownloaded extends _$LibraryMangaFilterDownloaded
     with SharedPreferenceClientMixin<bool> {
   @override
-  bool? build() {
-    final value = initialize(DBKeys.mangaFilterDownloaded);
-    if (value == false) {
-      Future.microtask(() => update(null));
-      return null;
-    }
-    return value;
-  }
+  // Tri-state, like the chapter filters: null = off, true = only downloaded,
+  // false = only not downloaded.
+  bool? build() => initialize(DBKeys.mangaFilterDownloaded);
 }
 
 @riverpod
 class LibraryMangaFilterUnread extends _$LibraryMangaFilterUnread
     with SharedPreferenceClientMixin<bool> {
   @override
-  bool? build() {
-    final value = initialize(DBKeys.mangaFilterUnread);
-    if (value == false) {
-      Future.microtask(() => update(null));
-      return null;
-    }
-    return value;
-  }
+  bool? build() => initialize(DBKeys.mangaFilterUnread);
 }
 
 @riverpod
 class LibraryMangaFilterCompleted extends _$LibraryMangaFilterCompleted
     with SharedPreferenceClientMixin<bool> {
   @override
-  bool? build() {
-    final value = initialize(DBKeys.mangaFilterCompleted);
-    if (value == false) {
-      Future.microtask(() => update(null));
-      return null;
-    }
-    return value;
-  }
+  bool? build() => initialize(DBKeys.mangaFilterCompleted);
 }
 
 @riverpod

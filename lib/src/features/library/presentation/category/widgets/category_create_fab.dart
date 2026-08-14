@@ -9,6 +9,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../../utils/extensions/custom_extensions.dart';
+import '../../../../../utils/misc/toast/toast.dart';
 import '../../../../../widgets/custom_circular_progress_indicator.dart';
 import '../controller/edit_category_controller.dart';
 import 'edit_category_dialog.dart';
@@ -25,15 +26,16 @@ class CategoryCreateFab extends HookConsumerWidget {
           : () {
               context.showAdaptiveAppDialog(builder: (context) => EditCategoryDialog(
                   createCategory: (newCategory) async {
-                    try {
-                      isLoading.value = (true);
-                      await ref
+                    isLoading.value = true;
+                    final result = await AsyncValue.guard(
+                      () => ref
                           .read(categoryControllerProvider.notifier)
-                          .createCategory(newCategory);
-                      isLoading.value = (false);
-                    } catch (e) {
-                      //
-                    }
+                          .createCategory(newCategory),
+                    );
+                    // Always clear the spinner, or a failed create leaves the
+                    // button disabled for good, and say so when it failed.
+                    isLoading.value = false;
+                    result.showToastOnError(ref.read(toastProvider));
                   },
                 ),
               );

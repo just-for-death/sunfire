@@ -13,6 +13,17 @@ abstract final class ReaderSession {
 
   static void enter() => _depth++;
 
+  /// Holds the session open across a chapter `pushReplacement` so the outgoing
+  /// screen's [leave] cannot drop the depth to zero mid-transition.
+  ///
+  /// Self-balancing: a bare [enter] here would leak one level per chapter
+  /// change, and the depth would then never reach zero on exit — leaving the
+  /// wakelock, orientation lock and immersive UI stuck on.
+  static void beginTransition() {
+    _depth++;
+    SchedulerBinding.instance.addPostFrameCallback((_) => leave());
+  }
+
   static void leave() {
     if (_depth <= 0) return;
     _depth--;

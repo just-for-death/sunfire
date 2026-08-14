@@ -19,6 +19,7 @@ import '../../../../features/settings/presentation/server/widget/client/server_p
 import '../../../../features/settings/presentation/server/widget/client/server_url_tile/server_url_tile.dart';
 import '../../../../features/settings/presentation/server/widget/credential_popup/credentials_popup.dart';
 import '../../../../global_providers/global_providers.dart';
+import '../../../../graphql/__generated__/schema.graphql.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../data/manga_book/manga_book_repository.dart';
 import '../../domain/chapter/chapter_model.dart';
@@ -87,11 +88,15 @@ class DownloadCancelledException implements Exception {
   const DownloadCancelledException();
 }
 
+/// Sentinel category id used when the library falls back to offline downloads.
+const int kOfflineLibraryCategoryId = -1;
+
 class LocalDownloadsService {
   const LocalDownloadsService();
 
   static const _rootFolderName = 'catalyst_offline';
   static const _chaptersFolderName = 'chapters';
+  static const _coversFolderName = 'covers';
   static const _manifestFileName = 'manifest.json';
 
   Future<Directory> _chapterDir(int chapterId) async {
@@ -107,6 +112,117 @@ class LocalDownloadsService {
     return Directory(
       p.join(baseDir.path, _rootFolderName, _chaptersFolderName, '$chapterId'),
     );
+  }
+
+  Future<Directory> _coversDir() async {
+    final baseDir = await getApplicationDocumentsDirectory();
+    final dir = Directory(
+      p.join(baseDir.path, _rootFolderName, _coversFolderName),
+    );
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return dir;
+  }
+
+  /// Cached cover as a `file://` URI, or `null` if none is stored yet.
+  Future<String?> getCachedCoverUri(int mangaId) async {
+    if (mangaId <= 0) return null;
+    final dir = await _coversDir();
+    await for (final entity in dir.list(followLinks: false)) {
+      if (entity is! File) continue;
+      final name = p.basenameWithoutExtension(entity.path);
+      if (name == '$mangaId') {
+        return Uri.file(entity.path).toString();
+      }
+    }
+    return null;
+  }
+
+  /// First readable page of any downloaded chapter — used as a cover stand-in
+  /// for chapters downloaded before cover caching existed.
+  Future<String?> getFallbackCoverUri(int mangaId) async {
+    if (mangaId <= 0) return null;
+    final ids = await listDownloadedChapterIds();
+    for (final chapterId in ids) {
+      final manifest = await getOfflineManifest(chapterId);
+      if (manifest?.mangaId != mangaId) continue;
+      final pages = await getLocalPages(chapterId);
+      if (pages == null) continue;
+      for (final page in pages) {
+        if (page != null) return page;
+      }
+    }
+    return null;
+  }
+
+  Future<String?> getCoverUri(int mangaId) async =>
+      await getCachedCoverUri(mangaId) ?? await getFallbackCoverUri(mangaId);
+
+  /// Saves a cover image next to offline chapters so the library can show it
+  /// when the server is unreachable.
+  Future<void> cacheCoverBytes(
+    int mangaId,
+    List<int> bytes, {
+    String extension = '.img',
+  }) async {
+    if (mangaId <= 0 || bytes.isEmpty) return;
+    final dir = await _coversDir();
+    final ext = extension.startsWith('.') ? extension : '.$extension';
+    // Drop any previous cover for this manga (extension may change).
+    await for (final entity in dir.list(followLinks: false)) {
+      if (entity is! File) continue;
+      if (p.basenameWithoutExtension(entity.path) == '$mangaId') {
+        try {
+          await entity.delete();
+        } catch (_) {}
+      }
+    }
+    final target = File(p.join(dir.path, '$mangaId$ext'));
+    await target.writeAsBytes(bytes, flush: true);
+  }
+
+  Future<void> cacheCoverFromUrl({
+    required int mangaId,
+    required String imageUrl,
+    required String baseApi,
+    Map<String, String> headers = const {},
+  }) async {
+    if (mangaId <= 0 || imageUrl.isBlank) return;
+    // Already have a dedicated cover — don't re-fetch on every chapter download.
+    if (await getCachedCoverUri(mangaId) != null) return;
+
+    final fullUrl = imageUrl.startsWith('http')
+        ? imageUrl
+        : '$baseApi$imageUrl';
+    try {
+      final response = await http
+          .get(Uri.parse(fullUrl), headers: headers)
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode < 200 || response.statusCode >= 300) return;
+      if (response.bodyBytes.isEmpty) return;
+      await cacheCoverBytes(
+        mangaId,
+        response.bodyBytes,
+        extension: _safeExtFromUrl(imageUrl),
+      );
+    } catch (_) {
+      // Cover cache is best-effort; chapter pages are what matter.
+    }
+  }
+
+  Future<void> deleteCover(int mangaId) async {
+    if (mangaId <= 0) return;
+    final dir = await _coversDir();
+    if (!await dir.exists()) return;
+    await for (final entity in dir.list(followLinks: false)) {
+      if (entity is! File) continue;
+      if (p.basenameWithoutExtension(entity.path) == '$mangaId') {
+        try {
+          await entity.delete();
+        } catch (_) {}
+      }
+    }
   }
 
   /// Moves offline downloads from source manga chapters to matching target chapters.
@@ -188,7 +304,8 @@ class LocalDownloadsService {
     final manifest = await getOfflineManifest(chapterId);
     if (manifest == null || manifest.pages.isEmpty) return false;
     final pages = await getLocalPages(chapterId);
-    return pages != null && pages.length >= manifest.pageCount;
+    if (pages == null) return false;
+    return pages.nonNulls.length >= manifest.pageCount;
   }
 
   Future<OfflineChapterManifest?> getOfflineManifest(int chapterId) async {
@@ -236,6 +353,52 @@ class LocalDownloadsService {
       if (manifest != null) mangaIds.add(manifest.mangaId);
     }
     return mangaIds;
+  }
+
+  /// Builds a library-ready [MangaDto] from offline chapter manifests + cover.
+  Future<MangaDto?> buildOfflineMangaStub(int mangaId) async {
+    if (mangaId <= 0) return null;
+    final chapters = await getOfflineChaptersForManga(mangaId);
+    if (chapters.isEmpty) return null;
+
+    final title = await getOfflineMangaTitle(mangaId) ??
+        chapters.firstWhere(
+          (c) => c.name.isNotEmpty,
+          orElse: () => chapters.first,
+        ).name;
+    final cover = await getCoverUri(mangaId);
+    final unread = chapters.where((c) => !c.isRead).length;
+
+    return MangaDto(
+      downloadCount: chapters.length,
+      genre: const [],
+      id: mangaId,
+      inLibrary: true,
+      inLibraryAt: '0',
+      initialized: true,
+      meta: const [],
+      sourceId: '',
+      status: Enum$MangaStatus.UNKNOWN,
+      thumbnailUrl: cover,
+      title: title.isNotEmpty ? title : 'Manga $mangaId',
+      unreadCount: unread,
+      updateStrategy: Enum$UpdateStrategy.ONLY_FETCH_ONCE,
+      url: '',
+    );
+  }
+
+  /// All manga that have at least one offline chapter, for the offline library.
+  Future<List<MangaDto>> listOfflineManga() async {
+    final ids = await listOfflineMangaIds();
+    final list = <MangaDto>[];
+    for (final id in ids) {
+      final stub = await buildOfflineMangaStub(id);
+      if (stub != null) list.add(stub);
+    }
+    list.sort(
+      (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+    );
+    return list;
   }
 
   ChapterDto _chapterDtoFromManifest(OfflineChapterManifest manifest) {
@@ -296,32 +459,52 @@ class LocalDownloadsService {
       final manifest = await getOfflineManifest(chapterId);
       if (manifest == null || manifest.mangaId != mangaId) continue;
       final pages = await getLocalPages(chapterId);
-      if (pages == null || pages.isEmpty) continue;
+      if (pages == null) continue;
       chapters.add(_chapterDtoFromManifest(manifest));
     }
     chapters.sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
-    return chapters;
+    // Assign stable reading-order indices; manifests don't store sourceOrder.
+    return [
+      for (var i = 0; i < chapters.length; i++)
+        chapters[i].copyWith(sourceOrder: i + 1),
+    ];
   }
 
-  Future<List<String>?> getLocalPages(int chapterId) async {
+  /// Local page URIs, positionally aligned with the manifest: index `i` is
+  /// always manifest page `i`, and a missing file is `null` rather than being
+  /// collapsed out — dropping it would shift every later page onto the wrong
+  /// index for readers that merge these with the server's page list.
+  ///
+  /// Returns `null` when nothing is stored locally for the chapter.
+  Future<List<String?>?> getLocalPages(int chapterId) async {
     final manifest = await getOfflineManifest(chapterId);
     if (manifest == null || manifest.pages.isEmpty) return null;
 
     final dir = await _chapterDir(chapterId);
-    final result = <String>[];
+    final result = <String?>[];
+    var found = 0;
     for (final entry in manifest.pages) {
       final filePath = p.join(dir.path, entry);
       if (await File(filePath).exists()) {
         result.add(Uri.file(filePath).toString());
+        found++;
+      } else {
+        result.add(null);
       }
     }
-    return result.isEmpty ? null : result;
+    return found == 0 ? null : result;
   }
 
   Future<void> deleteChapter(int chapterId) async {
+    final manifest = await getOfflineManifest(chapterId);
+    final mangaId = manifest?.mangaId;
     final dir = await _chapterDir(chapterId);
     if (await dir.exists()) {
       await dir.delete(recursive: true);
+    }
+    // Drop the cover once no chapters remain for this manga.
+    if (mangaId != null && mangaId > 0 && !await hasOfflineManga(mangaId)) {
+      await deleteCover(mangaId);
     }
   }
 
@@ -419,10 +602,25 @@ class LocalDownloadsService {
         // Notify progress after each saved page.
         onProgress?.call(i + 1, total);
       }
+      // Last chance to bail: a delete racing the final page would otherwise be
+      // undone below, since writing the manifest re-creates the chapter dir.
+      if (isCancelled?.call() == true) {
+        throw const DownloadCancelledException();
+      }
     } on DownloadCancelledException {
+      // Discard the partial chapter: there is no resume, and a directory with
+      // no manifest is invisible to the offline listings, so keeping it would
+      // orphan the files where even "delete all offline" can't reclaim them.
+      try {
+        if (await dir.exists()) {
+          await dir.delete(recursive: true);
+        }
+      } catch (_) {
+        // Best-effort cleanup — don't mask the cancellation.
+      }
       rethrow;
     } catch (e) {
-      // Clean up partial downloads on failure, but preserve files on user cancel.
+      // Clean up partial downloads on failure.
       try {
         if (await dir.exists()) {
           await dir.delete(recursive: true);
@@ -449,6 +647,16 @@ class LocalDownloadsService {
         ).toJson(),
       ),
     );
+
+    final thumb = mangaMeta?.thumbnailUrl;
+    if (thumb.isNotBlank) {
+      await cacheCoverFromUrl(
+        mangaId: mangaId,
+        imageUrl: thumb!,
+        baseApi: baseApi,
+        headers: headers,
+      );
+    }
   }
 
   /// Returns total bytes used by all offline downloads in the app documents dir.

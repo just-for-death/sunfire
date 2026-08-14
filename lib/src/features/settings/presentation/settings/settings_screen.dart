@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
+import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/settings/adaptive_list_tile.dart';
 import 'ios/ios_settings_screen.dart';
 
@@ -28,6 +29,7 @@ class MaterialSettingsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.settings)),
       body: ListView(
+        padding: scrollBottomPadding(context),
         children: [
           ListTile(
             title: Text(context.l10n.general),

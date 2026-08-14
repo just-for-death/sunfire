@@ -5,20 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import '../../../../global_providers/tablet_selection_providers.dart';
 import '../../../../routes/router_config.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/platform/platform_ui.dart';
-import '../../../../widgets/layout/tablet_split_layout.dart';
 import '../../../../widgets/server_image.dart';
 import '../../../../widgets/shell/ios/glass_app_bar.dart';
 import '../../domain/history_group.dart';
 import '../../domain/history_item.dart';
+import '../../domain/history_menu_action.dart';
 import '../history_controller.dart';
 import '../history_reader_navigation.dart';
 import '../history_settings_sheet.dart';
 import '../widgets/continue_reading_carousel.dart';
-import '../widgets/history_detail_pane.dart';
 
 class IOSHomeScreen extends HookConsumerWidget {
   const IOSHomeScreen({super.key});
@@ -35,50 +33,16 @@ class IOSHomeScreen extends HookConsumerWidget {
     final isDark = context.isDarkMode;
     final cs = context.theme.colorScheme;
     final bottomPadding = scrollBottomPadding(context).bottom;
-    final isTabletSplit = TabletSplitLayout.shouldUse(context);
-    final selectedItem = ref.watch(tabletHistorySelectionProvider);
 
-    final selectableItems = useMemoized(
-      () => historyGroups.expand((g) => g.items).toList(),
-      [historyGroups],
-    );
-    final selectedId = selectedItem?.id;
-    final liveSelectedItem = useMemoized(
-      () {
-        if (selectedId == null) return null;
-        for (final item in selectableItems) {
-          if (item.id == selectedId) return item;
-        }
-        return null;
-      },
-      [selectableItems, selectedId],
-    );
+    final loadMoreFailed = useState(false);
 
     useEffect(() {
       if (searchController.text != searchQuery) {
         searchController.text = searchQuery;
       }
+      loadMoreFailed.value = false;
       return null;
     }, [searchQuery]);
-
-    useEffect(() {
-      if (!isTabletSplit) return null;
-      if (selectableItems.isEmpty) {
-        if (selectedItem != null) {
-          Future.microtask(() {
-            ref.read(tabletHistorySelectionProvider.notifier).state = null;
-          });
-        }
-        return null;
-      }
-      if (liveSelectedItem == null) {
-        Future.microtask(() {
-          ref.read(tabletHistorySelectionProvider.notifier).state =
-              selectableItems.first;
-        });
-      }
-      return null;
-    }, [isTabletSplit, selectableItems, liveSelectedItem]);
 
     Future<void> tryLoadMore() async {
       if (!hasMore ||
@@ -89,22 +53,25 @@ class IOSHomeScreen extends HookConsumerWidget {
       isLoadingMore.value = true;
       try {
         await ref.read(readingHistoryProvider.notifier).loadMore();
+        loadMoreFailed.value = false;
+      } catch (_) {
+        // Without this the auto-pager below would sit on a spinner forever.
+        loadMoreFailed.value = true;
       } finally {
         isLoadingMore.value = false;
       }
     }
 
     useEffect(() {
-      if (searchQuery.isBlank) return null;
       if (historyGroups.isNotEmpty) return null;
-      if (!hasMore || isLoadingMore.value) return null;
+      if (!hasMore || isLoadingMore.value || loadMoreFailed.value) return null;
+      // Nothing to show yet the server has more: client-side search and
+      // hidden-chapter filtering both only see the pages loaded so far.
       Future.microtask(() => tryLoadMore());
       return null;
-    }, [searchQuery, historyGroups, hasMore]);
+    }, [searchQuery, historyGroups, hasMore, loadMoreFailed.value]);
 
-    void onHistoryItemTap(HistoryItemDto item) {
-      ref.read(tabletHistorySelectionProvider.notifier).state = item;
-    }
+    final isPagingForResults = hasMore && !loadMoreFailed.value;
 
     final listEntries = useMemoized(
       () => _buildGroupedEntries(historyGroups),
@@ -164,7 +131,7 @@ class IOSHomeScreen extends HookConsumerWidget {
                 ),
                 IconButton(
                   icon: const Icon(CupertinoIcons.refresh),
-                  tooltip: context.l10n.retry,
+                  tooltip: context.l10n.refresh,
                   onPressed: () =>
                       ref.read(readingHistoryProvider.notifier).refresh(),
                 ),
@@ -190,7 +157,7 @@ class IOSHomeScreen extends HookConsumerWidget {
                           searchController.clear();
                           ref
                               .read(historySearchQueryProvider.notifier)
-                              .updateQuery('');
+                              .clearQuery();
                         },
                 ),
               ),
@@ -238,8 +205,6 @@ class IOSHomeScreen extends HookConsumerWidget {
               ContinueReadingCarousel(
                 groups: historyGroups,
                 useCupertinoStyle: true,
-                onItemTap: isTabletSplit ? onHistoryItemTap : null,
-                selectedItemId: isTabletSplit ? liveSelectedItem?.id : null,
               ),
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(0, 0, 0, bottomPadding),
@@ -279,8 +244,6 @@ class IOSHomeScreen extends HookConsumerWidget {
                       );
                     }
                     final item = entry.item!;
-                    final selected =
-                        isTabletSplit && liveSelectedItem?.id == item.id;
                     return Dismissible(
                       key: ValueKey('ios_history_${item.id}'),
                       direction: DismissDirection.endToStart,
@@ -313,17 +276,13 @@ class IOSHomeScreen extends HookConsumerWidget {
                           item: item,
                           isDark: isDark,
                           cs: cs,
-                          isSelected: selected,
-                          onTap: isTabletSplit
-                              ? () => onHistoryItemTap(item)
-                              : null,
                         ),
                       ),
                     );
                   },
                 ),
               ),
-            ] else if (searchQuery.isNotBlank && hasMore)
+            ] else if (isPagingForResults)
               const SliverFillRemaining(
                 child: Center(child: CupertinoActivityIndicator()),
               )
@@ -362,18 +321,7 @@ class IOSHomeScreen extends HookConsumerWidget {
     return Scaffold(
       backgroundColor: context.theme.scaffoldBackgroundColor,
       extendBodyBehindAppBar: true,
-      body: isTabletSplit
-          ? TabletSplitLayout(
-              master: scrollBody,
-              detail: liveSelectedItem != null
-                  ? HistoryDetailPane(
-                      key: ValueKey(liveSelectedItem.id),
-                      item: liveSelectedItem,
-                    )
-                  : const SizedBox.shrink(),
-              showDetail: liveSelectedItem != null,
-            )
-          : scrollBody,
+      body: scrollBody,
     );
   }
 
@@ -413,24 +361,18 @@ class _IOSHistoryTile extends ConsumerWidget {
     required this.item,
     required this.isDark,
     required this.cs,
-    this.onTap,
-    this.isSelected = false,
   });
   final HistoryItemDto item;
   final bool isDark;
   final ColorScheme cs;
-  final VoidCallback? onTap;
-  final bool isSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: isSelected
-            ? Border.all(color: cs.primary, width: 2)
-            : Border.all(color: Colors.transparent, width: 2),
-      ),
+    final completed = historyItemIsCompleted(item);
+    final progress = historyItemReadProgress(item);
+    final showProgress = item.pageCount > 0;
+    return GestureDetector(
+      onLongPress: () => _showMenu(context, ref),
       child: GlassCard(
         padding: const EdgeInsets.all(12),
         child: Row(
@@ -439,8 +381,7 @@ class _IOSHistoryTile extends ConsumerWidget {
               label: item.manga.title,
               button: true,
               child: GestureDetector(
-                onTap: onTap ??
-                    () => MangaRoute(mangaId: item.mangaId).push(context),
+                onTap: () => MangaRoute(mangaId: item.mangaId).push(context),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: ServerImage(
@@ -455,8 +396,7 @@ class _IOSHistoryTile extends ConsumerWidget {
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: onTap ??
-                    () => MangaRoute(mangaId: item.mangaId).push(context),
+                onTap: () => MangaRoute(mangaId: item.mangaId).push(context),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -481,10 +421,44 @@ class _IOSHistoryTile extends ConsumerWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (showProgress) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                value: progress,
+                                minHeight: 3,
+                                backgroundColor:
+                                    (isDark ? Colors.white : Colors.black)
+                                        .withValues(alpha: 0.12),
+                                valueColor: AlwaysStoppedAnimation(
+                                  completed ? cs.secondary : cs.primary,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            completed
+                                ? '✓'
+                                : '${(progress * 100).round()}%',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: completed ? cs.secondary : cs.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
+            const SizedBox(width: 8),
             Semantics(
               label: context.l10n.historyContinueReading,
               button: true,
@@ -502,6 +476,54 @@ class _IOSHistoryTile extends ConsumerWidget {
                     color: cs.primary,
                   ),
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMenu(BuildContext context, WidgetRef ref) {
+    showAdaptiveBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(CupertinoIcons.book),
+              title: Text(item.manga.title,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(item.name),
+            ),
+            const Divider(height: 1),
+            ...HistoryMenuAction.values.map(
+              (action) => ListTile(
+                leading: Icon(action.icon),
+                title: Text(action.toLocale(ctx)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  switch (action) {
+                    case HistoryMenuAction.removeFromHistory:
+                      unawaited(showAdaptiveConfirmDialog(
+                        context: context,
+                        title: context.l10n.removeFromHistory,
+                        content: context.l10n.removeFromHistoryConfirmation,
+                        confirmLabel: context.l10n.remove,
+                        cancelLabel: context.l10n.cancel,
+                        isDestructive: true,
+                      ).then((confirmed) {
+                        if (confirmed == true) {
+                          ref
+                              .read(readingHistoryProvider.notifier)
+                              .removeFromHistory(item.id);
+                        }
+                      }));
+                    case HistoryMenuAction.viewManga:
+                      MangaRoute(mangaId: item.mangaId).push(context);
+                  }
+                },
               ),
             ),
           ],

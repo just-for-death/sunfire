@@ -66,7 +66,7 @@ class CreateBackupDialog extends HookConsumerWidget {
               Endpoints.baseApi(
                     baseUrl: ref.read(serverUrlProvider),
                     port: ref.read(serverPortProvider),
-                    addPort: ref.watch(serverPortToggleProvider).ifNull(),
+                    addPort: ref.read(serverPortToggleProvider).ifNull(),
                     appendApiToUrl: false,
                   ) +
                   backupUrl.value!,

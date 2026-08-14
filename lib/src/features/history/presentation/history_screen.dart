@@ -6,18 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import '../../../global_providers/tablet_selection_providers.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../../../utils/platform/platform_ui.dart';
 import '../../../widgets/emoticons.dart';
-import '../../../widgets/layout/tablet_split_layout.dart';
-import '../domain/history_item.dart';
 import 'history_controller.dart';
 import 'history_reader_navigation.dart';
 import 'history_settings_sheet.dart';
 import 'ios/ios_home_screen.dart';
 import 'widgets/continue_reading_carousel.dart';
-import 'widgets/history_detail_pane.dart';
 import 'widgets/history_group_widget.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -50,11 +46,13 @@ class _AndroidHomeScreen extends HookConsumerWidget {
     final searchQuery = ref.watch(historySearchQueryProvider);
     final searchController = useTextEditingController(text: searchQuery);
     final isLoadingMore = useState(false);
+    final loadMoreFailed = useState(false);
 
     useEffect(() {
       if (searchController.text != searchQuery) {
         searchController.text = searchQuery;
       }
+      loadMoreFailed.value = false;
       return null;
     }, [searchQuery]);
 
@@ -67,67 +65,25 @@ class _AndroidHomeScreen extends HookConsumerWidget {
       isLoadingMore.value = true;
       try {
         await ref.read(readingHistoryProvider.notifier).loadMore();
+        loadMoreFailed.value = false;
+      } catch (_) {
+        // Without this the auto-pager below would sit on a spinner forever.
+        loadMoreFailed.value = true;
       } finally {
         isLoadingMore.value = false;
       }
     }
 
     useEffect(() {
-      if (searchQuery.isBlank) return null;
       if (historyGroups.isNotEmpty) return null;
-      if (!hasMore || isLoadingMore.value) return null;
-      // Client-side search only covers loaded pages — keep paging until a
-      // match appears or the server reports no more history.
+      if (!hasMore || isLoadingMore.value || loadMoreFailed.value) return null;
+      // Nothing to show yet the server has more: client-side search and
+      // hidden-chapter filtering both only see the pages loaded so far.
       Future.microtask(() => tryLoadMore());
       return null;
-    }, [searchQuery, historyGroups, hasMore]);
+    }, [searchQuery, historyGroups, hasMore, loadMoreFailed.value]);
 
-    final isTabletSplit = TabletSplitLayout.shouldUse(context);
-    final selectedItem = ref.watch(tabletHistorySelectionProvider);
-
-    // Carousel items are selectable too, so validate against every item rather
-    // than only the ones left in the list section.
-    final selectableItems = useMemoized(
-      () => historyGroups.expand((g) => g.items).toList(),
-      [historyGroups],
-    );
-
-    // The provider holds a snapshot taken at tap time. Re-resolve it by id so
-    // the pane shows current progress after a chapter is read.
-    final selectedId = selectedItem?.id;
-    final liveSelectedItem = useMemoized(
-      () {
-        if (selectedId == null) return null;
-        for (final item in selectableItems) {
-          if (item.id == selectedId) return item;
-        }
-        return null;
-      },
-      [selectableItems, selectedId],
-    );
-
-    useEffect(() {
-      if (!isTabletSplit) return null;
-      if (selectableItems.isEmpty) {
-        if (selectedItem != null) {
-          Future.microtask(() {
-            ref.read(tabletHistorySelectionProvider.notifier).state = null;
-          });
-        }
-        return null;
-      }
-      if (liveSelectedItem == null) {
-        Future.microtask(() {
-          ref.read(tabletHistorySelectionProvider.notifier).state =
-              selectableItems.first;
-        });
-      }
-      return null;
-    }, [isTabletSplit, selectableItems, liveSelectedItem]);
-
-    void onHistoryItemTap(HistoryItemDto item) {
-      ref.read(tabletHistorySelectionProvider.notifier).state = item;
-    }
+    final isPagingForResults = hasMore && !loadMoreFailed.value;
 
     final scrollContent = NotificationListener<ScrollNotification>(
         onNotification: (notification) {
@@ -156,7 +112,7 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                         searchController.clear();
                         ref
                             .read(historySearchQueryProvider.notifier)
-                            .updateQuery('');
+                            .clearQuery();
                       },
                     ),
                   IconButton(
@@ -192,28 +148,24 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                   ),
                 );
               }
-              if (data == null || data.isEmpty) {
-                return const SliverFillRemaining(child: _HistoryEmptyState());
-              }
-              if (historyGroups.isEmpty && searchQuery.isNotBlank) {
-                if (hasMore) {
+              if (historyGroups.isEmpty) {
+                if (isPagingForResults) {
                   return const SliverFillRemaining(
                     child: Center(child: CircularProgressIndicator()),
                   );
                 }
-                return const SliverFillRemaining(child: _HistoryNoResults());
+                return SliverFillRemaining(
+                  child: searchQuery.isNotBlank
+                      ? const _HistoryNoResults()
+                      : const _HistoryEmptyState(),
+                );
               }
-              if (historyGroups.isEmpty) {
+              if (data == null || data.isEmpty) {
                 return const SliverFillRemaining(child: _HistoryEmptyState());
               }
               return SliverMainAxisGroup(
                 slivers: [
-                  ContinueReadingCarousel(
-                    groups: historyGroups,
-                    onItemTap: isTabletSplit ? onHistoryItemTap : null,
-                    selectedItemId:
-                        isTabletSplit ? liveSelectedItem?.id : null,
-                  ),
+                  ContinueReadingCarousel(groups: historyGroups),
                   if (listHistoryGroups.isNotEmpty)
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
@@ -247,10 +199,6 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                           onRemoveItem: (id) => ref
                               .read(readingHistoryProvider.notifier)
                               .removeFromHistory(id),
-                          onItemTap:
-                              isTabletSplit ? onHistoryItemTap : null,
-                          selectedItemId:
-                              isTabletSplit ? liveSelectedItem?.id : null,
                         );
                       },
                     ),
@@ -272,20 +220,7 @@ class _AndroidHomeScreen extends HookConsumerWidget {
         ),
       );
 
-    return Scaffold(
-      body: isTabletSplit
-          ? TabletSplitLayout(
-              master: scrollContent,
-              detail: liveSelectedItem != null
-                  ? HistoryDetailPane(
-                      key: ValueKey(liveSelectedItem.id),
-                      item: liveSelectedItem,
-                    )
-                  : const SizedBox.shrink(),
-              showDetail: liveSelectedItem != null,
-            )
-          : scrollContent,
-    );
+    return Scaffold(body: scrollContent);
   }
 }
 

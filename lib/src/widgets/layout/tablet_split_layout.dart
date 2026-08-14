@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../constants/app_breakpoints.dart';
+import '../../theme/catalyst_ui_tokens.dart';
 
 /// Master–detail split for tablet-width layouts.
 class TabletSplitLayout extends StatelessWidget {
@@ -18,15 +19,16 @@ class TabletSplitLayout extends StatelessWidget {
   final bool showDetail;
 
   static bool shouldUse(BuildContext context) =>
-      AppBreakpoints.isTabletLayout(context) &&
-      !AppBreakpoints.useCompactShellOnNarrowTablet(context);
+      AppBreakpoints.usesSideRail(context);
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        SizedBox(
+        AnimatedContainer(
+          duration: CatalystUiTokens.durationStandard,
+          curve: CatalystUiTokens.curveStandard,
           width: masterWidth,
           child: Material(
             color: cs.surfaceContainerLow,
