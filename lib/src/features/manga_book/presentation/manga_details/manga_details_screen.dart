@@ -60,6 +60,22 @@ class MangaDetailsScreen extends HookConsumerWidget {
 
     final selectedChapters = useState<Map<int, ChapterDto>>({});
 
+    // Drop selected chapters the current filter hides, so the count in the app
+    // bar and the bulk actions only ever cover what is on screen.
+    final visibleChapterIds =
+        filteredChapterList.valueOrNull?.map((e) => e.id).toSet();
+    useEffect(() {
+      final visible = visibleChapterIds;
+      final selected = selectedChapters.value;
+      if (visible == null || selected.isEmpty) return null;
+      if (selected.keys.every(visible.contains)) return null;
+      selectedChapters.value = {
+        for (final entry in selected.entries)
+          if (visible.contains(entry.key)) entry.key: entry.value,
+      };
+      return null;
+    });
+
     // Refresh manga
     final mangaRefresh = useCallback(([bool onlineFetch = false]) async {
       await ref.read(mangaProvider.notifier).refresh();
@@ -176,10 +192,10 @@ class MangaDetailsScreen extends HookConsumerWidget {
                       ),
                       IconButton(
                         onPressed: AppUtils.returnIf(
-                          data!.realUrl != null,
+                          data?.realUrl != null,
                           () => launchUrlInWeb(
                             context,
-                            data.realUrl!,
+                            data!.realUrl!,
                             ref.read(toastProvider),
                           ),
                         ),
@@ -348,6 +364,9 @@ class MultiSelectPopupButton extends StatelessWidget {
             final lastId = selectedChapters.value.keys.last;
             final lastIndex =
                 chapterList.lastIndexWhere((chapter) => chapter.id == lastId);
+            // The selection can outlive a filter change, leaving it off-list;
+            // without this the range would restart from the top.
+            if (lastIndex < 0) return;
             final maxIndex = min(chapterList.length, lastIndex + 10);
             selectedChapters.value = ({
               ...selectedChapters.value,
@@ -377,6 +396,9 @@ class MultiSelectPopupButton extends StatelessWidget {
                 (chapter) => chapter.id == selectedChapterIds.firstOrNull);
             final lastSelectedIndex = chapterList.indexWhere(
                 (chapter) => chapter.id == selectedChapterIds.lastOrNull);
+            // A selected chapter filtered out of the list gives -1, which would
+            // index the list out of range below.
+            if (firstSelectedIndex < 0 || lastSelectedIndex < 0) return;
             final firstIndex = min(firstSelectedIndex, lastSelectedIndex);
             final lastIndex = max(firstSelectedIndex, lastSelectedIndex);
 

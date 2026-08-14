@@ -17,14 +17,10 @@ class HistoryItemTile extends ConsumerWidget {
     super.key,
     required this.item,
     required this.onRemove,
-    this.onTap,
-    this.isSelected = false,
   });
 
   final HistoryItemDto item;
   final VoidCallback onRemove;
-  final VoidCallback? onTap;
-  final bool isSelected;
 
   bool get _isCompleted => historyItemIsCompleted(item);
 
@@ -110,22 +106,11 @@ class HistoryItemTile extends ConsumerWidget {
             type: MaterialType.transparency,
             child: InkWell(
               borderRadius: radius,
-              onTap: onTap ?? () => _navigateToReader(context, ref),
+              onTap: () => _navigateToReader(context, ref),
               onLongPress: () => _showMenu(context),
             ),
           ),
         ),
-        if (isSelected)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: radius,
-                  border: Border.all(color: cs.primary, width: 3),
-                ),
-              ),
-            ),
-          ),
       ],
     );
 

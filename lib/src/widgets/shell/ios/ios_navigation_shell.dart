@@ -32,7 +32,7 @@ class IOSNavigationShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (context.isTablet && !AppBreakpoints.useCompactShellOnNarrowTablet(context)) {
+    if (AppBreakpoints.usesSideRail(context)) {
       return _IPadSplitShell(
         onDestinationSelected: onDestinationSelected,
         child: child,
@@ -399,83 +399,87 @@ class _GlassSidebar extends ConsumerWidget {
               children: [
                 Padding(
                   padding: EdgeInsets.fromLTRB(
-                    expanded ? 12 : 8,
+                    expanded ? 12 : 4,
                     12,
-                    expanded ? 8 : 8,
+                    expanded ? 8 : 4,
                     8,
                   ),
-                  child: Row(
-                    children: [
-                      if (expanded)
-                        Expanded(
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(8),
-                              onTap: () => const AboutRoute().go(context),
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 8),
-                                child: Row(
-                                  children: [
-                                    ImageIcon(
-                                      AssetImage(Assets.icons.darkIcon.path),
-                                      size: titleSize,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        context.l10n.appTitle,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: titleSize,
-                                          fontWeight: FontWeight.w700,
-                                          color:
-                                              isDark ? Colors.white : Colors.black,
-                                          letterSpacing: -0.3,
+                  // Side by side the app button and the toggle need ~80px, more
+                  // than the collapsed rail is wide, so stack them instead.
+                  child: expanded
+                      ? Row(
+                          children: [
+                            Expanded(
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: () => const AboutRoute().go(context),
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 8),
+                                    child: Row(
+                                      children: [
+                                        ImageIcon(
+                                          AssetImage(
+                                              Assets.icons.darkIcon.path),
+                                          size: titleSize,
                                         ),
-                                      ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            context.l10n.appTitle,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: titleSize,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : Colors.black,
+                                              letterSpacing: -0.3,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                            _SidebarToggleButton(
+                              expanded: expanded,
+                              isDark: isDark,
+                              onToggle: onToggle,
+                            ),
+                          ],
                         )
-                      else
-                        Tooltip(
-                          message: context.l10n.about,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(8),
-                              onTap: () => const AboutRoute().go(context),
-                              child: Padding(
-                                padding: const EdgeInsets.all(4),
-                                child: ImageIcon(
-                                  AssetImage(Assets.icons.darkIcon.path),
-                                  size: rowIconSize + 4,
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Tooltip(
+                              message: context.l10n.about,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: () => const AboutRoute().go(context),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: ImageIcon(
+                                      AssetImage(Assets.icons.darkIcon.path),
+                                      size: rowIconSize + 4,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                            _SidebarToggleButton(
+                              expanded: expanded,
+                              isDark: isDark,
+                              onToggle: onToggle,
+                            ),
+                          ],
                         ),
-                      IconButton(
-                        onPressed: onToggle,
-                        tooltip: expanded
-                            ? context.l10n.collapseSidebar
-                            : context.l10n.expandSidebar,
-                        icon: Icon(
-                          expanded
-                              ? CupertinoIcons.chevron_back
-                              : CupertinoIcons.chevron_forward,
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.7)
-                              : Colors.black.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
                 const SizedBox(height: 4),
                 Expanded(
@@ -566,4 +570,32 @@ class _GlassSidebar extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _SidebarToggleButton extends StatelessWidget {
+  const _SidebarToggleButton({
+    required this.expanded,
+    required this.isDark,
+    required this.onToggle,
+  });
+
+  final bool expanded;
+  final bool isDark;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+        onPressed: onToggle,
+        tooltip: expanded
+            ? context.l10n.collapseSidebar
+            : context.l10n.expandSidebar,
+        icon: Icon(
+          expanded
+              ? CupertinoIcons.chevron_back
+              : CupertinoIcons.chevron_forward,
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.7)
+              : Colors.black.withValues(alpha: 0.6),
+        ),
+      );
 }

@@ -4,8 +4,11 @@ import 'data/tracker_repository.dart';
 import 'presentation/controller/tracker_controller.dart';
 
 /// Best-effort sync of bound tracker records when chapter progress advances.
+///
+/// Takes a [ProviderContainer] rather than a `WidgetRef` so it can also run
+/// while the reader is being disposed, where a `WidgetRef` would throw.
 Future<void> syncTrackerProgressOnChapterComplete(
-  WidgetRef ref, {
+  ProviderContainer ref, {
   required int mangaId,
   required double chapterNumber,
 }) async {

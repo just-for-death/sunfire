@@ -41,7 +41,6 @@ class HistoryRepository {
     int rawOffset = 0,
     Set<int> excludeMangaIds = const {},
     int targetCount = 50,
-    String? searchQuery,
     DateTime? fromDate,
     DateTime? toDate,
   }) async {
@@ -55,7 +54,6 @@ class HistoryRepository {
       final batch = await _fetchRawHistoryChapters(
         rawOffset: offset,
         rawBatchSize: rawBatchSize,
-        searchQuery: searchQuery,
         fromDate: fromDate,
         toDate: toDate,
       );
@@ -65,7 +63,13 @@ class HistoryRepository {
         break;
       }
 
+      // Track how far into the batch we actually got: stopping at [targetCount]
+      // mid-batch and then skipping the whole batch would drop every remaining
+      // chapter in it from the next page.
+      var consumed = 0;
       for (final chapter in batch) {
+        consumed++;
+        if (!chapter.isRead && chapter.lastPageRead <= 0) continue;
         final mangaId = chapter.mangaId;
         if (seenMangaIds.contains(mangaId)) continue;
         seenMangaIds.add(mangaId);
@@ -73,8 +77,8 @@ class HistoryRepository {
         if (collected.length >= targetCount) break;
       }
 
-      offset += batch.length;
-      lastBatchFull = batch.length >= rawBatchSize;
+      offset += consumed;
+      lastBatchFull = consumed < batch.length || batch.length >= rawBatchSize;
     }
 
     return ReadingHistoryPage(
@@ -87,7 +91,6 @@ class HistoryRepository {
   Future<List<HistoryItemDto>> _fetchRawHistoryChapters({
     required int rawOffset,
     required int rawBatchSize,
-    String? searchQuery,
     DateTime? fromDate,
     DateTime? toDate,
   }) async {
@@ -130,20 +133,6 @@ class HistoryRepository {
                   (toDate.millisecondsSinceEpoch ~/ 1000).toString(),
             ),
           ),
-        // Add search filtering if provided
-        if (searchQuery.isNotBlank)
-          Input$ChapterFilterInput(
-            or: [
-              // Search in chapter name
-              Input$ChapterFilterInput(
-                name: Input$StringFilterInput(
-                  includesInsensitive: searchQuery,
-                ),
-              ),
-              // Note: We can't search manga title directly in chapter filter
-              // This will be handled in the UI layer
-            ],
-          ),
       ],
     );
 
@@ -173,13 +162,9 @@ class HistoryRepository {
         )
         .getData((data) => data.chapters);
 
-    if (result?.nodes == null) return const [];
-
-    return result!.nodes.where((chapter) {
-      final isFullyRead = chapter.isRead;
-      final hasProgress = chapter.lastPageRead > 0;
-      return isFullyRead || hasProgress;
-    }).toList();
+    // Returned unfiltered on purpose: [rawOffset] indexes the server's result
+    // set, so dropping rows here would desync the offset and cut paging short.
+    return result?.nodes ?? const [];
   }
 
   /// Get reading history for a specific manga

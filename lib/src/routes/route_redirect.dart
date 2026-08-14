@@ -26,20 +26,24 @@ String? redirectPathForUri(Uri uri) {
 
   final mangaIdx = segments.indexOf('manga');
   if (mangaIdx >= 0) {
+    final wantsChapter =
+        mangaIdx + 2 < segments.length && segments[mangaIdx + 2] == 'chapter';
+    // Only send the user to the reader when that is where they were headed;
+    // otherwise fall back to manga details.
+    final fallback = wantsChapter ? '/manga/0/chapter/0' : '/manga/0';
+
     if (mangaIdx + 1 >= segments.length) {
-      return '/manga/0/chapter/0';
+      return fallback;
     }
-    final mangaIdStr = segments[mangaIdx + 1];
-    if (int.tryParse(mangaIdStr) == null) {
-      return '/manga/0/chapter/0';
+    if (int.tryParse(segments[mangaIdx + 1]) == null) {
+      return fallback;
     }
 
-    if (mangaIdx + 2 < segments.length && segments[mangaIdx + 2] == 'chapter') {
+    if (wantsChapter) {
       if (mangaIdx + 3 >= segments.length) {
         return '/manga/0/chapter/0';
       }
-      final chapterIdStr = segments[mangaIdx + 3];
-      if (int.tryParse(chapterIdStr) == null) {
+      if (int.tryParse(segments[mangaIdx + 3]) == null) {
         return '/manga/0/chapter/0';
       }
     }

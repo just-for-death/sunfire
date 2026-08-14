@@ -16,6 +16,7 @@ import '../../data/downloads/downloads_repository.dart';
 import '../../data/manga_book/manga_book_repository.dart';
 import '../../domain/chapter/chapter_model.dart';
 import '../../domain/chapter_batch/chapter_batch_model.dart';
+import '../../presentation/manga_details/chapter_navigation_utils.dart';
 import 'multi_chapters_action_icon.dart';
 
 class MultiChaptersActionsBottomAppBar extends HookConsumerWidget {
@@ -43,6 +44,15 @@ class MultiChaptersActionsBottomAppBar extends HookConsumerWidget {
 
     final selectedList = selectedChapters.value.values;
 
+    final previousChapterIds = selectedList.isSingletonList &&
+            chapterList.isNotBlank
+        ? [
+            for (final c
+                in chaptersBeforeInReadingOrder(chapterList!, firstChapter))
+              c.id,
+          ]
+        : const <int>[];
+
     return Padding(
       padding: KEdgeInsets.a8.size,
       child: Row(
@@ -62,17 +72,10 @@ class MultiChaptersActionsBottomAppBar extends HookConsumerWidget {
               change: ChapterChange(isBookmarked: true),
               refresh: refresh,
             ),
-          if (selectedList.isSingletonList && chapterList.isNotBlank)
+          // Hidden for the first chapter, where there is nothing before it.
+          if (previousChapterIds.isNotEmpty)
             MultiChaptersActionIcon(
-              chapterList: () {
-                final list = chapterList!;
-                final selectedPos =
-                    list.indexWhere((c) => c.id == firstChapter.id);
-                if (selectedPos <= 0) return <int>[];
-                return [
-                  for (var i = 0; i < selectedPos; i++) list[i].id,
-                ];
-              }(),
+              chapterList: previousChapterIds,
               icon: ImageIcon(
                 Assets.icons.previousDone.provider(),
                 color: context.theme.cardTheme.color,

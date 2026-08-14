@@ -98,6 +98,11 @@ class ReaderScreen extends HookConsumerWidget {
       return null;
     }, [nextPrevPair?.first?.id, nextPrevPair?.second?.id]);
 
+    // Saving progress must also work from the dispose path (chapter changes use
+    // pushReplacement, which never triggers PopScope), and `ref` throws once the
+    // element is unmounted — so the whole save goes through the container.
+    final container = ProviderScope.containerOf(context, listen: false);
+
     final updateLastRead = useCallback((int currentPage) async {
       final chapterValue = resolvedChapter;
       final chapterPagesValue = chapterPages.valueOrNull;
@@ -112,7 +117,7 @@ class ReaderScreen extends HookConsumerWidget {
       final lastPage = isReadingCompleted ? 0 : currentPage;
 
       final saveResult = await AsyncValue.guard(
-        () => ref.read(mangaBookRepositoryProvider).putChapter(
+        () => container.read(mangaBookRepositoryProvider).putChapter(
               chapterId: chapterValue.id,
               patch: ChapterChange(
                 lastPageRead: lastPage,
@@ -121,36 +126,39 @@ class ReaderScreen extends HookConsumerWidget {
             ),
       );
 
-      await ref.read(localDownloadsServiceProvider).updateReadingProgress(
+      await container.read(localDownloadsServiceProvider).updateReadingProgress(
             chapterValue.id,
             lastPageRead: lastPage,
             isRead: isReadingCompleted,
           );
 
       if (saveResult.hasError) {
-        ref.invalidate(chapterProvider(chapterId: chapterValue.id));
+        container.invalidate(chapterProvider(chapterId: chapterValue.id));
         return;
       }
 
-      ref.invalidate(chapterProvider(chapterId: chapterValue.id));
+      container.invalidate(chapterProvider(chapterId: chapterValue.id));
       pendingPageIndex.value = null;
 
-      ref.read(historyHiddenChapterIdsProvider.notifier).unhideChapter(
+      container.read(historyHiddenChapterIdsProvider.notifier).unhideChapter(
             chapterValue.id,
           );
 
-      unawaited(
-        syncTrackerProgressOnChapterComplete(
-          ref,
-          mangaId: mangaId,
-          chapterNumber: chapterValue.chapterNumber,
-        ),
-      );
-
       if (isReadingCompleted) {
-        final historyEnabled = ref.read(historyEnabledProvider) ?? true;
+        // Only on completion: every debounced page save runs through here, and
+        // the tracker pushes any chapter number above the last one recorded, so
+        // syncing mid-chapter marks the chapter finished after a single page.
+        unawaited(
+          syncTrackerProgressOnChapterComplete(
+            container,
+            mangaId: mangaId,
+            chapterNumber: chapterValue.chapterNumber,
+          ),
+        );
+
+        final historyEnabled = container.read(historyEnabledProvider) ?? true;
         if (historyEnabled) {
-          ref.invalidate(readingHistoryProvider);
+          container.invalidate(readingHistoryProvider);
         }
       }
     }, [resolvedChapter, chapterPages.valueOrNull]);
@@ -173,12 +181,32 @@ class ReaderScreen extends HookConsumerWidget {
       ReaderSession.enter();
       ReaderSession.onEnterReader(chromeVisible: false);
       return () {
-        debounce.value?.cancel();
-        final pending = pendingPageIndex.value;
-        if (pending != null) {
-          unawaited(updateLastReadRef.value?.call(pending) ?? Future.value());
+        // Restoring the wakelock, orientation and system UI must not be
+        // skipped by a throw from the progress/history work below.
+        try {
+          debounce.value?.cancel();
+          final pending = pendingPageIndex.value;
+          // Mid-chapter progress is saved to the server but only completion
+          // refreshes the home/history views, so refresh on exit too — after
+          // the final flush, so it reads the saved value rather than a stale one.
+          void refreshHistory() {
+            if (container.read(historyEnabledProvider) ?? true) {
+              container.invalidate(readingHistoryProvider);
+            }
+          }
+
+          if (pending != null) {
+            final flush =
+                updateLastReadRef.value?.call(pending) ?? Future.value();
+            // Only on success: refreshing after a failed save would just refetch
+            // the stale server state.
+            unawaited(flush.then((_) => refreshHistory(), onError: (_, __) {}));
+          } else {
+            refreshHistory();
+          }
+        } finally {
+          ReaderSession.leave();
         }
-        ReaderSession.leave();
       };
     }, []);
 
@@ -230,6 +258,10 @@ class ReaderScreen extends HookConsumerWidget {
 
         if (index >= (pageCount - 1) && pageCount > 0) {
           await updateLastRead(index);
+          // Record it so a later flush (back button, dispose) doesn't save the
+          // same page a second time. A cleared pending index means the save
+          // succeeded; on failure leave it unset so the flush can retry.
+          if (pendingPageIndex.value == null) lastFlushedPage.value = index;
         } else {
           debounce.value = Timer(
             const Duration(seconds: 2),

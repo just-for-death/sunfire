@@ -14,6 +14,7 @@ import '../extension/widgets/extension_language_filter_dialog.dart';
 import '../extension/widgets/install_extension_file.dart';
 import '../source/controller/source_controller.dart' hide SourceLanguageFilter;
 import '../source/widgets/source_language_filter.dart';
+import '../source/widgets/source_list_tile.dart';
 
 class BrowseScreen extends HookConsumerWidget {
   const BrowseScreen({
@@ -319,13 +320,12 @@ class _PinnedSourcesGrid extends ConsumerWidget {
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  ref.read(sourceLastUsedProvider.notifier).update(source.id);
-                  SourceTypeRoute(
-                    sourceId: source.id,
-                    sourceType: SourceType.POPULAR,
-                  ).go(context);
-                },
+                onTap: () => openSource(
+                  context,
+                  ref,
+                  sourceId: source.id,
+                  sourceType: SourceType.POPULAR,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(6.0),
                   child: Column(

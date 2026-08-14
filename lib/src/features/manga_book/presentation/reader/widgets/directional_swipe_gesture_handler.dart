@@ -268,7 +268,7 @@ class DirectionalSwipeGestureHandler extends HookWidget {
         if (onNextChapter != null) {
           onNextChapter!();
         } else {
-          ReaderSession.enter();
+          ReaderSession.beginTransition();
           ReaderRoute(
             mangaId: mangaId,
             chapterId: prevNextChapterPair!.first!.id,
@@ -291,7 +291,7 @@ class DirectionalSwipeGestureHandler extends HookWidget {
         if (onPreviousChapter != null) {
           onPreviousChapter!();
         } else {
-          ReaderSession.enter();
+          ReaderSession.beginTransition();
           ReaderRoute(
             mangaId: mangaId,
             chapterId: prevNextChapterPair!.second!.id,

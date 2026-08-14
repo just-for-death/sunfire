@@ -31,7 +31,11 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
     final migrationOptions = ref.watch(migrationOptionsProvider);
 
     useEffect(() {
+      // Searching every source manga can take a while; leaving the screen
+      // mid-search must not write to hook state that has been disposed.
+      var cancelled = false;
       Future(() async {
+        if (cancelled) return;
         isMatching.value = true;
         final results = <MangaDto, MangaDto?>{};
         final errorMessage = l10n.errorSomethingWentWrong;
@@ -42,6 +46,7 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
               targetSource.id,
               manga.title,
             );
+            if (cancelled) return;
             if (searchResults != null && searchResults.isNotEmpty) {
               // Try to find exact title match, otherwise pick the first
               final exactMatch = searchResults.firstWhere(
@@ -55,12 +60,13 @@ class MigrationBatchMatchScreen extends HookConsumerWidget {
           }
           matches.value = results;
         } catch (e) {
+          if (cancelled) return;
           error.value = errorMessage;
         } finally {
-          isMatching.value = false;
+          if (!cancelled) isMatching.value = false;
         }
       });
-      return null;
+      return () => cancelled = true;
     }, const []);
 
     final matchedCount = matches.value.values.where((m) => m != null).length;
