@@ -22,21 +22,21 @@ class NavigationBarData {
           ? cupertinoActiveIcon!
           : activeIcon;
 
-  // Catalyst tab order: History · Library · Explore · Feed · Downloads · More
+  // Catalyst tab order: Library · History · Explore · Feed · Downloads · More
   static final phoneNavList = [
     NavigationBarData(
-      icon: Icons.home_outlined,
-      activeIcon: Icons.home_rounded,
-      cupertinoIcon: CupertinoIcons.house,
-      cupertinoActiveIcon: CupertinoIcons.house_fill,
-      label: (context) => context.l10n.navHome,
-    ),
-    NavigationBarData(
-      icon: Icons.favorite_border_rounded,
-      activeIcon: Icons.favorite_rounded,
+      icon: Icons.collections_bookmark_outlined,
+      activeIcon: Icons.collections_bookmark_rounded,
       cupertinoIcon: CupertinoIcons.book,
       cupertinoActiveIcon: CupertinoIcons.book_fill,
       label: (context) => context.l10n.library,
+    ),
+    NavigationBarData(
+      icon: Icons.history_outlined,
+      activeIcon: Icons.history_rounded,
+      cupertinoIcon: CupertinoIcons.clock,
+      cupertinoActiveIcon: CupertinoIcons.clock_fill,
+      label: (context) => context.l10n.history,
     ),
     NavigationBarData(
       icon: Icons.explore_outlined,
