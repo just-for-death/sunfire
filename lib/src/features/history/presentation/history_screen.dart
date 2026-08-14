@@ -9,10 +9,12 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../../../utils/platform/platform_ui.dart';
 import '../../../widgets/emoticons.dart';
+import '../domain/history_group.dart';
+import '../domain/history_item.dart';
 import 'history_controller.dart';
 import 'history_settings_sheet.dart';
 import 'ios/ios_home_screen.dart';
-import 'widgets/history_group_widget.dart';
+import 'widgets/history_item_tile.dart';
 
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
@@ -78,6 +80,11 @@ class _AndroidHomeScreen extends HookConsumerWidget {
     }, [searchQuery, historyGroups, hasMore, loadMoreFailed.value]);
 
     final isPagingForResults = hasMore && !loadMoreFailed.value;
+
+    final listEntries = useMemoized(
+      () => _buildGroupedEntries(historyGroups),
+      [historyGroups],
+    );
 
     final scrollContent = NotificationListener<ScrollNotification>(
         onNotification: (notification) {
@@ -167,9 +174,9 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                       scrollBottomInset(context: context),
                     ),
                     sliver: SliverList.builder(
-                      itemCount: historyGroups.length + (hasMore ? 1 : 0),
+                      itemCount: listEntries.length + (hasMore ? 1 : 0),
                       itemBuilder: (context, i) {
-                        if (i == historyGroups.length) {
+                        if (i == listEntries.length) {
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             child: Center(
@@ -186,11 +193,36 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                             ),
                           );
                         }
-                        return HistoryGroupWidget(
-                          group: historyGroups[i],
-                          onRemoveItem: (id) => ref
-                              .read(readingHistoryProvider.notifier)
-                              .removeFromHistory(id),
+                        final entry = listEntries[i];
+                        if (entry.isHeader) {
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                            child: Text(
+                              entry.group!.getLocalizedTitle(context),
+                              style: context.theme.textTheme.titleSmall?.copyWith(
+                                color: context.theme.colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          );
+                        }
+                        final item = entry.item!;
+                        final isLastInGroup = i + 1 < listEntries.length &&
+                            listEntries[i + 1].isHeader;
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            HistoryItemTile(
+                              key: ValueKey('history-item-${item.id}'),
+                              item: item,
+                              onRemove: () => ref
+                                  .read(readingHistoryProvider.notifier)
+                                  .removeFromHistory(item.id),
+                            ),
+                            if (!isLastInGroup && i + 1 < listEntries.length)
+                              const Divider(height: 1, indent: 82),
+                          ],
                         );
                       },
                     ),
@@ -214,6 +246,35 @@ class _AndroidHomeScreen extends HookConsumerWidget {
 
     return Scaffold(body: scrollContent);
   }
+
+  static List<_HistoryListEntry> _buildGroupedEntries(
+    List<HistoryGroup> groups,
+  ) {
+    final entries = <_HistoryListEntry>[];
+    for (final group in groups) {
+      if (group.isEmpty) continue;
+      entries.add(_HistoryListEntry.header(group));
+      for (final item in group.items) {
+        entries.add(_HistoryListEntry.item(item));
+      }
+    }
+    return entries;
+  }
+}
+
+class _HistoryListEntry {
+  const _HistoryListEntry._({this.group, this.item});
+
+  factory _HistoryListEntry.header(HistoryGroup group) =>
+      _HistoryListEntry._(group: group);
+
+  factory _HistoryListEntry.item(HistoryItemDto item) =>
+      _HistoryListEntry._(item: item);
+
+  final HistoryGroup? group;
+  final HistoryItemDto? item;
+
+  bool get isHeader => group != null;
 }
 
 class _HistoryEmptyState extends StatelessWidget {
