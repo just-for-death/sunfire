@@ -10,10 +10,8 @@ import '../../../utils/extensions/custom_extensions.dart';
 import '../../../utils/platform/platform_ui.dart';
 import '../../../widgets/emoticons.dart';
 import 'history_controller.dart';
-import 'history_reader_navigation.dart';
 import 'history_settings_sheet.dart';
 import 'ios/ios_home_screen.dart';
-import 'widgets/continue_reading_carousel.dart';
 import 'widgets/history_group_widget.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -36,10 +34,6 @@ class _AndroidHomeScreen extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final historyGroups = ref.watch(filteredHistoryGroupsProvider);
-    final listHistoryGroups = useMemoized(
-      () => historyGroupsExcludingCarousel(historyGroups),
-      [historyGroups],
-    );
     final historyState = ref.watch(readingHistoryProvider);
     final historyEnabled = ref.watch(historyEnabledProvider) ?? true;
     final hasMore = ref.watch(historyHasMoreProvider);
@@ -165,19 +159,17 @@ class _AndroidHomeScreen extends HookConsumerWidget {
               }
               return SliverMainAxisGroup(
                 slivers: [
-                  ContinueReadingCarousel(groups: historyGroups),
-                  if (listHistoryGroups.isNotEmpty)
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
-                      12,
-                      8,
-                      12,
+                      0,
+                      0,
+                      0,
                       scrollBottomInset(context: context),
                     ),
                     sliver: SliverList.builder(
-                      itemCount: listHistoryGroups.length + (hasMore ? 1 : 0),
+                      itemCount: historyGroups.length + (hasMore ? 1 : 0),
                       itemBuilder: (context, i) {
-                        if (i == listHistoryGroups.length) {
+                        if (i == historyGroups.length) {
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             child: Center(
@@ -195,7 +187,7 @@ class _AndroidHomeScreen extends HookConsumerWidget {
                           );
                         }
                         return HistoryGroupWidget(
-                          group: listHistoryGroups[i],
+                          group: historyGroups[i],
                           onRemoveItem: (id) => ref
                               .read(readingHistoryProvider.notifier)
                               .removeFromHistory(id),
