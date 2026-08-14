@@ -11,7 +11,10 @@ abstract final class ReaderSystemUi {
   }
 
   static void hideChrome() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: const [],
+    );
   }
 
   static void showChrome() {

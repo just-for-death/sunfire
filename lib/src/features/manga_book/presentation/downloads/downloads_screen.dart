@@ -32,7 +32,7 @@ class DownloadsScreen extends ConsumerWidget {
       backgroundColor: isCupertinoPlatform
           ? context.theme.scaffoldBackgroundColor
           : null,
-      extendBodyBehindAppBar: isCupertinoPlatform,
+      extendBodyBehindAppBar: false,
       appBar: adaptiveGlassAppBar(
         context: context,
         title: Text(

@@ -91,7 +91,7 @@ class LibraryScreen extends HookConsumerWidget {
             backgroundColor: isCupertinoPlatform
                 ? context.theme.scaffoldBackgroundColor
                 : null,
-            extendBodyBehindAppBar: isCupertinoPlatform,
+            extendBodyBehindAppBar: false,
             appBar: adaptiveGlassAppBar(
               context: context,
               bottom: PreferredSize(
@@ -328,7 +328,7 @@ class _LibraryTabletSplit extends HookConsumerWidget {
       backgroundColor: isCupertinoPlatform
           ? context.theme.scaffoldBackgroundColor
           : null,
-      extendBodyBehindAppBar: isCupertinoPlatform,
+      extendBodyBehindAppBar: false,
       appBar: adaptiveGlassAppBar(
         context: context,
         centerTitle: false,

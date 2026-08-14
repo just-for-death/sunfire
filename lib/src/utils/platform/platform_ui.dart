@@ -53,6 +53,23 @@ Future<T?> showAdaptiveBottomSheet<T>({
   final effectiveUseSafeArea = useSafeArea ?? isScrollControlled;
 
   if (isCupertinoPlatform) {
+    Widget buildWrappedSheet(BuildContext ctx) {
+      final isDark = MediaQuery.platformBrightnessOf(ctx) == Brightness.dark;
+      final sheetColor = isDark
+          ? const Color(0xFF1C1C1E)
+          : CupertinoColors.systemBackground.resolveFrom(ctx);
+      final child = effectiveUseSafeArea
+          ? SafeArea(child: builder(ctx))
+          : builder(ctx);
+      return ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        child: Material(
+          color: sheetColor,
+          child: child,
+        ),
+      );
+    }
+
     if (isScrollControlled) {
       return showCupertinoModalPopup<T>(
         context: context,
@@ -62,15 +79,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
           child: FractionallySizedBox(
             heightFactor: scrollControlledHeightFactor,
             widthFactor: 1,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-              child: Material(
-                color: CupertinoColors.systemBackground.resolveFrom(ctx),
-                child: effectiveUseSafeArea
-                    ? SafeArea(child: builder(ctx))
-                    : builder(ctx),
-              ),
-            ),
+            child: buildWrappedSheet(ctx),
           ),
         ),
       );
@@ -78,7 +87,10 @@ Future<T?> showAdaptiveBottomSheet<T>({
     return showCupertinoModalPopup<T>(
       context: context,
       useRootNavigator: useRootNavigator,
-      builder: builder,
+      builder: (ctx) => Align(
+        alignment: Alignment.bottomCenter,
+        child: buildWrappedSheet(ctx),
+      ),
     );
   }
   return showModalBottomSheet<T>(
