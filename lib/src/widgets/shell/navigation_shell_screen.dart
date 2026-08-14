@@ -101,8 +101,7 @@ class NavigationShellScreen extends HookConsumerWidget {
     }
 
     // Desktop / other → Material You bottom nav or rail
-    if (AppBreakpoints.isTabletLayout(context) &&
-        !AppBreakpoints.useCompactShellOnNarrowTablet(context)) {
+    if (AppBreakpoints.usesSideRail(context)) {
       return ServerAwareWrapper(
         showOfflineBanner: false,
         child: Scaffold(

@@ -68,6 +68,9 @@ class DownloadsMap extends _$DownloadsMap {
     final downloadStatusDto = await ref
         .read(downloadsRepositoryProvider)
         .reorderDownload(chapterId, to);
+    // A null response means the call failed; rebuilding from it would blank the
+    // whole queue until the next subscription event.
+    if (downloadStatusDto == null) return;
     state = getStateFromUpdates(downloadStatusDto);
   }
 }

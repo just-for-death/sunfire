@@ -29,15 +29,16 @@ class BigScreenNavigationBar extends ConsumerStatefulWidget {
       _BigScreenNavigationBarState();
 }
 
-class _BigScreenNavigationBarState extends ConsumerState<BigScreenNavigationBar> {
+class _BigScreenNavigationBarState
+    extends ConsumerState<BigScreenNavigationBar> {
   static const _railPrefKey = 'android_rail_expanded';
-  bool _railExpanded = true;
+  bool _railExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _railExpanded =
-        ref.read(sharedPreferencesProvider).getBool(_railPrefKey) ?? true;
+        ref.read(sharedPreferencesProvider).getBool(_railPrefKey) ?? false;
   }
 
   void _toggleRail() {
@@ -50,16 +51,21 @@ class _BigScreenNavigationBarState extends ConsumerState<BigScreenNavigationBar>
     NavigationBarData data,
     int updateCount,
   ) {
+    final label = data.label(context);
     Widget icon = Icon(data.navIcon(context));
     Widget selectedIcon = Icon(data.navActiveIcon(context));
     if (data.badgeType == NavBadgeType.updates && updateCount > 0) {
-      icon = Badge.count(count: updateCount, child: Icon(data.navIcon(context)));
-      selectedIcon =
-          Badge.count(count: updateCount, child: Icon(data.navActiveIcon(context)));
+      icon = Badge.count(count: updateCount, child: icon);
+      selectedIcon = Badge.count(count: updateCount, child: selectedIcon);
+    }
+    if (!_railExpanded) {
+      // Labels are hidden when collapsed, so surface them on hover/long-press.
+      icon = Tooltip(message: label, child: icon);
+      selectedIcon = Tooltip(message: label, child: selectedIcon);
     }
     return NavigationRailDestination(
       icon: icon,
-      label: Text(data.label(context)),
+      label: Text(label),
       selectedIcon: selectedIcon,
     );
   }
@@ -67,57 +73,51 @@ class _BigScreenNavigationBarState extends ConsumerState<BigScreenNavigationBar>
   @override
   Widget build(BuildContext context) {
     final updateCount = ref.watch(navUpdatesBadgeCountProvider);
-    final showExtended = context.isDesktop || _railExpanded;
 
-    final Widget leadingIcon;
-    if (context.isDesktop) {
-      leadingIcon = TextButton.icon(
-        onPressed: () => const AboutRoute().go(context),
-        icon: ImageIcon(
-          AssetImage(Assets.icons.darkIcon.path),
-          size: 48,
-        ),
-        label: Text(context.l10n.appTitle),
-        style: TextButton.styleFrom(
-          foregroundColor: context.textTheme.bodyLarge?.color,
-        ),
-      );
-    } else {
-      leadingIcon = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            onPressed: () => const AboutRoute().go(context),
-            icon: ImageIcon(
-              AssetImage(Assets.icons.darkIcon.path),
-              size: 48,
-            ),
-          ),
-          IconButton(
-            onPressed: _toggleRail,
-            tooltip: _railExpanded
-                ? context.l10n.collapseSidebar
-                : context.l10n.expandSidebar,
-            icon: Icon(
-              _railExpanded
-                  ? Icons.chevron_left_rounded
-                  : Icons.chevron_right_rounded,
-            ),
-          ),
-        ],
-      );
-    }
+    final appButton = IconButton(
+      onPressed: () => const AboutRoute().go(context),
+      tooltip: context.l10n.appTitle,
+      icon: ImageIcon(AssetImage(Assets.icons.darkIcon.path), size: 32),
+    );
+    final toggleButton = IconButton(
+      onPressed: _toggleRail,
+      tooltip: _railExpanded
+          ? context.l10n.collapseSidebar
+          : context.l10n.expandSidebar,
+      icon: Icon(
+        _railExpanded
+            ? Icons.chevron_left_rounded
+            : Icons.chevron_right_rounded,
+      ),
+    );
 
     return NavigationRail(
       useIndicator: true,
       groupAlignment: 0.0,
-      extended: showExtended,
-      labelType: showExtended
-          ? NavigationRailLabelType.none
-          : NavigationRailLabelType.all,
+      extended: _railExpanded,
+      labelType: NavigationRailLabelType.none,
       leading: Padding(
-        padding: const EdgeInsets.only(bottom: 16.0),
-        child: leadingIcon,
+        padding: const EdgeInsets.only(bottom: 8.0),
+        child: _railExpanded
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  appButton,
+                  Flexible(
+                    child: Text(
+                      context.l10n.appTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textTheme.titleMedium,
+                    ),
+                  ),
+                  toggleButton,
+                ],
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [appButton, toggleButton],
+              ),
       ),
       destinations: NavigationBarData.getNavList(context)
           .map<NavigationRailDestination>(

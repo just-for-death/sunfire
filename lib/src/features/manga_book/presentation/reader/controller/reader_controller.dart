@@ -13,6 +13,7 @@ import '../../../domain/chapter/chapter_model.dart';
 import '../../../domain/chapter/graphql/__generated__/fragment.graphql.dart';
 import '../../../domain/chapter_page/chapter_page_model.dart';
 import '../../../domain/chapter_page/graphql/__generated__/fragment.graphql.dart';
+import '../utils/reader_page_merge.dart';
 
 part 'reader_controller.g.dart';
 
@@ -100,34 +101,27 @@ Future<ChapterPagesDto?> _chapterPagesWithLocalFallback(
   }
 
   if (remote != null) {
-    if (localPages == null || localPages.isEmpty) return remote;
-    if (localPages.length >= remote.pages.length) {
-      return remote.copyWith(
-        pages: localPages,
-        chapter: remote.chapter.copyWith(pageCount: localPages.length),
-      );
-    }
-    final mergedPages = <String>[];
-    for (var i = 0; i < remote.pages.length; i++) {
-      mergedPages.add(
-        i < localPages.length ? localPages[i] : remote.pages[i],
-      );
-    }
+    if (localPages == null) return remote;
+    final mergedPages = mergeLocalAndRemotePages(localPages, remote.pages);
+    if (mergedPages.isEmpty) return remote;
     return remote.copyWith(
       pages: mergedPages,
       chapter: remote.chapter.copyWith(pageCount: mergedPages.length),
     );
   }
 
-  if (localPages == null || localPages.isEmpty) return null;
+  if (localPages == null) return null;
+
+  final offlinePages = offlineOnlyPages(localPages);
+  if (offlinePages.isEmpty) return null;
 
   if (offlineManifest != null) {
     return ChapterPagesDto(
       chapter: Fragment$ChapterPagesDto$chapter(
         id: offlineManifest.chapterId,
-        pageCount: localPages.length,
+        pageCount: offlinePages.length,
       ),
-      pages: localPages,
+      pages: offlinePages,
     );
   }
 
@@ -143,9 +137,9 @@ Future<ChapterPagesDto?> _chapterPagesWithLocalFallback(
   return ChapterPagesDto(
     chapter: Fragment$ChapterPagesDto$chapter(
       id: chapter?.id ?? chapterId,
-      pageCount: localPages.length,
+      pageCount: offlinePages.length,
     ),
-    pages: localPages,
+    pages: offlinePages,
   );
 }
 

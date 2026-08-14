@@ -36,7 +36,7 @@ void navigateToReaderChapter(
   if (!context.mounted || chapterId <= 0) return;
   prefetchReaderChapter(ref, chapterId);
   // Prevent wakelock / system-UI flicker while pushReplacement disposes the old screen.
-  ReaderSession.enter();
+  ReaderSession.beginTransition();
   ReaderRoute(
     mangaId: mangaId,
     chapterId: chapterId,

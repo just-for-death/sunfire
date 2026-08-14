@@ -13,19 +13,10 @@ class ContinueReadingCarousel extends StatelessWidget {
     super.key,
     required this.groups,
     this.useCupertinoStyle = false,
-    this.onItemTap,
-    this.selectedItemId,
   });
 
   final List<HistoryGroup> groups;
   final bool useCupertinoStyle;
-
-  /// When set, tapping a card selects it (tablet master–detail) instead of
-  /// jumping straight into the reader.
-  final ValueChanged<HistoryItemDto>? onItemTap;
-
-  /// Chapter id of the currently selected card in the tablet detail pane.
-  final int? selectedItemId;
 
   @override
   Widget build(BuildContext context) {
@@ -68,11 +59,6 @@ class ContinueReadingCarousel extends StatelessWidget {
                 item: allItems[i],
                 useCupertinoStyle: useCupertinoStyle,
                 colorScheme: cs,
-                onTap: onItemTap != null
-                    ? () => onItemTap!(allItems[i])
-                    : null,
-                isSelected: selectedItemId != null &&
-                    allItems[i].id == selectedItemId,
               ),
             ),
           ),
@@ -87,15 +73,11 @@ class _CarouselCard extends ConsumerWidget {
     required this.item,
     required this.useCupertinoStyle,
     required this.colorScheme,
-    this.onTap,
-    this.isSelected = false,
   });
 
   final HistoryItemDto item;
   final bool useCupertinoStyle;
   final ColorScheme colorScheme;
-  final VoidCallback? onTap;
-  final bool isSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -105,7 +87,6 @@ class _CarouselCard extends ConsumerWidget {
 
     return Semantics(
       button: true,
-      selected: isSelected,
       label: '${item.manga.title}, ${(progress * 100).round()}%',
       child: Container(
         width: 130,
@@ -175,22 +156,10 @@ class _CarouselCard extends ConsumerWidget {
                 type: MaterialType.transparency,
                 child: InkWell(
                   borderRadius: radius,
-                  onTap: onTap ??
-                      () => openReaderFromHistoryItem(context, ref, item),
+                  onTap: () => openReaderFromHistoryItem(context, ref, item),
                 ),
               ),
             ),
-            if (isSelected)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: radius,
-                      border: Border.all(color: colorScheme.primary, width: 3),
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),

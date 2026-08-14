@@ -27,8 +27,7 @@ class AndroidNavigationShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (AppBreakpoints.isTabletLayout(context) &&
-        !AppBreakpoints.useCompactShellOnNarrowTablet(context)) {
+    if (AppBreakpoints.usesSideRail(context)) {
       return _AndroidTabletGlassShell(
         onDestinationSelected: onDestinationSelected,
         child: child,

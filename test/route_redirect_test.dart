@@ -16,6 +16,15 @@ void main() {
     );
   });
 
+  test('redirectPathForUri sends a bad manga id without a chapter to details',
+      () {
+    expect(redirectPathForUri(Uri.parse('/manga/foo')), '/manga/0');
+  });
+
+  test('redirectPathForUri allows valid manga details path', () {
+    expect(redirectPathForUri(Uri.parse('/manga/5')), isNull);
+  });
+
   test('redirectPathForUri allows valid reader path', () {
     expect(
       redirectPathForUri(Uri.parse('/manga/5/chapter/12')),

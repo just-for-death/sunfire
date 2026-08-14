@@ -50,15 +50,4 @@ extension HistoryItemExtension on HistoryItemDto {
 
     return readDate.dateGroupKey;
   }
-
-  /// Search functionality for history items
-  bool historyQuery([String? query]) {
-    if (query.isBlank) return true;
-    final searchQuery = query!.toLowerCase();
-
-    return manga.title.toLowerCase().contains(searchQuery) ||
-        name.toLowerCase().contains(searchQuery) ||
-        (manga.author?.toLowerCase().contains(searchQuery) ?? false) ||
-        (scanlator?.toLowerCase().contains(searchQuery) ?? false);
-  }
 }

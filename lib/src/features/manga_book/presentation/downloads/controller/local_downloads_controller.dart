@@ -42,7 +42,7 @@ class LocalChapterDownload extends _$LocalChapterDownload {
     return service.isChapterDownloaded(chapterId);
   }
 
-  Future<List<String>?> getLocalPages() async {
+  Future<List<String?>?> getLocalPages() async {
     final service = ref.read(localDownloadsServiceProvider);
     return service.getLocalPages(chapterId);
   }
@@ -107,6 +107,11 @@ class LocalChapterDownload extends _$LocalChapterDownload {
 
   Future<void> delete() async {
     if (kIsWeb) return;
+    // Stop any in-flight download first. It would keep writing pages and then
+    // re-create the manifest after the directory is gone, resurrecting the
+    // chapter. Bumping the generation also stops it from clobbering our state.
+    _cancelRequested = true;
+    _downloadGeneration++;
     state = LocalDownloadState.downloading;
     try {
       final service = ref.read(localDownloadsServiceProvider);
