@@ -180,7 +180,10 @@ class DownloadsScreen extends ConsumerWidget {
                             0,
                             8,
                             0,
-                            scrollBottomInset(hasFab: showDownloadsFAB),
+                            scrollBottomInset(
+                              hasFab: showDownloadsFAB,
+                              context: context,
+                            ),
                           ),
                           itemCount: rows.length + 1,
                           itemBuilder: (context, i) {

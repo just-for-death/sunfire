@@ -3,7 +3,9 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../../constants/app_sizes.dart';
 import '../../../../routes/router_config.dart';
+import '../../../../theme/catalyst_ui_tokens.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../widgets/emoticons.dart';
 import '../../../../widgets/manga_cover/grid/manga_cover_grid_tile.dart';
@@ -110,11 +112,8 @@ class MigrationSourceMangaScreen extends HookConsumerWidget {
 
           return GridView.builder(
             padding: const EdgeInsets.all(8),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 120,
-              childAspectRatio: 0.65,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+            gridDelegate: mangaCoverGridDelegate(
+              CatalystUiTokens.gridPreferredItemWidth,
             ),
             itemCount: data.length,
             itemBuilder: (context, index) {

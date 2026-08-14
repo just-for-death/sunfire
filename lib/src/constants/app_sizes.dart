@@ -8,6 +8,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../theme/catalyst_ui_tokens.dart';
 import 'app_constants.dart';
 import 'db_keys.dart';
 
@@ -95,10 +96,21 @@ enum KRadius {
   final Radius radius;
 }
 
-SliverGridDelegateWithMaxCrossAxisExtent mangaCoverGridDelegate(double? size) =>
-    SliverGridDelegateWithMaxCrossAxisExtent(
-      maxCrossAxisExtent: size ?? DBKeys.gridMangaCoverWidth.initial,
-      crossAxisSpacing: 2.0,
-      mainAxisSpacing: 2.0,
-      childAspectRatio: 0.75,
-    );
+/// Grid geometry for manga covers.
+///
+/// Cells are sized so the cover lands close to [CatalystUiTokens.coverAspectRatio];
+/// when [showTitle] is set the cell also reserves room for the caption below it.
+SliverGridDelegateWithMaxCrossAxisExtent mangaCoverGridDelegate(
+  double? size, {
+  bool showTitle = true,
+}) {
+  final maxWidth = size ?? DBKeys.gridMangaCoverWidth.initial;
+  final titleExtent = showTitle ? CatalystUiTokens.gridTitleExtent : 0.0;
+  final cellHeight = maxWidth / CatalystUiTokens.coverAspectRatio + titleExtent;
+  return SliverGridDelegateWithMaxCrossAxisExtent(
+    maxCrossAxisExtent: maxWidth,
+    crossAxisSpacing: CatalystUiTokens.gridSpacing,
+    mainAxisSpacing: CatalystUiTokens.gridSpacing,
+    childAspectRatio: maxWidth / cellHeight,
+  );
+}

@@ -110,12 +110,11 @@ class _BigScreenNavigationBarState extends ConsumerState<BigScreenNavigationBar>
 
     return NavigationRail(
       useIndicator: true,
-      elevation: 5,
       groupAlignment: 0.0,
       extended: showExtended,
       labelType: showExtended
           ? NavigationRailLabelType.none
-          : NavigationRailLabelType.selected,
+          : NavigationRailLabelType.all,
       leading: Padding(
         padding: const EdgeInsets.only(bottom: 16.0),
         child: leadingIcon,

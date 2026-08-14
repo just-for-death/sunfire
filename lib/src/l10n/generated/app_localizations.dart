@@ -532,6 +532,24 @@ abstract class AppLocalizations {
   /// **'Discord'**
   String get discord;
 
+  /// Header of the collapsible details section in the history detail pane
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get details;
+
+  /// Label for the genre chips of a manga
+  ///
+  /// In en, this message translates to:
+  /// **'Genres'**
+  String get genres;
+
+  /// Label for the scanlator group of a chapter
+  ///
+  /// In en, this message translates to:
+  /// **'Scanlator'**
+  String get scanlator;
+
   /// Text for Display tab in Library screen drawer
   ///
   /// In en, this message translates to:

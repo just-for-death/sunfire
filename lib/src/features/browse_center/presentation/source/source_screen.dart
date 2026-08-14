@@ -25,11 +25,31 @@ class SourceScreen extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sourceMapData = ref.watch(sourceMapFilteredProvider);
+    final tabletSelection = ref.watch(tabletBrowseSourceSelectionProvider);
 
     final sourceMap = {...?sourceMapData.valueOrNull};
     final localSource = sourceMap.remove("localsourcelang");
     final lastUsed = sourceMap.remove("lastUsed");
     final allSource = sourceMap.remove("all");
+
+    useEffect(() {
+      if (!TabletSplitLayout.shouldUse(context) || tabletSelection == null) {
+        return null;
+      }
+      final ids = <String>{};
+      if (lastUsed != null) ids.addAll(lastUsed.map((s) => s.id));
+      if (allSource != null) ids.addAll(allSource.map((s) => s.id));
+      if (localSource != null) ids.addAll(localSource.map((s) => s.id));
+      for (final list in sourceMap.values) {
+        ids.addAll(list.map((s) => s.id));
+      }
+      if (!ids.contains(tabletSelection.sourceId)) {
+        Future.microtask(() {
+          ref.read(tabletBrowseSourceSelectionProvider.notifier).state = null;
+        });
+      }
+      return null;
+    }, [sourceMapData.valueOrNull, tabletSelection?.sourceId]);
 
     refresh() => ref.refresh(sourceListProvider.future);
     useEffect(() {
@@ -71,13 +91,17 @@ class SourceScreen extends HookConsumerWidget {
         );
 
         if (TabletSplitLayout.shouldUse(context)) {
-          final selection = ref.watch(tabletBrowseSourceSelectionProvider);
+          final selection = tabletSelection;
           return TabletSplitLayout(
             master: sourceList,
             detail: selection != null
                 ? SourceMangaListScreen(
+                    key: ValueKey(
+                      '${selection.sourceId}-${selection.sourceType}-${selection.query ?? ''}',
+                    ),
                     sourceId: selection.sourceId,
                     sourceType: selection.sourceType,
+                    initialQuery: selection.query,
                   )
                 : Center(
                     child: Text(
