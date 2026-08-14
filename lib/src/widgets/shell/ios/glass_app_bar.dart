@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -25,7 +26,9 @@ class GlassSliverAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
     final cs = context.theme.colorScheme;
-    final topPad = MediaQuery.of(context).padding.top;
+    final topPad = isCupertinoPlatform
+        ? math.max(MediaQuery.of(context).padding.top, 38.0)
+        : MediaQuery.of(context).padding.top;
 
     return SliverPersistentHeader(
       pinned: true,
@@ -251,24 +254,36 @@ PreferredSizeWidget adaptiveGlassAppBar({
   }
 
   final isDark = context.isDarkMode;
-  return AppBar(
-    title: title,
-    actions: actions,
-    bottom: bottom,
-    leading: leading,
-    automaticallyImplyLeading: automaticallyImplyLeading,
-    centerTitle: centerTitle,
-    titleSpacing: titleSpacing,
-    backgroundColor: Colors.transparent,
-    elevation: 0,
-    scrolledUnderElevation: 0,
-    flexibleSpace: ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          color: isDark
-              ? Colors.black.withValues(alpha: 0.5)
-              : Colors.white.withValues(alpha: 0.72),
+  final rawTop = MediaQuery.of(context).padding.top;
+  final safeTop = math.max(rawTop, 38.0);
+  final extraPadding = math.max(0.0, safeTop - rawTop);
+
+  final baseHeight = kToolbarHeight + (bottom?.preferredSize.height ?? 0);
+
+  return PreferredSize(
+    preferredSize: Size.fromHeight(baseHeight + extraPadding),
+    child: Padding(
+      padding: EdgeInsets.only(top: extraPadding),
+      child: AppBar(
+        title: title,
+        actions: actions,
+        bottom: bottom,
+        leading: leading,
+        automaticallyImplyLeading: automaticallyImplyLeading,
+        centerTitle: centerTitle,
+        titleSpacing: titleSpacing,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        flexibleSpace: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.7)
+                  : Colors.white.withValues(alpha: 0.85),
+            ),
+          ),
         ),
       ),
     ),
