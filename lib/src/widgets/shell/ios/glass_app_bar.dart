@@ -82,8 +82,8 @@ class _GlassAppBarDelegate extends SliverPersistentHeaderDelegate {
         child: Container(
           decoration: BoxDecoration(
             color: isDark
-                ? Colors.black.withValues(alpha: 0.55 * t + 0.1)
-                : Colors.white.withValues(alpha: 0.72 * t + 0.1),
+                ? Colors.black.withValues(alpha: 0.7 + 0.2 * t)
+                : Colors.white.withValues(alpha: 0.85 + 0.1 * t),
             border: Border(
               bottom: BorderSide(
                 color: isDark

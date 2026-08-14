@@ -76,7 +76,7 @@ class UpdatesScreen extends HookConsumerWidget {
       backgroundColor: isCupertinoPlatform
           ? context.theme.scaffoldBackgroundColor
           : null,
-      extendBodyBehindAppBar: isCupertinoPlatform,
+      extendBodyBehindAppBar: false,
       floatingActionButton:
           selectedChapters.value.isEmpty ? const UpdateStatusFab() : null,
       appBar: selectedChapters.value.isNotEmpty
