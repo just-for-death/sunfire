@@ -44,6 +44,7 @@ class SourceMangaDisplayView extends ConsumerWidget {
           cancelLabel: context.l10n.cancel,
           isDestructive: true,
         );
+        if (!context.mounted) return null;
         return removeManga
             ? await AsyncValue.guard(() => ref
                 .read(mangaBookRepositoryProvider)

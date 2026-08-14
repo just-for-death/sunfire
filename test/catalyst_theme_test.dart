@@ -94,34 +94,39 @@ void main() {
       }
     });
 
-    testWidgets('collapsed rail uses labels like the tablet shell',
-        (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: _theme(),
-          home: Scaffold(
-            body: NavigationRail(
-              labelType: NavigationRailLabelType.all,
-              destinations: const [
-                NavigationRailDestination(
-                  icon: Icon(Icons.book),
-                  label: Text('Library'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.explore),
-                  label: Text('Browse'),
-                ),
-              ],
-              selectedIndex: 0,
+    // The tablet shell toggles `extended` while pinning `labelType` to none;
+    // NavigationRail asserts if those two ever disagree.
+    for (final extended in [false, true]) {
+      testWidgets('rail renders ${extended ? 'expanded' : 'collapsed'}',
+          (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: _theme(),
+            home: Scaffold(
+              body: NavigationRail(
+                extended: extended,
+                labelType: NavigationRailLabelType.none,
+                destinations: const [
+                  NavigationRailDestination(
+                    icon: Icon(Icons.book),
+                    label: Text('Library'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.explore),
+                    label: Text('Browse'),
+                  ),
+                ],
+                selectedIndex: 0,
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      expect(tester.takeException(), isNull);
-      expect(find.text('Library'), findsOneWidget);
-    });
+        expect(tester.takeException(), isNull);
+        expect(find.text('Library'), findsOneWidget);
+      });
+    }
 
     test('true black only darkens the dark scheme', () {
       final dark = _theme(isTrueBlack: true);

@@ -12,6 +12,7 @@ import '../../../../constants/language_list.dart';
 import '../../../../global_providers/tablet_selection_providers.dart';
 import '../../../../utils/extensions/custom_extensions.dart';
 import '../../../../utils/misc/toast/toast.dart';
+import '../../../../utils/platform/platform_ui.dart';
 import '../../../../widgets/emoticons.dart';
 import '../../../../widgets/layout/tablet_split_layout.dart';
 import '../../domain/source/source_model.dart';
@@ -212,10 +213,22 @@ class SourceScreen extends HookConsumerWidget {
                     ),
                   ),
                 ),
-                SliverToBoxAdapter(
-                  child: SourceListTile(source: localSource!.first),
+                SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 450,
+                    mainAxisExtent: 80,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => SourceListTile(
+                      source: localSource![index],
+                    ),
+                    childCount: localSource?.length,
+                  ),
                 )
               ],
+              SliverToBoxAdapter(
+                child: SizedBox(height: scrollBottomInset(context: context)),
+              ),
     ];
   }
 }
