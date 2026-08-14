@@ -231,7 +231,7 @@ class _HistoryEmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.home_rounded,
+            Icon(Icons.history_rounded,
                 size: 64,
                 color: context.theme.colorScheme.onSurfaceVariant
                     .withValues(alpha: 0.4)),
