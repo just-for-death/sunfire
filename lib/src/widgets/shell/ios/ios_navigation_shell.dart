@@ -586,6 +586,8 @@ class _SidebarToggleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => IconButton(
         onPressed: onToggle,
+        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        padding: EdgeInsets.zero,
         tooltip: expanded
             ? context.l10n.collapseSidebar
             : context.l10n.expandSidebar,
