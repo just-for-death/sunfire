@@ -54,7 +54,7 @@ class SourceShortSearch extends StatelessWidget {
                       for (final i in data)
                         SizedBox(
                           width: 144,
-                          height: 192,
+                          height: 240,
                           child: MangaCoverGridTile(
                             manga: i,
                             showDarkOverlay: i.inLibrary.ifNull(),

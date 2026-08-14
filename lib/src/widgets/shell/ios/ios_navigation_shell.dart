@@ -32,7 +32,7 @@ class IOSNavigationShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (context.isTablet && !AppBreakpoints.useCompactShellOnIPad(context)) {
+    if (context.isTablet && !AppBreakpoints.useCompactShellOnNarrowTablet(context)) {
       return _IPadSplitShell(
         onDestinationSelected: onDestinationSelected,
         child: child,

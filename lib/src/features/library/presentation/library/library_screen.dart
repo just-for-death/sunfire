@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -56,8 +54,11 @@ class LibraryScreen extends HookConsumerWidget {
         }
         return DefaultTabController(
           length: data!.length,
-          initialIndex:
-              min(categoryId.getValueOnNullOrNegative(), data.length - 1),
+          initialIndex: () {
+            final idx = data.indexWhere((c) => c.id == categoryId);
+            if (idx >= 0) return idx;
+            return 0;
+          }(),
           child: Scaffold(
             backgroundColor: isCupertinoPlatform
                 ? context.theme.scaffoldBackgroundColor
@@ -245,24 +246,42 @@ class _LibraryTabletSplit extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stored = ref.watch(tabletLibraryCategorySelectionProvider);
-    final initialIndex = min(
-      initialCategoryId.getValueOnNullOrNegative(),
-      categories.length - 1,
-    );
-    final selectedId = stored ?? categories[initialIndex].id;
+    final routeId = categories
+            .where((c) => c.id == initialCategoryId)
+            .map((c) => c.id)
+            .firstOrNull ??
+        categories.first.id;
+    final selectedId = stored ?? routeId;
 
     useEffect(() {
-      if (stored == null && categories.isNotEmpty) {
+      if (categories.isEmpty) return null;
+      Future.microtask(() {
+        final current = ref.read(tabletLibraryCategorySelectionProvider);
+        if (current != routeId) {
+          ref.read(tabletLibraryCategorySelectionProvider.notifier).state =
+              routeId;
+        }
+      });
+      return null;
+    }, [initialCategoryId, routeId]);
+
+    useEffect(() {
+      if (categories.isEmpty) return null;
+      if (!categories.any((c) => c.id == selectedId)) {
         Future.microtask(() {
           ref.read(tabletLibraryCategorySelectionProvider.notifier).state =
-              categories[initialIndex].id;
+              routeId;
         });
       }
       return null;
-    }, [categories]);
+    }, [categories, selectedId, routeId]);
 
     return Scaffold(
       appBar: AppBar(
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: _LibraryFilterChips(ref: ref),
+        ),
         title: !showSearch.value
             ? Text(context.l10n.library)
             : SearchBar(
@@ -308,6 +327,7 @@ class _LibraryTabletSplit extends HookConsumerWidget {
         shape: RoundedRectangleBorder(),
         child: LibraryMangaOrganizer(),
       ),
+      endDrawerEnableOpenDragGesture: false,
       body: TabletSplitLayout(
         master: ListView(
           children: categories.map((category) {
@@ -326,6 +346,7 @@ class _LibraryTabletSplit extends HookConsumerWidget {
           }).toList(),
         ),
         detail: CategoryMangaList(
+          key: ValueKey(selectedId),
           categoryId: selectedId.getValueOnNullOrNegative(),
         ),
         showDetail: true,

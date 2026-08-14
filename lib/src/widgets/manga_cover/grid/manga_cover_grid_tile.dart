@@ -6,14 +6,19 @@
 
 import 'package:flutter/material.dart';
 
-import '../../../constants/app_sizes.dart';
 import '../../../constants/gen/assets.gen.dart';
 import '../../../features/manga_book/domain/manga/manga_model.dart';
 import '../../../features/manga_book/presentation/manga_thumbnail_viewer/manga_thumbnail_viewer.dart';
+import '../../../theme/catalyst_typography.dart';
+import '../../../theme/catalyst_ui_tokens.dart';
 import '../../../utils/extensions/custom_extensions.dart';
 import '../../server_image.dart';
 import '../widgets/manga_badges.dart';
 
+/// Cover tile used by every manga grid.
+///
+/// The cover fills the cell and the caption sits underneath it, so the artwork
+/// is never covered by a title gradient.
 class MangaCoverGridTile extends StatelessWidget {
   const MangaCoverGridTile({
     super.key,
@@ -23,7 +28,7 @@ class MangaCoverGridTile extends StatelessWidget {
     this.showTitle = true,
     this.showBadges = true,
     this.showCountBadges = false,
-    this.showDarkOverlay = true,
+    this.showDarkOverlay = false,
     this.isSelected = false,
   });
   final MangaDto manga;
@@ -34,139 +39,135 @@ class MangaCoverGridTile extends StatelessWidget {
   final bool showBadges;
   final bool showDarkOverlay;
   final bool isSelected;
-  @override
-  Widget build(BuildContext context) {
-    final baseCard = InkResponse(
-      onTap: onPressed ??
-          () => Navigator.push(
-                context,
-                PageRouteBuilder(
-                  fullscreenDialog: true,
-                  opaque: false,
-                  pageBuilder: (context, _, __) => MangaThumbnailViewer(
-                    imageUrl: manga.thumbnailUrl ?? "",
-                  ),
-                  transitionsBuilder:
-                      (context, animation, secondaryAnimation, child) {
-                    const begin = Offset(-1.0, 0.0);
-                    const end = Offset.zero;
-                    const curve = Curves.ease;
 
-                    final tween = Tween(begin: begin, end: end);
-                    final curvedAnimation = CurvedAnimation(
-                      parent: animation,
-                      curve: curve,
-                    );
-
-                    return SlideTransition(
-                      position: tween.animate(curvedAnimation),
-                      child: child,
-                    );
-                  },
-                ),
-              ),
-      onLongPress: onLongPress,
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: KBorderRadius.r12.radius),
-        child: GridTile(
-          header: showBadges
-              ? MangaBadgesRow(manga: manga, showCountBadges: showCountBadges)
-              : null,
-          footer: showTitle
-              ? ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                  dense: true,
-                  title: Text(
-                    manga.title,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
-                  ),
-                )
-              : null,
-          child: manga.thumbnailUrl.isNotBlank
-              ? Container(
-                  foregroundDecoration: BoxDecoration(
-                    border: Border.all(
-                      width: 0,
-                      color: context.theme.canvasColor,
-                    ),
-                    boxShadow: showDarkOverlay
-                        ? [
-                            BoxShadow(
-                              color: context.theme.canvasColor
-                                  .withValues(alpha: .5),
-                            )
-                          ]
-                        : null,
-                    gradient: showTitle
-                        ? LinearGradient(
-                            begin: Alignment.center,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              context.theme.canvasColor.withValues(alpha: 0),
-                              context.theme.canvasColor.withValues(alpha: 0.4),
-                              context.theme.canvasColor.withValues(alpha: 0.9),
-                            ],
-                          )
-                        : null,
-                  ),
-                  child: ServerImage(imageUrl: manga.thumbnailUrl ?? ""),
-                )
-              : SizedBox(
-                  height: context.height * .3,
-                  child: ImageIcon(
-                    AssetImage(Assets.icons.darkIcon.path),
-                    size: context.height * .2,
-                  ),
-                ),
-        ),
+  void _openThumbnail(BuildContext context) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        fullscreenDialog: true,
+        opaque: false,
+        transitionDuration: CatalystUiTokens.durationStandard,
+        reverseTransitionDuration: CatalystUiTokens.durationShort,
+        pageBuilder: (context, _, __) =>
+            MangaThumbnailViewer(imageUrl: manga.thumbnailUrl ?? ""),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: CatalystUiTokens.curveStandard,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.92, end: 1).animate(curved),
+              child: child,
+            ),
+          );
+        },
       ),
     );
+  }
 
-    // Add selection overlay on top
-    if (isSelected) {
-      return Stack(
-        fit: StackFit.passthrough,
-        children: [
-          baseCard,
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Card(
-                color: context.theme.colorScheme.primaryContainer
-                    .withValues(alpha: 0.5),
-                clipBehavior: Clip.antiAlias,
-                shape: RoundedRectangleBorder(
-                  borderRadius: KBorderRadius.r12.radius,
-                  side: BorderSide(
-                    color: context.theme.colorScheme.primary,
-                    width: 3,
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.theme.colorScheme;
+
+    final cover = manga.thumbnailUrl.isNotBlank
+        ? ServerImage(imageUrl: manga.thumbnailUrl ?? "")
+        : Center(
+            child: ImageIcon(
+              AssetImage(Assets.icons.darkIcon.path),
+              size: 48,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+            ),
+          );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: CatalystUiTokens.coverRadius,
+            child: ColoredBox(
+              color: cs.surfaceContainer,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  cover,
+                  if (showDarkOverlay)
+                    ColoredBox(
+                      color: cs.scrim.withValues(alpha: 0.4),
+                    ),
+                  Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      onTap: onPressed ?? () => _openThumbnail(context),
+                      onLongPress: onLongPress,
+                    ),
                   ),
-                ),
-                child: Stack(
-                  children: [
+                  if (showBadges)
                     Positioned(
-                      top: 8,
-                      left: 8,
-                      child: CircleAvatar(
-                        radius: 12,
-                        backgroundColor: context.theme.colorScheme.primary,
-                        child: Icon(
-                          Icons.check,
-                          size: 16,
-                          color: context.theme.colorScheme.onPrimary,
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: IgnorePointer(
+                        child: MangaBadgesRow(
+                          manga: manga,
+                          showCountBadges: showCountBadges,
                         ),
                       ),
                     ),
-                  ],
+                  if (isSelected)
+                    IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: CatalystUiTokens.coverRadius,
+                          color: cs.primary.withValues(alpha: 0.28),
+                          border: Border.all(color: cs.primary, width: 3),
+                        ),
+                        child: Align(
+                          alignment: Alignment.topLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.all(
+                              CatalystUiTokens.space8,
+                            ),
+                            child: CircleAvatar(
+                              radius: 12,
+                              backgroundColor: cs.primary,
+                              child: Icon(
+                                Icons.check_rounded,
+                                size: 16,
+                                color: cs.onPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (showTitle)
+          SizedBox(
+            height: CatalystUiTokens.gridTitleExtent,
+            child: Padding(
+              padding: const EdgeInsets.only(
+                top: CatalystUiTokens.space4,
+                left: CatalystUiTokens.space2,
+                right: CatalystUiTokens.space2,
+              ),
+              child: Text(
+                manga.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: CatalystTypography.coverTitle.copyWith(
+                  color: cs.onSurface,
                 ),
               ),
             ),
           ),
-        ],
-      );
-    }
-
-    return baseCard;
+      ],
+    );
   }
 }

@@ -61,6 +61,23 @@ class BrowseScreen extends HookConsumerWidget {
     final cs = context.theme.colorScheme;
     final isExtensions = tabController.index == 1;
 
+    useEffect(() {
+      var previousIndex = tabController.index;
+      void onSearchTabChanged() {
+        if (tabController.indexIsChanging) return;
+        if (tabController.index != previousIndex) {
+          previousIndex = tabController.index;
+          if (showSearch.value) {
+            ref.read(extensionQueryProvider.notifier).update('');
+            showSearch.value = false;
+          }
+        }
+      }
+
+      tabController.addListener(onSearchTabChanged);
+      return () => tabController.removeListener(onSearchTabChanged);
+    }, [tabController]);
+
     return Scaffold(
       backgroundColor: isCupertinoPlatform
           ? context.theme.scaffoldBackgroundColor
@@ -87,7 +104,12 @@ class BrowseScreen extends HookConsumerWidget {
                     trailing: [
                       IconButton(
                         icon: const Icon(Icons.close_rounded),
-                        onPressed: () => showSearch.value = false,
+                        onPressed: () {
+                          ref
+                              .read(extensionQueryProvider.notifier)
+                              .update('');
+                          showSearch.value = false;
+                        },
                       )
                     ],
                     onChanged: isExtensions

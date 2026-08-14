@@ -227,6 +227,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get discord => 'Discord';
 
   @override
+  String get details => 'Details';
+
+  @override
+  String get genres => 'Genres';
+
+  @override
+  String get scanlator => 'Scanlator';
+
+  @override
   String get display => 'Exibição';
 
   @override

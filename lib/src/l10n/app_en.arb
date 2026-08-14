@@ -1009,6 +1009,18 @@
     "deleteCategoryDescription": "This will merge all Mangas in this Category to Default!",
     "deleteCategoryTitle": "Are you sure?",
     "discord": "Discord",
+    "details": "Details",
+    "@details": {
+        "description": "Header of the collapsible details section in the history detail pane"
+    },
+    "genres": "Genres",
+    "@genres": {
+        "description": "Label for the genre chips of a manga"
+    },
+    "scanlator": "Scanlator",
+    "@scanlator": {
+        "description": "Label for the scanlator group of a chapter"
+    },
     "display": "Display",
     "displayMode": "Display Mode",
     "displayModeDescriptiveList": "Descriptive List",

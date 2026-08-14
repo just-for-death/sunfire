@@ -38,17 +38,11 @@ class ReadingHistory extends _$ReadingHistory {
     return DateTime.now().subtract(Duration(days: days));
   }
 
-  String? _activeSearchQuery() {
-    final query = ref.read(historySearchQueryProvider);
-    return query.isBlank ? null : query;
-  }
-
   Future<List<HistoryItemDto>?> _fetchFirstPage() async {
     _resetPagination();
     final hidden = ref.read(historyHiddenChapterIdsProvider) ?? const [];
     final page = await ref.read(historyRepositoryProvider).fetchReadingHistoryPage(
           targetCount: _pageSize,
-          searchQuery: _activeSearchQuery(),
           fromDate: _retentionFromDate(),
         );
     _rawOffset = page.nextRawOffset;
@@ -68,10 +62,9 @@ class ReadingHistory extends _$ReadingHistory {
       return const [];
     }
 
-    // Refetch when search, retention, or hidden set changes.
-    ref.watch(historySearchQueryProvider);
+    // Refetch when retention changes. Search is filtered client-side so it
+    // does not need to reset pagination.
     ref.watch(historyRetentionDaysProvider);
-    ref.watch(historyHiddenChapterIdsProvider);
 
     final nodes = await _fetchFirstPage();
     ref.keepAlive();
@@ -105,7 +98,6 @@ class ReadingHistory extends _$ReadingHistory {
             rawOffset: _rawOffset,
             excludeMangaIds: _loadedMangaIds,
             targetCount: _pageSize,
-            searchQuery: _activeSearchQuery(),
             fromDate: _retentionFromDate(),
           );
 
