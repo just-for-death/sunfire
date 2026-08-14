@@ -39,9 +39,11 @@ class MigrationProgressScreen extends HookConsumerWidget {
 
     useEffect(() {
       final current = ref.read(migrationExecutionProvider);
+      // Only skip while a migration is genuinely in flight. A leftover
+      // `completed` from an earlier run (backed out of instead of pressing
+      // Done, which resets) would otherwise block every later migration.
       if (current?.status == MigrationStatus.migrating ||
-          current?.status == MigrationStatus.preparing ||
-          current?.status == MigrationStatus.completed) {
+          current?.status == MigrationStatus.preparing) {
         return null;
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {

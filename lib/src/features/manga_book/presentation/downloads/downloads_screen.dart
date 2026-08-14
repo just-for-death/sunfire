@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../utils/extensions/custom_extensions.dart';
@@ -49,9 +48,11 @@ class DownloadsScreen extends ConsumerWidget {
           ),
           if (downloadsChapterIds.isNotBlank)
             IconButton(
-              onPressed: () => AsyncValue.guard(
-                ref.read(downloadsRepositoryProvider).clearDownloads,
-              ),
+              onPressed: () async =>
+                  (await AsyncValue.guard(
+                    ref.read(downloadsRepositoryProvider).clearDownloads,
+                  ))
+                      .showToastOnError(ref.read(toastProvider)),
               icon: const Icon(Icons.delete_sweep_rounded),
               tooltip: context.l10n.remove,
             ),
@@ -67,22 +68,28 @@ class DownloadsScreen extends ConsumerWidget {
                             cancelLabel: context.l10n.cancel,
                             isDestructive: true,
                           );
-                      if (!ok) return;
+                      if (!ok || !context.mounted) return;
+                      // Deleting is a long await chain; leaving the screen
+                      // part-way would make `ref` throw, so go through the
+                      // container captured while mounted.
+                      final container =
+                          ProviderScope.containerOf(context, listen: false);
                       final service = ref.read(localDownloadsServiceProvider);
                       final mangaIds = <int>{};
                       for (final id in ids) {
                         final manifest = await service.getOfflineManifest(id);
                         if (manifest != null) mangaIds.add(manifest.mangaId);
                         await service.deleteChapter(id);
-                        ref.invalidate(chapterPagesProvider(chapterId: id));
+                        container.invalidate(chapterPagesProvider(chapterId: id));
                       }
                       for (final mangaId in mangaIds) {
-                        ref.invalidate(mangaChapterListProvider(mangaId: mangaId));
-                        ref.invalidate(mangaWithIdProvider(mangaId: mangaId));
+                        container
+                            .invalidate(mangaChapterListProvider(mangaId: mangaId));
+                        container.invalidate(mangaWithIdProvider(mangaId: mangaId));
                       }
-                      ref.invalidate(localDownloadedChapterIdsProvider);
-                      ref.invalidate(localDownloadedMangaIdsProvider);
-                      ref.invalidate(offlineStorageSizeProvider);
+                      container.invalidate(localDownloadedChapterIdsProvider);
+                      container.invalidate(localDownloadedMangaIdsProvider);
+                      container.invalidate(offlineStorageSizeProvider);
                     },
                     icon: const Icon(Icons.delete_outline_rounded),
                   )
@@ -149,11 +156,14 @@ class DownloadsScreen extends ConsumerWidget {
                             context.l10n.downloadsInProgress,
                             Icons.downloading_rounded,
                           ),
+                          // Positions are absolute in the queue: the headers
+                          // only group the list visually, while reorder sends
+                          // the index straight to the server.
                           ...inProgress.map(
                             (id) => _DownloadListRow.tile(
                               chapterId: id,
-                              index: inProgress.indexOf(id),
-                              listLength: inProgress.length,
+                              index: downloadsChapterIds.indexOf(id),
+                              listLength: downloadsChapterIds.length,
                             ),
                           ),
                         ],
@@ -165,8 +175,8 @@ class DownloadsScreen extends ConsumerWidget {
                           ...queued.map(
                             (id) => _DownloadListRow.tile(
                               chapterId: id,
-                              index: queued.indexOf(id),
-                              listLength: queued.length,
+                              index: downloadsChapterIds.indexOf(id),
+                              listLength: downloadsChapterIds.length,
                             ),
                           ),
                         ],
@@ -185,11 +195,8 @@ class DownloadsScreen extends ConsumerWidget {
                               context: context,
                             ),
                           ),
-                          itemCount: rows.length + 1,
+                          itemCount: rows.length,
                           itemBuilder: (context, i) {
-                            if (i >= rows.length) {
-                              return const Gap(104);
-                            }
                             final row = rows[i];
                             if (row.isHeader) {
                               return _SectionHeader(

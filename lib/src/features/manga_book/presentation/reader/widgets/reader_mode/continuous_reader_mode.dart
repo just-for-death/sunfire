@@ -164,8 +164,14 @@ class ContinuousReaderMode extends HookConsumerWidget {
           forceNavigation: true,
         );
 
-        // Reset the flag after the navigation completes
-        Timer(const Duration(milliseconds: 300), () {
+        // Reset the flags after the navigation completes. Tracked so exiting
+        // mid-navigation can't fire it against a disposed widget. This replaces
+        // any pending position-tracking timer, so it has to clear both flags —
+        // otherwise `isUserScrolling` would stay stuck on and block navigation.
+        positionUpdateTimer.value?.cancel();
+        positionUpdateTimer.value =
+            Timer(const Duration(milliseconds: 300), () {
+          isUserScrolling.value = false;
           isNavigatingFromSlider.value = false;
         });
       },
@@ -365,11 +371,10 @@ class ContinuousReaderMode extends HookConsumerWidget {
         alignment = 0.0;
       }
     } else {
-      // Move to previous item with minimal scroll
-      if (currentPosition.index <= 0 &&
-          currentPosition.itemLeadingEdge >= 0.2) {
-        return;
-      }
+      // Move to previous item with minimal scroll.
+      // Guard the whole first item: partially scrolled into it (leading edge
+      // < 0.2) the branch below would target index -1.
+      if (currentPosition.index <= 0) return;
       if (currentPosition.itemLeadingEdge < 0.2) {
         targetIndex = currentPosition.index - 1;
         alignment = 0.0;

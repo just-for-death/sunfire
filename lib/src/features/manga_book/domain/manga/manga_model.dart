@@ -64,8 +64,10 @@ class MangaMeta with _$MangaMeta {
       ? val.toLowerCase().compareTo(true.toString()) == 0
       : null;
 
+  // tryParse, not parse: a malformed stored value would otherwise throw while
+  // decoding meta and take the whole manga load down with it.
   static double? fromJsonToDouble(dynamic val) =>
-      val != null && val is String ? double.parse(val) : null;
+      val != null && val is String ? double.tryParse(val) : null;
   factory MangaMeta.fromJson(Map<String, dynamic> json) =>
       _$MangaMetaFromJson(json);
 }

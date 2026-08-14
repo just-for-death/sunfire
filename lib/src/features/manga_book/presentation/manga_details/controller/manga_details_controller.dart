@@ -161,6 +161,11 @@ class MangaWithId extends _$MangaWithId {
         await ref.read(localDownloadsServiceProvider).hasOfflineManga(mangaId);
     if (!hasOffline) return null;
 
+    final stub = await ref
+        .read(localDownloadsServiceProvider)
+        .buildOfflineMangaStub(mangaId);
+    if (stub != null) return stub;
+
     return MangaDto(
       downloadCount: 0,
       genre: const [],
@@ -325,10 +330,7 @@ ChapterDto? firstUnreadInFilteredChapterList(
   if (filteredList == null) {
     return null;
   }
-  // Filtered list is already sorted in reading order — first unread is always
-  // the first match regardless of ascending/descending display sort.
-  return filteredList
-      .firstWhereOrNull((element) => !element.isRead.ifNull(false));
+  return firstUnreadInReadingOrder(filteredList);
 }
 
 @riverpod

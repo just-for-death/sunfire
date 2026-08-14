@@ -18,6 +18,15 @@ abstract final class AppBreakpoints {
   static bool useCompactShellOnNarrowTablet(BuildContext context) =>
       MediaQuery.sizeOf(context).width < narrowTabletMaxWidth;
 
+  /// True when navigation lives in a side rail beside a master–detail body.
+  ///
+  /// The shortest-side check keeps large phones in landscape on the phone shell:
+  /// they are wide enough for a rail but far too short for one.
+  static bool usesSideRail(BuildContext context) =>
+      isTabletLayout(context) &&
+      !useCompactShellOnNarrowTablet(context) &&
+      !isCompactNav(context);
+
   @Deprecated('Use useCompactShellOnNarrowTablet')
   static bool useCompactShellOnIPad(BuildContext context) =>
       useCompactShellOnNarrowTablet(context);

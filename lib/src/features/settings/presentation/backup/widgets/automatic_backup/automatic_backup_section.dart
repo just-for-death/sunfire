@@ -32,7 +32,7 @@ class AutomaticBackupSection extends ConsumerWidget {
           children: [
             SectionTitle(title: context.l10n.automaticBackup),
             SettingsPropTile(
-              title: context.l10n.socksHost,
+              title: context.l10n.backupLocation,
               leading: const Icon(Icons.folder_rounded),
               subtitle: data.backupPath,
               description: context.l10n.backupLocationDescription,
@@ -54,18 +54,13 @@ class AutomaticBackupSection extends ConsumerWidget {
                       const TimeOfDay(hour: 0, minute: 0),
                   context: context,
                 );
-                if (backupTime != null) {
-                  final result = await AppUtils.guard(
-                      () => repository.updateBackupTime(backupTime),
-                      ref.read(toastProvider));
-                  if (result != null) {
-                    ref.read(settingsProvider.notifier).updateState(result);
-                  }
-                } else {
-                  if (context.mounted) {
-                    ref.read(toastProvider)?.showError(
-                        context.l10n.invalidProp(context.l10n.backupTime));
-                  }
+                // Null means the user dismissed the picker, not bad input.
+                if (backupTime == null) return;
+                final result = await AppUtils.guard(
+                    () => repository.updateBackupTime(backupTime),
+                    ref.read(toastProvider));
+                if (result != null) {
+                  ref.read(settingsProvider.notifier).updateState(result);
                 }
               },
             ),

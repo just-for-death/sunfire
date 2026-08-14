@@ -7,17 +7,52 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../../../graphql/__generated__/schema.graphql.dart';
 import '../../../../../utils/extensions/custom_extensions.dart';
+import '../../../../manga_book/data/local_downloads/local_downloads_service.dart';
 import '../../../data/category_repository.dart';
 import '../../../domain/category/category_model.dart';
+import '../../../domain/category/graphql/__generated__/fragment.graphql.dart';
 
 part 'edit_category_controller.g.dart';
+
+CategoryDto offlineLibraryCategory({required int mangaCount}) =>
+    Fragment$CategoryDto(
+      defaultCategory: true,
+      id: kOfflineLibraryCategoryId,
+      includeInDownload: Enum$IncludeOrExclude.EXCLUDE,
+      includeInUpdate: Enum$IncludeOrExclude.EXCLUDE,
+      name: 'Downloads',
+      order: 0,
+      mangas: Fragment$CategoryDto$mangas(totalCount: mangaCount),
+      meta: const [],
+    );
 
 @riverpod
 class CategoryController extends _$CategoryController {
   @override
-  Future<List<CategoryDto>?> build() =>
-      ref.watch(categoryRepositoryProvider).getCategoryList();
+  Future<List<CategoryDto>?> build() async {
+    Object? error;
+    StackTrace? stack;
+    try {
+      final list =
+          await ref.watch(categoryRepositoryProvider).getCategoryList();
+      if (list != null) return list;
+    } catch (e, st) {
+      error = e;
+      stack = st;
+    }
+
+    final offline =
+        await ref.read(localDownloadsServiceProvider).listOfflineManga();
+    if (offline.isNotEmpty) {
+      return [offlineLibraryCategory(mangaCount: offline.length)];
+    }
+    if (error != null) {
+      Error.throwWithStackTrace(error, stack ?? StackTrace.current);
+    }
+    return null;
+  }
 
   Future<AsyncValue<void>> deleteCategory(int categoryId) async {
     final response = await AsyncValue.guard(() => ref

@@ -46,14 +46,6 @@ class HistoryGroup with _$HistoryGroup {
                 : DateTimeExtensions.max(previous, current));
   }
 
-  /// Get a localized description of when this group was last read
-  String? getLastReadDescription(BuildContext context) {
-    final lastRead = mostRecentReadDate;
-    if (lastRead == null) return null;
-
-    return lastRead.convertToDaysAgo(context);
-  }
-
   /// Get the localized title for this group
   String getLocalizedTitle(BuildContext context) {
     // Handle special keys

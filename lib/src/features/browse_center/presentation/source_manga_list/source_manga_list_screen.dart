@@ -78,6 +78,8 @@ class SourceMangaListScreen extends HookConsumerWidget {
     ).then(
       (value) => value.whenOrNull(
         data: (recentMangaPage) {
+          // The controller is disposed when the screen is remounted (source or
+          // type switch), so a late response must not touch it.
           try {
             if (recentMangaPage != null) {
               if (recentMangaPage.hasNextPage.ifNull()) {
@@ -93,7 +95,13 @@ class SourceMangaListScreen extends HookConsumerWidget {
             //
           }
         },
-        error: (error, stackTrace) => controller.error = error,
+        error: (error, stackTrace) {
+          try {
+            controller.error = error;
+          } catch (e) {
+            //
+          }
+        },
       ),
     );
   }
@@ -179,7 +187,10 @@ class SourceMangaListScreen extends HookConsumerWidget {
                       onClose: () => showSearch.value = (false),
                       onSubmitted: (val) {
                         if (sourceType == SourceType.SEARCH) {
-                          query.value = (val);
+                          // The close button submits null; only a real submit
+                          // (possibly an empty string) should replace results.
+                          if (val == null) return;
+                          query.value = val;
                           controller.refresh();
                         } else {
                           if (val == null) return;

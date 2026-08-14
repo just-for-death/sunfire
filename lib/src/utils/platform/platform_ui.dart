@@ -8,19 +8,23 @@ import 'package:flutter/services.dart';
 /// True on iPhone/iPad native builds (not web).
 bool get isCupertinoPlatform => !kIsWeb && Platform.isIOS;
 
-/// Bottom inset so scroll content clears the tab bar.
-const double kTabBarScrollBottomInset = 96;
-
 /// Extra bottom inset when a FAB floats over the list.
 const double kFabScrollBottomInset = 96;
 
+/// Bottom inset so scroll content clears whatever the shell draws over it.
+///
+/// `Scaffold` folds the bottom bar into the body's `MediaQuery.padding` when the
+/// shell extends its body behind that bar (Android), and reports plain
+/// safe-area otherwise (iOS, desktop, and the tablet rail shells, where the body
+/// already stops above the bar). Either way the padding *is* the overlap, so
+/// reading it beats guessing a bar height.
 double scrollBottomInset({
   bool hasFab = false,
   BuildContext? context,
 }) {
-  final base = hasFab ? kFabScrollBottomInset : kTabBarScrollBottomInset;
-  if (context == null) return base;
-  return base + MediaQuery.paddingOf(context).bottom;
+  final fabInset = hasFab ? kFabScrollBottomInset : 0.0;
+  if (context == null) return fabInset;
+  return MediaQuery.paddingOf(context).bottom + fabInset;
 }
 
 /// Scroll padding that includes safe-area and tab bar clearance.
