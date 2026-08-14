@@ -16,7 +16,6 @@ import '../../domain/history_menu_action.dart';
 import '../history_controller.dart';
 import '../history_reader_navigation.dart';
 import '../history_settings_sheet.dart';
-import '../widgets/continue_reading_carousel.dart';
 
 class IOSHomeScreen extends HookConsumerWidget {
   const IOSHomeScreen({super.key});
@@ -119,7 +118,7 @@ class IOSHomeScreen extends HookConsumerWidget {
           ),
           slivers: [
             GlassSliverAppBar(
-              title: context.l10n.navHome,
+              title: context.l10n.history,
               actions: [
                 IconButton(
                   icon: Icon(
@@ -201,11 +200,7 @@ class IOSHomeScreen extends HookConsumerWidget {
                   ),
                 ),
               )
-            else if (historyGroups.isNotEmpty) ...[
-              ContinueReadingCarousel(
-                groups: historyGroups,
-                useCupertinoStyle: true,
-              ),
+            else if (historyGroups.isNotEmpty)
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(0, 0, 0, bottomPadding),
                 sliver: SliverList.builder(
@@ -281,8 +276,8 @@ class IOSHomeScreen extends HookConsumerWidget {
                     );
                   },
                 ),
-              ),
-            ] else if (isPagingForResults)
+              )
+            else if (isPagingForResults)
               const SliverFillRemaining(
                 child: Center(child: CupertinoActivityIndicator()),
               )
@@ -328,9 +323,8 @@ class IOSHomeScreen extends HookConsumerWidget {
   static List<_IOSHistoryListEntry> _buildGroupedEntries(
     List<HistoryGroup> groups,
   ) {
-    final listGroups = historyGroupsExcludingCarousel(groups);
     final entries = <_IOSHistoryListEntry>[];
-    for (final group in listGroups) {
+    for (final group in groups) {
       if (group.isEmpty) continue;
       entries.add(_IOSHistoryListEntry.header(group));
       for (final item in group.items) {
