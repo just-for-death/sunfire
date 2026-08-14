@@ -68,13 +68,18 @@ class _GlassAppBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   double get maxExtent =>
-      largeTitle ? topPad + 54 + _bottomHeight : topPad + 44 + _bottomHeight;
+      largeTitle ? topPad + 92 + _bottomHeight : topPad + 44 + _bottomHeight;
 
   @override
   Widget build(
       BuildContext context, double shrinkOffset, bool overlapsContent) {
-    final t = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
-    final isExpanded = largeTitle && t < 0.5;
+    final maxScrollable = maxExtent - minExtent;
+    final t = maxScrollable > 0
+        ? (shrinkOffset / maxScrollable).clamp(0.0, 1.0)
+        : 1.0;
+    final smallTitleOpacity = largeTitle ? (t * 2 - 0.5).clamp(0.0, 1.0) : 1.0;
+    final largeTitleOpacity =
+        largeTitle ? (1.0 - t * 1.8).clamp(0.0, 1.0) : 0.0;
 
     return ClipRect(
       child: BackdropFilter(
@@ -100,24 +105,22 @@ class _GlassAppBarDelegate extends SliverPersistentHeaderDelegate {
               mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
-                  height: isExpanded ? 52 : 44,
+                  height: 44,
                   child: Row(
                     children: [
                       const SizedBox(width: 16),
                       Expanded(
-                        child: AnimatedDefaultTextStyle(
-                          duration: const Duration(milliseconds: 150),
-                          style: TextStyle(
-                            fontSize: isExpanded ? 28 : 17,
-                            fontWeight:
-                                isExpanded ? FontWeight.w700 : FontWeight.w600,
-                            color: isDark ? Colors.white : Colors.black,
-                            letterSpacing: isExpanded ? -0.5 : 0,
-                          ),
+                        child: Opacity(
+                          opacity: smallTitleOpacity,
                           child: Text(
                             title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
                           ),
                         ),
                       ),
@@ -126,6 +129,24 @@ class _GlassAppBarDelegate extends SliverPersistentHeaderDelegate {
                     ],
                   ),
                 ),
+                if (largeTitle && largeTitleOpacity > 0.01)
+                  Opacity(
+                    opacity: largeTitleOpacity,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : Colors.black,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                    ),
+                  ),
                 if (bottom != null) bottom!,
               ],
             ),
