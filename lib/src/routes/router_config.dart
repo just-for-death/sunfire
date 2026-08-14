@@ -121,7 +121,7 @@ GoRouter routerConfig(ref) {
     routes: $appRoutes,
     debugLogDiagnostics: kDebugMode,
     redirect: routeRedirect,
-    initialLocation: const HistoryTabRoute().location,
+    initialLocation: const LibraryRoute(categoryId: 0).location,
     navigatorKey: rootNavigatorKey,
     onException: (context, state, router) {
       final location = state.uri.toString();
@@ -129,7 +129,7 @@ GoRouter routerConfig(ref) {
         router.go(const ReaderRoute(mangaId: 0, chapterId: 0).location);
         return;
       }
-      router.go(const HistoryTabRoute().location);
+      router.go(const LibraryRoute(categoryId: 0).location);
     },
   );
 }
@@ -138,9 +138,6 @@ GoRouter routerConfig(ref) {
   routes: [
     TypedStatefulShellRoute<NavigationShellRoute>(
       branches: [
-        TypedStatefulShellBranch<HistoryBranch>(
-          routes: [TypedGoRoute<HistoryTabRoute>(path: '/history')],
-        ),
         TypedStatefulShellBranch<LibraryBranch>(
           routes: [
             TypedGoRoute<LibraryRoute>(
@@ -148,6 +145,9 @@ GoRouter routerConfig(ref) {
               routes: [],
             ),
           ],
+        ),
+        TypedStatefulShellBranch<HistoryBranch>(
+          routes: [TypedGoRoute<HistoryTabRoute>(path: '/history')],
         ),
         TypedStatefulShellBranch<BrowserBranch>(
           routes: [

@@ -18,20 +18,20 @@ RouteBase get $quickSearchRoute => ShellRouteData.$route(
           factory: $NavigationShellRouteExtension._fromState,
           branches: [
             StatefulShellBranchData.$branch(
-              initialLocation: HistoryBranch.$initialLocation,
-              routes: [
-                GoRouteData.$route(
-                  path: '/history',
-                  factory: $HistoryTabRouteExtension._fromState,
-                ),
-              ],
-            ),
-            StatefulShellBranchData.$branch(
               initialLocation: LibraryBranch.$initialLocation,
               routes: [
                 GoRouteData.$route(
                   path: '/library/:categoryId',
                   factory: $LibraryRouteExtension._fromState,
+                ),
+              ],
+            ),
+            StatefulShellBranchData.$branch(
+              initialLocation: HistoryBranch.$initialLocation,
+              routes: [
+                GoRouteData.$route(
+                  path: '/history',
+                  factory: $HistoryTabRouteExtension._fromState,
                 ),
               ],
             ),

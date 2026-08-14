@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../features/settings/presentation/server/server_connectivity.dart';
 import '../../utils/extensions/custom_extensions.dart';
 import '../../utils/platform/platform_ui.dart';
+import 'download_progress_banner.dart';
 import 'notification_permission_banner.dart';
 import 'top_state_banners.dart';
 
@@ -30,6 +31,7 @@ class ShellBannerStack extends HookConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           NotificationPermissionBanner(),
+          DownloadProgressBanner(),
           TopStateBanners(),
         ],
       );
