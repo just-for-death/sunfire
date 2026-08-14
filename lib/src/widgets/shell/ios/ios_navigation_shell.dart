@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
@@ -368,6 +369,9 @@ class _GlassSidebar extends ConsumerWidget {
     final titleSize = textScaler.scale(22.0).clamp(18.0, 28.0);
     final rowLabelSize = textScaler.scale(15.0).clamp(13.0, 20.0);
     final rowIconSize = textScaler.scale(20.0).clamp(18.0, 26.0);
+    final rawTop = MediaQuery.of(context).padding.top;
+    final safeTop = math.max(rawTop, 38.0);
+    final extraTopPadding = math.max(0.0, safeTop - rawTop);
 
     Widget navIcon(NavigationBarData item, bool selected) {
       Widget icon = Icon(
@@ -400,7 +404,7 @@ class _GlassSidebar extends ConsumerWidget {
                 Padding(
                   padding: EdgeInsets.fromLTRB(
                     expanded ? 12 : 4,
-                    12,
+                    12 + extraTopPadding,
                     expanded ? 8 : 4,
                     8,
                   ),
