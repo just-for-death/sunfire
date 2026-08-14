@@ -18,7 +18,8 @@ class TabletSplitLayout extends StatelessWidget {
   final bool showDetail;
 
   static bool shouldUse(BuildContext context) =>
-      AppBreakpoints.isTabletLayout(context);
+      AppBreakpoints.isTabletLayout(context) &&
+      !AppBreakpoints.useCompactShellOnNarrowTablet(context);
 
   @override
   Widget build(BuildContext context) {
@@ -43,10 +44,17 @@ class TabletSplitLayout extends StatelessWidget {
               : ColoredBox(
                   color: cs.surface,
                   child: Center(
-                    child: Icon(
-                      Icons.touch_app_outlined,
-                      size: 48,
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.4),
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHigh,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.menu_book_outlined,
+                        size: 40,
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                      ),
                     ),
                   ),
                 ),

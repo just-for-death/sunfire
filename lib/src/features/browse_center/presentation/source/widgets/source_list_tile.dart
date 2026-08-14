@@ -31,6 +31,7 @@ class SourceListTile extends ConsumerWidget {
       ref.read(tabletBrowseSourceSelectionProvider.notifier).state = (
         sourceId: source.id,
         sourceType: sourceType,
+        query: null,
       );
       return;
     }

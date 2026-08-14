@@ -4,7 +4,7 @@ import 'package:flutter/widgets.dart';
 abstract final class AppBreakpoints {
   static const double tabletMinWidth = 600;
   static const double compactNavMaxShortestSide = 600;
-  static const double narrowIPadMaxWidth = 700;
+  static const double narrowTabletMaxWidth = 700;
 
   static bool isTabletLayout(BuildContext context) =>
       MediaQuery.sizeOf(context).width >= tabletMinWidth;
@@ -12,7 +12,13 @@ abstract final class AppBreakpoints {
   static bool isCompactNav(BuildContext context) =>
       MediaQuery.sizeOf(context).shortestSide < compactNavMaxShortestSide;
 
-  /// iPad in Stage Manager or split view — use phone shell instead of sidebar.
+  /// Phone shell instead of sidebar rail when the window is tablet-class but
+  /// too narrow for rail + master–detail (Stage Manager / foldables / small
+  /// landscape tablets).
+  static bool useCompactShellOnNarrowTablet(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < narrowTabletMaxWidth;
+
+  @Deprecated('Use useCompactShellOnNarrowTablet')
   static bool useCompactShellOnIPad(BuildContext context) =>
-      MediaQuery.sizeOf(context).width < narrowIPadMaxWidth;
+      useCompactShellOnNarrowTablet(context);
 }

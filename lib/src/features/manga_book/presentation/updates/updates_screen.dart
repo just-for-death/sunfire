@@ -111,7 +111,7 @@ class UpdatesScreen extends HookConsumerWidget {
         child: PagedListView(
           padding: EdgeInsets.only(
             bottom: selectedChapters.value.isEmpty
-                ? scrollBottomInset(hasFab: true)
+                ? scrollBottomInset(hasFab: true, context: context)
                 : 0,
           ),
           pagingController: controller,
