@@ -4,18 +4,26 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../global_providers/global_providers.dart';
 import '../../utils/extensions/custom_extensions.dart';
 import '../../utils/platform/mobile_permissions.dart';
 import '../../utils/platform/platform_ui.dart';
 
+const String _kNotificationBannerDismissedPrefKey =
+    'notification_permission_banner_dismissed';
+
 /// Prompts the user when notification permission is missing on mobile.
-class NotificationPermissionBanner extends HookWidget {
+class NotificationPermissionBanner extends HookConsumerWidget {
   const NotificationPermissionBanner({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final dismissed = useState(false);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    final isPermanentlyDismissed =
+        prefs.getBool(_kNotificationBannerDismissedPrefKey) ?? false;
+    final dismissed = useState(isPermanentlyDismissed);
     final granted = useState<bool?>(null);
     final needsSettings = useState(false);
 
@@ -45,7 +53,7 @@ class NotificationPermissionBanner extends HookWidget {
     if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
       return const SizedBox.shrink();
     }
-    if (dismissed.value || granted.value != false) {
+    if (dismissed.value || isPermanentlyDismissed || granted.value != false) {
       return const SizedBox.shrink();
     }
 
@@ -114,7 +122,10 @@ class NotificationPermissionBanner extends HookWidget {
                     padding: EdgeInsets.zero,
                   ),
                 IconButton(
-                  onPressed: () => dismissed.value = true,
+                  onPressed: () {
+                    prefs.setBool(_kNotificationBannerDismissedPrefKey, true);
+                    dismissed.value = true;
+                  },
                   icon: Icon(
                     isCupertinoPlatform
                         ? CupertinoIcons.xmark
