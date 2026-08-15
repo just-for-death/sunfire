@@ -25,7 +25,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   List<Map<String, dynamic>> _sourcesList = [];
   bool _isLoadingSources = true;
   String _sourceSearchQuery = '';
-  String _selectedLangFilter = 'en';
+  String _selectedLangFilter = 'EN';
 
   // ── EXTENSIONS STATE ─────────────────────────────────────
   List<Map<String, dynamic>> _extensionList = [];
@@ -299,7 +299,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       final name = (s['name'] as String).toLowerCase();
       final lang = (s['lang'] as String).toUpperCase();
       final matchesSearch = _sourceSearchQuery.isEmpty || name.contains(_sourceSearchQuery.toLowerCase());
-      final matchesLang = _selectedLangFilter == 'ALL' || lang == _selectedLangFilter;
+      final matchesLang = _selectedLangFilter.toUpperCase() == 'ALL' || lang == _selectedLangFilter.toUpperCase();
       return matchesSearch && matchesLang;
     }).toList();
 
