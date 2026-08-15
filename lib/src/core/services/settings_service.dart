@@ -16,6 +16,13 @@ class SettingsService extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
   }
 
+  // ── ONBOARDING STATE ──────────────────────────────────────
+  bool get onboardingCompleted => _prefs?.getBool('onboarding_completed') ?? false;
+  set onboardingCompleted(bool value) {
+    _prefs?.setBool('onboarding_completed', value);
+    notifyListeners();
+  }
+
   // ── ACCENT COLOR PALETTE ──────────────────────────────────
   static const Map<String, Color> accentColors = {
     'Sunfire Orange': Color(0xFFFF5722),
