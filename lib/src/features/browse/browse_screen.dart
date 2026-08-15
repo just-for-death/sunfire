@@ -25,7 +25,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   List<Map<String, dynamic>> _sourcesList = [];
   bool _isLoadingSources = true;
   String _sourceSearchQuery = '';
-  String _selectedLangFilter = 'ALL';
+  String _selectedLangFilter = 'en';
 
   // ── EXTENSIONS STATE ─────────────────────────────────────
   List<Map<String, dynamic>> _extensionList = [];
