@@ -35,16 +35,46 @@ class SettingsService extends ChangeNotifier {
 
   Color get accentColor => accentColors[accentColorName] ?? const Color(0xFFFF5722);
 
-  // ── READER SETTINGS ──────────────────────────────────────
+  // ── READER SETTINGS (MIHON PARITY) ───────────────────────
   String get readingMode => _prefs?.getString('reading_mode') ?? 'Webtoon';
   set readingMode(String value) {
     _prefs?.setString('reading_mode', value);
     notifyListeners();
   }
 
-  String get readingDirection => _prefs?.getString('reading_direction') ?? 'Vertical';
-  set readingDirection(String value) {
-    _prefs?.setString('reading_direction', value);
+  String get readerTheme => _prefs?.getString('reader_theme') ?? 'Black';
+  set readerTheme(String value) {
+    _prefs?.setString('reader_theme', value);
+    notifyListeners();
+  }
+
+  String get colorFilter => _prefs?.getString('color_filter') ?? 'None';
+  set colorFilter(String value) {
+    _prefs?.setString('color_filter', value);
+    notifyListeners();
+  }
+
+  String get scaleType => _prefs?.getString('scale_type') ?? 'Fit Width';
+  set scaleType(String value) {
+    _prefs?.setString('scale_type', value);
+    notifyListeners();
+  }
+
+  bool get tapZonesEnabled => _prefs?.getBool('tap_zones_enabled') ?? true;
+  set tapZonesEnabled(bool value) {
+    _prefs?.setBool('tap_zones_enabled', value);
+    notifyListeners();
+  }
+
+  bool get invertTapZones => _prefs?.getBool('invert_tap_zones') ?? false;
+  set invertTapZones(bool value) {
+    _prefs?.setBool('invert_tap_zones', value);
+    notifyListeners();
+  }
+
+  bool get seamlessTransitions => _prefs?.getBool('seamless_transitions') ?? true;
+  set seamlessTransitions(bool value) {
+    _prefs?.setBool('seamless_transitions', value);
     notifyListeners();
   }
 
@@ -54,15 +84,9 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool get cropBorders => _prefs?.getBool('crop_borders') ?? true;
+  bool get cropBorders => _prefs?.getBool('crop_borders') ?? false;
   set cropBorders(bool value) {
     _prefs?.setBool('crop_borders', value);
-    notifyListeners();
-  }
-
-  bool get tapZonesEnabled => _prefs?.getBool('tap_zones_enabled') ?? true;
-  set tapZonesEnabled(bool value) {
-    _prefs?.setBool('tap_zones_enabled', value);
     notifyListeners();
   }
 
@@ -85,7 +109,13 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── LIBRARY & CATEGORIES ─────────────────────────────────
+  // ── LIBRARY & CATEGORIES (MIHON PARITY) ───────────────────
+  String get libraryDisplayMode => _prefs?.getString('library_display_mode') ?? 'Comfortable Grid';
+  set libraryDisplayMode(String value) {
+    _prefs?.setString('library_display_mode', value);
+    notifyListeners();
+  }
+
   int get defaultCategoryId => _prefs?.getInt('default_category_id') ?? 0;
   set defaultCategoryId(int value) {
     _prefs?.setInt('default_category_id', value);
@@ -95,6 +125,27 @@ class SettingsService extends ChangeNotifier {
   bool get showUnreadBadges => _prefs?.getBool('show_unread_badges') ?? true;
   set showUnreadBadges(bool value) {
     _prefs?.setBool('show_unread_badges', value);
+    notifyListeners();
+  }
+
+  // ── SOURCES & BROWSING (MIHON PARITY) ─────────────────────
+  List<String> get pinnedSources => _prefs?.getStringList('pinned_sources') ?? [];
+  Future<void> togglePinSource(String sourceName) async {
+    final list = List<String>.from(pinnedSources);
+    if (list.contains(sourceName)) {
+      list.remove(sourceName);
+    } else {
+      list.add(sourceName);
+    }
+    await _prefs?.setStringList('pinned_sources', list);
+    notifyListeners();
+  }
+
+  bool isSourcePinned(String sourceName) => pinnedSources.contains(sourceName);
+
+  List<String> get selectedLanguages => _prefs?.getStringList('selected_languages') ?? ['all'];
+  set selectedLanguages(List<String> langs) {
+    _prefs?.setStringList('selected_languages', langs);
     notifyListeners();
   }
 
