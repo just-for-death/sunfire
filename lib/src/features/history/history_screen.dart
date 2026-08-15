@@ -75,7 +75,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               : _historyItems.isEmpty
                   ? const Center(
                       child: Text(
-                        'No reading history synced yet.\nPull down to sync from server.',
+                        'No reading history yet.\nStart reading a chapter to track progress.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.grey),
                       ),
