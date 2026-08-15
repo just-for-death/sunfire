@@ -301,6 +301,14 @@ class SyncEngine {
                 chapter.fetchedAt = int.tryParse(rawFetchedAt.toString());
               }
 
+              // Save remote chapter URLs for on-device QuickJS scraping
+              if (chMap['url'] != null && (chMap['url'] as String).isNotEmpty) {
+                chapter.url = chMap['url'] as String;
+              }
+              if (chMap['realUrl'] != null && (chMap['realUrl'] as String).isNotEmpty) {
+                chapter.realUrl = chMap['realUrl'] as String;
+              }
+
               // Denormalize manga info into the chapter for offline display
               chapter.mangaTitle = manga.title;
               chapter.mangaThumbnailUrl = manga.thumbnailUrl;
