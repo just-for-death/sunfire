@@ -268,7 +268,11 @@ class GraphQLClientService {
   Future<Map<String, dynamic>?> fetchUpdatesChapters({int first = 100}) async {
     final queryStr = '''
       {
-        chapters(order: [{ by: FETCHED_AT, byType: DESC }], first: $first) {
+        chapters(
+          filter: { inLibrary: { equalTo: true } }
+          order: [{ by: FETCHED_AT, byType: DESC }]
+          first: $first
+        ) {
           totalCount
           nodes {
             id
