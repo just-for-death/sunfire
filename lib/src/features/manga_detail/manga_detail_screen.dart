@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
+import '../../core/services/download_manager_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 
 class MangaDetailScreen extends StatefulWidget {
@@ -41,7 +42,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     // 2. Fetch fresh details AND chapters from Suwayomi GraphQL in 1 single call
     if (GraphQLClientService.instance.isConfigured) {
       try {
-        final detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
+        var detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
+        
+        // If chapters are empty on server, scrape online from source directly!
+        final rawChNodes = (detailsData?['manga']?['chapters']?['nodes'] as List<dynamic>?) ?? [];
+        if (rawChNodes.isEmpty) {
+          await GraphQLClientService.instance.fetchMangaAndChapters(widget.mangaServerId);
+          detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
+        }
+
         if (detailsData != null && detailsData.containsKey('manga') && detailsData['manga'] != null) {
           final mMap = detailsData['manga'] as Map<String, dynamic>;
           _manga ??= Manga()..serverId = widget.mangaServerId;
@@ -229,9 +238,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 subtitle: const Text('Queue download on Suwayomi server storage'),
                 onTap: () async {
                   Navigator.pop(sheetContext);
-                  if (GraphQLClientService.instance.isConfigured) {
-                    await GraphQLClientService.instance.enqueueChapterDownload(ch.serverId);
-                  }
+                  await DownloadManagerService.instance.enqueueServerDownload(ch.serverId);
                   messenger.showSnackBar(
                     SnackBar(content: Text('Enqueued ${ch.name} on server')),
                   );
@@ -240,11 +247,28 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               ListTile(
                 leading: Icon(Icons.phone_android_rounded, color: primaryColor),
                 title: const Text('Download to Local Device (Offline)', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Save to device cache for offline reading'),
-                onTap: () {
+                subtitle: const Text('Save images to device for offline reading'),
+                onTap: () async {
                   Navigator.pop(sheetContext);
+                  await DownloadManagerService.instance.enqueueLocalDownload(
+                    chapterId: ch.serverId,
+                    mangaId: widget.mangaServerId,
+                    chapterName: ch.name,
+                    mangaTitle: _manga?.title ?? 'Manga',
+                  );
                   messenger.showSnackBar(
-                    SnackBar(content: Text('Downloading ${ch.name} to local device...')),
+                    SnackBar(content: Text('Downloading ${ch.name} to device...')),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_sweep_rounded, color: Colors.orangeAccent),
+                title: const Text('Delete from Local Device', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await DownloadManagerService.instance.deleteLocalDownload(ch.serverId);
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Deleted ${ch.name} from local storage')),
                   );
                 },
               ),
@@ -253,11 +277,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 title: const Text('Delete Download from Server', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
                 onTap: () async {
                   Navigator.pop(sheetContext);
-                  if (GraphQLClientService.instance.isConfigured) {
-                    await GraphQLClientService.instance.deleteDownloadedChapter(ch.serverId);
-                  }
+                  await DownloadManagerService.instance.deleteServerDownload(ch.serverId);
                   messenger.showSnackBar(
-                    SnackBar(content: Text('Deleted ${ch.name} download')),
+                    SnackBar(content: Text('Deleted ${ch.name} from server')),
                   );
                 },
               ),
@@ -523,6 +545,16 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              if (DownloadManagerService.instance.isChapterDownloadedLocally(ch.serverId))
+                                const Padding(
+                                  padding: EdgeInsets.only(right: 4.0),
+                                  child: Icon(Icons.phone_android_rounded, color: Colors.greenAccent, size: 18),
+                                ),
+                              if (DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId) || ch.isDownloaded)
+                                const Padding(
+                                  padding: EdgeInsets.only(right: 4.0),
+                                  child: Icon(Icons.cloud_done_rounded, color: Colors.cyanAccent, size: 18),
+                                ),
                               IconButton(
                                 icon: const Icon(Icons.more_vert_rounded, color: Colors.grey, size: 20),
                                 onPressed: () => _showSingleChapterOptions(ch),
