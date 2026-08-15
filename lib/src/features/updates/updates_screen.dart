@@ -72,9 +72,6 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
               final map = n as Map<String, dynamic>;
               final mangaMap = map['manga'] as Map<String, dynamic>?;
 
-              final inLibrary = mangaMap?['inLibrary'] as bool? ?? true;
-              if (!inLibrary) continue;
-
               final chServerId = map['id'] as int;
               final ch = Chapter()
                 ..serverId = chServerId
