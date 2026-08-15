@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
+import '../../core/engine/content_resolver_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 
@@ -144,38 +144,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
       }
     }
 
-    // 1. Check if chapter is downloaded locally on device
-    try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final chapterDir = Directory('${appDir.path}/downloads/$chapterId');
-      if (await chapterDir.exists()) {
-        final files = await chapterDir.list().toList();
-        final localImageFiles = files.whereType<File>().toList();
-        localImageFiles.sort((a, b) => a.path.compareTo(b.path));
-        if (localImageFiles.isNotEmpty) {
-          _pageUrls = localImageFiles.map((f) => f.path).toList();
-        }
-      }
-    } catch (_) {}
-
-    // 2. Fetch live pages from Suwayomi if not downloaded locally
-    final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
-    if (_pageUrls.isEmpty && GraphQLClientService.instance.isConfigured) {
-      try {
-        final data = await GraphQLClientService.instance.fetchChapterPages(chapterId);
-        if (data != null && data.containsKey('fetchChapterPages')) {
-          final rawPages = data['fetchChapterPages']['pages'] as List<dynamic>?;
-          if (rawPages != null && rawPages.isNotEmpty) {
-            _pageUrls = rawPages.map((p) {
-              final str = p.toString();
-              return str.startsWith('http') ? str : '$serverUrl$str';
-            }).toList();
-          }
-        }
-      } catch (_) {}
+    // ── 3-TIER RESOLVER: 1. Local Extension -> 2. Local Download -> 3. Server ──
+    String? sourceName;
+    if (_chapter != null) {
+      final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
+      sourceName = manga?.sourceName;
     }
 
-    // 2. Fallback placeholders if offline
+    final resolved = await ContentResolverService.instance.resolveChapterPages(
+      chapterServerId: chapterId,
+      chapterUrl: _chapter?.localPath,
+      sourceName: sourceName,
+    );
+
+    _pageUrls = resolved.pageUrls;
+
+    // Fallback placeholders only if completely offline and unresolved
     if (_pageUrls.isEmpty) {
       _pageUrls = List.generate(
         15,
