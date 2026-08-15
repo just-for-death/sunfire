@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/db/isar_service.dart';
@@ -38,34 +39,43 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
     super.dispose();
   }
 
+  List<Map<String, dynamic>> _getTargetSources() {
+    return widget.sources.where((s) {
+      final id = s['id'].toString();
+      final name = s['name'] as String? ?? '';
+      if (name == widget.manga.sourceName || id == widget.manga.sourceName) return false;
+      return true;
+    }).toList();
+  }
+
   Future<void> _performSearchAcrossSources() async {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
 
+    final targetSources = _getTargetSources();
+
     setState(() {
       _searchResults.clear();
-      for (final s in widget.sources) {
+      _loadingStates.clear();
+      for (final s in targetSources) {
         final id = s['id'].toString();
         _loadingStates[id] = true;
       }
     });
 
-    final targetSources = widget.sources.where((s) => s['name'] != widget.manga.sourceName && s['id'] != widget.manga.sourceName).toList();
-
-    // Query in batches of 3 to avoid hammering slow remote extensions
-    final batchSize = 3;
-    for (var i = 0; i < targetSources.length; i += batchSize) {
-      final batch = targetSources.skip(i).take(batchSize).toList();
-      await Future.wait(
-        batch.map((s) => _searchSingleSource(s['id'].toString(), query)),
-      );
-    }
+    // Run searches with individual timeouts so no source blocks the UI
+    await Future.wait(
+      targetSources.map((s) => _searchSingleSource(s['id'].toString(), query)),
+    );
   }
 
   Future<void> _searchSingleSource(String sourceId, String query) async {
     try {
       if (GraphQLClientService.instance.isConfigured) {
-        final data = await GraphQLClientService.instance.fetchSourceManga(sourceId, searchQuery: query);
+        final data = await GraphQLClientService.instance
+            .fetchSourceManga(sourceId, searchQuery: query)
+            .timeout(const Duration(seconds: 8), onTimeout: () => null);
+
         if (data != null && data.containsKey('fetchSourceManga')) {
           final mangas = data['fetchSourceManga']['mangas'] as List<dynamic>?;
           if (mangas != null) {
@@ -80,6 +90,8 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                 'id': map['id'],
                 'title': map['title'] as String? ?? 'Untitled',
                 'thumbnailUrl': thumb,
+                'artist': map['artist'],
+                'author': map['author'],
               };
             }).toList();
 
@@ -94,14 +106,14 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
         }
       }
     } catch (e) {
-      await LoggerService.instance.logWarning('Search timed out on source $sourceId', 'Migrate');
-    }
-
-    if (mounted) {
-      setState(() {
-        _searchResults[sourceId] = [];
-        _loadingStates[sourceId] = false;
-      });
+      await LoggerService.instance.logWarning('Search timed out on source $sourceId: $e', 'Migrate');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _searchResults.putIfAbsent(sourceId, () => []);
+          _loadingStates[sourceId] = false;
+        });
+      }
     }
   }
 
@@ -110,77 +122,176 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
     final targetTitle = targetManga['title'] as String;
     final targetSourceName = targetSource['displayName'] as String? ?? targetSource['name'] as String;
 
+    bool copyHistory = true;
+    bool copyCategories = true;
+    bool copyTracking = true;
+    bool deleteOriginal = true;
+
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
-          title: const Text('Confirm Migration', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Migrate "${widget.manga.title}" from ${widget.manga.sourceName} to:'),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: primaryColor.withAlpha(25),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: primaryColor.withAlpha(100)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1F1F24),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Row(
+                children: [
+                  Icon(Icons.swap_horiz_rounded, color: Colors.blueAccent, size: 24),
+                  SizedBox(width: 10),
+                  Text('Migrate Manga (Mihon)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView(
+                  shrinkWrap: true,
                   children: [
-                    Text(targetTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    const SizedBox(height: 4),
-                    Text('Source: $targetSourceName', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                    Text('Migrate from: ${widget.manga.sourceName}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withAlpha(25),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: primaryColor.withAlpha(80)),
+                      ),
+                      child: Row(
+                        children: [
+                          if (targetManga['thumbnailUrl'] != null && (targetManga['thumbnailUrl'] as String).isNotEmpty)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(targetManga['thumbnailUrl'] as String, width: 42, height: 56, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded)),
+                            ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(targetTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                const SizedBox(height: 2),
+                                Text('Target: $targetSourceName', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('WHAT TO INCLUDE', style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      value: copyHistory,
+                      activeColor: primaryColor,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Transfer chapter reading progress', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      onChanged: (v) => setDialogState(() => copyHistory = v ?? true),
+                    ),
+                    CheckboxListTile(
+                      value: copyCategories,
+                      activeColor: primaryColor,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Transfer category assignments', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      onChanged: (v) => setDialogState(() => copyCategories = v ?? true),
+                    ),
+                    CheckboxListTile(
+                      value: copyTracking,
+                      activeColor: primaryColor,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Transfer manga tracking records', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      onChanged: (v) => setDialogState(() => copyTracking = v ?? true),
+                    ),
+                    CheckboxListTile(
+                      value: deleteOriginal,
+                      activeColor: primaryColor,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Delete original manga from library', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      onChanged: (v) => setDialogState(() => deleteOriginal = v ?? true),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              const Text('• Reading progress & bookmarks will be transferred.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () async {
-                Navigator.pop(context);
-                await _executeMigration(targetManga, targetSource);
-              },
-              child: const Text('Migrate', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(dialogCtx);
+                    await _executeMigration(
+                      targetManga,
+                      targetSource,
+                      copyHistory: copyHistory,
+                      copyCategories: copyCategories,
+                      copyTracking: copyTracking,
+                      deleteOriginal: deleteOriginal,
+                    );
+                  },
+                  child: const Text('Migrate', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
-  Future<void> _executeMigration(Map<String, dynamic> targetManga, Map<String, dynamic> targetSource) async {
+  Future<void> _executeMigration(
+    Map<String, dynamic> targetManga,
+    Map<String, dynamic> targetSource, {
+    required bool copyHistory,
+    required bool copyCategories,
+    required bool copyTracking,
+    required bool deleteOriginal,
+  }) async {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final targetSourceName = targetSource['displayName'] as String? ?? targetSource['name'] as String;
+    final targetMangaId = targetManga['id'] as int;
 
-    // 1. Update Isar DB
+    // 1. Fetch Target Manga into Suwayomi Library
+    if (GraphQLClientService.instance.isConfigured) {
+      try {
+        await GraphQLClientService.instance.fetchMangaAndChapters(targetMangaId);
+        await GraphQLClientService.instance.updateMangaLibraryState(targetMangaId, true);
+
+        // Copy Tracking Records
+        if (copyTracking && widget.manga.serverId > 0) {
+          final existingTracks = await GraphQLClientService.instance.fetchTrackRecords(widget.manga.serverId);
+          final nodes = existingTracks?['trackRecords']?['nodes'] as List<dynamic>? ?? [];
+          for (final tr in nodes) {
+            final trackerId = tr['trackerId'] as int?;
+            final remoteId = tr['remoteId']?.toString() ?? tr['id']?.toString();
+            if (trackerId != null && remoteId != null) {
+              await GraphQLClientService.instance.bindTrack(targetMangaId, trackerId, remoteId);
+            }
+          }
+        }
+
+        // Delete Original if requested
+        if (deleteOriginal && widget.manga.serverId > 0) {
+          await GraphQLClientService.instance.updateMangaLibraryState(widget.manga.serverId, false);
+        }
+      } catch (e) {
+        await LoggerService.instance.logError('Migration sync error: $e', exception: e, category: 'Migrate');
+      }
+    }
+
+    // 2. Update local Isar record
     widget.manga.sourceName = targetSourceName;
     if (targetManga['thumbnailUrl'] != null && (targetManga['thumbnailUrl'] as String).isNotEmpty) {
       widget.manga.thumbnailUrl = targetManga['thumbnailUrl'] as String;
     }
     await IsarService.instance.saveManga(widget.manga);
-
-    // 2. Sync with Suwayomi server if configured
-    try {
-      if (GraphQLClientService.instance.isConfigured && widget.manga.serverId > 0) {
-        await GraphQLClientService.instance.updateMangaLibraryState(widget.manga.serverId, true);
-      }
-    } catch (_) {}
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -198,14 +309,18 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     final targetSources = widget.sources.where((s) {
-      if (s['name'] == widget.manga.sourceName || s['id'] == widget.manga.sourceName) return false;
+      final name = s['name'] as String? ?? '';
+      final id = s['id'].toString();
+      if (name == widget.manga.sourceName || id == widget.manga.sourceName) return false;
+
       if (_activeFilter == 'PINNED') return s['isPinned'] == true;
       if (_activeFilter == 'HAS_RESULTS') {
-        final id = s['id'].toString();
         return (_searchResults[id]?.isNotEmpty ?? false);
       }
       return true;
     }).toList();
+
+    final isAnyLoading = _loadingStates.values.any((loading) => loading);
 
     return Scaffold(
       appBar: AppBar(
@@ -213,7 +328,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
           controller: _searchController,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           decoration: InputDecoration(
-            hintText: 'Search for target manga...',
+            hintText: 'Search title...',
             border: InputBorder.none,
             suffixIcon: Row(
               mainAxisSize: MainAxisSize.min,
@@ -300,7 +415,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                   label: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.checklist_rounded, size: 14),
+                      Icon(Icons.check_circle_outline_rounded, size: 14),
                       SizedBox(width: 4),
                       Text('HAS RESULTS'),
                     ],
@@ -319,130 +434,140 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                   ),
                   onSelected: (_) => setState(() => _activeFilter = 'HAS_RESULTS'),
                 ),
+                if (isAnyLoading) ...[
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text('Searching...', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                ],
               ],
             ),
           ),
 
-          // ── MULTI-SOURCE SEARCH RESULTS ─────────────────────────
+          const Divider(height: 1, color: Color(0x1AFFFFFF)),
+
+          // ── SOURCES EXPANDABLE LIST ─────────────────────────────
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 120),
-              itemCount: targetSources.length,
-              itemBuilder: (context, index) {
-                final source = targetSources[index];
-                final sourceId = source['id'].toString();
-                final sourceName = source['displayName'] as String? ?? source['name'] as String;
-                final lang = (source['lang'] as String? ?? 'en').toUpperCase();
-                final isLoading = _loadingStates[sourceId] ?? false;
-                final results = _searchResults[sourceId] ?? [];
+            child: targetSources.isEmpty
+                ? Center(
+                    child: Text(
+                      _activeFilter == 'PINNED'
+                          ? 'No pinned sources found.\nSwitch to "ALL" to search across all sources.'
+                          : 'No sources available for migration.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16.0),
+                    itemCount: targetSources.length,
+                    itemBuilder: (context, index) {
+                      final source = targetSources[index];
+                      final sourceId = source['id'].toString();
+                      final sourceName = source['displayName'] as String? ?? source['name'] as String;
+                      final lang = (source['lang'] as String? ?? 'en').toUpperCase();
+                      final isLoading = _loadingStates[sourceId] ?? false;
+                      final results = _searchResults[sourceId] ?? [];
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Source Section Header
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6.0),
+                        child: Material(
                           color: const Color(0x1F2A2A32),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(sourceName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                                const SizedBox(height: 2),
-                                Text(lang, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                              ],
-                            ),
-                            const Icon(Icons.arrow_forward_rounded, color: Colors.grey, size: 20),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      // Results Row / Loading
-                      if (isLoading)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 24.0),
-                          child: Center(
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2.5),
-                            ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
                           ),
-                        )
-                      else if (results.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
-                          child: Text('No matching results found on this source.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                        )
-                      else
-                        SizedBox(
-                          height: 190,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: results.length,
-                            itemBuilder: (context, rIndex) {
-                              final item = results[rIndex];
-                              final title = item['title'] as String;
-                              final thumb = item['thumbnailUrl'] as String? ?? '';
-
-                              return GestureDetector(
-                                onTap: () => _showMigrationConfirmation(item, source),
-                                child: Container(
-                                  width: 110,
-                                  margin: const EdgeInsets.only(right: 12),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(14),
-                                            color: const Color(0xFF1F1F24),
-                                            border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
-                                          ),
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(14),
-                                            child: thumb.isNotEmpty
-                                                ? Image.network(
-                                                    thumb,
-                                                    width: double.infinity,
-                                                    height: double.infinity,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder: (_, __, ___) => Center(child: Icon(Icons.book_rounded, color: primaryColor)),
-                                                  )
-                                                : Center(child: Icon(Icons.book_rounded, color: primaryColor)),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        title,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                      ),
-                                    ],
+                          child: ExpansionTile(
+                            initiallyExpanded: results.isNotEmpty,
+                            shape: const Border(),
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    sourceName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                   ),
                                 ),
-                              );
-                            },
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(4)),
+                                  child: Text(lang, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                            trailing: isLoading
+                                ? SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor),
+                                  )
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (results.isNotEmpty)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: primaryColor.withAlpha(50),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            '${results.length}',
+                                            style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      const SizedBox(width: 4),
+                                      const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+                                    ],
+                                  ),
+                            children: [
+                              if (results.isEmpty && !isLoading)
+                                const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Text('No matching results found on this source.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                )
+                              else
+                                ...results.map((res) {
+                                  final thumb = res['thumbnailUrl'] as String? ?? '';
+                                  final title = res['title'] as String? ?? 'Untitled';
+
+                                  return ListTile(
+                                    leading: thumb.isNotEmpty
+                                        ? ClipRRect(
+                                            borderRadius: BorderRadius.circular(6),
+                                            child: Image.network(
+                                              thumb,
+                                              width: 38,
+                                              height: 52,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => Icon(Icons.book_rounded, color: primaryColor),
+                                            ),
+                                          )
+                                        : Icon(Icons.book_rounded, color: primaryColor),
+                                    title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                    trailing: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: primaryColor,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      ),
+                                      child: const Text('Select', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                      onPressed: () => _showMigrationConfirmation(res, source),
+                                    ),
+                                  );
+                                }),
+                            ],
                           ),
                         ),
-                    ],
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
