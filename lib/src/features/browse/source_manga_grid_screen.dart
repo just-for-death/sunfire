@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/logging/logger_service.dart';
+import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 
 class SourceMangaGridScreen extends StatefulWidget {
@@ -421,6 +422,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
 
                             return GestureDetector(
                               onTap: () => context.push('/manga/$id'),
+                              onLongPress: () => _showMangaQuickActions(id, title, thumb),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -488,6 +490,73 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
           ],
         ),
       ),
+    );
+  }
+
+  void _showMangaQuickActions(int mangaId, String title, String? thumb) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1F1F24),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (thumb != null && thumb.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(thumb, width: 40, height: 55, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded)),
+                    ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        const Text('Quick Actions (Mihon)', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Icon(Icons.favorite_rounded, color: primaryColor),
+                title: const Text('Add to Library (Default Category)', style: TextStyle(fontWeight: FontWeight.bold)),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  if (GraphQLClientService.instance.isConfigured) {
+                    await GraphQLClientService.instance.updateMangaLibraryState(mangaId, true);
+                    if (SettingsService.instance.defaultCategoryId != null) {
+                      await GraphQLClientService.instance.updateMangaCategories(mangaId, [SettingsService.instance.defaultCategoryId!]);
+                    }
+                  }
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Added "$title" to library')),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.open_in_new_rounded, color: Colors.white),
+                title: const Text('View Manga Details', style: TextStyle(fontWeight: FontWeight.bold)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  context.push('/manga/$mangaId');
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
