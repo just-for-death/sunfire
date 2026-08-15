@@ -104,7 +104,17 @@ class IsarService {
   // ── CATEGORY CRUD ───────────────────────────────────────
   Future<void> saveCategories(List<Category> categories) async {
     await _isar.writeTxn(() async {
+      await _isar.categorys.clear();
       await _isar.categorys.putAll(categories);
+    });
+  }
+
+  Future<void> deleteCategory(int serverId) async {
+    await _isar.writeTxn(() async {
+      final cat = await _isar.categorys.filter().serverIdEqualTo(serverId).findFirst();
+      if (cat != null) {
+        await _isar.categorys.delete(cat.id);
+      }
     });
   }
 
