@@ -129,12 +129,6 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  int get defaultCategoryId => _prefs?.getInt('default_category_id') ?? 0;
-  set defaultCategoryId(int value) {
-    _prefs?.setInt('default_category_id', value);
-    notifyListeners();
-  }
-
   bool get showUnreadBadges => _prefs?.getBool('show_unread_badges') ?? true;
   set showUnreadBadges(bool value) {
     _prefs?.setBool('show_unread_badges', value);
@@ -184,6 +178,29 @@ class SettingsService extends ChangeNotifier {
   bool get downloadOnlyOnWifi => _prefs?.getBool('download_only_on_wifi') ?? true;
   set downloadOnlyOnWifi(bool value) {
     _prefs?.setBool('download_only_on_wifi', value);
+    notifyListeners();
+  }
+
+  // ── LIBRARY & CATEGORY SETTINGS ──────────────────────────
+  int? get defaultCategoryId => _prefs?.getInt('default_category_id');
+  set defaultCategoryId(int? value) {
+    if (value == null) {
+      _prefs?.remove('default_category_id');
+    } else {
+      _prefs?.setInt('default_category_id', value);
+    }
+    notifyListeners();
+  }
+
+  String get defaultCategoryName => _prefs?.getString('default_category_name') ?? 'Default';
+  set defaultCategoryName(String value) {
+    _prefs?.setString('default_category_name', value);
+    notifyListeners();
+  }
+
+  bool get showCategoryTabs => _prefs?.getBool('show_category_tabs') ?? true;
+  set showCategoryTabs(bool value) {
+    _prefs?.setBool('show_category_tabs', value);
     notifyListeners();
   }
 

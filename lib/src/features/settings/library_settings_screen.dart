@@ -73,6 +73,25 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
 
               const SizedBox(height: 24),
 
+              Text('DEFAULT CATEGORY FOR NEW MANGA', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+              const SizedBox(height: 8),
+              Material(
+                color: const Color(0x1F2A2A32),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                ),
+                child: ListTile(
+                  leading: Icon(Icons.bookmark_added_rounded, color: primaryColor),
+                  title: const Text('Default Category', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('Added titles will be placed in: ${_settings.defaultCategoryName}'),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                  onTap: _showDefaultCategoryDialog,
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
               Text('CATEGORIES ENGINE (SYNCED WITH SERVER)', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
               const SizedBox(height: 8),
               Material(
@@ -91,16 +110,65 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                                 )
                               ]
                             : _categories.map((cat) {
+                                final isDefault = _settings.defaultCategoryId == cat.serverId;
                                 return ListTile(
-                                  leading: Icon(Icons.folder_special_rounded, color: primaryColor),
+                                  leading: Icon(Icons.folder_special_rounded, color: isDefault ? Colors.amber : primaryColor),
                                   title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                                   subtitle: Text('Category ID: ${cat.serverId} • Order: ${cat.order}'),
-                                  trailing: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20),
+                                  trailing: isDefault
+                                      ? Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(color: Colors.amber.withAlpha(40), borderRadius: BorderRadius.circular(8)),
+                                          child: const Text('DEFAULT', style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
+                                        )
+                                      : null,
                                 );
                               }).toList(),
                       ),
               ),
             ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showDefaultCategoryDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1F1F24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Select Default Category', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                ListTile(
+                  title: const Text('None (Uncategorized / Default)'),
+                  trailing: _settings.defaultCategoryId == null ? const Icon(Icons.check_rounded, color: Colors.amber) : null,
+                  onTap: () {
+                    _settings.defaultCategoryId = null;
+                    _settings.defaultCategoryName = 'Default';
+                    Navigator.pop(context);
+                  },
+                ),
+                ..._categories.map((cat) {
+                  final isSelected = _settings.defaultCategoryId == cat.serverId;
+                  return ListTile(
+                    title: Text(cat.name),
+                    trailing: isSelected ? const Icon(Icons.check_rounded, color: Colors.amber) : null,
+                    onTap: () {
+                      _settings.defaultCategoryId = cat.serverId;
+                      _settings.defaultCategoryName = cat.name;
+                      Navigator.pop(context);
+                    },
+                  );
+                }),
+              ],
+            ),
           ),
         );
       },
