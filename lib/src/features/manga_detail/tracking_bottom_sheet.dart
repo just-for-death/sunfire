@@ -83,10 +83,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
 
     try {
       final data = await GraphQLClientService.instance.searchTracker(trackerId, _searchQuery.isEmpty ? widget.mangaTitle : _searchQuery);
-      final nodes = data?['searchTracker']?['nodes'] as List<dynamic>? ?? [];
+      final list = data?['searchTracker']?['trackSearches'] as List<dynamic>? ?? [];
       if (mounted) {
         setState(() {
-          _searchResults = nodes.map((n) => n as Map<String, dynamic>).toList();
+          _searchResults = list.map((n) => n as Map<String, dynamic>).toList();
           _isSearching = false;
         });
       }
@@ -300,6 +300,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           final totalCh = res['totalChapters'] as int? ?? 0;
                           final remoteId = res['remoteId'] as int? ?? res['id'] as int? ?? 0;
 
+                          final cover = res['coverUrl'] as String?;
+
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 4.0),
                             child: Material(
@@ -309,11 +311,23 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                 side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
                               ),
                               child: ListTile(
-                                title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                subtitle: Text('$totalCh Chapters • Score: ${res["score"] ?? "-"}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                leading: (cover != null && cover.isNotEmpty)
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(
+                                          cover,
+                                          width: 44,
+                                          height: 56,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Container(width: 44, height: 56, color: const Color(0xFF2A2A32), child: const Icon(Icons.broken_image_rounded, size: 16)),
+                                        ),
+                                      )
+                                    : Container(width: 44, height: 56, decoration: BoxDecoration(color: const Color(0xFF2A2A32), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.image_rounded, size: 20)),
+                                title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                subtitle: Text('$totalCh Chapters • Score: ${res["score"] ?? "-"}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
                                 trailing: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
-                                  child: const Text('Bind', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                                  child: const Text('Bind', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                                   onPressed: () => _bindManga(_searchingTrackerId!, remoteId),
                                 ),
                               ),
