@@ -8,6 +8,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 
+
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
 
@@ -25,6 +26,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
   String _searchQuery = '';
   String _sortBy = 'Title';
 
+  // Offline banner state
+  bool _isOffline = false;
+  bool _isSyncing = false;
+
   // Multi-select batch mode
   bool _isBatchMode = false;
   final Set<int> _selectedMangaIds = {};
@@ -32,19 +37,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadLibraryAndCategories();
+    _loadFromIsarThenSync();
   }
 
-  Future<void> _loadLibraryAndCategories() async {
-    var list = await IsarService.instance.getLibraryManga();
-    var cats = await IsarService.instance.getCategories();
-
-    if (list.isEmpty) {
-      await SyncEngine.instance.triggerSync();
-      list = await IsarService.instance.getLibraryManga();
-      cats = await IsarService.instance.getCategories();
-    }
-
+  /// Load Isar immediately (never blocks on network). Then attempt a background
+  /// sync to update. This guarantees the library is visible instantly even when
+  /// the server is down, wiped, or unreachable.
+  Future<void> _loadFromIsarThenSync() async {
+    // 1. Show local data immediately — never wait for network
+    final list = await IsarService.instance.getLibraryManga();
+    final cats = await IsarService.instance.getCategories();
     if (mounted) {
       setState(() {
         _allManga = list;
@@ -52,17 +54,54 @@ class _LibraryScreenState extends State<LibraryScreen> {
         _isLoading = false;
       });
     }
+
+    // 2. Background sync (silent — only if server is configured)
+    if (GraphQLClientService.instance.isConfigured) {
+      _backgroundSync();
+    }
+  }
+
+  Future<void> _backgroundSync() async {
+    if (_isSyncing) return;
+    setState(() => _isSyncing = true);
+    try {
+      await SyncEngine.instance.triggerSync().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {},
+      );
+      final list = await IsarService.instance.getLibraryManga();
+      final cats = await IsarService.instance.getCategories();
+      if (mounted) {
+        setState(() {
+          _allManga = list;
+          _categories = cats;
+          _isOffline = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isOffline = true);
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
+    }
   }
 
   Future<void> _handleRefresh() async {
-    await SyncEngine.instance.triggerSync();
-    final list = await IsarService.instance.getLibraryManga();
-    final cats = await IsarService.instance.getCategories();
-    if (mounted) {
-      setState(() {
-        _allManga = list;
-        _categories = cats;
-      });
+    setState(() => _isSyncing = true);
+    try {
+      await SyncEngine.instance.triggerSync();
+      final list = await IsarService.instance.getLibraryManga();
+      final cats = await IsarService.instance.getCategories();
+      if (mounted) {
+        setState(() {
+          _allManga = list;
+          _categories = cats;
+          _isOffline = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isOffline = true);
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
     }
   }
 
@@ -134,7 +173,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       _selectedMangaIds.clear();
       _isBatchMode = false;
     });
-    await _loadLibraryAndCategories();
+    await _handleRefresh();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Removed $count titles from library')),
@@ -374,6 +413,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                   else ...[
                                     const Text('Sunfire', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
                                     const Spacer(),
+                                    if (_isSyncing)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                        child: SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Theme.of(context).colorScheme.primary,
+                                          ),
+                                        ),
+                                      ),
                                     IconButton(
                                       icon: const Icon(Icons.search_rounded, size: 26),
                                       onPressed: () => setState(() => _isSearching = true),
@@ -435,6 +486,30 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ),
                     ),
 
+                    // Offline banner — shown when local cache is present but server unreachable
+                    if (_isOffline)
+                      SliverToBoxAdapter(
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withAlpha(30),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.orange.withAlpha(80), width: 0.8),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.wifi_off_rounded, color: Colors.orange, size: 16),
+                              SizedBox(width: 8),
+                              Text(
+                                'Offline — Showing cached library',
+                                style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
                     // Content Canvas (Comfortable Grid, Compact Grid, or List View)
                     if (displayManga.isEmpty)
                       SliverFillRemaining(
@@ -445,9 +520,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             children: [
                               Icon(Icons.auto_stories_outlined, size: 64, color: primaryColor.withAlpha(120)),
                               const SizedBox(height: 16),
-                              const Text('No manga found', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              const Text('Library is empty', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 8),
-                              const Text('Pull down to sync or browse to add titles.', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                              const Text(
+                                'Browse to add manga or pull down\nto sync with your server.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey, fontSize: 13),
+                              ),
                             ],
                           ),
                         ),

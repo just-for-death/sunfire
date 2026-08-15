@@ -71,6 +71,21 @@ class QuickJsService {
     return _installedJsSources.containsKey(clean) || _installedJsSources.containsKey(sourceName.toLowerCase());
   }
 
+  /// Returns the display names of all locally installed JS extensions.
+  List<String> getInstalledExtensionNames() {
+    // Return unique display names (prefer the non-cleaned version stored as alias)
+    final seen = <String>{};
+    final names = <String>[];
+    for (final key in _installedJsSources.keys) {
+      // Skip keys that look like cleaned snake_case versions (contain underscores from cleaning)
+      // We stored both 'clean_name' and 'original name' — prefer original
+      final display = key.replaceAll('_', ' ').trim();
+      if (seen.add(display)) names.add(display);
+    }
+    return names;
+  }
+
+  /// Returns the raw JS source code for a named extension, or null if not installed.
   String? getExtensionCode(String sourceName) {
     final clean = sourceName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
     return _installedJsSources[clean] ?? _installedJsSources[sourceName.toLowerCase()];
