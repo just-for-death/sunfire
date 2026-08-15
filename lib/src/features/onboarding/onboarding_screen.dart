@@ -26,11 +26,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     try {
       final url = _serverUrlController.text.trim();
+      SettingsService.instance.serverUrl = url;
       GraphQLClientService.instance.initialize(url);
       final data = await GraphQLClientService.instance.query('{ aboutServer { version } }');
 
       if (data != null && data.containsKey('aboutServer')) {
         final version = data['aboutServer']['version'];
+        SettingsService.instance.serverUrl = url;
         WebSocketService.instance.initialize(url);
         await SyncEngine.instance.initialize();
 
