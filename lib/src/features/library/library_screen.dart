@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/category.dart';
 import '../../core/db/models/manga.dart';
+import '../../core/services/settings_service.dart';
+import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 
 class LibraryScreen extends StatefulWidget {
@@ -14,6 +16,7 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
+  final SettingsService _settings = SettingsService.instance;
   int _selectedCategoryIndex = 0;
   List<Manga> _allManga = [];
   List<Category> _categories = [];
@@ -21,6 +24,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
   bool _isSearching = false;
   String _searchQuery = '';
   String _sortBy = 'Title';
+
+  // Multi-select batch mode
+  bool _isBatchMode = false;
+  final Set<int> _selectedMangaIds = {};
 
   @override
   void initState() {
@@ -33,7 +40,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     var cats = await IsarService.instance.getCategories();
 
     if (list.isEmpty) {
-      // Trigger sync if local DB is empty
       await SyncEngine.instance.triggerSync();
       list = await IsarService.instance.getLibraryManga();
       cats = await IsarService.instance.getCategories();
@@ -63,19 +69,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
   List<Manga> get _filteredManga {
     var list = List<Manga>.from(_allManga);
 
-    // 1. Filter by category
+    // 1. Category Filter
     if (_selectedCategoryIndex > 0 && _selectedCategoryIndex <= _categories.length) {
       final selectedCatId = _categories[_selectedCategoryIndex - 1].serverId;
       list = list.where((m) => m.categoryIds.contains(selectedCatId)).toList();
     }
 
-    // 2. Filter by search query
+    // 2. Search Query Filter
     if (_searchQuery.trim().isNotEmpty) {
       final q = _searchQuery.toLowerCase().trim();
       list = list.where((m) => m.title.toLowerCase().contains(q)).toList();
     }
 
-    // 3. Sort
+    // 3. Sorting
     if (_sortBy == 'Title') {
       list.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     } else if (_sortBy == 'Unread') {
@@ -87,47 +93,220 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return list;
   }
 
-  void _showSortDialog() {
+  void _toggleBatchSelection(int mangaServerId) {
+    setState(() {
+      if (_selectedMangaIds.contains(mangaServerId)) {
+        _selectedMangaIds.remove(mangaServerId);
+        if (_selectedMangaIds.isEmpty) _isBatchMode = false;
+      } else {
+        _selectedMangaIds.add(mangaServerId);
+        _isBatchMode = true;
+      }
+    });
+  }
+
+  void _selectAll() {
+    final currentList = _filteredManga;
+    setState(() {
+      if (_selectedMangaIds.length == currentList.length) {
+        _selectedMangaIds.clear();
+        _isBatchMode = false;
+      } else {
+        _selectedMangaIds.addAll(currentList.map((m) => m.serverId));
+        _isBatchMode = true;
+      }
+    });
+  }
+
+  Future<void> _batchRemoveFromLibrary() async {
+    final count = _selectedMangaIds.length;
+    for (final id in _selectedMangaIds) {
+      final m = await IsarService.instance.getMangaByServerId(id);
+      if (m != null) {
+        m.inLibrary = false;
+        await IsarService.instance.saveManga(m);
+        if (GraphQLClientService.instance.isConfigured) {
+          GraphQLClientService.instance.updateMangaLibraryState(id, false);
+        }
+      }
+    }
+    setState(() {
+      _selectedMangaIds.clear();
+      _isBatchMode = false;
+    });
+    await _loadLibraryAndCategories();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Removed $count titles from library')),
+      );
+    }
+  }
+
+  void _showCategoryManagementDialog() {
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final textController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1F1F24),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Edit Categories', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: textController,
+                          decoration: InputDecoration(
+                            hintText: 'New category name...',
+                            filled: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                        onPressed: () async {
+                          final name = textController.text.trim();
+                          if (name.isNotEmpty) {
+                            if (GraphQLClientService.instance.isConfigured) {
+                              await GraphQLClientService.instance.createCategory(name);
+                            }
+                            textController.clear();
+                            await _handleRefresh();
+                            setSheetState(() {});
+                          }
+                        },
+                        child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 280),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _categories.length,
+                      itemBuilder: (context, index) {
+                        final cat = _categories[index];
+                        return ListTile(
+                          title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                            onPressed: () async {
+                              if (GraphQLClientService.instance.isConfigured) {
+                                await GraphQLClientService.instance.deleteCategory(cat.serverId);
+                              }
+                              await _handleRefresh();
+                              setSheetState(() {});
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSortAndDisplayDialog() {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1F1F24),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Sort Library By', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              ListTile(
-                title: const Text('Title (A-Z)'),
-                trailing: _sortBy == 'Title' ? Icon(Icons.check_rounded, color: primaryColor) : null,
-                onTap: () {
-                  setState(() => _sortBy = 'Title');
-                  Navigator.pop(context);
-                },
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Library View & Sort', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  const Text('DISPLAY MODE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: ['Comfortable Grid', 'Compact Grid', 'List'].map((mode) {
+                      final isSel = _settings.libraryDisplayMode == mode;
+                      return ChoiceChip(
+                        label: Text(mode),
+                        selected: isSel,
+                        selectedColor: primaryColor,
+                        backgroundColor: const Color(0x1F2A2A32),
+                        labelStyle: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : const Color(0x2BFFFFFF), width: 0.8)),
+                        onSelected: (_) {
+                          setState(() => _settings.libraryDisplayMode = mode);
+                          setSheetState(() {});
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('SORT BY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                  ListTile(
+                    title: const Text('Title (A-Z)'),
+                    trailing: _sortBy == 'Title' ? Icon(Icons.check_rounded, color: primaryColor) : null,
+                    onTap: () {
+                      setState(() => _sortBy = 'Title');
+                      Navigator.pop(context);
+                    },
+                  ),
+                  ListTile(
+                    title: const Text('Unread Count'),
+                    trailing: _sortBy == 'Unread' ? Icon(Icons.check_rounded, color: primaryColor) : null,
+                    onTap: () {
+                      setState(() => _sortBy = 'Unread');
+                      Navigator.pop(context);
+                    },
+                  ),
+                  ListTile(
+                    title: const Text('Recently Added'),
+                    trailing: _sortBy == 'Recent' ? Icon(Icons.check_rounded, color: primaryColor) : null,
+                    onTap: () {
+                      setState(() => _sortBy = 'Recent');
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
               ),
-              ListTile(
-                title: const Text('Unread Count'),
-                trailing: _sortBy == 'Unread' ? Icon(Icons.check_rounded, color: primaryColor) : null,
-                onTap: () {
-                  setState(() => _sortBy = 'Unread');
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                title: const Text('Recently Added'),
-                trailing: _sortBy == 'Recent' ? Icon(Icons.check_rounded, color: primaryColor) : null,
-                onTap: () {
-                  setState(() => _sortBy = 'Recent');
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -137,6 +316,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final displayManga = _filteredManga;
+    final displayMode = _settings.libraryDisplayMode;
 
     return Scaffold(
       body: SafeArea(
@@ -147,73 +327,84 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 onRefresh: _handleRefresh,
                 child: CustomScrollView(
                   slivers: [
-                    // Top App Bar
+                    // Top App Bar / Batch Bar
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-                        child: Row(
-                          children: [
-                            if (_isSearching)
-                              Expanded(
-                                child: TextField(
-                                  autofocus: true,
-                                  decoration: InputDecoration(
-                                    hintText: 'Search library...',
-                                    prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
-                                    suffixIcon: IconButton(
-                                      icon: const Icon(Icons.close_rounded),
-                                      onPressed: () => setState(() {
-                                        _isSearching = false;
-                                        _searchQuery = '';
-                                      }),
-                                    ),
-                                    filled: true,
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        child: _isBatchMode
+                            ? Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.close_rounded),
+                                    onPressed: () => setState(() {
+                                      _selectedMangaIds.clear();
+                                      _isBatchMode = false;
+                                    }),
                                   ),
-                                  onChanged: (val) => setState(() => _searchQuery = val),
-                                ),
+                                  Text('${_selectedMangaIds.length} Selected', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                  const Spacer(),
+                                  TextButton(
+                                    onPressed: _selectAll,
+                                    child: Text(_selectedMangaIds.length == displayManga.length ? 'Deselect All' : 'Select All', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
                               )
-                            else ...[
-                              const Text(
-                                'Sunfire',
-                                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+                            : Row(
+                                children: [
+                                  if (_isSearching)
+                                    Expanded(
+                                      child: TextField(
+                                        autofocus: true,
+                                        decoration: InputDecoration(
+                                          hintText: 'Search library...',
+                                          prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
+                                          suffixIcon: IconButton(
+                                            icon: const Icon(Icons.close_rounded),
+                                            onPressed: () => setState(() {
+                                              _isSearching = false;
+                                              _searchQuery = '';
+                                            }),
+                                          ),
+                                          filled: true,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                                        ),
+                                        onChanged: (val) => setState(() => _searchQuery = val),
+                                      ),
+                                    )
+                                  else ...[
+                                    const Text('Sunfire', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+                                    const Spacer(),
+                                    IconButton(
+                                      icon: const Icon(Icons.search_rounded, size: 26),
+                                      onPressed: () => setState(() => _isSearching = true),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.tune_rounded, size: 26),
+                                      onPressed: _showSortAndDisplayDialog,
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.label_outline_rounded, size: 26),
+                                      tooltip: 'Categories',
+                                      onPressed: _showCategoryManagementDialog,
+                                    ),
+                                  ],
+                                ],
                               ),
-                              const Spacer(),
-                              IconButton(
-                                icon: const Icon(Icons.search_rounded, size: 26),
-                                onPressed: () => setState(() => _isSearching = true),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.filter_list_rounded, size: 26),
-                                onPressed: _showSortDialog,
-                              ),
-                            ],
-                          ],
-                        ),
                       ),
                     ),
-
-                    // Hero Showcase Banner (Currently Reading)
-                    if (_allManga.isNotEmpty && !_isSearching)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                          child: _buildHeroBanner(_allManga.first),
-                        ),
-                      ),
 
                     // Category Pill Selector
                     SliverToBoxAdapter(
                       child: Container(
                         height: 48,
-                        margin: const EdgeInsets.symmetric(vertical: 12),
+                        margin: const EdgeInsets.symmetric(vertical: 8),
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _categories.length + 1,
                           itemBuilder: (context, index) {
                             final isSelected = _selectedCategoryIndex == index;
-                            final label = index == 0 ? 'All' : _categories[index - 1].name;
+                            final label = index == 0 ? 'All (${_allManga.length})' : _categories[index - 1].name;
                             return Padding(
                               padding: const EdgeInsets.only(right: 8.0),
                               child: ChoiceChip(
@@ -244,7 +435,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ),
                     ),
 
-                    // Manga Grid View
+                    // Content Canvas (Comfortable Grid, Compact Grid, or List View)
                     if (displayManga.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
@@ -261,18 +452,28 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           ),
                         ),
                       )
+                    else if (displayMode == 'List')
+                      SliverPadding(
+                        padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 120),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => _buildMangaListItem(displayManga[index]),
+                            childCount: displayManga.length,
+                          ),
+                        ),
+                      )
                     else
                       SliverPadding(
                         padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 120),
                         sliver: SliverGrid(
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            childAspectRatio: 0.65,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: displayMode == 'Compact Grid' ? 4 : 3,
+                            childAspectRatio: displayMode == 'Compact Grid' ? 0.70 : 0.65,
                             crossAxisSpacing: 12,
                             mainAxisSpacing: 16,
                           ),
                           delegate: SliverChildBuilderDelegate(
-                            (context, index) => _buildMangaCard(displayManga[index]),
+                            (context, index) => _buildMangaCard(displayManga[index], isCompact: displayMode == 'Compact Grid'),
                             childCount: displayManga.length,
                           ),
                         ),
@@ -281,86 +482,38 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
               ),
       ),
+      bottomNavigationBar: _isBatchMode
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: const BoxDecoration(color: Color(0xFF1F1F24), border: Border(top: BorderSide(color: Color(0x2BFFFFFF)))),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                    tooltip: 'Remove from Library',
+                    onPressed: _batchRemoveFromLibrary,
+                  ),
+                ],
+              ),
+            )
+          : null,
     );
   }
 
-  Widget _buildHeroBanner(Manga manga) {
+  Widget _buildMangaCard(Manga manga, {bool isCompact = false}) {
+    final isSelected = _selectedMangaIds.contains(manga.serverId);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return GestureDetector(
-      onTap: () => context.push('/manga/${manga.serverId}'),
-      child: Container(
-        height: 130,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            colors: [
-              primaryColor.withAlpha(50),
-              const Color(0x1F2A2A32),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
-        ),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: manga.thumbnailUrl != null && manga.thumbnailUrl!.isNotEmpty
-                  ? Image.network(
-                      manga.thumbnailUrl!,
-                      width: 80,
-                      height: 106,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 80,
-                        height: 106,
-                        color: Colors.grey[800],
-                        child: Icon(Icons.book_rounded, color: primaryColor),
-                      ),
-                    )
-                  : Container(
-                      width: 80,
-                      height: 106,
-                      color: Colors.grey[800],
-                      child: Icon(Icons.book_rounded, color: primaryColor),
-                    ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('CURRENTLY READING', style: TextStyle(color: primaryColor, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                  const SizedBox(height: 4),
-                  Text(manga.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('${manga.unreadCount ?? 0} unread chapters', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: 0.65,
-                      backgroundColor: const Color(0x33FFFFFF),
-                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                      minHeight: 6,
-                    ),
-                  )
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMangaCard(Manga manga) {
-    return GestureDetector(
-      onTap: () => context.push('/manga/${manga.serverId}'),
+      onTap: () {
+        if (_isBatchMode) {
+          _toggleBatchSelection(manga.serverId);
+        } else {
+          context.push('/manga/${manga.serverId}');
+        }
+      },
+      onLongPress: () => _toggleBatchSelection(manga.serverId),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -371,13 +524,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     color: const Color(0xFF1F1F24),
-                    border: Border.all(color: const Color(0x1AFFFFFF), width: 0.8),
-                    boxShadow: const [
-                      BoxShadow(color: Color(0x0D000000), blurRadius: 8, offset: Offset(0, 4)),
-                    ],
+                    border: Border.all(
+                      color: isSelected ? primaryColor : const Color(0x1AFFFFFF),
+                      width: isSelected ? 2.5 : 0.8,
+                    ),
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(14),
                     child: manga.thumbnailUrl != null && manga.thumbnailUrl!.isNotEmpty
                         ? Image.network(
                             manga.thumbnailUrl!,
@@ -389,7 +542,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         : const Center(child: Icon(Icons.book_rounded, color: Colors.grey)),
                   ),
                 ),
-                if (manga.unreadCount != null && manga.unreadCount! > 0)
+                if (isSelected)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle),
+                      child: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+                    ),
+                  ),
+                if (manga.unreadCount != null && manga.unreadCount! > 0 && !isSelected)
                   Positioned(
                     bottom: 8,
                     right: 8,
@@ -409,14 +572,57 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            manga.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-          ),
+          if (!isCompact) ...[
+            const SizedBox(height: 6),
+            Text(
+              manga.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildMangaListItem(Manga manga) {
+    final isSelected = _selectedMangaIds.contains(manga.serverId);
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Material(
+        color: isSelected ? primaryColor.withAlpha(40) : const Color(0x1F2A2A32),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: isSelected ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
+        ),
+        child: ListTile(
+          onTap: () {
+            if (_isBatchMode) {
+              _toggleBatchSelection(manga.serverId);
+            } else {
+              context.push('/manga/${manga.serverId}');
+            }
+          },
+          onLongPress: () => _toggleBatchSelection(manga.serverId),
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: manga.thumbnailUrl != null && manga.thumbnailUrl!.isNotEmpty
+                ? Image.network(manga.thumbnailUrl!, width: 40, height: 56, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded))
+                : const Icon(Icons.book_rounded),
+          ),
+          title: Text(manga.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text(manga.sourceName, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          trailing: manga.unreadCount != null && manga.unreadCount! > 0
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: primaryColor, borderRadius: BorderRadius.circular(10)),
+                  child: Text('${manga.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                )
+              : null,
+        ),
       ),
     );
   }

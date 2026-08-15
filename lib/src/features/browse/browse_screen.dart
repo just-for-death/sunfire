@@ -7,6 +7,7 @@ import '../../core/logging/logger_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import 'extension_details_screen.dart';
+import 'global_search_screen.dart';
 import 'migrate_search_screen.dart';
 import 'source_manga_grid_screen.dart';
 
@@ -249,6 +250,18 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     return Scaffold(
       appBar: AppBar(
         title: const Text('Browse', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.travel_explore_rounded, color: primaryColor),
+            tooltip: 'Global Search',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const GlobalSearchScreen()),
+              );
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: primaryColor,

@@ -341,6 +341,57 @@ class GraphQLClientService {
     return await query(mutStr, variables: {'id': mangaId, 'inLibrary': inLibrary}, label: 'updateMangaLibraryState');
   }
 
+  Future<Map<String, dynamic>?> createCategory(String name) async {
+    const mutStr = r'''
+      mutation($name: String!) {
+        createCategory(input: { name: $name }) {
+          category {
+            id
+            name
+            order
+          }
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'name': name}, label: 'createCategory');
+  }
+
+  Future<Map<String, dynamic>?> updateCategoryName(int categoryId, String newName) async {
+    const mutStr = r'''
+      mutation($id: Int!, $name: String!) {
+        updateCategory(input: { id: $id, patch: { name: $name } }) {
+          category {
+            id
+            name
+          }
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'id': categoryId, 'name': newName}, label: 'updateCategoryName');
+  }
+
+  Future<Map<String, dynamic>?> deleteCategory(int categoryId) async {
+    const mutStr = r'''
+      mutation($categoryId: Int!) {
+        deleteCategory(input: { categoryId: $categoryId }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'categoryId': categoryId}, label: 'deleteCategory');
+  }
+
+  Future<Map<String, dynamic>?> setMangaCategories(int mangaId, List<int> categoryIds) async {
+    const mutStr = r'''
+      mutation($id: Int!, $categories: [Int!]!) {
+        updateMangaCategories(input: { id: $id, patch: { categories: $categories } }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'id': mangaId, 'categories': categoryIds}, label: 'setMangaCategories');
+  }
+
   Future<Map<String, dynamic>?> setGlobalMeta(String key, String value) async {
     try {
       const mutStr = r'''
