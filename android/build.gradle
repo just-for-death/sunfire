@@ -15,6 +15,25 @@ subprojects {
     project.evaluationDependsOn(':app')
 }
 
+// Workaround for older Flutter plugins (e.g. flutter_qjs 0.3.x) that don't
+// declare an Android `namespace` in their build.gradle. AGP 8+ requires it.
+// See: https://d.android.com/r/tools/upgrade-assistant/set-namespace
+// We fall back to the plugin's Gradle `group` (set in its own build.gradle).
+subprojects { subproject ->
+    subproject.afterEvaluate {
+        if (subproject.hasProperty('android')) {
+            subproject.android {
+                if (namespace == null) {
+                    def g = subproject.group?.toString()
+                    if (g != null && !g.isEmpty()) {
+                        namespace = g
+                    }
+                }
+            }
+        }
+    }
+}
+
 tasks.register("clean", Delete) {
     delete rootProject.layout.buildDirectory
 }
