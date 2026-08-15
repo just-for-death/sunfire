@@ -4,8 +4,11 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   dynamic_color
+  flutter_qjs
   flutter_secure_storage_linux
   gtk
+  isar_flutter_libs
+  sentry_flutter
   url_launcher_linux
 )
 
