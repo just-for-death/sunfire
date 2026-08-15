@@ -7,6 +7,8 @@ import 'src/core/engine/image_transport_service.dart';
 import 'src/core/engine/quickjs_service.dart';
 import 'src/core/logging/logger_service.dart';
 import 'src/core/services/settings_service.dart';
+import 'src/core/sync/graphql_client_service.dart';
+import 'src/core/sync/sync_engine.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +25,10 @@ void main() async {
       await SettingsService.instance.initialize();
       QuickJsService.instance.initialize();
       ImageTransportService.instance.initialize();
+
+      // Configure Suwayomi GraphQL client and SyncEngine
+      GraphQLClientService.instance.initialize(SettingsService.instance.serverUrl);
+      SyncEngine.instance.initialize();
 
       runApp(const SunfireApp());
     },

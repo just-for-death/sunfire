@@ -16,10 +16,16 @@ class SettingsService extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
   }
 
-  // ── ONBOARDING STATE ──────────────────────────────────────
+  // ── ONBOARDING & SERVER ──────────────────────────────────
   bool get onboardingCompleted => _prefs?.getBool('onboarding_completed') ?? false;
   set onboardingCompleted(bool value) {
     _prefs?.setBool('onboarding_completed', value);
+    notifyListeners();
+  }
+
+  String get serverUrl => _prefs?.getString('server_url') ?? 'http://localhost:4567';
+  set serverUrl(String value) {
+    _prefs?.setString('server_url', value);
     notifyListeners();
   }
 
