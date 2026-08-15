@@ -671,9 +671,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       if (index == _pageUrls.length) {
                         return _buildChapterTransitionCard();
                       }
-                      return Padding(
-                        padding: EdgeInsets.only(bottom: _readingMode == ReadingMode.continuousVertical ? 8.0 : 0.0),
-                        child: _buildPageWidget(_pageUrls[index], index),
+                      return ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
+                          minWidth: constraints.maxWidth,
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: _readingMode == ReadingMode.continuousVertical ? 8.0 : 0.0),
+                          child: _buildPageWidget(_pageUrls[index], index),
+                        ),
                       );
                     },
                   )
