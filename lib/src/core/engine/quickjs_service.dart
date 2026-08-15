@@ -31,20 +31,36 @@ class QuickJsService {
   }
 
   Future<void> _loadInstalledExtensionsFromDisk() async {
+    final candidateDirs = <String>[];
     try {
       final appDir = await getApplicationDocumentsDirectory();
-      final extDir = Directory('${appDir.path}/extensions');
-      if (await extDir.exists()) {
-        final files = await extDir.list().toList();
-        for (final f in files) {
-          if (f is File && f.path.endsWith('.js')) {
-            final fileName = f.uri.pathSegments.last.replaceAll('.js', '');
-            final code = await f.readAsString();
-            _installedJsSources[fileName.toLowerCase()] = code;
+      candidateDirs.add('${appDir.path}/extensions');
+    } catch (_) {}
+
+    // Fallback directories for Linux / desktop & asset locations
+    candidateDirs.addAll([
+      '/home/zoro/.local/share/com.catalyst.catalyst/extensions',
+      '/home/zoro/.local/share/com.suwayomi.catalyst/extensions',
+      '/home/zoro/.local/share/dev.loopy.catalyst/extensions',
+      'assets/extensions',
+    ]);
+
+    for (final dirPath in candidateDirs) {
+      try {
+        final extDir = Directory(dirPath);
+        if (await extDir.exists()) {
+          final files = await extDir.list().toList();
+          for (final f in files) {
+            if (f is File && f.path.endsWith('.js')) {
+              final fileName = f.uri.pathSegments.last.replaceAll('.js', '');
+              final code = await f.readAsString();
+              _installedJsSources[fileName.toLowerCase()] = code;
+              _installedJsSources[fileName.replaceAll('_', ' ').toLowerCase()] = code;
+            }
           }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
 
   Future<bool> saveLocalExtension(String sourceName, String jsCode) async {

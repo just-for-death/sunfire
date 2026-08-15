@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sunfire/src/core/db/models/category.dart';
 import 'package:sunfire/src/core/db/models/chapter.dart';
 import 'package:sunfire/src/core/db/models/manga.dart';
 import 'package:sunfire/src/core/engine/content_resolver_service.dart';
