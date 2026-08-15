@@ -14,20 +14,32 @@ class Chapter {
 
   String name = '';
   double chapterNumber = 0.0;
-  
+
   bool isRead = false;
   int lastPageRead = 0;
-  
+
   @Index()
   int? lastReadAt;
-  
+
   int pageCount = 0;
   bool isBookmarked = false;
-  
+
   String? scanlator;
   String? localPath;
   bool isDownloadedLocally = false;
   bool isDownloadedOnServer = false;
+
+  /// Unix timestamp (seconds) when Suwayomi discovered this chapter.
+  /// Indexed for fast Updates tab ordering (ORDER BY fetchedAt DESC).
+  @Index()
+  int? fetchedAt;
+
+  /// Denormalized parent manga title — allows Updates & History to render
+  /// without any Isar join when the server is offline.
+  String mangaTitle = '';
+
+  /// Denormalized parent manga cover URL — same rationale as mangaTitle.
+  String? mangaThumbnailUrl;
 
   bool get isDownloaded => isDownloadedLocally || isDownloadedOnServer;
   set isDownloaded(bool val) {

@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
 import '../logging/logger_service.dart';
 
 class RepoSourceItem {
@@ -51,13 +53,40 @@ class RepoManager {
     return _instance!;
   }
 
+  /// Returns a cache-friendly key for a given repo URL
+  String _cacheKeyFor(String url) =>
+      url.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_').substring(0, url.length.clamp(0, 60));
+
+  Future<File> _cacheFileFor(String indexUrl) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final cacheDir = Directory('${dir.path}/repo_cache');
+    if (!await cacheDir.exists()) await cacheDir.create(recursive: true);
+    return File('${cacheDir.path}/${_cacheKeyFor(indexUrl)}.json');
+  }
+
   Future<List<RepoSourceItem>> fetchRepoSources(String indexUrl) async {
+    final cacheFile = await _cacheFileFor(indexUrl);
     try {
-      final response = await _dio.get(indexUrl);
-      final list = response.data is String ? jsonDecode(response.data) as List : response.data as List;
+      // Try network first
+      final response = await _dio
+          .get(indexUrl)
+          .timeout(const Duration(seconds: 6));
+      final raw = response.data is String
+          ? response.data as String
+          : jsonEncode(response.data);
+      // Cache to disk for offline use
+      await cacheFile.writeAsString(raw);
+      final list = jsonDecode(raw) as List;
       return list.map((item) => RepoSourceItem.fromJson(item as Map<String, dynamic>)).toList();
-    } catch (e, stack) {
-      await LoggerService.instance.logError('Failed to fetch repo index from $indexUrl: $e', exception: e, stackTrace: stack, category: 'RepoManager');
+    } catch (_) {
+      // Offline fallback: read from disk cache
+      if (await cacheFile.exists()) {
+        try {
+          final cached = await cacheFile.readAsString();
+          final list = jsonDecode(cached) as List;
+          return list.map((item) => RepoSourceItem.fromJson(item as Map<String, dynamic>)).toList();
+        } catch (_) {}
+      }
       return [];
     }
   }
