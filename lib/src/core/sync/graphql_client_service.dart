@@ -180,6 +180,18 @@ class GraphQLClientService {
             name
             displayName
           }
+          chapters {
+            nodes {
+              id
+              name
+              chapterNumber
+              isRead
+              lastPageRead
+              lastReadAt
+              pageCount
+              fetchedAt
+            }
+          }
         }
       }
     ''';
