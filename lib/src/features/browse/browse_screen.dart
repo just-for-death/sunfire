@@ -764,46 +764,107 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   void _showMigrationMangaSelectionDialog(String sourceName, List<Manga> mangas) {
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final selectedMangaIds = <int>{};
 
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
-          title: Text('Migrate from $sourceName (${mangas.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 380,
-            child: ListView.builder(
-              itemCount: mangas.length,
-              itemBuilder: (context, index) {
-                final manga = mangas[index];
-                return ListTile(
-                  leading: manga.thumbnailUrl != null && manga.thumbnailUrl!.isNotEmpty
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.network(manga.thumbnailUrl!, width: 40, height: 50, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.book_rounded, color: primaryColor)),
-                        )
-                      : Icon(Icons.book_rounded, color: primaryColor),
-                  title: Text(manga.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text(manga.author ?? 'Unknown Author', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                  trailing: Icon(Icons.swap_calls_rounded, color: primaryColor),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    final migrated = await Navigator.push<bool>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MigrateSearchScreen(manga: manga, sources: _sourcesList),
-                      ),
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            final allSelected = selectedMangaIds.length == mangas.length;
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1F1F24),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Migrate from $sourceName',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setDialogState(() {
+                        if (allSelected) {
+                          selectedMangaIds.clear();
+                        } else {
+                          selectedMangaIds.addAll(mangas.map((m) => m.serverId));
+                        }
+                      });
+                    },
+                    child: Text(allSelected ? 'Deselect All' : 'Select All', style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 380,
+                child: ListView.builder(
+                  itemCount: mangas.length,
+                  itemBuilder: (context, index) {
+                    final manga = mangas[index];
+                    final isSelected = selectedMangaIds.contains(manga.serverId);
+
+                    return CheckboxListTile(
+                      value: isSelected,
+                      activeColor: primaryColor,
+                      onChanged: (val) {
+                        setDialogState(() {
+                          if (val == true) {
+                            selectedMangaIds.add(manga.serverId);
+                          } else {
+                            selectedMangaIds.remove(manga.serverId);
+                          }
+                        });
+                      },
+                      secondary: manga.thumbnailUrl != null && manga.thumbnailUrl!.isNotEmpty
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: Image.network(manga.thumbnailUrl!, width: 40, height: 50, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.book_rounded, color: primaryColor)),
+                            )
+                          : Icon(Icons.book_rounded, color: primaryColor),
+                      title: Text(manga.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: Text(manga.author ?? 'Unknown Author', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     );
-                    if (migrated == true) {
-                      await _loadLibraryForMigration();
-                    }
                   },
-                );
-              },
-            ),
-          ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                if (selectedMangaIds.isNotEmpty)
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () async {
+                      Navigator.pop(dialogCtx);
+                      final selectedList = mangas.where((m) => selectedMangaIds.contains(m.serverId)).toList();
+                      for (final manga in selectedList) {
+                        if (!mounted) break;
+                        final migrated = await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MigrateSearchScreen(manga: manga, sources: _sourcesList),
+                          ),
+                        );
+                        if (migrated != true) break;
+                      }
+                      await _loadLibraryForMigration();
+                    },
+                    child: Text('Migrate Selected (${selectedMangaIds.length})', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+              ],
+            );
+          },
         );
       },
     );
