@@ -58,13 +58,35 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   Future<void> _fetchServerSources() async {
     setState(() => _isLoadingSources = true);
     final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+
+    // ── STEP 1: Always load installed local JS extensions FIRST (fully offline) ──
+    final List<Map<String, dynamic>> localJsSources = [];
+    final installedNames = QuickJsService.instance.getInstalledExtensionNames();
+    for (final name in installedNames) {
+      final localId = 'local_js_${name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_').toLowerCase()}';
+      localJsSources.add({
+        'id': localId,
+        'name': name,
+        'displayName': '$name ⚡',
+        'lang': 'en',
+        'supportsLatest': true,
+        'isPinned': SettingsService.instance.isSourcePinned(localId),
+        'iconUrl': '',
+        'isLocalJs': true,
+      });
+    }
+
+    // ── STEP 2: Try fetching server sources (optional, 4s timeout) ──
+    final List<Map<String, dynamic>> serverSources = [];
     try {
       if (GraphQLClientService.instance.isConfigured) {
-        final data = await GraphQLClientService.instance.fetchSources();
+        final data = await GraphQLClientService.instance
+            .fetchSources()
+            .timeout(const Duration(seconds: 4), onTimeout: () => null);
         if (data != null && data.containsKey('sources')) {
           final nodes = data['sources']['nodes'] as List<dynamic>?;
           if (nodes != null) {
-            _sourcesList = nodes.map((n) {
+            for (final n in nodes) {
               final m = n as Map<String, dynamic>;
               final id = m['id'].toString();
               final name = m['name'] as String? ?? 'Source';
@@ -73,8 +95,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               final iconUrl = (rawIcon != null && rawIcon.isNotEmpty)
                   ? (rawIcon.startsWith('http') ? rawIcon : '$serverUrl$rawIcon')
                   : '$serverUrl/api/v1/source/$id/icon';
-
-              return {
+              serverSources.add({
                 'id': id,
                 'name': name,
                 'displayName': displayName,
@@ -82,35 +103,30 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 'supportsLatest': m['supportsLatest'] as bool? ?? true,
                 'isPinned': SettingsService.instance.isSourcePinned(id),
                 'iconUrl': iconUrl,
-              };
-            }).toList();
+                'isLocalJs': false,
+              });
+            }
           }
         }
       }
-
-      if (_sourcesList.isEmpty) {
-        _sourcesList = [
-          {'id': '0', 'name': 'Local source', 'displayName': 'Local source', 'lang': 'en', 'supportsLatest': false, 'isPinned': SettingsService.instance.isSourcePinned('0'), 'iconUrl': ''},
-          {'id': '7185601298150078890', 'name': 'ReadAllComics', 'displayName': 'ReadAllComics', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('7185601298150078890'), 'iconUrl': ''},
-          {'id': '2499283573021220255', 'name': 'MangaDex', 'displayName': 'MangaDex', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('2499283573021220255'), 'iconUrl': ''},
-          {'id': '6084907896154116083', 'name': 'MangaFire', 'displayName': 'MangaFire', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('6084907896154116083'), 'iconUrl': ''},
-          {'id': '4972933717624256217', 'name': 'Comick', 'displayName': 'Comick', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('4972933717624256217'), 'iconUrl': ''},
-          {'id': '3444662672352788181', 'name': 'MANGA Plus by SHUEISHA', 'displayName': 'MANGA Plus by SHUEISHA', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('3444662672352788181'), 'iconUrl': ''},
-          {'id': '5192837192837129381', 'name': 'Mangafreak', 'displayName': 'Mangafreak', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('5192837192837129381'), 'iconUrl': ''},
-          {'id': '9182736451928371625', 'name': 'Buon Dua', 'displayName': 'Buon Dua', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('9182736451928371625'), 'iconUrl': ''},
-          {'id': '1928374651029384756', 'name': 'Webtoons.com', 'displayName': 'Webtoons.com', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('1928374651029384756'), 'iconUrl': ''},
-          {'id': '1928374651029384757', 'name': 'Weeb Central', 'displayName': 'Weeb Central', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('1928374651029384757'), 'iconUrl': ''},
-          {'id': '1928374651029384758', 'name': 'Mangakakalot', 'displayName': 'Mangakakalot', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('1928374651029384758'), 'iconUrl': ''},
-          {'id': '1928374651029384759', 'name': 'NineAnime', 'displayName': 'NineAnime', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('1928374651029384759'), 'iconUrl': ''},
-          {'id': '1928374651029384760', 'name': 'MangaKatana', 'displayName': 'MangaKatana', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('1928374651029384760'), 'iconUrl': ''},
-        ];
-      }
-    } catch (e, stack) {
-      await LoggerService.instance.logError('Failed to fetch server sources: $e', exception: e, stackTrace: stack, category: 'Browse');
-    } finally {
-      setState(() => _isLoadingSources = false);
+    } catch (_) {
+      // Server unreachable — local JS sources still work
     }
+
+    // ── STEP 3: Merge local JS first, then server (deduped by name) ──
+    final merged = [...localJsSources];
+    for (final s in serverSources) {
+      final alreadyPresent = merged.any(
+          (m) => (m['name'] as String).toLowerCase() == (s['name'] as String).toLowerCase());
+      if (!alreadyPresent) merged.add(s);
+    }
+
+    setState(() {
+      _sourcesList = merged;
+      _isLoadingSources = false;
+    });
   }
+
 
   Future<void> _fetchExtensions() async {
     setState(() => _isLoadingExtensions = true);
