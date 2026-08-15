@@ -31,14 +31,18 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     setState(() => _isLoading = true);
     final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
 
-    // 1. Check local Isar DB first
+    // 1. Check local Isar DB first to display immediate cached state
     _manga = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
+    _chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+    if (_manga != null && _chapters.isNotEmpty && mounted) {
+      setState(() => _isLoading = false);
+    }
 
-    // 2. Fetch fresh details from Suwayomi GraphQL
+    // 2. Fetch fresh details AND chapters from Suwayomi GraphQL in 1 single call
     if (GraphQLClientService.instance.isConfigured) {
       try {
         final detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
-        if (detailsData != null && detailsData.containsKey('manga')) {
+        if (detailsData != null && detailsData.containsKey('manga') && detailsData['manga'] != null) {
           final mMap = detailsData['manga'] as Map<String, dynamic>;
           _manga ??= Manga()..serverId = widget.mangaServerId;
           _manga!.title = mMap['title'] as String? ?? _manga!.title;
@@ -63,28 +67,28 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           }
 
           await IsarService.instance.saveManga(_manga!);
-        }
 
-        // Fetch fresh chapters
-        final chData = await GraphQLClientService.instance.fetchChaptersForManga(widget.mangaServerId);
-        if (chData != null && chData.containsKey('chapters')) {
-          final chNodes = chData['chapters']['nodes'] as List<dynamic>;
-          final fetched = <Chapter>[];
-          for (final n in chNodes) {
-            final chMap = n as Map<String, dynamic>;
-            final ch = Chapter()
-              ..serverId = chMap['id'] as int
-              ..mangaId = widget.mangaServerId
-              ..name = chMap['name'] ?? 'Chapter ${chMap['chapterNumber']}'
-              ..chapterNumber = (chMap['chapterNumber'] as num? ?? 0).toDouble()
-              ..isRead = chMap['isRead'] as bool? ?? false
-              ..lastPageRead = chMap['lastPageRead'] as int? ?? 0
-              ..pageCount = chMap['pageCount'] as int? ?? 0;
-            fetched.add(ch);
-          }
-          if (fetched.isNotEmpty) {
-            await IsarService.instance.saveChapters(fetched);
-            _chapters = fetched;
+          // Process nested chapters
+          final chaptersMap = mMap['chapters'] as Map<String, dynamic>?;
+          if (chaptersMap != null && chaptersMap.containsKey('nodes')) {
+            final chNodes = chaptersMap['nodes'] as List<dynamic>?;
+            if (chNodes != null && chNodes.isNotEmpty) {
+              final fetched = <Chapter>[];
+              for (final n in chNodes) {
+                final chMap = n as Map<String, dynamic>;
+                final ch = Chapter()
+                  ..serverId = chMap['id'] as int
+                  ..mangaId = widget.mangaServerId
+                  ..name = chMap['name'] ?? 'Chapter ${chMap['chapterNumber']}'
+                  ..chapterNumber = (chMap['chapterNumber'] as num? ?? 0).toDouble()
+                  ..isRead = chMap['isRead'] as bool? ?? false
+                  ..lastPageRead = chMap['lastPageRead'] as int? ?? 0
+                  ..pageCount = chMap['pageCount'] as int? ?? 0;
+                fetched.add(ch);
+              }
+              await IsarService.instance.saveChapters(fetched);
+              _chapters = fetched;
+            }
           }
         }
       } catch (_) {}

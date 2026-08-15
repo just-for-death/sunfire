@@ -604,10 +604,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    if (_isLoading) {
+    if (_isLoading || _pageUrls.isEmpty) {
       return Scaffold(
         backgroundColor: _canvasBackgroundColor,
-        body: Center(child: CircularProgressIndicator(color: primaryColor)),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: primaryColor),
+              const SizedBox(height: 16),
+              Text(
+                _chapter?.name ?? 'Loading Chapter...',
+                style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -623,7 +635,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 if (_readingMode == ReadingMode.webtoon || _readingMode == ReadingMode.continuousVertical)
                   ListView.builder(
                     controller: _scrollController,
-                    itemCount: _pageUrls.length + 1,
+                    itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
                     itemBuilder: (context, index) {
                       if (index == _pageUrls.length) {
                         return _buildChapterTransitionCard();
