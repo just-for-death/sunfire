@@ -440,16 +440,16 @@ class GraphQLClientService {
   Future<Map<String, dynamic>?> searchTracker(int trackerId, String queryStr) async {
     const query = r'''
       query($trackerId: Int!, $query: String!) {
-        searchTracker(trackerId: $trackerId, query: $query) {
-          nodes {
+        searchTracker(input: { trackerId: $trackerId, query: $query }) {
+          trackSearches {
             id
-            trackerId
-            remoteId
-            remoteUrl
             title
-            status
             totalChapters
             score
+            coverUrl
+            trackingUrl
+            summary
+            remoteId
           }
         }
       }
@@ -566,6 +566,50 @@ class GraphQLClientService {
       }
     ''';
     return await query(mutStr, variables: {'id': categoryId, 'name': newName}, label: 'updateCategoryName');
+  }
+
+  Future<Map<String, dynamic>?> updateCategoryOrder(int categoryId, int position) async {
+    const mutStr = r'''
+      mutation($id: Int!, $position: Int!) {
+        updateCategoryOrder(input: { id: $id, position: $position }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'id': categoryId, 'position': position}, label: 'updateCategoryOrder');
+  }
+
+  Future<Map<String, dynamic>?> startDownloader() async {
+    const mutStr = r'''
+      mutation {
+        startDownloader(input: {}) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, label: 'startDownloader');
+  }
+
+  Future<Map<String, dynamic>?> stopDownloader() async {
+    const mutStr = r'''
+      mutation {
+        stopDownloader(input: {}) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, label: 'stopDownloader');
+  }
+
+  Future<Map<String, dynamic>?> clearDownloader() async {
+    const mutStr = r'''
+      mutation {
+        clearDownloader(input: {}) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, label: 'clearDownloader');
   }
 
   Future<Map<String, dynamic>?> deleteCategory(int categoryId) async {
