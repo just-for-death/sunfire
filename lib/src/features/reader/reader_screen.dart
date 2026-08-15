@@ -151,9 +151,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
       sourceName = manga?.sourceName;
     }
 
+    final chapterUrlToResolve = (_chapter?.url.isNotEmpty == true)
+        ? _chapter!.url
+        : ((_chapter?.realUrl.isNotEmpty == true)
+            ? _chapter!.realUrl
+            : _chapter?.localPath);
+
     final resolved = await ContentResolverService.instance.resolveChapterPages(
       chapterServerId: chapterId,
-      chapterUrl: _chapter?.localPath,
+      chapterUrl: chapterUrlToResolve,
       sourceName: sourceName,
     );
 
