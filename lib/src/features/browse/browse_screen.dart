@@ -118,31 +118,36 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     try {
       final items = <Map<String, dynamic>>[];
 
-      // 1. Fetch server-side Keiyoushi APK extensions via GraphQL
+      // 1. Fetch server-side Keiyoushi APK extensions via GraphQL (if reachable)
       if (GraphQLClientService.instance.isConfigured) {
-        final data = await GraphQLClientService.instance.fetchExtensions();
-        if (data != null && data.containsKey('extensions')) {
-          final nodes = data['extensions']['nodes'] as List<dynamic>?;
-          if (nodes != null) {
-            for (final n in nodes) {
-              final map = n as Map<String, dynamic>;
-              final rawIcon = map['iconUrl'] as String?;
-              final iconUrl = (rawIcon != null && rawIcon.isNotEmpty)
-                  ? (rawIcon.startsWith('http') ? rawIcon : '$serverUrl$rawIcon')
-                  : '';
+        try {
+          final data = await GraphQLClientService.instance
+              .fetchExtensions()
+              .timeout(const Duration(seconds: 3), onTimeout: () => null);
 
-              items.add({
-                'id': (map['pkgName'] ?? map['name']).toString(),
-                'name': map['name'] as String? ?? 'Extension',
-                'lang': map['lang'] as String? ?? 'en',
-                'version': (map['versionName'] ?? map['version'] ?? '1.0.0').toString(),
-                'isInstalled': map['isInstalled'] as bool? ?? false,
-                'iconUrl': iconUrl,
-                'isJs': false,
-              });
+          if (data != null && data.containsKey('extensions')) {
+            final nodes = data['extensions']['nodes'] as List<dynamic>?;
+            if (nodes != null) {
+              for (final n in nodes) {
+                final map = n as Map<String, dynamic>;
+                final rawIcon = map['iconUrl'] as String?;
+                final iconUrl = (rawIcon != null && rawIcon.isNotEmpty)
+                    ? (rawIcon.startsWith('http') ? rawIcon : '$serverUrl$rawIcon')
+                    : '';
+
+                items.add({
+                  'id': (map['pkgName'] ?? map['name']).toString(),
+                  'name': map['name'] as String? ?? 'Extension',
+                  'lang': map['lang'] as String? ?? 'en',
+                  'version': (map['versionName'] ?? map['version'] ?? '1.0.0').toString(),
+                  'isInstalled': map['isInstalled'] as bool? ?? false,
+                  'iconUrl': iconUrl,
+                  'isJs': false,
+                });
+              }
             }
           }
-        }
+        } catch (_) {}
       }
 
       // 2. Fetch local JS repo extensions
