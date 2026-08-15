@@ -415,6 +415,116 @@ class GraphQLClientService {
     return await query(mutStr, variables: {'trackerId': trackerId, 'mangaId': mangaId, 'lastChapterRead': chapterNumber}, label: 'trackProgress');
   }
 
+  Future<Map<String, dynamic>?> fetchTrackRecords(int mangaId) async {
+    const queryStr = r'''
+      query($mangaId: Int!) {
+        trackRecords(condition: { mangaId: $mangaId }) {
+          nodes {
+            id
+            mangaId
+            trackerId
+            remoteId
+            remoteUrl
+            title
+            status
+            lastChapterRead
+            totalChapters
+            score
+          }
+        }
+      }
+    ''';
+    return await query(queryStr, variables: {'mangaId': mangaId}, label: 'fetchTrackRecords');
+  }
+
+  Future<Map<String, dynamic>?> searchTracker(int trackerId, String queryStr) async {
+    const query = r'''
+      query($trackerId: Int!, $query: String!) {
+        searchTracker(trackerId: $trackerId, query: $query) {
+          nodes {
+            id
+            trackerId
+            remoteId
+            remoteUrl
+            title
+            status
+            totalChapters
+            score
+          }
+        }
+      }
+    ''';
+    return await this.query(query, variables: {'trackerId': trackerId, 'query': queryStr}, label: 'searchTracker');
+  }
+
+  Future<Map<String, dynamic>?> bindTrack(int mangaId, int trackerId, int remoteId) async {
+    const mutStr = r'''
+      mutation($mangaId: Int!, $trackerId: Int!, $remoteId: Int!) {
+        bindTrack(input: { mangaId: $mangaId, trackerId: $trackerId, remoteId: $remoteId }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'mangaId': mangaId, 'trackerId': trackerId, 'remoteId': remoteId}, label: 'bindTrack');
+  }
+
+  Future<Map<String, dynamic>?> unbindTrack(int recordId) async {
+    const mutStr = r'''
+      mutation($recordId: Int!) {
+        unbindTrack(input: { recordId: $recordId, deleteRemoteTrack: false }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'recordId': recordId}, label: 'unbindTrack');
+  }
+
+  Future<Map<String, dynamic>?> updateTrack({
+    required int recordId,
+    required double lastChapterRead,
+    String? status,
+    double? score,
+  }) async {
+    const mutStr = r'''
+      mutation($recordId: Int!, $lastChapterRead: Float, $status: String, $score: Float) {
+        updateTrack(input: { recordId: $recordId, lastChapterRead: $lastChapterRead, status: $status, scoreString: $score }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {
+      'recordId': recordId,
+      'lastChapterRead': lastChapterRead,
+      'status': status,
+      'score': score,
+    }, label: 'updateTrack');
+  }
+
+  Future<Map<String, dynamic>?> updateMangaCategories(int mangaId, List<int> categoryIds) async {
+    const mutStr = r'''
+      mutation($id: Int!, $categoryIds: [Int!]!) {
+        updateMangaCategories(input: { id: $id, patch: { categoryIds: $categoryIds } }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'id': mangaId, 'categoryIds': categoryIds}, label: 'updateMangaCategories');
+  }
+
+  Future<Map<String, dynamic>?> updateChapterBookmark(int chapterId, bool isBookmarked) async {
+    const mutStr = r'''
+      mutation($id: Int!, $isBookmarked: Boolean) {
+        updateChapter(input: { id: $id, patch: { isBookmarked: $isBookmarked } }) {
+          chapter {
+            id
+            isBookmarked
+          }
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'id': chapterId, 'isBookmarked': isBookmarked}, label: 'updateChapterBookmark');
+  }
+
   Future<Map<String, dynamic>?> updateMangaLibraryState(int mangaId, bool inLibrary) async {
     const mutStr = r'''
       mutation($id: Int!, $inLibrary: Boolean) {
