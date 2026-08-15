@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
+import '../../core/engine/quickjs_service.dart';
 import '../../core/engine/repo_manager.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/settings_service.dart';
@@ -152,8 +153,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           'name': js.name,
           'lang': js.lang,
           'version': js.version,
-          'isInstalled': js.name == '1st Kiss-Manga (unoriginal)' && js.lang == 'en',
-          'iconUrl': '',
+          'isInstalled': QuickJsService.instance.isLocalExtensionInstalled(js.name),
+          'sourceCodeUrl': js.sourceCodeUrl,
+          'iconUrl': js.iconUrl,
           'isJs': true,
         });
       }
@@ -214,20 +216,29 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final name = ext['name'] as String;
     final isInstalled = ext['isInstalled'] as bool;
     final id = ext['id'] as String;
+    final isJs = ext['isJs'] as bool? ?? false;
+    final sourceCodeUrl = ext['sourceCodeUrl'] as String? ?? '';
 
     setState(() {
       ext['isInstalled'] = !isInstalled;
     });
 
     try {
-      if (GraphQLClientService.instance.isConfigured && !ext['isJs']) {
+      if (isJs) {
+        if (!isInstalled && sourceCodeUrl.isNotEmpty) {
+          final code = await RepoManager.instance.downloadJsSourceCode(sourceCodeUrl);
+          if (code != null) {
+            await QuickJsService.instance.saveLocalExtension(name, code);
+          }
+        }
+      } else if (GraphQLClientService.instance.isConfigured) {
         await GraphQLClientService.instance.updateExtension(id, isInstalled ? 'UNINSTALL' : 'INSTALL');
       }
     } catch (_) {}
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isInstalled ? 'Uninstalled $name' : 'Installed $name')),
+        SnackBar(content: Text(isInstalled ? 'Uninstalled $name' : 'Installed $name (Ready for on-device scraping)')),
       );
     }
   }
