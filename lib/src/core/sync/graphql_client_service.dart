@@ -262,10 +262,10 @@ class GraphQLClientService {
     return await query(queryStr, label: 'fetchHistoryChapters');
   }
 
-  Future<Map<String, dynamic>?> fetchUpdatesChapters({int first = 50}) async {
+  Future<Map<String, dynamic>?> fetchUpdatesChapters({int first = 100}) async {
     final queryStr = '''
       {
-        chapters(condition: { isRead: false }, first: $first, orderBy: FETCHED_AT) {
+        chapters(orderBy: FETCHED_AT, first: $first) {
           totalCount
           nodes {
             id
@@ -273,18 +273,87 @@ class GraphQLClientService {
             chapterNumber
             isRead
             lastPageRead
+            isDownloaded
             fetchedAt
             mangaId
             manga {
               id
               title
               thumbnailUrl
+              inLibrary
+              source {
+                displayName
+              }
             }
           }
         }
       }
     ''';
     return await query(queryStr, label: 'fetchUpdatesChapters');
+  }
+
+  Future<Map<String, dynamic>?> triggerServerLibraryUpdate() async {
+    const mutStr = r'''
+      mutation {
+        updateLibrary(input: {}) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, label: 'triggerServerLibraryUpdate');
+  }
+
+  Future<Map<String, dynamic>?> enqueueChapterDownload(int chapterId) async {
+    const mutStr = r'''
+      mutation($chapterId: Int!) {
+        enqueueChapterDownload(input: { chapterId: $chapterId }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'chapterId': chapterId}, label: 'enqueueChapterDownload');
+  }
+
+  Future<Map<String, dynamic>?> enqueueChapterDownloads(List<int> chapterIds) async {
+    const mutStr = r'''
+      mutation($chapterIds: [Int!]!) {
+        enqueueChapterDownloads(input: { chapterIds: $chapterIds }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'chapterIds': chapterIds}, label: 'enqueueChapterDownloads');
+  }
+
+  Future<Map<String, dynamic>?> deleteDownloadedChapter(int chapterId) async {
+    const mutStr = r'''
+      mutation($chapterId: Int!) {
+        deleteDownloadedChapter(input: { chapterId: $chapterId }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'chapterId': chapterId}, label: 'deleteDownloadedChapter');
+  }
+
+  Future<Map<String, dynamic>?> fetchDownloadStatus() async {
+    const queryStr = r'''
+      {
+        downloadStatus {
+          state
+          queue {
+            progress
+            state
+            chapter {
+              id
+              name
+              isDownloaded
+            }
+          }
+        }
+      }
+    ''';
+    return await query(queryStr, label: 'fetchDownloadStatus');
   }
 
   Future<Map<String, dynamic>?> fetchChapterPages(int chapterId) async {
