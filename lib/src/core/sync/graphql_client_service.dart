@@ -334,7 +334,7 @@ class GraphQLClientService {
   Future<Map<String, dynamic>?> enqueueChapterDownload(int chapterId) async {
     const mutStr = r'''
       mutation($chapterId: Int!) {
-        enqueueChapterDownload(input: { chapterId: $chapterId }) {
+        enqueueChapterDownload(input: { id: $chapterId }) {
           clientMutationId
         }
       }
@@ -345,7 +345,7 @@ class GraphQLClientService {
   Future<Map<String, dynamic>?> enqueueChapterDownloads(List<int> chapterIds) async {
     const mutStr = r'''
       mutation($chapterIds: [Int!]!) {
-        enqueueChapterDownloads(input: { chapterIds: $chapterIds }) {
+        enqueueChapterDownloads(input: { ids: $chapterIds }) {
           clientMutationId
         }
       }
@@ -356,7 +356,7 @@ class GraphQLClientService {
   Future<Map<String, dynamic>?> deleteDownloadedChapter(int chapterId) async {
     const mutStr = r'''
       mutation($chapterId: Int!) {
-        deleteDownloadedChapter(input: { chapterId: $chapterId }) {
+        deleteDownloadedChapter(input: { id: $chapterId }) {
           clientMutationId
         }
       }
