@@ -286,45 +286,76 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   void _showBatchDownloadModal() {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final unreadChapters = _chapters.where((c) => !c.isRead).toList();
+    bool downloadToLocal = true;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1F1F24),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Download Options (Mihon)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              _buildDownloadOptionTile('Next chapter', 1, unreadChapters, primaryColor),
-              _buildDownloadOptionTile('Next 5 chapters', 5, unreadChapters, primaryColor),
-              _buildDownloadOptionTile('Next 10 chapters', 10, unreadChapters, primaryColor),
-              _buildDownloadOptionTile('All unread chapters (${unreadChapters.length})', unreadChapters.length, unreadChapters, primaryColor),
-              _buildDownloadOptionTile('All chapters (${_chapters.length})', _chapters.length, _chapters, primaryColor),
-            ],
-          ),
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Download Options (Mihon)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      SegmentedButton<bool>(
+                        segments: const [
+                          ButtonSegment(value: true, label: Text('Device', style: TextStyle(fontSize: 11))),
+                          ButtonSegment(value: false, label: Text('Server', style: TextStyle(fontSize: 11))),
+                        ],
+                        selected: {downloadToLocal},
+                        onSelectionChanged: (set) {
+                          setSheetState(() => downloadToLocal = set.first);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDownloadOptionTile('Next chapter', 1, unreadChapters, primaryColor, downloadToLocal),
+                  _buildDownloadOptionTile('Next 5 chapters', 5, unreadChapters, primaryColor, downloadToLocal),
+                  _buildDownloadOptionTile('Next 10 chapters', 10, unreadChapters, primaryColor, downloadToLocal),
+                  _buildDownloadOptionTile('All unread chapters (${unreadChapters.length})', unreadChapters.length, unreadChapters, primaryColor, downloadToLocal),
+                  _buildDownloadOptionTile('All chapters (${_chapters.length})', _chapters.length, _chapters, primaryColor, downloadToLocal),
+                ],
+              ),
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildDownloadOptionTile(String title, int count, List<Chapter> sourceList, Color primaryColor) {
+  Widget _buildDownloadOptionTile(String title, int count, List<Chapter> sourceList, Color primaryColor, bool downloadToLocal) {
     return ListTile(
-      leading: Icon(Icons.download_rounded, color: primaryColor),
+      leading: Icon(downloadToLocal ? Icons.phone_android_rounded : Icons.cloud_download_rounded, color: primaryColor),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(downloadToLocal ? 'Download to offline device' : 'Download to Suwayomi server', style: const TextStyle(color: Colors.grey, fontSize: 11)),
       onTap: () async {
         Navigator.pop(context);
-        final targets = sourceList.take(count).map((c) => c.serverId).toList();
-        if (targets.isNotEmpty) {
-          await DownloadManagerService.instance.enqueueServerDownloads(targets);
+        final targets = sourceList.take(count).toList();
+        if (downloadToLocal) {
+          for (final c in targets) {
+            await DownloadManagerService.instance.enqueueLocalDownload(
+              chapterId: c.serverId,
+              mangaId: widget.mangaServerId,
+              chapterName: c.name,
+              mangaTitle: _manga?.title ?? 'Manga',
+            );
+          }
+        } else {
+          final ids = targets.map((c) => c.serverId).toList();
+          await DownloadManagerService.instance.enqueueServerDownloads(ids);
         }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Enqueued $count chapters for download')),
+            SnackBar(content: Text('Enqueued $count chapters for ${downloadToLocal ? "device" : "server"} download')),
           );
         }
       },
