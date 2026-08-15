@@ -461,15 +461,15 @@ class GraphQLClientService {
     return await this.query(query, variables: {'trackerId': trackerId, 'query': queryStr}, label: 'searchTracker');
   }
 
-  Future<Map<String, dynamic>?> bindTrack(int mangaId, int trackerId, int remoteId) async {
+  Future<Map<String, dynamic>?> bindTrack(int mangaId, int trackerId, dynamic remoteId) async {
     const mutStr = r'''
-      mutation($mangaId: Int!, $trackerId: Int!, $remoteId: Int!) {
+      mutation($mangaId: Int!, $trackerId: Int!, $remoteId: LongString!) {
         bindTrack(input: { mangaId: $mangaId, trackerId: $trackerId, remoteId: $remoteId }) {
           clientMutationId
         }
       }
     ''';
-    return await query(mutStr, variables: {'mangaId': mangaId, 'trackerId': trackerId, 'remoteId': remoteId}, label: 'bindTrack');
+    return await query(mutStr, variables: {'mangaId': mangaId, 'trackerId': trackerId, 'remoteId': remoteId.toString()}, label: 'bindTrack');
   }
 
   Future<Map<String, dynamic>?> unbindTrack(int recordId) async {
