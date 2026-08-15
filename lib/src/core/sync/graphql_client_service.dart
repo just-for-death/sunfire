@@ -503,7 +503,7 @@ class GraphQLClientService {
   Future<Map<String, dynamic>?> updateMangaCategories(int mangaId, List<int> categoryIds) async {
     const mutStr = r'''
       mutation($id: Int!, $categoryIds: [Int!]!) {
-        updateMangaCategories(input: { id: $id, patch: { categoryIds: $categoryIds } }) {
+        updateMangaCategories(input: { id: $id, patch: { addToCategories: $categoryIds } }) {
           clientMutationId
         }
       }
