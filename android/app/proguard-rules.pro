@@ -5,7 +5,7 @@
 -keep class io.flutter.view.** { *; }
 -keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }
--keep class com.catalyst.app.** { *; }
+-keep class com.sunfire.app.** { *; }
 
 # Keep annotations / generics used by Gson, Retrofit-style plugins, and R8.
 -keepattributes *Annotation*

@@ -2,18 +2,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "catalyst",
+            "name": "sunfire",
             "request": "launch",
             "type": "dart"
         },
         {
-            "name": "catalyst (profile mode)",
+            "name": "sunfire (profile mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "profile"
         },
         {
-            "name": "catalyst (release mode)",
+            "name": "sunfire (release mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "release"

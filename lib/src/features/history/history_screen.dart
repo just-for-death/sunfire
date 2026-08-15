@@ -132,7 +132,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   const SizedBox(height: 2),
                                   Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w600)),
                                   const SizedBox(height: 6),
-                                  // ── PROGRESS BAR (Catalyst & Mihon) ──
+                                  // ── PROGRESS BAR (Sunfire & Mihon) ──
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(4),
                                     child: LinearProgressIndicator(
