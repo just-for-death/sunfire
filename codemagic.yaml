@@ -14,6 +14,36 @@ workflows:
       - name: Get packages & dependencies
         script: flutter pub get
 
+      - name: Patch flutter_qjs for AGP 8 (inject namespace, drop manifest package)
+        script: |
+          set -e
+          # flutter_qjs 0.3.7 ships without an Android namespace, which AGP 8+ rejects.
+          # Patch the pub-cache copy in-place. Idempotent: safe to re-run.
+          QJS_DIR="$HOME/.pub-cache/hosted/pub.dev/flutter_qjs-0.3.7"
+          if [ ! -d "$QJS_DIR" ]; then
+            echo "::warning::flutter_qjs 0.3.7 not found at $QJS_DIR; skipping patch"
+          else
+            BG="$QJS_DIR/android/build.gradle"
+            MF="$QJS_DIR/android/src/main/AndroidManifest.xml"
+
+            # 1) Add `namespace 'soko.ekibun.flutter_qjs'` as the first line inside android { }
+            if [ -f "$BG" ] && ! grep -qE "^[[:space:]]*namespace[[:space:]]+['\"]" "$BG"; then
+              # Insert after the opening `android {` line
+              sed -i.bak -E "s|(android[[:space:]]*\{)|\1\n    namespace 'soko.ekibun.flutter_qjs'|" "$BG"
+              rm -f "$BG.bak"
+              echo "  + added namespace to $BG"
+            fi
+
+            # 2) Strip the `package="..."` attribute from AndroidManifest.xml (AGP 8 forbids it)
+            if [ -f "$MF" ] && grep -qE 'package="[^"]+"' "$MF"; then
+              sed -i.bak -E 's|[[:space:]]*package="[^"]+"||g' "$MF"
+              rm -f "$MF.bak"
+              echo "  + removed package attribute from $MF"
+            fi
+
+            echo "flutter_qjs patch complete."
+          fi
+
       - name: Generate Isar Schemas
         script: dart run build_runner build --delete-conflicting-outputs
 
@@ -98,6 +128,35 @@ workflows:
     scripts:
       - name: Get packages & dependencies
         script: flutter pub get
+
+      - name: Patch flutter_qjs for AGP 8 (inject namespace, drop manifest package)
+        script: |
+          set -e
+          # flutter_qjs 0.3.7 ships without an Android namespace, which AGP 8+ rejects.
+          # Patch the pub-cache copy in-place. Idempotent: safe to re-run.
+          QJS_DIR="$HOME/.pub-cache/hosted/pub.dev/flutter_qjs-0.3.7"
+          if [ ! -d "$QJS_DIR" ]; then
+            echo "::warning::flutter_qjs 0.3.7 not found at $QJS_DIR; skipping patch"
+          else
+            BG="$QJS_DIR/android/build.gradle"
+            MF="$QJS_DIR/android/src/main/AndroidManifest.xml"
+
+            # 1) Add `namespace 'soko.ekibun.flutter_qjs'` as the first line inside android { }
+            if [ -f "$BG" ] && ! grep -qE "^[[:space:]]*namespace[[:space:]]+['\"]" "$BG"; then
+              sed -i.bak -E "s|(android[[:space:]]*\{)|\1\n    namespace 'soko.ekibun.flutter_qjs'|" "$BG"
+              rm -f "$BG.bak"
+              echo "  + added namespace to $BG"
+            fi
+
+            # 2) Strip the `package="..."` attribute from AndroidManifest.xml (AGP 8 forbids it)
+            if [ -f "$MF" ] && grep -qE 'package="[^"]+"' "$MF"; then
+              sed -i.bak -E 's|[[:space:]]*package="[^"]+"||g' "$MF"
+              rm -f "$MF.bak"
+              echo "  + removed package attribute from $MF"
+            fi
+
+            echo "flutter_qjs patch complete."
+          fi
 
       - name: Generate Isar Schemas
         script: dart run build_runner build --delete-conflicting-outputs
