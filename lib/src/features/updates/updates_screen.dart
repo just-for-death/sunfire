@@ -18,12 +18,13 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   List<Map<String, dynamic>> _updatesList = [];
   bool _isLoading = true;
   bool _isCheckingServer = false;
+  bool _isOffline = false;
   String? _lastUpdateText;
 
   @override
   void initState() {
     super.initState();
-    _loadUpdatesFromServer();
+    _loadUpdates();
   }
 
   String _formatDateHeader(int? fetchedAt) {
@@ -45,16 +46,20 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
     }
   }
 
-  Future<void> _loadUpdatesFromServer() async {
+  Future<void> _loadUpdates() async {
     setState(() => _isLoading = true);
-    final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+    bool serverSucceeded = false;
 
-    try {
-      final items = <Map<String, dynamic>>[];
+    // ── TRY SERVER (with 5s timeout) ─────────────────────────────────────
+    if (GraphQLClientService.instance.isConfigured) {
+      try {
+        final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+        final items = <Map<String, dynamic>>[];
 
-      if (GraphQLClientService.instance.isConfigured) {
         // Fetch last update timestamp
-        final tsStr = await GraphQLClientService.instance.fetchLastUpdateTimestamp();
+        final tsStr = await GraphQLClientService.instance
+            .fetchLastUpdateTimestamp()
+            .timeout(const Duration(seconds: 5));
         if (tsStr != null) {
           final ts = int.tryParse(tsStr);
           if (ts != null) {
@@ -63,15 +68,16 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
           }
         }
 
-        // Fetch live chapters in order: [{ by: FETCHED_AT, byType: DESC }]
-        final data = await GraphQLClientService.instance.fetchUpdatesChapters(first: 100);
+        final data = await GraphQLClientService.instance
+            .fetchUpdatesChapters(first: 100)
+            .timeout(const Duration(seconds: 5));
+
         if (data != null && data.containsKey('chapters')) {
           final nodes = data['chapters']['nodes'] as List<dynamic>?;
           if (nodes != null) {
             for (final n in nodes) {
               final map = n as Map<String, dynamic>;
               final mangaMap = map['manga'] as Map<String, dynamic>?;
-
               final chServerId = map['id'] as int;
               final ch = Chapter()
                 ..serverId = chServerId
@@ -113,27 +119,57 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
             }
           }
         }
-      }
 
-      // Fallback if offline
-      if (items.isEmpty) {
-        final libraryMangas = await IsarService.instance.getLibraryManga();
-        for (final manga in libraryMangas) {
-          final chapters = await IsarService.instance.getChaptersForManga(manga.serverId);
-          final unread = chapters.where((c) => !c.isRead).toList();
-          if (unread.isNotEmpty) {
-            items.add({
-              'chapter': unread.first,
-              'mangaId': manga.serverId,
-              'title': manga.title,
-              'thumbnailUrl': manga.thumbnailUrl ?? '',
-              'sourceName': manga.sourceName,
-              'isDownloaded': false,
-              'fetchedAt': null,
-              'dateHeader': 'Recent',
+        if (items.isNotEmpty) {
+          serverSucceeded = true;
+          if (mounted) {
+            setState(() {
+              _updatesList = items;
+              _isLoading = false;
+              _isOffline = false;
             });
           }
+          return;
         }
+      } catch (_) {
+        // Server unreachable — fall through to local Isar cache
+      }
+    }
+
+    // ── OFFLINE FALLBACK: Isar chapter cache ──────────────────────────────
+    // Uses denormalized mangaTitle + mangaThumbnailUrl saved during last sync.
+    await _loadUpdatesFromIsarCache();
+    if (!serverSucceeded && mounted) setState(() => _isOffline = true);
+  }
+
+  Future<void> _loadUpdatesFromIsarCache() async {
+    try {
+      final chapters = await IsarService.instance.getRecentChapters(limit: 100);
+      final items = <Map<String, dynamic>>[];
+
+      for (final ch in chapters) {
+        // Use denormalized fields when available, else fall back to Isar join
+        String title = ch.mangaTitle.isNotEmpty ? ch.mangaTitle : 'Manga #${ch.mangaId}';
+        String thumb = ch.mangaThumbnailUrl ?? '';
+
+        if (title == 'Manga #${ch.mangaId}' || thumb.isEmpty) {
+          final manga = await IsarService.instance.getMangaByServerId(ch.mangaId);
+          if (manga != null) {
+            if (title == 'Manga #${ch.mangaId}') title = manga.title;
+            if (thumb.isEmpty) thumb = manga.thumbnailUrl ?? '';
+          }
+        }
+
+        items.add({
+          'chapter': ch,
+          'mangaId': ch.mangaId,
+          'title': title,
+          'thumbnailUrl': thumb,
+          'sourceName': '',
+          'isDownloaded': ch.isDownloaded,
+          'fetchedAt': ch.fetchedAt,
+          'dateHeader': _formatDateHeader(ch.fetchedAt),
+        });
       }
 
       if (mounted) {
@@ -146,6 +182,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  // Legacy compat — kept for pull-to-refresh and server check button
+  Future<void> _loadUpdatesFromServer() => _loadUpdates();
+
 
   Future<void> _checkServerForUpdates() async {
     setState(() => _isCheckingServer = true);
@@ -237,7 +277,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Updates', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Updates', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+            if (_isOffline)
+              const Text(
+                'Offline — Cached updates',
+                style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w600),
+              ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: _isCheckingServer

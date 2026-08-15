@@ -74,6 +74,12 @@ class IsarService {
     return await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
   }
 
+  /// Returns the count of manga currently marked as inLibrary in Isar.
+  /// Used by the wipe guard to detect suspicious server-side library wipes.
+  Future<int> getMangaCount() async {
+    return await _isar.mangas.filter().inLibraryEqualTo(true).count();
+  }
+
   // ── CHAPTER CRUD ────────────────────────────────────────
   Future<void> saveChapter(Chapter chapter) async {
     await _isar.writeTxn(() async {
@@ -99,6 +105,32 @@ class IsarService {
     final list = await _isar.chapters.filter().isReadEqualTo(true).findAll();
     list.sort((a, b) => (b.lastReadAt ?? 0).compareTo(a.lastReadAt ?? 0));
     return list;
+  }
+
+  /// Returns chapters sorted by fetchedAt DESC — the offline Updates feed.
+  /// Chapters with denormalized [mangaTitle] and [mangaThumbnailUrl] render
+  /// the Updates tab fully without any network or join.
+  Future<List<Chapter>> getRecentChapters({int limit = 100}) async {
+    final all = await _isar.chapters
+        .filter()
+        .fetchedAtIsNotNull()
+        .sortByFetchedAtDesc()
+        .limit(limit)
+        .findAll();
+    return all;
+  }
+
+  /// Returns chapters that are currently in-progress (opened but not finished).
+  /// Useful for a "Continue Reading" widget that works fully offline.
+  Future<List<Chapter>> getInProgressChapters({int limit = 20}) async {
+    final all = await _isar.chapters
+        .filter()
+        .isReadEqualTo(false)
+        .lastPageReadGreaterThan(0)
+        .sortByLastReadAtDesc()
+        .limit(limit)
+        .findAll();
+    return all;
   }
 
   // ── CATEGORY CRUD ───────────────────────────────────────
