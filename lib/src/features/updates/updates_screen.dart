@@ -16,31 +16,36 @@ class UpdatesScreen extends StatefulWidget {
 class _UpdatesScreenState extends State<UpdatesScreen> {
   List<Map<String, dynamic>> _updatesList = [];
   bool _isLoading = true;
+  bool _isCheckingServer = false;
 
   @override
   void initState() {
     super.initState();
-    _loadUpdates();
+    _loadUpdatesFromServer();
   }
 
-  Future<void> _loadUpdates() async {
+  Future<void> _loadUpdatesFromServer() async {
     setState(() => _isLoading = true);
     final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
 
     try {
       final items = <Map<String, dynamic>>[];
 
-      // 1. Fetch live unread updates from Suwayomi
+      // 1. Pull directly from Suwayomi Server (Main Brain)
       if (GraphQLClientService.instance.isConfigured) {
-        final data = await GraphQLClientService.instance.fetchUpdatesChapters(first: 50);
+        final data = await GraphQLClientService.instance.fetchUpdatesChapters(first: 100);
         if (data != null && data.containsKey('chapters')) {
           final nodes = data['chapters']['nodes'] as List<dynamic>?;
           if (nodes != null) {
             for (final n in nodes) {
               final map = n as Map<String, dynamic>;
-              final chServerId = map['id'] as int;
               final mangaMap = map['manga'] as Map<String, dynamic>?;
 
+              // Only show in-library manga updates
+              final inLibrary = mangaMap?['inLibrary'] as bool? ?? false;
+              if (!inLibrary) continue;
+
+              final chServerId = map['id'] as int;
               final ch = Chapter()
                 ..serverId = chServerId
                 ..mangaId = map['mangaId'] as int? ?? 0
@@ -52,6 +57,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
               String title = 'Manga';
               String thumb = '';
               int mId = ch.mangaId;
+              String sourceName = '';
 
               if (mangaMap != null) {
                 title = mangaMap['title'] as String? ?? 'Manga';
@@ -60,20 +66,28 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                 if (rawThumb != null && rawThumb.isNotEmpty) {
                   thumb = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
                 }
+                final srcMap = mangaMap['source'] as Map<String, dynamic>?;
+                sourceName = srcMap?['displayName'] as String? ?? '';
               }
+
+              final isDownloaded = map['isDownloaded'] as bool? ?? false;
+              final fetchedAt = map['fetchedAt'] != null ? int.tryParse(map['fetchedAt'].toString()) : null;
 
               items.add({
                 'chapter': ch,
                 'mangaId': mId,
                 'title': title,
                 'thumbnailUrl': thumb,
+                'sourceName': sourceName,
+                'isDownloaded': isDownloaded,
+                'fetchedAt': fetchedAt,
               });
             }
           }
         }
       }
 
-      // 2. Fallback to local DB if offline
+      // 2. Fallback to local DB if server unreachable
       if (items.isEmpty) {
         final libraryMangas = await IsarService.instance.getLibraryManga();
         for (final manga in libraryMangas) {
@@ -85,6 +99,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
               'mangaId': manga.serverId,
               'title': manga.title,
               'thumbnailUrl': manga.thumbnailUrl ?? '',
+              'sourceName': manga.sourceName,
+              'isDownloaded': false,
+              'fetchedAt': null,
             });
           }
         }
@@ -101,6 +118,90 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
     }
   }
 
+  Future<void> _checkServerForUpdates() async {
+    setState(() => _isCheckingServer = true);
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    if (GraphQLClientService.instance.isConfigured) {
+      await GraphQLClientService.instance.triggerServerLibraryUpdate();
+    }
+    await SyncEngine.instance.triggerSync();
+    await _loadUpdatesFromServer();
+
+    if (mounted) {
+      setState(() => _isCheckingServer = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Server library update completed'),
+          backgroundColor: primaryColor,
+        ),
+      );
+    }
+  }
+
+  void _showDownloadOptions(Map<String, dynamic> item) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final messenger = ScaffoldMessenger.of(context);
+    final ch = item['chapter'] as Chapter;
+    final isDownloaded = item['isDownloaded'] as bool? ?? false;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1F1F24),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(ch.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Icon(Icons.cloud_download_rounded, color: primaryColor),
+                title: const Text('Download to Suwayomi Server', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Download and cache on your central server storage'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  if (GraphQLClientService.instance.isConfigured) {
+                    await GraphQLClientService.instance.enqueueChapterDownload(ch.serverId);
+                  }
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Enqueued ${ch.name} on server')),
+                  );
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.phone_android_rounded, color: primaryColor),
+                title: const Text('Download to Local Device (Offline)', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Save chapter pages locally for offline reading'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Downloading ${ch.name} to local device...')),
+                  );
+                },
+              ),
+              if (isDownloaded)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                  title: const Text('Delete Download from Server', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    if (GraphQLClientService.instance.isConfigured) {
+                      await GraphQLClientService.instance.deleteDownloadedChapter(ch.serverId);
+                    }
+                    _loadUpdatesFromServer();
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -110,27 +211,24 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
         title: const Text('Updates', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
         actions: [
           IconButton(
-            icon: Icon(Icons.sync_rounded, color: primaryColor),
-            onPressed: () async {
-              await SyncEngine.instance.triggerSync();
-              await _loadUpdates();
-            },
+            icon: _isCheckingServer
+                ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2.5))
+                : Icon(Icons.refresh_rounded, color: primaryColor),
+            tooltip: 'Check Server Updates',
+            onPressed: _isCheckingServer ? null : _checkServerForUpdates,
           ),
         ],
       ),
       body: RefreshIndicator(
         color: primaryColor,
-        onRefresh: () async {
-          await SyncEngine.instance.triggerSync();
-          await _loadUpdates();
-        },
+        onRefresh: _checkServerForUpdates,
         child: SafeArea(
           child: _isLoading
               ? Center(child: CircularProgressIndicator(color: primaryColor))
               : _updatesList.isEmpty
                   ? const Center(
                       child: Text(
-                        'No unread chapter updates.\nPull down to check server for updates.',
+                        'No recent chapter updates found.\nTap refresh to check your Suwayomi server.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.grey),
                       ),
@@ -144,6 +242,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                         final mangaId = item['mangaId'] as int;
                         final title = item['title'] as String;
                         final thumb = item['thumbnailUrl'] as String;
+                        final sourceName = item['sourceName'] as String;
+                        final isDownloaded = item['isDownloaded'] as bool? ?? false;
 
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6.0),
@@ -174,14 +274,46 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: primaryColor)),
+                                  Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w600)),
                                   const SizedBox(height: 2),
-                                  Text('Unread Chapter', style: TextStyle(fontSize: 11, color: primaryColor, fontWeight: FontWeight.w600)),
+                                  Row(
+                                    children: [
+                                      if (sourceName.isNotEmpty) ...[
+                                        Text(sourceName, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                        const SizedBox(width: 6),
+                                        const Text('•', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                        const SizedBox(width: 6),
+                                      ],
+                                      Text(
+                                        ch.isRead ? 'Read' : 'Unread',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: ch.isRead ? Colors.grey : primaryColor,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
-                              trailing: IconButton(
-                                icon: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 30),
-                                onPressed: () => context.push('/reader/${ch.serverId}'),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: Icon(
+                                      isDownloaded ? Icons.cloud_done_rounded : Icons.download_rounded,
+                                      color: isDownloaded ? Colors.greenAccent : Colors.grey,
+                                      size: 24,
+                                    ),
+                                    tooltip: 'Download options',
+                                    onPressed: () => _showDownloadOptions(item),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 30),
+                                    tooltip: 'Read Chapter',
+                                    onPressed: () => context.push('/reader/${ch.serverId}'),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
