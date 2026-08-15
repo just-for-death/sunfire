@@ -13,7 +13,7 @@ class SunfireApp extends StatelessWidget {
   const SunfireApp({super.key});
 
   static final GoRouter _router = GoRouter(
-    initialLocation: '/onboarding',
+    initialLocation: SettingsService.instance.onboardingCompleted ? '/library' : '/onboarding',
     routes: [
       GoRoute(
         path: '/onboarding',
