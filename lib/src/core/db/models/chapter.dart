@@ -41,6 +41,13 @@ class Chapter {
   /// Denormalized parent manga cover URL — same rationale as mangaTitle.
   String? mangaThumbnailUrl;
 
+  /// The chapter URL (e.g. /read/one-piece-chapter-1/) on the source website.
+  /// Used by local Mangayomi / QuickJS extensions to scrape chapter pages directly.
+  String url = '';
+
+  /// The full absolute URL if different from relative url.
+  String realUrl = '';
+
   bool get isDownloaded => isDownloadedLocally || isDownloadedOnServer;
   set isDownloaded(bool val) {
     isDownloadedLocally = val;

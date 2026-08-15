@@ -143,6 +143,8 @@ class GraphQLClientService {
             inLibraryAt
             sourceId
             unreadCount
+            url
+            realUrl
             source {
               id
               name
@@ -175,6 +177,8 @@ class GraphQLClientService {
           status
           inLibrary
           thumbnailUrl
+          url
+          realUrl
           source {
             id
             name
@@ -185,6 +189,8 @@ class GraphQLClientService {
               id
               name
               chapterNumber
+              url
+              realUrl
               isRead
               lastPageRead
               lastReadAt
