@@ -58,10 +58,12 @@ class DownloadManagerService extends ChangeNotifier {
         final entities = await downloadsDir.list().toList();
         for (final entity in entities) {
           if (entity is Directory) {
-            final name = entity.path.split('/').last;
-            final id = int.tryParse(name);
-            if (id != null) {
-              _downloadedLocalChapterIds.add(id);
+            final segments = entity.uri.pathSegments.where((s) => s.isNotEmpty).toList();
+            if (segments.isNotEmpty) {
+              final id = int.tryParse(segments.last);
+              if (id != null) {
+                _downloadedLocalChapterIds.add(id);
+              }
             }
           }
         }
