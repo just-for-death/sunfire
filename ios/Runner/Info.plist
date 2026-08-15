@@ -38,7 +38,7 @@
 			<string>fil</string>
 		</array>
 		<key>CFBundleName</key>
-		<string>Catalyst</string>
+		<string>Sunfire</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
@@ -53,10 +53,10 @@
 				<key>CFBundleTypeRole</key>
 				<string>Editor</string>
 				<key>CFBundleURLName</key>
-				<string>com.catalyst.app</string>
+				<string>com.sunfire.app</string>
 				<key>CFBundleURLSchemes</key>
 				<array>
-					<string>catalyst</string>
+					<string>sunfire</string>
 				</array>
 			</dict>
 		</array>
@@ -78,11 +78,11 @@
 		<key>UIMainStoryboardFile</key>
 		<string>Main</string>
 		<key>NSLocalNetworkUsageDescription</key>
-		<string>Catalyst connects to your manga server on your local network.</string>
+		<string>Sunfire connects to your manga server on your local network.</string>
 		<key>NSUserNotificationsUsageDescription</key>
-		<string>Catalyst sends notifications when new manga chapters are available from your server.</string>
-		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Catalyst needs access to import backup files and documents.</string>
+		<string>Sunfire sends notifications when new manga chapters are available from your server.</string>
+		<key>NSDocumentsFolderUsageDescription</key>
+		<string>Sunfire needs access to import backup files and documents.</string>
 		<key>UIStatusBarHidden</key>
 		<false/>
 		<key>UISupportedInterfaceOrientations</key>

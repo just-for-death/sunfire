@@ -30,11 +30,13 @@
     "vals",
     "Webtoon",
     "webtoons",
-    "WEBUI"
+    "sunfire",
+    "tachidesk",
+    "wakelock"
   ],
   "licenser.license": "MPLv2",
-  "licenser.projectName": "Catalyst",
-  "licenser.author": "Contributors to the Catalyst project",
+  "licenser.projectName": "Sunfire",
+  "licenser.author": "Contributors to the Sunfire project",
   "editor.wordSeparators": "`~!@#%^&*()-=+[{]}\\|;:'\",.<>/?",
   "files.exclude": {
     "**/*.g.dart": true

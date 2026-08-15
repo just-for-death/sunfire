@@ -39,6 +39,8 @@ class QuickJsService {
 
     // Fallback directories for Linux / desktop & asset locations
     candidateDirs.addAll([
+      '/home/zoro/.local/share/com.sunfire.app/extensions',
+      '/home/zoro/.local/share/com.sunfire.sunfire/extensions',
       '/home/zoro/.local/share/com.catalyst.catalyst/extensions',
       '/home/zoro/.local/share/com.suwayomi.catalyst/extensions',
       '/home/zoro/.local/share/dev.loopy.catalyst/extensions',
