@@ -75,12 +75,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildWelcomeStep() {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.wb_sunny_rounded, size: 80, color: Color(0xFFFF5722)),
+          Icon(Icons.wb_sunny_rounded, size: 80, color: primaryColor),
           const SizedBox(height: 24),
           const Text(
             'Sunfire',
@@ -95,7 +96,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 48),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF5722),
+              backgroundColor: primaryColor,
               minimumSize: const Size.fromHeight(54),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
@@ -108,6 +109,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildServerStep() {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
@@ -133,7 +135,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 32),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF5722),
+              backgroundColor: primaryColor,
               minimumSize: const Size.fromHeight(54),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
@@ -153,6 +155,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildReposStep() {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
@@ -170,7 +173,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 32),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF5722),
+              backgroundColor: primaryColor,
               minimumSize: const Size.fromHeight(54),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
@@ -208,25 +211,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildSourceSyncStep() {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.sync_rounded, size: 64, color: Color(0xFFFF5722)),
+          Icon(Icons.extension_rounded, size: 72, color: primaryColor),
           const SizedBox(height: 24),
-          const Text('Cross-Referencing Sources', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          const Text('Extension Architecture', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          const Text('Matching installed server sources with local JS extensions...', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 48),
+          const Text(
+            'Browse Tachiyomi Keiyoushi APK sources on your server and QuickJS community sources on your device seamlessly.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 36),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF5722),
+              backgroundColor: primaryColor,
               minimumSize: const Size.fromHeight(54),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
             onPressed: () => _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut),
-            child: const Text('Sync Sources', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+            child: const Text('Next', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
           ),
         ],
       ),
@@ -234,25 +242,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildLibrarySyncStep() {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.auto_awesome_rounded, size: 64, color: Color(0xFFFF5722)),
+          Icon(Icons.library_books_rounded, size: 72, color: primaryColor),
           const SizedBox(height: 24),
-          const Text('Ready to Explore!', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+          const Text('Real-time State Engine', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          const Text('Your library and history will automatically stay in sync.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 48),
+          const Text(
+            'Your categories, reading progress, and chapter updates synchronize automatically in the background.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 36),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF5722),
+              backgroundColor: primaryColor,
               minimumSize: const Size.fromHeight(54),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
             onPressed: _finishOnboarding,
-            child: const Text('Enter Sunfire', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+            child: const Text('Start Reading', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
           ),
         ],
       ),
