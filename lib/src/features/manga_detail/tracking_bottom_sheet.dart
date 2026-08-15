@@ -95,7 +95,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     }
   }
 
-  Future<void> _bindManga(int trackerId, int remoteId) async {
+  Future<void> _bindManga(int trackerId, dynamic remoteId) async {
     setState(() => _isLoading = true);
     _searchingTrackerId = null;
     await GraphQLClientService.instance.bindTrack(widget.mangaServerId, trackerId, remoteId);
@@ -297,8 +297,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         itemBuilder: (context, index) {
                           final res = _searchResults[index];
                           final title = res['title'] as String? ?? 'Title';
-                          final totalCh = res['totalChapters'] as int? ?? 0;
-                          final remoteId = res['remoteId'] as int? ?? res['id'] as int? ?? 0;
+                          final totalCh = (res['totalChapters'] as num?)?.toInt() ?? 0;
+                          final remoteId = res['remoteId'] ?? res['id'] ?? '0';
 
                           final cover = res['coverUrl'] as String?;
 
