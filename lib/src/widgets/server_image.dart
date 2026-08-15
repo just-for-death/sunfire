@@ -49,6 +49,7 @@ class ServerImage extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final key = useState(UniqueKey());
+    final autoRetryCount = useState(0);
 
     // Offline/local file support (Android/iOS).
     // When `imageUrl` is a file URI we bypass CachedNetworkImage entirely.
@@ -119,6 +120,18 @@ class ServerImage extends HookConsumerWidget {
         );
 
     Widget errorWidget(BuildContext context, String error, stackTrace) {
+      if (showReloadButton && autoRetryCount.value < 2) {
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          if (context.mounted && autoRetryCount.value < 2) {
+            autoRetryCount.value++;
+            key.value = UniqueKey();
+          }
+        });
+        return AppUtils.wrapOn(
+          wrapper,
+          const CenterCatalystShimmerIndicator(),
+        );
+      }
       if (showReloadButton) {
         return AppUtils.wrapOn(
           wrapper,
@@ -136,7 +149,8 @@ class ServerImage extends HookConsumerWidget {
                   const Gap(32),
                   TextButton(
                     onPressed: () {
-                      key.value = (UniqueKey());
+                      autoRetryCount.value = 0;
+                      key.value = UniqueKey();
                     },
                     child: Text(context.l10n.reload),
                   ),
