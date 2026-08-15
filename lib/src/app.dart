@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import 'core/services/settings_service.dart';
 import 'core/theme/app_theme.dart';
+import 'features/downloads/download_queue_screen.dart';
 import 'features/manga_detail/manga_detail_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/reader/reader_screen.dart';
+import 'features/stats/stats_screen.dart';
 import 'main_shell.dart';
 
 class SunfireApp extends StatelessWidget {
@@ -22,6 +24,14 @@ class SunfireApp extends StatelessWidget {
       GoRoute(
         path: '/library',
         builder: (context, state) => const MainShell(),
+      ),
+      GoRoute(
+        path: '/downloads',
+        builder: (context, state) => const DownloadQueueScreen(),
+      ),
+      GoRoute(
+        path: '/stats',
+        builder: (context, state) => const StatsScreen(),
       ),
       GoRoute(
         path: '/manga/:id',
