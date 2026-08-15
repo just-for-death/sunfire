@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/engine/content_resolver_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
@@ -25,7 +26,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   List<Map<String, dynamic>> _mangaList = [];
   bool _isLoading = true;
   int _currentPage = 1;
-  bool _hasNextPage = true;
+  final bool _hasNextPage = true;
   String _searchQuery = '';
   late bool _isLatestMode;
   final TextEditingController _searchController = TextEditingController();
@@ -46,36 +47,13 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
     setState(() => _isLoading = true);
 
     try {
-      if (GraphQLClientService.instance.isConfigured) {
-        final data = await GraphQLClientService.instance.fetchSourceManga(
-          widget.sourceId,
-          isLatest: _isLatestMode,
-          page: _currentPage,
-          searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
-        );
-
-        if (data != null && data.containsKey('fetchSourceManga')) {
-          final payload = data['fetchSourceManga'] as Map<String, dynamic>;
-          final nodes = payload['mangas'] as List<dynamic>?;
-          _hasNextPage = payload['hasNextPage'] as bool? ?? false;
-
-          if (nodes != null) {
-            final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
-            _mangaList = nodes.map((n) {
-              final map = n as Map<String, dynamic>;
-              final rawThumb = map['thumbnailUrl'] as String?;
-              final thumb = (rawThumb != null && rawThumb.isNotEmpty)
-                  ? (rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb')
-                  : null;
-              return {
-                'id': map['id'],
-                'title': map['title'] ?? 'Untitled',
-                'thumbnailUrl': thumb,
-              };
-            }).toList();
-          }
-        }
-      }
+      _mangaList = await ContentResolverService.instance.resolveSourceManga(
+        sourceId: widget.sourceId,
+        sourceName: widget.sourceName,
+        isLatest: _isLatestMode,
+        page: _currentPage,
+        searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
+      );
 
       if (_mangaList.isEmpty) {
         _mangaList = List.generate(
