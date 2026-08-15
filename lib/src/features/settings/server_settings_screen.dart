@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/logging/logger_service.dart';
+import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 
@@ -20,18 +21,45 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
   int _pendingCount = 0;
   List<Map<String, dynamic>> _serverTrackers = [];
   bool _isLoadingTrackers = true;
+  int? _latencyMs;
+  bool _isUpdatingLibrary = false;
 
   @override
   void initState() {
     super.initState();
-    _urlController.text = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+    _urlController.text = SettingsService.instance.serverUrl;
     _checkServerConnection();
     _loadPendingQueue();
     _loadTrackers();
   }
 
   Future<void> _checkServerConnection() async {
-    setState(() => _isConnected = GraphQLClientService.instance.isConfigured);
+    final start = DateTime.now();
+    final ok = GraphQLClientService.instance.isConfigured;
+    if (ok) {
+      try {
+        await GraphQLClientService.instance.fetchCategories();
+        final elapsed = DateTime.now().difference(start).inMilliseconds;
+        if (mounted) {
+          setState(() {
+            _isConnected = true;
+            _latencyMs = elapsed;
+          });
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _isConnected = false;
+            _latencyMs = null;
+          });
+        }
+      }
+    } else {
+      setState(() {
+        _isConnected = false;
+        _latencyMs = null;
+      });
+    }
   }
 
   Future<void> _loadPendingQueue() async {
@@ -73,21 +101,19 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     } catch (e, stack) {
       await LoggerService.instance.logError('Failed to load server trackers: $e', exception: e, stackTrace: stack, category: 'ServerSettings');
     } finally {
-      setState(() => _isLoadingTrackers = false);
+      if (mounted) setState(() => _isLoadingTrackers = false);
     }
   }
 
   void _showTrackerAuthDialog(Map<String, dynamic> tracker) {
     final name = tracker['name'] as String;
     final isLoggedIn = tracker['isLoggedIn'] as bool;
-    final authUrl = tracker['authUrl'] as String;
     final tokenController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) {
-        final theme = Theme.of(context);
-        final primaryColor = theme.colorScheme.primary;
+        final primaryColor = Theme.of(context).colorScheme.primary;
 
         return AlertDialog(
           backgroundColor: const Color(0xFF1F1F24),
@@ -98,54 +124,85 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
             children: [
               Text(
                 isLoggedIn
-                    ? '$name is currently logged in on your Suwayomi server. Reading progress and scores are automatically synchronized.'
-                    : 'To link $name with Suwayomi server, open the authentication endpoint or paste your OAuth token below:',
+                    ? 'Suwayomi server is currently authenticated with $name.'
+                    : 'Enter username/token or authenticate on Suwayomi web dashboard for OAuth verification.',
                 style: const TextStyle(fontSize: 13, color: Colors.grey),
               ),
-              const SizedBox(height: 16),
-              if (!isLoggedIn)
+              if (!isLoggedIn) ...[
+                const SizedBox(height: 16),
                 TextField(
                   controller: tokenController,
-                  decoration: InputDecoration(
-                    labelText: 'OAuth Token / Key',
-                    hintText: 'Paste token from $name',
-                    prefixIcon: Icon(Icons.key_rounded, color: primaryColor),
-                    filled: true,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
+                  decoration: const InputDecoration(labelText: 'OAuth Token / Key'),
                 ),
-              const SizedBox(height: 12),
-              SelectableText(
-                'OAuth Endpoint: $authUrl',
-                style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.grey),
-              ),
+              ],
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              child: const Text('Close', style: TextStyle(color: Colors.grey)),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isLoggedIn ? Colors.red : primaryColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            if (isLoggedIn)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                onPressed: () async {
+                  Navigator.pop(context);
+                  setState(() => tracker['isLoggedIn'] = false);
+                },
+                child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              )
+            else
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+                onPressed: () {
+                  Navigator.pop(context);
+                  setState(() => tracker['isLoggedIn'] = true);
+                },
+                child: const Text('Save & Authorize', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
-              onPressed: () {
-                setState(() {
-                  tracker['isLoggedIn'] = !isLoggedIn;
-                });
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(isLoggedIn ? 'Logged out of $name on server.' : 'Successfully authenticated $name on server!')),
-                );
-              },
-              child: Text(isLoggedIn ? 'Log Out' : 'Authenticate', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
           ],
         );
       },
     );
+  }
+
+  Future<void> _saveAndTestServer() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final url = _urlController.text.trim();
+    if (url.isEmpty) return;
+
+    SettingsService.instance.serverUrl = url;
+    GraphQLClientService.instance.initialize(url);
+
+    await _checkServerConnection();
+    await _loadTrackers();
+
+    if (mounted) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(_isConnected ? 'Connected successfully (${_latencyMs}ms)' : 'Failed to connect to server'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _triggerGlobalUpdate() async {
+    setState(() => _isUpdatingLibrary = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      if (GraphQLClientService.instance.isConfigured) {
+        await GraphQLClientService.instance.query('mutation { updateLibrary(input: {}) { clientMutationId } }', label: 'updateLibrary');
+      }
+      if (mounted) {
+        messenger.showSnackBar(const SnackBar(content: Text('Global library update started on server!')));
+      }
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(const SnackBar(content: Text('Could not trigger library update.')));
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdatingLibrary = false);
+    }
   }
 
   Future<void> _triggerCreateBackup() async {
@@ -222,7 +279,9 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                             Text(
-                              _isConnected ? 'Server Version: $_serverVersion' : 'Check network or server URL',
+                              _isConnected
+                                  ? 'Version: $_serverVersion • Latency: ${_latencyMs ?? "-"}ms'
+                                  : 'Check network connection or server address',
                               style: const TextStyle(color: Colors.grey, fontSize: 12),
                             ),
                           ],
@@ -242,26 +301,17 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: () {
-                            GraphQLClientService.instance.initialize(_urlController.text.trim());
-                            _checkServerConnection();
-                            SyncEngine.instance.triggerSync();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Server URL saved & connection re-established!')),
-                            );
-                          },
-                          child: const Text('Test & Save Connection', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                    ],
+                      onPressed: _saveAndTestServer,
+                      child: const Text('Test & Save Connection', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
                   ),
                 ],
               ),
@@ -270,44 +320,8 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
 
           const SizedBox(height: 24),
 
-          Text('SERVER TRACKERS (MAL, ANILIST, KITSU)', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-          const SizedBox(height: 8),
-          Material(
-            color: const Color(0x1F2A2A32),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
-            ),
-            child: _isLoadingTrackers
-                ? Padding(padding: const EdgeInsets.all(24.0), child: Center(child: CircularProgressIndicator(color: primaryColor)))
-                : Column(
-                    children: _serverTrackers.map((t) {
-                      final name = t['name'] as String;
-                      final loggedIn = t['isLoggedIn'] as bool;
-                      return ListTile(
-                        leading: Icon(
-                          loggedIn ? Icons.check_circle_rounded : Icons.account_circle_outlined,
-                          color: loggedIn ? Colors.green : Colors.grey,
-                        ),
-                        title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(loggedIn ? 'Logged in on Suwayomi server' : 'Not logged in'),
-                        trailing: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: loggedIn ? const Color(0x1F2A2A32) : primaryColor,
-                            side: BorderSide(color: loggedIn ? Colors.grey : primaryColor),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: () => _showTrackerAuthDialog(t),
-                          child: Text(loggedIn ? 'Active' : 'Log In', style: TextStyle(color: loggedIn ? Colors.grey : Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-          ),
-
-          const SizedBox(height: 24),
-
-          Text('SYNC ENGINE & OFFLINE QUEUE', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          // ── GLOBAL SERVER MAINTENANCE & TASKS ─────────────────────
+          Text('SERVER MAINTENANCE & TASKS', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
           const SizedBox(height: 8),
           Material(
             color: const Color(0x1F2A2A32),
@@ -319,23 +333,37 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
               children: [
                 ListTile(
                   leading: Icon(Icons.sync_rounded, color: primaryColor),
-                  title: const Text('Pending Offline Mutations', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('$_pendingCount queued offline records waiting to push'),
-                  trailing: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      await SyncEngine.instance.triggerSync();
-                      await _loadPendingQueue();
-                      if (mounted) {
-                        messenger.showSnackBar(const SnackBar(content: Text('Sync engine triggered!')));
-                      }
-                    },
-                    child: const Text('Sync Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ),
+                  title: const Text('Global Library Update', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Instruct Suwayomi server to scrape for new chapters across all library titles'),
+                  trailing: _isUpdatingLibrary
+                      ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor))
+                      : ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                          onPressed: _triggerGlobalUpdate,
+                          child: const Text('Update Now', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
+                ),
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                ListTile(
+                  leading: const Icon(Icons.play_circle_fill_rounded, color: Colors.greenAccent),
+                  title: const Text('Resume Server Downloader', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Start processing pending Suwayomi chapter download queue'),
+                  onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    await GraphQLClientService.instance.startDownloader();
+                    if (mounted) messenger.showSnackBar(const SnackBar(content: Text('Server downloader resumed')));
+                  },
+                ),
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                ListTile(
+                  leading: const Icon(Icons.pause_circle_filled_rounded, color: Colors.amber),
+                  title: const Text('Pause Server Downloader', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Temporarily pause Suwayomi background chapter downloads'),
+                  onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    await GraphQLClientService.instance.stopDownloader();
+                    if (mounted) messenger.showSnackBar(const SnackBar(content: Text('Server downloader paused')));
+                  },
                 ),
               ],
             ),
@@ -343,6 +371,79 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
 
           const SizedBox(height: 24),
 
+          // ── SERVER TRACKERS ───────────────────────────────────────
+          Text('SERVER TRACKERS (MAL, ANILIST, KITSU, ETC)', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          const SizedBox(height: 8),
+          Material(
+            color: const Color(0x1F2A2A32),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+            ),
+            child: _isLoadingTrackers
+                ? const Padding(padding: EdgeInsets.all(20.0), child: Center(child: CircularProgressIndicator()))
+                : Column(
+                    children: _serverTrackers.map((t) {
+                      final isLoggedIn = t['isLoggedIn'] as bool;
+                      final name = t['name'] as String;
+
+                      return ListTile(
+                        leading: Icon(
+                          isLoggedIn ? Icons.check_circle_rounded : Icons.account_circle_outlined,
+                          color: isLoggedIn ? Colors.green : Colors.grey,
+                        ),
+                        title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(
+                          isLoggedIn ? 'Logged in on Suwayomi server' : 'Not logged in',
+                          style: TextStyle(color: isLoggedIn ? Colors.grey : Colors.orangeAccent, fontSize: 12),
+                        ),
+                        trailing: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isLoggedIn ? const Color(0x33FFFFFF) : primaryColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () => _showTrackerAuthDialog(t),
+                          child: Text(isLoggedIn ? 'Active' : 'Log In', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── SYNC ENGINE & OFFLINE QUEUE ───────────────────────────
+          Text('SYNC ENGINE & OFFLINE QUEUE', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          const SizedBox(height: 8),
+          Material(
+            color: const Color(0x1F2A2A32),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+            ),
+            child: ListTile(
+              leading: Icon(Icons.sync_alt_rounded, color: primaryColor),
+              title: const Text('Pending Offline Mutations', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('$_pendingCount queued offline records waiting to push'),
+              trailing: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  await SyncEngine.instance.triggerSync();
+                  await _loadPendingQueue();
+                },
+                child: const Text('Sync Now', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── SERVER BACKUP & RESTORE ───────────────────────────────
           Text('SERVER BACKUP & RESTORE (.TACHIBK)', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
           const SizedBox(height: 8),
           Material(
@@ -354,19 +455,19 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
             child: Column(
               children: [
                 ListTile(
-                  leading: Icon(Icons.backup_rounded, color: primaryColor),
+                  leading: const Icon(Icons.cloud_download_rounded, color: Colors.cyanAccent),
                   title: const Text('Create Server Backup', style: TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: const Text('Export full Suwayomi library & categories (.tachibk)'),
                   onTap: _triggerCreateBackup,
                 ),
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
                 ListTile(
-                  leading: Icon(Icons.restore_rounded, color: primaryColor),
+                  leading: const Icon(Icons.cloud_upload_rounded, color: Colors.tealAccent),
                   title: const Text('Restore Server Backup', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Import .tachibk backup file into Suwayomi server'),
+                  subtitle: const Text('Import Tachiyomi/Mihon backup file onto server'),
                   onTap: () {
-                    final messenger = ScaffoldMessenger.of(context);
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('Select a .tachibk file to restore into Suwayomi.')),
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Place .tachibk backup file in Suwayomi data/backups folder')),
                     );
                   },
                 ),
