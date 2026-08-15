@@ -19,15 +19,20 @@ subprojects {
 // declare an Android `namespace` in their build.gradle. AGP 8+ requires it.
 // See: https://d.android.com/r/tools/upgrade-assistant/set-namespace
 // We fall back to the plugin's Gradle `group` (set in its own build.gradle).
+//
+// Uses `plugins.withId` (not `afterEvaluate`) because the existing
+// `subprojects { project.evaluationDependsOn(':app') }` above forces all
+// subprojects to be evaluated immediately, which makes `afterEvaluate` throw
+// "Cannot run Project.afterEvaluate(Closure) when the project is already
+// evaluated." `plugins.withId` fires during the subproject's own
+// configuration phase, before evaluation completes.
 subprojects { subproject ->
-    subproject.afterEvaluate {
-        if (subproject.hasProperty('android')) {
-            subproject.android {
-                if (namespace == null) {
-                    def g = subproject.group?.toString()
-                    if (g != null && !g.isEmpty()) {
-                        namespace = g
-                    }
+    subproject.plugins.withId('com.android.library') {
+        subproject.android {
+            if (namespace == null) {
+                def g = subproject.group?.toString()
+                if (g != null && !g.isEmpty()) {
+                    namespace = g
                 }
             }
         }
