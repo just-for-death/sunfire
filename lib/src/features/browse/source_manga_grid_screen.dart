@@ -88,6 +88,8 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.sourceName} (${widget.isLatest ? "Latest" : "Popular"})'),
@@ -105,7 +107,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> {
                 controller: _searchController,
                 decoration: InputDecoration(
                   hintText: 'Search ${widget.sourceName}...',
-                  prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFFFF5722)),
+                  prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear_rounded),
@@ -127,7 +129,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> {
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF5722)))
+                  ? Center(child: CircularProgressIndicator(color: primaryColor))
                   : GridView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

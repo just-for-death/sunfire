@@ -262,6 +262,42 @@ class GraphQLClientService {
     return await query(queryStr, label: 'fetchHistoryChapters');
   }
 
+  Future<Map<String, dynamic>?> fetchUpdatesChapters({int first = 50}) async {
+    final queryStr = '''
+      {
+        chapters(condition: { isRead: false }, first: $first, orderBy: FETCHED_AT) {
+          totalCount
+          nodes {
+            id
+            name
+            chapterNumber
+            isRead
+            lastPageRead
+            fetchedAt
+            mangaId
+            manga {
+              id
+              title
+              thumbnailUrl
+            }
+          }
+        }
+      }
+    ''';
+    return await query(queryStr, label: 'fetchUpdatesChapters');
+  }
+
+  Future<Map<String, dynamic>?> fetchChapterPages(int chapterId) async {
+    const mutStr = r'''
+      mutation($chapterId: Int!) {
+        fetchChapterPages(input: { chapterId: $chapterId }) {
+          pages
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'chapterId': chapterId}, label: 'fetchChapterPages');
+  }
+
   Future<Map<String, dynamic>?> updateChapterReadStatus(int chapterId, bool isRead, int lastPageRead) async {
     const mutStr = r'''
       mutation($id: Int!, $isRead: Boolean, $lastPageRead: Int) {
