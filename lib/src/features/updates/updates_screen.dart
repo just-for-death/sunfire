@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
@@ -17,11 +18,31 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   List<Map<String, dynamic>> _updatesList = [];
   bool _isLoading = true;
   bool _isCheckingServer = false;
+  String? _lastUpdateText;
 
   @override
   void initState() {
     super.initState();
     _loadUpdatesFromServer();
+  }
+
+  String _formatDateHeader(int? fetchedAt) {
+    if (fetchedAt == null || fetchedAt == 0) return 'Recent';
+    final date = DateTime.fromMillisecondsSinceEpoch(fetchedAt * 1000);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final itemDate = DateTime(date.year, date.month, date.day);
+
+    final diffDays = today.difference(itemDate).inDays;
+    if (diffDays == 0) {
+      return 'Today';
+    } else if (diffDays == 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return DateFormat('EEEE').format(date); // e.g. "Wednesday"
+    } else {
+      return DateFormat('MMMM d, yyyy').format(date);
+    }
   }
 
   Future<void> _loadUpdatesFromServer() async {
@@ -31,8 +52,18 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
     try {
       final items = <Map<String, dynamic>>[];
 
-      // 1. Pull directly from Suwayomi Server (Main Brain)
       if (GraphQLClientService.instance.isConfigured) {
+        // Fetch last update timestamp
+        final tsStr = await GraphQLClientService.instance.fetchLastUpdateTimestamp();
+        if (tsStr != null) {
+          final ts = int.tryParse(tsStr);
+          if (ts != null) {
+            final dt = DateTime.fromMillisecondsSinceEpoch(ts);
+            _lastUpdateText = 'Last update: ${DateFormat('MM/dd/yyyy, hh:mm a').format(dt)}';
+          }
+        }
+
+        // Fetch live chapters in order: [{ by: FETCHED_AT, byType: DESC }]
         final data = await GraphQLClientService.instance.fetchUpdatesChapters(first: 100);
         if (data != null && data.containsKey('chapters')) {
           final nodes = data['chapters']['nodes'] as List<dynamic>?;
@@ -41,8 +72,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
               final map = n as Map<String, dynamic>;
               final mangaMap = map['manga'] as Map<String, dynamic>?;
 
-              // Only show in-library manga updates
-              final inLibrary = mangaMap?['inLibrary'] as bool? ?? false;
+              final inLibrary = mangaMap?['inLibrary'] as bool? ?? true;
               if (!inLibrary) continue;
 
               final chServerId = map['id'] as int;
@@ -81,13 +111,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                 'sourceName': sourceName,
                 'isDownloaded': isDownloaded,
                 'fetchedAt': fetchedAt,
+                'dateHeader': _formatDateHeader(fetchedAt),
               });
             }
           }
         }
       }
 
-      // 2. Fallback to local DB if server unreachable
+      // Fallback if offline
       if (items.isEmpty) {
         final libraryMangas = await IsarService.instance.getLibraryManga();
         for (final manga in libraryMangas) {
@@ -102,6 +133,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
               'sourceName': manga.sourceName,
               'isDownloaded': false,
               'fetchedAt': null,
+              'dateHeader': 'Recent',
             });
           }
         }
@@ -233,92 +265,94 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                         style: TextStyle(color: Colors.grey),
                       ),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0, bottom: 120.0),
-                      itemCount: _updatesList.length,
-                      itemBuilder: (context, index) {
-                        final item = _updatesList[index];
-                        final ch = item['chapter'] as Chapter;
-                        final mangaId = item['mangaId'] as int;
-                        final title = item['title'] as String;
-                        final thumb = item['thumbnailUrl'] as String;
-                        final sourceName = item['sourceName'] as String;
-                        final isDownloaded = item['isDownloaded'] as bool? ?? false;
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6.0),
-                          child: Material(
-                            color: const Color(0x1F2A2A32),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
-                            ),
-                            child: ListTile(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              onTap: () => context.push('/manga/$mangaId'),
-                              leading: Container(
-                                width: 44,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  color: Colors.grey[900],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: thumb.isNotEmpty
-                                      ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.book_rounded, size: 20, color: Colors.grey)))
-                                      : const Center(child: Icon(Icons.book_rounded, size: 20, color: Colors.grey)),
-                                ),
-                              ),
-                              title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 2),
-                                  Row(
-                                    children: [
-                                      if (sourceName.isNotEmpty) ...[
-                                        Text(sourceName, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                        const SizedBox(width: 6),
-                                        const Text('•', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                                        const SizedBox(width: 6),
-                                      ],
-                                      Text(
-                                        ch.isRead ? 'Read' : 'Unread',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: ch.isRead ? Colors.grey : primaryColor,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: Icon(
-                                      isDownloaded ? Icons.cloud_done_rounded : Icons.download_rounded,
-                                      color: isDownloaded ? Colors.greenAccent : Colors.grey,
-                                      size: 24,
-                                    ),
-                                    tooltip: 'Download options',
-                                    onPressed: () => _showDownloadOptions(item),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 30),
-                                    tooltip: 'Read Chapter',
-                                    onPressed: () => context.push('/reader/${ch.serverId}'),
-                                  ),
-                                ],
+                  : CustomScrollView(
+                      slivers: [
+                        if (_lastUpdateText != null)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
+                              child: Text(
+                                _lastUpdateText!,
+                                style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
                               ),
                             ),
                           ),
-                        );
-                      },
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final item = _updatesList[index];
+                              final ch = item['chapter'] as Chapter;
+                              final mangaId = item['mangaId'] as int;
+                              final title = item['title'] as String;
+                              final thumb = item['thumbnailUrl'] as String;
+                              final isDownloaded = item['isDownloaded'] as bool? ?? false;
+                              final dateHeader = item['dateHeader'] as String;
+
+                              // Show header if first item or if previous item had different date
+                              final bool showHeader = index == 0 || _updatesList[index - 1]['dateHeader'] != dateHeader;
+
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (showHeader) ...[
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 14.0, bottom: 8.0, left: 4.0),
+                                        child: Text(
+                                          dateHeader,
+                                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                      child: Material(
+                                        color: const Color(0x1F2A2A32),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                                        ),
+                                        child: ListTile(
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          onTap: () => context.push('/manga/$mangaId'),
+                                          leading: Container(
+                                            width: 44,
+                                            height: 60,
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(8),
+                                              color: Colors.grey[900],
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: thumb.isNotEmpty
+                                                  ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.book_rounded, size: 20, color: Colors.grey)))
+                                                  : const Center(child: Icon(Icons.book_rounded, size: 20, color: Colors.grey)),
+                                            ),
+                                          ),
+                                          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                          subtitle: Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w600)),
+                                          trailing: IconButton(
+                                            icon: Icon(
+                                              isDownloaded ? Icons.cloud_done_rounded : Icons.download_rounded,
+                                              color: isDownloaded ? Colors.greenAccent : Colors.grey,
+                                              size: 24,
+                                            ),
+                                            tooltip: 'Download options',
+                                            onPressed: () => _showDownloadOptions(item),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            childCount: _updatesList.length,
+                          ),
+                        ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                      ],
                     ),
         ),
       ),
