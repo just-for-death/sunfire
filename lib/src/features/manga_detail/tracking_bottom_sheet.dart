@@ -125,8 +125,21 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     double currentChapter = (record['lastChapterRead'] as num?)?.toDouble() ?? 0.0;
     int totalChapters = (record['totalChapters'] as num?)?.toInt() ?? 0;
     double currentScore = (record['score'] as num?)?.toDouble() ?? 0.0;
-    String startDate = record['startDate']?.toString() ?? '';
-    String finishDate = record['finishDate']?.toString() ?? '';
+    
+    // Convert timestamp or string to human-readable format
+    String? startEpochStr = record['startDate']?.toString();
+    String? finishEpochStr = record['finishDate']?.toString();
+    if (startEpochStr == '0') startEpochStr = null;
+    if (finishEpochStr == '0') finishEpochStr = null;
+
+    String startDisplay = '';
+    if (startEpochStr != null && int.tryParse(startEpochStr) != null) {
+      startDisplay = DateFormat('MM/dd/yyyy').format(DateTime.fromMillisecondsSinceEpoch(int.parse(startEpochStr)));
+    }
+    String finishDisplay = '';
+    if (finishEpochStr != null && int.tryParse(finishEpochStr) != null) {
+      finishDisplay = DateFormat('MM/dd/yyyy').format(DateTime.fromMillisecondsSinceEpoch(int.parse(finishEpochStr)));
+    }
 
     showDialog(
       context: context,
@@ -258,7 +271,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
                                 icon: const Icon(Icons.calendar_today_rounded, size: 14),
-                                label: Text(startDate.isNotEmpty ? startDate : 'Set Date', style: const TextStyle(fontSize: 11)),
+                                label: Text(startDisplay.isNotEmpty ? startDisplay : 'Set Date', style: const TextStyle(fontSize: 11)),
                                 onPressed: () async {
                                   final picked = await showDatePicker(
                                     context: dialogCtx,
@@ -267,7 +280,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                     lastDate: DateTime(2035),
                                   );
                                   if (picked != null) {
-                                    setDialogState(() => startDate = DateFormat('MM/dd/yyyy').format(picked));
+                                    setDialogState(() {
+                                      startDisplay = DateFormat('MM/dd/yyyy').format(picked);
+                                      startEpochStr = picked.millisecondsSinceEpoch.toString();
+                                    });
                                   }
                                 },
                               ),
@@ -287,7 +303,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
                                 icon: const Icon(Icons.event_available_rounded, size: 14),
-                                label: Text(finishDate.isNotEmpty ? finishDate : 'Set Date', style: const TextStyle(fontSize: 11)),
+                                label: Text(finishDisplay.isNotEmpty ? finishDisplay : 'Set Date', style: const TextStyle(fontSize: 11)),
                                 onPressed: () async {
                                   final picked = await showDatePicker(
                                     context: dialogCtx,
@@ -296,7 +312,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                     lastDate: DateTime(2035),
                                   );
                                   if (picked != null) {
-                                    setDialogState(() => finishDate = DateFormat('MM/dd/yyyy').format(picked));
+                                    setDialogState(() {
+                                      finishDisplay = DateFormat('MM/dd/yyyy').format(picked);
+                                      finishEpochStr = picked.millisecondsSinceEpoch.toString();
+                                    });
                                   }
                                 },
                               ),
@@ -322,9 +341,9 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       recordId: recordId,
                       lastChapterRead: currentChapter,
                       status: currentStatus,
-                      scoreString: currentScore > 0 ? currentScore.toString() : null,
-                      startDate: startDate.isNotEmpty ? startDate : null,
-                      finishDate: finishDate.isNotEmpty ? finishDate : null,
+                      scoreString: currentScore > 0 ? (currentScore.truncateToDouble() == currentScore ? currentScore.toInt().toString() : currentScore.toString()) : null,
+                      startDate: startEpochStr,
+                      finishDate: finishEpochStr,
                     );
                     await _loadTrackingData();
                   },
