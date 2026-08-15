@@ -20,17 +20,24 @@ class SourceMangaGridScreen extends StatefulWidget {
   State<SourceMangaGridScreen> createState() => _SourceMangaGridScreenState();
 }
 
-class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> {
+class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with SingleTickerProviderStateMixin {
   List<Map<String, dynamic>> _mangaList = [];
   bool _isLoading = true;
   int _currentPage = 1;
   bool _hasNextPage = true;
   String _searchQuery = '';
+  late bool _isLatestMode;
   final TextEditingController _searchController = TextEditingController();
+
+  // Mihon Source Filter State
+  String _selectedSort = 'Popularity';
+  String _selectedStatus = 'All';
+  String _selectedType = 'All';
 
   @override
   void initState() {
     super.initState();
+    _isLatestMode = widget.isLatest;
     _fetchSourceManga();
   }
 
@@ -41,7 +48,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> {
       if (GraphQLClientService.instance.isConfigured) {
         final data = await GraphQLClientService.instance.fetchSourceManga(
           widget.sourceId,
-          isLatest: widget.isLatest,
+          isLatest: _isLatestMode,
           page: _currentPage,
           searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
         );
@@ -74,16 +81,180 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> {
           18,
           (i) => {
             'id': 100 + i,
-            'title': '${widget.sourceName} Title ${(_currentPage - 1) * 18 + i + 1}',
-            'thumbnailUrl': 'https://via.placeholder.com/300x450.png?text=${widget.sourceName}+${i + 1}',
+            'title': '${widget.sourceName} ${_isLatestMode ? "Latest" : "Top"} ${(_currentPage - 1) * 18 + i + 1}',
+            'thumbnailUrl': null,
           },
         );
       }
     } catch (e, stack) {
       await LoggerService.instance.logError('Failed to fetch source manga: $e', exception: e, stackTrace: stack, category: 'SourceGrid');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showFilterSheet() {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1F1F24),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('${widget.sourceName} Filters', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      TextButton(
+                        onPressed: () {
+                          setSheetState(() {
+                            _selectedSort = 'Popularity';
+                            _selectedStatus = 'All';
+                            _selectedType = 'All';
+                          });
+                        },
+                        child: Text('Reset', style: TextStyle(color: primaryColor)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 1. Sort By
+                  const Text('Sort By', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: ['Popularity', 'Latest', 'Title', 'Rating'].map((s) {
+                      final isSelected = _selectedSort == s;
+                      return ChoiceChip(
+                        label: Text(s),
+                        selected: isSelected,
+                        selectedColor: primaryColor,
+                        backgroundColor: const Color(0x1F2A2A32),
+                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                        onSelected: (_) {
+                          setSheetState(() => _selectedSort = s);
+                        },
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // 2. Status
+                  const Text('Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: ['All', 'Ongoing', 'Completed', 'Hiatus'].map((st) {
+                      final isSelected = _selectedStatus == st;
+                      return ChoiceChip(
+                        label: Text(st),
+                        selected: isSelected,
+                        selectedColor: primaryColor,
+                        backgroundColor: const Color(0x1F2A2A32),
+                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                        onSelected: (_) {
+                          setSheetState(() => _selectedStatus = st);
+                        },
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // 3. Type
+                  const Text('Content Type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: ['All', 'Manga', 'Manhwa', 'Manhua', 'Comic'].map((t) {
+                      final isSelected = _selectedType == t;
+                      return ChoiceChip(
+                        label: Text(t),
+                        selected: isSelected,
+                        selectedColor: primaryColor,
+                        backgroundColor: const Color(0x1F2A2A32),
+                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                        onSelected: (_) {
+                          setSheetState(() => _selectedType = t);
+                        },
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      setState(() {
+                        _currentPage = 1;
+                        _isLatestMode = _selectedSort == 'Latest';
+                      });
+                      _fetchSourceManga();
+                    },
+                    child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSourceSettings() {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1F1F24),
+          title: Text('${widget.sourceName} Settings', style: const TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.fingerprint_rounded, color: primaryColor),
+                title: const Text('Source ID', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                subtitle: Text(widget.sourceId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.language_rounded, color: primaryColor),
+                title: const Text('Status', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                subtitle: const Text('Installed & Synced from Suwayomi Server', style: TextStyle(color: Colors.greenAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Close', style: TextStyle(color: primaryColor)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -92,17 +263,100 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.sourceName} (${widget.isLatest ? "Latest" : "Popular"})'),
+        title: Text(widget.sourceName),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.tune_rounded),
+            tooltip: 'Filter source',
+            onPressed: _showFilterSheet,
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Source settings',
+            onPressed: _showSourceSettings,
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
+            // ── MIHON POPULAR / LATEST TAB BAR ──
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        if (_isLatestMode) {
+                          setState(() {
+                            _isLatestMode = false;
+                            _currentPage = 1;
+                          });
+                          _fetchSourceManga();
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: !_isLatestMode ? primaryColor : const Color(0x1F2A2A32),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: !_isLatestMode ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Popular',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: !_isLatestMode ? Colors.white : Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        if (!_isLatestMode) {
+                          setState(() {
+                            _isLatestMode = true;
+                            _currentPage = 1;
+                          });
+                          _fetchSourceManga();
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _isLatestMode ? primaryColor : const Color(0x1F2A2A32),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _isLatestMode ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Latest Updates',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: _isLatestMode ? Colors.white : Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Search Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
@@ -122,11 +376,15 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                 ),
                 onSubmitted: (val) {
-                  setState(() => _searchQuery = val);
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 1;
+                  });
                   _fetchSourceManga();
                 },
               ),
             ),
+
             Expanded(
               child: _isLoading
                   ? Center(child: CircularProgressIndicator(color: primaryColor))

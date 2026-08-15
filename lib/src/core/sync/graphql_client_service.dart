@@ -265,7 +265,7 @@ class GraphQLClientService {
   Future<Map<String, dynamic>?> fetchUpdatesChapters({int first = 100}) async {
     final queryStr = '''
       {
-        chapters(orderBy: FETCHED_AT, first: $first) {
+        chapters(order: [{ by: FETCHED_AT, byType: DESC }], first: $first) {
           totalCount
           nodes {
             id
@@ -290,6 +290,22 @@ class GraphQLClientService {
       }
     ''';
     return await query(queryStr, label: 'fetchUpdatesChapters');
+  }
+
+  Future<String?> fetchLastUpdateTimestamp() async {
+    const queryStr = '''
+      {
+        lastUpdateTimestamp {
+          timestamp
+        }
+      }
+    ''';
+    final data = await query(queryStr, label: 'fetchLastUpdateTimestamp');
+    if (data != null && data.containsKey('lastUpdateTimestamp')) {
+      final payload = data['lastUpdateTimestamp'] as Map<String, dynamic>?;
+      return payload?['timestamp']?.toString();
+    }
+    return null;
   }
 
   Future<Map<String, dynamic>?> triggerServerLibraryUpdate() async {

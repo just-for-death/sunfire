@@ -90,6 +90,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         final title = manga?.title ?? 'Manga #${ch.mangaId}';
                         final thumb = manga?.thumbnailUrl;
 
+                        final double progressValue = ch.pageCount > 0
+                            ? (ch.lastPageRead / ch.pageCount).clamp(0.0, 1.0)
+                            : (ch.isRead ? 1.0 : (ch.lastPageRead > 0 ? 0.35 : 0.0));
+
+                        final int currentPage = ch.lastPageRead > 0 ? ch.lastPageRead : 1;
+                        final String progressText = ch.pageCount > 0
+                            ? 'Page $currentPage / ${ch.pageCount} (${(progressValue * 100).toInt()}%)'
+                            : (ch.isRead ? 'Completed' : 'Page $currentPage');
+
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6.0),
                           child: Material(
@@ -99,6 +108,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
                             ),
                             child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               onTap: () => context.push('/reader/${ch.serverId}'),
                               leading: Container(
@@ -119,13 +129,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: primaryColor)),
                                   const SizedBox(height: 2),
-                                  Text('Page ${ch.lastPageRead > 0 ? ch.lastPageRead : 1}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                  Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 6),
+                                  // ── PROGRESS BAR (Catalyst & Mihon) ──
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: progressValue,
+                                      minHeight: 4,
+                                      backgroundColor: const Color(0x33FFFFFF),
+                                      valueColor: AlwaysStoppedAnimation<Color>(ch.isRead ? Colors.greenAccent : primaryColor),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(progressText, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500)),
                                 ],
                               ),
                               trailing: IconButton(
                                 icon: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 32),
+                                tooltip: 'Resume reading',
                                 onPressed: () => context.push('/reader/${ch.serverId}'),
                               ),
                             ),
