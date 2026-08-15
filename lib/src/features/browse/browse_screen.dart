@@ -4,6 +4,7 @@ import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/repo_manager.dart';
 import '../../core/logging/logger_service.dart';
+import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import 'extension_details_screen.dart';
@@ -78,7 +79,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 'displayName': displayName,
                 'lang': m['lang'] as String? ?? 'en',
                 'supportsLatest': m['supportsLatest'] as bool? ?? true,
-                'isPinned': name.contains('MangaDex') || name.contains('Read Comics') || name.contains('ReadAllComics'),
+                'isPinned': SettingsService.instance.isSourcePinned(id),
                 'iconUrl': iconUrl,
               };
             }).toList();
@@ -88,19 +89,19 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
       if (_sourcesList.isEmpty) {
         _sourcesList = [
-          {'id': '0', 'name': 'Local source', 'displayName': 'Local source', 'lang': 'en', 'supportsLatest': false, 'isPinned': false, 'iconUrl': ''},
-          {'id': '7185601298150078890', 'name': 'ReadAllComics', 'displayName': 'ReadAllComics', 'lang': 'en', 'supportsLatest': true, 'isPinned': true, 'iconUrl': ''},
-          {'id': '2499283573021220255', 'name': 'MangaDex', 'displayName': 'MangaDex', 'lang': 'en', 'supportsLatest': true, 'isPinned': true, 'iconUrl': ''},
-          {'id': '6084907896154116083', 'name': 'MangaFire', 'displayName': 'MangaFire', 'lang': 'en', 'supportsLatest': true, 'isPinned': false, 'iconUrl': ''},
-          {'id': '4972933717624256217', 'name': 'Comick', 'displayName': 'Comick', 'lang': 'en', 'supportsLatest': true, 'isPinned': false, 'iconUrl': ''},
-          {'id': '3444662672352788181', 'name': 'MANGA Plus by SHUEISHA', 'displayName': 'MANGA Plus by SHUEISHA', 'lang': 'en', 'supportsLatest': true, 'isPinned': false, 'iconUrl': ''},
-          {'id': '5192837192837129381', 'name': 'Mangafreak', 'displayName': 'Mangafreak', 'lang': 'en', 'supportsLatest': true, 'isPinned': false, 'iconUrl': ''},
-          {'id': '9182736451928371625', 'name': 'Buon Dua', 'displayName': 'Buon Dua', 'lang': 'en', 'supportsLatest': true, 'isPinned': false, 'iconUrl': ''},
-          {'id': '1928374651029384756', 'name': 'Webtoons.com', 'displayName': 'Webtoons.com', 'lang': 'en', 'supportsLatest': true, 'isPinned': false, 'iconUrl': ''},
-          {'id': '1928374651029384757', 'name': 'Weeb Central', 'displayName': 'Weeb Central', 'lang': 'en', 'supportsLatest': true, 'isPinned': false, 'iconUrl': ''},
-          {'id': '1928374651029384758', 'name': 'Mangakakalot', 'displayName': 'Mangakakalot', 'lang': 'en', 'supportsLatest': true, 'isPinned': false, 'iconUrl': ''},
-          {'id': '1928374651029384759', 'name': 'NineAnime', 'displayName': 'NineAnime', 'lang': 'en', 'supportsLatest': true, 'isPinned': false, 'iconUrl': ''},
-          {'id': '1928374651029384760', 'name': 'MangaKatana', 'displayName': 'MangaKatana', 'lang': 'en', 'supportsLatest': true, 'isPinned': false, 'iconUrl': ''},
+          {'id': '0', 'name': 'Local source', 'displayName': 'Local source', 'lang': 'en', 'supportsLatest': false, 'isPinned': SettingsService.instance.isSourcePinned('0'), 'iconUrl': ''},
+          {'id': '7185601298150078890', 'name': 'ReadAllComics', 'displayName': 'ReadAllComics', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('7185601298150078890'), 'iconUrl': ''},
+          {'id': '2499283573021220255', 'name': 'MangaDex', 'displayName': 'MangaDex', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('2499283573021220255'), 'iconUrl': ''},
+          {'id': '6084907896154116083', 'name': 'MangaFire', 'displayName': 'MangaFire', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('6084907896154116083'), 'iconUrl': ''},
+          {'id': '4972933717624256217', 'name': 'Comick', 'displayName': 'Comick', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('4972933717624256217'), 'iconUrl': ''},
+          {'id': '3444662672352788181', 'name': 'MANGA Plus by SHUEISHA', 'displayName': 'MANGA Plus by SHUEISHA', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('3444662672352788181'), 'iconUrl': ''},
+          {'id': '5192837192837129381', 'name': 'Mangafreak', 'displayName': 'Mangafreak', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('5192837192837129381'), 'iconUrl': ''},
+          {'id': '9182736451928371625', 'name': 'Buon Dua', 'displayName': 'Buon Dua', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('9182736451928371625'), 'iconUrl': ''},
+          {'id': '1928374651029384756', 'name': 'Webtoons.com', 'displayName': 'Webtoons.com', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('1928374651029384756'), 'iconUrl': ''},
+          {'id': '1928374651029384757', 'name': 'Weeb Central', 'displayName': 'Weeb Central', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('1928374651029384757'), 'iconUrl': ''},
+          {'id': '1928374651029384758', 'name': 'Mangakakalot', 'displayName': 'Mangakakalot', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('1928374651029384758'), 'iconUrl': ''},
+          {'id': '1928374651029384759', 'name': 'NineAnime', 'displayName': 'NineAnime', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('1928374651029384759'), 'iconUrl': ''},
+          {'id': '1928374651029384760', 'name': 'MangaKatana', 'displayName': 'MangaKatana', 'lang': 'en', 'supportsLatest': true, 'isPinned': SettingsService.instance.isSourcePinned('1928374651029384760'), 'iconUrl': ''},
         ];
       }
     } catch (e, stack) {
@@ -200,10 +201,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   }
 
   void _toggleSourcePin(String id) {
+    SettingsService.instance.togglePinSource(id);
     setState(() {
       final idx = _sourcesList.indexWhere((s) => s['id'] == id);
       if (idx != -1) {
-        _sourcesList[idx]['isPinned'] = !(_sourcesList[idx]['isPinned'] as bool);
+        _sourcesList[idx]['isPinned'] = SettingsService.instance.isSourcePinned(id);
       }
     });
   }

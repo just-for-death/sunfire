@@ -29,5 +29,10 @@ class Chapter {
   bool isDownloadedLocally = false;
   bool isDownloadedOnServer = false;
 
+  bool get isDownloaded => isDownloadedLocally || isDownloadedOnServer;
+  set isDownloaded(bool val) {
+    isDownloadedLocally = val;
+  }
+
   Chapter();
 }
