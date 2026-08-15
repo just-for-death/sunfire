@@ -140,9 +140,13 @@ class SyncEngine {
     final localCountBefore = await IsarService.instance.getMangaCount();
 
     // ── STEP 2: Pull full library from Suwayomi ───────────────────────────
+    bool serverReachable = false;
     try {
-      final libData = await GraphQLClientService.instance.fetchLibrary();
+      final libData = await GraphQLClientService.instance
+          .fetchLibrary()
+          .timeout(const Duration(seconds: 4));
       if (libData != null && libData.containsKey('mangas')) {
+        serverReachable = true;
         final nodes = libData['mangas']['nodes'] as List<dynamic>;
         final serverMangas = <Manga>[];
 
@@ -213,8 +217,11 @@ class SyncEngine {
         }
       }
     } catch (e) {
-      await LoggerService.instance.logError('Library sync error: $e', category: 'SyncEngine');
+      await LoggerService.instance.logInfo('Server unreachable for library sync, skipping server pull ($e)', 'SyncEngine');
+      return; // Server is offline — immediately return to keep local data untouched and fast!
     }
+
+    if (!serverReachable) return;
 
     // ── STEP 3: Pull ALL chapters for the full library (full snapshot) ────
     // This is the core of local-first: every chapter, page count, URL, and
