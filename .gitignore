@@ -59,5 +59,10 @@ android/.gradle/
 **/local.properties
 android/key.properties
 
+# Local Sentry & Scripts
+.sentry-native/
+test_*.py
+implementation_plan.md
+
 # FVM Version Cache
 .fvm/
