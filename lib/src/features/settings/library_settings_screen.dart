@@ -81,6 +81,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
 
   Future<void> _deleteCategory(Category cat) async {
     setState(() => _isLoadingCategories = true);
+    await IsarService.instance.deleteCategory(cat.serverId);
     try {
       if (GraphQLClientService.instance.isConfigured) {
         await GraphQLClientService.instance.deleteCategory(cat.serverId);

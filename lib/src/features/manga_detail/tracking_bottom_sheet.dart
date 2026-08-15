@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/sync/graphql_client_service.dart';
 
@@ -41,6 +42,16 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   String _searchQuery = '';
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
+
+  // Tracker status mapping
+  static const Map<int, String> statusNames = {
+    1: 'Reading',
+    2: 'Completed',
+    3: 'On Hold',
+    4: 'Dropped',
+    5: 'Plan to Read',
+    6: 'Re-Reading',
+  };
 
   @override
   void initState() {
@@ -106,6 +117,225 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     setState(() => _isLoading = true);
     await GraphQLClientService.instance.unbindTrack(recordId);
     await _loadTrackingData();
+  }
+
+  void _showEditTrackDialog(Map<String, dynamic> record, String trackerName) {
+    final recordId = record['id'] as int;
+    int currentStatus = record['status'] is int ? record['status'] as int : 1;
+    double currentChapter = (record['lastChapterRead'] as num?)?.toDouble() ?? 0.0;
+    int totalChapters = (record['totalChapters'] as num?)?.toInt() ?? 0;
+    double currentScore = (record['score'] as num?)?.toDouble() ?? 0.0;
+    String startDate = record['startDate']?.toString() ?? '';
+    String finishDate = record['finishDate']?.toString() ?? '';
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        final primaryColor = Theme.of(dialogCtx).colorScheme.primary;
+
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1F1F24),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Row(
+                children: [
+                  Icon(Icons.track_changes_rounded, color: primaryColor, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      record['title'] as String? ?? widget.mangaTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    // ── STATUS ──────────────────────────────────────────
+                    const Text('STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(color: const Color(0x1F2A2A32), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0x2BFFFFFF))),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: currentStatus,
+                          dropdownColor: const Color(0xFF1F1F24),
+                          isExpanded: true,
+                          items: statusNames.entries.map((e) {
+                            return DropdownMenuItem<int>(
+                              value: e.key,
+                              child: Text(e.value, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDialogState(() => currentStatus = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ── CHAPTER READ (WITH +/- BUTTONS) ───────────────────
+                    const Text('CHAPTERS READ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: const Color(0x1F2A2A32), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0x2BFFFFFF))),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline_rounded, color: Colors.grey),
+                            onPressed: currentChapter > 0 ? () => setDialogState(() => currentChapter--) : null,
+                          ),
+                          Expanded(
+                            child: Center(
+                              child: Text(
+                                '${currentChapter.toInt()} / ${totalChapters > 0 ? totalChapters : "?"}',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.add_circle_outline_rounded, color: primaryColor),
+                            onPressed: () => setDialogState(() => currentChapter++),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ── SCORE (0 - 10) ──────────────────────────────────
+                    const Text('SCORE (0 - 10)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(color: const Color(0x1F2A2A32), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0x2BFFFFFF))),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<double>(
+                          value: (currentScore >= 0 && currentScore <= 10) ? currentScore : 0.0,
+                          dropdownColor: const Color(0xFF1F1F24),
+                          isExpanded: true,
+                          items: [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0].map((s) {
+                            return DropdownMenuItem<double>(
+                              value: s,
+                              child: Text(s == 0.0 ? 'No Score (-)' : '$s / 10 ★', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDialogState(() => currentScore = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ── START DATE & FINISH DATE ─────────────────────────
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('START DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                              const SizedBox(height: 6),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                icon: const Icon(Icons.calendar_today_rounded, size: 14),
+                                label: Text(startDate.isNotEmpty ? startDate : 'Set Date', style: const TextStyle(fontSize: 11)),
+                                onPressed: () async {
+                                  final picked = await showDatePicker(
+                                    context: dialogCtx,
+                                    initialDate: DateTime.now(),
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2035),
+                                  );
+                                  if (picked != null) {
+                                    setDialogState(() => startDate = DateFormat('MM/dd/yyyy').format(picked));
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('FINISH DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                              const SizedBox(height: 6),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                icon: const Icon(Icons.event_available_rounded, size: 14),
+                                label: Text(finishDate.isNotEmpty ? finishDate : 'Set Date', style: const TextStyle(fontSize: 11)),
+                                onPressed: () async {
+                                  final picked = await showDatePicker(
+                                    context: dialogCtx,
+                                    initialDate: DateTime.now(),
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2035),
+                                  );
+                                  if (picked != null) {
+                                    setDialogState(() => finishDate = DateFormat('MM/dd/yyyy').format(picked));
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  onPressed: () async {
+                    Navigator.pop(dialogCtx);
+                    setState(() => _isLoading = true);
+                    await GraphQLClientService.instance.updateTrack(
+                      recordId: recordId,
+                      lastChapterRead: currentChapter,
+                      status: currentStatus,
+                      scoreString: currentScore > 0 ? currentScore.toString() : null,
+                      startDate: startDate.isNotEmpty ? startDate : null,
+                      finishDate: finishDate.isNotEmpty ? finishDate : null,
+                    );
+                    await _loadTrackingData();
+                  },
+                  child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -174,74 +404,100 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       borderRadius: BorderRadius.circular(16),
                       side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: isBound ? () => _showEditTrackDialog(bound, trackerName) : null,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.track_changes_rounded, color: isBound ? Colors.greenAccent : primaryColor, size: 22),
+                                    const SizedBox(width: 10),
+                                    Text(trackerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  ],
+                                ),
+                                if (isBound)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(color: Colors.greenAccent.withAlpha(40), borderRadius: BorderRadius.circular(8)),
+                                    child: const Text('TRACKED', style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            if (isBound) ...[
+                              Text(bound['title'] as String? ?? widget.mangaTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Icon(Icons.track_changes_rounded, color: isBound ? Colors.greenAccent : primaryColor, size: 22),
-                                  const SizedBox(width: 10),
-                                  Text(trackerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(color: const Color(0x2BFFFFFF), borderRadius: BorderRadius.circular(6)),
+                                    child: Text(
+                                      statusNames[bound['status'] is int ? bound['status'] as int : 1] ?? 'Reading',
+                                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(color: const Color(0x2BFFFFFF), borderRadius: BorderRadius.circular(6)),
+                                    child: Text(
+                                      'Ch: ${(bound["lastChapterRead"] as num?)?.toInt() ?? 0} / ${(bound["totalChapters"] as num?)?.toInt() ?? "?"}',
+                                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(color: const Color(0x2BFFFFFF), borderRadius: BorderRadius.circular(6)),
+                                    child: Text(
+                                      'Score: ${(bound["score"] as num?)?.toDouble() ?? "-"}',
+                                      style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
                                 ],
                               ),
-                              if (isBound)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(color: Colors.greenAccent.withAlpha(40), borderRadius: BorderRadius.circular(8)),
-                                  child: const Text('TRACKED', style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          if (isBound) ...[
-                            Text(bound['title'] as String? ?? widget.mangaTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Text('Status: ${bound['status'] ?? "Reading"}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                                const SizedBox(width: 16),
-                                Text('Ch: ${bound['lastChapterRead'] ?? 0} / ${bound['totalChapters'] ?? "?"}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                                const SizedBox(width: 16),
-                                Text('Score: ${bound['score'] ?? "-"}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                TextButton.icon(
-                                  icon: const Icon(Icons.link_off_rounded, color: Colors.redAccent, size: 16),
-                                  label: const Text('Unbind', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
-                                  onPressed: () => _unbindRecord(bound['id'] as int),
-                                ),
-                              ],
-                            ),
-                          ] else ...[
-                            const Text('Not linked with this tracker.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: primaryColor.withAlpha(40),
-                                  foregroundColor: primaryColor,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                                icon: const Icon(Icons.search_rounded, size: 18),
-                                label: const Text('Search & Bind'),
-                                onPressed: () {
-                                  _searchQuery = widget.mangaTitle;
-                                  _searchTracker(trackerId);
-                                },
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Tap card to edit status & progress', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.w600)),
+                                  TextButton.icon(
+                                    icon: const Icon(Icons.link_off_rounded, color: Colors.redAccent, size: 16),
+                                    label: const Text('Unbind', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                                    onPressed: () => _unbindRecord(bound['id'] as int),
+                                  ),
+                                ],
                               ),
-                            ),
+                            ] else ...[
+                              const Text('Not linked with this tracker.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryColor.withAlpha(40),
+                                    foregroundColor: primaryColor,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  icon: const Icon(Icons.search_rounded, size: 18),
+                                  label: const Text('Search & Bind'),
+                                  onPressed: () {
+                                    _searchQuery = widget.mangaTitle;
+                                    _searchTracker(trackerId);
+                                  },
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),

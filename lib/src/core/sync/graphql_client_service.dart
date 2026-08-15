@@ -486,12 +486,21 @@ class GraphQLClientService {
   Future<Map<String, dynamic>?> updateTrack({
     required int recordId,
     required double lastChapterRead,
-    String? status,
-    double? score,
+    int? status,
+    String? scoreString,
+    String? startDate,
+    String? finishDate,
   }) async {
     const mutStr = r'''
-      mutation($recordId: Int!, $lastChapterRead: Float, $status: String, $score: Float) {
-        updateTrack(input: { recordId: $recordId, lastChapterRead: $lastChapterRead, status: $status, scoreString: $score }) {
+      mutation($recordId: Int!, $lastChapterRead: Float, $status: Int, $scoreString: String, $startDate: LongString, $finishDate: LongString) {
+        updateTrack(input: {
+          recordId: $recordId,
+          lastChapterRead: $lastChapterRead,
+          status: $status,
+          scoreString: $scoreString,
+          startDate: $startDate,
+          finishDate: $finishDate
+        }) {
           clientMutationId
         }
       }
@@ -500,7 +509,9 @@ class GraphQLClientService {
       'recordId': recordId,
       'lastChapterRead': lastChapterRead,
       'status': status,
-      'score': score,
+      'scoreString': scoreString,
+      'startDate': startDate,
+      'finishDate': finishDate,
     }, label: 'updateTrack');
   }
 
