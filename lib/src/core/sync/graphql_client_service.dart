@@ -198,24 +198,15 @@ class GraphQLClientService {
     return await query(queryStr, variables: {'id': mangaServerId}, label: 'fetchMangaDetails');
   }
 
-  Future<Map<String, dynamic>?> fetchChaptersForManga(int mangaServerId) async {
-    const queryStr = r'''
-      query($mangaId: Int!) {
-        chapters(condition: { mangaId: $mangaId }, first: 1000) {
-          nodes {
-            id
-            name
-            chapterNumber
-            isRead
-            lastPageRead
-            lastReadAt
-            mangaId
-            fetchedAt
-          }
+  Future<Map<String, dynamic>?> fetchMangaAndChapters(int mangaServerId) async {
+    const mutStr = r'''
+      mutation($id: Int!) {
+        fetchMangaAndChapters(input: { id: $id, fetchManga: true, fetchChapters: true }) {
+          clientMutationId
         }
       }
     ''';
-    return await query(queryStr, variables: {'mangaId': mangaServerId}, label: 'fetchChaptersForManga');
+    return await query(mutStr, variables: {'id': mangaServerId}, label: 'fetchMangaAndChapters');
   }
 
   Future<Map<String, dynamic>?> fetchCategories() async {

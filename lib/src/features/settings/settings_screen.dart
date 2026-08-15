@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'advanced_settings_screen.dart';
 import 'appearance_settings_screen.dart';
@@ -105,8 +106,28 @@ class SettingsScreen extends StatelessWidget {
 
                 // 4. DOWNLOADS & STORAGE
                 ListTile(
+                  leading: Icon(Icons.downloading_rounded, color: primaryColor),
+                  title: const Text('Download Manager', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Manage active local & server download queues'),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                  onTap: () => context.push('/downloads'),
+                ),
+                const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
+
+                // 5. STATISTICS
+                ListTile(
+                  leading: Icon(Icons.insights_rounded, color: primaryColor),
+                  title: const Text('Statistics (Mihon)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Read counts, reading time, genres & sources breakdown'),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                  onTap: () => context.push('/stats'),
+                ),
+                const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
+
+                // 6. STORAGE & CACHE
+                ListTile(
                   leading: Icon(Icons.folder_zip_rounded, color: primaryColor),
-                  title: const Text('Downloads & Storage', style: TextStyle(fontWeight: FontWeight.bold)),
+                  title: const Text('Storage & Cache', style: TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: const Text('Auto-download, WiFi restrictions, auto-delete, clear cache'),
                   trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                   onTap: () {
@@ -118,7 +139,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
 
-                // 5. EXTENSION REPOSITORIES
+                // 7. EXTENSION REPOSITORIES
                 ListTile(
                   leading: Icon(Icons.extension_rounded, color: primaryColor),
                   title: const Text('Extension Repositories', style: TextStyle(fontWeight: FontWeight.bold)),

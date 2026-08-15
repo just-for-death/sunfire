@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
@@ -141,10 +144,23 @@ class _ReaderScreenState extends State<ReaderScreen> {
       }
     }
 
-    final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+    // 1. Check if chapter is downloaded locally on device
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final chapterDir = Directory('${appDir.path}/downloads/$chapterId');
+      if (await chapterDir.exists()) {
+        final files = await chapterDir.list().toList();
+        final localImageFiles = files.whereType<File>().toList();
+        localImageFiles.sort((a, b) => a.path.compareTo(b.path));
+        if (localImageFiles.isNotEmpty) {
+          _pageUrls = localImageFiles.map((f) => f.path).toList();
+        }
+      }
+    } catch (_) {}
 
-    // 1. Fetch live pages from Suwayomi
-    if (GraphQLClientService.instance.isConfigured) {
+    // 2. Fetch live pages from Suwayomi if not downloaded locally
+    final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+    if (_pageUrls.isEmpty && GraphQLClientService.instance.isConfigured) {
       try {
         final data = await GraphQLClientService.instance.fetchChapterPages(chapterId);
         if (data != null && data.containsKey('fetchChapterPages')) {
@@ -528,25 +544,40 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Widget _buildPageWidget(String url, int index) {
-    Widget image = Image.network(
-      url,
-      fit: _imageBoxFit,
-      loadingBuilder: (_, child, progress) {
-        if (progress == null) return child;
-        return Container(
-          height: 400,
-          color: _canvasBackgroundColor,
-          child: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)),
-        );
-      },
-      errorBuilder: (_, __, ___) => Container(
-        height: 300,
-        color: const Color(0xFF1A1A22),
-        child: Center(
-          child: Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.grey)),
+    Widget image;
+    if (url.startsWith('/')) {
+      image = Image.file(
+        File(url),
+        fit: _imageBoxFit,
+        errorBuilder: (_, __, ___) => Container(
+          height: 300,
+          color: const Color(0xFF1A1A22),
+          child: Center(
+            child: Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.grey)),
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      image = Image.network(
+        url,
+        fit: _imageBoxFit,
+        loadingBuilder: (_, child, progress) {
+          if (progress == null) return child;
+          return Container(
+            height: 400,
+            color: _canvasBackgroundColor,
+            child: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)),
+          );
+        },
+        errorBuilder: (_, __, ___) => Container(
+          height: 300,
+          color: const Color(0xFF1A1A22),
+          child: Center(
+            child: Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.grey)),
+          ),
+        ),
+      );
+    }
 
     if (_activeColorFilter != null) {
       image = ColorFiltered(colorFilter: _activeColorFilter!, child: image);
