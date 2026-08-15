@@ -92,15 +92,27 @@ Future<ChapterPagesDto?> _chapterPagesWithLocalFallback(
   final offlineManifest = await service.getOfflineManifest(chapterId);
 
   ChapterPagesDto? remote;
-  try {
-    remote = await ref
-        .read(mangaBookRepositoryProvider)
-        .getChapterPages(chapterId: chapterId);
-  } catch (_) {
-    remote = null;
+  int attempts = 0;
+  const maxAttempts = 3;
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    try {
+      remote = await ref
+          .read(mangaBookRepositoryProvider)
+          .getChapterPages(chapterId: chapterId);
+      if (remote != null && remote.pages.isNotEmpty) {
+        break;
+      }
+    } catch (_) {
+      remote = null;
+    }
+    if (attempts < maxAttempts && localPages == null) {
+      await Future.delayed(Duration(milliseconds: 600 * attempts));
+    }
   }
 
-  if (remote != null) {
+  if (remote != null && remote.pages.isNotEmpty) {
     if (localPages == null) return remote;
     final mergedPages = mergeLocalAndRemotePages(localPages, remote.pages);
     if (mergedPages.isEmpty) return remote;
