@@ -388,59 +388,75 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
             Expanded(
               child: _isLoading
                   ? Center(child: CircularProgressIndicator(color: primaryColor))
-                  : GridView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        childAspectRatio: 0.62,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 16,
-                      ),
-                      itemCount: _mangaList.length,
-                      itemBuilder: (context, index) {
-                        final manga = _mangaList[index];
-                        final id = manga['id'] as int;
-                        final title = manga['title'] as String;
-                        final thumb = manga['thumbnailUrl'] as String?;
-
-                        return GestureDetector(
-                          onTap: () => context.push('/manga/$id'),
+                  : _mangaList.isEmpty
+                      ? Center(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Expanded(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    color: Colors.grey[900],
-                                    border: Border.all(color: const Color(0x1AFFFFFF), width: 0.8),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: thumb != null && thumb.isNotEmpty
-                                        ? Image.network(
-                                            thumb,
-                                            width: double.infinity,
-                                            height: double.infinity,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.book_rounded, color: Colors.grey)),
-                                          )
-                                        : const Center(child: Icon(Icons.book_rounded, color: Colors.grey)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                              const Icon(Icons.wifi_off_rounded, size: 48, color: Colors.grey),
+                              const SizedBox(height: 12),
+                              const Text('No manga found or source timed out.', style: TextStyle(color: Colors.grey)),
+                              const SizedBox(height: 12),
+                              ElevatedButton(
+                                onPressed: _fetchSourceManga,
+                                child: const Text('Retry'),
                               ),
                             ],
                           ),
-                        );
-                      },
-                    ),
+                        )
+                      : GridView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            childAspectRatio: 0.62,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 16,
+                          ),
+                          itemCount: _mangaList.length,
+                          itemBuilder: (context, index) {
+                            final manga = _mangaList[index];
+                            final id = manga['id'] as int;
+                            final title = manga['title'] as String;
+                            final thumb = manga['thumbnailUrl'] as String?;
+
+                            return GestureDetector(
+                              onTap: () => context.push('/manga/$id'),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(16),
+                                        color: Colors.grey[900],
+                                        border: Border.all(color: const Color(0x1AFFFFFF), width: 0.8),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: thumb != null && thumb.isNotEmpty
+                                            ? Image.network(
+                                                thumb,
+                                                width: double.infinity,
+                                                height: double.infinity,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.book_rounded, color: Colors.grey)),
+                                              )
+                                            : const Center(child: Icon(Icons.book_rounded, color: Colors.grey)),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),

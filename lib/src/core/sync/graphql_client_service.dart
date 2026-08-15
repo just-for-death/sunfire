@@ -18,8 +18,8 @@ class GraphQLClientService {
     _baseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
     _dio = Dio(BaseOptions(
       baseUrl: '$_baseUrl/api/graphql',
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 45),
+      connectTimeout: const Duration(seconds: 45),
+      receiveTimeout: const Duration(seconds: 90),
       headers: {'Content-Type': 'application/json'},
     ));
   }
