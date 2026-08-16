@@ -35,6 +35,9 @@ subprojects { subproject ->
                     namespace = g
                 }
             }
+            defaultConfig {
+                minSdkVersion 21
+            }
         }
     }
 }
