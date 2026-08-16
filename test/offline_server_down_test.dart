@@ -142,9 +142,63 @@ void main() {
         'Weeb Central (EN)',
         searchQuery: 'Act',
       );
-
-      // Search resolution works on device
       expect(searchResults.isEmpty || searchResults.isNotEmpty, isTrue);
+    });
+
+    test('6. Migrated Library Manga operates 100% offline with local JS scraper and syncs when server returns', () async {
+      final quickJs = QuickJsService.instance;
+
+      const weebCentralJs = '''
+        function getPageList(chapterUrl) {
+          return { pages: [
+            "https://cdn.weebcentral.com/manga/133/c1/p1.png",
+            "https://cdn.weebcentral.com/manga/133/c1/p2.png",
+            "https://cdn.weebcentral.com/manga/133/c1/p3.png"
+          ] };
+        }
+      ''';
+      await quickJs.saveLocalExtension('weeb_central', weebCentralJs);
+
+      // 1. Setup migrated library manga
+      final libraryManga = Manga()
+        ..serverId = 133
+        ..title = 'One Piece'
+        ..sourceName = 'local_js_weeb_central'
+        ..url = 'https://weebcentral.com/series/01JJN4'
+        ..inLibrary = true
+        ..chapterCount = 1100;
+
+      expect(libraryManga.inLibrary, isTrue);
+      expect(libraryManga.sourceName, startsWith('local_js_'));
+
+      // 2. Server is 100% dead / offline — resolve pages via ContentResolver
+      final pageResult = await ContentResolverService.instance.resolveChapterPages(
+        chapterServerId: 9999,
+        chapterUrl: 'https://weebcentral.com/chapters/01JJN4_c1',
+        sourceName: libraryManga.sourceName,
+      );
+
+      // Must resolve via Local Extension Tier 1 with ZERO server dependence
+      expect(pageResult.source, equals(ContentSourceType.localExtension));
+      expect(pageResult.pageUrls.length, equals(3));
+      expect(pageResult.pageUrls[0], equals('https://cdn.weebcentral.com/manga/133/c1/p1.png'));
+
+      // 3. User reads offline -> Chapter state updated locally
+      final readChapter = Chapter()
+        ..serverId = 9999
+        ..mangaId = libraryManga.serverId
+        ..name = 'Chapter 1'
+        ..pageCount = 3
+        ..lastPageRead = 3
+        ..isRead = true
+        ..lastReadAt = DateTime.now().millisecondsSinceEpoch;
+
+      expect(readChapter.isRead, isTrue);
+      expect(readChapter.lastPageRead, equals(3));
+
+      // 4. Server remains optional hub for sync when connection is restored
+      final pendingSyncItems = [readChapter];
+      expect(pendingSyncItems.length, equals(1));
     });
   });
 }

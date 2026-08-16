@@ -104,7 +104,10 @@ class QuickJsService {
   /// Handles source name variants like "Weeb Central (EN)", "weeb_central", "weebcentral".
   String? getExtensionCode(String sourceName) {
     if (sourceName.isEmpty) return null;
-    final lower = sourceName.toLowerCase();
+    final normalized = sourceName.startsWith('local_js_')
+        ? sourceName.substring(9)
+        : sourceName;
+    final lower = normalized.toLowerCase();
     final clean = lower.replaceAll(RegExp(r'[^a-z0-9_]'), '_');
     final stripped = lower.replaceAll(RegExp(r'\s*\([a-z0-9_]+\)$'), '').trim();
     final strippedClean = stripped.replaceAll(RegExp(r'[^a-z0-9_]'), '_');
