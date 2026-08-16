@@ -14,10 +14,10 @@ workflows:
       - name: Get packages & dependencies
         script: flutter pub get
 
-      - name: Patch flutter_qjs for AGP 8 (inject namespace, drop manifest package)
+      - name: Patch flutter_qjs for AGP 8 (inject namespace, set minSdkVersion 21, drop manifest package)
         script: |
           set -e
-          # flutter_qjs 0.3.7 ships without an Android namespace, which AGP 8+ rejects.
+          # flutter_qjs 0.3.7 ships without an Android namespace and with minSdk 16, which AGP 8 / NDK rejects.
           # Patch the pub-cache copy in-place. Idempotent: safe to re-run.
           QJS_DIR="$HOME/.pub-cache/hosted/pub.dev/flutter_qjs-0.3.7"
           if [ ! -d "$QJS_DIR" ]; then
@@ -28,13 +28,19 @@ workflows:
 
             # 1) Add `namespace 'soko.ekibun.flutter_qjs'` as the first line inside android { }
             if [ -f "$BG" ] && ! grep -qE "^[[:space:]]*namespace[[:space:]]+['\"]" "$BG"; then
-              # Insert after the opening `android {` line
               sed -i.bak -E "s|(android[[:space:]]*\{)|\1\n    namespace 'soko.ekibun.flutter_qjs'|" "$BG"
               rm -f "$BG.bak"
               echo "  + added namespace to $BG"
             fi
 
-            # 2) Strip the `package="..."` attribute from AndroidManifest.xml (AGP 8 forbids it)
+            # 2) Bump minSdkVersion 16 -> 21 in build.gradle (NDK requirement)
+            if [ -f "$BG" ]; then
+              sed -i.bak -E 's|minSdkVersion[[:space:]]+16|minSdkVersion 21|g' "$BG"
+              rm -f "$BG.bak"
+              echo "  + updated minSdkVersion to 21 in $BG"
+            fi
+
+            # 3) Strip the `package="..."` attribute from AndroidManifest.xml (AGP 8 forbids it)
             if [ -f "$MF" ] && grep -qE 'package="[^"]+"' "$MF"; then
               sed -i.bak -E 's|[[:space:]]*package="[^"]+"||g' "$MF"
               rm -f "$MF.bak"
@@ -129,10 +135,10 @@ workflows:
       - name: Get packages & dependencies
         script: flutter pub get
 
-      - name: Patch flutter_qjs for AGP 8 (inject namespace, drop manifest package)
+      - name: Patch flutter_qjs for AGP 8 (inject namespace, set minSdkVersion 21, drop manifest package)
         script: |
           set -e
-          # flutter_qjs 0.3.7 ships without an Android namespace, which AGP 8+ rejects.
+          # flutter_qjs 0.3.7 ships without an Android namespace and with minSdk 16, which AGP 8 / NDK rejects.
           # Patch the pub-cache copy in-place. Idempotent: safe to re-run.
           QJS_DIR="$HOME/.pub-cache/hosted/pub.dev/flutter_qjs-0.3.7"
           if [ ! -d "$QJS_DIR" ]; then
@@ -148,7 +154,14 @@ workflows:
               echo "  + added namespace to $BG"
             fi
 
-            # 2) Strip the `package="..."` attribute from AndroidManifest.xml (AGP 8 forbids it)
+            # 2) Bump minSdkVersion 16 -> 21 in build.gradle (NDK requirement)
+            if [ -f "$BG" ]; then
+              sed -i.bak -E 's|minSdkVersion[[:space:]]+16|minSdkVersion 21|g' "$BG"
+              rm -f "$BG.bak"
+              echo "  + updated minSdkVersion to 21 in $BG"
+            fi
+
+            # 3) Strip the `package="..."` attribute from AndroidManifest.xml (AGP 8 forbids it)
             if [ -f "$MF" ] && grep -qE 'package="[^"]+"' "$MF"; then
               sed -i.bak -E 's|[[:space:]]*package="[^"]+"||g' "$MF"
               rm -f "$MF.bak"
