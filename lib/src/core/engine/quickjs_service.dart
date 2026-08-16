@@ -127,6 +127,40 @@ class QuickJsService {
     return null;
   }
 
+  String? extractBaseUrl(String jsCode) {
+    final match = RegExp(r'''["']baseUrl["']\s*:\s*["']([^"']+)["']''').firstMatch(jsCode);
+    return match?.group(1);
+  }
+
+  Future<String> fetchUrlHtml(String url, {Map<String, String>? headers}) async {
+    if (url.isEmpty || !url.startsWith('http')) return '';
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 8);
+      final request = await client.getUrl(Uri.parse(url));
+
+      headers?.forEach((k, v) {
+        request.headers.set(k, v);
+      });
+
+      if (headers == null || !headers.keys.any((k) => k.toLowerCase() == 'user-agent')) {
+        request.headers.set(
+          'User-Agent',
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        );
+      }
+
+      final response = await request.close();
+      if (response.statusCode >= 200 && response.statusCode < 400) {
+        final body = await response.transform(utf8.decoder).join();
+        client.close();
+        return body;
+      }
+      client.close();
+    } catch (_) {}
+    return '';
+  }
+
   /// ── SCRAPE SOURCE MANGA DIRECTLY ON DEVICE ───────────────────
   Future<List<Map<String, dynamic>>> fetchSourceMangaLocal(
     String sourceName, {
@@ -144,10 +178,23 @@ class QuickJsService {
           ? 'searchManga'
           : (isLatest ? 'getLatestUpdates' : 'getPopularManga');
 
+      final baseUrl = extractBaseUrl(jsCode);
+      String initialHtml = '';
+      if (baseUrl != null && baseUrl.isNotEmpty) {
+        String targetUrl = baseUrl;
+        if (sourceName.toLowerCase().contains('weeb central') || sourceName.toLowerCase().contains('weebcentral')) {
+          targetUrl = '$baseUrl/search/data?sort=Popularity&order=Ascending&official=Any&display_mode=Full%20Display&limit=32&offset=${(page - 1) * 32}';
+        } else if (sourceName.toLowerCase().contains('mangakatana')) {
+          targetUrl = '$baseUrl/manga/page/$page';
+        }
+        initialHtml = await fetchUrlHtml(targetUrl, headers: {'Referer': '$baseUrl/'});
+      }
+
       final result = await evaluateExtensionScript(
         jsCode,
         functionName,
         searchQuery != null && searchQuery.isNotEmpty ? [searchQuery, page] : [page],
+        initialHtml: initialHtml,
       );
 
       if (result.containsKey('list') && result['list'] is List) {
@@ -168,10 +215,17 @@ class QuickJsService {
     }
 
     try {
+      final baseUrl = extractBaseUrl(jsCode);
+      String initialHtml = '';
+      if (chapterUrl.startsWith('http')) {
+        initialHtml = await fetchUrlHtml(chapterUrl, headers: baseUrl != null ? {'Referer': '$baseUrl/'} : null);
+      }
+
       final result = await evaluateExtensionScript(
         jsCode,
         'getPageList',
         [chapterUrl],
+        initialHtml: initialHtml,
       );
 
       if (result.containsKey('pages') && result['pages'] is List) {
@@ -184,7 +238,12 @@ class QuickJsService {
     return [];
   }
 
-  Future<Map<String, dynamic>> evaluateExtensionScript(String jsCode, String functionName, List<dynamic> args) async {
+  Future<Map<String, dynamic>> evaluateExtensionScript(
+    String jsCode,
+    String functionName,
+    List<dynamic> args, {
+    String initialHtml = '',
+  }) async {
     if (_engine == null) {
       await initialize();
     }
@@ -209,7 +268,7 @@ class QuickJsService {
     }
 
     try {
-      const mangayomiHeader = '''
+      final mangayomiHeader = '''
         var SharedPreferences = (typeof SharedPreferences !== 'undefined') ? SharedPreferences : class SharedPreferences {
           constructor() { this._map = {}; }
           get(key) { return this._map[key]; }
@@ -232,14 +291,18 @@ class QuickJsService {
             var src = (typeof mangayomiSources !== 'undefined' && Array.isArray(mangayomiSources) && mangayomiSources.length > 0)
               ? mangayomiSources[0]
               : {};
+            var srcUrl = (src && (src.baseUrl || src.url)) ? (src.baseUrl || src.url) : '';
             this.source = Object.assign({
-              baseUrl: '',
-              apiUrl: '',
-              urls: [],
+              baseUrl: srcUrl,
+              apiUrl: srcUrl,
+              urls: srcUrl ? [srcUrl] : [''],
               name: '',
               lang: 'en',
               id: 0
             }, src);
+            if (!this.source.urls || !Array.isArray(this.source.urls) || this.source.urls.length === 0) {
+              this.source.urls = [this.source.baseUrl || ''];
+            }
             this.preferences = new SharedPreferences();
           }
           getFilterList() {
@@ -255,9 +318,21 @@ class QuickJsService {
           getPreference(key, def) { return def !== undefined ? def : null; }
         };
 
+               var __initialPageHtml = ${jsonEncode(initialHtml)};
+
         var Client = (typeof Client !== 'undefined') ? Client : class Client {
-          get(url, headers) { return { body: '', statusCode: 200, headers: headers || {} }; }
-          post(url, headers, body) { return { body: '', statusCode: 200, headers: headers || {} }; }
+          async get(url, headers) {
+            if (typeof __initialPageHtml !== 'undefined' && __initialPageHtml.length > 0) {
+              return { body: __initialPageHtml, statusCode: 200, headers: headers || {} };
+            }
+            return { body: '', statusCode: 200, headers: headers || {} };
+          }
+          async post(url, headers, body) {
+            if (typeof __initialPageHtml !== 'undefined' && __initialPageHtml.length > 0) {
+              return { body: __initialPageHtml, statusCode: 200, headers: headers || {} };
+            }
+            return { body: '', statusCode: 200, headers: headers || {} };
+          }
         };
 
         var Document = (typeof Document !== 'undefined') ? Document : class Document {
@@ -294,7 +369,11 @@ class QuickJsService {
           } else if (_inst && '$functionName' === 'getLatestUpdates' && typeof _inst.getLatestUpdates === 'function') {
             return JSON.stringify(_inst.getLatestUpdates(${args.map((a) => jsonEncode(a)).join(', ')}));
           } else if (_inst && '$functionName' === 'searchManga' && typeof _inst.search === 'function') {
-            return JSON.stringify(_inst.search(${args.map((a) => jsonEncode(a)).join(', ')}));
+            var filterList = [];
+            if (typeof _inst.getFilterList === 'function') {
+              try { filterList = _inst.getFilterList() || []; } catch(e) {}
+            }
+            return JSON.stringify(_inst.search(${args.map((a) => jsonEncode(a)).join(', ')}, filterList));
           }
 
           return JSON.stringify({ error: 'Function $functionName not found' });
