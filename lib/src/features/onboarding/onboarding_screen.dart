@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/db/isar_service.dart';
-import '../../core/engine/quickjs_service.dart';
 import '../../core/engine/repo_manager.dart';
 import '../../core/engine/source_migration_service.dart';
 import '../../core/logging/logger_service.dart';
@@ -147,24 +146,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         }
       }
 
-      // Collect available JS extensions from user repos & bundled assets
-      final availableExtensions = <String>{
-        ...QuickJsService.instance.getInstalledExtensionNames(),
-        'mangadex.js',
-        'weeb_central.js',
-        'mangakatana.js',
-        'mangafire.js',
-        'webtoons.js',
-        'readcomiconline.js',
-        'readcomicsonline.js',
-        'mangafreak.js',
-        'mangakakalot.js',
-        'asura_scans.js',
-      };
+      // Download and install JS scrapers ONLY for installed server sources
+      final installedSources = await RepoManager.instance.downloadAndInstallMatchingSources(
+        serverSourceNames: serverSources.map((s) => s.name).toList(),
+        userRepoUrls: _userRepoUrls,
+      );
 
       final migrationResult = SourceMigrationService.instance.migrateServerSources(
         serverSourceNames: serverSources.map((s) => s.name).toList(),
-        availableJsExtensions: availableExtensions.toList(),
+        availableJsExtensions: installedSources,
       );
 
       setState(() {

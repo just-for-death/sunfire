@@ -5,8 +5,10 @@ import '../db/models/chapter.dart';
 import '../db/models/manga.dart';
 import '../db/models/sync_record.dart';
 import '../engine/quickjs_service.dart';
+import '../engine/repo_manager.dart';
 import '../engine/source_migration_service.dart';
 import '../logging/logger_service.dart';
+import '../services/settings_service.dart';
 import 'graphql_client_service.dart';
 
 class SyncEngine {
@@ -130,27 +132,23 @@ class SyncEngine {
             );
           }).toList();
 
-          final installedLocalJs = QuickJsService.instance.getInstalledExtensionNames();
-          final availableRepoExtensions = <String>[
-            ...installedLocalJs,
-            'mangadex.js',
-            'weeb_central.js',
-            'mangakatana.js',
-            'mangafire.js',
-            'webtoons.js',
-            'readcomiconline.js',
-            'readcomicsonline.js',
-            'mangafreak.js',
-            'mangakakalot.js',
-            'asura_scans.js',
-          ];
+          final userRepos = SettingsService.instance.customRepos.isNotEmpty
+              ? SettingsService.instance.customRepos
+              : RepoManager.defaultRepos.map((r) => r['url']!).toList();
 
+          // Auto-download and install matching JS scrapers from user repos
+          await RepoManager.instance.downloadAndInstallMatchingSources(
+            serverSourceNames: serverSources.map((s) => s.name).toList(),
+            userRepoUrls: userRepos,
+          );
+
+          final installedLocalJs = QuickJsService.instance.getInstalledExtensionNames();
           final libraryManga = await IsarService.instance.getLibraryManga();
 
           final report = SourceMigrationService.instance.syncAndReplicateServerSources(
             currentServerInstalledSources: serverSources,
             currentlyInstalledLocalJs: installedLocalJs,
-            availableMangayomiRepoExtensions: availableRepoExtensions,
+            availableMangayomiRepoExtensions: installedLocalJs,
             currentLibraryManga: libraryManga,
           );
 

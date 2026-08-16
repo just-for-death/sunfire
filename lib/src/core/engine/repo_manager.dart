@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import '../logging/logger_service.dart';
+import 'quickjs_service.dart';
+import 'source_migration_service.dart';
 
 class RepoSourceItem {
   final String name;
@@ -107,6 +109,21 @@ class RepoManager {
     }
   }
 
+  Future<List<RepoSourceItem>> fetchCombinedRepoSources(List<String> repoUrls) async {
+    final combined = <RepoSourceItem>[];
+    final seen = <String>{};
+    for (final url in repoUrls) {
+      final items = await fetchRepoSources(url);
+      for (final item in items) {
+        final key = '${item.name}_${item.lang}'.toLowerCase();
+        if (seen.add(key)) {
+          combined.add(item);
+        }
+      }
+    }
+    return combined;
+  }
+
   Future<String?> downloadJsSourceCode(String jsUrl) async {
     try {
       final response = await _dio.get<String>(jsUrl);
@@ -115,5 +132,40 @@ class RepoManager {
       await LoggerService.instance.logError('Failed to download JS source code from $jsUrl: $e', exception: e, stackTrace: stack, category: 'RepoManager');
       return null;
     }
+  }
+
+  /// Finds and downloads JS scrapers ONLY for sources installed on the user's server.
+  Future<List<String>> downloadAndInstallMatchingSources({
+    required List<String> serverSourceNames,
+    required List<String> userRepoUrls,
+  }) async {
+    final repoSources = await fetchCombinedRepoSources(userRepoUrls);
+    final installed = <String>[];
+
+    for (final serverName in serverSourceNames) {
+      final cleanServerName = SourceMigrationService.instance.normalizeSourceName(serverName);
+
+      for (final item in repoSources) {
+        final cleanRepoName = SourceMigrationService.instance.normalizeSourceName(item.name);
+        final isMatch = cleanRepoName == cleanServerName ||
+            cleanRepoName.replaceAll('_', '') == cleanServerName.replaceAll('_', '') ||
+            (cleanServerName.length > 4 && cleanRepoName.startsWith(cleanServerName)) ||
+            (cleanRepoName.length > 4 && cleanServerName.startsWith(cleanRepoName));
+
+        if (isMatch && item.sourceCodeUrl.isNotEmpty) {
+          final jsCode = await downloadJsSourceCode(item.sourceCodeUrl);
+          if (jsCode != null && jsCode.isNotEmpty) {
+            await QuickJsService.instance.saveLocalExtension(item.name, jsCode);
+            installed.add(item.name);
+            await LoggerService.instance.logInfo(
+              '✓ Auto-installed local JS scraper for server source: ${item.name} (${item.lang})',
+              'RepoManager',
+            );
+          }
+          break;
+        }
+      }
+    }
+    return installed;
   }
 }
