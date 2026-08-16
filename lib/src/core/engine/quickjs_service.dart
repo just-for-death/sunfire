@@ -10,6 +10,7 @@ class QuickJsService {
   FlutterQjs? _engine;
 
   final Map<String, String> _installedJsSources = {};
+  final Map<String, String> _canonicalDisplayNames = {};
 
   QuickJsService._();
 
@@ -37,15 +38,7 @@ class QuickJsService {
       candidateDirs.add('${appDir.path}/extensions');
     } catch (_) {}
 
-    // Fallback directories for Linux / desktop & asset locations
-    candidateDirs.addAll([
-      '/home/zoro/.local/share/com.sunfire.app/extensions',
-      '/home/zoro/.local/share/com.sunfire.sunfire/extensions',
-      '/home/zoro/.local/share/com.catalyst.catalyst/extensions',
-      '/home/zoro/.local/share/com.suwayomi.catalyst/extensions',
-      '/home/zoro/.local/share/dev.loopy.catalyst/extensions',
-      'assets/extensions',
-    ]);
+    candidateDirs.add('/home/zoro/.local/share/com.sunfire.sunfire/extensions');
 
     for (final dirPath in candidateDirs) {
       try {
@@ -56,8 +49,10 @@ class QuickJsService {
             if (f is File && f.path.endsWith('.js')) {
               final fileName = f.uri.pathSegments.last.replaceAll('.js', '');
               final code = await f.readAsString();
-              _installedJsSources[fileName.toLowerCase()] = code;
-              _installedJsSources[fileName.replaceAll('_', ' ').toLowerCase()] = code;
+              final cleanKey = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
+              final displayName = fileName.replaceAll('_', ' ').trim();
+              _installedJsSources[cleanKey] = code;
+              _canonicalDisplayNames[cleanKey] = displayName;
             }
           }
         }
@@ -66,9 +61,14 @@ class QuickJsService {
   }
 
   Future<bool> saveLocalExtension(String sourceName, String jsCode) async {
-    final cleanName = sourceName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
+    final cleanName = sourceName
+        .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
+        .toLowerCase();
+    final displayName = sourceName.replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '').trim();
+
     _installedJsSources[cleanName] = jsCode;
-    _installedJsSources[sourceName.toLowerCase()] = jsCode;
+    _canonicalDisplayNames[cleanName] = displayName;
 
     try {
       final appDir = await getApplicationDocumentsDirectory();
@@ -80,7 +80,26 @@ class QuickJsService {
       await file.writeAsString(jsCode);
       return true;
     } catch (_) {
-      // In-memory cache is already updated
+      return true;
+    }
+  }
+
+  Future<bool> deleteLocalExtension(String sourceName) async {
+    final cleanName = sourceName
+        .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
+        .toLowerCase();
+    _installedJsSources.remove(cleanName);
+    _canonicalDisplayNames.remove(cleanName);
+
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final file = File('${appDir.path}/extensions/$cleanName.js');
+      if (await file.exists()) {
+        await file.delete();
+      }
+      return true;
+    } catch (_) {
       return true;
     }
   }
@@ -89,15 +108,9 @@ class QuickJsService {
     return getExtensionCode(sourceName) != null;
   }
 
-  /// Returns the display names of all locally installed JS extensions.
+  /// Returns the canonical display names of all locally installed JS extensions.
   List<String> getInstalledExtensionNames() {
-    final seen = <String>{};
-    final names = <String>[];
-    for (final key in _installedJsSources.keys) {
-      final display = key.replaceAll('_', ' ').trim();
-      if (seen.add(display)) names.add(display);
-    }
-    return names;
+    return _canonicalDisplayNames.values.toSet().toList();
   }
 
   /// Returns the raw JS source code for a named extension, or null if not installed.
