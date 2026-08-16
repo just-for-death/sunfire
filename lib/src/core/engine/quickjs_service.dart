@@ -210,13 +210,32 @@ class QuickJsService {
 
     try {
       const mangayomiHeader = '''
+        var SharedPreferences = (typeof SharedPreferences !== 'undefined') ? SharedPreferences : class SharedPreferences {
+          constructor() { this._map = {}; }
+          get(key) { return this._map[key]; }
+          set(key, val) { this._map[key] = val; }
+          getString(key, def) { return this._map[key] !== undefined ? String(this._map[key]) : (def !== undefined ? def : ''); }
+          getBool(key, def) { return this._map[key] !== undefined ? Boolean(this._map[key]) : (def !== undefined ? def : false); }
+          getInt(key, def) { return this._map[key] !== undefined ? Number(this._map[key]) : (def !== undefined ? def : 0); }
+          setString(key, val) { this._map[key] = String(val); }
+          setBool(key, val) { this._map[key] = Boolean(val); }
+          setInt(key, val) { this._map[key] = Number(val); }
+        };
+
+        var Preference = (typeof Preference !== 'undefined') ? Preference : class Preference {
+          constructor() {}
+          getPreference(key, def) { return def !== undefined ? def : ''; }
+        };
+
         var MProvider = (typeof MProvider !== 'undefined') ? MProvider : class MProvider {
           constructor() {
             this.source = (typeof mangayomiSources !== 'undefined' && mangayomiSources.length > 0)
               ? mangayomiSources[0]
               : { baseUrl: '' };
+            this.preferences = new SharedPreferences();
           }
           getFilterList() { return []; }
+          getPreference(key, def) { return def !== undefined ? def : null; }
         };
 
         var Client = (typeof Client !== 'undefined') ? Client : class Client {
