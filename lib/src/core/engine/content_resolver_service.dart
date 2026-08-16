@@ -131,7 +131,7 @@ class ContentResolverService {
     }
 
     // ── PRIORITY 2: SUWAYOMI SERVER ───────────────────────────────────────
-    if (GraphQLClientService.instance.isConfigured) {
+    if (GraphQLClientService.instance.isConfigured && !sourceId.startsWith('local_js_')) {
       try {
         final data = await GraphQLClientService.instance.fetchSourceManga(
           sourceId,
