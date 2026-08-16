@@ -7,10 +7,6 @@ import 'package:sunfire/src/core/db/models/sync_record.dart';
 import 'package:sunfire/src/core/engine/content_resolver_service.dart';
 import 'package:sunfire/src/core/engine/quickjs_service.dart';
 import 'package:sunfire/src/core/sync/graphql_client_service.dart';
-import 'package:sunfire/src/core/sync/sync_engine.dart';
-import 'package:sunfire/src/features/browse/browse_screen.dart';
-import 'package:sunfire/src/features/history/history_screen.dart';
-import 'package:sunfire/src/features/library/library_screen.dart';
 import 'package:sunfire/src/features/onboarding/onboarding_screen.dart';
 import 'package:sunfire/src/features/updates/updates_screen.dart';
 
