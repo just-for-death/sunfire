@@ -11,46 +11,57 @@ import 'features/reader/reader_screen.dart';
 import 'features/stats/stats_screen.dart';
 import 'main_shell.dart';
 
-class SunfireApp extends StatelessWidget {
+class SunfireApp extends StatefulWidget {
   const SunfireApp({super.key});
 
-  static GoRouter createRouter() => GoRouter(
-    initialLocation: SettingsService.instance.onboardingCompleted ? '/library' : '/onboarding',
-    routes: [
-      GoRoute(
-        path: '/onboarding',
-        builder: (context, state) => const OnboardingScreen(),
-      ),
-      GoRoute(
-        path: '/library',
-        builder: (context, state) => const MainShell(),
-      ),
-      GoRoute(
-        path: '/downloads',
-        builder: (context, state) => const DownloadQueueScreen(),
-      ),
-      GoRoute(
-        path: '/stats',
-        builder: (context, state) => const StatsScreen(),
-      ),
-      GoRoute(
-        path: '/manga/:id',
-        builder: (context, state) {
-          final idStr = state.pathParameters['id'] ?? '0';
-          final id = int.tryParse(idStr) ?? 0;
-          return MangaDetailScreen(mangaServerId: id);
-        },
-      ),
-      GoRoute(
-        path: '/reader/:id',
-        builder: (context, state) {
-          final idStr = state.pathParameters['id'] ?? '0';
-          final id = int.tryParse(idStr) ?? 0;
-          return ReaderScreen(chapterServerId: id);
-        },
-      ),
-    ],
-  );
+  @override
+  State<SunfireApp> createState() => _SunfireAppState();
+}
+
+class _SunfireAppState extends State<SunfireApp> {
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    _router = GoRouter(
+      initialLocation: SettingsService.instance.onboardingCompleted ? '/library' : '/onboarding',
+      routes: [
+        GoRoute(
+          path: '/onboarding',
+          builder: (context, state) => const OnboardingScreen(),
+        ),
+        GoRoute(
+          path: '/library',
+          builder: (context, state) => const MainShell(),
+        ),
+        GoRoute(
+          path: '/downloads',
+          builder: (context, state) => const DownloadQueueScreen(),
+        ),
+        GoRoute(
+          path: '/stats',
+          builder: (context, state) => const StatsScreen(),
+        ),
+        GoRoute(
+          path: '/manga/:id',
+          builder: (context, state) {
+            final idStr = state.pathParameters['id'] ?? '0';
+            final id = int.tryParse(idStr) ?? 0;
+            return MangaDetailScreen(mangaServerId: id);
+          },
+        ),
+        GoRoute(
+          path: '/reader/:id',
+          builder: (context, state) {
+            final idStr = state.pathParameters['id'] ?? '0';
+            final id = int.tryParse(idStr) ?? 0;
+            return ReaderScreen(chapterServerId: id);
+          },
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +87,7 @@ class SunfireApp extends StatelessWidget {
               debugShowCheckedModeBanner: false,
               themeMode: ThemeMode.dark,
               darkTheme: themeData,
-              routerConfig: createRouter(),
+              routerConfig: _router,
             );
           },
         );
