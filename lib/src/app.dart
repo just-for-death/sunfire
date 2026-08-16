@@ -14,7 +14,7 @@ import 'main_shell.dart';
 class SunfireApp extends StatelessWidget {
   const SunfireApp({super.key});
 
-  static final GoRouter _router = GoRouter(
+  static GoRouter createRouter() => GoRouter(
     initialLocation: SettingsService.instance.onboardingCompleted ? '/library' : '/onboarding',
     routes: [
       GoRoute(
@@ -76,7 +76,7 @@ class SunfireApp extends StatelessWidget {
               debugShowCheckedModeBanner: false,
               themeMode: ThemeMode.dark,
               darkTheme: themeData,
-              routerConfig: _router,
+              routerConfig: createRouter(),
             );
           },
         );
