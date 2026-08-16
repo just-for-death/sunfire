@@ -27,9 +27,11 @@ void main() async {
       QuickJsService.instance.initialize();
       ImageTransportService.instance.initialize();
 
-      // Configure Suwayomi GraphQL client and SyncEngine
-      GraphQLClientService.instance.initialize(SettingsService.instance.serverUrl);
-      SyncEngine.instance.initialize();
+      // Configure Suwayomi GraphQL client and SyncEngine only after onboarding
+      if (SettingsService.instance.onboardingCompleted) {
+        GraphQLClientService.instance.initialize(SettingsService.instance.serverUrl);
+        SyncEngine.instance.initialize();
+      }
       await DownloadManagerService.instance.initialize();
 
       runApp(const SunfireApp());
