@@ -4,6 +4,7 @@ import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/engine/repo_manager.dart';
+import '../../core/engine/source_migration_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
@@ -77,7 +78,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     }
 
     // ── STEP 2: Try fetching server sources (optional, 4s timeout) ──
-    final List<Map<String, dynamic>> serverSources = [];
+    final List<ServerSourceItem> serverSourceItems = [];
+    final Map<String, String> serverIconMap = {};
     try {
       if (GraphQLClientService.instance.isConfigured) {
         final data = await GraphQLClientService.instance
@@ -90,21 +92,16 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               final m = n as Map<String, dynamic>;
               final id = m['id'].toString();
               final name = m['name'] as String? ?? 'Source';
-              final displayName = m['displayName'] as String? ?? name;
               final rawIcon = m['iconUrl'] as String?;
               final iconUrl = (rawIcon != null && rawIcon.isNotEmpty)
                   ? (rawIcon.startsWith('http') ? rawIcon : '$serverUrl$rawIcon')
                   : '$serverUrl/api/v1/source/$id/icon';
-              serverSources.add({
-                'id': id,
-                'name': name,
-                'displayName': displayName,
-                'lang': m['lang'] as String? ?? 'en',
-                'supportsLatest': m['supportsLatest'] as bool? ?? true,
-                'isPinned': SettingsService.instance.isSourcePinned(id),
-                'iconUrl': iconUrl,
-                'isLocalJs': false,
-              });
+              serverSourceItems.add(ServerSourceItem(
+                id: id,
+                name: name,
+                lang: m['lang'] as String? ?? 'en',
+              ));
+              serverIconMap[id] = iconUrl;
             }
           }
         }
@@ -113,12 +110,27 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       // Server unreachable — local JS sources still work
     }
 
-    // ── STEP 3: Merge local JS first, then server (deduped by name) ──
-    final merged = [...localJsSources];
-    for (final s in serverSources) {
-      final alreadyPresent = merged.any(
-          (m) => (m['name'] as String).toLowerCase() == (s['name'] as String).toLowerCase());
-      if (!alreadyPresent) merged.add(s);
+    // ── STEP 3: Deduplicate using SourceMigrationService (Zero UI duplication) ──
+    final filteredDisplay = SourceMigrationService.instance.filterDisplaySources(
+      localInstalledExtensions: installedNames,
+      serverInstalledSources: serverSourceItems,
+    );
+
+    final merged = <Map<String, dynamic>>[];
+    for (final item in filteredDisplay) {
+      final isLocal = item.isLocalJs;
+      final iconUrl = isLocal ? '' : (serverIconMap[item.id] ?? '');
+      merged.add({
+        'id': item.id,
+        'name': item.name,
+        'displayName': isLocal ? '${item.name} ⚡' : '${item.name} ☁',
+        'lang': item.lang,
+        'supportsLatest': true,
+        'isPinned': SettingsService.instance.isSourcePinned(item.id),
+        'iconUrl': iconUrl,
+        'isLocalJs': isLocal,
+        'isServerFallback': item.isServerFallback,
+      });
     }
 
     setState(() {
@@ -248,6 +260,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final id = ext['id'] as String;
     final isJs = ext['isJs'] as bool? ?? false;
     final sourceCodeUrl = ext['sourceCodeUrl'] as String? ?? '';
+    String? customStatusMessage;
 
     setState(() {
       ext['isInstalled'] = !isInstalled;
@@ -259,6 +272,32 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           final code = await RepoManager.instance.downloadJsSourceCode(sourceCodeUrl);
           if (code != null) {
             await QuickJsService.instance.saveLocalExtension(name, code);
+
+            // Check if available on server and trigger dual install
+            final serverExtensionNames = _extensionList
+                .where((e) => e['isJs'] == false)
+                .map((e) => e['name'] as String)
+                .toList();
+
+            final dualResult = SourceMigrationService.instance.checkAndInstallSourceDualChannel(
+              jsExtensionName: name,
+              serverAvailableSourceNames: serverExtensionNames,
+            );
+
+            customStatusMessage = dualResult.statusMessage;
+
+            if (dualResult.isAvailableOnServer && GraphQLClientService.instance.isConfigured) {
+              final serverExt = _extensionList.firstWhere(
+                (e) => e['name'] == dualResult.serverSourceName,
+                orElse: () => {},
+              );
+              if (serverExt.isNotEmpty && serverExt['id'] != null) {
+                await GraphQLClientService.instance.updateExtension(
+                  serverExt['id'].toString(),
+                  'INSTALL',
+                );
+              }
+            }
           }
         }
       } else if (GraphQLClientService.instance.isConfigured) {
@@ -266,9 +305,16 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       }
     } catch (_) {}
 
+    await _fetchServerSources();
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isInstalled ? 'Uninstalled $name' : 'Installed $name (Ready for on-device scraping)')),
+        SnackBar(
+          content: Text(
+            customStatusMessage ??
+                (isInstalled ? 'Uninstalled $name' : 'Installed $name (Ready for on-device scraping)'),
+          ),
+        ),
       );
     }
   }
