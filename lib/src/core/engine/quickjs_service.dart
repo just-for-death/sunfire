@@ -271,11 +271,11 @@ class QuickJsService {
       final mangayomiHeader = '''
         var SharedPreferences = (typeof SharedPreferences !== 'undefined') ? SharedPreferences : class SharedPreferences {
           constructor() { this._map = {}; }
-          get(key) { return this._map[key]; }
+          get(key) { return this._map[key] !== undefined ? this._map[key] : ''; }
           set(key, val) { this._map[key] = val; }
-          getString(key, def) { return this._map[key] !== undefined ? String(this._map[key]) : (def !== undefined ? def : ''); }
-          getBool(key, def) { return this._map[key] !== undefined ? Boolean(this._map[key]) : (def !== undefined ? def : false); }
-          getInt(key, def) { return this._map[key] !== undefined ? Number(this._map[key]) : (def !== undefined ? def : 0); }
+          getString(key, def) { return this._map[key] !== undefined ? String(this._map[key]) : (def !== undefined && def !== null ? String(def) : ''); }
+          getBool(key, def) { return this._map[key] !== undefined ? Boolean(this._map[key]) : (def !== undefined && def !== null ? Boolean(def) : false); }
+          getInt(key, def) { return this._map[key] !== undefined ? Number(this._map[key]) : (def !== undefined && def !== null ? Number(def) : 0); }
           setString(key, val) { this._map[key] = String(val); }
           setBool(key, val) { this._map[key] = Boolean(val); }
           setInt(key, val) { this._map[key] = Number(val); }
@@ -283,7 +283,7 @@ class QuickJsService {
 
         var Preference = (typeof Preference !== 'undefined') ? Preference : class Preference {
           constructor() {}
-          getPreference(key, def) { return def !== undefined ? def : ''; }
+          getPreference(key, def) { return def !== undefined && def !== null ? def : ''; }
         };
 
         var MProvider = (typeof MProvider !== 'undefined') ? MProvider : class MProvider {
@@ -315,7 +315,9 @@ class QuickJsService {
               { type_name: 'GroupFilter', name: 'Genre', state: [] }
             ];
           }
-          getPreference(key, def) { return def !== undefined ? def : null; }
+          getPreference(key, def) {
+            return this.preferences.get(key) || (def !== undefined && def !== null ? def : '');
+          }
         };
 
                var __initialPageHtml = ${jsonEncode(initialHtml)};
