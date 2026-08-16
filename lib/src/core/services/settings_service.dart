@@ -17,8 +17,9 @@ class SettingsService extends ChangeNotifier {
   }
 
   // ── ONBOARDING & SERVER ──────────────────────────────────
-  bool get onboardingCompleted => _prefs?.getBool('onboarding_completed') ?? false;
+  bool get onboardingCompleted => _prefs?.getBool('sunfire_onboarding_completed') ?? _prefs?.getBool('onboarding_completed') ?? false;
   set onboardingCompleted(bool value) {
+    _prefs?.setBool('sunfire_onboarding_completed', value);
     _prefs?.setBool('onboarding_completed', value);
     notifyListeners();
   }
