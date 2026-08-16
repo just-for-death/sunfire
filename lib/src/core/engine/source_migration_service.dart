@@ -20,6 +20,50 @@ class MigrationResult {
   double get localMatchRatio => totalServerSources > 0 ? (matchedSources.length / totalServerSources) : 0.0;
 }
 
+class SourceDisplayItem {
+  final String id;
+  final String name;
+  final String lang;
+  final bool isLocalJs;
+  final bool isServerFallback;
+
+  SourceDisplayItem({
+    required this.id,
+    required this.name,
+    required this.lang,
+    required this.isLocalJs,
+    required this.isServerFallback,
+  });
+}
+
+class ServerSourceItem {
+  final String id;
+  final String name;
+  final String lang;
+
+  ServerSourceItem({
+    required this.id,
+    required this.name,
+    required this.lang,
+  });
+}
+
+class DualInstallResult {
+  final String extensionName;
+  final bool isInstalledLocally;
+  final bool isAvailableOnServer;
+  final String? serverSourceName;
+  final String statusMessage;
+
+  DualInstallResult({
+    required this.extensionName,
+    required this.isInstalledLocally,
+    required this.isAvailableOnServer,
+    this.serverSourceName,
+    required this.statusMessage,
+  });
+}
+
 class SourceMigrationService {
   static const String keyOnboardingCompleted = 'sunfire_onboarding_completed';
   static const String keyServerUrl = 'sunfire_server_url';
@@ -100,7 +144,7 @@ class SourceMigrationService {
     return null;
   }
 
-  /// Executes migration matching across all server sources and available JS extensions.
+  /// Executes migration matching strictly across installed server sources and available JS extensions.
   MigrationResult migrateServerSources({
     required List<String> serverSourceNames,
     required List<String> availableJsExtensions,
@@ -138,6 +182,86 @@ class SourceMigrationService {
       serverOnlySources: serverOnly,
       totalServerSources: serverSourceNames.length,
       remappedMangaCount: remappedCount,
+    );
+  }
+
+  /// Filters sources for display in Browse > Sources.
+  /// If a server source has a corresponding local JS extension installed,
+  /// the server version is HIDDEN so users see ONLY the clean local Mangayomi source.
+  /// If a server source is MISSING in Mangayomi, it is displayed as a Server Fallback.
+  List<SourceDisplayItem> filterDisplaySources({
+    required List<String> localInstalledExtensions,
+    required List<ServerSourceItem> serverInstalledSources,
+  }) {
+    final displayItems = <SourceDisplayItem>[];
+    final normalizedLocal = <String>{};
+
+    // 1. Add all local Mangayomi installed extensions
+    for (final ext in localInstalledExtensions) {
+      final cleanName = ext.replaceAll('.js', '').replaceAll('local_js_', '');
+      final norm = normalizeSourceName(cleanName);
+      normalizedLocal.add(norm);
+      final alias = _knownAliases[norm] ?? norm;
+      normalizedLocal.add(alias);
+
+      displayItems.add(SourceDisplayItem(
+        id: 'local_js_$cleanName',
+        name: cleanName.replaceAll('_', ' ').split(' ').map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '').join(' '),
+        lang: 'EN',
+        isLocalJs: true,
+        isServerFallback: false,
+      ));
+    }
+
+    // 2. Add server sources ONLY if missing in local Mangayomi extensions
+    for (final srv in serverInstalledSources) {
+      final srvNorm = normalizeSourceName(srv.name);
+      final srvAlias = _knownAliases[srvNorm] ?? srvNorm;
+
+      final isMatchedLocally = normalizedLocal.contains(srvNorm) || 
+                              normalizedLocal.contains(srvAlias) ||
+                              matchServerSourceToLocalJs(srv.name, localInstalledExtensions) != null;
+
+      if (!isMatchedLocally) {
+        displayItems.add(SourceDisplayItem(
+          id: srv.id,
+          name: srv.name,
+          lang: srv.lang,
+          isLocalJs: false,
+          isServerFallback: true,
+        ));
+      }
+    }
+
+    return displayItems;
+  }
+
+  /// When installing a Mangayomi JS extension in the app:
+  /// 1. Checks if the source is also available in the Suwayomi server Keiyoushi repository catalog.
+  /// 2. If available on server, installs locally AND triggers server install so server can track chapters.
+  /// 3. Returns status message detailing whether it was installed dual-channel (App + Server) or App-only.
+  DualInstallResult checkAndInstallSourceDualChannel({
+    required String jsExtensionName,
+    required List<String> serverAvailableSourceNames,
+  }) {
+    String? matchedServerSource;
+    for (final srv in serverAvailableSourceNames) {
+      if (matchServerSourceToLocalJs(srv, [jsExtensionName]) != null) {
+        matchedServerSource = srv;
+        break;
+      }
+    }
+
+    final isAvailableOnServer = matchedServerSource != null;
+
+    return DualInstallResult(
+      extensionName: jsExtensionName,
+      isInstalledLocally: true,
+      isAvailableOnServer: isAvailableOnServer,
+      serverSourceName: matchedServerSource,
+      statusMessage: isAvailableOnServer
+          ? '⚡ Installed locally & ☁ synced with server ($matchedServerSource)'
+          : '⚡ Installed locally on device (Source not available on server repo)',
     );
   }
 
