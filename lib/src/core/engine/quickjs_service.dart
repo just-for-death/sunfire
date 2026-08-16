@@ -242,7 +242,16 @@ class QuickJsService {
             }, src);
             this.preferences = new SharedPreferences();
           }
-          getFilterList() { return []; }
+          getFilterList() {
+            return [
+              { type_name: 'SelectFilter', name: 'Sort', state: 0, values: [{ name: 'Popular', value: 'popular' }] },
+              { type_name: 'SelectFilter', name: 'Order', state: 0, values: [{ name: 'Ascending', value: 'asc' }] },
+              { type_name: 'SelectFilter', name: 'Language', state: 0, values: [{ name: 'All', value: 'all' }] },
+              { type_name: 'GroupFilter', name: 'Status', state: [] },
+              { type_name: 'GroupFilter', name: 'Type', state: [] },
+              { type_name: 'GroupFilter', name: 'Genre', state: [] }
+            ];
+          }
           getPreference(key, def) { return def !== undefined ? def : null; }
         };
 
