@@ -14,7 +14,7 @@ void main() {
       );
 
       expect(find.text('Sunfire'), findsOneWidget);
-      expect(find.text('Local-first manga reader powered by QuickJS and Suwayomi sync.'), findsOneWidget);
+      expect(find.text('The Local-First Manga Experience'), findsOneWidget);
       expect(find.text('Get Started'), findsOneWidget);
     });
 
