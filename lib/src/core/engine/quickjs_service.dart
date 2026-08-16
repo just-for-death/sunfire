@@ -210,32 +210,33 @@ class QuickJsService {
 
     try {
       const mangayomiHeader = '''
-        if (typeof MProvider === 'undefined') {
-          class MProvider {
-            constructor() {
-              this.source = (typeof mangayomiSources !== 'undefined' && mangayomiSources.length > 0)
-                ? mangayomiSources[0]
-                : { baseUrl: '' };
-            }
-            getFilterList() { return []; }
+        var MProvider = (typeof MProvider !== 'undefined') ? MProvider : class MProvider {
+          constructor() {
+            this.source = (typeof mangayomiSources !== 'undefined' && mangayomiSources.length > 0)
+              ? mangayomiSources[0]
+              : { baseUrl: '' };
           }
-          class Client {
-            get(url, headers) { return { body: '', statusCode: 200, headers: headers || {} }; }
-            post(url, headers, body) { return { body: '', statusCode: 200, headers: headers || {} }; }
-          }
-          class Document {
-            constructor(html) { this.html = html || ''; }
-            querySelector(sel) { return new Element(this.html, sel); }
-            querySelectorAll(sel) { return [new Element(this.html, sel)]; }
-            select(sel) { return [new Element(this.html, sel)]; }
-          }
-          class Element {
-            constructor(html, sel) { this.html = html || ''; this.sel = sel || ''; this.text = ''; }
-            attr(name) { return ''; }
-            text() { return ''; }
-            selectFirst(sel) { return new Element(this.html, sel); }
-          }
-        }
+          getFilterList() { return []; }
+        };
+
+        var Client = (typeof Client !== 'undefined') ? Client : class Client {
+          get(url, headers) { return { body: '', statusCode: 200, headers: headers || {} }; }
+          post(url, headers, body) { return { body: '', statusCode: 200, headers: headers || {} }; }
+        };
+
+        var Document = (typeof Document !== 'undefined') ? Document : class Document {
+          constructor(html) { this.html = html || ''; }
+          querySelector(sel) { return new Element(this.html, sel); }
+          querySelectorAll(sel) { return [new Element(this.html, sel)]; }
+          select(sel) { return [new Element(this.html, sel)]; }
+        };
+
+        var Element = (typeof Element !== 'undefined') ? Element : class Element {
+          constructor(html, sel) { this.html = html || ''; this.sel = sel || ''; this.text = ''; }
+          attr(name) { return ''; }
+          text() { return ''; }
+          selectFirst(sel) { return new Element(this.html, sel); }
+        };
       ''';
 
       final script = '''
