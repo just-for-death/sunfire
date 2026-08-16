@@ -133,6 +133,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
     try {
       final items = <Map<String, dynamic>>[];
+      final seenKeys = <String>{};
 
       // 1. Fetch server-side Keiyoushi APK extensions via GraphQL (if reachable)
       if (GraphQLClientService.instance.isConfigured) {
@@ -146,6 +147,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             if (nodes != null) {
               for (final n in nodes) {
                 final map = n as Map<String, dynamic>;
+                final name = map['name'] as String? ?? 'Extension';
+                final lang = map['lang'] as String? ?? 'en';
+                final key = 'apk_${name}_$lang'.toLowerCase();
+                if (!seenKeys.add(key)) continue;
+
                 final rawIcon = map['iconUrl'] as String?;
                 final iconUrl = (rawIcon != null && rawIcon.isNotEmpty)
                     ? (rawIcon.startsWith('http') ? rawIcon : '$serverUrl$rawIcon')
@@ -153,8 +159,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
                 items.add({
                   'id': (map['pkgName'] ?? map['name']).toString(),
-                  'name': map['name'] as String? ?? 'Extension',
-                  'lang': map['lang'] as String? ?? 'en',
+                  'name': lang.toLowerCase() == 'en' || lang.isEmpty ? name : '$name (${lang.toUpperCase()})',
+                  'lang': lang,
                   'version': (map['versionName'] ?? map['version'] ?? '1.0.0').toString(),
                   'isInstalled': map['isInstalled'] as bool? ?? false,
                   'iconUrl': iconUrl,
@@ -169,9 +175,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       // 2. Fetch local JS repo extensions
       final jsList = await RepoManager.instance.fetchRepoSources(_selectedRepoUrl);
       for (final js in jsList) {
+        final key = 'js_${js.name}_${js.lang}'.toLowerCase();
+        if (!seenKeys.add(key)) continue;
+
         items.add({
           'id': '${js.name}_${js.lang}',
-          'name': js.name,
+          'name': js.lang.toLowerCase() == 'en' || js.lang.isEmpty ? js.name : '${js.name} (${js.lang.toUpperCase()})',
           'lang': js.lang,
           'version': js.version,
           'isInstalled': QuickJsService.instance.isLocalExtensionInstalled(js.name),
