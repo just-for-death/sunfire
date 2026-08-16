@@ -180,14 +180,58 @@ void main() {
     });
   });
 
+  group('CONTINUOUS SERVER SOURCE REPLICATION & MANGA RE-MAPPING', () {
+    test('8. Automatically detects newly installed server sources and installs local JS scrapers + remaps manga', () {
+      final currentlyInstalledLocalJs = ['mangadex.js'];
+
+      final currentServerSources = [
+        ServerSourceItem(id: '1001', name: 'MangaDex (EN)', lang: 'en'), // already local
+        ServerSourceItem(id: '1002', name: 'MangaKatana (EN)', lang: 'en'), // NEW server source with JS match
+        ServerSourceItem(id: '1003', name: 'Rare Unscraped Raw Server Source', lang: 'ja'), // NEW server source without JS match
+      ];
+
+      final availableRepoExtensions = [
+        'mangadex.js',
+        'weeb_central.js',
+        'mangakatana.js',
+        'asura_scans.js',
+      ];
+
+      final attachedLibraryManga = [
+        Manga()
+          ..title = 'Katana Manga'
+          ..sourceName = 'MangaKatana (EN)',
+        Manga()
+          ..title = 'Dex Manga'
+          ..sourceName = 'local_js_mangadex',
+      ];
+
+      final report = migrationService.syncAndReplicateServerSources(
+        currentServerInstalledSources: currentServerSources,
+        currentlyInstalledLocalJs: currentlyInstalledLocalJs,
+        availableMangayomiRepoExtensions: availableRepoExtensions,
+        currentLibraryManga: attachedLibraryManga,
+      );
+
+      expect(report.hasChanges, isTrue);
+      expect(report.newlyInstalledLocalScrapers, contains('mangakatana.js'));
+      expect(report.newlyAddedServerFallbacks, contains('Rare Unscraped Raw Server Source'));
+      expect(report.totalReplicatedManga, equals(1));
+
+      // Assert that manga attached to MangaKatana is re-mapped to local JS ID
+      final katanaManga = attachedLibraryManga.firstWhere((m) => m.title == 'Katana Manga');
+      expect(katanaManga.sourceName, equals('local_js_mangakatana'));
+    });
+  });
+
   group('ONBOARDING GATEKEEPER: One-Time Setup State', () {
-    test('8. Default state reports onboarding is NOT completed', () async {
+    test('9. Default state reports onboarding is NOT completed', () async {
       final prefs = await SharedPreferences.getInstance();
       final isCompleted = await migrationService.isOnboardingCompleted(prefs);
       expect(isCompleted, isFalse);
     });
 
-    test('9. Mark onboarding completed persists server URL, auth, and repos', () async {
+    test('10. Mark onboarding completed persists server URL, auth, and repos', () async {
       final prefs = await SharedPreferences.getInstance();
 
       await migrationService.markOnboardingCompleted(
@@ -207,7 +251,7 @@ void main() {
       );
     });
 
-    test('10. Reset onboarding allows re-running setup if user switches server in settings', () async {
+    test('11. Reset onboarding allows re-running setup if user switches server in settings', () async {
       final prefs = await SharedPreferences.getInstance();
 
       await migrationService.markOnboardingCompleted(
