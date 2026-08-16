@@ -54,17 +54,6 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
         page: _currentPage,
         searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
       );
-
-      if (_mangaList.isEmpty) {
-        _mangaList = List.generate(
-          18,
-          (i) => {
-            'id': 100 + i,
-            'title': '${widget.sourceName} ${_isLatestMode ? "Latest" : "Top"} ${(_currentPage - 1) * 18 + i + 1}',
-            'thumbnailUrl': null,
-          },
-        );
-      }
     } catch (e, stack) {
       await LoggerService.instance.logError('Failed to fetch source manga: $e', exception: e, stackTrace: stack, category: 'SourceGrid');
     } finally {
