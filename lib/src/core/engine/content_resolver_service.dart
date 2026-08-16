@@ -131,33 +131,55 @@ class ContentResolverService {
     }
 
     // ── PRIORITY 2: SUWAYOMI SERVER ───────────────────────────────────────
-    if (GraphQLClientService.instance.isConfigured && !sourceId.startsWith('local_js_')) {
+    if (GraphQLClientService.instance.isConfigured) {
       try {
-        final data = await GraphQLClientService.instance.fetchSourceManga(
-          sourceId,
-          isLatest: isLatest,
-          page: page,
-          searchQuery: searchQuery,
-        );
-        if (data != null && data.containsKey('fetchSourceManga')) {
-          final payload = data['fetchSourceManga'] as Map<String, dynamic>;
-          final nodes = payload['mangas'] as List<dynamic>?;
-          if (nodes != null) {
-            final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
-            return nodes.map((n) {
-              final map = n as Map<String, dynamic>;
-              final rawThumb = map['thumbnailUrl'] as String?;
-              final thumb = (rawThumb != null && rawThumb.isNotEmpty)
-                  ? (rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb')
-                  : null;
-              return {
-                'id': map['id'],
-                'title': map['title'] ?? 'Untitled',
-                'thumbnailUrl': thumb,
-                'author': map['author'],
-                'artist': map['artist'],
-              };
-            }).toList();
+        var queryServerId = sourceId;
+        if (queryServerId.startsWith('local_js_')) {
+          final sourcesData = await GraphQLClientService.instance.fetchSources();
+          if (sourcesData != null && sourcesData.containsKey('sources')) {
+            final nodes = sourcesData['sources']['nodes'] as List<dynamic>?;
+            if (nodes != null) {
+              for (final n in nodes) {
+                final map = n as Map<String, dynamic>;
+                final name = (map['name'] as String? ?? '').toLowerCase();
+                final disp = (map['displayName'] as String? ?? '').toLowerCase();
+                final target = sourceName.toLowerCase();
+                if (name == target || disp == target || name.contains(target) || target.contains(name)) {
+                  queryServerId = map['id'].toString();
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        if (!queryServerId.startsWith('local_js_')) {
+          final data = await GraphQLClientService.instance.fetchSourceManga(
+            queryServerId,
+            isLatest: isLatest,
+            page: page,
+            searchQuery: searchQuery,
+          );
+          if (data != null && data.containsKey('fetchSourceManga')) {
+            final payload = data['fetchSourceManga'] as Map<String, dynamic>;
+            final nodes = payload['mangas'] as List<dynamic>?;
+            if (nodes != null) {
+              final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
+              return nodes.map((n) {
+                final map = n as Map<String, dynamic>;
+                final rawThumb = map['thumbnailUrl'] as String?;
+                final thumb = (rawThumb != null && rawThumb.isNotEmpty)
+                    ? (rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb')
+                    : null;
+                return {
+                  'id': map['id'],
+                  'title': map['title'] ?? 'Untitled',
+                  'thumbnailUrl': thumb,
+                  'author': map['author'],
+                  'artist': map['artist'],
+                };
+              }).toList();
+            }
           }
         }
       } catch (e) {
