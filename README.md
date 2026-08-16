@@ -14,11 +14,10 @@
 
 ---
 
-## 🌟 Overview
+## 🌟 The Core Fundamental Principle (Local-First Independence)
 
-**Sunfire** is a next-generation local-first manga reader application designed to seamlessly bridge your self-hosted **[Suwayomi Server](https://github.com/Suwayomi/Suwayomi-Server)** backend with community source repositories.
-
-Featuring a fluid OLED dark aesthetic with dynamic accent theming, instant 2-step multi-source migration search, full offline chapter caching via Isar Database, and a versatile multi-mode reader (Continuous Webtoon, Paged LTR, and RTL Manga).
+1. **Initial Full Snapshot Hydration:** During the one-time onboarding setup, Sunfire links to your Suwayomi server. The server provides all past and present data (sources, library manga, categories, chapters, read states, bookmarks, history, and updates feed). Sunfire replicates 100% of this into local **Isar DB** and auto-installs matching on-device **Mangayomi JS scrapers**.
+2. **100% Server Independence:** Once hydrated, Sunfire becomes completely independent of the server. It browses, scrapes, reads, and logs history on-device without needing the server online. The server is strictly a central hub for backup and tracker sync when connected.
 
 ---
 
