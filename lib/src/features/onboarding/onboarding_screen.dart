@@ -63,7 +63,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final url = rawUrl.replaceAll(RegExp(r'/+$'), '');
       final auth = _serverAuthController.text.trim().isNotEmpty ? _serverAuthController.text.trim() : null;
 
-      SettingsService.instance.serverUrl = url;
       GraphQLClientService.instance.initialize(url, authToken: auth);
 
       final data = await GraphQLClientService.instance
@@ -430,7 +429,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 final rawUrl = _serverUrlController.text.trim();
                 final url = rawUrl.replaceAll(RegExp(r'/+$'), '');
                 final auth = _serverAuthController.text.trim().isNotEmpty ? _serverAuthController.text.trim() : null;
-                SettingsService.instance.serverUrl = url;
                 GraphQLClientService.instance.initialize(url, authToken: auth);
                 _pageController.nextPage(
                   duration: const Duration(milliseconds: 300),
