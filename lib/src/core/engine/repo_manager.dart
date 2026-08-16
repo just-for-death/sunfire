@@ -37,9 +37,10 @@ class RepoSourceItem {
 
 class RepoManager {
   static const List<Map<String, String>> defaultRepos = [
-    {'name': 'm2k3a (Primary)', 'url': 'https://m2k3a.github.io/mangayomi-extensions/index.json'},
+    {'name': 'kodjodevf (Official Core)', 'url': 'https://kodjodevf.github.io/mangayomi-extensions/index.json'},
+    {'name': 'm2k3a (Primary Community)', 'url': 'https://m2k3a.github.io/mangayomi-extensions/index.json'},
     {'name': 'Mallyd11 (Anime/Novel)', 'url': 'https://raw.githubusercontent.com/Mallyd11/mangayomi-anime-extensions/main/index.json'},
-    {'name': 'Swakshan (Cloudflare)', 'url': 'https://raw.githubusercontent.com/Swakshan/mangayomi-swak-extensions/refs/heads/main/index.json'},
+    {'name': 'Swakshan (Cloudflare Bypass)', 'url': 'https://raw.githubusercontent.com/Swakshan/mangayomi-swak-extensions/refs/heads/main/index.json'},
     {'name': 'gato404 (NSFW)', 'url': 'https://raw.githubusercontent.com/gato404/kegareta-sauces/refs/heads/main/index.json'},
   ];
 
