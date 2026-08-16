@@ -36,7 +36,8 @@ class RepoSourceItem {
 }
 
 class RepoManager {
-  static const List<Map<String, String>> defaultRepos = [
+  /// Development/Testing reference repos (Users provide their own repos in production)
+  static const List<Map<String, String>> devTestingRepos = [
     {'name': 'kodjodevf (Official Core)', 'url': 'https://kodjodevf.github.io/mangayomi-extensions/index.json'},
     {'name': 'm2k3a (Primary Community)', 'url': 'https://m2k3a.github.io/mangayomi-extensions/index.json'},
     {'name': 'Mallyd11 (Anime/Novel)', 'url': 'https://raw.githubusercontent.com/Mallyd11/mangayomi-anime-extensions/main/index.json'},
@@ -44,14 +45,28 @@ class RepoManager {
     {'name': 'gato404 (NSFW)', 'url': 'https://raw.githubusercontent.com/gato404/kegareta-sauces/refs/heads/main/index.json'},
   ];
 
+  static const List<Map<String, String>> defaultRepos = devTestingRepos;
+
   static RepoManager? _instance;
   final Dio _dio = Dio();
+  final List<Map<String, String>> _userRepos = [];
 
   RepoManager._();
 
   static RepoManager get instance {
     _instance ??= RepoManager._();
     return _instance!;
+  }
+
+  List<Map<String, String>> get userConfiguredRepos => List.unmodifiable(_userRepos);
+
+  void addUserRepo(String name, String url) {
+    _userRepos.removeWhere((r) => r['url'] == url);
+    _userRepos.add({'name': name, 'url': url});
+  }
+
+  void removeUserRepo(String url) {
+    _userRepos.removeWhere((r) => r['url'] == url);
   }
 
   /// Returns a cache-friendly key for a given repo URL
