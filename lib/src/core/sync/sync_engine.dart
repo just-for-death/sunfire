@@ -4,6 +4,8 @@ import '../db/models/category.dart';
 import '../db/models/chapter.dart';
 import '../db/models/manga.dart';
 import '../db/models/sync_record.dart';
+import '../engine/quickjs_service.dart';
+import '../engine/source_migration_service.dart';
 import '../logging/logger_service.dart';
 import 'graphql_client_service.dart';
 
@@ -109,7 +111,55 @@ class SyncEngine {
 
   Future<void> _pullServerState() async {
     await _syncCategories();
+    await _syncSourcesAndReplicate();
     await _performFullSync();
+  }
+
+  Future<void> _syncSourcesAndReplicate() async {
+    try {
+      final sourcesData = await GraphQLClientService.instance.fetchSources();
+      if (sourcesData != null && sourcesData.containsKey('sources')) {
+        final nodes = sourcesData['sources']['nodes'] as List<dynamic>?;
+        if (nodes != null) {
+          final serverSources = nodes.map((n) {
+            final m = n as Map<String, dynamic>;
+            return ServerSourceItem(
+              id: m['id'].toString(),
+              name: m['name'] as String? ?? '',
+              lang: m['lang'] as String? ?? 'en',
+            );
+          }).toList();
+
+          final installedLocalJs = QuickJsService.instance.getInstalledExtensionNames();
+          final availableRepoExtensions = <String>[
+            ...installedLocalJs,
+            'mangadex.js',
+            'weeb_central.js',
+            'mangakatana.js',
+            'mangafire.js',
+            'webtoons.js',
+            'readcomiconline.js',
+            'readcomicsonline.js',
+            'mangafreak.js',
+            'mangakakalot.js',
+            'asura_scans.js',
+          ];
+
+          final libraryManga = await IsarService.instance.getLibraryManga();
+
+          final report = SourceMigrationService.instance.syncAndReplicateServerSources(
+            currentServerInstalledSources: serverSources,
+            currentlyInstalledLocalJs: installedLocalJs,
+            availableMangayomiRepoExtensions: availableRepoExtensions,
+            currentLibraryManga: libraryManga,
+          );
+
+          if (report.totalReplicatedManga > 0) {
+            await IsarService.instance.saveMangas(libraryManga);
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _syncCategories() async {
