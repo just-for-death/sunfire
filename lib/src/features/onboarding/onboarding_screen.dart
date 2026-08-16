@@ -59,32 +59,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
 
     try {
-      final url = _serverUrlController.text.trim();
+      final rawUrl = _serverUrlController.text.trim();
+      final url = rawUrl.replaceAll(RegExp(r'/+$'), '');
+      final auth = _serverAuthController.text.trim().isNotEmpty ? _serverAuthController.text.trim() : null;
+
       SettingsService.instance.serverUrl = url;
-      GraphQLClientService.instance.initialize(url);
+      GraphQLClientService.instance.initialize(url, authToken: auth);
 
       final data = await GraphQLClientService.instance
           .query('{ aboutServer { version } }')
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 4));
 
       if (data != null && data.containsKey('aboutServer')) {
         final version = data['aboutServer']['version'] ?? 'v1.x';
         WebSocketService.instance.initialize(url);
-        await SyncEngine.instance.initialize();
 
         setState(() {
           _connectionSuccess = true;
           _connectionStatus = '✓ Successfully connected to Suwayomi $version';
         });
 
-        await Future.delayed(const Duration(milliseconds: 600));
+        await Future.delayed(const Duration(milliseconds: 400));
         _pageController.nextPage(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
       } else {
         setState(() {
-          _connectionStatus = '❌ Invalid response from server. Check URL and credentials.';
+          _connectionStatus = '⚠️ Could not verify server version. Check URL and credentials.';
         });
       }
     } catch (e) {
@@ -215,12 +217,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _finishOnboarding() async {
+    final cleanUrl = _serverUrlController.text.trim().replaceAll(RegExp(r'/+$'), '');
+    final auth = _serverAuthController.text.trim().isNotEmpty ? _serverAuthController.text.trim() : null;
+
     await SourceMigrationService.instance.markOnboardingCompleted(
-      serverUrl: _serverUrlController.text.trim(),
-      authHeader: _serverAuthController.text.trim().isNotEmpty ? _serverAuthController.text.trim() : null,
+      serverUrl: cleanUrl,
+      authHeader: auth,
       selectedRepos: _userRepoUrls,
     );
     SettingsService.instance.onboardingCompleted = true;
+
+    if (cleanUrl.isNotEmpty) {
+      GraphQLClientService.instance.initialize(cleanUrl, authToken: auth);
+      SyncEngine.instance.initialize();
+    }
+
     if (mounted) {
       context.go('/library');
     }
@@ -407,6 +418,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
                 : const Text('Connect & Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
           ),
+          if (_connectionStatus != null && !_connectionSuccess) ...[
+            const SizedBox(height: 10),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                side: const BorderSide(color: Colors.white24),
+              ),
+              onPressed: () {
+                final rawUrl = _serverUrlController.text.trim();
+                final url = rawUrl.replaceAll(RegExp(r'/+$'), '');
+                final auth = _serverAuthController.text.trim().isNotEmpty ? _serverAuthController.text.trim() : null;
+                SettingsService.instance.serverUrl = url;
+                GraphQLClientService.instance.initialize(url, authToken: auth);
+                _pageController.nextPage(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                );
+              },
+              child: const Text('Continue with this URL anyway', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            ),
+          ],
           const SizedBox(height: 10),
           TextButton(
             onPressed: () => _pageController.nextPage(

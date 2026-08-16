@@ -14,13 +14,17 @@ class GraphQLClientService {
     return _instance!;
   }
 
-  void initialize(String baseUrl) {
+  void initialize(String baseUrl, {String? authToken}) {
     _baseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final headers = <String, dynamic>{'Content-Type': 'application/json'};
+    if (authToken != null && authToken.isNotEmpty) {
+      headers['Authorization'] = authToken.startsWith('Bearer ') ? authToken : 'Bearer $authToken';
+    }
     _dio = Dio(BaseOptions(
       baseUrl: '$_baseUrl/api/graphql',
       connectTimeout: const Duration(seconds: 45),
       receiveTimeout: const Duration(seconds: 90),
-      headers: {'Content-Type': 'application/json'},
+      headers: headers,
     ));
   }
 
