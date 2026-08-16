@@ -299,6 +299,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               }
             }
           }
+        } else if (isInstalled) {
+          await QuickJsService.instance.deleteLocalExtension(name);
         }
       } else if (GraphQLClientService.instance.isConfigured) {
         await GraphQLClientService.instance.updateExtension(id, isInstalled ? 'UNINSTALL' : 'INSTALL');
