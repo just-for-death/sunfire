@@ -348,6 +348,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
     final pinned = filtered.where((s) => s['isPinned'] == true).toList();
     final unpinned = filtered.where((s) => s['isPinned'] != true).toList();
+    final localJsUnpinned = unpinned.where((s) => s['isLocalJs'] == true).toList();
+    final serverUnpinned = unpinned.where((s) => s['isLocalJs'] != true).toList();
 
     return RefreshIndicator(
       color: primaryColor,
@@ -391,12 +393,27 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             const Divider(height: 24, color: Color(0x1AFFFFFF)),
           ],
 
-          Text('INSTALLED SOURCES', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-          const SizedBox(height: 8),
-          if (unpinned.isEmpty)
-            const Padding(padding: EdgeInsets.all(16.0), child: Center(child: Text('No sources found.', style: TextStyle(color: Colors.grey))))
-          else
-            ...unpinned.map((s) => _buildSourceItemTile(s)),
+          if (localJsUnpinned.isNotEmpty) ...[
+            const Text(
+              '⚡ LOCAL EXTENSIONS (On-Device Engine - Fast & Offline)',
+              style: TextStyle(color: Colors.tealAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+            ),
+            const SizedBox(height: 8),
+            ...localJsUnpinned.map((s) => _buildSourceItemTile(s)),
+            const SizedBox(height: 16),
+          ],
+
+          if (serverUnpinned.isNotEmpty) ...[
+            const Text(
+              '☁ SERVER SOURCES (Suwayomi Proxy)',
+              style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+            ),
+            const SizedBox(height: 8),
+            ...serverUnpinned.map((s) => _buildSourceItemTile(s)),
+          ],
+
+          if (unpinned.isEmpty && pinned.isEmpty)
+            const Padding(padding: EdgeInsets.all(16.0), child: Center(child: Text('No sources found.', style: TextStyle(color: Colors.grey)))),
         ],
       ),
     );
@@ -410,6 +427,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final lang = (source['lang'] as String).toUpperCase();
     final iconUrl = source['iconUrl'] as String? ?? '';
     final bool isPinned = source['isPinned'] as bool? ?? false;
+    final bool isLocalJs = source['isLocalJs'] as bool? ?? false;
     final bool supportsLatest = source['supportsLatest'] as bool? ?? true;
 
     return Padding(
@@ -466,11 +484,31 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    const SizedBox(height: 2),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(4)),
-                      child: Text(lang, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(4)),
+                          child: Text(lang, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isLocalJs ? Colors.teal.withAlpha(50) : Colors.blue.withAlpha(50),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            isLocalJs ? '⚡ Local' : '☁ Server',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isLocalJs ? Colors.tealAccent : Colors.lightBlueAccent,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -497,14 +535,27 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   }
 
   // ═════════════════════════════════════════════════════════
+  String _selectedExtensionFilter = 'All'; // 'All', 'Local JS', 'Server APK', 'Installed'
+
   // ── 2. EXTENSIONS TAB ────────────────────────────────────
   // ═════════════════════════════════════════════════════════
   Widget _buildExtensionsTab() {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    final filtered = _extensionSearchQuery.isEmpty
-        ? _extensionList
-        : _extensionList.where((e) => (e['name'] as String).toLowerCase().contains(_extensionSearchQuery.toLowerCase())).toList();
+    final filtered = _extensionList.where((ext) {
+      final name = (ext['name'] as String).toLowerCase();
+      final matchesSearch = _extensionSearchQuery.isEmpty || name.contains(_extensionSearchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+
+      final isJs = ext['isJs'] as bool? ?? false;
+      final isInstalled = ext['isInstalled'] as bool? ?? false;
+
+      if (_selectedExtensionFilter == 'Local JS' && !isJs) return false;
+      if (_selectedExtensionFilter == 'Server APK' && isJs) return false;
+      if (_selectedExtensionFilter == 'Installed' && !isInstalled) return false;
+
+      return true;
+    }).toList();
 
     final sortedList = List<Map<String, dynamic>>.from(filtered);
     sortedList.sort((a, b) {
@@ -529,6 +580,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             onChanged: (val) => setState(() => _extensionSearchQuery = val),
           ),
         ),
+        // ── REPOSITORY SELECTION ROW ──
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -554,6 +606,45 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           ),
         ),
         const SizedBox(height: 8),
+
+        // ── EXTENSION TYPE FILTER SUB-ROW ──
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              FilterChip(
+                label: const Text('All'),
+                selected: _selectedExtensionFilter == 'All',
+                selectedColor: primaryColor.withAlpha(80),
+                onSelected: (_) => setState(() => _selectedExtensionFilter = 'All'),
+              ),
+              const SizedBox(width: 6),
+              FilterChip(
+                label: const Text('⚡ Local JS (iOS & Android)'),
+                selected: _selectedExtensionFilter == 'Local JS',
+                selectedColor: Colors.teal.withAlpha(80),
+                onSelected: (_) => setState(() => _selectedExtensionFilter = 'Local JS'),
+              ),
+              const SizedBox(width: 6),
+              FilterChip(
+                label: const Text('☁ Server APK (Suwayomi)'),
+                selected: _selectedExtensionFilter == 'Server APK',
+                selectedColor: Colors.blue.withAlpha(80),
+                onSelected: (_) => setState(() => _selectedExtensionFilter = 'Server APK'),
+              ),
+              const SizedBox(width: 6),
+              FilterChip(
+                label: const Text('Installed'),
+                selected: _selectedExtensionFilter == 'Installed',
+                selectedColor: Colors.purple.withAlpha(80),
+                onSelected: (_) => setState(() => _selectedExtensionFilter = 'Installed'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+
         Expanded(
           child: _isLoadingExtensions
               ? Center(child: CircularProgressIndicator(color: primaryColor))
@@ -609,7 +700,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                 ),
                               ),
                               title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('v$version • ${isJs ? ".js Extension" : "Keiyoushi APK"}'),
+                              subtitle: Text(
+                                'v$version • ${isJs ? "⚡ Local JS (Cross-Platform)" : "☁ Server APK (Suwayomi Proxy)"}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isJs ? Colors.tealAccent : Colors.lightBlueAccent,
+                                ),
+                              ),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
