@@ -3,6 +3,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../db/models/manga.dart';
 import '../logging/logger_service.dart';
 
+class ReplicationReport {
+  final List<String> newlyInstalledLocalScrapers;
+  final List<String> newlyAddedServerFallbacks;
+  final int totalReplicatedManga;
+
+  ReplicationReport({
+    required this.newlyInstalledLocalScrapers,
+    required this.newlyAddedServerFallbacks,
+    required this.totalReplicatedManga,
+  });
+
+  bool get hasChanges => newlyInstalledLocalScrapers.isNotEmpty || newlyAddedServerFallbacks.isNotEmpty;
+}
+
 class MigrationResult {
   final Map<String, String> matchedSources; // serverSourceName -> localJsExtensionName
   final List<String> serverOnlySources;
@@ -262,6 +276,63 @@ class SourceMigrationService {
       statusMessage: isAvailableOnServer
           ? '⚡ Installed locally & ☁ synced with server ($matchedServerSource)'
           : '⚡ Installed locally on device (Source not available on server repo)',
+    );
+  }
+
+  /// Continuously syncs installed server sources against available Mangayomi repositories.
+  /// Automatically installs matching .js scrapers locally and re-maps attached manga items
+  /// so that any new source added on the server in future is immediately replicated locally.
+  ReplicationReport syncAndReplicateServerSources({
+    required List<ServerSourceItem> currentServerInstalledSources,
+    required List<String> currentlyInstalledLocalJs,
+    required List<String> availableMangayomiRepoExtensions,
+    List<Manga>? currentLibraryManga,
+  }) {
+    final newlyInstalled = <String>[];
+    final newlyAddedFallbacks = <String>[];
+    var remappedMangaCount = 0;
+
+    final installedLocalNormalized = currentlyInstalledLocalJs
+        .map((e) => normalizeSourceName(e.replaceAll('.js', '')))
+        .toSet();
+
+    for (final srv in currentServerInstalledSources) {
+      final srvNorm = normalizeSourceName(srv.name);
+      
+      // If already installed locally, skip
+      if (installedLocalNormalized.contains(srvNorm)) {
+        continue;
+      }
+
+      // Check if a matching Mangayomi JS extension exists in the repositories
+      final matchedJs = matchServerSourceToLocalJs(srv.name, availableMangayomiRepoExtensions);
+      if (matchedJs != null) {
+        newlyInstalled.add(matchedJs);
+        installedLocalNormalized.add(srvNorm);
+
+        // Re-map attached library manga to the newly installed local JS extension
+        if (currentLibraryManga != null) {
+          for (final manga in currentLibraryManga) {
+            if (normalizeSourceName(manga.sourceName) == srvNorm) {
+              manga.sourceName = 'local_js_${matchedJs.replaceAll('.js', '')}';
+              remappedMangaCount++;
+            }
+          }
+        }
+      } else {
+        newlyAddedFallbacks.add(srv.name);
+      }
+    }
+
+    LoggerService.instance.logInfo(
+      'Continuous Source Replication: ${newlyInstalled.length} local scrapers auto-installed, ${newlyAddedFallbacks.length} server fallbacks registered, $remappedMangaCount manga remapped',
+      'SourceReplication',
+    );
+
+    return ReplicationReport(
+      newlyInstalledLocalScrapers: newlyInstalled,
+      newlyAddedServerFallbacks: newlyAddedFallbacks,
+      totalReplicatedManga: remappedMangaCount,
     );
   }
 
