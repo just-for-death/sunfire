@@ -102,14 +102,92 @@ void main() {
     });
   });
 
+  group('UNIFIED SOURCES TAB: Deduplication & Missing Source Fallback', () {
+    test('5. Deduplicates sources: hides server duplicate if local Mangayomi exists, shows only missing server source', () {
+      final localInstalledExtensions = [
+        'mangadex.js',
+        'weeb_central.js',
+      ];
+
+      final serverInstalledSources = [
+        ServerSourceItem(id: '1001', name: 'MangaDex (EN)', lang: 'en'),
+        ServerSourceItem(id: '1002', name: 'Weeb Central (EN)', lang: 'en'),
+        ServerSourceItem(id: '1003', name: 'Niche Japanese Raw Source', lang: 'ja'), // Missing in Mangayomi
+      ];
+
+      final displaySources = migrationService.filterDisplaySources(
+        localInstalledExtensions: localInstalledExtensions,
+        serverInstalledSources: serverInstalledSources,
+      );
+
+      // Should display exactly 3 sources: 2 Local Mangayomi + 1 Server Fallback
+      expect(displaySources.length, equals(3));
+
+      // Check Local Mangayomi sources
+      final mangadex = displaySources.firstWhere((s) => s.id == 'local_js_mangadex');
+      expect(mangadex.isLocalJs, isTrue);
+      expect(mangadex.isServerFallback, isFalse);
+
+      final weebCentral = displaySources.firstWhere((s) => s.id == 'local_js_weeb_central');
+      expect(weebCentral.isLocalJs, isTrue);
+      expect(weebCentral.isServerFallback, isFalse);
+
+      // Check Server Fallback source
+      final nicheSource = displaySources.firstWhere((s) => s.id == '1003');
+      expect(nicheSource.name, equals('Niche Japanese Raw Source'));
+      expect(nicheSource.isLocalJs, isFalse);
+      expect(nicheSource.isServerFallback, isTrue);
+
+      // Server versions of MangaDex and Weeb Central are strictly excluded
+      expect(displaySources.any((s) => s.id == '1001'), isFalse);
+      expect(displaySources.any((s) => s.id == '1002'), isFalse);
+    });
+  });
+
+  group('DUAL-CHANNEL SOURCE INSTALLATION', () {
+    test('6. Installing source available on server performs dual installation (App + Server)', () {
+      final serverCatalog = [
+        'MangaDex (EN)',
+        'Weeb Central (EN)',
+        'MangaKatana',
+      ];
+
+      final result = migrationService.checkAndInstallSourceDualChannel(
+        jsExtensionName: 'mangadex.js',
+        serverAvailableSourceNames: serverCatalog,
+      );
+
+      expect(result.isInstalledLocally, isTrue);
+      expect(result.isAvailableOnServer, isTrue);
+      expect(result.serverSourceName, equals('MangaDex (EN)'));
+      expect(result.statusMessage, contains('Installed locally & ☁ synced with server'));
+    });
+
+    test('7. Installing source NOT available on server installs locally with clear status message', () {
+      final serverCatalog = [
+        'MangaDex (EN)',
+      ];
+
+      final result = migrationService.checkAndInstallSourceDualChannel(
+        jsExtensionName: 'obscure_local_only.js',
+        serverAvailableSourceNames: serverCatalog,
+      );
+
+      expect(result.isInstalledLocally, isTrue);
+      expect(result.isAvailableOnServer, isFalse);
+      expect(result.serverSourceName, isNull);
+      expect(result.statusMessage, contains('Installed locally on device (Source not available on server repo)'));
+    });
+  });
+
   group('ONBOARDING GATEKEEPER: One-Time Setup State', () {
-    test('5. Default state reports onboarding is NOT completed', () async {
+    test('8. Default state reports onboarding is NOT completed', () async {
       final prefs = await SharedPreferences.getInstance();
       final isCompleted = await migrationService.isOnboardingCompleted(prefs);
       expect(isCompleted, isFalse);
     });
 
-    test('6. Mark onboarding completed persists server URL, auth, and repos', () async {
+    test('9. Mark onboarding completed persists server URL, auth, and repos', () async {
       final prefs = await SharedPreferences.getInstance();
 
       await migrationService.markOnboardingCompleted(
@@ -129,7 +207,7 @@ void main() {
       );
     });
 
-    test('7. Reset onboarding allows re-running setup if user switches server in settings', () async {
+    test('10. Reset onboarding allows re-running setup if user switches server in settings', () async {
       final prefs = await SharedPreferences.getInstance();
 
       await migrationService.markOnboardingCompleted(
