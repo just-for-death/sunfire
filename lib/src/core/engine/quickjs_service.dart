@@ -209,12 +209,57 @@ class QuickJsService {
     }
 
     try {
+      const mangayomiHeader = '''
+        if (typeof MProvider === 'undefined') {
+          class MProvider {
+            constructor() {
+              this.source = (typeof mangayomiSources !== 'undefined' && mangayomiSources.length > 0)
+                ? mangayomiSources[0]
+                : { baseUrl: '' };
+            }
+            getFilterList() { return []; }
+          }
+          class Client {
+            get(url, headers) { return { body: '', statusCode: 200, headers: headers || {} }; }
+            post(url, headers, body) { return { body: '', statusCode: 200, headers: headers || {} }; }
+          }
+          class Document {
+            constructor(html) { this.html = html || ''; }
+            querySelector(sel) { return new Element(this.html, sel); }
+            querySelectorAll(sel) { return [new Element(this.html, sel)]; }
+            select(sel) { return [new Element(this.html, sel)]; }
+          }
+          class Element {
+            constructor(html, sel) { this.html = html || ''; this.sel = sel || ''; this.text = ''; }
+            attr(name) { return ''; }
+            text() { return ''; }
+            selectFirst(sel) { return new Element(this.html, sel); }
+          }
+        }
+      ''';
+
       final script = '''
         (function() {
+          $mangayomiHeader
           $jsCode
+
+          var _inst = null;
+          if (typeof DefaultExtension !== 'undefined') {
+            try { _inst = new DefaultExtension(); } catch(e) {}
+          }
+
           if (typeof $functionName === 'function') {
             return JSON.stringify($functionName(${args.map((a) => jsonEncode(a)).join(', ')}));
+          } else if (_inst && typeof _inst['$functionName'] === 'function') {
+            return JSON.stringify(_inst['$functionName'](${args.map((a) => jsonEncode(a)).join(', ')}));
+          } else if (_inst && '$functionName' === 'getPopularManga' && typeof _inst.getPopular === 'function') {
+            return JSON.stringify(_inst.getPopular(${args.map((a) => jsonEncode(a)).join(', ')}));
+          } else if (_inst && '$functionName' === 'getLatestUpdates' && typeof _inst.getLatestUpdates === 'function') {
+            return JSON.stringify(_inst.getLatestUpdates(${args.map((a) => jsonEncode(a)).join(', ')}));
+          } else if (_inst && '$functionName' === 'searchManga' && typeof _inst.search === 'function') {
+            return JSON.stringify(_inst.search(${args.map((a) => jsonEncode(a)).join(', ')}));
           }
+
           return JSON.stringify({ error: 'Function $functionName not found' });
         })();
       ''';
