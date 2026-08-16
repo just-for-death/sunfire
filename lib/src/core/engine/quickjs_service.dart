@@ -229,9 +229,17 @@ class QuickJsService {
 
         var MProvider = (typeof MProvider !== 'undefined') ? MProvider : class MProvider {
           constructor() {
-            this.source = (typeof mangayomiSources !== 'undefined' && mangayomiSources.length > 0)
+            var src = (typeof mangayomiSources !== 'undefined' && Array.isArray(mangayomiSources) && mangayomiSources.length > 0)
               ? mangayomiSources[0]
-              : { baseUrl: '' };
+              : {};
+            this.source = Object.assign({
+              baseUrl: '',
+              apiUrl: '',
+              urls: [],
+              name: '',
+              lang: 'en',
+              id: 0
+            }, src);
             this.preferences = new SharedPreferences();
           }
           getFilterList() { return []; }
