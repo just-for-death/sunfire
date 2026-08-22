@@ -53,9 +53,10 @@ class QuickJsService {
       candidateDirs.add('${appDir.path}/extensions');
     } catch (_) {}
 
-    candidateDirs.add('/home/zoro/Documents/extensions');
-    candidateDirs.add('/home/zoro/Documents/Projects/sunfire/assets/extensions');
-    candidateDirs.add('/home/zoro/.local/share/com.sunfire.sunfire/extensions');
+    try {
+      final appSupportDir = await getApplicationSupportDirectory();
+      candidateDirs.add('${appSupportDir.path}/extensions');
+    } catch (_) {}
 
     for (final dirPath in candidateDirs) {
       try {
