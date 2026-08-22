@@ -198,6 +198,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           final jsLang = js.lang.toLowerCase();
           final isEn = jsLang == 'en' || jsLang == 'all';
           final isInstalled = isEn && QuickJsService.instance.isLocalExtensionInstalled(js.name);
+          final installedVer = isInstalled ? QuickJsService.instance.getInstalledVersion(js.name) : '';
+          final hasUpdate = isInstalled && installedVer.isNotEmpty && RepoManager.compareVersions(js.version, installedVer) > 0;
 
           var iconUrl = js.iconUrl;
           if (iconUrl.isEmpty) {
@@ -209,6 +211,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             'name': js.lang.toLowerCase() == 'en' || js.lang.isEmpty ? js.name : '${js.name} (${js.lang.toUpperCase()})',
             'lang': js.lang,
             'version': js.version,
+            'installedVersion': installedVer,
+            'hasUpdate': hasUpdate,
             'isInstalled': isInstalled,
             'sourceCodeUrl': js.sourceCodeUrl,
             'iconUrl': iconUrl,
@@ -840,6 +844,20 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   if (isInstalled) ...[
+                                    if (ext['hasUpdate'] == true) ...[
+                                      ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.amber.withAlpha(40),
+                                          side: const BorderSide(color: Colors.amberAccent, width: 0.8),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                        ),
+                                        icon: const Icon(Icons.system_update_alt_rounded, color: Colors.amberAccent, size: 14),
+                                        label: Text('Update v$version', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                                        onPressed: () => _toggleExtensionInstallation(ext),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
                                     IconButton(
                                       icon: const Icon(Icons.settings_outlined, color: Colors.grey, size: 20),
                                       onPressed: () => _showExtensionSettingsDialog(ext),
@@ -884,26 +902,34 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       return Center(child: CircularProgressIndicator(color: primaryColor));
     }
 
-    // 1. Group library manga strictly by source
+    // 1. Group library manga by canonical source to prevent case/casing duplicates
     final Map<String, List<Manga>> sourceToMangas = {};
+    final Map<String, String> canonicalDisplayNames = {};
+
     for (final manga in _libraryMangaList) {
-      final key = manga.sourceName.isNotEmpty ? manga.sourceName : 'Unknown Source';
+      final raw = manga.sourceName.trim();
+      final key = raw.isNotEmpty ? raw.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '') : 'unknown';
+      final disp = raw.isNotEmpty ? raw : 'Unknown Source';
+
+      if (!canonicalDisplayNames.containsKey(key) || (disp != disp.toLowerCase())) {
+        canonicalDisplayNames[key] = disp;
+      }
       sourceToMangas.putIfAbsent(key, () => []).add(manga);
     }
 
     // 2. Build migration source items
     final List<Map<String, dynamic>> migrationItems = [];
 
-    sourceToMangas.forEach((sourceName, mangas) {
+    sourceToMangas.forEach((key, mangas) {
       if (mangas.isEmpty) return;
+      final sourceName = canonicalDisplayNames[key] ?? key;
 
       // Find matching server source metadata
       Map<String, dynamic>? matched;
       for (final s in _sourcesList) {
-        final sName = (s['name'] as String).toLowerCase();
-        final sDisp = (s['displayName'] as String? ?? '').toLowerCase();
-        final qName = sourceName.toLowerCase();
-        if (sName == qName || sDisp == qName || s['id'] == sourceName) {
+        final sName = (s['name'] as String).toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        final sDisp = (s['displayName'] as String? ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        if (sName == key || sDisp == key || s['id'] == sourceName) {
           matched = s;
           break;
         }
