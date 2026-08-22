@@ -309,7 +309,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         if ((!isInstalled || isUpdate) && sourceCodeUrl.isNotEmpty) {
           final code = await RepoManager.instance.downloadJsSourceCode(sourceCodeUrl);
           if (code != null) {
-            await QuickJsService.instance.saveLocalExtension(name, code);
+            final iconUrl = ext['iconUrl'] as String? ?? '';
+            await QuickJsService.instance.saveLocalExtension(
+              name,
+              code,
+              version: version,
+              iconUrl: iconUrl,
+            );
             setState(() {
               ext['isInstalled'] = true;
               ext['hasUpdate'] = false;
@@ -864,29 +870,56 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.extension_off_rounded, size: 56, color: primaryColor.withAlpha(120)),
+                            Icon(
+                              _selectedExtensionFilter == 'Server APK'
+                                  ? Icons.cloud_off_rounded
+                                  : Icons.extension_off_rounded,
+                              size: 56,
+                              color: primaryColor.withAlpha(120),
+                            ),
                             const SizedBox(height: 16),
-                            const Text(
-                              'No Extensions or Repositories Added',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            Text(
+                              _selectedExtensionFilter == 'Server APK'
+                                  ? 'No Server APKs Found'
+                                  : (_selectedExtensionFilter == 'Installed'
+                                      ? 'No Extensions Installed'
+                                      : 'No Extensions Found'),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                             const SizedBox(height: 8),
-                            const Text(
-                              'Add custom repository URLs (Mangayomi index.json) to browse and install extensions on your device.',
+                            Text(
+                              _selectedExtensionFilter == 'Server APK'
+                                  ? 'No Keiyoushi APK extensions found on your Suwayomi server. Switch to Local JS or All to use on-device extensions.'
+                                  : (_selectedExtensionFilter == 'Installed'
+                                      ? 'You haven\'t installed any extensions yet. Switch to "All" or "Local JS" to install extensions.'
+                                      : 'No extensions match your current search and repository filters.'),
                               textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.grey, fontSize: 13),
+                              style: const TextStyle(color: Colors.grey, fontSize: 13),
                             ),
                             const SizedBox(height: 20),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: primaryColor,
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            if (_selectedExtensionFilter != 'All') ...[
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                ),
+                                icon: const Icon(Icons.filter_alt_off_rounded, color: Colors.white),
+                                label: const Text('Show All Extensions', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                onPressed: () => setState(() => _selectedExtensionFilter = 'All'),
                               ),
-                              icon: const Icon(Icons.add_rounded, color: Colors.white),
-                              label: const Text('Add Repository', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                              onPressed: () => _showAddRepoDialog(),
-                            ),
+                            ] else ...[
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                ),
+                                icon: const Icon(Icons.add_rounded, color: Colors.white),
+                                label: const Text('Add Repository', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                onPressed: () => _showAddRepoDialog(),
+                              ),
+                            ],
                           ],
                         ),
                       ),
