@@ -152,6 +152,15 @@ class QuickJsService {
     }
   }
 
+  String getInstalledVersion(String sourceName) {
+    final code = getExtensionCode(sourceName);
+    if (code != null && code.isNotEmpty) {
+      final meta = extractSourceMetadata(code);
+      return meta['version']?.toString() ?? '1.0.0';
+    }
+    return '';
+  }
+
   String getSourceIconUrl(String sourceName) {
     final code = getExtensionCode(sourceName);
     if (code != null && code.isNotEmpty) {
