@@ -102,32 +102,27 @@ class IsarService {
   }
 
   Future<List<Chapter>> getReadingHistory() async {
-    final list = await _isar.chapters
-        .filter()
-        .isReadEqualTo(true)
-        .or()
-        .lastPageReadGreaterThan(0)
-        .or()
-        .lastReadAtIsNotNull()
-        .findAll();
-    list.sort((a, b) => (b.lastReadAt ?? 0).compareTo(a.lastReadAt ?? 0));
-    return list;
+    try {
+      final all = await _isar.chapters.where().findAll();
+      final list = all.where((c) => c.isRead || c.lastPageRead > 0 || (c.lastReadAt != null && c.lastReadAt! > 0)).toList();
+      list.sort((a, b) => (b.lastReadAt ?? 0).compareTo(a.lastReadAt ?? 0));
+      return list;
+    } catch (_) {
+      return [];
+    }
   }
 
   /// Returns chapters sorted by fetchedAt DESC — the offline Updates feed.
   /// Chapters with denormalized [mangaTitle] and [mangaThumbnailUrl] render
   /// the Updates tab fully without any network or join.
   Future<List<Chapter>> getRecentChapters({int limit = 100}) async {
-    var all = await _isar.chapters
-        .filter()
-        .fetchedAtIsNotNull()
-        .sortByFetchedAtDesc()
-        .limit(limit)
-        .findAll();
-    if (all.isEmpty) {
-      all = await _isar.chapters.where().limit(limit).findAll();
+    try {
+      final all = await _isar.chapters.where().findAll();
+      all.sort((a, b) => (b.fetchedAt ?? b.lastReadAt ?? 0).compareTo(a.fetchedAt ?? a.lastReadAt ?? 0));
+      return all.take(limit).toList();
+    } catch (_) {
+      return [];
     }
-    return all;
   }
 
   /// Returns chapters that are currently in-progress (opened but not finished).
