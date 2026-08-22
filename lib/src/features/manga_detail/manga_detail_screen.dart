@@ -172,8 +172,12 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               final rawChNum = (cMap['chapterNumber'] as num?)?.toDouble();
               final chNum = (rawChNum != null && rawChNum > 0) ? rawChNum : _extractChapterNumber(chName, i, chList.length);
 
+              final chServerId = (widget.mangaServerId > 0 && widget.mangaServerId < 200000)
+                  ? (widget.mangaServerId * 10000 + i + 1)
+                  : ((widget.mangaServerId.hashCode & 0x3FFFFFFF) * 1000 + i + 1);
+
               final ch = Chapter()
-                ..serverId = (widget.mangaServerId * 10000 + i + 1).abs()
+                ..serverId = chServerId
                 ..mangaId = widget.mangaServerId
                 ..name = chName
                 ..chapterNumber = chNum

@@ -23,7 +23,8 @@ class JsExtensionService {
     runtime = QuickJsRuntime2(stackSize: 1024 * 1024 * 4);
     runtime.enableHandlePromises();
 
-    _httpClient = JsHttpClient(runtime)..init();
+    final baseUrl = (sourceMeta['baseUrl'] ?? sourceMeta['apiUrl'] ?? '').toString();
+    _httpClient = JsHttpClient(runtime, baseUrl)..init();
     _jsDomSelector = JsDomSelector(runtime)..init();
     JsUtils(runtime).init();
     JsPreferences(runtime).init();
@@ -115,11 +116,37 @@ var extention = new DefaultExtension();
 
   Future<List<String>> getPageList(String url) async {
     final res = await extensionCallAsync<dynamic>('getPageList(${jsonEncode(url)})');
+    List<dynamic>? rawList;
     if (res is List) {
-      return res.map((e) => e is Map ? (e['url'] ?? '').toString() : e.toString()).toList();
+      rawList = res;
+    } else if (res is Map && res['pages'] is List) {
+      rawList = res['pages'] as List;
+    } else if (res is Map && res['list'] is List) {
+      rawList = res['list'] as List;
     }
-    if (res is Map && res['pages'] is List) {
-      return (res['pages'] as List).map((e) => e is Map ? (e['url'] ?? '').toString() : e.toString()).toList();
+
+    if (rawList != null) {
+      final baseUrl = (sourceMeta['baseUrl'] ?? '').toString();
+      final cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+
+      return rawList
+          .map((e) {
+            if (e is Map) {
+              final raw = (e['url'] ?? e['image'] ?? e['link'] ?? e['src'] ?? e['img'] ?? '').toString().trim();
+              return raw;
+            }
+            return e.toString().trim();
+          })
+          .where((u) => u.isNotEmpty)
+          .map((u) {
+            if (u.startsWith('//')) return 'https:$u';
+            if (!u.startsWith('http://') && !u.startsWith('https://') && cleanBase.isNotEmpty) {
+              final cleanPath = u.startsWith('/') ? u : '/$u';
+              return '$cleanBase$cleanPath';
+            }
+            return u;
+          })
+          .toList();
     }
     return [];
   }
