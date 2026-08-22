@@ -32,7 +32,7 @@
 ## 📜 2. Chronological History & Inception of Sunfire
 
 ### **Phase 1: Inception & Catalyst Re-evaluation**
-1. **Initial Context:** The user evaluated the existing `catalyst` codebase and identified architectural limitations: heavy reliance on Suwayomi server proxying for basic reading, fragmented extension systems, and UI clutter.
+1. **Initial Context:** Evaluated the existing `catalyst` codebase and identified architectural limitations: heavy reliance on Suwayomi server proxying for basic reading, fragmented extension systems, and UI clutter.
 2. **Decision to Create Sunfire:** The user directed the creation of a clean-slate, local-first Flutter application named **Sunfire**, combining:
    - **Mihon (Tachiyomi)** UI ergonomics, typography, category management, and reader controls.
    - **Mangayomi** multi-repository JavaScript scraper execution running directly on-device via QuickJS FFI.
@@ -109,7 +109,7 @@ graph TD
 
 ---
 
-## 🐛 5. Bugs Encounted & Permanent Solutions
+## 🐛 5. Bugs Encountered & Permanent Solutions
 
 | Issue Encountered | Root Cause | Permanent Fix |
 |---|---|---|

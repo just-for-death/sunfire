@@ -94,7 +94,7 @@ void main() {
 
       await migration.markOnboardingCompleted(
         serverUrl: 'http://127.0.0.1:4567',
-        selectedRepos: ['https://kodjodevf.github.io/mangayomi-extensions/index.json'],
+        selectedRepos: ['https://m2k3a.github.io/mangayomi-extensions/index.json'],
         prefs: prefs,
       );
 
