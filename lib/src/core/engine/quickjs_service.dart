@@ -88,19 +88,30 @@ class QuickJsService {
     }
   }
 
+  static String _canonicalizeKey(String raw) {
+    return raw
+        .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
+        .toLowerCase()
+        .replaceAll('comics', 'comic')
+        .replaceAll('scans', 'scan')
+        .replaceAll('mangas', 'manga')
+        .replaceAll('hentais', 'hentai');
+  }
+
   bool isSourceInstalledLocally(String sourceName) {
     if (sourceName.isEmpty) return false;
     final cleanName = sourceName
         .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
         .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
         .toLowerCase();
-    final alphaOnly = cleanName.replaceAll('_', '');
+    final canonQuery = _canonicalizeKey(sourceName);
 
     if (_installedJsSources.containsKey(cleanName)) return true;
 
     for (final key in _installedJsSources.keys) {
-      final keyAlpha = key.replaceAll('_', '');
-      if (cleanName == key || alphaOnly == keyAlpha || cleanName.contains(key) || key.contains(cleanName) || alphaOnly.contains(keyAlpha) || keyAlpha.contains(alphaOnly)) {
+      final canonKey = _canonicalizeKey(key);
+      if (cleanName == key || canonQuery == canonKey || canonQuery.contains(canonKey) || canonKey.contains(canonQuery)) {
         return true;
       }
     }
@@ -110,22 +121,52 @@ class QuickJsService {
   bool isLocalExtensionInstalled(String sourceName) => isSourceInstalledLocally(sourceName);
 
   Future<bool> deleteLocalExtension(String sourceName) async {
-    final cleanName = sourceName
-        .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
-        .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
-        .toLowerCase();
-    _installedJsSources.remove(cleanName);
-    _canonicalDisplayNames.remove(cleanName);
+    final canonQuery = _canonicalizeKey(sourceName);
+    final toDelete = <String>[];
+    for (final key in _installedJsSources.keys) {
+      if (key == sourceName || _canonicalizeKey(key) == canonQuery || key.contains(canonQuery) || canonQuery.contains(key)) {
+        toDelete.add(key);
+      }
+    }
+    for (final k in toDelete) {
+      _installedJsSources.remove(k);
+      _canonicalDisplayNames.remove(k);
+    }
     try {
       final appDir = await getApplicationDocumentsDirectory();
-      final file = File('${appDir.path}/extensions/$cleanName.js');
-      if (await file.exists()) {
-        await file.delete();
+      final extDir = Directory('${appDir.path}/extensions');
+      if (await extDir.exists()) {
+        final files = await extDir.list().toList();
+        for (final f in files) {
+          if (f is File && f.path.endsWith('.js')) {
+            final base = f.uri.pathSegments.last.replaceAll('.js', '');
+            if (_canonicalizeKey(base) == canonQuery || toDelete.contains(base)) {
+              await f.delete();
+            }
+          }
+        }
       }
       return true;
     } catch (_) {
       return false;
     }
+  }
+
+  String getSourceIconUrl(String sourceName) {
+    final code = getExtensionCode(sourceName);
+    if (code != null && code.isNotEmpty) {
+      final meta = extractSourceMetadata(code);
+      final icon = meta['iconUrl']?.toString() ?? '';
+      if (icon.isNotEmpty && !icon.contains('example.com') && !icon.endsWith('.png404') && !icon.contains('m2k3a/mangayomi-extensions/main/javascript/icon')) {
+        return icon;
+      }
+      final baseUrl = meta['baseUrl']?.toString() ?? '';
+      if (baseUrl.isNotEmpty) {
+        return 'https://www.google.com/s2/favicons?domain=$baseUrl&sz=128';
+      }
+    }
+    final clean = _canonicalizeKey(sourceName);
+    return 'https://www.google.com/s2/favicons?domain=https://$clean.com&sz=128';
   }
 
   List<String> getInstalledExtensionNames() {
