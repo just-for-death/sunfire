@@ -80,7 +80,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
 
     // 2. Fetch fresh details AND chapters from Suwayomi GraphQL
-    if (GraphQLClientService.instance.isConfigured) {
+    if (GraphQLClientService.instance.isConfigured && widget.mangaServerId > 0 && widget.mangaServerId < 2147483647) {
       try {
         var detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
 
@@ -436,9 +436,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Download Options (Mihon)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Expanded(
+                        child: Text(
+                          'Download Options',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       SegmentedButton<bool>(
                         segments: const [
                           ButtonSegment(value: true, label: Text('Device', style: TextStyle(fontSize: 11))),
@@ -1001,11 +1007,25 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            if (manga.author != null && manga.author!.isNotEmpty)
-                              Text(manga.author!, style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
-                            if (manga.author != null && manga.author!.isNotEmpty)
+                            if (manga.author != null && manga.author!.isNotEmpty) ...[
+                              Flexible(
+                                child: Text(
+                                  manga.author!,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                               const Text(' • ', style: TextStyle(color: Colors.white70)),
-                            Text(manga.sourceName, style: TextStyle(color: primaryColor, fontSize: 13, fontWeight: FontWeight.bold)),
+                            ],
+                            Flexible(
+                              child: Text(
+                                manga.sourceName,
+                                style: TextStyle(color: primaryColor, fontSize: 13, fontWeight: FontWeight.bold),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 8),
