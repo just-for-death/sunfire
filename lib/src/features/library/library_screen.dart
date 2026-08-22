@@ -365,200 +365,209 @@ class _LibraryScreenState extends State<LibraryScreen> {
             : RefreshIndicator(
                 color: primaryColor,
                 onRefresh: _handleRefresh,
-                child: CustomScrollView(
-                  slivers: [
-                    // Top App Bar / Batch Bar
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-                        child: _isBatchMode
-                            ? Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.close_rounded),
-                                    onPressed: () => setState(() {
-                                      _selectedMangaIds.clear();
-                                      _isBatchMode = false;
-                                    }),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isCompact = displayMode == 'Compact Grid';
+                    final targetWidth = isCompact ? 110.0 : 145.0;
+                    final dynamicColumns = (constraints.maxWidth / targetWidth).floor().clamp(isCompact ? 3 : 2, isCompact ? 10 : 8);
+
+                    return CustomScrollView(
+                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                      slivers: [
+                        // Top App Bar / Batch Bar
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+                            child: _isBatchMode
+                                ? Row(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.close_rounded),
+                                        onPressed: () => setState(() {
+                                          _selectedMangaIds.clear();
+                                          _isBatchMode = false;
+                                        }),
+                                      ),
+                                      Text('${_selectedMangaIds.length} Selected', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                      const Spacer(),
+                                      TextButton(
+                                        onPressed: _selectAll,
+                                        child: Text(_selectedMangaIds.length == displayManga.length ? 'Deselect All' : 'Select All', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  )
+                                : Row(
+                                    children: [
+                                      if (_isSearching)
+                                        Expanded(
+                                          child: TextField(
+                                            autofocus: true,
+                                            decoration: InputDecoration(
+                                              hintText: 'Search library...',
+                                              prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
+                                              suffixIcon: IconButton(
+                                                icon: const Icon(Icons.close_rounded),
+                                                onPressed: () => setState(() {
+                                                  _isSearching = false;
+                                                  _searchQuery = '';
+                                                }),
+                                              ),
+                                              filled: true,
+                                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                                            ),
+                                            onChanged: (val) => setState(() => _searchQuery = val),
+                                          ),
+                                        )
+                                      else ...[
+                                        const Text('Sunfire', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+                                        const Spacer(),
+                                        if (_isSyncing)
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                            child: SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Theme.of(context).colorScheme.primary,
+                                              ),
+                                            ),
+                                          ),
+                                        IconButton(
+                                          icon: const Icon(Icons.search_rounded, size: 26),
+                                          onPressed: () => setState(() => _isSearching = true),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.tune_rounded, size: 26),
+                                          onPressed: _showSortAndDisplayDialog,
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.label_outline_rounded, size: 26),
+                                          tooltip: 'Categories',
+                                          onPressed: _showCategoryManagementDialog,
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                  Text('${_selectedMangaIds.length} Selected', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                  const Spacer(),
-                                  TextButton(
-                                    onPressed: _selectAll,
-                                    child: Text(_selectedMangaIds.length == displayManga.length ? 'Deselect All' : 'Select All', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+
+                        // Category Pill Selector
+                        SliverToBoxAdapter(
+                          child: Container(
+                            height: 48,
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: _categories.length + 1,
+                              itemBuilder: (context, index) {
+                                final isSelected = _selectedCategoryIndex == index;
+                                final label = index == 0 ? 'All (${_allManga.length})' : _categories[index - 1].name;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: ChoiceChip(
+                                    label: Text(label),
+                                    selected: isSelected,
+                                    selectedColor: primaryColor,
+                                    backgroundColor: const Color(0x1F2A2A32),
+                                    labelStyle: TextStyle(
+                                      color: isSelected ? Colors.white : Colors.grey,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      side: BorderSide(
+                                        color: isSelected ? primaryColor : const Color(0x2BFFFFFF),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    onSelected: (selected) {
+                                      if (selected) {
+                                        setState(() => _selectedCategoryIndex = index);
+                                      }
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+
+                        // Offline banner — shown when local cache is present but server unreachable
+                        if (_isOffline)
+                          SliverToBoxAdapter(
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withAlpha(30),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.orange.withAlpha(80), width: 0.8),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.wifi_off_rounded, color: Colors.orange, size: 16),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Offline — Showing cached library',
+                                    style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w600),
                                   ),
                                 ],
-                              )
-                            : Row(
+                              ),
+                            ),
+                          ),
+
+                        // Content Canvas (Comfortable Grid, Compact Grid, or List View)
+                        if (displayManga.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  if (_isSearching)
-                                    Expanded(
-                                      child: TextField(
-                                        autofocus: true,
-                                        decoration: InputDecoration(
-                                          hintText: 'Search library...',
-                                          prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
-                                          suffixIcon: IconButton(
-                                            icon: const Icon(Icons.close_rounded),
-                                            onPressed: () => setState(() {
-                                              _isSearching = false;
-                                              _searchQuery = '';
-                                            }),
-                                          ),
-                                          filled: true,
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                                        ),
-                                        onChanged: (val) => setState(() => _searchQuery = val),
-                                      ),
-                                    )
-                                  else ...[
-                                    const Text('Sunfire', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
-                                    const Spacer(),
-                                    if (_isSyncing)
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                        child: SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Theme.of(context).colorScheme.primary,
-                                          ),
-                                        ),
-                                      ),
-                                    IconButton(
-                                      icon: const Icon(Icons.search_rounded, size: 26),
-                                      onPressed: () => setState(() => _isSearching = true),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.tune_rounded, size: 26),
-                                      onPressed: _showSortAndDisplayDialog,
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.label_outline_rounded, size: 26),
-                                      tooltip: 'Categories',
-                                      onPressed: _showCategoryManagementDialog,
-                                    ),
-                                  ],
+                                  Icon(Icons.auto_stories_outlined, size: 64, color: primaryColor.withAlpha(120)),
+                                  const SizedBox(height: 16),
+                                  const Text('Library is empty', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Browse to add manga or pull down\nto sync with your server.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                                  ),
                                 ],
                               ),
-                      ),
-                    ),
-
-                    // Category Pill Selector
-                    SliverToBoxAdapter(
-                      child: Container(
-                        height: 48,
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: _categories.length + 1,
-                          itemBuilder: (context, index) {
-                            final isSelected = _selectedCategoryIndex == index;
-                            final label = index == 0 ? 'All (${_allManga.length})' : _categories[index - 1].name;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: ChoiceChip(
-                                label: Text(label),
-                                selected: isSelected,
-                                selectedColor: primaryColor,
-                                backgroundColor: const Color(0x1F2A2A32),
-                                labelStyle: TextStyle(
-                                  color: isSelected ? Colors.white : Colors.grey,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                  side: BorderSide(
-                                    color: isSelected ? primaryColor : const Color(0x2BFFFFFF),
-                                    width: 0.8,
-                                  ),
-                                ),
-                                onSelected: (selected) {
-                                  if (selected) {
-                                    setState(() => _selectedCategoryIndex = index);
-                                  }
-                                },
+                            ),
+                          )
+                        else if (displayMode == 'List')
+                          SliverPadding(
+                            padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 120),
+                            sliver: SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) => _buildMangaListItem(displayManga[index]),
+                                childCount: displayManga.length,
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-
-                    // Offline banner — shown when local cache is present but server unreachable
-                    if (_isOffline)
-                      SliverToBoxAdapter(
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withAlpha(30),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.orange.withAlpha(80), width: 0.8),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.wifi_off_rounded, color: Colors.orange, size: 16),
-                              SizedBox(width: 8),
-                              Text(
-                                'Offline — Showing cached library',
-                                style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          )
+                        else
+                          SliverPadding(
+                            padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 120),
+                            sliver: SliverGrid(
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: dynamicColumns,
+                                childAspectRatio: isCompact ? 0.70 : 0.65,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 16,
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    // Content Canvas (Comfortable Grid, Compact Grid, or List View)
-                    if (displayManga.isEmpty)
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.auto_stories_outlined, size: 64, color: primaryColor.withAlpha(120)),
-                              const SizedBox(height: 16),
-                              const Text('Library is empty', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Browse to add manga or pull down\nto sync with your server.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey, fontSize: 13),
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) => _buildMangaCard(displayManga[index], isCompact: isCompact),
+                                childCount: displayManga.length,
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      )
-                    else if (displayMode == 'List')
-                      SliverPadding(
-                        padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 120),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => _buildMangaListItem(displayManga[index]),
-                            childCount: displayManga.length,
-                          ),
-                        ),
-                      )
-                    else
-                      SliverPadding(
-                        padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 120),
-                        sliver: SliverGrid(
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: displayMode == 'Compact Grid' ? 4 : 3,
-                            childAspectRatio: displayMode == 'Compact Grid' ? 0.70 : 0.65,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 16,
-                          ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => _buildMangaCard(displayManga[index], isCompact: displayMode == 'Compact Grid'),
-                            childCount: displayManga.length,
-                          ),
-                        ),
-                      ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
               ),
       ),
