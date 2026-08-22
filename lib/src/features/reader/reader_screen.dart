@@ -25,6 +25,7 @@ class ReaderScreen extends StatefulWidget {
 
 class _ReaderScreenState extends State<ReaderScreen> {
   final SettingsService _settings = SettingsService.instance;
+  String? _sourceName;
   Chapter? _chapter;
   Chapter? _nextChapter;
   Chapter? _prevChapter;
@@ -151,6 +152,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
       sourceName = manga?.sourceName;
     }
+    _sourceName = sourceName;
 
     final chapterUrlToResolve = (_chapter?.url.isNotEmpty == true)
         ? _chapter!.url
@@ -541,7 +543,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         ),
       );
     } else {
-      final headers = QuickJsService.getImageHeaders(url);
+      final headers = QuickJsService.getImageHeaders(_sourceName ?? '', url);
 
       image = Image.network(
         url,
