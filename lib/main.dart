@@ -25,7 +25,7 @@ void main() async {
       await LoggerService.instance.initialize();
       await IsarService.instance.initialize();
       await SettingsService.instance.initialize();
-      QuickJsService.instance.initialize();
+      await QuickJsService.instance.initialize();
       ImageTransportService.instance.initialize();
 
       // Configure Suwayomi GraphQL client and SyncEngine only after onboarding
