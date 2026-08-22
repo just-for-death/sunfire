@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
+import '../../core/engine/quickjs_service.dart';
 import '../../core/services/download_manager_service.dart';
+import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import 'tracking_bottom_sheet.dart';
@@ -107,6 +109,104 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           }
         }
       } catch (_) {}
+    }
+
+    // 3. Offline / Local Scraper: Scrape chapters directly via QuickJS if empty, missing URLs, or server offline
+    if ((_chapters.isEmpty || _chapters.any((c) => c.url.isEmpty)) && _manga != null && _manga!.sourceName.isNotEmpty) {
+      try {
+        final localData = await QuickJsService.instance.fetchMangaDetailsLocal(
+          _manga!.sourceName,
+          _manga!.url.isNotEmpty ? _manga!.url : _manga!.title,
+        );
+        if (localData.isNotEmpty) {
+          if (localData['description'] != null && (_manga!.description == null || _manga!.description!.isEmpty)) {
+            _manga!.description = localData['description'].toString();
+          }
+          if (localData['author'] != null && (_manga!.author == null || _manga!.author!.isEmpty)) {
+            _manga!.author = localData['author'].toString();
+          }
+          if (localData['imageUrl'] != null && (_manga!.thumbnailUrl == null || _manga!.thumbnailUrl!.isEmpty)) {
+            _manga!.thumbnailUrl = localData['imageUrl'].toString();
+          }
+          await IsarService.instance.saveManga(_manga!);
+
+          final chList = (localData['chapters'] ?? localData['chapterList'] ?? localData['epList'] ?? localData['episodes']) as List<dynamic>?;
+          if (chList != null && chList.isNotEmpty) {
+            final fetched = <Chapter>[];
+            for (var i = 0; i < chList.length; i++) {
+              final cMap = chList[i] as Map<String, dynamic>;
+              final chUrl = (cMap['url'] ?? cMap['link'] ?? '').toString();
+              final chName = cMap['name']?.toString() ?? 'Chapter ${i + 1}';
+              final chNum = (cMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble();
+
+              final ch = Chapter()
+                ..serverId = (widget.mangaServerId * 10000 + i + 1).abs()
+                ..mangaId = widget.mangaServerId
+                ..name = chName
+                ..chapterNumber = chNum
+                ..url = chUrl
+                ..realUrl = chUrl
+                ..mangaTitle = _manga!.title;
+              fetched.add(ch);
+            }
+            await IsarService.instance.saveChapters(fetched);
+            _chapters = fetched;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (_chapters.isEmpty && _manga != null && _manga!.title.isNotEmpty) {
+      final installedExtensions = QuickJsService.instance.getInstalledExtensionNames();
+      for (final altSource in installedExtensions) {
+        if (altSource.toLowerCase() == _manga!.sourceName.toLowerCase()) continue;
+        try {
+          final searchResults = await QuickJsService.instance.fetchSourceMangaLocal(
+            altSource,
+            searchQuery: _manga!.title,
+          );
+          if (searchResults.isNotEmpty) {
+            final first = searchResults.first;
+            final link = (first['link'] ?? first['url'] ?? '').toString();
+            if (link.isNotEmpty) {
+              final altData = await QuickJsService.instance.fetchMangaDetailsLocal(altSource, link);
+              final chList = (altData['chapters'] ?? altData['chapterList']) as List<dynamic>?;
+              if (chList != null && chList.isNotEmpty) {
+                _manga!.sourceName = altSource;
+                _manga!.url = link;
+                if (altData['description'] != null && (_manga!.description == null || _manga!.description!.isEmpty)) {
+                  _manga!.description = altData['description'].toString();
+                }
+                if (altData['imageUrl'] != null && (_manga!.thumbnailUrl == null || _manga!.thumbnailUrl!.isEmpty)) {
+                  _manga!.thumbnailUrl = altData['imageUrl'].toString();
+                }
+                await IsarService.instance.saveManga(_manga!);
+
+                final fetched = <Chapter>[];
+                for (var i = 0; i < chList.length; i++) {
+                  final cMap = chList[i] as Map<String, dynamic>;
+                  final chUrl = (cMap['url'] ?? cMap['link'] ?? '').toString();
+                  final chName = cMap['name']?.toString() ?? 'Chapter ${i + 1}';
+                  final chNum = (cMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble();
+
+                  final ch = Chapter()
+                    ..serverId = (widget.mangaServerId * 10000 + i + 1).abs()
+                    ..mangaId = widget.mangaServerId
+                    ..name = chName
+                    ..chapterNumber = chNum
+                    ..url = chUrl
+                    ..realUrl = chUrl
+                    ..mangaTitle = _manga!.title;
+                  fetched.add(ch);
+                }
+                await IsarService.instance.saveChapters(fetched);
+                _chapters = fetched;
+                break;
+              }
+            }
+          }
+        } catch (_) {}
+      }
     }
 
     _manga ??= Manga()
@@ -574,14 +674,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 background: Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (manga.thumbnailUrl != null && manga.thumbnailUrl!.isNotEmpty)
-                      Image.network(
-                        manga.thumbnailUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1F1F24)),
-                      )
-                    else
-                      Container(color: const Color(0xFF1F1F24)),
+                    MangaCoverImage(
+                      mangaServerId: manga.serverId,
+                      thumbnailUrl: manga.thumbnailUrl,
+                      fit: BoxFit.cover,
+                    ),
                     // Gradient Vignette
                     Container(
                       decoration: const BoxDecoration(

@@ -85,28 +85,7 @@ class _ExtensionReposScreenState extends State<ExtensionReposScreen> {
           body: ListView(
             padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 120.0),
             children: [
-              Text('DEFAULT COMMUNITY JS REPOSITORIES', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-              const SizedBox(height: 8),
-              Material(
-                color: const Color(0x1F2A2A32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
-                ),
-                child: Column(
-                  children: RepoManager.defaultRepos.map((repo) {
-                    return ListTile(
-                      leading: const Icon(Icons.verified_rounded, color: Colors.green),
-                      title: Text(repo['name']!, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(repo['url']!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                    );
-                  }).toList(),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              Text('CUSTOM REPOSITORIES', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+              Text('CONFIGURED REPOSITORIES', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
               const SizedBox(height: 8),
               Material(
                 color: const Color(0x1F2A2A32),
@@ -121,9 +100,11 @@ class _ExtensionReposScreenState extends State<ExtensionReposScreen> {
                       )
                     : Column(
                         children: customList.map((url) {
+                          final title = RepoManager.deriveRepoTitle(url);
                           return ListTile(
                             leading: Icon(Icons.link_rounded, color: primaryColor),
-                            title: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            subtitle: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.grey)),
                             trailing: IconButton(
                               icon: const Icon(Icons.delete_rounded, color: Colors.red),
                               onPressed: () => _settings.removeCustomRepo(url),

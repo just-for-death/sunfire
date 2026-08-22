@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/db/isar_service.dart';
+import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
+import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
@@ -53,6 +56,9 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
         isLatest: _isLatestMode,
         page: _currentPage,
         searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
+        selectedSort: _selectedSort,
+        selectedStatus: _selectedStatus,
+        selectedType: _selectedType,
       );
     } catch (e, stack) {
       await LoggerService.instance.logError('Failed to fetch source manga: $e', exception: e, stackTrace: stack, category: 'SourceGrid');
@@ -383,12 +389,41 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                           itemCount: _mangaList.length,
                           itemBuilder: (context, index) {
                             final manga = _mangaList[index];
-                            final id = manga['id'] as int;
-                            final title = manga['title'] as String;
-                            final thumb = manga['thumbnailUrl'] as String?;
+                            final title = (manga['title'] ?? manga['name'] ?? 'Unknown Manga').toString();
+                            final thumb = (manga['thumbnailUrl'] ?? manga['imageUrl'])?.toString();
+                            final link = (manga['link'] ?? manga['url'] ?? '').toString();
+
+                            final rawId = manga['id'];
+                            int id = rawId is int ? rawId : (int.tryParse(rawId?.toString() ?? '0') ?? 0);
+                            if (id <= 0 && link.isNotEmpty) {
+                              id = (link.hashCode ^ widget.sourceName.hashCode).abs();
+                            } else if (id <= 0 && title.isNotEmpty) {
+                              id = (title.hashCode ^ widget.sourceName.hashCode).abs();
+                            }
 
                             return GestureDetector(
-                              onTap: () => context.push('/manga/$id'),
+                              onTap: () async {
+                                if (id > 0) {
+                                  var existing = await IsarService.instance.getMangaByServerId(id);
+                                  if (existing == null) {
+                                    final newManga = Manga()
+                                      ..serverId = id
+                                      ..title = title
+                                      ..url = link
+                                      ..thumbnailUrl = thumb
+                                      ..sourceName = widget.sourceName;
+                                    await IsarService.instance.saveManga(newManga);
+                                  } else {
+                                    if (existing.url.isEmpty && link.isNotEmpty) {
+                                      existing.url = link;
+                                      await IsarService.instance.saveManga(existing);
+                                    }
+                                  }
+                                  if (context.mounted) {
+                                    context.push('/manga/$id');
+                                  }
+                                }
+                              },
                               onLongPress: () => _showMangaQuickActions(id, title, thumb),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,6 +440,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                         child: thumb != null && thumb.isNotEmpty
                                             ? Image.network(
                                                 thumb,
+                                                headers: QuickJsService.getImageHeaders(widget.sourceName, thumb),
                                                 width: double.infinity,
                                                 height: double.infinity,
                                                 fit: BoxFit.cover,
