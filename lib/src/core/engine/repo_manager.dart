@@ -14,7 +14,7 @@ class RepoSourceItem {
   final String version;
   final bool isJs;
 
-  RepoSourceItem({
+  const RepoSourceItem({
     required this.name,
     required this.lang,
     required this.sourceCodeUrl,
@@ -298,7 +298,12 @@ class RepoManager {
       for (final item in listToTry) {
         final jsCode = await downloadJsSourceCode(item.sourceCodeUrl);
         if (jsCode != null && jsCode.trim().isNotEmpty) {
-          await QuickJsService.instance.saveLocalExtension(item.name, jsCode);
+          await QuickJsService.instance.saveLocalExtension(
+            item.name,
+            jsCode,
+            version: item.version,
+            iconUrl: item.iconUrl,
+          );
           installed.add(item.name);
           installedNormalized.add(cleanServerName);
           await LoggerService.instance.logInfo(
@@ -310,5 +315,52 @@ class RepoManager {
       }
     }
     return installed;
+  }
+
+  /// ── UPDATE ALL INSTALLED EXTENSIONS ──────────────────────────────
+  /// Checks configured repositories for newer versions of installed JS extensions
+  /// and updates them if a newer version is available.
+  Future<int> updateInstalledExtensions(List<String> repoUrls) async {
+    if (repoUrls.isEmpty) return 0;
+    int updatedCount = 0;
+    try {
+      final availableSources = await fetchCombinedRepoSources(repoUrls);
+      final installedNames = QuickJsService.instance.getInstalledExtensionNames();
+
+      for (final name in installedNames) {
+        final currentVer = QuickJsService.instance.getInstalledVersion(name);
+        final cleanName = name.replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '').trim().toLowerCase();
+
+        final match = availableSources.firstWhere(
+          (s) => s.name.trim().toLowerCase() == cleanName && (s.lang.toLowerCase() == 'en' || s.lang.toLowerCase() == 'all'),
+          orElse: () => availableSources.firstWhere(
+            (s) => s.name.trim().toLowerCase() == cleanName,
+            orElse: () => const RepoSourceItem(name: '', version: '', sourceCodeUrl: '', iconUrl: '', lang: '', isJs: true),
+          ),
+        );
+
+        if (match.sourceCodeUrl.isNotEmpty && match.version.isNotEmpty && currentVer.isNotEmpty) {
+          if (compareVersions(match.version, currentVer) > 0) {
+            final jsCode = await downloadJsSourceCode(match.sourceCodeUrl);
+            if (jsCode != null && jsCode.trim().isNotEmpty) {
+              await QuickJsService.instance.saveLocalExtension(
+                name,
+                jsCode,
+                version: match.version,
+                iconUrl: match.iconUrl,
+              );
+              updatedCount++;
+              await LoggerService.instance.logInfo(
+                '✓ Updated extension: $name from v$currentVer to v${match.version}',
+                'RepoManager',
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      await LoggerService.instance.logWarning('Auto-update extensions failed: $e', 'RepoManager');
+    }
+    return updatedCount;
   }
 }
