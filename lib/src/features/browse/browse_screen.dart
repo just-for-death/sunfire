@@ -570,96 +570,122 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: [
-              IconButton(
-                icon: Icon(
-                  isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
-                  color: isPinned ? primaryColor : Colors.grey,
-                  size: 20,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openSourceGrid(id, name, false),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
+            child: Row(
+              children: [
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: Icon(
+                    isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                    color: isPinned ? primaryColor : Colors.grey,
+                    size: 18,
+                  ),
+                  onPressed: () => _toggleSourcePin(id),
                 ),
-                onPressed: () => _toggleSourcePin(id),
-              ),
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: primaryColor.withAlpha(38),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: iconUrl.isNotEmpty
-                      ? Image.network(
-                          iconUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Center(
+                const SizedBox(width: 8),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: primaryColor.withAlpha(38),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: iconUrl.isNotEmpty
+                        ? Image.network(
+                            iconUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(
+                                name.substring(0, 1).toUpperCase(),
+                                style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                            ),
+                          )
+                        : Center(
                             child: Text(
                               name.substring(0, 1).toUpperCase(),
-                              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 18),
+                              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                           ),
-                        )
-                      : Center(
-                          child: Text(
-                            name.substring(0, 1).toUpperCase(),
-                            style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 18),
-                          ),
-                        ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(4)),
-                          child: Text(lang, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isLocalJs ? Colors.teal.withAlpha(50) : Colors.blue.withAlpha(50),
-                            borderRadius: BorderRadius.circular(4),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const SizedBox(height: 3),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 2,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(4)),
+                            child: Text(lang, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
                           ),
-                          child: Text(
-                            isLocalJs ? '⚡ Local' : '☁ Server',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: isLocalJs ? Colors.tealAccent : Colors.lightBlueAccent,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: isLocalJs ? Colors.teal.withAlpha(50) : Colors.blue.withAlpha(50),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              isLocalJs ? '⚡ Local' : '☁ Server',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: isLocalJs ? Colors.tealAccent : Colors.lightBlueAccent,
+                              ),
                             ),
                           ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (supportsLatest)
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                      ],
+                        onPressed: () => _openSourceGrid(id, name, true),
+                        child: const Text('Latest', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                      ),
+                    const SizedBox(width: 4),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => _openSourceGrid(id, name, false),
+                      child: const Text('Popular', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
-              ),
-              if (supportsLatest)
-                TextButton(
-                  onPressed: () => _openSourceGrid(id, name, true),
-                  child: const Text('Latest', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                ),
-                onPressed: () => _openSourceGrid(id, name, false),
-                child: const Text('Popular', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
