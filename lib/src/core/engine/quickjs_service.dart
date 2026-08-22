@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../logging/logger_service.dart';
@@ -22,28 +21,10 @@ class QuickJsService {
 
   Future<void> initialize() async {
     try {
-      await _loadBundledExtensions();
       await _loadInstalledExtensionsFromDisk();
     } catch (e, stack) {
       await LoggerService.instance.logError('Failed to initialize QuickJS: $e', exception: e, stackTrace: stack, category: 'QuickJS');
     }
-  }
-
-  Future<void> _loadBundledExtensions() async {
-    try {
-      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-      final assetPaths = manifest.listAssets().where((p) => p.startsWith('assets/extensions/') && p.endsWith('.js')).toList();
-      for (final path in assetPaths) {
-        try {
-          final code = await rootBundle.loadString(path);
-          final filename = path.split('/').last;
-          final cleanKey = filename.replaceAll('.js', '').replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
-          final displayName = filename.replaceAll('.js', '').replaceAll('_', ' ').trim();
-          _installedJsSources[cleanKey] = code;
-          _canonicalDisplayNames[cleanKey] = displayName;
-        } catch (_) {}
-      }
-    } catch (_) {}
   }
 
   Future<void> _loadInstalledExtensionsFromDisk() async {
