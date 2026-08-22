@@ -15,6 +15,12 @@ class _ExtensionReposScreenState extends State<ExtensionReposScreen> {
   final SettingsService _settings = SettingsService.instance;
   final TextEditingController _urlController = TextEditingController();
 
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
+  }
+
   void _showAddRepoDialog() {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
