@@ -133,29 +133,40 @@ class QuickJsService {
   }
 
   static Map<String, String> getImageHeaders(String sourceOrUrl, [String? imageUrl]) {
-    if (sourceOrUrl.isEmpty && (imageUrl == null || imageUrl.isEmpty)) return {};
-
-    try {
-      final jsCode = instance.getExtensionCode(sourceOrUrl);
-      if (jsCode != null && jsCode.isNotEmpty) {
-        final headers = instance.getSourceHeaders(jsCode);
-        if (headers.isNotEmpty) return headers;
-      }
-    } catch (_) {}
-
-    String referer = '';
     final targetUrl = (imageUrl != null && imageUrl.isNotEmpty) ? imageUrl : sourceOrUrl;
-    if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+    final headers = <String, String>{
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    };
+
+    if (sourceOrUrl.isNotEmpty) {
       try {
-        final uri = Uri.parse(targetUrl);
-        referer = '${uri.scheme}://${uri.host}/';
+        final jsCode = instance.getExtensionCode(sourceOrUrl);
+        if (jsCode != null && jsCode.isNotEmpty) {
+          final extHeaders = instance.getSourceHeaders(jsCode);
+          if (extHeaders.isNotEmpty) {
+            headers.addAll(extHeaders);
+          }
+        }
       } catch (_) {}
     }
 
-    return {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      if (referer.isNotEmpty) 'Referer': referer,
-    };
+    if (!headers.containsKey('Referer') || headers['Referer']!.isEmpty) {
+      if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+        try {
+          final uri = Uri.parse(targetUrl);
+          var host = uri.host;
+          if (host.startsWith('cdn.') || host.startsWith('img.') || host.startsWith('images.') || host.startsWith('s1.') || host.startsWith('s2.')) {
+            final parts = host.split('.');
+            if (parts.length > 2) {
+              host = parts.sublist(1).join('.');
+            }
+          }
+          headers['Referer'] = '${uri.scheme}://$host/';
+        } catch (_) {}
+      }
+    }
+
+    return headers;
   }
 
   Map<String, String> getSourceHeaders(String jsCode) {
