@@ -354,8 +354,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(
-            hintText: 'https://.../index.json',
-            labelText: 'Repository JSON URL',
+            hintText: 'https://raw.githubusercontent.com/.../index.json',
+            labelText: 'Repository URL',
             border: OutlineInputBorder(),
           ),
         ),
@@ -368,11 +368,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             onPressed: () async {
               final url = controller.text.trim();
               if (url.isNotEmpty) {
+                final normalized = RepoManager.normalizeRepoUrl(url);
                 final nav = Navigator.of(context);
-                await SettingsService.instance.addCustomRepo(url);
+                await SettingsService.instance.addCustomRepo(normalized);
                 nav.pop();
                 if (mounted) {
-                  setState(() => _selectedRepoUrl = url);
+                  setState(() => _selectedRepoUrl = normalized);
                   _fetchExtensions();
                 }
               }
