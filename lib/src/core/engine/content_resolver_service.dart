@@ -13,11 +13,13 @@ class ChapterPagesResult {
   final List<String> pageUrls;
   final ContentSourceType source;
   final bool isLocalFiles;
+  final String? effectiveSourceName;
 
   ChapterPagesResult({
     required this.pageUrls,
     required this.source,
     this.isLocalFiles = false,
+    this.effectiveSourceName,
   });
 }
 
@@ -145,6 +147,7 @@ class ContentResolverService {
           return ChapterPagesResult(
             pageUrls: localPages,
             source: ContentSourceType.localExtension,
+            effectiveSourceName: effectiveSourceName,
             isLocalFiles: false,
           );
         }
@@ -196,6 +199,7 @@ class ContentResolverService {
                           return ChapterPagesResult(
                             pageUrls: altPages,
                             source: ContentSourceType.localExtension,
+                            effectiveSourceName: altSource,
                             isLocalFiles: false,
                           );
                         }
@@ -224,6 +228,7 @@ class ContentResolverService {
           return ChapterPagesResult(
             pageUrls: paths,
             source: ContentSourceType.localDownload,
+            effectiveSourceName: effectiveSourceName,
             isLocalFiles: true,
           );
         }
@@ -248,6 +253,7 @@ class ContentResolverService {
             return ChapterPagesResult(
               pageUrls: urls,
               source: ContentSourceType.suwayomiServer,
+              effectiveSourceName: effectiveSourceName,
               isLocalFiles: false,
             );
           }
@@ -261,6 +267,7 @@ class ContentResolverService {
     return ChapterPagesResult(
       pageUrls: [],
       source: ContentSourceType.fallback,
+      effectiveSourceName: effectiveSourceName,
       isLocalFiles: false,
     );
   }
