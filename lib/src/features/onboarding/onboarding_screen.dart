@@ -27,12 +27,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _connectionSuccess = false;
 
   // Repositories configured by user
-  final List<String> _userRepoUrls = [
-    'https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json',
-    'https://m2k3a.github.io/mangayomi-extensions/index.json',
-    'https://raw.githubusercontent.com/Swakshan/mangayomi-swak-extensions/refs/heads/main/index.json',
-    'https://raw.githubusercontent.com/Mallyd11/mangayomi-anime-extensions/main/index.json',
-  ];
+  final List<String> _userRepoUrls = [];
 
   // Hydration Progress State
   bool _isHydrating = false;
