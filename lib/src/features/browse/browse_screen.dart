@@ -119,7 +119,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final merged = <Map<String, dynamic>>[];
     for (final item in filteredDisplay) {
       final isLocal = item.isLocalJs;
-      final iconUrl = isLocal ? '' : (serverIconMap[item.id] ?? '');
+      final iconUrl = isLocal ? QuickJsService.instance.getSourceIconUrl(item.name) : (serverIconMap[item.id] ?? '');
       merged.add({
         'id': item.id,
         'name': item.name,
@@ -199,6 +199,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           final isEn = jsLang == 'en' || jsLang == 'all';
           final isInstalled = isEn && QuickJsService.instance.isLocalExtensionInstalled(js.name);
 
+          var iconUrl = js.iconUrl;
+          if (iconUrl.isEmpty || iconUrl.contains('m2k3a/mangayomi-extensions/main/javascript/icon')) {
+            iconUrl = QuickJsService.instance.getSourceIconUrl(js.name);
+          }
+
           items.add({
             'id': '${js.name}_${js.lang}',
             'name': js.lang.toLowerCase() == 'en' || js.lang.isEmpty ? js.name : '${js.name} (${js.lang.toUpperCase()})',
@@ -206,7 +211,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             'version': js.version,
             'isInstalled': isInstalled,
             'sourceCodeUrl': js.sourceCodeUrl,
-            'iconUrl': js.iconUrl,
+            'iconUrl': iconUrl,
             'isJs': true,
           });
         }
