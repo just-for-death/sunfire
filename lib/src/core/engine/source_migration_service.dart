@@ -118,11 +118,29 @@ class SourceMigrationService {
       }
     }
 
-    // 3. Substring containment match (e.g. "mangadex" in "mangadex_org")
+    // 2. Substring containment match (e.g. "mangadex" in "mangadex_org")
     for (final ext in availableJsExtensions) {
       final extClean = ext.replaceAll('.js', '').replaceAll('local_js_', '').toLowerCase();
       if (extClean.contains(alphanumericOnly) || (alphanumericOnly.length >= 4 && alphanumericOnly.contains(extClean))) {
         return ext;
+      }
+    }
+
+    // 3. Synonym & Token prefix match (e.g. "Flame Comics" vs "flame_scans.js", "Asura Comics" vs "asura_scans.js")
+    final serverWords = normalized.split(' ').where((w) => w.isNotEmpty && w != 'comics' && w != 'scans' && w != 'manga' && w != 'scan' && w != 'scanlations').toList();
+    if (serverWords.isNotEmpty) {
+      final primaryToken = serverWords.first;
+      if (primaryToken.length >= 3) {
+        for (final ext in availableJsExtensions) {
+          final extClean = ext.replaceAll('.js', '').replaceAll('local_js_', '').toLowerCase();
+          final extTokens = extClean.split('_').where((w) => w.isNotEmpty && w != 'comics' && w != 'scans' && w != 'manga' && w != 'scan' && w != 'scanlations').toList();
+          if (extTokens.isNotEmpty && extTokens.first == primaryToken) {
+            return ext;
+          }
+          if (extClean.contains(primaryToken)) {
+            return ext;
+          }
+        }
       }
     }
 

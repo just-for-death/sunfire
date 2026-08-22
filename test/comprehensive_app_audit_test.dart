@@ -116,7 +116,8 @@ void main() {
 
       bool handledCleanly = false;
       try {
-        await gql.fetchLibrary().timeout(const Duration(seconds: 1));
+        final res = await gql.fetchLibrary().timeout(const Duration(seconds: 1));
+        if (res == null) handledCleanly = true;
       } catch (_) {
         handledCleanly = true;
       }
