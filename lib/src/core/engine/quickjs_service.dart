@@ -165,8 +165,7 @@ class QuickJsService {
         return 'https://www.google.com/s2/favicons?domain=$baseUrl&sz=128';
       }
     }
-    final clean = _canonicalizeKey(sourceName);
-    return 'https://www.google.com/s2/favicons?domain=https://$clean.com&sz=128';
+    return '';
   }
 
   List<String> getInstalledExtensionNames() {
@@ -179,31 +178,8 @@ class QuickJsService {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     };
 
-    // 1. Identify CDN domains and supply correct origin site Referer
-    if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
-      try {
-        final uri = Uri.parse(targetUrl);
-        final host = uri.host.toLowerCase();
-        if (host.contains('readdetectiveconan.com') || host.contains('mangapill.com')) {
-          headers['Referer'] = 'https://mangapill.com/';
-        } else if (host.contains('webtoon-phinf.pstatic.net') || host.contains('webtoons.com')) {
-          headers['Referer'] = 'https://www.webtoons.com/';
-        } else if (host.contains('compsci88.com') || host.contains('weebcentral.com')) {
-          headers['Referer'] = 'https://weebcentral.com/';
-        } else if (host.contains('funmanga.com') || host.contains('mangahere.cc')) {
-          headers['Referer'] = 'https://www.mangahere.cc/';
-        } else if (host.contains('readmng.com') || host.contains('mangago.me')) {
-          headers['Referer'] = 'https://www.mangago.me/';
-        } else if (host.contains('mangafreak.me') || host.contains('mangafreak.net')) {
-          headers['Referer'] = 'https://ww3.mangafreak.me/';
-        } else if (host.contains('readcomicsonline.ru') || host.contains('readcomiconline.li')) {
-          headers['Referer'] = 'https://readcomicsonline.ru/';
-        }
-      } catch (_) {}
-    }
-
-    // 2. Query extension headers if available
-    if (!headers.containsKey('Referer') && sourceOrUrl.isNotEmpty) {
+    // 1. Query extension headers dynamically from the installed JS source
+    if (sourceOrUrl.isNotEmpty) {
       try {
         final jsCode = instance.getExtensionCode(sourceOrUrl);
         if (jsCode != null && jsCode.isNotEmpty) {
@@ -215,7 +191,7 @@ class QuickJsService {
       } catch (_) {}
     }
 
-    // 3. Fallback generic Referer
+    // 2. Generic Referer derivation from image URL host if not provided by source extension
     if (!headers.containsKey('Referer') || headers['Referer']!.isEmpty) {
       if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
         try {
@@ -424,7 +400,7 @@ class QuickJsService {
       if (pages.isNotEmpty) return pages;
     } catch (e) {
       // In test mock mode or if quickjs symbol lookup fails in unit test runner
-      if (e.toString().contains('Failed to lookup symbol') || e.toString().contains('jsNewRuntime') || jsCode.contains('cdn.weebcentral.com') || jsCode.contains('mangakatana.com')) {
+      if (e.toString().contains('Failed to lookup symbol') || e.toString().contains('jsNewRuntime')) {
         final mockPagesMatch = RegExp(r'''["'](https?://[^"']+)["']''').allMatches(jsCode);
         if (mockPagesMatch.isNotEmpty) {
           final matchedUrls = mockPagesMatch.map((m) => m.group(1)!).where((u) => u.contains('png') || u.contains('jpg') || u.contains('webp') || u.contains('image')).toList();
