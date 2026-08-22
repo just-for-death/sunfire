@@ -32,12 +32,18 @@ class SyncEngine {
   Future<void> triggerSync() async {
     if (_isSyncing) return;
     if (!GraphQLClientService.instance.isConfigured) {
-      await LoggerService.instance.logInfo('SyncEngine: server not configured, skipping sync — local data is authoritative', 'SyncEngine');
       return;
     }
+
+    final isServerOnline = await GraphQLClientService.instance.checkServerReachable();
+    if (!isServerOnline) {
+      // Server is offline — silently keep local authoritative state without firing network queries
+      return;
+    }
+
     _isSyncing = true;
     try {
-      await LoggerService.instance.logInfo('Starting sync cycle...', 'SyncEngine');
+      await LoggerService.instance.logInfo('Starting sync cycle with server...', 'SyncEngine');
       await _flushPendingMutations();
       await _pullServerState();
       await LoggerService.instance.logInfo('Sync cycle completed successfully', 'SyncEngine');
@@ -132,9 +138,7 @@ class SyncEngine {
             );
           }).toList();
 
-          final userRepos = SettingsService.instance.customRepos.isNotEmpty
-              ? SettingsService.instance.customRepos
-              : RepoManager.defaultRepos.map((r) => r['url']!).toList();
+          final userRepos = SettingsService.instance.customRepos;
 
           // Auto-download and install matching JS scrapers from user repos
           await RepoManager.instance.downloadAndInstallMatchingSources(

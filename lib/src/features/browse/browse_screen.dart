@@ -34,7 +34,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   List<Map<String, dynamic>> _extensionList = [];
   bool _isLoadingExtensions = true;
   String _extensionSearchQuery = '';
-  String _selectedRepoUrl = RepoManager.defaultRepos[0]['url']!;
+  String _selectedRepoUrl = '';
 
   // ── MIGRATION STATE ──────────────────────────────────────
   List<Manga> _libraryMangaList = [];
@@ -147,12 +147,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       final items = <Map<String, dynamic>>[];
       final seenKeys = <String>{};
 
-      // 1. Fetch server-side Keiyoushi APK extensions via GraphQL (if reachable)
-      if (GraphQLClientService.instance.isConfigured) {
+      // 1. Fetch server-side Keiyoushi APK extensions via GraphQL (only if server is online)
+      final isServerOnline = await GraphQLClientService.instance.checkServerReachable();
+      if (isServerOnline) {
         try {
-          final data = await GraphQLClientService.instance
-              .fetchExtensions()
-              .timeout(const Duration(seconds: 3), onTimeout: () => null);
+          final data = await GraphQLClientService.instance.fetchExtensions();
 
           if (data != null && data.containsKey('extensions')) {
             final nodes = data['extensions']['nodes'] as List<dynamic>?;
@@ -184,22 +183,33 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         } catch (_) {}
       }
 
-      // 2. Fetch local JS repo extensions
-      final jsList = await RepoManager.instance.fetchRepoSources(_selectedRepoUrl);
-      for (final js in jsList) {
-        final key = 'js_${js.name}_${js.lang}'.toLowerCase();
-        if (!seenKeys.add(key)) continue;
+      // 2. Fetch local JS repo extensions from user-configured repositories
+      final customRepos = SettingsService.instance.customRepos;
+      if (_selectedRepoUrl.isEmpty && customRepos.isNotEmpty) {
+        _selectedRepoUrl = customRepos.first;
+      }
 
-        items.add({
-          'id': '${js.name}_${js.lang}',
-          'name': js.lang.toLowerCase() == 'en' || js.lang.isEmpty ? js.name : '${js.name} (${js.lang.toUpperCase()})',
-          'lang': js.lang,
-          'version': js.version,
-          'isInstalled': QuickJsService.instance.isLocalExtensionInstalled(js.name),
-          'sourceCodeUrl': js.sourceCodeUrl,
-          'iconUrl': js.iconUrl,
-          'isJs': true,
-        });
+      if (_selectedRepoUrl.isNotEmpty) {
+        final jsList = await RepoManager.instance.fetchRepoSources(_selectedRepoUrl);
+        for (final js in jsList) {
+          final key = 'js_${js.name}_${js.lang}'.toLowerCase();
+          if (!seenKeys.add(key)) continue;
+
+          final jsLang = js.lang.toLowerCase();
+          final isEn = jsLang == 'en' || jsLang == 'all';
+          final isInstalled = isEn && QuickJsService.instance.isLocalExtensionInstalled(js.name);
+
+          items.add({
+            'id': '${js.name}_${js.lang}',
+            'name': js.lang.toLowerCase() == 'en' || js.lang.isEmpty ? js.name : '${js.name} (${js.lang.toUpperCase()})',
+            'lang': js.lang,
+            'version': js.version,
+            'isInstalled': isInstalled,
+            'sourceCodeUrl': js.sourceCodeUrl,
+            'iconUrl': js.iconUrl,
+            'isJs': true,
+          });
+        }
       }
 
       setState(() {
@@ -334,6 +344,46 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     }
   }
 
+  void _showAddRepoDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F24),
+        title: const Text('Add Extension Repository', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'https://.../index.json',
+            labelText: 'Repository JSON URL',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final url = controller.text.trim();
+              if (url.isNotEmpty) {
+                final nav = Navigator.of(context);
+                await SettingsService.instance.addCustomRepo(url);
+                nav.pop();
+                if (mounted) {
+                  setState(() => _selectedRepoUrl = url);
+                  _fetchExtensions();
+                }
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -389,8 +439,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final filtered = _sourcesList.where((s) {
       final name = (s['name'] as String).toLowerCase();
       final lang = (s['lang'] as String).toUpperCase();
+      final isEnglish = lang == 'EN' || lang == 'ALL' || lang.isEmpty;
+      if (!isEnglish) return false;
+
       final matchesSearch = _sourceSearchQuery.isEmpty || name.contains(_sourceSearchQuery.toLowerCase());
-      final matchesLang = _selectedLangFilter.toUpperCase() == 'ALL' || lang == _selectedLangFilter.toUpperCase();
+      final matchesLang = _selectedLangFilter.toUpperCase() == 'ALL' || _selectedLangFilter.toUpperCase() == 'EN' ? isEnglish : lang == _selectedLangFilter.toUpperCase();
       return matchesSearch && matchesLang;
     }).toList();
 
@@ -595,6 +648,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       final matchesSearch = _extensionSearchQuery.isEmpty || name.contains(_extensionSearchQuery.toLowerCase());
       if (!matchesSearch) return false;
 
+      final lang = (ext['lang'] as String? ?? 'en').toLowerCase();
+      final isEnglish = lang == 'en' || lang == 'all' || lang.isEmpty;
+      if (!isEnglish) return false;
+
       final isJs = ext['isJs'] as bool? ?? false;
       final isInstalled = ext['isInstalled'] as bool? ?? false;
 
@@ -628,30 +685,48 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             onChanged: (val) => setState(() => _extensionSearchQuery = val),
           ),
         ),
-        // ── REPOSITORY SELECTION ROW ──
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: RepoManager.defaultRepos.map((repo) {
-              final isSelected = _selectedRepoUrl == repo['url'];
-              return Padding(
-                padding: const EdgeInsets.only(right: 8.0),
-                child: ChoiceChip(
-                  label: Text(repo['name']!),
-                  selected: isSelected,
-                  selectedColor: primaryColor,
-                  backgroundColor: const Color(0x1F2A2A32),
-                  labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  onSelected: (_) {
-                    setState(() => _selectedRepoUrl = repo['url']!);
-                    _fetchExtensions();
-                  },
-                ),
-              );
-            }).toList(),
-          ),
+        // ── USER CONFIGURED REPOSITORIES ROW ──
+        Builder(
+          builder: (context) {
+            final customRepos = SettingsService.instance.customRepos;
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  ...customRepos.map((repoUrl) {
+                    final isSelected = _selectedRepoUrl == repoUrl;
+                    final repoTitle = RepoManager.deriveRepoTitle(repoUrl);
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ChoiceChip(
+                        label: Text(repoTitle),
+                        selected: isSelected,
+                        selectedColor: primaryColor,
+                        backgroundColor: const Color(0x1F2A2A32),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : Colors.grey,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        onSelected: (_) {
+                          setState(() => _selectedRepoUrl = repoUrl);
+                          _fetchExtensions();
+                        },
+                      ),
+                    );
+                  }),
+                  ActionChip(
+                    avatar: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Add Repo'),
+                    backgroundColor: const Color(0x1F2A2A32),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    onPressed: () => _showAddRepoDialog(),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
         const SizedBox(height: 8),
 

@@ -88,24 +88,6 @@ class SourceMigrationService {
   static SourceMigrationService get instance => _instance;
   SourceMigrationService._internal();
 
-  /// Built-in known alias mapping for common community source names
-  static const Map<String, String> _knownAliases = {
-    'weeb central': 'weeb_central',
-    'weebcentral': 'weeb_central',
-    'mangadex': 'mangadex',
-    'mangakatana': 'mangakatana',
-    'manga katana': 'mangakatana',
-    'asura': 'asura_scans',
-    'asurascans': 'asura_scans',
-    'asura scans': 'asura_scans',
-    'flamescans': 'flame_scans',
-    'flame scans': 'flame_scans',
-    'flamecomics': 'flame_scans',
-    'flame comics': 'flame_scans',
-    'reaper scans': 'reaper_scans',
-    'reaperscans': 'reaper_scans',
-  };
-
   /// Normalizes a source name for resilient fuzzy matching.
   /// Example: "MangaDex (EN) [v1.4]" -> "mangadex"
   String normalizeSourceName(String name) {
@@ -126,18 +108,7 @@ class SourceMigrationService {
     final normalized = normalizeSourceName(serverSourceName);
     final alphanumericOnly = normalized.replaceAll(RegExp(r'\s+'), '');
 
-    // 1. Direct alias lookup
-    if (_knownAliases.containsKey(normalized)) {
-      final aliasTarget = _knownAliases[normalized]!;
-      for (final ext in availableJsExtensions) {
-        final extNormalized = ext.replaceAll('.js', '').replaceAll('local_js_', '').toLowerCase();
-        if (extNormalized == aliasTarget || extNormalized.replaceAll('_', '') == aliasTarget.replaceAll('_', '')) {
-          return ext;
-        }
-      }
-    }
-
-    // 2. Exact match against extension names (without .js / local_js_ prefix)
+    // 1. Exact match against extension names (without .js / local_js_ prefix)
     for (final ext in availableJsExtensions) {
       final extClean = ext.replaceAll('.js', '').replaceAll('local_js_', '').toLowerCase();
       final extAlpha = extClean.replaceAll(RegExp(r'[^a-z0-9]'), '');
@@ -215,8 +186,6 @@ class SourceMigrationService {
       final cleanName = ext.replaceAll('.js', '').replaceAll('local_js_', '');
       final norm = normalizeSourceName(cleanName);
       normalizedLocal.add(norm);
-      final alias = _knownAliases[norm] ?? norm;
-      normalizedLocal.add(alias);
 
       displayItems.add(SourceDisplayItem(
         id: 'local_js_$cleanName',
@@ -230,10 +199,7 @@ class SourceMigrationService {
     // 2. Add server sources ONLY if missing in local Mangayomi extensions
     for (final srv in serverInstalledSources) {
       final srvNorm = normalizeSourceName(srv.name);
-      final srvAlias = _knownAliases[srvNorm] ?? srvNorm;
-
       final isMatchedLocally = normalizedLocal.contains(srvNorm) || 
-                              normalizedLocal.contains(srvAlias) ||
                               matchServerSourceToLocalJs(srv.name, localInstalledExtensions) != null;
 
       if (!isMatchedLocally) {

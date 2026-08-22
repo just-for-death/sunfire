@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/category.dart';
 import '../../core/db/models/manga.dart';
+import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
@@ -610,15 +611,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(14),
-                    child: manga.thumbnailUrl != null && manga.thumbnailUrl!.isNotEmpty
-                        ? Image.network(
-                            manga.thumbnailUrl!,
-                            width: double.infinity,
-                            height: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.book_rounded, color: Colors.grey)),
-                          )
-                        : const Center(child: Icon(Icons.book_rounded, color: Colors.grey)),
+                    child: MangaCoverImage(
+                      mangaServerId: manga.serverId,
+                      thumbnailUrl: manga.thumbnailUrl,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
                 if (isSelected)
@@ -688,9 +687,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
           onLongPress: () => _toggleBatchSelection(manga.serverId),
           leading: ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: manga.thumbnailUrl != null && manga.thumbnailUrl!.isNotEmpty
-                ? Image.network(manga.thumbnailUrl!, width: 40, height: 56, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded))
-                : const Icon(Icons.book_rounded),
+            child: MangaCoverImage(
+              mangaServerId: manga.serverId,
+              thumbnailUrl: manga.thumbnailUrl,
+              width: 40,
+              height: 56,
+              fit: BoxFit.cover,
+            ),
           ),
           title: Text(manga.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
           subtitle: Text(manga.sourceName, style: const TextStyle(color: Colors.grey, fontSize: 12)),
