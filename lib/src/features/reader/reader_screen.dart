@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
@@ -214,26 +215,36 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
-  void _handleTapZone(TapUpDetails details, BoxConstraints constraints) {
-    final screenWidth = constraints.maxWidth;
-    final tapX = details.localPosition.dx;
-    final leftBoundary = screenWidth * 0.30;
-    final rightBoundary = screenWidth * 0.70;
+  void _toggleControls() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _showControls = !_showControls;
+      if (!_showControls) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      } else {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      }
+    });
+  }
 
-    final isLeft = tapX < leftBoundary;
-    final isRight = tapX > rightBoundary;
+  void _handleTapZone(TapUpDetails details, BoxConstraints constraints) {
+    final width = constraints.maxWidth;
+    final dx = details.localPosition.dx;
+
+    final isLeft = dx < width * 0.30;
+    final isRight = dx > width * 0.70;
+
+    final isNext = _invertTaps ? isLeft : isRight;
+    final isPrev = _invertTaps ? isRight : isLeft;
 
     if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
-      final isNext = _invertTaps ? isLeft : isRight;
-      final isPrev = _invertTaps ? isRight : isLeft;
-
       if (_readingMode == ReadingMode.pagedRtl) {
         if (isLeft) {
           _goToNextPage();
         } else if (isRight) {
           _goToPrevPage();
         } else {
-          setState(() => _showControls = !_showControls);
+          _toggleControls();
         }
       } else {
         if (isNext) {
@@ -241,24 +252,24 @@ class _ReaderScreenState extends State<ReaderScreen> {
         } else if (isPrev) {
           _goToPrevPage();
         } else {
-          setState(() => _showControls = !_showControls);
+          _toggleControls();
         }
       }
     } else {
-      // In Webtoon / Vertical mode, middle tap toggles controls
+      // In Webtoon / Vertical mode, center tap toggles controls
       if (!isLeft && !isRight) {
-        setState(() => _showControls = !_showControls);
+        _toggleControls();
       } else if (isRight) {
         _scrollController.animateTo(
           _scrollController.offset + 400,
           duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
+          curve: Curves.easeOutCubic,
         );
       } else if (isLeft) {
         _scrollController.animateTo(
           _scrollController.offset - 400,
           duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
+          curve: Curves.easeOutCubic,
         );
       }
     }
@@ -266,7 +277,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   void _goToNextPage() {
     if (_currentPage < _pageUrls.length) {
-      _pageController.nextPage(duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      HapticFeedback.lightImpact();
+      _pageController.nextPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
     } else if (_nextChapter != null) {
       _loadChapterAndPages(_nextChapter!.serverId);
     }
@@ -274,7 +286,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   void _goToPrevPage() {
     if (_currentPage > 1) {
-      _pageController.previousPage(duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      HapticFeedback.lightImpact();
+      _pageController.previousPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
     } else if (_prevChapter != null) {
       _loadChapterAndPages(_prevChapter!.serverId);
     }
@@ -529,7 +542,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
-  Widget _buildPageWidget(String url, int index) {
+  Widget _buildPageWidget(String url, int index, {bool isPaged = false}) {
     Widget image;
     if (url.startsWith('/')) {
       image = Image.file(
@@ -576,11 +589,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
       image = ClipRect(child: image);
     }
 
-    return InteractiveViewer(
-      minScale: 1.0,
-      maxScale: 3.5,
-      child: image,
-    );
+    if (isPaged) {
+      return InteractiveViewer(
+        minScale: 1.0,
+        maxScale: 3.5,
+        child: image,
+      );
+    }
+
+    return image;
   }
 
   Widget _buildChapterTransitionCard() {
@@ -692,6 +709,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 if (_readingMode == ReadingMode.webtoon || _readingMode == ReadingMode.continuousVertical)
                   ListView.builder(
                     controller: _scrollController,
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
                     itemBuilder: (context, index) {
                       if (index == _pageUrls.length) {
@@ -704,7 +722,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         ),
                         child: Padding(
                           padding: EdgeInsets.only(bottom: _readingMode == ReadingMode.continuousVertical ? 8.0 : 0.0),
-                          child: _buildPageWidget(_pageUrls[index], index),
+                          child: _buildPageWidget(_pageUrls[index], index, isPaged: false),
                         ),
                       );
                     },
@@ -712,11 +730,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 else
                   PageView.builder(
                     controller: _pageController,
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     reverse: _readingMode == ReadingMode.pagedRtl,
                     itemCount: _pageUrls.length,
                     onPageChanged: _onPageChanged,
                     itemBuilder: (context, index) {
-                      return Center(child: _buildPageWidget(_pageUrls[index], index));
+                      return Center(child: _buildPageWidget(_pageUrls[index], index, isPaged: true));
                     },
                   ),
 

@@ -312,7 +312,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                         style: TextStyle(color: Colors.grey),
                       ),
                     )
-                  : CustomScrollView(
+              : Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 850),
+                    child: CustomScrollView(
+                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                       slivers: [
                         if (_lastUpdateText != null)
                           SliverToBoxAdapter(
@@ -401,6 +406,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                         const SliverToBoxAdapter(child: SizedBox(height: 120)),
                       ],
                     ),
+                  ),
+                ),
         ),
       ),
     );
