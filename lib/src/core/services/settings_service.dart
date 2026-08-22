@@ -214,13 +214,27 @@ class SettingsService extends ChangeNotifier {
   }
 
   // ── EXTENSIONS & REPOS ───────────────────────────────────
+  static const List<String> defaultRepositories = [
+    'https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json',
+    'https://m2k3a.github.io/mangayomi-extensions/index.json',
+    'https://raw.githubusercontent.com/Swakshan/mangayomi-swak-extensions/refs/heads/main/index.json',
+    'https://raw.githubusercontent.com/Mallyd11/mangayomi-anime-extensions/main/index.json',
+  ];
+
   bool get autoUpdateJsSources => _prefs?.getBool('auto_update_js_sources') ?? true;
   set autoUpdateJsSources(bool value) {
     _prefs?.setBool('auto_update_js_sources', value);
     notifyListeners();
   }
 
-  List<String> get customRepos => _prefs?.getStringList('custom_repos') ?? [];
+  List<String> get customRepos {
+    final list = _prefs?.getStringList('custom_repos');
+    if (list == null || list.isEmpty) {
+      return List<String>.from(defaultRepositories);
+    }
+    return list;
+  }
+
   Future<void> addCustomRepo(String url) async {
     final list = List<String>.from(customRepos);
     if (!list.contains(url)) {
