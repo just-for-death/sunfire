@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
+import '../../core/engine/content_resolver_service.dart';
+import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 
@@ -65,45 +67,28 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
 
     // Run searches with individual timeouts so no source blocks the UI
     await Future.wait(
-      targetSources.map((s) => _searchSingleSource(s['id'].toString(), query)),
+      targetSources.map((s) => _searchSingleSource(
+        s['id'].toString(),
+        query,
+        s['name'] as String? ?? s['displayName'] as String? ?? 'Source',
+      )),
     );
   }
 
-  Future<void> _searchSingleSource(String sourceId, String query) async {
+  Future<void> _searchSingleSource(String sourceId, String query, String sourceName) async {
     try {
-      if (GraphQLClientService.instance.isConfigured) {
-        final data = await GraphQLClientService.instance
-            .fetchSourceManga(sourceId, searchQuery: query)
-            .timeout(const Duration(seconds: 8), onTimeout: () => null);
+      final list = await ContentResolverService.instance.resolveSourceManga(
+        sourceId: sourceId,
+        sourceName: sourceName,
+        searchQuery: query,
+        page: 1,
+      ).timeout(const Duration(seconds: 8), onTimeout: () => []);
 
-        if (data != null && data.containsKey('fetchSourceManga')) {
-          final mangas = data['fetchSourceManga']['mangas'] as List<dynamic>?;
-          if (mangas != null) {
-            final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
-            final list = mangas.map((m) {
-              final map = m as Map<String, dynamic>;
-              final rawThumb = map['thumbnailUrl'] as String?;
-              final thumb = (rawThumb != null && rawThumb.isNotEmpty)
-                  ? (rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb')
-                  : '';
-              return {
-                'id': map['id'],
-                'title': map['title'] as String? ?? 'Untitled',
-                'thumbnailUrl': thumb,
-                'artist': map['artist'],
-                'author': map['author'],
-              };
-            }).toList();
-
-            if (mounted) {
-              setState(() {
-                _searchResults[sourceId] = list;
-                _loadingStates[sourceId] = false;
-              });
-            }
-            return;
-          }
-        }
+      if (mounted) {
+        setState(() {
+          _searchResults[sourceId] = list;
+          _loadingStates[sourceId] = false;
+        });
       }
     } catch (e) {
       await LoggerService.instance.logWarning('Search timed out on source $sourceId: $e', 'Migrate');
@@ -543,6 +528,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                                             borderRadius: BorderRadius.circular(6),
                                             child: Image.network(
                                               thumb,
+                                              headers: QuickJsService.getImageHeaders(sourceName, thumb),
                                               width: 38,
                                               height: 52,
                                               fit: BoxFit.cover,
