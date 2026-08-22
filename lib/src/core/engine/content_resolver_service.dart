@@ -238,7 +238,7 @@ class ContentResolverService {
     }
 
     // ── PRIORITY 3: SUWAYOMI SERVER PROXY ─────────────────────────────────
-    if (GraphQLClientService.instance.isConfigured && chapterServerId > 0) {
+    if (GraphQLClientService.instance.isConfigured && chapterServerId > 0 && chapterServerId < 2147483647) {
       try {
         final data = await GraphQLClientService.instance.fetchChapterPages(chapterServerId);
         if (data != null && data.containsKey('fetchChapterPages')) {
