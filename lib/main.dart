@@ -4,6 +4,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'src/app.dart';
 import 'src/core/db/isar_service.dart';
 import 'src/core/engine/image_transport_service.dart';
+import 'src/core/engine/javascript/m_client.dart';
 import 'src/core/engine/quickjs_service.dart';
 import 'src/core/logging/logger_service.dart';
 import 'src/core/services/download_manager_service.dart';
@@ -32,6 +33,14 @@ void main() async {
         GraphQLClientService.instance.initialize(SettingsService.instance.serverUrl);
         SyncEngine.instance.initialize();
       }
+
+      // Load saved FlareSolverr / Byparr URL into MClient so Cloudflare-protected
+      // sources (Mangago, ReadComicOnline, etc.) work immediately on startup.
+      final savedCfProxy = SettingsService.instance.cfProxyUrl;
+      if (savedCfProxy.isNotEmpty) {
+        MClient.cfProxyUrl = savedCfProxy;
+      }
+
       await DownloadManagerService.instance.initialize();
 
       runApp(const SunfireApp());

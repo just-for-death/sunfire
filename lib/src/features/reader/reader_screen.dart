@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/engine/content_resolver_service.dart';
+import '../../core/engine/quickjs_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 
@@ -164,14 +165,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
 
     _pageUrls = resolved.pageUrls;
-
-    // Fallback placeholders only if completely offline and unresolved
-    if (_pageUrls.isEmpty) {
-      _pageUrls = List.generate(
-        15,
-        (i) => 'https://via.placeholder.com/800x1200.png?text=Page+${i + 1}',
-      );
-    }
 
     if (_chapter != null && _chapter!.lastPageRead > 0 && _chapter!.lastPageRead <= _pageUrls.length) {
       _currentPage = _chapter!.lastPageRead;
@@ -548,8 +541,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
         ),
       );
     } else {
+      final headers = QuickJsService.getImageHeaders(url);
+
       image = Image.network(
         url,
+        headers: headers,
         fit: _imageBoxFit,
         loadingBuilder: (_, child, progress) {
           if (progress == null) return child;
@@ -625,7 +621,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    if (_isLoading || _pageUrls.isEmpty) {
+    if (_isLoading) {
       return Scaffold(
         backgroundColor: _canvasBackgroundColor,
         body: Center(
@@ -637,6 +633,43 @@ class _ReaderScreenState extends State<ReaderScreen> {
               Text(
                 _chapter?.name ?? 'Loading Chapter...',
                 style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_pageUrls.isEmpty) {
+      return Scaffold(
+        backgroundColor: _canvasBackgroundColor,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.broken_image_rounded, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              Text(
+                'Could not load ${_chapter?.name ?? "chapter pages"}',
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Check network or source availability',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => _loadChapterAndPages(widget.chapterServerId),
+                child: const Text('Retry'),
               ),
             ],
           ),

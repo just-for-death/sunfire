@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
+import '../db/isar_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/graphql_client_service.dart';
 import 'quickjs_service.dart';
+import 'source_migration_service.dart';
 
 enum ContentSourceType { localExtension, localDownload, suwayomiServer, fallback }
 
@@ -34,12 +36,112 @@ class ContentResolverService {
     String? chapterUrl,
     String? sourceName,
   }) async {
-    // ── PRIORITY 1: LOCAL EXTENSION SCRAPER (Mangayomi / QuickJS) ─────────
-    if (sourceName != null && chapterUrl != null && chapterUrl.isNotEmpty) {
+    var effectiveSourceName = sourceName;
+    var effectiveChapterUrl = chapterUrl;
+
+    // Retrieve from local DB if missing
+    if (effectiveChapterUrl == null || effectiveChapterUrl.isEmpty || effectiveSourceName == null) {
       try {
-        final localPages = await QuickJsService.instance.fetchChapterPagesLocal(sourceName, chapterUrl);
+        final ch = await IsarService.instance.getChapterByServerId(chapterServerId);
+        if (ch != null) {
+          if (effectiveChapterUrl == null || effectiveChapterUrl.isEmpty) {
+            effectiveChapterUrl = ch.url.isNotEmpty ? ch.url : ch.realUrl;
+          }
+          if (effectiveSourceName == null) {
+            final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
+            effectiveSourceName = m?.sourceName;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // If chapter URL is still missing, scrape the manga details locally to hydrate chapters with real URLs!
+    if ((effectiveChapterUrl == null || effectiveChapterUrl.isEmpty) && effectiveSourceName != null) {
+      try {
+        final ch = await IsarService.instance.getChapterByServerId(chapterServerId);
+        if (ch != null) {
+          final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
+          if (m != null) {
+            if (m.url.isEmpty) {
+              final searchResults = await QuickJsService.instance.fetchSourceMangaLocal(
+                effectiveSourceName,
+                searchQuery: m.title,
+              );
+              if (searchResults.isNotEmpty) {
+                final found = searchResults.first;
+                final link = (found['link'] ?? found['url'] ?? '').toString();
+                if (link.isNotEmpty) {
+                  m.url = link;
+                  await IsarService.instance.saveManga(m);
+                }
+              }
+            }
+
+            if (m.url.isNotEmpty) {
+              final localData = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSourceName, m.url);
+              final chList = (localData['chapters'] ?? localData['chapterList'] ?? localData['epList'] ?? localData['episodes']) as List<dynamic>?;
+              if (chList != null && chList.isNotEmpty) {
+                // Pre-extract chapter numbers from scraped list
+                final parsedScraped = <Map<String, dynamic>>[];
+                for (final c in chList) {
+                  final cMap = Map<String, dynamic>.from(c as Map);
+                  final cName = cMap['name']?.toString() ?? '';
+                  final cUrl = (cMap['url'] ?? cMap['link'])?.toString() ?? '';
+                  double parsedNum = -1.0;
+                  if (cMap['chapterNumber'] != null) {
+                    parsedNum = (cMap['chapterNumber'] as num).toDouble();
+                  } else {
+                    final numMatch = RegExp(r'(?:ch(?:apter)?\.?|episode|#)?\s*(\d+(?:\.\d+)?)', caseSensitive: false).firstMatch(cName);
+                    if (numMatch != null) {
+                      parsedNum = double.tryParse(numMatch.group(1)!) ?? -1.0;
+                    }
+                  }
+                  parsedScraped.add({
+                    'name': cName,
+                    'url': cUrl,
+                    'num': parsedNum,
+                  });
+                }
+
+                // 1. Exact name match or chapter number match
+                for (final p in parsedScraped) {
+                  final cName = p['name'] as String;
+                  final cUrl = p['url'] as String;
+                  final pNum = p['num'] as double;
+
+                  final numMatches = ch.chapterNumber > 0 && pNum > 0 && (pNum - ch.chapterNumber).abs() < 0.001;
+                  final nameMatches = cName.trim().toLowerCase() == ch.name.trim().toLowerCase();
+
+                  if (numMatches || nameMatches) {
+                    effectiveChapterUrl = cUrl;
+                    ch.url = cUrl;
+                    ch.realUrl = cUrl;
+                    await IsarService.instance.saveChapter(ch);
+                    break;
+                  }
+                }
+
+                if ((effectiveChapterUrl == null || effectiveChapterUrl.isEmpty) && parsedScraped.isNotEmpty) {
+                  effectiveChapterUrl = parsedScraped.first['url'] as String?;
+                  if (effectiveChapterUrl != null) {
+                    ch.url = effectiveChapterUrl;
+                    ch.realUrl = effectiveChapterUrl;
+                    await IsarService.instance.saveChapter(ch);
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // ── PRIORITY 1: LOCAL EXTENSION SCRAPER (Mangayomi / QuickJS) ─────────
+    if (effectiveSourceName != null && effectiveChapterUrl != null && effectiveChapterUrl.isNotEmpty) {
+      try {
+        final localPages = await QuickJsService.instance.fetchChapterPagesLocal(effectiveSourceName, effectiveChapterUrl);
         if (localPages.isNotEmpty) {
-          await LoggerService.instance.logInfo('Resolved ${localPages.length} pages via Local Extension ($sourceName)', 'ContentResolver');
+          await LoggerService.instance.logInfo('Resolved ${localPages.length} pages via Local Extension ($effectiveSourceName)', 'ContentResolver');
           return ChapterPagesResult(
             pageUrls: localPages,
             source: ContentSourceType.localExtension,
@@ -47,9 +149,66 @@ class ContentResolverService {
           );
         }
       } catch (e) {
-        await LoggerService.instance.logWarning('Local extension resolution failed for $sourceName: $e', 'ContentResolver');
+        await LoggerService.instance.logWarning('Local extension resolution failed for $effectiveSourceName: $e', 'ContentResolver');
       }
     }
+
+    // ── PRIORITY 1.5: AUTO-RECOVERY ACROSS OTHER INSTALLED LOCAL EXTENSIONS ──
+    try {
+      final ch = await IsarService.instance.getChapterByServerId(chapterServerId);
+      if (ch != null) {
+        final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
+        if (m != null && m.title.isNotEmpty) {
+          // Dynamically query whatever extensions are actually installed on the device
+          final installedExtensions = QuickJsService.instance.getInstalledExtensionNames();
+          for (final altSource in installedExtensions) {
+            if (altSource.toLowerCase() == (effectiveSourceName ?? '').toLowerCase()) continue;
+            try {
+              final searchResults = await QuickJsService.instance.fetchSourceMangaLocal(
+                altSource,
+                searchQuery: m.title,
+              );
+              if (searchResults.isNotEmpty) {
+                final found = searchResults.first;
+                final link = (found['link'] ?? found['url'] ?? '').toString();
+                if (link.isNotEmpty) {
+                  final altData = await QuickJsService.instance.fetchMangaDetailsLocal(altSource, link);
+                  final chList = (altData['chapters'] ?? altData['chapterList'] ?? altData['epList'] ?? altData['episodes']) as List<dynamic>?;
+                  if (chList != null && chList.isNotEmpty) {
+                    for (final c in chList) {
+                      final cMap = c as Map<String, dynamic>;
+                      final cName = cMap['name']?.toString() ?? '';
+                      final cUrl = (cMap['url'] ?? cMap['link'])?.toString() ?? '';
+                      final cNum = (cMap['chapterNumber'] as num?)?.toDouble() ?? 0.0;
+                      final matchFound = cName == ch.name ||
+                          (ch.chapterNumber > 0 && cNum == ch.chapterNumber) ||
+                          (ch.chapterNumber > 0 && cName.contains('${ch.chapterNumber.toInt()}'));
+                      if (matchFound && cUrl.isNotEmpty) {
+                        final altPages = await QuickJsService.instance.fetchChapterPagesLocal(altSource, cUrl);
+                        if (altPages.isNotEmpty) {
+                          ch.url = cUrl;
+                          ch.realUrl = cUrl;
+                          await IsarService.instance.saveChapter(ch);
+                          m.sourceName = altSource;
+                          m.url = link;
+                          await IsarService.instance.saveManga(m);
+                          await LoggerService.instance.logInfo('Auto-recovered ${altPages.length} pages via $altSource for ${m.title}', 'ContentResolver');
+                          return ChapterPagesResult(
+                            pageUrls: altPages,
+                            source: ContentSourceType.localExtension,
+                            isLocalFiles: false,
+                          );
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
 
     // ── PRIORITY 2: LOCAL DOWNLOADS (Offline Storage) ─────────────────────
     try {
@@ -106,13 +265,16 @@ class ContentResolverService {
     );
   }
 
-  /// ── SOURCE MANGA LIST RESOLVER (1. Local Extension -> 2. Suwayomi Server) ──
+
   Future<List<Map<String, dynamic>>> resolveSourceManga({
     required String sourceId,
     required String sourceName,
     bool isLatest = false,
     int page = 1,
     String? searchQuery,
+    String? selectedSort,
+    String? selectedStatus,
+    String? selectedType,
   }) async {
     // ── PRIORITY 1: LOCAL EXTENSION ───────────────────────────────────────
     try {
@@ -121,6 +283,9 @@ class ContentResolverService {
         isLatest: isLatest,
         page: page,
         searchQuery: searchQuery,
+        selectedSort: selectedSort,
+        selectedStatus: selectedStatus,
+        selectedType: selectedType,
       );
       if (localResults.isNotEmpty) {
         await LoggerService.instance.logInfo('Fetched ${localResults.length} titles via Local Extension ($sourceName)', 'ContentResolver');
@@ -134,17 +299,20 @@ class ContentResolverService {
     if (GraphQLClientService.instance.isConfigured) {
       try {
         var queryServerId = sourceId;
-        if (queryServerId.startsWith('local_js_')) {
+        if (int.tryParse(queryServerId) == null) {
           final sourcesData = await GraphQLClientService.instance.fetchSources();
           if (sourcesData != null && sourcesData.containsKey('sources')) {
             final nodes = sourcesData['sources']['nodes'] as List<dynamic>?;
             if (nodes != null) {
+              final targetClean = SourceMigrationService.instance.normalizeSourceName(sourceName);
               for (final n in nodes) {
                 final map = n as Map<String, dynamic>;
-                final name = (map['name'] as String? ?? '').toLowerCase();
-                final disp = (map['displayName'] as String? ?? '').toLowerCase();
-                final target = sourceName.toLowerCase();
-                if (name == target || disp == target || name.contains(target) || target.contains(name)) {
+                final nameClean = SourceMigrationService.instance.normalizeSourceName(map['name'] as String? ?? '');
+                final dispClean = SourceMigrationService.instance.normalizeSourceName(map['displayName'] as String? ?? '');
+                if (nameClean == targetClean ||
+                    dispClean == targetClean ||
+                    nameClean.contains(targetClean) ||
+                    targetClean.contains(nameClean)) {
                   queryServerId = map['id'].toString();
                   break;
                 }
@@ -153,7 +321,7 @@ class ContentResolverService {
           }
         }
 
-        if (!queryServerId.startsWith('local_js_')) {
+        if (int.tryParse(queryServerId) != null) {
           final data = await GraphQLClientService.instance.fetchSourceManga(
             queryServerId,
             isLatest: isLatest,
