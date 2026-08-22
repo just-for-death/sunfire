@@ -60,6 +60,8 @@ dependencies:
 dev_dependencies:
   build_runner: ^2.4.13
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.1
   flutter_test:
     sdk: flutter
   isar_generator: ^3.1.0+1
@@ -78,35 +80,35 @@ flutter_gen:
   output: lib/src/constants/gen/
 
 flutter_native_splash:
-  color: "#54C5F8"
-  image: assets/icons/dark_icon.png
-  color_dark: "#01579B"
-  image_dark: assets/icons/light_icon.png
+  color: "#0F0F13"
+  image: assets/icons/sunfire_logo.png
+  color_dark: "#0F0F13"
+  image_dark: assets/icons/sunfire_logo.png
   android_12:
-    color: "#54C5F8"
-    color_dark: "#01579B"
-    icon_background_color: "#54C5F8"
-    icon_background_color_dark: "#01579B"
-    image: assets/icons/dark_icon.png
-    image_dark: assets/icons/light_icon.png
+    color: "#0F0F13"
+    color_dark: "#0F0F13"
+    icon_background_color: "#0F0F13"
+    icon_background_color_dark: "#0F0F13"
+    image: assets/icons/sunfire_logo.png
+    image_dark: assets/icons/sunfire_logo.png
 
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
   remove_alpha_ios: true
-  image_path: "assets/icons/launcher/catalyst_icon.png"
-  adaptive_icon_background: "#1C1C1E"
-  adaptive_icon_foreground: "assets/icons/launcher/catalyst_icon_foreground.png"
-  adaptive_icon_monochrome: "assets/icons/launcher/catalyst_icon_monochrome.png"
+  image_path: "assets/icons/launcher/sunfire_icon.png"
+  adaptive_icon_background: "#0F0F13"
+  adaptive_icon_foreground: "assets/icons/sunfire_logo.png"
+  adaptive_icon_monochrome: "assets/icons/sunfire_logo.png"
 
   web:
     generate: true
-    image_path: "assets/icons/launcher/catalyst_icon.png"
-    background_color: "#54C5F8"
-    theme_color: "#54C5F8"
+    image_path: "assets/icons/launcher/sunfire_icon.png"
+    background_color: "#0F0F13"
+    theme_color: "#FF6D00"
   windows:
     generate: true
-    image_path: "assets/icons/launcher/catalyst_icon.png"
+    image_path: "assets/icons/launcher/sunfire_icon.png"
   macos:
     generate: true
-    image_path: "assets/icons/launcher/catalyst_icon.png"
+    image_path: "assets/icons/launcher/sunfire_icon.png"
