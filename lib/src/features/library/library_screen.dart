@@ -45,15 +45,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
   /// sync to update. This guarantees the library is visible instantly even when
   /// the server is down, wiped, or unreachable.
   Future<void> _loadFromIsarThenSync() async {
-    // 1. Show local data immediately — never wait for network
-    final list = await IsarService.instance.getLibraryManga();
-    final cats = await IsarService.instance.getCategories();
-    if (mounted) {
-      setState(() {
-        _allManga = list;
-        _categories = cats;
-        _isLoading = false;
-      });
+    try {
+      final list = await IsarService.instance.getLibraryManga();
+      final cats = await IsarService.instance.getCategories();
+      if (mounted) {
+        setState(() {
+          _allManga = list;
+          _categories = cats;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
 
     // 2. Background sync (silent — only if server is configured)

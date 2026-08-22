@@ -73,21 +73,52 @@ class _HistoryScreenState extends State<HistoryScreen> {
         child: SafeArea(
           child: _isLoading
               ? Center(child: CircularProgressIndicator(color: primaryColor))
-              : _historyItems.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No reading history yet.\nStart reading a chapter to track progress.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    )
               : Align(
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 850),
-                    child: ListView.builder(
-                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                      padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0, bottom: 120.0),
+                    child: _historyItems.isEmpty
+                        ? CustomScrollView(
+                            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                            slivers: [
+                              SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24.0),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.history_toggle_off_rounded, size: 64, color: primaryColor.withAlpha(120)),
+                                        const SizedBox(height: 16),
+                                        const Text('No Reading History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 8),
+                                        const Text(
+                                          'Start reading a chapter to track\nyour reading progress here.',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                                        ),
+                                        const SizedBox(height: 20),
+                                        ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: primaryColor,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                          ),
+                                          icon: const Icon(Icons.explore_outlined, color: Colors.white, size: 18),
+                                          label: const Text('Browse Manga', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                          onPressed: () => context.go('/browse'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        : ListView.builder(
+                            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                            padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0, bottom: 120.0),
                       itemCount: _historyItems.length,
                       itemBuilder: (context, index) {
                         final item = _historyItems[index];
