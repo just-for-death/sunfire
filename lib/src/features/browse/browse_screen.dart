@@ -273,24 +273,32 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     });
   }
 
-  void _toggleExtensionInstallation(Map<String, dynamic> ext) async {
+  void _toggleExtensionInstallation(Map<String, dynamic> ext, {bool isUpdate = false}) async {
     final name = ext['name'] as String;
     final isInstalled = ext['isInstalled'] as bool;
     final id = ext['id'] as String;
     final isJs = ext['isJs'] as bool? ?? false;
     final sourceCodeUrl = ext['sourceCodeUrl'] as String? ?? '';
+    final version = ext['version'] as String? ?? '1.0.0';
     String? customStatusMessage;
 
-    setState(() {
-      ext['isInstalled'] = !isInstalled;
-    });
+    if (!isUpdate) {
+      setState(() {
+        ext['isInstalled'] = !isInstalled;
+      });
+    }
 
     try {
       if (isJs) {
-        if (!isInstalled && sourceCodeUrl.isNotEmpty) {
+        if ((!isInstalled || isUpdate) && sourceCodeUrl.isNotEmpty) {
           final code = await RepoManager.instance.downloadJsSourceCode(sourceCodeUrl);
           if (code != null) {
             await QuickJsService.instance.saveLocalExtension(name, code);
+            setState(() {
+              ext['isInstalled'] = true;
+              ext['hasUpdate'] = false;
+              ext['installedVersion'] = version;
+            });
 
             // Check if available on server and trigger dual install
             final serverExtensionNames = _extensionList
@@ -303,7 +311,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               serverAvailableSourceNames: serverExtensionNames,
             );
 
-            customStatusMessage = dualResult.statusMessage;
+            customStatusMessage = isUpdate ? 'Updated $name to v$version' : dualResult.statusMessage;
 
             if (dualResult.isAvailableOnServer && GraphQLClientService.instance.isConfigured) {
               final serverExt = _extensionList.firstWhere(
@@ -318,11 +326,15 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               }
             }
           }
-        } else if (isInstalled) {
+        } else if (isInstalled && !isUpdate) {
           await QuickJsService.instance.deleteLocalExtension(name);
+          setState(() {
+            ext['isInstalled'] = false;
+            ext['hasUpdate'] = false;
+          });
         }
       } else if (GraphQLClientService.instance.isConfigured) {
-        await GraphQLClientService.instance.updateExtension(id, isInstalled ? 'UNINSTALL' : 'INSTALL');
+        await GraphQLClientService.instance.updateExtension(id, (isInstalled && !isUpdate) ? 'UNINSTALL' : 'INSTALL');
       }
     } catch (_) {}
 
@@ -333,7 +345,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         SnackBar(
           content: Text(
             customStatusMessage ??
-                (isInstalled ? 'Uninstalled $name' : 'Installed $name (Ready for on-device scraping)'),
+                (isUpdate
+                    ? 'Updated $name to v$version'
+                    : (isInstalled ? 'Uninstalled $name' : 'Installed $name (Ready for on-device scraping)')),
           ),
         ),
       );
@@ -854,7 +868,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                         ),
                                         icon: const Icon(Icons.system_update_alt_rounded, color: Colors.amberAccent, size: 14),
                                         label: Text('Update v$version', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)),
-                                        onPressed: () => _toggleExtensionInstallation(ext),
+                                        onPressed: () => _toggleExtensionInstallation(ext, isUpdate: true),
                                       ),
                                       const SizedBox(width: 8),
                                     ],
