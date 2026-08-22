@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/logging/logger_service.dart';
@@ -11,52 +13,13 @@ class AdvancedSettingsScreen extends StatefulWidget {
 }
 
 class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
-  void _showLogsModal() async {
-    final logs = await LoggerService.instance.getDiagnosticLogs();
-    if (!mounted) return;
-
+  void _showLogsModal() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1F1F24),
+      backgroundColor: const Color(0xFF141419),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.75,
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Diagnostic Logs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: SingleChildScrollView(
-                    child: Text(
-                      logs.isEmpty ? 'No diagnostic logs recorded.' : logs,
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.greenAccent),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (context) => const _LiveLogViewerSheet(),
     );
   }
 
@@ -72,39 +35,265 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 120.0),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: ListView(
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 120.0),
+            children: [
+              Text('REAL-TIME DIAGNOSTICS', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+              const SizedBox(height: 8),
+              Material(
+                color: const Color(0x1F2A2A32),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                ),
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Icon(Icons.terminal_rounded, color: primaryColor),
+                      title: const Text('Live Diagnostic Console', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('Stream real-time app events, JS scrapers, network & errors'),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                      onTap: _showLogsModal,
+                    ),
+                    const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
+                    ListTile(
+                      leading: const Icon(Icons.cleaning_services_rounded, color: Colors.redAccent),
+                      title: const Text('Clear Diagnostic Logs', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('Truncate on-device log file and in-memory buffer'),
+                      onTap: () async {
+                        await LoggerService.instance.clearLogs();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Diagnostic logs cleared.')),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveLogViewerSheet extends StatefulWidget {
+  const _LiveLogViewerSheet();
+
+  @override
+  State<_LiveLogViewerSheet> createState() => _LiveLogViewerSheetState();
+}
+
+class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
+  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+  StreamSubscription<LogEntry>? _subscription;
+  List<LogEntry> _logs = [];
+  String _selectedLevel = 'ALL'; // ALL, ERROR, WARN, INFO, NETWORK
+  String _searchQuery = '';
+  bool _autoScroll = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _logs = List.from(LoggerService.instance.inMemoryLogs);
+    _subscription = LoggerService.instance.logStream.listen((entry) {
+      if (!mounted) return;
+      setState(() {
+        _logs.add(entry);
+        if (_logs.length > LoggerService.maxInMemoryLogs) {
+          _logs.removeAt(0);
+        }
+      });
+      if (_autoScroll && _scrollController.hasClients) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+          }
+        });
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<LogEntry> get _filteredLogs {
+    return _logs.where((entry) {
+      if (_selectedLevel != 'ALL' && entry.level != _selectedLevel) {
+        return false;
+      }
+      if (_searchQuery.isNotEmpty) {
+        final q = _searchQuery.toLowerCase();
+        final matchMsg = entry.message.toLowerCase().contains(q);
+        final matchCat = (entry.category ?? '').toLowerCase().contains(q);
+        final matchExc = (entry.exception?.toString() ?? '').toLowerCase().contains(q);
+        if (!matchMsg && !matchCat && !matchExc) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  Color _levelColor(String level) {
+    switch (level) {
+      case 'ERROR':
+        return Colors.redAccent;
+      case 'WARN':
+        return Colors.amberAccent;
+      case 'NETWORK':
+        return Colors.cyanAccent;
+      case 'DEBUG':
+        return Colors.purpleAccent;
+      default:
+        return Colors.greenAccent;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final filtered = _filteredLogs;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('SYSTEM DIAGNOSTICS', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          // Header Bar
+          Row(
+            children: [
+              Icon(Icons.terminal_rounded, color: primaryColor),
+              const SizedBox(width: 8),
+              const Text('Live Diagnostics', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              IconButton(
+                icon: Icon(_autoScroll ? Icons.vertical_align_bottom_rounded : Icons.pause_rounded, color: _autoScroll ? primaryColor : Colors.grey),
+                tooltip: _autoScroll ? 'Auto-scroll ON' : 'Auto-scroll PAUSED',
+                onPressed: () => setState(() => _autoScroll = !_autoScroll),
+              ),
+              IconButton(
+                icon: const Icon(Icons.copy_rounded, color: Colors.grey),
+                tooltip: 'Copy all logs',
+                onPressed: () {
+                  final text = filtered.map((e) => e.format()).join('\n');
+                  Clipboard.setData(ClipboardData(text: text));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Copied logs to clipboard!')),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
-          Material(
-            color: const Color(0x1F2A2A32),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+
+          // Search Bar
+          TextField(
+            controller: _searchController,
+            onChanged: (val) => setState(() => _searchQuery = val.trim()),
+            decoration: InputDecoration(
+              hintText: 'Filter logs by text or category...',
+              prefixIcon: Icon(Icons.search_rounded, color: primaryColor, size: 20),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: const Color(0xFF1F1F24),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(Icons.bug_report_rounded, color: primaryColor),
-                  title: const Text('View Diagnostic Logs', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Inspect local sunfire_diagnostic.log file'),
-                  onTap: _showLogsModal,
-                ),
-                ListTile(
-                  leading: Icon(Icons.cleaning_services_rounded, color: primaryColor),
-                  title: const Text('Clear Diagnostic Logs', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Truncate sunfire_diagnostic.log log file'),
-                  onTap: () async {
-                    await LoggerService.instance.clearLogs();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Diagnostic log file cleared.')),
-                      );
-                    }
-                  },
-                ),
-              ],
+          ),
+          const SizedBox(height: 8),
+
+          // Level Filter Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: ['ALL', 'ERROR', 'WARN', 'INFO', 'NETWORK'].map((lvl) {
+                final isSelected = _selectedLevel == lvl;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6.0),
+                  child: FilterChip(
+                    label: Text(lvl, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.grey)),
+                    selected: isSelected,
+                    selectedColor: _levelColor(lvl).withAlpha(120),
+                    backgroundColor: const Color(0x1F2A2A32),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onSelected: (_) => setState(() => _selectedLevel = lvl),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Terminal Canvas
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
+              ),
+              child: filtered.isEmpty
+                  ? const Center(child: Text('No matching log entries found.', style: TextStyle(color: Colors.grey, fontSize: 12)))
+                  : ListView.builder(
+                      controller: _scrollController,
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final e = filtered[index];
+                        final timeStr = '${e.timestamp.hour.toString().padLeft(2, "0")}:${e.timestamp.minute.toString().padLeft(2, "0")}:${e.timestamp.second.toString().padLeft(2, "0")}.${e.timestamp.millisecond.toString().padLeft(3, "0")}';
+                        final color = _levelColor(e.level);
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2.0),
+                          child: SelectableText.rich(
+                            TextSpan(
+                              style: const TextStyle(fontFamily: 'monospace', fontSize: 11, height: 1.3),
+                              children: [
+                                TextSpan(text: '$timeStr ', style: const TextStyle(color: Colors.grey)),
+                                TextSpan(text: '[${e.level}] ', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+                                if (e.category != null)
+                                  TextSpan(text: '[${e.category}] ', style: const TextStyle(color: Colors.amberAccent)),
+                                TextSpan(text: e.message, style: const TextStyle(color: Colors.white70)),
+                                if (e.exception != null)
+                                  TextSpan(text: '\n${e.exception}', style: const TextStyle(color: Colors.redAccent)),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
           ),
         ],
