@@ -535,6 +535,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                     textAlign: TextAlign.center,
                                     style: TextStyle(color: Colors.grey, fontSize: 13),
                                   ),
+                                  const SizedBox(height: 20),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: primaryColor,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                    ),
+                                    icon: const Icon(Icons.explore_outlined, color: Colors.white, size: 18),
+                                    label: const Text('Browse Sources', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                    onPressed: () => context.go('/browse'),
+                                  ),
                                 ],
                               ),
                             ),
