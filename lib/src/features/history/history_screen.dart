@@ -16,7 +16,7 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   List<Map<String, dynamic>> _historyItems = [];
-  bool _isLoading = true;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -25,7 +25,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _loadHistory() async {
-    setState(() => _isLoading = true);
     try {
       final chapters = await IsarService.instance.getReadingHistory();
       final items = <Map<String, dynamic>>[];
@@ -38,12 +37,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
         });
       }
 
-      setState(() {
-        _historyItems = items;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _historyItems = items;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -70,52 +73,43 @@ class _HistoryScreenState extends State<HistoryScreen> {
           await SyncEngine.instance.triggerSync();
           await _loadHistory();
         },
-        child: SafeArea(
-          child: _isLoading
-              ? Center(child: CircularProgressIndicator(color: primaryColor))
-              : Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 850),
-                    child: _historyItems.isEmpty
-                        ? CustomScrollView(
-                            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                            slivers: [
-                              SliverFillRemaining(
-                                hasScrollBody: false,
-                                child: Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(24.0),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.history_toggle_off_rounded, size: 64, color: primaryColor.withAlpha(120)),
-                                        const SizedBox(height: 16),
-                                        const Text('No Reading History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                        const SizedBox(height: 8),
-                                        const Text(
-                                          'Start reading a chapter to track\nyour reading progress here.',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(color: Colors.grey, fontSize: 13),
-                                        ),
-                                        const SizedBox(height: 20),
-                                        ElevatedButton.icon(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: primaryColor,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                                          ),
-                                          icon: const Icon(Icons.explore_outlined, color: Colors.white, size: 18),
-                                          label: const Text('Browse Manga', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                          onPressed: () => context.go('/browse'),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+        child: _historyItems.isEmpty
+            ? CustomScrollView(
+                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                slivers: [
+                        SliverToBoxAdapter(
+                          child: Container(
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.only(top: 80.0, left: 24.0, right: 24.0),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.history_toggle_off_rounded, size: 64, color: primaryColor.withAlpha(120)),
+                                const SizedBox(height: 16),
+                                const Text('No Reading History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Start reading a chapter to track\nyour reading progress here.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.grey, fontSize: 13),
                                 ),
-                              ),
-                            ],
-                          )
+                                const SizedBox(height: 20),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryColor,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                  ),
+                                  icon: const Icon(Icons.explore_outlined, color: Colors.white, size: 18),
+                                  label: const Text('Browse Manga', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  onPressed: () => context.go('/browse'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
                         : ListView.builder(
                             physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                             padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0, bottom: 120.0),
@@ -195,9 +189,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         );
                       },
                     ),
-                  ),
-                ),
-        ),
       ),
     );
   }

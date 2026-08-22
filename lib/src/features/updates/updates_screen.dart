@@ -16,7 +16,7 @@ class UpdatesScreen extends StatefulWidget {
 
 class _UpdatesScreenState extends State<UpdatesScreen> {
   List<Map<String, dynamic>> _updatesList = [];
-  bool _isLoading = true;
+  bool _isLoading = false;
   bool _isCheckingServer = false;
   bool _isOffline = false;
   String? _lastUpdateText;
@@ -298,16 +298,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       body: RefreshIndicator(
         color: primaryColor,
         onRefresh: _checkServerForUpdates,
-        child: SafeArea(
-          child: _isLoading
-              ? Center(child: CircularProgressIndicator(color: primaryColor))
-              : Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 850),
-                    child: CustomScrollView(
-                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                      slivers: [
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          slivers: [
                         if (_lastUpdateText != null)
                           SliverToBoxAdapter(
                             child: Padding(
@@ -319,36 +312,34 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                             ),
                           ),
                         if (_updatesList.isEmpty)
-                          SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(24.0),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.notifications_none_rounded, size: 64, color: primaryColor.withAlpha(120)),
-                                    const SizedBox(height: 16),
-                                    const Text('No Recent Updates', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 8),
-                                    const Text(
-                                      'Pull down to check for updates or\nadd more manga to your library.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                          SliverToBoxAdapter(
+                            child: Container(
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.only(top: 80.0, left: 24.0, right: 24.0),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.notifications_none_rounded, size: 64, color: primaryColor.withAlpha(120)),
+                                  const SizedBox(height: 16),
+                                  const Text('No Recent Updates', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Pull down to check for updates or\nadd more manga to your library.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: primaryColor,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                                     ),
-                                    const SizedBox(height: 20),
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: primaryColor,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                                      ),
-                                      icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                                      label: const Text('Check Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                      onPressed: _checkServerForUpdates,
-                                    ),
-                                  ],
-                                ),
+                                    icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                                    label: const Text('Check Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                    onPressed: _checkServerForUpdates,
+                                  ),
+                                ],
                               ),
                             ),
                           )
@@ -430,10 +421,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                         const SliverToBoxAdapter(child: SizedBox(height: 120)),
                       ],
                     ],
-                  ),
-                ),
-              ),
-        ),
+          ),
       ),
     );
   }
