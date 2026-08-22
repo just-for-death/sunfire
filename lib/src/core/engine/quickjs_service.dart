@@ -157,7 +157,7 @@ class QuickJsService {
     if (code != null && code.isNotEmpty) {
       final meta = extractSourceMetadata(code);
       final icon = meta['iconUrl']?.toString() ?? '';
-      if (icon.isNotEmpty && !icon.contains('example.com') && !icon.endsWith('.png404') && !icon.contains('m2k3a/mangayomi-extensions/main/javascript/icon')) {
+      if (icon.isNotEmpty && (icon.startsWith('http://') || icon.startsWith('https://'))) {
         return icon;
       }
       final baseUrl = meta['baseUrl']?.toString() ?? '';
@@ -179,7 +179,31 @@ class QuickJsService {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     };
 
-    if (sourceOrUrl.isNotEmpty) {
+    // 1. Identify CDN domains and supply correct origin site Referer
+    if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+      try {
+        final uri = Uri.parse(targetUrl);
+        final host = uri.host.toLowerCase();
+        if (host.contains('readdetectiveconan.com') || host.contains('mangapill.com')) {
+          headers['Referer'] = 'https://mangapill.com/';
+        } else if (host.contains('webtoon-phinf.pstatic.net') || host.contains('webtoons.com')) {
+          headers['Referer'] = 'https://www.webtoons.com/';
+        } else if (host.contains('compsci88.com') || host.contains('weebcentral.com')) {
+          headers['Referer'] = 'https://weebcentral.com/';
+        } else if (host.contains('funmanga.com') || host.contains('mangahere.cc')) {
+          headers['Referer'] = 'https://www.mangahere.cc/';
+        } else if (host.contains('readmng.com') || host.contains('mangago.me')) {
+          headers['Referer'] = 'https://www.mangago.me/';
+        } else if (host.contains('mangafreak.me') || host.contains('mangafreak.net')) {
+          headers['Referer'] = 'https://ww3.mangafreak.me/';
+        } else if (host.contains('readcomicsonline.ru') || host.contains('readcomiconline.li')) {
+          headers['Referer'] = 'https://readcomicsonline.ru/';
+        }
+      } catch (_) {}
+    }
+
+    // 2. Query extension headers if available
+    if (!headers.containsKey('Referer') && sourceOrUrl.isNotEmpty) {
       try {
         final jsCode = instance.getExtensionCode(sourceOrUrl);
         if (jsCode != null && jsCode.isNotEmpty) {
@@ -191,6 +215,7 @@ class QuickJsService {
       } catch (_) {}
     }
 
+    // 3. Fallback generic Referer
     if (!headers.containsKey('Referer') || headers['Referer']!.isEmpty) {
       if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
         try {

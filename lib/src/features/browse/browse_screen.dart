@@ -200,7 +200,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           final isInstalled = isEn && QuickJsService.instance.isLocalExtensionInstalled(js.name);
 
           var iconUrl = js.iconUrl;
-          if (iconUrl.isEmpty || iconUrl.contains('m2k3a/mangayomi-extensions/main/javascript/icon')) {
+          if (iconUrl.isEmpty) {
             iconUrl = QuickJsService.instance.getSourceIconUrl(js.name);
           }
 
