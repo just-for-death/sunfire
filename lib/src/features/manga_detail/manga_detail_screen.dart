@@ -976,7 +976,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                                   ? const Icon(Icons.bookmark_rounded, color: Colors.amber, size: 20)
                                   : null,
                           title: Text(
-                            ch.name,
+                            ch.name.trim().isNotEmpty
+                                ? ch.name
+                                : 'Chapter ${ch.chapterNumber.toString().replaceAll(RegExp(r'\.0$'), '')}',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
