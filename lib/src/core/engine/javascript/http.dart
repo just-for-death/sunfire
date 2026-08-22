@@ -6,9 +6,10 @@ import 'm_client.dart';
 
 class JsHttpClient {
   final JavascriptRuntime runtime;
+  final String baseUrl;
   final Map<String, InterceptedClient> _clientCache = {};
 
-  JsHttpClient(this.runtime);
+  JsHttpClient(this.runtime, [this.baseUrl = '']);
 
   InterceptedClient _getClient(dynamic reqcopyWith) {
     final map = (reqcopyWith as Map?)?.map((k, v) => MapEntry(k.toString(), v));
@@ -93,9 +94,19 @@ class Client {
     String urlStr = '';
     try {
       final List<dynamic> params = args is String ? jsonDecode(args) : args;
-      urlStr = params[2].toString();
+      urlStr = params[2].toString().trim();
       final Map<String, dynamic> rawHeaders = params[3] is Map ? Map<String, dynamic>.from(params[3]) : {};
       final dynamic body = params.length > 4 ? params[4] : null;
+
+      if (urlStr.startsWith('//')) {
+        urlStr = 'https:$urlStr';
+      } else if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
+        if (baseUrl.isNotEmpty) {
+          final cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+          final cleanPath = urlStr.startsWith('/') ? urlStr : '/$urlStr';
+          urlStr = '$cleanBase$cleanPath';
+        }
+      }
 
       final headers = <String, String>{
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
