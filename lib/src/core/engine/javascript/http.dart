@@ -137,8 +137,8 @@ class Client {
           response = await client.get(uri, headers: headers);
       }
 
-      // If Cloudflare block was received (or status is 403/503), attempt direct FlareSolverr fetch
-      if (isCloudflare(response) || (response.statusCode == 403 || response.statusCode == 503)) {
+      // If Cloudflare block was received (403/503 with Cloudflare headers), attempt direct FlareSolverr fetch
+      if (isCloudflare(response) && urlStr.startsWith('http')) {
         if (MClient.cfProxyUrl.isNotEmpty) {
           final solved = await MClient.solveAndFetchWithProxy(urlStr);
           if (solved != null) {
@@ -154,7 +154,7 @@ class Client {
         'request': {'url': response.request?.url.toString() ?? urlStr}
       });
     } catch (e) {
-      if (MClient.cfProxyUrl.isNotEmpty) {
+      if (urlStr.startsWith('http') && MClient.cfProxyUrl.isNotEmpty) {
         final solved = await MClient.solveAndFetchWithProxy(urlStr);
         if (solved != null) {
           return jsonEncode(solved);
