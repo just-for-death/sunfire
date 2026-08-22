@@ -47,99 +47,96 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   }
 
   Future<void> _loadUpdates() async {
-    setState(() => _isLoading = true);
-    bool serverSucceeded = false;
+    // 1. Show local cache immediately (0ms instant render)
+    await _loadUpdatesFromIsarCache();
 
-    // ── TRY SERVER (with 5s timeout) ─────────────────────────────────────
+    // 2. Background server fetch (only if configured, never blocks initial render)
     if (GraphQLClientService.instance.isConfigured) {
-      try {
-        final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
-        final items = <Map<String, dynamic>>[];
+      _fetchServerUpdatesInBackground();
+    }
+  }
 
-        // Fetch last update timestamp
-        final tsStr = await GraphQLClientService.instance
-            .fetchLastUpdateTimestamp()
-            .timeout(const Duration(seconds: 5));
-        if (tsStr != null) {
-          final ts = int.tryParse(tsStr);
-          if (ts != null) {
-            final dt = DateTime.fromMillisecondsSinceEpoch(ts);
+  Future<void> _fetchServerUpdatesInBackground() async {
+    try {
+      final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+      final items = <Map<String, dynamic>>[];
+
+      // Fetch last update timestamp
+      final tsStr = await GraphQLClientService.instance
+          .fetchLastUpdateTimestamp()
+          .timeout(const Duration(seconds: 4));
+      if (tsStr != null) {
+        final ts = int.tryParse(tsStr);
+        if (ts != null && mounted) {
+          final dt = DateTime.fromMillisecondsSinceEpoch(ts);
+          setState(() {
             _lastUpdateText = 'Last update: ${DateFormat('MM/dd/yyyy, hh:mm a').format(dt)}';
-          }
+          });
         }
+      }
 
-        final data = await GraphQLClientService.instance
-            .fetchUpdatesChapters(first: 100)
-            .timeout(const Duration(seconds: 5));
+      final data = await GraphQLClientService.instance
+          .fetchUpdatesChapters(first: 100)
+          .timeout(const Duration(seconds: 4));
 
-        if (data != null && data.containsKey('chapters')) {
-          final nodes = data['chapters']['nodes'] as List<dynamic>?;
-          if (nodes != null) {
-            for (final n in nodes) {
-              final map = n as Map<String, dynamic>;
-              final mangaMap = map['manga'] as Map<String, dynamic>?;
-              final chServerId = map['id'] as int;
-              final ch = Chapter()
-                ..serverId = chServerId
-                ..mangaId = map['mangaId'] as int? ?? 0
-                ..name = map['name'] as String? ?? 'Chapter'
-                ..chapterNumber = (map['chapterNumber'] as num? ?? 0).toDouble()
-                ..isRead = map['isRead'] as bool? ?? false
-                ..lastPageRead = map['lastPageRead'] as int? ?? 0;
+      if (data != null && data.containsKey('chapters')) {
+        final nodes = data['chapters']['nodes'] as List<dynamic>?;
+        if (nodes != null) {
+          for (final n in nodes) {
+            final map = n as Map<String, dynamic>;
+            final mangaMap = map['manga'] as Map<String, dynamic>?;
+            final chServerId = map['id'] as int;
+            final ch = Chapter()
+              ..serverId = chServerId
+              ..mangaId = map['mangaId'] as int? ?? 0
+              ..name = map['name'] as String? ?? 'Chapter'
+              ..chapterNumber = (map['chapterNumber'] as num? ?? 0).toDouble()
+              ..isRead = map['isRead'] as bool? ?? false
+              ..lastPageRead = map['lastPageRead'] as int? ?? 0;
 
-              String title = 'Manga';
-              String thumb = '';
-              int mId = ch.mangaId;
-              String sourceName = '';
+            String title = 'Manga';
+            String thumb = '';
+            int mId = ch.mangaId;
+            String sourceName = '';
 
-              if (mangaMap != null) {
-                title = mangaMap['title'] as String? ?? 'Manga';
-                mId = mangaMap['id'] as int? ?? mId;
-                final rawThumb = mangaMap['thumbnailUrl'] as String?;
-                if (rawThumb != null && rawThumb.isNotEmpty) {
-                  thumb = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
-                }
-                final srcMap = mangaMap['source'] as Map<String, dynamic>?;
-                sourceName = srcMap?['displayName'] as String? ?? '';
+            if (mangaMap != null) {
+              title = mangaMap['title'] as String? ?? 'Manga';
+              mId = mangaMap['id'] as int? ?? mId;
+              final rawThumb = mangaMap['thumbnailUrl'] as String?;
+              if (rawThumb != null && rawThumb.isNotEmpty) {
+                thumb = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
               }
-
-              final isDownloaded = map['isDownloaded'] as bool? ?? false;
-              final fetchedAt = map['fetchedAt'] != null ? int.tryParse(map['fetchedAt'].toString()) : null;
-
-              items.add({
-                'chapter': ch,
-                'mangaId': mId,
-                'title': title,
-                'thumbnailUrl': thumb,
-                'sourceName': sourceName,
-                'isDownloaded': isDownloaded,
-                'fetchedAt': fetchedAt,
-                'dateHeader': _formatDateHeader(fetchedAt),
-              });
+              final srcMap = mangaMap['source'] as Map<String, dynamic>?;
+              sourceName = srcMap?['displayName'] as String? ?? '';
             }
-          }
-        }
 
-        if (items.isNotEmpty) {
-          serverSucceeded = true;
-          if (mounted) {
-            setState(() {
-              _updatesList = items;
-              _isLoading = false;
-              _isOffline = false;
+            final isDownloaded = map['isDownloaded'] as bool? ?? false;
+            final fetchedAt = map['fetchedAt'] != null ? int.tryParse(map['fetchedAt'].toString()) : null;
+
+            items.add({
+              'chapter': ch,
+              'mangaId': mId,
+              'title': title,
+              'thumbnailUrl': thumb,
+              'sourceName': sourceName,
+              'isDownloaded': isDownloaded,
+              'fetchedAt': fetchedAt,
+              'dateHeader': _formatDateHeader(fetchedAt),
             });
           }
-          return;
         }
-      } catch (_) {
-        // Server unreachable — fall through to local Isar cache
       }
-    }
 
-    // ── OFFLINE FALLBACK: Isar chapter cache ──────────────────────────────
-    // Uses denormalized mangaTitle + mangaThumbnailUrl saved during last sync.
-    await _loadUpdatesFromIsarCache();
-    if (!serverSucceeded && mounted) setState(() => _isOffline = true);
+      if (items.isNotEmpty && mounted) {
+        setState(() {
+          _updatesList = items;
+          _isLoading = false;
+          _isOffline = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isOffline = true);
+    }
   }
 
   Future<void> _loadUpdatesFromIsarCache() async {
