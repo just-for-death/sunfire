@@ -166,6 +166,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       sourceName: sourceName,
     );
 
+    _sourceName = resolved.effectiveSourceName ?? sourceName;
     _pageUrls = resolved.pageUrls;
 
     if (_chapter != null && _chapter!.lastPageRead > 0 && _chapter!.lastPageRead <= _pageUrls.length) {
