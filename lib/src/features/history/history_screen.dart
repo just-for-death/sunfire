@@ -81,7 +81,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         style: TextStyle(color: Colors.grey),
                       ),
                     )
-                  : ListView.builder(
+              : Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 850),
+                    child: ListView.builder(
+                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                       padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0, bottom: 120.0),
                       itemCount: _historyItems.length,
                       itemBuilder: (context, index) {
@@ -159,6 +164,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         );
                       },
                     ),
+                  ),
+                ),
         ),
       ),
     );

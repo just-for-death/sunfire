@@ -378,16 +378,20 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                             ],
                           ),
                         )
-                      : GridView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            childAspectRatio: 0.62,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 16,
-                          ),
-                          itemCount: _mangaList.length,
-                          itemBuilder: (context, index) {
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final dynamicColumns = (constraints.maxWidth / 135).floor().clamp(2, 8);
+                            return GridView.builder(
+                              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: dynamicColumns,
+                                childAspectRatio: 0.62,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 16,
+                              ),
+                              itemCount: _mangaList.length,
+                              itemBuilder: (context, index) {
                             final manga = _mangaList[index];
                             final title = (manga['title'] ?? manga['name'] ?? 'Unknown Manga').toString();
                             final thumb = (manga['thumbnailUrl'] ?? manga['imageUrl'])?.toString();
@@ -461,7 +465,9 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                               ),
                             );
                           },
-                        ),
+                        );
+                      },
+                    ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
