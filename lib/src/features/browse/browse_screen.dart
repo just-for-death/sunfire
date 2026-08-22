@@ -479,9 +479,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     return RefreshIndicator(
       color: primaryColor,
       onRefresh: _fetchServerSources,
-      child: ListView(
-        padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0, bottom: 120.0),
-        children: [
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 850),
+          child: ListView(
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0, bottom: 120.0),
+            children: [
           Row(
             children: [
               Expanded(
@@ -541,7 +546,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             const Padding(padding: EdgeInsets.all(16.0), child: Center(child: Text('No sources found.', style: TextStyle(color: Colors.grey)))),
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 
   Widget _buildSourceItemTile(Map<String, dynamic> source) {
@@ -695,11 +702,15 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       return (a['name'] as String).compareTo(b['name'] as String);
     });
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: TextField(
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 850),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: TextField(
             decoration: InputDecoration(
               hintText: 'Search extensions...',
               prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
@@ -798,6 +809,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               : sortedList.isEmpty
                   ? const Center(child: Text('No extensions found.', style: TextStyle(color: Colors.grey)))
                   : ListView.builder(
+                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                       padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 8.0, bottom: 120.0),
                       itemCount: sortedList.length,
                       itemBuilder: (context, index) {
@@ -903,7 +915,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     ),
         ),
       ],
-    );
+    ),
+  ),
+);
   }
 
   // ═════════════════════════════════════════════════════════
@@ -976,9 +990,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       migrationItems.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
     }
 
-    return ListView(
-      padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 120.0),
-      children: [
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 850),
+        child: ListView(
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 120.0),
+          children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -1066,7 +1085,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             }).toList(),
           ),
       ],
-    );
+    ),
+  ),
+);
   }
 
   void _showMigrationMangaSelectionDialog(String sourceName, List<Manga> mangas) {
