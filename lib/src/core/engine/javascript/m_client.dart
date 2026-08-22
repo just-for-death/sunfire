@@ -48,6 +48,9 @@ class MClient {
 
   /// Directly sends a request.get to FlareSolverr / Byparr and returns the solved response.
   static Future<Map<String, dynamic>?> solveAndFetchWithProxy(String targetUrl) async {
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      return null;
+    }
     final proxyUrl = normalizeProxyUrl(cfProxyUrl.trim());
     if (proxyUrl.isEmpty) return null;
     try {
