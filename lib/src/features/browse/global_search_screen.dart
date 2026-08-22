@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/db/isar_service.dart';
+import '../../core/db/models/manga.dart';
+import '../../core/engine/content_resolver_service.dart';
+import '../../core/engine/quickjs_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 
 class GlobalSearchScreen extends StatefulWidget {
@@ -24,21 +28,53 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     _loadSourcesAndSearch();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadSourcesAndSearch() async {
+    final combinedSources = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    // 1. Local JS Extensions
+    final localExtNames = QuickJsService.instance.getInstalledExtensionNames();
+    for (final name in localExtNames) {
+      if (name.isNotEmpty && !seen.contains(name.toLowerCase())) {
+        seen.add(name.toLowerCase());
+        combinedSources.add({
+          'id': 'local_js_${name.toLowerCase().replaceAll(' ', '_')}',
+          'name': name,
+          'isLocal': true,
+        });
+      }
+    }
+
+    // 2. Server Sources
     if (GraphQLClientService.instance.isConfigured) {
       final data = await GraphQLClientService.instance.fetchSources();
       if (data != null && data.containsKey('sources')) {
         final nodes = data['sources']['nodes'] as List<dynamic>?;
         if (nodes != null) {
-          _sources = nodes.map((n) {
+          for (final n in nodes) {
             final m = n as Map<String, dynamic>;
-            return {
-              'id': m['id'].toString(),
-              'name': m['displayName'] as String? ?? m['name'] as String? ?? 'Source',
-            };
-          }).toList();
+            final name = m['displayName'] as String? ?? m['name'] as String? ?? 'Source';
+            if (!seen.contains(name.toLowerCase())) {
+              seen.add(name.toLowerCase());
+              combinedSources.add({
+                'id': m['id'].toString(),
+                'name': name,
+                'isLocal': false,
+              });
+            }
+          }
         }
       }
+    }
+
+    if (mounted) {
+      setState(() => _sources = combinedSources);
     }
 
     if (_searchController.text.trim().isNotEmpty) {
@@ -47,52 +83,71 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   }
 
   Future<void> _executeGlobalSearch(String query) async {
-    if (query.isEmpty) return;
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+
     setState(() {
       _resultsBySource.clear();
-      _loadingSources.addAll(_sources.map((s) => s['id'] as String));
+      _loadingSources.addAll(_sources.map((s) => s['name'] as String));
     });
-
-    final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
 
     for (final src in _sources) {
       final sourceId = src['id'] as String;
       final sourceName = src['name'] as String;
 
-      GraphQLClientService.instance.fetchSourceManga(
-        sourceId,
+      ContentResolverService.instance.resolveSourceManga(
+        sourceId: sourceId,
+        sourceName: sourceName,
+        searchQuery: trimmed,
         page: 1,
-        searchQuery: query,
-      ).then((data) {
+      ).then((list) {
         if (!mounted) return;
-        final list = <Map<String, dynamic>>[];
-        if (data != null && data.containsKey('fetchSourceManga')) {
-          final payload = data['fetchSourceManga'] as Map<String, dynamic>;
-          final nodes = payload['mangas'] as List<dynamic>?;
-          if (nodes != null) {
-            for (final n in nodes) {
-              final map = n as Map<String, dynamic>;
-              final rawThumb = map['thumbnailUrl'] as String?;
-              final thumb = (rawThumb != null && rawThumb.isNotEmpty)
-                  ? (rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb')
-                  : '';
-              list.add({
-                'id': map['id'],
-                'title': map['title'] ?? 'Untitled',
-                'thumbnailUrl': thumb,
-              });
-            }
-          }
-        }
         setState(() {
-          _loadingSources.remove(sourceId);
+          _loadingSources.remove(sourceName);
           if (list.isNotEmpty) {
             _resultsBySource[sourceName] = list;
           }
         });
       }).catchError((_) {
-        if (mounted) setState(() => _loadingSources.remove(sourceId));
+        if (mounted) {
+          setState(() => _loadingSources.remove(sourceName));
+        }
       });
+    }
+  }
+
+  Future<void> _onMangaTap(Map<String, dynamic> manga, String sourceName) async {
+    final title = (manga['title'] ?? manga['name'] ?? 'Unknown Manga').toString();
+    final thumb = (manga['thumbnailUrl'] ?? manga['imageUrl'])?.toString();
+    final link = (manga['link'] ?? manga['url'] ?? '').toString();
+
+    final rawId = manga['id'];
+    int id = rawId is int ? rawId : (int.tryParse(rawId?.toString() ?? '0') ?? 0);
+    if (id <= 0 && link.isNotEmpty) {
+      id = (link.hashCode ^ sourceName.hashCode).abs();
+    } else if (id <= 0 && title.isNotEmpty) {
+      id = (title.hashCode ^ sourceName.hashCode).abs();
+    }
+
+    if (id > 0) {
+      var existing = await IsarService.instance.getMangaByServerId(id);
+      if (existing == null) {
+        final newManga = Manga()
+          ..serverId = id
+          ..title = title
+          ..url = link
+          ..thumbnailUrl = thumb
+          ..sourceName = sourceName;
+        await IsarService.instance.saveManga(newManga);
+      } else {
+        if (existing.url.isEmpty && link.isNotEmpty) {
+          existing.url = link;
+          await IsarService.instance.saveManga(existing);
+        }
+      }
+      if (mounted) {
+        context.push('/manga/$id');
+      }
     }
   }
 
@@ -106,7 +161,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           controller: _searchController,
           autofocus: widget.initialQuery.isEmpty,
           decoration: InputDecoration(
-            hintText: 'Global Search all sources...',
+            hintText: 'Global search all sources...',
             border: InputBorder.none,
             suffixIcon: IconButton(
               icon: const Icon(Icons.search_rounded),
@@ -122,6 +177,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
             : _resultsBySource.isEmpty
                 ? const Center(child: Text('No results across sources.', style: TextStyle(color: Colors.grey)))
                 : ListView(
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     padding: const EdgeInsets.only(bottom: 120),
                     children: _resultsBySource.entries.map((entry) {
                       final sourceName = entry.key;
@@ -144,16 +200,16 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                               height: 190,
                               child: ListView.builder(
                                 scrollDirection: Axis.horizontal,
+                                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                                 padding: const EdgeInsets.symmetric(horizontal: 16),
                                 itemCount: mangas.length,
                                 itemBuilder: (context, index) {
                                   final m = mangas[index];
-                                  final id = m['id'] as int;
-                                  final title = m['title'] as String;
-                                  final thumb = m['thumbnailUrl'] as String;
+                                  final title = (m['title'] ?? m['name'] ?? 'Untitled').toString();
+                                  final thumb = (m['thumbnailUrl'] ?? m['imageUrl'])?.toString() ?? '';
 
                                   return GestureDetector(
-                                    onTap: () => context.push('/manga/$id'),
+                                    onTap: () => _onMangaTap(m, sourceName),
                                     child: Container(
                                       width: 110,
                                       margin: const EdgeInsets.only(right: 12),
@@ -167,7 +223,12 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                                               height: 150,
                                               color: const Color(0xFF1F1F24),
                                               child: thumb.isNotEmpty
-                                                  ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded, color: Colors.grey))
+                                                  ? Image.network(
+                                                      thumb,
+                                                      headers: QuickJsService.getImageHeaders(sourceName, thumb),
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded, color: Colors.grey),
+                                                    )
                                                   : const Icon(Icons.book_rounded, color: Colors.grey),
                                             ),
                                           ),

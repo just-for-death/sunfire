@@ -46,6 +46,12 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
     _fetchSourceManga();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _fetchSourceManga() async {
     setState(() => _isLoading = true);
 

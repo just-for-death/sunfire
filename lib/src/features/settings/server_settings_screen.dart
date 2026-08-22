@@ -41,6 +41,13 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     _loadTrackers();
   }
 
+  @override
+  void dispose() {
+    _urlController.dispose();
+    _cfProxyController.dispose();
+    super.dispose();
+  }
+
   Future<void> _checkServerConnection() async {
     final start = DateTime.now();
     final ok = GraphQLClientService.instance.isConfigured;

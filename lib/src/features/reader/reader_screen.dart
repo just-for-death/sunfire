@@ -118,8 +118,99 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
+  final FocusNode _focusNode = FocusNode();
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    final key = event.logicalKey;
+    final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
+    final isRtl = _readingMode == ReadingMode.pagedRtl;
+
+    if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.keyD) {
+      if (isRtl) {
+        _goToPrevPage();
+      } else {
+        _goToNextPage();
+      }
+      return KeyEventResult.handled;
+    } else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyA) {
+      if (isRtl) {
+        _goToNextPage();
+      } else {
+        _goToPrevPage();
+      }
+      return KeyEventResult.handled;
+    } else if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.pageDown) {
+      if (isPaged) {
+        if (isRtl) {
+          _goToPrevPage();
+        } else {
+          _goToNextPage();
+        }
+      } else {
+        _scrollController.animateTo(
+          _scrollController.offset + 500,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      return KeyEventResult.handled;
+    } else if (key == LogicalKeyboardKey.pageUp) {
+      if (isPaged) {
+        if (isRtl) {
+          _goToNextPage();
+        } else {
+          _goToPrevPage();
+        }
+      } else {
+        _scrollController.animateTo(
+          _scrollController.offset - 500,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      return KeyEventResult.handled;
+    } else if (key == LogicalKeyboardKey.arrowDown) {
+      if (isPaged) {
+        _goToNextPage();
+      } else {
+        _scrollController.animateTo(
+          _scrollController.offset + 300,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      return KeyEventResult.handled;
+    } else if (key == LogicalKeyboardKey.arrowUp) {
+      if (isPaged) {
+        _goToPrevPage();
+      } else {
+        _scrollController.animateTo(
+          _scrollController.offset - 300,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      return KeyEventResult.handled;
+    } else if (key == LogicalKeyboardKey.escape) {
+      context.pop();
+      return KeyEventResult.handled;
+    } else if (key == LogicalKeyboardKey.audioVolumeDown && _settings.volumeKeyTurn) {
+      _goToNextPage();
+      return KeyEventResult.handled;
+    } else if (key == LogicalKeyboardKey.audioVolumeUp && _settings.volumeKeyTurn) {
+      _goToPrevPage();
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
   @override
   void dispose() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _focusNode.dispose();
     _scrollController.removeListener(_onVerticalScroll);
     _scrollController.dispose();
     _pageController.dispose();
@@ -699,174 +790,179 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     return Scaffold(
       backgroundColor: _canvasBackgroundColor,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return GestureDetector(
-            onTapUp: (details) => _handleTapZone(details, constraints),
-            child: Stack(
-              children: [
-                // ── 1. READER CANVAS ──────────────────────────────
-                if (_readingMode == ReadingMode.webtoon || _readingMode == ReadingMode.continuousVertical)
-                  ListView.builder(
-                    controller: _scrollController,
-                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                    itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
-                    itemBuilder: (context, index) {
-                      if (index == _pageUrls.length) {
-                        return _buildChapterTransitionCard();
-                      }
-                      return ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight,
-                          minWidth: constraints.maxWidth,
-                        ),
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: _readingMode == ReadingMode.continuousVertical ? 8.0 : 0.0),
-                          child: _buildPageWidget(_pageUrls[index], index, isPaged: false),
-                        ),
-                      );
-                    },
-                  )
-                else
-                  PageView.builder(
-                    controller: _pageController,
-                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                    reverse: _readingMode == ReadingMode.pagedRtl,
-                    itemCount: _pageUrls.length,
-                    onPageChanged: _onPageChanged,
-                    itemBuilder: (context, index) {
-                      return Center(child: _buildPageWidget(_pageUrls[index], index, isPaged: true));
-                    },
-                  ),
-
-                // ── 2. OVERLAY HUD (TOP APP BAR & BOTTOM SLIDER) ──
-                if (_showControls) ...[
-                  // Top Overlay Bar
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 8, left: 16, right: 16, bottom: 12),
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xCC000000), Colors.transparent],
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                            onPressed: () => context.pop(),
+      body: Focus(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKeyEvent: _handleKeyEvent,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return GestureDetector(
+              onTapUp: (details) => _handleTapZone(details, constraints),
+              child: Stack(
+                children: [
+                  // ── 1. READER CANVAS ──────────────────────────────
+                  if (_readingMode == ReadingMode.webtoon || _readingMode == ReadingMode.continuousVertical)
+                    ListView.builder(
+                      controller: _scrollController,
+                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                      itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
+                      itemBuilder: (context, index) {
+                        if (index == _pageUrls.length) {
+                          return _buildChapterTransitionCard();
+                        }
+                        return ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                            minWidth: constraints.maxWidth,
                           ),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _chapter?.name ?? 'Reader',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                ),
-                                Text(
-                                  '${_readingMode.name.toUpperCase()} • ${_readerTheme.name.toUpperCase()}',
-                                  style: TextStyle(color: primaryColor, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
+                          child: Padding(
+                            padding: EdgeInsets.only(bottom: _readingMode == ReadingMode.continuousVertical ? 8.0 : 0.0),
+                            child: _buildPageWidget(_pageUrls[index], index, isPaged: false),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.tune_rounded, color: Colors.white),
-                            onPressed: _showReaderSettingsSheet,
-                          ),
-                        ],
-                      ),
+                        );
+                      },
+                    )
+                  else
+                    PageView.builder(
+                      controller: _pageController,
+                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                      reverse: _readingMode == ReadingMode.pagedRtl,
+                      itemCount: _pageUrls.length,
+                      onPageChanged: _onPageChanged,
+                      itemBuilder: (context, index) {
+                        return Center(child: _buildPageWidget(_pageUrls[index], index, isPaged: true));
+                      },
                     ),
-                  ),
 
-                  // Bottom HUD Bar with Scrubber Slider
-                  Positioned(
-                    bottom: 24,
-                    left: 16,
-                    right: 16,
-                    child: Center(
+                  // ── 2. OVERLAY HUD (TOP APP BAR & BOTTOM SLIDER) ──
+                  if (_showControls) ...[
+                    // Top Overlay Bar
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xE61F1F24),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
-                          boxShadow: const [
-                            BoxShadow(color: Color(0x66000000), blurRadius: 16, offset: Offset(0, 4)),
-                          ],
+                        padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 8, left: 16, right: 16, bottom: 12),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xCC000000), Colors.transparent],
+                          ),
                         ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
+                        child: Row(
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.skip_previous_rounded, color: Colors.white),
-                                  tooltip: 'Previous Chapter',
-                                  onPressed: _prevChapter != null ? () => _loadChapterAndPages(_prevChapter!.serverId) : null,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Page $_currentPage / ${_pageUrls.length}',
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
-                                  tooltip: 'Next Chapter',
-                                  onPressed: _nextChapter != null ? () => _loadChapterAndPages(_nextChapter!.serverId) : null,
-                                ),
-                              ],
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                              onPressed: () => context.pop(),
                             ),
-                            if (_pageUrls.length > 1)
-                              SizedBox(
-                                width: 260,
-                                height: 28,
-                                child: SliderTheme(
-                                  data: SliderThemeData(
-                                    activeTrackColor: primaryColor,
-                                    inactiveTrackColor: Colors.grey[800],
-                                    thumbColor: primaryColor,
-                                    trackHeight: 3,
-                                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _chapter?.name ?? 'Reader',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                                   ),
-                                  child: Slider(
-                                    value: _currentPage.toDouble().clamp(1.0, _pageUrls.length.toDouble()),
-                                    min: 1.0,
-                                    max: _pageUrls.length.toDouble(),
-                                    divisions: _pageUrls.length > 1 ? _pageUrls.length - 1 : 1,
-                                    onChanged: (val) {
-                                      final targetPage = val.round();
-                                      setState(() => _currentPage = targetPage);
-                                      if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
-                                        _pageController.jumpToPage(targetPage - 1);
-                                      } else {
-                                        final targetOffset = ((targetPage - 1) / (_pageUrls.length - 1)) * _scrollController.position.maxScrollExtent;
-                                        _scrollController.jumpTo(targetOffset);
-                                      }
-                                    },
+                                  Text(
+                                    '${_readingMode.name.toUpperCase()} • ${_readerTheme.name.toUpperCase()}',
+                                    style: TextStyle(color: primaryColor, fontSize: 10, fontWeight: FontWeight.bold),
                                   ),
-                                ),
+                                ],
                               ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.tune_rounded, color: Colors.white),
+                              onPressed: _showReaderSettingsSheet,
+                            ),
                           ],
                         ),
                       ),
                     ),
-                  ),
+
+                    // Bottom HUD Bar with Scrubber Slider
+                    Positioned(
+                      bottom: 24,
+                      left: 16,
+                      right: 16,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xE61F1F24),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
+                            boxShadow: const [
+                              BoxShadow(color: Color(0x66000000), blurRadius: 16, offset: Offset(0, 4)),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.skip_previous_rounded, color: Colors.white),
+                                    tooltip: 'Previous Chapter',
+                                    onPressed: _prevChapter != null ? () => _loadChapterAndPages(_prevChapter!.serverId) : null,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Page $_currentPage / ${_pageUrls.length}',
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
+                                    tooltip: 'Next Chapter',
+                                    onPressed: _nextChapter != null ? () => _loadChapterAndPages(_nextChapter!.serverId) : null,
+                                  ),
+                                ],
+                              ),
+                              if (_pageUrls.length > 1)
+                                SizedBox(
+                                  width: 260,
+                                  height: 28,
+                                  child: SliderTheme(
+                                    data: SliderThemeData(
+                                      activeTrackColor: primaryColor,
+                                      inactiveTrackColor: Colors.grey[800],
+                                      thumbColor: primaryColor,
+                                      trackHeight: 3,
+                                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                    ),
+                                    child: Slider(
+                                      value: _currentPage.toDouble().clamp(1.0, _pageUrls.length.toDouble()),
+                                      min: 1.0,
+                                      max: _pageUrls.length.toDouble(),
+                                      divisions: _pageUrls.length > 1 ? _pageUrls.length - 1 : 1,
+                                      onChanged: (val) {
+                                        final targetPage = val.round();
+                                        setState(() => _currentPage = targetPage);
+                                        if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
+                                          _pageController.jumpToPage(targetPage - 1);
+                                        } else {
+                                          final targetOffset = ((targetPage - 1) / (_pageUrls.length - 1)) * _scrollController.position.maxScrollExtent;
+                                          _scrollController.jumpTo(targetOffset);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
-            ),
-          );
-        },
+              ),
+            );
+          },
+        ),
       ),
     );
   }
