@@ -38,17 +38,6 @@ class RepoSourceItem {
 }
 
 class RepoManager {
-  /// Development/Testing reference repos (Users provide their own repos in production)
-  static const List<Map<String, String>> devTestingRepos = [
-    {'name': 'kodjodevf (Official Core)', 'url': 'https://kodjodevf.github.io/mangayomi-extensions/index.json'},
-    {'name': 'm2k3a (Primary Community)', 'url': 'https://m2k3a.github.io/mangayomi-extensions/index.json'},
-    {'name': 'Mallyd11 (Anime/Novel)', 'url': 'https://raw.githubusercontent.com/Mallyd11/mangayomi-anime-extensions/main/index.json'},
-    {'name': 'Swakshan (Cloudflare Bypass)', 'url': 'https://raw.githubusercontent.com/Swakshan/mangayomi-swak-extensions/refs/heads/main/index.json'},
-    {'name': 'gato404 (NSFW)', 'url': 'https://raw.githubusercontent.com/gato404/kegareta-sauces/refs/heads/main/index.json'},
-  ];
-
-  static const List<Map<String, String>> defaultRepos = devTestingRepos;
-
   static RepoManager? _instance;
   final Dio _dio = Dio();
   final List<Map<String, String>> _userRepos = [];
@@ -62,9 +51,37 @@ class RepoManager {
 
   List<Map<String, String>> get userConfiguredRepos => List.unmodifiable(_userRepos);
 
+  /// Automatically derives a clean, human-readable repository title from its URL.
+  static String deriveRepoTitle(String url) {
+    final trimmed = url.trim();
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null) {
+      if (uri.host.contains('github.io')) {
+        final user = uri.host.split('.').first;
+        if (user.isNotEmpty) return user;
+      }
+      if (uri.host.contains('githubusercontent.com') || uri.host.contains('github.com')) {
+        final segments = uri.pathSegments;
+        if (segments.isNotEmpty) {
+          final user = segments.first;
+          final repo = segments.length > 1 ? segments[1] : '';
+          if (repo.isNotEmpty && repo != 'mangayomi-extensions' && repo != 'index.json') {
+            return '$user ($repo)';
+          }
+          return user;
+        }
+      }
+      if (uri.host.isNotEmpty) {
+        return uri.host;
+      }
+    }
+    return 'Custom Repository';
+  }
+
   void addUserRepo(String name, String url) {
     _userRepos.removeWhere((r) => r['url'] == url);
-    _userRepos.add({'name': name, 'url': url});
+    final effectiveName = (name.isEmpty || name == 'Custom Repo') ? deriveRepoTitle(url) : name;
+    _userRepos.add({'name': effectiveName, 'url': url});
   }
 
   void removeUserRepo(String url) {
@@ -80,6 +97,20 @@ class RepoManager {
     final cacheDir = Directory('${dir.path}/repo_cache');
     if (!await cacheDir.exists()) await cacheDir.create(recursive: true);
     return File('${cacheDir.path}/${_cacheKeyFor(indexUrl)}.json');
+  }
+
+  /// Compares two semver strings (e.g. "0.1.5" vs "0.1.2").
+  /// Returns > 0 if v1 is newer than v2, < 0 if v2 is newer, 0 if equal.
+  static int compareVersions(String v1, String v2) {
+    final p1 = v1.replaceAll(RegExp(r'[^0-9\.]'), '').split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final p2 = v2.replaceAll(RegExp(r'[^0-9\.]'), '').split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final maxLen = p1.length > p2.length ? p1.length : p2.length;
+    for (var i = 0; i < maxLen; i++) {
+      final n1 = i < p1.length ? p1[i] : 0;
+      final n2 = i < p2.length ? p2[i] : 0;
+      if (n1 != n2) return n1.compareTo(n2);
+    }
+    return 0;
   }
 
   Future<List<RepoSourceItem>> fetchRepoSources(String indexUrl) async {
@@ -109,59 +140,131 @@ class RepoManager {
     }
   }
 
+  /// Fetches and aggregates sources across multiple repositories.
+  /// When multiple repos contain the same source (same name + lang),
+  /// the version with the highest semver number is selected.
   Future<List<RepoSourceItem>> fetchCombinedRepoSources(List<String> repoUrls) async {
-    final combined = <RepoSourceItem>[];
-    final seen = <String>{};
+    final Map<String, RepoSourceItem> bestVersionMap = {};
+
     for (final url in repoUrls) {
       final items = await fetchRepoSources(url);
       for (final item in items) {
         final key = '${item.name}_${item.lang}'.toLowerCase();
-        if (seen.add(key)) {
-          combined.add(item);
+        if (!bestVersionMap.containsKey(key)) {
+          bestVersionMap[key] = item;
+        } else {
+          final existing = bestVersionMap[key]!;
+          if (compareVersions(item.version, existing.version) > 0) {
+            bestVersionMap[key] = item;
+          }
         }
       }
     }
-    return combined;
+    return bestVersionMap.values.toList();
   }
 
   Future<String?> downloadJsSourceCode(String jsUrl) async {
     try {
-      final response = await _dio.get<String>(jsUrl);
+      final response = await _dio.get<String>(
+        jsUrl,
+        options: Options(
+          responseType: ResponseType.plain,
+          validateStatus: (status) => status != null && status >= 200 && status < 300,
+        ),
+      );
       return response.data;
-    } catch (e, stack) {
-      await LoggerService.instance.logError('Failed to download JS source code from $jsUrl: $e', exception: e, stackTrace: stack, category: 'RepoManager');
+    } catch (e) {
+      await LoggerService.instance.logWarning('Failed to download JS from $jsUrl: $e', 'RepoManager');
       return null;
     }
   }
 
   /// Finds and downloads JS scrapers ONLY for sources installed on the user's server.
+  /// - Strictly prioritizes English ('en' or 'all') variants over non-English.
+  /// - Automatically falls back to other repository candidate URLs if one returns 404.
   Future<List<String>> downloadAndInstallMatchingSources({
     required List<String> serverSourceNames,
     required List<String> userRepoUrls,
   }) async {
-    final repoSources = await fetchCombinedRepoSources(userRepoUrls);
+    // Fetch all raw sources across all user repositories without discarding alternative mirrors
+    final allRepoSources = <RepoSourceItem>[];
+    for (final url in userRepoUrls) {
+      final items = await fetchRepoSources(url);
+      allRepoSources.addAll(items);
+    }
+
     final installed = <String>[];
+    final installedNormalized = <String>{};
 
     for (final serverName in serverSourceNames) {
       final cleanServerName = SourceMigrationService.instance.normalizeSourceName(serverName);
+      if (cleanServerName.isEmpty || installedNormalized.contains(cleanServerName)) {
+        continue;
+      }
 
-      for (final item in repoSources) {
+      // 1. Gather all candidates matching this server source name
+      final candidates = <RepoSourceItem>[];
+      for (final item in allRepoSources) {
         final cleanRepoName = SourceMigrationService.instance.normalizeSourceName(item.name);
         final isMatch = cleanRepoName == cleanServerName ||
             cleanRepoName.replaceAll('_', '') == cleanServerName.replaceAll('_', '') ||
             (cleanServerName.length > 4 && cleanRepoName.startsWith(cleanServerName)) ||
             (cleanRepoName.length > 4 && cleanServerName.startsWith(cleanRepoName));
 
-        if (isMatch && item.sourceCodeUrl.isNotEmpty) {
-          final jsCode = await downloadJsSourceCode(item.sourceCodeUrl);
-          if (jsCode != null && jsCode.isNotEmpty) {
-            await QuickJsService.instance.saveLocalExtension(item.name, jsCode);
-            installed.add(item.name);
-            await LoggerService.instance.logInfo(
-              '✓ Auto-installed local JS scraper for server source: ${item.name} (${item.lang})',
-              'RepoManager',
-            );
-          }
+        if (isMatch &&
+            item.sourceCodeUrl.isNotEmpty &&
+            item.sourceCodeUrl.toLowerCase().endsWith('.js')) {
+          candidates.add(item);
+        }
+      }
+
+      if (candidates.isEmpty) continue;
+
+      // 2. Sort candidates:
+      //    a. English ('en' or 'all') first
+      //    b. Higher version first
+      candidates.sort((a, b) {
+        final aLang = a.lang.toLowerCase();
+        final bLang = b.lang.toLowerCase();
+        final aIsEn = aLang == 'en' || aLang == 'all';
+        final bIsEn = bLang == 'en' || bLang == 'all';
+
+        if (aIsEn && !bIsEn) return -1;
+        if (!aIsEn && bIsEn) return 1;
+
+        return compareVersions(b.version, a.version);
+      });
+
+      // 3. Filter out non-English variants if English / default source is expected
+      final serverLower = serverName.toLowerCase();
+      final expectsNonEnglish = serverLower.contains('(fr)') ||
+          serverLower.contains('(es)') ||
+          serverLower.contains('(ja)') ||
+          serverLower.contains('(ar)') ||
+          serverLower.contains('(id)') ||
+          serverLower.contains('(ko)') ||
+          serverLower.contains('(ru)');
+
+      final filteredCandidates = expectsNonEnglish
+          ? candidates
+          : candidates.where((c) {
+              final lang = c.lang.toLowerCase();
+              return lang == 'en' || lang == 'all';
+            }).toList();
+
+      final listToTry = filteredCandidates.isNotEmpty ? filteredCandidates : candidates;
+
+      // 4. Try candidates sequentially until one downloads successfully (working mirror)
+      for (final item in listToTry) {
+        final jsCode = await downloadJsSourceCode(item.sourceCodeUrl);
+        if (jsCode != null && jsCode.trim().isNotEmpty) {
+          await QuickJsService.instance.saveLocalExtension(item.name, jsCode);
+          installed.add(item.name);
+          installedNormalized.add(cleanServerName);
+          await LoggerService.instance.logInfo(
+            '✓ Auto-installed local JS scraper: ${item.name} (${item.lang}) v${item.version} from ${item.sourceCodeUrl}',
+            'RepoManager',
+          );
           break;
         }
       }

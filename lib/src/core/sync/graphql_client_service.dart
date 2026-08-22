@@ -31,27 +31,71 @@ class GraphQLClientService {
   bool get isConfigured => _baseUrl != null;
   String? get baseUrl => _baseUrl;
 
-  Future<Map<String, dynamic>?> query(String document, {Map<String, dynamic>? variables, String? label}) async {
-    if (!isConfigured) throw Exception('GraphQLClientService not configured with server URL');
-    try {
-      final response = await _dio.post('', data: jsonEncode({
-        'query': document,
-        'variables': variables ?? {},
-      }));
+  DateTime? _lastReachableCheck;
+  bool _lastReachableStatus = false;
 
-      final data = response.data;
+  Future<bool> checkServerReachable({bool force = false}) async {
+    if (!isConfigured) return false;
+    final now = DateTime.now();
+    if (!force && _lastReachableCheck != null && now.difference(_lastReachableCheck!) < const Duration(seconds: 8)) {
+      return _lastReachableStatus;
+    }
+    try {
+      final res = await _dio.post(
+        '',
+        data: jsonEncode({'query': '{ aboutServer { version } }'}),
+        options: Options(
+          sendTimeout: const Duration(milliseconds: 1500),
+          receiveTimeout: const Duration(milliseconds: 1500),
+        ),
+      );
+      _lastReachableStatus = (res.statusCode == 200);
+    } catch (_) {
+      _lastReachableStatus = false;
+    }
+    _lastReachableCheck = now;
+    return _lastReachableStatus;
+  }
+
+  Future<Map<String, dynamic>?> query(String document, {Map<String, dynamic>? variables, String? label}) async {
+    if (!isConfigured) return null;
+    
+    // Quick server reachability check to prevent hanging or connection errors when server is offline
+    if (label != 'healthCheck') {
+      final isOnline = await checkServerReachable();
+      if (!isOnline) {
+        return null;
+      }
+    }
+
+    try {
+      final response = await _dio.post(
+        '',
+        data: jsonEncode({
+          'query': document,
+          'variables': variables ?? {},
+        }),
+      );
+
+      var data = response.data;
+      if (data is String) {
+        data = jsonDecode(data);
+      }
       if (data is Map<String, dynamic>) {
         if (data.containsKey('errors')) {
           final errorMsg = data['errors'][0]['message'];
-          await LoggerService.instance.logError('GraphQL Error [$label]: $errorMsg', category: 'GraphQL');
-          throw Exception('GraphQL Error: $errorMsg');
+          await LoggerService.instance.logWarning('GraphQL Error [$label]: $errorMsg', 'GraphQL');
+          return null;
         }
         return data['data'] as Map<String, dynamic>?;
       }
       return null;
-    } on DioException catch (e, stack) {
-      await LoggerService.instance.logError('Dio Exception [$label]: ${e.message}', exception: e, stackTrace: stack, category: 'GraphQL');
-      rethrow;
+    } on DioException {
+      _lastReachableStatus = false;
+      return null;
+    } catch (e) {
+      await LoggerService.instance.logWarning('GraphQL query failed [$label]: $e', 'GraphQL');
+      return null;
     }
   }
 
@@ -109,30 +153,55 @@ class GraphQLClientService {
   }
 
   Future<Map<String, dynamic>?> fetchSourceManga(String sourceId, {bool isLatest = false, int page = 1, String? searchQuery}) async {
-    final typeStr = isLatest ? 'LATEST' : ((searchQuery != null && searchQuery.trim().isNotEmpty) ? 'SEARCH' : 'POPULAR');
-    const mutationStr = r'''
-      mutation($source: LongString!, $type: FetchSourceMangaType!, $page: Int!, $query: String) {
-        fetchSourceManga(input: {
-          source: $source,
-          type: $type,
-          page: $page,
-          query: $query
-        }) {
-          mangas {
-            id
-            title
-            thumbnailUrl
+    final isSearch = searchQuery != null && searchQuery.trim().isNotEmpty;
+    final typeStr = isLatest ? 'LATEST' : (isSearch ? 'SEARCH' : 'POPULAR');
+
+    if (isSearch) {
+      const searchMutation = r'''
+        mutation($source: LongString!, $page: Int!, $query: String!) {
+          fetchSourceManga(input: {
+            source: $source,
+            type: SEARCH,
+            page: $page,
+            query: $query
+          }) {
+            mangas {
+              id
+              title
+              thumbnailUrl
+            }
+            hasNextPage
           }
-          hasNextPage
         }
-      }
-    ''';
-    return await query(mutationStr, variables: {
-      'source': sourceId,
-      'type': typeStr,
-      'page': page,
-      'query': searchQuery,
-    }, label: 'fetchSourceManga');
+      ''';
+      return await query(searchMutation, variables: {
+        'source': sourceId,
+        'page': page,
+        'query': searchQuery.trim(),
+      }, label: 'fetchSourceManga');
+    } else {
+      const browseMutation = r'''
+        mutation($source: LongString!, $type: FetchSourceMangaType!, $page: Int!) {
+          fetchSourceManga(input: {
+            source: $source,
+            type: $type,
+            page: $page
+          }) {
+            mangas {
+              id
+              title
+              thumbnailUrl
+            }
+            hasNextPage
+          }
+        }
+      ''';
+      return await query(browseMutation, variables: {
+        'source': sourceId,
+        'type': typeStr,
+        'page': page,
+      }, label: 'fetchSourceManga');
+    }
   }
 
   Future<Map<String, dynamic>?> fetchLibrary() async {
