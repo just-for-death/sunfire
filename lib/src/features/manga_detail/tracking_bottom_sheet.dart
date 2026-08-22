@@ -40,6 +40,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   // Search mode state
   int? _searchingTrackerId;
   String _searchQuery = '';
+  final TextEditingController _trackerSearchController = TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
 
@@ -56,7 +57,15 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   @override
   void initState() {
     super.initState();
+    _searchQuery = widget.mangaTitle;
+    _trackerSearchController.text = widget.mangaTitle;
     _loadTrackingData();
+  }
+
+  @override
+  void dispose() {
+    _trackerSearchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadTrackingData() async {
@@ -510,6 +519,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                   label: const Text('Search & Bind'),
                                   onPressed: () {
                                     _searchQuery = widget.mangaTitle;
+                                    _trackerSearchController.text = widget.mangaTitle;
                                     _searchTracker(trackerId);
                                   },
                                 ),
@@ -548,7 +558,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: TextEditingController(text: _searchQuery),
+            controller: _trackerSearchController,
+            onChanged: (val) => _searchQuery = val,
             onSubmitted: (val) {
               _searchQuery = val;
               _searchTracker(_searchingTrackerId!);
