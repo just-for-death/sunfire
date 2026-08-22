@@ -304,14 +304,6 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
         child: SafeArea(
           child: _isLoading
               ? Center(child: CircularProgressIndicator(color: primaryColor))
-              : _updatesList.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No recent chapter updates found.\nTap refresh to check your Suwayomi server.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    )
               : Align(
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(
@@ -329,7 +321,42 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                               ),
                             ),
                           ),
-                        SliverList(
+                        if (_updatesList.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.notifications_none_rounded, size: 64, color: primaryColor.withAlpha(120)),
+                                    const SizedBox(height: 16),
+                                    const Text('No Recent Updates', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Pull down to check for updates or\nadd more manga to your library.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: primaryColor,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                      ),
+                                      icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                                      label: const Text('Check Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      onPressed: _checkServerForUpdates,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          )
+                        else ...[
+                          SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final item = _updatesList[index];
@@ -405,9 +432,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                         ),
                         const SliverToBoxAdapter(child: SizedBox(height: 120)),
                       ],
-                    ),
+                    ],
                   ),
                 ),
+              ),
         ),
       ),
     );
