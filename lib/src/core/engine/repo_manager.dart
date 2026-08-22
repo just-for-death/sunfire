@@ -23,15 +23,29 @@ class RepoSourceItem {
     required this.isJs,
   });
 
-  factory RepoSourceItem.fromJson(Map<String, dynamic> json) {
-    final url = json['sourceCodeUrl'] as String? ?? '';
-    final isJs = url.endsWith('.js') || url.contains('/javascript/');
+  factory RepoSourceItem.fromJson(Map<String, dynamic> json, [String repoIndexUrl = '']) {
+    var url = json['sourceCodeUrl'] as String? ?? '';
+    final pkgPath = json['pkgPath'] as String? ?? '';
+
+    if (url.isEmpty && pkgPath.isNotEmpty && repoIndexUrl.isNotEmpty) {
+      final repoBase = repoIndexUrl.replaceAll(RegExp(r'/index\.json$'), '');
+      url = '$repoBase/$pkgPath';
+    }
+
+    final isJs = (json['sourceCodeLanguage'] == 1) ||
+        (json['typeSource'] != null) ||
+        (json['isManga'] == true) ||
+        url.endsWith('.js') ||
+        url.contains('/javascript/') ||
+        pkgPath.endsWith('.js') ||
+        pkgPath.contains('javascript');
+
     return RepoSourceItem(
       name: json['name'] as String? ?? 'Unknown',
       lang: json['lang'] as String? ?? 'all',
       sourceCodeUrl: url,
       iconUrl: json['iconUrl'] as String? ?? '',
-      version: json['version'] as String? ?? '0.0.1',
+      version: json['version'] as String? ?? '1.0.0',
       isJs: isJs,
     );
   }
@@ -50,6 +64,32 @@ class RepoManager {
   }
 
   List<Map<String, String>> get userConfiguredRepos => List.unmodifiable(_userRepos);
+
+  /// Automatically normalizes user entered repo URLs into standard index.json URLs.
+  static String normalizeRepoUrl(String url) {
+    var trimmed = url.trim();
+    if (trimmed.endsWith('/index.json')) return trimmed;
+    if (trimmed.endsWith('/')) trimmed = trimmed.substring(0, trimmed.length - 1);
+
+    if (trimmed.contains('github.com') && !trimmed.contains('raw.githubusercontent.com')) {
+      final uri = Uri.tryParse(trimmed);
+      if (uri != null && uri.pathSegments.length >= 2) {
+        final user = uri.pathSegments[0];
+        final repo = uri.pathSegments[1];
+        return 'https://raw.githubusercontent.com/$user/$repo/main/index.json';
+      }
+    }
+
+    if (trimmed.contains('raw.githubusercontent.com') && !trimmed.endsWith('index.json')) {
+      return '$trimmed/index.json';
+    }
+
+    if (trimmed.contains('.github.io') && !trimmed.endsWith('index.json')) {
+      return '$trimmed/index.json';
+    }
+
+    return trimmed;
+  }
 
   /// Automatically derives a clean, human-readable repository title from its URL.
   static String deriveRepoTitle(String url) {
@@ -79,13 +119,15 @@ class RepoManager {
   }
 
   void addUserRepo(String name, String url) {
-    _userRepos.removeWhere((r) => r['url'] == url);
-    final effectiveName = (name.isEmpty || name == 'Custom Repo') ? deriveRepoTitle(url) : name;
-    _userRepos.add({'name': effectiveName, 'url': url});
+    final normUrl = normalizeRepoUrl(url);
+    _userRepos.removeWhere((r) => r['url'] == normUrl || r['url'] == url);
+    final effectiveName = (name.isEmpty || name == 'Custom Repo') ? deriveRepoTitle(normUrl) : name;
+    _userRepos.add({'name': effectiveName, 'url': normUrl});
   }
 
   void removeUserRepo(String url) {
-    _userRepos.removeWhere((r) => r['url'] == url);
+    final normUrl = normalizeRepoUrl(url);
+    _userRepos.removeWhere((r) => r['url'] == normUrl || r['url'] == url);
   }
 
   /// Returns a cache-friendly key for a given repo URL
@@ -114,26 +156,24 @@ class RepoManager {
   }
 
   Future<List<RepoSourceItem>> fetchRepoSources(String indexUrl) async {
-    final cacheFile = await _cacheFileFor(indexUrl);
+    final normalizedUrl = normalizeRepoUrl(indexUrl);
+    final cacheFile = await _cacheFileFor(normalizedUrl);
     try {
-      // Try network first
       final response = await _dio
-          .get(indexUrl)
-          .timeout(const Duration(seconds: 6));
+          .get(normalizedUrl)
+          .timeout(const Duration(seconds: 10));
       final raw = response.data is String
           ? response.data as String
           : jsonEncode(response.data);
-      // Cache to disk for offline use
       await cacheFile.writeAsString(raw);
       final list = jsonDecode(raw) as List;
-      return list.map((item) => RepoSourceItem.fromJson(item as Map<String, dynamic>)).toList();
+      return list.map((item) => RepoSourceItem.fromJson(item as Map<String, dynamic>, normalizedUrl)).toList();
     } catch (_) {
-      // Offline fallback: read from disk cache
       if (await cacheFile.exists()) {
         try {
           final cached = await cacheFile.readAsString();
           final list = jsonDecode(cached) as List;
-          return list.map((item) => RepoSourceItem.fromJson(item as Map<String, dynamic>)).toList();
+          return list.map((item) => RepoSourceItem.fromJson(item as Map<String, dynamic>, normalizedUrl)).toList();
         } catch (_) {}
       }
       return [];

@@ -30,6 +30,38 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   // Multi-chapter selection state
   final Set<int> _selectedChapterIds = {};
 
+  double _extractChapterNumber(String name, int index, int totalCount) {
+    final match = RegExp(r'(?:ch(?:apter)?\.?|ep(?:isode)?\.?|#)\s*(\d+(?:\.\d+)?)', caseSensitive: false).firstMatch(name)
+        ?? RegExp(r'(\d+(?:\.\d+)?)').firstMatch(name);
+    if (match != null) {
+      final parsed = double.tryParse(match.group(1)!);
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    return (index + 1).toDouble();
+  }
+
+  String _formatChapterSubtitle(Chapter ch) {
+    final parts = <String>[];
+    if (ch.pageCount > 0) {
+      if (ch.lastPageRead > 0) {
+        parts.add('Page ${ch.lastPageRead}/${ch.pageCount}');
+      } else {
+        parts.add('${ch.pageCount} pages');
+      }
+    } else if (ch.lastPageRead > 0) {
+      parts.add('Page ${ch.lastPageRead}');
+    }
+
+    if (parts.isEmpty) {
+      final nameLower = ch.name.toLowerCase();
+      if (!nameLower.contains('chapter') && !nameLower.contains('ch.') && !nameLower.contains('ep.')) {
+        final numStr = ch.chapterNumber.toString().replaceAll(RegExp(r'\.0$'), '');
+        parts.add('Ch. $numStr');
+      }
+    }
+    return parts.join(' • ');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -137,7 +169,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               final cMap = chList[i] as Map<String, dynamic>;
               final chUrl = (cMap['url'] ?? cMap['link'] ?? '').toString();
               final chName = cMap['name']?.toString() ?? 'Chapter ${i + 1}';
-              final chNum = (cMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble();
+              final rawChNum = (cMap['chapterNumber'] as num?)?.toDouble();
+              final chNum = (rawChNum != null && rawChNum > 0) ? rawChNum : _extractChapterNumber(chName, i, chList.length);
 
               final ch = Chapter()
                 ..serverId = (widget.mangaServerId * 10000 + i + 1).abs()
@@ -187,7 +220,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   final cMap = chList[i] as Map<String, dynamic>;
                   final chUrl = (cMap['url'] ?? cMap['link'] ?? '').toString();
                   final chName = cMap['name']?.toString() ?? 'Chapter ${i + 1}';
-                  final chNum = (cMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble();
+                  final rawChNum = (cMap['chapterNumber'] as num?)?.toDouble();
+                  final chNum = (rawChNum != null && rawChNum > 0) ? rawChNum : _extractChapterNumber(chName, i, chList.length);
 
                   final ch = Chapter()
                     ..serverId = (widget.mangaServerId * 10000 + i + 1).abs()
@@ -949,10 +983,12 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                               color: ch.isRead ? Colors.grey : Colors.white,
                             ),
                           ),
-                          subtitle: Text(
-                            'Ch. ${ch.chapterNumber}${ch.lastPageRead > 0 ? " • Page ${ch.lastPageRead}" : ""}',
-                            style: TextStyle(fontSize: 12, color: ch.isRead ? Colors.grey[600] : primaryColor),
-                          ),
+                          subtitle: _formatChapterSubtitle(ch).isNotEmpty
+                              ? Text(
+                                  _formatChapterSubtitle(ch),
+                                  style: TextStyle(fontSize: 12, color: ch.isRead ? Colors.grey[600] : primaryColor),
+                                )
+                              : null,
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
