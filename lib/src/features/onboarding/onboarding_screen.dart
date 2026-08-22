@@ -28,8 +28,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // Repositories configured by user
   final List<String> _userRepoUrls = [
-    'https://kodjodevf.github.io/mangayomi-extensions/index.json',
+    'https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json',
     'https://m2k3a.github.io/mangayomi-extensions/index.json',
+    'https://raw.githubusercontent.com/Swakshan/mangayomi-swak-extensions/refs/heads/main/index.json',
+    'https://raw.githubusercontent.com/Mallyd11/mangayomi-anime-extensions/main/index.json',
   ];
 
   // Hydration Progress State
@@ -102,10 +104,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final url = _newRepoUrlController.text.trim();
     if (url.isNotEmpty && !_userRepoUrls.contains(url)) {
       setState(() {
-        _userRepoUrls.add(url);
+        _userRepoUrls.insert(0, url);
         _newRepoUrlController.clear();
       });
-      RepoManager.instance.addUserRepo('Custom Repo', url);
+      RepoManager.instance.addUserRepo(RepoManager.deriveRepoTitle(url), url);
     }
   }
 
@@ -498,13 +500,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               itemCount: _userRepoUrls.length,
               itemBuilder: (context, idx) {
                 final url = _userRepoUrls[idx];
-                final isCore = url.contains('kodjodevf');
-                final isCommunity = url.contains('m2k3a');
-                final label = isCore
-                    ? 'Official Mangayomi Core'
-                    : isCommunity
-                        ? 'Community Extensions Index'
-                        : 'User Custom Repository';
+                final label = RepoManager.deriveRepoTitle(url);
                 return Container(
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -519,7 +515,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
                             Text(url, style: const TextStyle(color: Colors.grey, fontSize: 11), overflow: TextOverflow.ellipsis),

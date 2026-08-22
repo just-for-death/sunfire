@@ -2,6 +2,9 @@
 cmake_minimum_required(VERSION 3.13)
 project(runner LANGUAGES CXX)
 
+# Suppress deprecated CMake warnings from third-party plugin CMakeLists (e.g., flutter_qjs)
+set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE)
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "sunfire")

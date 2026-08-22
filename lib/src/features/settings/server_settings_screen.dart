@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 
 import '../../core/db/isar_service.dart';
+import '../../core/engine/javascript/m_client.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
@@ -16,6 +20,7 @@ class ServerSettingsScreen extends StatefulWidget {
 
 class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
   final TextEditingController _urlController = TextEditingController();
+  final TextEditingController _cfProxyController = TextEditingController();
   bool _isConnected = false;
   final String _serverVersion = 'v2.3.2321';
   int _pendingCount = 0;
@@ -23,11 +28,14 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
   bool _isLoadingTrackers = true;
   int? _latencyMs;
   bool _isUpdatingLibrary = false;
+  bool _isDockerBusy = false;
+  bool _isCfTesting = false;
 
   @override
   void initState() {
     super.initState();
     _urlController.text = SettingsService.instance.serverUrl;
+    _cfProxyController.text = SettingsService.instance.cfProxyUrl;
     _checkServerConnection();
     _loadPendingQueue();
     _loadTrackers();
@@ -312,6 +320,220 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       onPressed: _saveAndTestServer,
                       child: const Text('Test & Save Connection', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── CLOUDFLARE BYPASS (FLARESOLVERR / BYPARR) ──────────────
+          Text('CLOUDFLARE BYPASS', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          const SizedBox(height: 8),
+          Material(
+            color: const Color(0x1F2A2A32),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.shield_rounded, color: primaryColor, size: 24),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('FlareSolverr / Byparr', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            Text(
+                              'Enables Mangago, ReadComicOnline and other Cloudflare-protected sources to work on Linux desktop.',
+                              style: TextStyle(color: Colors.grey, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _cfProxyController,
+                    decoration: InputDecoration(
+                      labelText: 'FlareSolverr URL',
+                      hintText: 'http://192.168.x.x:8191/v1',
+                      prefixIcon: Icon(Icons.vpn_lock_rounded, color: primaryColor),
+                      filled: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      helperText: 'Point to your FlareSolverr or Byparr instance. Leave empty to disable.',
+                      helperStyle: const TextStyle(color: Colors.grey, fontSize: 11),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: _isCfTesting ? null : () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        final url = _cfProxyController.text.trim();
+
+                        // Save immediately
+                        SettingsService.instance.cfProxyUrl = url;
+                        MClient.cfProxyUrl = url;
+
+                        if (url.isEmpty) {
+                          messenger.showSnackBar(const SnackBar(content: Text('Cloudflare bypass disabled.')));
+                          return;
+                        }
+
+                        setState(() => _isCfTesting = true);
+                        try {
+                          // Test by sending a version-check request to the FlareSolverr API
+                          final res = await http.get(
+                            Uri.parse(url.replaceAll(RegExp(r'/v\d+$'), '')),
+                          ).timeout(const Duration(seconds: 8));
+                          final ok = res.statusCode == 200;
+                          if (mounted) {
+                            messenger.showSnackBar(SnackBar(
+                              content: Text(ok
+                                  ? '✅ FlareSolverr reachable at $url'
+                                  : '⚠️ Saved but got HTTP ${res.statusCode} — check the URL'),
+                            ));
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            messenger.showSnackBar(SnackBar(
+                              content: Text('❌ Cannot reach FlareSolverr: $e'),
+                            ));
+                          }
+                        } finally {
+                          if (mounted) setState(() => _isCfTesting = false);
+                        }
+                      },
+                      child: _isCfTesting
+                          ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('Save & Test', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── DOCKER SERVER CONTROL ──────────────────────────────────
+          Text('DOCKER SERVER CONTROL', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          const SizedBox(height: 8),
+          Material(
+            color: const Color(0x1F2A2A32),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.dns_rounded, color: primaryColor, size: 24),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Suwayomi Docker', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            Text(
+                              'Manually start or stop the weeb-suwayomi-1 container on this machine.',
+                              style: TextStyle(color: Colors.grey, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green.shade700,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          icon: _isDockerBusy
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.play_arrow_rounded, color: Colors.white),
+                          label: const Text('Start Server', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          onPressed: _isDockerBusy ? null : () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            setState(() => _isDockerBusy = true);
+                            try {
+                              await Process.run('docker', ['start', 'weeb-suwayomi-1']);
+                              // Poll up to 20s for server to respond
+                              bool alive = false;
+                              for (int i = 0; i < 10; i++) {
+                                await Future<void>.delayed(const Duration(seconds: 2));
+                                alive = await GraphQLClientService.instance.checkServerReachable(force: true);
+                                if (alive) break;
+                              }
+                              if (mounted) {
+                                setState(() => _isConnected = alive);
+                                messenger.showSnackBar(SnackBar(
+                                  content: Text(alive ? '✅ Server is up and reachable' : '⚠️ Container started but server not responding yet'),
+                                ));
+                                if (alive) await _checkServerConnection();
+                              }
+                            } catch (e) {
+                              if (mounted) messenger.showSnackBar(SnackBar(content: Text('❌ Failed to start: $e')));
+                            } finally {
+                              if (mounted) setState(() => _isDockerBusy = false);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade700,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          icon: _isDockerBusy
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.stop_rounded, color: Colors.white),
+                          label: const Text('Stop Server', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          onPressed: _isDockerBusy ? null : () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            setState(() => _isDockerBusy = true);
+                            try {
+                              await Process.run('docker', ['stop', 'weeb-suwayomi-1']);
+                              if (mounted) {
+                                setState(() => _isConnected = false);
+                                messenger.showSnackBar(const SnackBar(content: Text('🛑 Server stopped')));
+                              }
+                            } catch (e) {
+                              if (mounted) messenger.showSnackBar(SnackBar(content: Text('❌ Failed to stop: $e')));
+                            } finally {
+                              if (mounted) setState(() => _isDockerBusy = false);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

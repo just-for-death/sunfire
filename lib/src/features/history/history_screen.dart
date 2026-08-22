@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
+import '../../core/services/image_cache_helper.dart';
 import '../../core/sync/sync_engine.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -120,9 +121,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: thumb != null && thumb.isNotEmpty
-                                      ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.book_rounded, size: 20, color: Colors.grey)))
-                                      : const Center(child: Icon(Icons.book_rounded, size: 20, color: Colors.grey)),
+                                  child: MangaCoverImage(
+                                    mangaServerId: ch.mangaId,
+                                    thumbnailUrl: thumb,
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
                               ),
                               title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),

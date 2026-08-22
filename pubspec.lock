@@ -17,6 +17,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.13.0"
+  antlr4:
+    dependency: transitive
+    description:
+      name: antlr4
+      sha256: "752b4a6e4ad97953652a2b2bbf5377f46c94b579d3372b50080c7e5858234a05"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.13.2"
   app_links:
     dependency: "direct main"
     description:
@@ -241,6 +249,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.7"
+  csslib:
+    dependency: transitive
+    description:
+      name: csslib
+      sha256: "09bad715f418841f976c77db72d5398dc1253c21fb9c0c7f0b0b985860b2d58e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.2"
   cupertino_icons:
     dependency: "direct main"
     description:
@@ -297,6 +313,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.8.1"
+  expressions:
+    dependency: transitive
+    description:
+      name: expressions
+      sha256: f3b0e99563a9a1bde1138e728eb722f292cc7d2aec55d28136c49b1a370306c5
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.5+3"
   extended_image:
     dependency: "direct main"
     description:
@@ -414,11 +438,12 @@ packages:
   flutter_qjs:
     dependency: "direct main"
     description:
-      name: flutter_qjs
-      sha256: "123b6a2c95ceb4343a15a2bf4eb8e22f6f30d17c291b7a6c71f759906f817525"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.7"
+      path: "."
+      ref: main
+      resolved-ref: "3261eb462c975d66dbd713c15f1959c6f976412e"
+      url: "https://github.com/kodjodevf/flutter_qjs.git"
+    source: git
+    version: "0.0.1"
   flutter_riverpod:
     dependency: "direct main"
     description:
@@ -637,8 +662,16 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.19.3"
+  html:
+    dependency: "direct main"
+    description:
+      name: html
+      sha256: "6d1264f2dffa1b1101c25a91dff0dc2daee4c18e87cd8538729773c073dbf602"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.15.6"
   http:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: http
       sha256: "87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412"
@@ -653,6 +686,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.0"
+  http_interceptor:
+    dependency: "direct main"
+    description:
+      name: http_interceptor
+      sha256: "288c6ded4a2c66de2730a16b30cbd29d05d042a5e61304d9b4be0e16378f4082"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.0"
   http_multi_server:
     dependency: transitive
     description:
@@ -1005,6 +1046,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.2"
+  pseudom:
+    dependency: "direct main"
+    description:
+      name: pseudom
+      sha256: "3df7b5aa28adc8e035820db8954e34466aa94353a02e28fd72e54d0ed68b0ecf"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   pub_semver:
     dependency: transitive
     description:
@@ -1021,6 +1070,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.0"
+  quiver:
+    dependency: transitive
+    description:
+      name: quiver
+      sha256: ea0b925899e64ecdfbf9c7becb60d5b50e706ade44a85b2363be2a22d88117d2
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.2"
   riverpod:
     dependency: transitive
     description:
@@ -1450,6 +1507,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.6.1"
+  xpath_selector:
+    dependency: transitive
+    description:
+      name: xpath_selector
+      sha256: "6d8295565a34a6e2821a0721592e584c70421e52a0f54955e0c8e41963db7c90"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.2"
+  xpath_selector_html_parser:
+    dependency: "direct main"
+    description:
+      name: xpath_selector_html_parser
+      sha256: ebc562a07832a4062a2bc1c238fd59a81d31d841f15460caeed412ce078af9e0
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.1"
   xxh3:
     dependency: transitive
     description:

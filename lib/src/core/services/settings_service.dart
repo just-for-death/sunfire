@@ -30,6 +30,14 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// FlareSolverr / Byparr proxy URL for Cloudflare bypass (e.g. http://192.168.1.x:8191/v1).
+  /// Leave empty to disable.
+  String get cfProxyUrl => _prefs?.getString('cf_proxy_url') ?? '';
+  set cfProxyUrl(String value) {
+    _prefs?.setString('cf_proxy_url', value.trim());
+    notifyListeners();
+  }
+
   // ── ACCENT COLOR PALETTE ──────────────────────────────────
   static const Map<String, Color> accentColors = {
     'Sunfire Orange': Color(0xFFFF5722),
