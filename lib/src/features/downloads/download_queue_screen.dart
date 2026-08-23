@@ -205,8 +205,8 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
         final item = queue[index] as Map<String, dynamic>;
         final chMap = item['chapter'] as Map<String, dynamic>?;
         final chName = chMap?['name'] as String? ?? 'Chapter';
-        final chId = chMap?['id'] as int? ?? 0;
-        final progress = (item['progress'] as num? ?? 0).toDouble();
+        final chId = parseIntSafe(chMap?['id']);
+        final progress = parseDoubleSafe(item['progress']);
         final itemState = item['state'] as String? ?? 'QUEUED';
 
         return Padding(

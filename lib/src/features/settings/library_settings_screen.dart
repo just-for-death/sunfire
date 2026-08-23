@@ -43,9 +43,9 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
           for (final n in rawNodes) {
             final cMap = n as Map<String, dynamic>;
             final cat = Category()
-              ..serverId = cMap['id'] as int
+              ..serverId = parseIntSafe(cMap['id'])
               ..name = cMap['name'] as String? ?? 'Category'
-              ..order = cMap['order'] as int? ?? 0;
+              ..order = parseIntSafe(cMap['order']);
             serverCats.add(cat);
           }
           await IsarService.instance.saveCategories(serverCats);

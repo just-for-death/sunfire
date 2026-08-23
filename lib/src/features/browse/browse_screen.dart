@@ -21,14 +21,16 @@ class BrowseScreen extends StatefulWidget {
   State<BrowseScreen> createState() => _BrowseScreenState();
 }
 
-class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderStateMixin {
+class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   late TabController _tabController;
 
   // ── SOURCES STATE ────────────────────────────────────────
   List<Map<String, dynamic>> _sourcesList = [];
   bool _isLoadingSources = true;
   String _sourceSearchQuery = '';
-  String _selectedLangFilter = 'EN';
+  String _selectedLangFilter = 'ALL';
 
   // ── EXTENSIONS STATE ─────────────────────────────────────
   List<Map<String, dynamic>> _extensionList = [];
@@ -45,19 +47,36 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    SettingsService.instance.addListener(_onSettingsChanged);
     _fetchServerSources();
     _fetchExtensions();
     _loadLibraryForMigration();
   }
 
+  void _onSettingsChanged() {
+    if (mounted) {
+      _fetchServerSources();
+      _fetchExtensions();
+    }
+  }
+
   @override
   void dispose() {
+    SettingsService.instance.removeListener(_onSettingsChanged);
     _tabController.dispose();
     super.dispose();
   }
 
+  String _selectedSourceFilter = 'All'; // 'All', 'Local JS', 'Server', 'Pinned'
+
   Future<void> _fetchServerSources() async {
-    final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+    final currentServerUrl = SettingsService.instance.serverUrl;
+    if (currentServerUrl.isNotEmpty) {
+      if (!GraphQLClientService.instance.isConfigured || GraphQLClientService.instance.baseUrl != currentServerUrl) {
+        GraphQLClientService.instance.initialize(currentServerUrl);
+      }
+    }
+    final serverUrl = GraphQLClientService.instance.baseUrl ?? currentServerUrl;
 
     // ── STEP 1: Always load installed local JS extensions FIRST (fully offline & instant) ──
     final installedNames = QuickJsService.instance.getInstalledExtensionNames();
@@ -68,7 +87,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         'id': localId,
         'name': name,
         'displayName': '$name ⚡',
-        'lang': 'en',
+        'lang': 'EN',
         'supportsLatest': true,
         'isPinned': SettingsService.instance.isSourcePinned(localId),
         'iconUrl': QuickJsService.instance.getSourceIconUrl(name),
@@ -85,61 +104,48 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       });
     }
 
-    // ── STEP 2: Try fetching server sources (background async, 3s timeout) ──
-    final List<ServerSourceItem> serverSourceItems = [];
-    final Map<String, String> serverIconMap = {};
+    // ── STEP 2: Fetch server sources via GraphQL ──
+    final List<Map<String, dynamic>> serverSources = [];
     try {
       if (GraphQLClientService.instance.isConfigured) {
         final data = await GraphQLClientService.instance
             .fetchSources()
-            .timeout(const Duration(seconds: 3), onTimeout: () => null);
+            .timeout(const Duration(seconds: 6), onTimeout: () => null);
+
         if (data != null && data.containsKey('sources')) {
           final nodes = data['sources']['nodes'] as List<dynamic>?;
           if (nodes != null) {
             for (final n in nodes) {
               final m = n as Map<String, dynamic>;
               final id = m['id'].toString();
-              final name = m['name'] as String? ?? 'Source';
+              final name = m['displayName'] as String? ?? m['name'] as String? ?? 'Source';
               final rawIcon = m['iconUrl'] as String?;
               final iconUrl = (rawIcon != null && rawIcon.isNotEmpty)
                   ? (rawIcon.startsWith('http') ? rawIcon : '$serverUrl$rawIcon')
                   : '$serverUrl/api/v1/source/$id/icon';
-              serverSourceItems.add(ServerSourceItem(
-                id: id,
-                name: name,
-                lang: m['lang'] as String? ?? 'en',
-              ));
-              serverIconMap[id] = iconUrl;
+              final lang = (m['lang'] as String? ?? 'en').trim().toUpperCase();
+              final supportsLatest = m['supportsLatest'] as bool? ?? true;
+              serverSources.add({
+                'id': id,
+                'name': name,
+                'displayName': '$name ☁',
+                'lang': lang,
+                'supportsLatest': supportsLatest,
+                'isPinned': SettingsService.instance.isSourcePinned(id),
+                'iconUrl': iconUrl,
+                'isLocalJs': false,
+                'isServerFallback': false,
+              });
             }
+            await LoggerService.instance.logInfo('Fetched ${nodes.length} server sources from $serverUrl', 'Browse');
           }
         }
       }
-    } catch (_) {
-      // Server unreachable — local JS sources still work
+    } catch (e) {
+      await LoggerService.instance.logWarning('Failed to fetch server sources: $e', 'Browse');
     }
 
-    // ── STEP 3: Deduplicate using SourceMigrationService (Zero UI duplication) ──
-    final filteredDisplay = SourceMigrationService.instance.filterDisplaySources(
-      localInstalledExtensions: installedNames,
-      serverInstalledSources: serverSourceItems,
-    );
-
-    final merged = <Map<String, dynamic>>[];
-    for (final item in filteredDisplay) {
-      final isLocal = item.isLocalJs;
-      final iconUrl = isLocal ? QuickJsService.instance.getSourceIconUrl(item.name) : (serverIconMap[item.id] ?? '');
-      merged.add({
-        'id': item.id,
-        'name': item.name,
-        'displayName': isLocal ? '${item.name} ⚡' : '${item.name} ☁',
-        'lang': item.lang,
-        'supportsLatest': true,
-        'isPinned': SettingsService.instance.isSourcePinned(item.id),
-        'iconUrl': iconUrl,
-        'isLocalJs': isLocal,
-        'isServerFallback': item.isServerFallback,
-      });
-    }
+    final merged = <Map<String, dynamic>>[...localJsSources, ...serverSources];
 
     if (mounted) {
       setState(() {
@@ -151,52 +157,61 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   Future<void> _fetchExtensions() async {
     setState(() => _isLoadingExtensions = true);
-    final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+    final currentServerUrl = SettingsService.instance.serverUrl;
+    if (currentServerUrl.isNotEmpty) {
+      if (!GraphQLClientService.instance.isConfigured || GraphQLClientService.instance.baseUrl != currentServerUrl) {
+        GraphQLClientService.instance.initialize(currentServerUrl);
+      }
+    }
+    final serverUrl = GraphQLClientService.instance.baseUrl ?? currentServerUrl;
     final customRepos = SettingsService.instance.customRepos;
 
     try {
       final items = <Map<String, dynamic>>[];
       final seenKeys = <String>{};
 
-      // 1. Fetch server-side Keiyoushi APK extensions via GraphQL (only if server is online)
+      // 1. Fetch server-side Keiyoushi APK extensions via GraphQL
       try {
         if (GraphQLClientService.instance.isConfigured) {
-          final isServerOnline = await GraphQLClientService.instance.checkServerReachable().timeout(
-            const Duration(seconds: 2),
-            onTimeout: () => false,
-          );
-          if (isServerOnline) {
-            final data = await GraphQLClientService.instance.fetchExtensions();
-            if (data != null && data.containsKey('extensions')) {
-              final nodes = data['extensions']['nodes'] as List<dynamic>?;
-              if (nodes != null) {
-                for (final n in nodes) {
-                  final map = n as Map<String, dynamic>;
-                  final name = map['name'] as String? ?? 'Extension';
-                  final lang = map['lang'] as String? ?? 'en';
-                  final key = 'apk_${name}_$lang'.toLowerCase();
-                  if (!seenKeys.add(key)) continue;
+          final data = await GraphQLClientService.instance
+              .fetchExtensions()
+              .timeout(const Duration(seconds: 6), onTimeout: () => null);
 
-                  final rawIcon = map['iconUrl'] as String?;
-                  final iconUrl = (rawIcon != null && rawIcon.isNotEmpty)
-                      ? (rawIcon.startsWith('http') ? rawIcon : '$serverUrl$rawIcon')
-                      : '';
+          if (data != null && data.containsKey('extensions')) {
+            final nodes = data['extensions']['nodes'] as List<dynamic>?;
+            if (nodes != null) {
+              for (final n in nodes) {
+                final map = n as Map<String, dynamic>;
+                final name = map['name'] as String? ?? 'Extension';
+                final lang = (map['lang'] as String? ?? 'en').toLowerCase();
+                final pkgName = (map['pkgName'] ?? map['name']).toString();
+                final key = 'apk_$pkgName'.toLowerCase();
+                if (!seenKeys.add(key)) continue;
 
-                  items.add({
-                    'id': (map['pkgName'] ?? map['name']).toString(),
-                    'name': lang.toLowerCase() == 'en' || lang.isEmpty ? name : '$name (${lang.toUpperCase()})',
-                    'lang': lang,
-                    'version': (map['versionName'] ?? map['version'] ?? '1.0.0').toString(),
-                    'isInstalled': map['isInstalled'] as bool? ?? false,
-                    'iconUrl': iconUrl,
-                    'isJs': false,
-                  });
-                }
+                final rawIcon = map['iconUrl'] as String?;
+                final iconUrl = (rawIcon != null && rawIcon.isNotEmpty)
+                    ? (rawIcon.startsWith('http') ? rawIcon : '$serverUrl$rawIcon')
+                    : '';
+
+                items.add({
+                  'id': pkgName,
+                  'pkgName': pkgName,
+                  'name': lang == 'en' || lang.isEmpty ? name : '$name (${lang.toUpperCase()})',
+                  'lang': lang,
+                  'version': (map['versionName'] ?? map['version'] ?? '1.0.0').toString(),
+                  'isInstalled': map['isInstalled'] as bool? ?? false,
+                  'hasUpdate': map['hasUpdate'] as bool? ?? false,
+                  'iconUrl': iconUrl,
+                  'isJs': false,
+                });
               }
+              await LoggerService.instance.logInfo('Fetched ${nodes.length} server extensions from $serverUrl', 'Browse');
             }
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        await LoggerService.instance.logWarning('Server extension fetch failed: $e', 'Browse');
+      }
 
       // 2. Fetch local JS repo extensions from all or selected repositories
       final List<RepoSourceItem> jsList;
@@ -354,9 +369,31 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             ext['isInstalled'] = false;
             ext['hasUpdate'] = false;
           });
+          customStatusMessage = 'Uninstalled $name';
         }
       } else if (GraphQLClientService.instance.isConfigured) {
-        await GraphQLClientService.instance.updateExtension(id, (isInstalled && !isUpdate) ? 'UNINSTALL' : 'INSTALL');
+        final pkgName = (ext['pkgName'] ?? ext['id']).toString();
+        if (isUpdate) {
+          await GraphQLClientService.instance.updateServerExtension(pkgName);
+          setState(() {
+            ext['hasUpdate'] = false;
+          });
+          customStatusMessage = 'Updated $name on server';
+        } else if (isInstalled) {
+          await GraphQLClientService.instance.uninstallServerExtension(pkgName);
+          setState(() {
+            ext['isInstalled'] = false;
+            ext['hasUpdate'] = false;
+          });
+          customStatusMessage = 'Uninstalled $name from server';
+        } else {
+          await GraphQLClientService.instance.installServerExtension(pkgName);
+          setState(() {
+            ext['isInstalled'] = true;
+            ext['hasUpdate'] = false;
+          });
+          customStatusMessage = 'Installed $name on server';
+        }
       }
     } catch (_) {}
 
@@ -369,7 +406,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             customStatusMessage ??
                 (isUpdate
                     ? 'Updated $name to v$version'
-                    : (isInstalled ? 'Uninstalled $name' : 'Installed $name (Ready for on-device scraping)')),
+                    : (isInstalled ? 'Uninstalled $name' : 'Installed $name')),
           ),
         ),
       );
@@ -432,6 +469,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
@@ -485,12 +523,22 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final filtered = _sourcesList.where((s) {
       final name = (s['name'] as String).toLowerCase();
       final lang = (s['lang'] as String).toUpperCase();
-      final isEnglish = lang == 'EN' || lang == 'ALL' || lang.isEmpty;
-      if (!isEnglish) return false;
+      final isEnglish = lang == 'EN' || lang.startsWith('EN') || lang == 'ALL' || lang == 'MULTI' || lang == 'UNIVERSAL' || lang.isEmpty;
 
       final matchesSearch = _sourceSearchQuery.isEmpty || name.contains(_sourceSearchQuery.toLowerCase());
-      final matchesLang = _selectedLangFilter.toUpperCase() == 'ALL' || _selectedLangFilter.toUpperCase() == 'EN' ? isEnglish : lang == _selectedLangFilter.toUpperCase();
-      return matchesSearch && matchesLang;
+      final matchesLang = _selectedLangFilter.toUpperCase() == 'ALL'
+          ? true
+          : (_selectedLangFilter.toUpperCase() == 'EN' ? isEnglish : lang.contains(_selectedLangFilter.toUpperCase()));
+      if (!matchesSearch || !matchesLang) return false;
+
+      final isLocal = s['isLocalJs'] as bool? ?? false;
+      final isPinned = s['isPinned'] as bool? ?? false;
+
+      if (_selectedSourceFilter == 'Local JS' && !isLocal) return false;
+      if (_selectedSourceFilter == 'Server' && isLocal) return false;
+      if (_selectedSourceFilter == 'Pinned' && !isPinned) return false;
+
+      return true;
     }).toList();
 
     final pinned = filtered.where((s) => s['isPinned'] == true).toList();
@@ -532,7 +580,72 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
+
+          // ── SOURCE TYPE FILTER ROW ──
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('All'),
+                  selected: _selectedSourceFilter == 'All',
+                  selectedColor: primaryColor,
+                  backgroundColor: const Color(0x1F2A2A32),
+                  labelStyle: TextStyle(
+                    color: _selectedSourceFilter == 'All' ? Colors.white : Colors.grey,
+                    fontWeight: _selectedSourceFilter == 'All' ? FontWeight.bold : FontWeight.normal,
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  onSelected: (_) => setState(() => _selectedSourceFilter = 'All'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  avatar: const Icon(Icons.flash_on_rounded, size: 16, color: Colors.tealAccent),
+                  label: const Text('Local JS'),
+                  selected: _selectedSourceFilter == 'Local JS',
+                  selectedColor: Colors.teal.shade800,
+                  backgroundColor: const Color(0x1F2A2A32),
+                  labelStyle: TextStyle(
+                    color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : Colors.grey,
+                    fontWeight: _selectedSourceFilter == 'Local JS' ? FontWeight.bold : FontWeight.normal,
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  onSelected: (_) => setState(() => _selectedSourceFilter = 'Local JS'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  avatar: const Icon(Icons.cloud_queue_rounded, size: 16, color: Colors.lightBlueAccent),
+                  label: const Text('Server (Suwayomi)'),
+                  selected: _selectedSourceFilter == 'Server',
+                  selectedColor: Colors.blue.shade800,
+                  backgroundColor: const Color(0x1F2A2A32),
+                  labelStyle: TextStyle(
+                    color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : Colors.grey,
+                    fontWeight: _selectedSourceFilter == 'Server' ? FontWeight.bold : FontWeight.normal,
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  onSelected: (_) => setState(() => _selectedSourceFilter = 'Server'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  avatar: const Icon(Icons.push_pin_rounded, size: 16, color: Colors.amberAccent),
+                  label: const Text('Pinned'),
+                  selected: _selectedSourceFilter == 'Pinned',
+                  selectedColor: Colors.amber.shade900,
+                  backgroundColor: const Color(0x1F2A2A32),
+                  labelStyle: TextStyle(
+                    color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : Colors.grey,
+                    fontWeight: _selectedSourceFilter == 'Pinned' ? FontWeight.bold : FontWeight.normal,
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  onSelected: (_) => setState(() => _selectedSourceFilter = 'Pinned'),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
 
           if (pinned.isNotEmpty) ...[
             Text('PINNED SOURCES', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
@@ -541,9 +654,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             const Divider(height: 24, color: Color(0x1AFFFFFF)),
           ],
 
-          if (localJsUnpinned.isNotEmpty) ...[
+          if (localJsUnpinned.isNotEmpty && _selectedSourceFilter != 'Server') ...[
             const Text(
-              '⚡ LOCAL EXTENSIONS (On-Device Engine - Fast & Offline)',
+              '⚡ LOCAL EXTENSIONS (On-Device Scrapers)',
               style: TextStyle(color: Colors.tealAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
             ),
             const SizedBox(height: 8),
@@ -551,7 +664,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             const SizedBox(height: 16),
           ],
 
-          if (serverUnpinned.isNotEmpty) ...[
+          if (serverUnpinned.isNotEmpty && _selectedSourceFilter != 'Local JS') ...[
             const Text(
               '☁ SERVER SOURCES (Suwayomi Proxy)',
               style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
@@ -560,8 +673,51 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             ...serverUnpinned.map((s) => _buildSourceItemTile(s)),
           ],
 
-          if (unpinned.isEmpty && pinned.isEmpty)
-            const Padding(padding: EdgeInsets.all(16.0), child: Center(child: Text('No sources found.', style: TextStyle(color: Colors.grey)))),
+          if (filtered.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 36.0, horizontal: 16.0),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _selectedSourceFilter == 'Server' ? Icons.cloud_off_rounded : Icons.search_off_rounded,
+                      size: 48,
+                      color: Colors.grey.withAlpha(120),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _selectedSourceFilter == 'Server'
+                          ? 'No server sources found'
+                          : 'No sources found',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _selectedSourceFilter == 'Server'
+                          ? 'Make sure your Suwayomi server is connected in Settings and has extensions installed.'
+                          : 'Try changing your search query or language filter.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: primaryColor,
+                        side: BorderSide(color: primaryColor.withAlpha(100)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        _fetchServerSources();
+                        _fetchExtensions();
+                      },
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Refresh Sources'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -578,53 +734,56 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final bool isLocalJs = source['isLocalJs'] as bool? ?? false;
     final bool supportsLatest = source['supportsLatest'] as bool? ?? true;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Material(
-        color: const Color(0x1F2A2A32),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => _openSourceGrid(id, name, false),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
-            child: Row(
-              children: [
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  icon: Icon(
-                    isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
-                    color: isPinned ? primaryColor : Colors.grey,
-                    size: 18,
+    return RepaintBoundary(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6.0),
+        child: Material(
+          color: const Color(0x1F2A2A32),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => _openSourceGrid(id, name, false),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
+              child: Row(
+                children: [
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: Icon(
+                      isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                      color: isPinned ? primaryColor : Colors.grey,
+                      size: 18,
+                    ),
+                    onPressed: () => _toggleSourcePin(id),
                   ),
-                  onPressed: () => _toggleSourcePin(id),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: primaryColor.withAlpha(38),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: iconUrl.isNotEmpty
-                        ? Image.network(
-                            iconUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Center(
-                              child: Text(
-                                name.substring(0, 1).toUpperCase(),
-                                style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: primaryColor.withAlpha(38),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: iconUrl.isNotEmpty
+                          ? Image.network(
+                              iconUrl,
+                              fit: BoxFit.cover,
+                              cacheWidth: 100,
+                              cacheHeight: 100,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Text(
+                                  name.substring(0, 1).toUpperCase(),
+                                  style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
                               ),
-                            ),
-                          )
+                            )
                         : Center(
                             child: Text(
                               name.substring(0, 1).toUpperCase(),
@@ -705,8 +864,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ═════════════════════════════════════════════════════════
   String _selectedExtensionFilter = 'All'; // 'All', 'Local JS', 'Server APK', 'Installed'
@@ -722,8 +882,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       if (!matchesSearch) return false;
 
       final lang = (ext['lang'] as String? ?? 'en').toLowerCase();
-      final isEnglish = lang == 'en' || lang == 'all' || lang.isEmpty;
-      if (!isEnglish) return false;
+      final isEnglish = lang == 'en' || lang.startsWith('en') || lang == 'all' || lang == 'multi' || lang == 'universal' || lang.isEmpty;
+      if (_selectedExtensionFilter != 'Server APK' && _extensionSearchQuery.isEmpty && !isEnglish) return false;
 
       final isJs = ext['isJs'] as bool? ?? false;
       final isInstalled = ext['isInstalled'] as bool? ?? false;
@@ -926,6 +1086,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     )
                   : ListView.builder(
                       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                      cacheExtent: 800,
                       padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 8.0, bottom: 120.0),
                       itemCount: sortedList.length,
                       itemBuilder: (context, index) {
@@ -936,47 +1097,49 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         final isJs = ext['isJs'] as bool;
                         final isInstalled = ext['isInstalled'] as bool;
                         final iconUrl = ext['iconUrl'] as String? ?? '';
-
                         final hasUpdate = ext['hasUpdate'] as bool? ?? false;
 
-                        return Container(
-                          margin: const EdgeInsets.symmetric(vertical: 4.0),
-                          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
-                          decoration: BoxDecoration(
-                            color: const Color(0x1F2A2A32),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 42,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  color: primaryColor.withAlpha(38),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: iconUrl.isNotEmpty
-                                      ? Image.network(
-                                          iconUrl,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => Center(
+                        return RepaintBoundary(
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 4.0),
+                            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+                            decoration: BoxDecoration(
+                              color: const Color(0x1F2A2A32),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: primaryColor.withAlpha(38),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: iconUrl.isNotEmpty
+                                        ? Image.network(
+                                            iconUrl,
+                                            fit: BoxFit.cover,
+                                            cacheWidth: 120,
+                                            cacheHeight: 120,
+                                            errorBuilder: (_, __, ___) => Center(
+                                              child: Text(
+                                                lang.substring(0, lang.length.clamp(0, 2)).toUpperCase(),
+                                                style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                              ),
+                                            ),
+                                          )
+                                        : Center(
                                             child: Text(
                                               lang.substring(0, lang.length.clamp(0, 2)).toUpperCase(),
                                               style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 12),
                                             ),
                                           ),
-                                        )
-                                      : Center(
-                                          child: Text(
-                                            lang.substring(0, lang.length.clamp(0, 2)).toUpperCase(),
-                                            style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 12),
-                                          ),
-                                        ),
+                                  ),
                                 ),
-                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -1049,8 +1212,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                 ),
                             ],
                           ),
-                        );
-                      },
+                        ),
+                      );
+                    },
                     ),
         ),
       ],
@@ -1122,7 +1286,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
     // 3. Sort migration items
     if (_migrateSortByCount) {
-      migrationItems.sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+      migrationItems.sort((a, b) => parseIntSafe(b['count']).compareTo(parseIntSafe(a['count'])));
     } else {
       migrationItems.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
     }
@@ -1166,7 +1330,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             children: migrationItems.map((item) {
               final name = item['name'] as String;
               final lang = item['lang'] as String;
-              final count = item['count'] as int;
+              final count = parseIntSafe(item['count']);
               final iconUrl = item['iconUrl'] as String;
               final mangas = item['mangas'] as List<Manga>;
 

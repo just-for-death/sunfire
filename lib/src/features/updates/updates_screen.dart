@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
+import '../../core/services/image_cache_helper.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 
@@ -14,7 +15,9 @@ class UpdatesScreen extends StatefulWidget {
   State<UpdatesScreen> createState() => _UpdatesScreenState();
 }
 
-class _UpdatesScreenState extends State<UpdatesScreen> {
+class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   List<Map<String, dynamic>> _updatesList = [];
   bool _isLoading = false;
   bool _isCheckingServer = false;
@@ -77,7 +80,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
 
       final data = await GraphQLClientService.instance
           .fetchUpdatesChapters(first: 100)
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 8));
 
       if (data != null && data.containsKey('chapters')) {
         final nodes = data['chapters']['nodes'] as List<dynamic>?;
@@ -85,14 +88,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
           for (final n in nodes) {
             final map = n as Map<String, dynamic>;
             final mangaMap = map['manga'] as Map<String, dynamic>?;
-            final chServerId = map['id'] as int;
+            final chServerId = parseIntSafe(map['id']);
             final ch = Chapter()
               ..serverId = chServerId
-              ..mangaId = map['mangaId'] as int? ?? 0
+              ..mangaId = parseIntSafe(map['mangaId'])
               ..name = map['name'] as String? ?? 'Chapter'
-              ..chapterNumber = (map['chapterNumber'] as num? ?? 0).toDouble()
-              ..isRead = map['isRead'] as bool? ?? false
-              ..lastPageRead = map['lastPageRead'] as int? ?? 0;
+              ..chapterNumber = parseDoubleSafe(map['chapterNumber'])
+              ..isRead = parseBoolSafe(map['isRead'])
+              ..lastPageRead = parseIntSafe(map['lastPageRead']);
 
             String title = 'Manga';
             String thumb = '';
@@ -101,7 +104,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
 
             if (mangaMap != null) {
               title = mangaMap['title'] as String? ?? 'Manga';
-              mId = mangaMap['id'] as int? ?? mId;
+              mId = parseIntSafe(mangaMap['id'], mId);
               final rawThumb = mangaMap['thumbnailUrl'] as String?;
               if (rawThumb != null && rawThumb.isNotEmpty) {
                 thumb = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
@@ -110,7 +113,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
               sourceName = srcMap?['displayName'] as String? ?? '';
             }
 
-            final isDownloaded = map['isDownloaded'] as bool? ?? false;
+            final isDownloaded = parseBoolSafe(map['isDownloaded']);
             final fetchedAt = map['fetchedAt'] != null ? int.tryParse(map['fetchedAt'].toString()) : null;
 
             items.add({
@@ -270,6 +273,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
@@ -300,6 +304,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
         onRefresh: _checkServerForUpdates,
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          cacheExtent: 800,
           slivers: [
                         if (_lastUpdateText != null)
                           SliverToBoxAdapter(
@@ -392,9 +397,13 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                                             ),
                                             child: ClipRRect(
                                               borderRadius: BorderRadius.circular(8),
-                                              child: thumb.isNotEmpty
-                                                  ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.book_rounded, size: 20, color: Colors.grey)))
-                                                  : const Center(child: Icon(Icons.book_rounded, size: 20, color: Colors.grey)),
+                                              child: MangaCoverImage(
+                                                mangaServerId: mangaId,
+                                                thumbnailUrl: thumb,
+                                                width: 44,
+                                                height: 60,
+                                                fit: BoxFit.cover,
+                                              ),
                                             ),
                                           ),
                                           title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),

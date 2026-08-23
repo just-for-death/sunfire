@@ -13,12 +13,19 @@ import 'features/updates/updates_screen.dart';
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
+  static final ValueNotifier<int> selectedTabNotifier = ValueNotifier<int>(0);
+
+  static void switchToTab(int index) {
+    selectedTabNotifier.value = index;
+  }
+
   @override
   State<MainShell> createState() => _MainShellState();
 }
 
 class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
+  late final PageController _pageController;
 
   final List<Widget> _screens = const [
     LibraryScreen(),
@@ -31,11 +38,27 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _currentIndex);
+    MainShell.selectedTabNotifier.addListener(_onExternalTabChange);
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  void _onExternalTabChange() {
+    final target = MainShell.selectedTabNotifier.value;
+    if (_currentIndex != target && mounted) {
+      setState(() => _currentIndex = target);
+      _pageController.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   @override
   void dispose() {
+    MainShell.selectedTabNotifier.removeListener(_onExternalTabChange);
+    _pageController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -51,8 +74,15 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      body: IndexedStack(
-        index: _currentIndex,
+      body: PageView(
+        controller: _pageController,
+        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+        onPageChanged: (index) {
+          if (_currentIndex != index) {
+            HapticFeedback.selectionClick();
+            setState(() => _currentIndex = index);
+          }
+        },
         children: _screens,
       ),
       bottomNavigationBar: SafeArea(
@@ -109,6 +139,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         if (_currentIndex != index) {
           HapticFeedback.selectionClick();
           setState(() => _currentIndex = index);
+          _pageController.animateToPage(
+            index,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+          );
         }
       },
       behavior: HitTestBehavior.opaque,

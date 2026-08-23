@@ -460,7 +460,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Reader Settings (Mihon)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const Text('Reader Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 20),
 
                     // 1. READING MODE
@@ -815,19 +815,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     ListView.builder(
                       controller: _scrollController,
                       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                      cacheExtent: 1500,
                       itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
                       itemBuilder: (context, index) {
                         if (index == _pageUrls.length) {
                           return _buildChapterTransitionCard();
                         }
-                        return ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: constraints.maxHeight,
-                            minWidth: constraints.maxWidth,
-                          ),
-                          child: Padding(
-                            padding: EdgeInsets.only(bottom: _readingMode == ReadingMode.continuousVertical ? 8.0 : 0.0),
-                            child: _buildPageWidget(_pageUrls[index], index, isPaged: false),
+                        return RepaintBoundary(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minHeight: constraints.maxHeight,
+                              minWidth: constraints.maxWidth,
+                            ),
+                            child: Padding(
+                              padding: EdgeInsets.only(bottom: _readingMode == ReadingMode.continuousVertical ? 8.0 : 0.0),
+                              child: _buildPageWidget(_pageUrls[index], index, isPaged: false),
+                            ),
                           ),
                         );
                       },
@@ -840,7 +843,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       itemCount: _pageUrls.length,
                       onPageChanged: _onPageChanged,
                       itemBuilder: (context, index) {
-                        return Center(child: _buildPageWidget(_pageUrls[index], index, isPaged: true));
+                        return RepaintBoundary(
+                          child: Center(child: _buildPageWidget(_pageUrls[index], index, isPaged: true)),
+                        );
                       },
                     ),
 

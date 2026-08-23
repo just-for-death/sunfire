@@ -54,7 +54,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
       builder: (context, child) {
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Reader Settings (Mihon)'),
+            title: const Text('Reader Settings'),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_rounded),
               onPressed: () => context.pop(),

@@ -10,6 +10,8 @@ class QuickJsService {
 
   final Map<String, String> _installedJsSources = {};
   final Map<String, String> _canonicalDisplayNames = {};
+  final Map<String, String> _installedVersions = {};
+  final Map<String, String> _installedIcons = {};
 
   QuickJsService._();
 
@@ -56,6 +58,22 @@ class QuickJsService {
               final displayName = fileName.replaceAll('_', ' ').trim();
               _installedJsSources[cleanKey] = code;
               _canonicalDisplayNames[cleanKey] = displayName;
+
+              // Read companion metadata json if available
+              final metaFile = File('$dirPath/$fileName.json');
+              if (await metaFile.exists()) {
+                try {
+                  final metaJson = jsonDecode(await metaFile.readAsString());
+                  if (metaJson is Map) {
+                    if (metaJson['version'] != null) {
+                      _installedVersions[cleanKey] = metaJson['version'].toString();
+                    }
+                    if (metaJson['iconUrl'] != null) {
+                      _installedIcons[cleanKey] = metaJson['iconUrl'].toString();
+                    }
+                  }
+                } catch (_) {}
+              }
             }
           }
         }
@@ -63,7 +81,12 @@ class QuickJsService {
     }
   }
 
-  Future<bool> saveLocalExtension(String sourceName, String jsCode) async {
+  Future<bool> saveLocalExtension(
+    String sourceName,
+    String jsCode, {
+    String? version,
+    String? iconUrl,
+  }) async {
     final cleanName = sourceName
         .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
         .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
@@ -72,6 +95,12 @@ class QuickJsService {
 
     _installedJsSources[cleanName] = jsCode;
     _canonicalDisplayNames[cleanName] = displayName;
+    if (version != null && version.isNotEmpty) {
+      _installedVersions[cleanName] = version;
+    }
+    if (iconUrl != null && iconUrl.isNotEmpty) {
+      _installedIcons[cleanName] = iconUrl;
+    }
 
     try {
       final appDir = await getApplicationDocumentsDirectory();
@@ -81,6 +110,13 @@ class QuickJsService {
       }
       final file = File('${extDir.path}/$cleanName.js');
       await file.writeAsString(jsCode);
+
+      final metaFile = File('${extDir.path}/$cleanName.json');
+      await metaFile.writeAsString(jsonEncode({
+        'name': displayName,
+        'version': version ?? _installedVersions[cleanName] ?? '1.0.0',
+        'iconUrl': iconUrl ?? _installedIcons[cleanName] ?? '',
+      }));
       return true;
     } catch (e) {
       await LoggerService.instance.logWarning('Failed to persist extension $sourceName: $e', 'QuickJS');
@@ -131,6 +167,8 @@ class QuickJsService {
     for (final k in toDelete) {
       _installedJsSources.remove(k);
       _canonicalDisplayNames.remove(k);
+      _installedVersions.remove(k);
+      _installedIcons.remove(k);
     }
     try {
       final appDir = await getApplicationDocumentsDirectory();
@@ -138,8 +176,8 @@ class QuickJsService {
       if (await extDir.exists()) {
         final files = await extDir.list().toList();
         for (final f in files) {
-          if (f is File && f.path.endsWith('.js')) {
-            final base = f.uri.pathSegments.last.replaceAll('.js', '');
+          if (f is File && (f.path.endsWith('.js') || f.path.endsWith('.json'))) {
+            final base = f.uri.pathSegments.last.replaceAll('.js', '').replaceAll('.json', '');
             if (_canonicalizeKey(base) == canonQuery || toDelete.contains(base)) {
               await f.delete();
             }
@@ -153,15 +191,29 @@ class QuickJsService {
   }
 
   String getInstalledVersion(String sourceName) {
+    final canonQuery = _canonicalizeKey(sourceName);
+    for (final entry in _installedVersions.entries) {
+      if (entry.key == sourceName || _canonicalizeKey(entry.key) == canonQuery) {
+        return entry.value;
+      }
+    }
     final code = getExtensionCode(sourceName);
     if (code != null && code.isNotEmpty) {
       final meta = extractSourceMetadata(code);
-      return meta['version']?.toString() ?? '1.0.0';
+      if (meta['version'] != null && meta['version'].toString().isNotEmpty) {
+        return meta['version'].toString();
+      }
     }
     return '';
   }
 
   String getSourceIconUrl(String sourceName) {
+    final canonQuery = _canonicalizeKey(sourceName);
+    for (final entry in _installedIcons.entries) {
+      if ((entry.key == sourceName || _canonicalizeKey(entry.key) == canonQuery) && entry.value.isNotEmpty) {
+        return entry.value;
+      }
+    }
     final code = getExtensionCode(sourceName);
     if (code != null && code.isNotEmpty) {
       final meta = extractSourceMetadata(code);

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
+import '../../core/sync/graphql_client_service.dart';
 
 class StorageSettingsScreen extends StatefulWidget {
   const StorageSettingsScreen({super.key});
@@ -97,7 +99,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                             title: 'Chapters to Auto-Download',
                             options: const ['1', '3', '5'],
                             currentValue: _settings.autoDownloadCount.toString(),
-                            onSelected: (val) => _settings.autoDownloadCount = int.parse(val),
+                            onSelected: (val) => _settings.autoDownloadCount = parseIntSafe(val, 1),
                           );
                         },
                       ),
@@ -128,10 +130,15 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       leading: Icon(Icons.cleaning_services_rounded, color: primaryColor),
                       title: const Text('Clear Image Disk Cache', style: TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: const Text('Free cached cover thumbnails & manga page images'),
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Image disk cache cleared!')),
-                        );
+                      onTap: () async {
+                        await ImageCacheHelper.clearCache();
+                        imageCache.clear();
+                        imageCache.clearLiveImages();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Image disk & memory cache cleared!')),
+                          );
+                        }
                       },
                     ),
                   ],

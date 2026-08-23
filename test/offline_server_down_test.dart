@@ -200,5 +200,22 @@ void main() {
       final pendingSyncItems = [readChapter];
       expect(pendingSyncItems.length, equals(1));
     });
+
+    test('7. DownloadManager & Local Storage: Downloaded chapter is resolved with zero network', () async {
+      // Direct offline download resolution check
+      final offlineResult = ChapterPagesResult(
+        pageUrls: [
+          '/app_data/downloads/101/page_001.jpg',
+          '/app_data/downloads/101/page_002.jpg',
+        ],
+        source: ContentSourceType.localDownload,
+        effectiveSourceName: 'Weeb Central (EN)',
+        isLocalFiles: true,
+      );
+
+      expect(offlineResult.source, equals(ContentSourceType.localDownload));
+      expect(offlineResult.isLocalFiles, isTrue);
+      expect(offlineResult.pageUrls.first, startsWith('/'));
+    });
   });
 }

@@ -8,6 +8,8 @@ class ImageCacheHelper {
 
   static Future<void> initialize() async {
     try {
+      PaintingBinding.instance.imageCache.maximumSize = 1000;
+      PaintingBinding.instance.imageCache.maximumSizeBytes = 128 * 1024 * 1024; // 128MB
       final appDir = await getApplicationDocumentsDirectory();
       final dir = Directory('${appDir.path}/covers');
       if (!await dir.exists()) {
@@ -24,12 +26,21 @@ class ImageCacheHelper {
         return f.path;
       }
     }
-    // Direct Linux documents check fallback
-    final direct = File('/home/zoro/Documents/covers/$mangaServerId.jpg');
-    if (direct.existsSync() && direct.lengthSync() > 100) {
-      return direct.path;
-    }
     return null;
+  }
+
+  static Future<void> clearCache() async {
+    try {
+      if (_basePath != null) {
+        final dir = Directory(_basePath!);
+        if (await dir.exists()) {
+          final files = await dir.list().toList();
+          for (final f in files) {
+            await f.delete();
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   static Future<void> cacheThumbnail(int mangaServerId, String url) async {
@@ -70,6 +81,10 @@ class MangaCoverImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    final int? targetCacheWidth = width != null ? (width! * dpr).clamp(100.0, 600.0).round() : 360;
+    final int? targetCacheHeight = height != null ? (height! * dpr).clamp(150.0, 900.0).round() : 520;
+
     final localPath = ImageCacheHelper.getLocalCoverPath(mangaServerId);
     if (localPath != null) {
       return Image.file(
@@ -77,6 +92,17 @@ class MangaCoverImage extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
+        cacheWidth: targetCacheWidth,
+        cacheHeight: targetCacheHeight,
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (wasSynchronouslyLoaded) return child;
+          return AnimatedOpacity(
+            opacity: frame == null ? 0.0 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            child: child,
+          );
+        },
         errorBuilder: (_, __, ___) => _fallback(),
       );
     }
@@ -84,12 +110,28 @@ class MangaCoverImage extends StatelessWidget {
     if (thumbnailUrl != null && thumbnailUrl!.isNotEmpty) {
       final headers = QuickJsService.getImageHeaders(thumbnailUrl!);
 
+      // Proactively cache to local storage in background
+      if (mangaServerId > 0) {
+        ImageCacheHelper.cacheThumbnail(mangaServerId, thumbnailUrl!);
+      }
+
       return Image.network(
         thumbnailUrl!,
         headers: headers,
         width: width,
         height: height,
         fit: fit,
+        cacheWidth: targetCacheWidth,
+        cacheHeight: targetCacheHeight,
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (wasSynchronouslyLoaded) return child;
+          return AnimatedOpacity(
+            opacity: frame == null ? 0.0 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            child: child,
+          );
+        },
         errorBuilder: (_, __, ___) => _fallback(),
       );
     }

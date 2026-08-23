@@ -15,7 +15,6 @@ class MClient {
   }) {
     return InterceptedClient.build(
       client: http.Client(),
-      retryPolicy: ResolveCloudFlareChallenge(showCloudFlareError),
       interceptors: [
         MCookieManager(reqcopyWith),
         LoggerInterceptor(showCloudFlareError),
