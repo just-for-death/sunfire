@@ -180,16 +180,22 @@ class ContentResolverService {
           final sNameLower = effectiveSourceName.toLowerCase();
           if (sNameLower.contains('weeb')) {
             cleanChapterUrl = 'https://weebcentral.com$cleanChapterUrl';
-          } else if (sNameLower.contains('mangahere')) {
+          } else if (sNameLower.contains('mangahere') || sNameLower.contains('here')) {
             cleanChapterUrl = 'https://www.mangahere.cc$cleanChapterUrl';
           } else if (sNameLower.contains('freak')) {
-            cleanChapterUrl = 'https://w16.mangafreak.net$cleanChapterUrl';
+            cleanChapterUrl = 'https://ww3.mangafreak.me$cleanChapterUrl';
           } else if (sNameLower.contains('pill')) {
             cleanChapterUrl = 'https://mangapill.com$cleanChapterUrl';
           } else if (sNameLower.contains('webtoon')) {
             cleanChapterUrl = 'https://www.webtoons.com$cleanChapterUrl';
-          } else if (sNameLower.contains('mangago')) {
+          } else if (sNameLower.contains('mangago') || sNameLower.contains('gogo')) {
             cleanChapterUrl = 'https://www.mangago.me$cleanChapterUrl';
+          } else if (sNameLower.contains('readcomic') || sNameLower.contains('comic')) {
+            cleanChapterUrl = 'https://readcomicsonline.ru$cleanChapterUrl';
+          } else if (sNameLower.contains('nhentai')) {
+            cleanChapterUrl = 'https://nhentai.net$cleanChapterUrl';
+          } else if (sNameLower.contains('ninehentai')) {
+            cleanChapterUrl = 'https://ninehentai.to$cleanChapterUrl';
           }
         }
         final localPages = await QuickJsService.instance.fetchChapterPagesLocal(effectiveSourceName, cleanChapterUrl);
