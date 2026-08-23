@@ -234,6 +234,43 @@ class ContentResolverService {
             isLocalFiles: false,
           );
         }
+
+        // Fallback: If 0 pages were returned (e.g. invalid stub URL or manga URL saved on chapter), re-hydrate from manga details
+        if (localPages.isEmpty && chapterServerId > 0) {
+          final ch = await IsarService.instance.getChapterByServerId(chapterServerId);
+          if (ch != null) {
+            final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
+            if (m != null && m.url.isNotEmpty) {
+              final localData = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSourceName, m.url);
+              final chList = (localData['chapters'] ?? localData['chapterList'] ?? localData['epList'] ?? localData['episodes']) as List<dynamic>?;
+              if (chList != null && chList.isNotEmpty) {
+                for (final c in chList) {
+                  final cMap = Map<String, dynamic>.from(c as Map);
+                  final cName = cMap['name']?.toString() ?? '';
+                  final cUrl = (cMap['url'] ?? cMap['link'])?.toString() ?? '';
+                  final double rawNum = (cMap['chapterNumber'] as num?)?.toDouble() ?? -1.0;
+                  final numMatches = ch.chapterNumber > 0 && rawNum > 0 && (rawNum - ch.chapterNumber).abs() < 0.001;
+                  final nameMatches = cName.trim().toLowerCase() == ch.name.trim().toLowerCase();
+                  if ((numMatches || nameMatches) && cUrl.isNotEmpty && cUrl != cleanChapterUrl) {
+                    ch.url = cUrl;
+                    ch.realUrl = cUrl;
+                    await IsarService.instance.saveChapter(ch);
+                    final retryPages = await QuickJsService.instance.fetchChapterPagesLocal(effectiveSourceName, cUrl);
+                    if (retryPages.isNotEmpty) {
+                      await LoggerService.instance.logInfo('Re-hydrated and resolved ${retryPages.length} pages via Local Extension ($effectiveSourceName)', 'ContentResolver');
+                      return ChapterPagesResult(
+                        pageUrls: retryPages,
+                        source: ContentSourceType.localExtension,
+                        effectiveSourceName: effectiveSourceName,
+                        isLocalFiles: false,
+                      );
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       } catch (e) {
         await LoggerService.instance.logWarning('Local extension resolution failed for $effectiveSourceName: $e', 'ContentResolver');
       }
