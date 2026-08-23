@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 import '../db/isar_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/graphql_client_service.dart';
+import 'javascript/m_client.dart';
 import 'quickjs_service.dart';
 import 'source_migration_service.dart';
 
@@ -176,28 +178,52 @@ class ContentResolverService {
     if (effectiveSourceName != null && effectiveChapterUrl != null && effectiveChapterUrl.isNotEmpty) {
       try {
         var cleanChapterUrl = effectiveChapterUrl;
+        String? sourceBaseUrl; // Track base URL for pre-warming
+
         if (cleanChapterUrl.startsWith('/')) {
           final sNameLower = effectiveSourceName.toLowerCase();
           if (sNameLower.contains('weeb')) {
-            cleanChapterUrl = 'https://weebcentral.com$cleanChapterUrl';
+            sourceBaseUrl = 'https://weebcentral.com';
+            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
           } else if (sNameLower.contains('mangahere') || sNameLower.contains('here')) {
-            cleanChapterUrl = 'https://www.mangahere.cc$cleanChapterUrl';
+            sourceBaseUrl = 'https://www.mangahere.cc';
+            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
           } else if (sNameLower.contains('freak')) {
-            cleanChapterUrl = 'https://ww3.mangafreak.me$cleanChapterUrl';
+            sourceBaseUrl = 'https://ww3.mangafreak.me';
+            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
           } else if (sNameLower.contains('pill')) {
-            cleanChapterUrl = 'https://mangapill.com$cleanChapterUrl';
+            sourceBaseUrl = 'https://mangapill.com';
+            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
           } else if (sNameLower.contains('webtoon')) {
-            cleanChapterUrl = 'https://www.webtoons.com$cleanChapterUrl';
+            sourceBaseUrl = 'https://www.webtoons.com';
+            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
           } else if (sNameLower.contains('mangago') || sNameLower.contains('gogo')) {
-            cleanChapterUrl = 'https://www.mangago.me$cleanChapterUrl';
+            sourceBaseUrl = 'https://www.mangago.me';
+            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
           } else if (sNameLower.contains('readcomic') || sNameLower.contains('comic')) {
-            cleanChapterUrl = 'https://readcomicsonline.ru$cleanChapterUrl';
+            sourceBaseUrl = 'https://readcomicsonline.ru';
+            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
           } else if (sNameLower.contains('nhentai')) {
-            cleanChapterUrl = 'https://nhentai.net$cleanChapterUrl';
+            sourceBaseUrl = 'https://nhentai.net';
+            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
           } else if (sNameLower.contains('ninehentai')) {
-            cleanChapterUrl = 'https://ninehentai.to$cleanChapterUrl';
+            sourceBaseUrl = 'https://ninehentai.to';
+            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
           }
+        } else if (cleanChapterUrl.startsWith('http')) {
+          // Extract base URL from full chapter URL
+          try {
+            final uri = Uri.parse(cleanChapterUrl);
+            sourceBaseUrl = '${uri.scheme}://${uri.host}';
+          } catch (_) {}
         }
+
+        // Fire FlareSolverr pre-warm in parallel — don't await, let scraping start immediately.
+        // By the time images start loading, the session cookie will be ready.
+        if (sourceBaseUrl != null) {
+          unawaited(MClient.prewarmSession(sourceBaseUrl));
+        }
+
         final localPages = await QuickJsService.instance.fetchChapterPagesLocal(effectiveSourceName, cleanChapterUrl);
         if (localPages.isNotEmpty) {
           await LoggerService.instance.logInfo('Resolved ${localPages.length} pages via Local Extension ($effectiveSourceName)', 'ContentResolver');
