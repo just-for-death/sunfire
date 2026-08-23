@@ -712,19 +712,23 @@ class _ReaderScreenState extends State<ReaderScreen> {
     if (_recoveringUrls.contains(url) || _recoveredImageBytes.containsKey(url)) return;
     _recoveringUrls.add(url);
     try {
-      final headers = QuickJsService.getImageHeaders(_sourceName ?? '', url);
+      final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
+      final cookieHeaders = MClient.getCookiesPref(url);
+      final initialHeaders = {...baseHeaders, ...cookieHeaders};
 
       // First attempt with whatever cookies we already have
       var client = MClient.init();
-      var res = await client.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 15));
+      var res = await client.get(Uri.parse(url), headers: initialHeaders).timeout(const Duration(seconds: 15));
       debugPrint('[Reader] Image fetch $url -> ${res.statusCode} (${res.bodyBytes.length} bytes)');
 
       // If blocked, prewarm FlareSolverr for this domain then retry
       if ([403, 503, 429, 520, 521, 522].contains(res.statusCode)) {
         debugPrint('[Reader] Blocked $url – prewarm FlareSolverr...');
         await MClient.prewarmSession(url, forceRenew: true);
+        final freshCookies = MClient.getCookiesPref(url);
+        final retryHeaders = {...baseHeaders, ...freshCookies};
         client = MClient.init();
-        res = await client.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 20));
+        res = await client.get(Uri.parse(url), headers: retryHeaders).timeout(const Duration(seconds: 20));
         debugPrint('[Reader] Image retry $url -> ${res.statusCode} (${res.bodyBytes.length} bytes)');
       }
 
