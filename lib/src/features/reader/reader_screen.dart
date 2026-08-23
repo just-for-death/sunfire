@@ -718,7 +718,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
       // First attempt with whatever cookies we already have
       var client = MClient.init();
-      var res = await client.get(Uri.parse(url), headers: initialHeaders).timeout(const Duration(seconds: 15));
+      var res = await client.get(Uri.parse(url), headers: initialHeaders).timeout(const Duration(seconds: 30));
       debugPrint('[Reader] Image fetch $url -> ${res.statusCode} (${res.bodyBytes.length} bytes)');
 
       // If blocked, prewarm FlareSolverr for this domain then retry
@@ -728,7 +728,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         final freshCookies = MClient.getCookiesPref(url);
         final retryHeaders = {...baseHeaders, ...freshCookies};
         client = MClient.init();
-        res = await client.get(Uri.parse(url), headers: retryHeaders).timeout(const Duration(seconds: 20));
+        res = await client.get(Uri.parse(url), headers: retryHeaders).timeout(const Duration(seconds: 30));
         debugPrint('[Reader] Image retry $url -> ${res.statusCode} (${res.bodyBytes.length} bytes)');
       }
 
@@ -751,10 +751,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Widget _buildPageWidget(String url, int index, {BoxConstraints? constraints, bool isPaged = false}) {
     final isWebtoon = _readingMode == ReadingMode.webtoon;
     final boxFit = isWebtoon ? BoxFit.fitWidth : _imageBoxFit;
-
-    if (!_recoveredImageBytes.containsKey(url) && url.startsWith('http')) {
-      _recoverImage(url, index);
-    }
 
     Widget image;
     if (_recoveredImageBytes.containsKey(url)) {
