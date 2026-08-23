@@ -161,6 +161,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                   child: MangaCoverImage(
                                     mangaServerId: ch.mangaId,
                                     thumbnailUrl: thumb,
+                                    sourceName: _mangaSourceNames[ch.mangaId],
                                     fit: BoxFit.cover,
                                   ),
                                 ),
