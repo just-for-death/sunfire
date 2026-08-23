@@ -32,7 +32,7 @@ class ContentResolverService {
     return _instance!;
   }
 
-  /// ── CHAPTER PAGES RESOLVER (1. Local Extension -> 2. Local Download -> 3. Server) ──
+  /// ── CHAPTER PAGES RESOLVER (1. Local Download -> 2. Local Extension -> 3. Server) ──
   Future<ChapterPagesResult> resolveChapterPages({
     required int chapterServerId,
     String? chapterUrl,
@@ -40,6 +40,31 @@ class ContentResolverService {
   }) async {
     var effectiveSourceName = sourceName;
     var effectiveChapterUrl = chapterUrl;
+
+    // ── PRIORITY 1: LOCAL DOWNLOADS (Instant Offline Storage) ─────────────
+    if (chapterServerId > 0) {
+      try {
+        final appDir = await getApplicationDocumentsDirectory();
+        final chapterDir = Directory('${appDir.path}/downloads/$chapterServerId');
+        if (await chapterDir.exists()) {
+          final files = await chapterDir.list().toList();
+          final localImages = files.whereType<File>().toList();
+          localImages.sort((a, b) => a.path.compareTo(b.path));
+          if (localImages.isNotEmpty) {
+            final paths = localImages.map((f) => f.path).toList();
+            await LoggerService.instance.logInfo('Resolved ${paths.length} pages from Local Storage (Offline Download)', 'ContentResolver');
+            return ChapterPagesResult(
+              pageUrls: paths,
+              source: ContentSourceType.localDownload,
+              effectiveSourceName: effectiveSourceName,
+              isLocalFiles: true,
+            );
+          }
+        }
+      } catch (e) {
+        await LoggerService.instance.logWarning('Local download check failed: $e', 'ContentResolver');
+      }
+    }
 
     // Retrieve from local DB if missing
     if (effectiveChapterUrl == null || effectiveChapterUrl.isEmpty || effectiveSourceName == null) {
@@ -138,10 +163,36 @@ class ContentResolverService {
       } catch (_) {}
     }
 
-    // ── PRIORITY 1: LOCAL EXTENSION SCRAPER (Mangayomi / QuickJS) ─────────
+    // Map effectiveSourceName to installed local extension name if available
+    if (effectiveSourceName != null) {
+      final installedNames = QuickJsService.instance.getInstalledExtensionNames();
+      final matchedName = SourceMigrationService.instance.matchServerSourceToLocalJs(effectiveSourceName, installedNames);
+      if (matchedName != null) {
+        effectiveSourceName = matchedName;
+      }
+    }
+
+    // ── PRIORITY 2: LOCAL EXTENSION SCRAPER (Mangayomi / QuickJS) ─────────
     if (effectiveSourceName != null && effectiveChapterUrl != null && effectiveChapterUrl.isNotEmpty) {
       try {
-        final localPages = await QuickJsService.instance.fetchChapterPagesLocal(effectiveSourceName, effectiveChapterUrl);
+        var cleanChapterUrl = effectiveChapterUrl;
+        if (cleanChapterUrl.startsWith('/')) {
+          final sNameLower = effectiveSourceName.toLowerCase();
+          if (sNameLower.contains('weeb')) {
+            cleanChapterUrl = 'https://weebcentral.com$cleanChapterUrl';
+          } else if (sNameLower.contains('mangahere')) {
+            cleanChapterUrl = 'https://www.mangahere.cc$cleanChapterUrl';
+          } else if (sNameLower.contains('freak')) {
+            cleanChapterUrl = 'https://w16.mangafreak.net$cleanChapterUrl';
+          } else if (sNameLower.contains('pill')) {
+            cleanChapterUrl = 'https://mangapill.com$cleanChapterUrl';
+          } else if (sNameLower.contains('webtoon')) {
+            cleanChapterUrl = 'https://www.webtoons.com$cleanChapterUrl';
+          } else if (sNameLower.contains('mangago')) {
+            cleanChapterUrl = 'https://www.mangago.me$cleanChapterUrl';
+          }
+        }
+        final localPages = await QuickJsService.instance.fetchChapterPagesLocal(effectiveSourceName, cleanChapterUrl);
         if (localPages.isNotEmpty) {
           await LoggerService.instance.logInfo('Resolved ${localPages.length} pages via Local Extension ($effectiveSourceName)', 'ContentResolver');
           return ChapterPagesResult(
@@ -156,88 +207,7 @@ class ContentResolverService {
       }
     }
 
-    // ── PRIORITY 1.5: AUTO-RECOVERY ACROSS OTHER INSTALLED LOCAL EXTENSIONS ──
-    try {
-      final ch = await IsarService.instance.getChapterByServerId(chapterServerId);
-      if (ch != null) {
-        final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
-        if (m != null && m.title.isNotEmpty) {
-          // Dynamically query whatever extensions are actually installed on the device
-          final installedExtensions = QuickJsService.instance.getInstalledExtensionNames();
-          for (final altSource in installedExtensions) {
-            if (altSource.toLowerCase() == (effectiveSourceName ?? '').toLowerCase()) continue;
-            try {
-              final searchResults = await QuickJsService.instance.fetchSourceMangaLocal(
-                altSource,
-                searchQuery: m.title,
-              );
-              if (searchResults.isNotEmpty) {
-                final found = searchResults.first;
-                final link = (found['link'] ?? found['url'] ?? '').toString();
-                if (link.isNotEmpty) {
-                  final altData = await QuickJsService.instance.fetchMangaDetailsLocal(altSource, link);
-                  final chList = (altData['chapters'] ?? altData['chapterList'] ?? altData['epList'] ?? altData['episodes']) as List<dynamic>?;
-                  if (chList != null && chList.isNotEmpty) {
-                    for (final c in chList) {
-                      final cMap = c as Map<String, dynamic>;
-                      final cName = cMap['name']?.toString() ?? '';
-                      final cUrl = (cMap['url'] ?? cMap['link'])?.toString() ?? '';
-                      final cNum = (cMap['chapterNumber'] as num?)?.toDouble() ?? 0.0;
-                      final matchFound = cName == ch.name ||
-                          (ch.chapterNumber > 0 && cNum == ch.chapterNumber) ||
-                          (ch.chapterNumber > 0 && cName.contains('${ch.chapterNumber.toInt()}'));
-                      if (matchFound && cUrl.isNotEmpty) {
-                        final altPages = await QuickJsService.instance.fetchChapterPagesLocal(altSource, cUrl);
-                        if (altPages.isNotEmpty) {
-                          ch.url = cUrl;
-                          ch.realUrl = cUrl;
-                          await IsarService.instance.saveChapter(ch);
-                          m.sourceName = altSource;
-                          m.url = link;
-                          await IsarService.instance.saveManga(m);
-                          await LoggerService.instance.logInfo('Auto-recovered ${altPages.length} pages via $altSource for ${m.title}', 'ContentResolver');
-                          return ChapterPagesResult(
-                            pageUrls: altPages,
-                            source: ContentSourceType.localExtension,
-                            effectiveSourceName: altSource,
-                            isLocalFiles: false,
-                          );
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            } catch (_) {}
-          }
-        }
-      }
-    } catch (_) {}
-
-    // ── PRIORITY 2: LOCAL DOWNLOADS (Offline Storage) ─────────────────────
-    try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final chapterDir = Directory('${appDir.path}/downloads/$chapterServerId');
-      if (await chapterDir.exists()) {
-        final files = await chapterDir.list().toList();
-        final localImages = files.whereType<File>().toList();
-        localImages.sort((a, b) => a.path.compareTo(b.path));
-        if (localImages.isNotEmpty) {
-          final paths = localImages.map((f) => f.path).toList();
-          await LoggerService.instance.logInfo('Resolved ${paths.length} pages from Local Storage (Offline Download)', 'ContentResolver');
-          return ChapterPagesResult(
-            pageUrls: paths,
-            source: ContentSourceType.localDownload,
-            effectiveSourceName: effectiveSourceName,
-            isLocalFiles: true,
-          );
-        }
-      }
-    } catch (e) {
-      await LoggerService.instance.logWarning('Local download check failed: $e', 'ContentResolver');
-    }
-
-    // ── PRIORITY 3: SUWAYOMI SERVER PROXY ─────────────────────────────────
+    // ── PRIORITY 2: SUWAYOMI SERVER PROXY ─────────────────────────────────
     if (GraphQLClientService.instance.isConfigured && chapterServerId > 0 && chapterServerId < 2147483647) {
       try {
         final data = await GraphQLClientService.instance.fetchChapterPages(chapterServerId);

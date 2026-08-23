@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../db/isar_service.dart';
+import '../engine/content_resolver_service.dart';
+import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/graphql_client_service.dart';
 
@@ -140,17 +142,21 @@ class DownloadManagerService extends ChangeNotifier {
   }
 
   Future<void> _downloadChapterLocally(LocalDownloadTask task) async {
-    final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+    // 1. Resolve chapter pages via 3-Tier ContentResolver (supports local JS scrapers, downloads & server)
+    final ch = await IsarService.instance.getChapterByServerId(task.chapterId);
+    final manga = ch != null ? await IsarService.instance.getMangaByServerId(ch.mangaId) : null;
+    final sourceName = manga?.sourceName;
+    final chapterUrl = (ch?.url.isNotEmpty == true) ? ch!.url : ch?.realUrl;
 
-    // 1. Fetch chapter page URLs from Suwayomi
-    final data = await GraphQLClientService.instance.fetchChapterPages(task.chapterId);
-    if (data == null || !data.containsKey('fetchChapterPages')) {
-      throw Exception('Failed to retrieve chapter page URLs');
-    }
+    final resolved = await ContentResolverService.instance.resolveChapterPages(
+      chapterServerId: task.chapterId,
+      chapterUrl: chapterUrl,
+      sourceName: sourceName,
+    );
 
-    final rawPages = data['fetchChapterPages']['pages'] as List<dynamic>?;
-    if (rawPages == null || rawPages.isEmpty) {
-      throw Exception('No pages found for chapter');
+    final rawPages = resolved.pageUrls;
+    if (rawPages.isEmpty) {
+      throw Exception('No pages found for chapter ${task.chapterName}');
     }
 
     final appDir = await getApplicationDocumentsDirectory();
@@ -160,12 +166,22 @@ class DownloadManagerService extends ChangeNotifier {
     }
 
     final totalPages = rawPages.length;
+    final effectiveSource = resolved.effectiveSourceName ?? sourceName ?? '';
     for (int i = 0; i < totalPages; i++) {
-      final pagePath = rawPages[i].toString();
-      final pageUrl = pagePath.startsWith('http') ? pagePath : '$serverUrl$pagePath';
-      final file = File('${chapterDir.path}/page_${i + 1}.jpg');
+      final pageUrl = rawPages[i];
+      final file = File('${chapterDir.path}/page_${(i + 1).toString().padLeft(3, '0')}.jpg');
 
-      await _dio.download(pageUrl, file.path);
+      final headers = QuickJsService.getImageHeaders(effectiveSource, pageUrl);
+      final response = await _dio.get<List<int>>(
+        pageUrl,
+        options: Options(
+          headers: headers,
+          responseType: ResponseType.bytes,
+        ),
+      );
+      if (response.data != null && response.data!.isNotEmpty) {
+        await file.writeAsBytes(response.data!);
+      }
 
       task.progress = (i + 1) / totalPages;
       notifyListeners();

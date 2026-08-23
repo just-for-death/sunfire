@@ -9,11 +9,20 @@ import 'reader_settings_screen.dart';
 import 'server_settings_screen.dart';
 import 'storage_settings_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
   @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     final theme = Theme.of(context);
     final primaryColor = theme.colorScheme.primary;
 
@@ -122,7 +131,7 @@ class SettingsScreen extends StatelessWidget {
                     // 5. STATISTICS
                     ListTile(
                       leading: Icon(Icons.insights_rounded, color: primaryColor),
-                      title: const Text('Statistics (Mihon)', style: TextStyle(fontWeight: FontWeight.bold)),
+                      title: const Text('Statistics', style: TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: const Text('Read counts, reading time, genres & sources breakdown'),
                       trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                       onTap: () => context.push('/stats'),

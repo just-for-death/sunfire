@@ -5,6 +5,7 @@ import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/quickjs_service.dart';
+import '../../core/logging/logger_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
@@ -126,13 +127,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               for (final n in chNodes) {
                 final chMap = n as Map<String, dynamic>;
                 final ch = Chapter()
-                  ..serverId = chMap['id'] as int
+                  ..serverId = parseIntSafe(chMap['id'])
                   ..mangaId = widget.mangaServerId
-                  ..name = chMap['name'] ?? 'Chapter ${chMap['chapterNumber']}'
-                  ..chapterNumber = (chMap['chapterNumber'] as num? ?? 0).toDouble()
-                  ..isRead = chMap['isRead'] as bool? ?? false
-                  ..lastPageRead = chMap['lastPageRead'] as int? ?? 0
-                  ..pageCount = chMap['pageCount'] as int? ?? 0;
+                  ..name = chMap['name']?.toString() ?? 'Chapter ${chMap['chapterNumber'] ?? ""}'
+                  ..chapterNumber = parseDoubleSafe(chMap['chapterNumber'])
+                  ..isRead = parseBoolSafe(chMap['isRead'])
+                  ..lastPageRead = parseIntSafe(chMap['lastPageRead'])
+                  ..pageCount = parseIntSafe(chMap['pageCount']);
                 fetched.add(ch);
               }
               await IsarService.instance.saveChapters(fetched);
@@ -140,7 +141,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             }
           }
         }
-      } catch (_) {}
+      } catch (e, st) {
+        await LoggerService.instance.logWarning('Failed to fetch server chapters: $e', 'MangaDetail');
+      }
     }
 
     // 3. Offline / Local Scraper: Scrape chapters directly via QuickJS if empty, missing URLs, or server offline
@@ -191,60 +194,6 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           }
         }
       } catch (_) {}
-    }
-
-    if (_chapters.isEmpty && _manga != null && _manga!.title.isNotEmpty) {
-      final installedExtensions = QuickJsService.instance.getInstalledExtensionNames();
-      for (final altSource in installedExtensions) {
-        if (altSource.toLowerCase() == _manga!.sourceName.toLowerCase()) continue;
-        try {
-          final searchResults = await QuickJsService.instance.fetchSourceMangaLocal(
-            altSource,
-            searchQuery: _manga!.title,
-          );
-          if (searchResults.isNotEmpty) {
-            final first = searchResults.first;
-            final link = (first['link'] ?? first['url'] ?? '').toString();
-            if (link.isNotEmpty) {
-              final altData = await QuickJsService.instance.fetchMangaDetailsLocal(altSource, link);
-              final chList = (altData['chapters'] ?? altData['chapterList']) as List<dynamic>?;
-              if (chList != null && chList.isNotEmpty) {
-                _manga!.sourceName = altSource;
-                _manga!.url = link;
-                if (altData['description'] != null && (_manga!.description == null || _manga!.description!.isEmpty)) {
-                  _manga!.description = altData['description'].toString();
-                }
-                if (altData['imageUrl'] != null && (_manga!.thumbnailUrl == null || _manga!.thumbnailUrl!.isEmpty)) {
-                  _manga!.thumbnailUrl = altData['imageUrl'].toString();
-                }
-                await IsarService.instance.saveManga(_manga!);
-
-                final fetched = <Chapter>[];
-                for (var i = 0; i < chList.length; i++) {
-                  final cMap = chList[i] as Map<String, dynamic>;
-                  final chUrl = (cMap['url'] ?? cMap['link'] ?? '').toString();
-                  final chName = cMap['name']?.toString() ?? 'Chapter ${i + 1}';
-                  final rawChNum = (cMap['chapterNumber'] as num?)?.toDouble();
-                  final chNum = (rawChNum != null && rawChNum > 0) ? rawChNum : _extractChapterNumber(chName, i, chList.length);
-
-                  final ch = Chapter()
-                    ..serverId = (widget.mangaServerId * 10000 + i + 1).abs()
-                    ..mangaId = widget.mangaServerId
-                    ..name = chName
-                    ..chapterNumber = chNum
-                    ..url = chUrl
-                    ..realUrl = chUrl
-                    ..mangaTitle = _manga!.title;
-                  fetched.add(ch);
-                }
-                await IsarService.instance.saveChapters(fetched);
-                _chapters = fetched;
-                break;
-              }
-            }
-          }
-        } catch (_) {}
-      }
     }
 
     _manga ??= Manga()
@@ -946,6 +895,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   ) {
     return CustomScrollView(
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      cacheExtent: 1000,
       slivers: [
         if (!isSelecting)
           SliverAppBar(
@@ -1241,88 +1191,90 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     bool isSelecting,
     Color primaryColor,
   ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Material(
-        color: isSelected ? primaryColor.withAlpha(30) : const Color(0x1F2A2A32),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(
-            color: isSelected ? primaryColor : const Color(0x1AFFFFFF),
-            width: isSelected ? 1.4 : 0.8,
-          ),
-        ),
-        child: ListTile(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          onTap: () {
-            if (isSelecting) {
-              setState(() {
-                if (isSelected) {
-                  _selectedChapterIds.remove(ch.serverId);
-                } else {
-                  _selectedChapterIds.add(ch.serverId);
-                }
-              });
-            } else {
-              _openReader(ch.serverId);
-            }
-          },
-          onLongPress: () => _enterSelectionMode(ch),
-          leading: isSelecting
-              ? Checkbox(
-                  value: isSelected,
-                  activeColor: primaryColor,
-                  onChanged: (val) {
-                    setState(() {
-                      if (val == true) {
-                        _selectedChapterIds.add(ch.serverId);
-                      } else {
-                        _selectedChapterIds.remove(ch.serverId);
-                      }
-                    });
-                  },
-                )
-              : ch.isBookmarked
-                  ? const Icon(Icons.bookmark_rounded, color: Colors.amber, size: 20)
-                  : null,
-          title: Text(
-            ch.name.trim().isNotEmpty
-                ? ch.name
-                : 'Chapter ${ch.chapterNumber.toString().replaceAll(RegExp(r'\.0$'), '')}',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: ch.isRead ? Colors.grey : Colors.white,
+    return RepaintBoundary(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4.0),
+        child: Material(
+          color: isSelected ? primaryColor.withAlpha(30) : const Color(0x1F2A2A32),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(
+              color: isSelected ? primaryColor : const Color(0x1AFFFFFF),
+              width: isSelected ? 1.4 : 0.8,
             ),
           ),
-          subtitle: _formatChapterSubtitle(ch).isNotEmpty
-              ? Text(
-                  _formatChapterSubtitle(ch),
-                  style: TextStyle(fontSize: 12, color: ch.isRead ? Colors.grey[600] : primaryColor),
-                )
-              : null,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (DownloadManagerService.instance.isChapterDownloadedLocally(ch.serverId))
-                const Padding(
-                  padding: EdgeInsets.only(right: 4.0),
-                  child: Icon(Icons.phone_android_rounded, color: Colors.greenAccent, size: 18),
-                ),
-              if (DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId) || ch.isDownloaded)
-                const Padding(
-                  padding: EdgeInsets.only(right: 4.0),
-                  child: Icon(Icons.cloud_done_rounded, color: Colors.cyanAccent, size: 18),
-                ),
-              IconButton(
-                icon: const Icon(Icons.more_vert_rounded, color: Colors.grey, size: 20),
-                onPressed: () => _showSingleChapterOptions(ch),
+          child: ListTile(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            onTap: () {
+              if (isSelecting) {
+                setState(() {
+                  if (isSelected) {
+                    _selectedChapterIds.remove(ch.serverId);
+                  } else {
+                    _selectedChapterIds.add(ch.serverId);
+                  }
+                });
+              } else {
+                _openReader(ch.serverId);
+              }
+            },
+            onLongPress: () => _enterSelectionMode(ch),
+            leading: isSelecting
+                ? Checkbox(
+                    value: isSelected,
+                    activeColor: primaryColor,
+                    onChanged: (val) {
+                      setState(() {
+                        if (val == true) {
+                          _selectedChapterIds.add(ch.serverId);
+                        } else {
+                          _selectedChapterIds.remove(ch.serverId);
+                        }
+                      });
+                    },
+                  )
+                : ch.isBookmarked
+                    ? const Icon(Icons.bookmark_rounded, color: Colors.amber, size: 20)
+                    : null,
+            title: Text(
+              ch.name.trim().isNotEmpty
+                  ? ch.name
+                  : 'Chapter ${ch.chapterNumber.toString().replaceAll(RegExp(r'\.0$'), '')}',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: ch.isRead ? Colors.grey : Colors.white,
               ),
-              if (ch.isRead)
-                const Icon(Icons.check_circle_rounded, color: Colors.grey, size: 20)
-              else
-                Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 24),
-            ],
+            ),
+            subtitle: _formatChapterSubtitle(ch).isNotEmpty
+                ? Text(
+                    _formatChapterSubtitle(ch),
+                    style: TextStyle(fontSize: 12, color: ch.isRead ? Colors.grey[600] : primaryColor),
+                  )
+                : null,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (DownloadManagerService.instance.isChapterDownloadedLocally(ch.serverId))
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4.0),
+                    child: Icon(Icons.phone_android_rounded, color: Colors.greenAccent, size: 18),
+                  ),
+                if (DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId) || ch.isDownloaded)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4.0),
+                    child: Icon(Icons.cloud_done_rounded, color: Colors.cyanAccent, size: 18),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.more_vert_rounded, color: Colors.grey, size: 20),
+                  onPressed: () => _showSingleChapterOptions(ch),
+                ),
+                if (ch.isRead)
+                  const Icon(Icons.check_circle_rounded, color: Colors.grey, size: 20)
+                else
+                  Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 24),
+              ],
+            ),
           ),
         ),
       ),
