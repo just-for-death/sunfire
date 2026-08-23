@@ -6,8 +6,10 @@ import 'package:http_interceptor/http_interceptor.dart';
 
 class MClient {
   static final Map<String, String> _cookies = {};
-  static String _userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  static String _userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6832.64 Safari/537.36';
   static String cfProxyUrl = '';
+
+  static String get userAgent => _userAgent;
 
   static InterceptedClient init({
     Map<String, dynamic>? reqcopyWith,
@@ -22,10 +24,29 @@ class MClient {
     );
   }
 
+  static String _extractRootDomain(String host) {
+    final parts = host.split('.');
+    if (parts.length > 2) {
+      return parts.sublist(parts.length - 2).join('.');
+    }
+    return host;
+  }
+
   static Map<String, String> getCookiesPref(String url) {
     try {
       final host = Uri.parse(url).host;
-      final cookie = _cookies[host];
+      final rootHost = _extractRootDomain(host);
+      
+      String? cookie = _cookies[host] ?? _cookies[rootHost];
+      if (cookie == null) {
+        for (final entry in _cookies.entries) {
+          if (host.endsWith(entry.key) || entry.key.endsWith(rootHost)) {
+            cookie = entry.value;
+            break;
+          }
+        }
+      }
+
       if (cookie != null && cookie.isNotEmpty) {
         return {HttpHeaders.cookieHeader: cookie};
       }
@@ -36,8 +57,11 @@ class MClient {
   static Future<void> setCookie(String url, String ua, {String? cookie}) async {
     try {
       final host = Uri.parse(url).host;
+      final rootHost = _extractRootDomain(host);
       if (cookie != null && cookie.isNotEmpty) {
         _cookies[host] = cookie;
+        _cookies[rootHost] = cookie;
+        _cookies['cdn.$rootHost'] = cookie;
       }
       if (ua.isNotEmpty) {
         _userAgent = ua;
