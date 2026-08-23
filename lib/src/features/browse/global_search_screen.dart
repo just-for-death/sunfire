@@ -121,8 +121,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     final thumb = (manga['thumbnailUrl'] ?? manga['imageUrl'])?.toString();
     final link = (manga['link'] ?? manga['url'] ?? '').toString();
 
-    final rawId = manga['id'];
-    int id = rawId is int ? rawId : (int.tryParse(rawId?.toString() ?? '0') ?? 0);
+    int id = parseIntSafe(manga['id']);
     if (id <= 0 && link.isNotEmpty) {
       id = (link.hashCode ^ sourceName.hashCode).abs();
     } else if (id <= 0 && title.isNotEmpty) {

@@ -129,11 +129,11 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   }
 
   void _showEditTrackDialog(Map<String, dynamic> record, String trackerName) {
-    final recordId = record['id'] as int;
-    int currentStatus = record['status'] is int ? record['status'] as int : 1;
-    double currentChapter = (record['lastChapterRead'] as num?)?.toDouble() ?? 0.0;
-    int totalChapters = (record['totalChapters'] as num?)?.toInt() ?? 0;
-    double currentScore = (record['score'] as num?)?.toDouble() ?? 0.0;
+    final recordId = parseIntSafe(record['id']);
+    int currentStatus = parseIntSafe(record['status'], 1);
+    double currentChapter = parseDoubleSafe(record['lastChapterRead']);
+    int totalChapters = parseIntSafe(record['totalChapters']);
+    double currentScore = parseDoubleSafe(record['score']);
     
     // Convert timestamp or string to human-readable format
     String? startEpochStr = record['startDate']?.toString();
@@ -416,10 +416,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               ),
             ] else ...[
               ..._trackers.map((t) {
-                final trackerId = t['id'] as int;
+                final trackerId = parseIntSafe(t['id']);
                 final trackerName = t['name'] as String? ?? 'Tracker';
                 final bound = _boundRecords.firstWhere(
-                  (r) => (r['trackerId'] as int?) == trackerId,
+                  (r) => parseIntSafe(r['trackerId']) == trackerId,
                   orElse: () => <String, dynamic>{},
                 );
                 final isBound = bound.isNotEmpty;
@@ -468,7 +468,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(color: const Color(0x2BFFFFFF), borderRadius: BorderRadius.circular(6)),
                                     child: Text(
-                                      statusNames[bound['status'] is int ? bound['status'] as int : 1] ?? 'Reading',
+                                      statusNames[parseIntSafe(bound['status'], 1)] ?? 'Reading',
                                       style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                     ),
                                   ),
@@ -477,7 +477,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(color: const Color(0x2BFFFFFF), borderRadius: BorderRadius.circular(6)),
                                     child: Text(
-                                      'Ch: ${(bound["lastChapterRead"] as num?)?.toInt() ?? 0} / ${(bound["totalChapters"] as num?)?.toInt() ?? "?"}',
+                                      'Ch: ${parseIntSafe(bound["lastChapterRead"])} / ${bound["totalChapters"] != null ? parseIntSafe(bound["totalChapters"]) : "?"}',
                                       style: const TextStyle(color: Colors.white, fontSize: 11),
                                     ),
                                   ),
@@ -486,7 +486,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(color: const Color(0x2BFFFFFF), borderRadius: BorderRadius.circular(6)),
                                     child: Text(
-                                      'Score: ${(bound["score"] as num?)?.toDouble() ?? "-"}',
+                                      'Score: ${bound["score"] != null ? parseDoubleSafe(bound["score"]) : "-"}',
                                       style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
                                     ),
                                   ),
@@ -500,7 +500,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                   TextButton.icon(
                                     icon: const Icon(Icons.link_off_rounded, color: Colors.redAccent, size: 16),
                                     label: const Text('Unbind', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
-                                    onPressed: () => _unbindRecord(bound['id'] as int),
+                                    onPressed: () => _unbindRecord(parseIntSafe(bound['id'])),
                                   ),
                                 ],
                               ),

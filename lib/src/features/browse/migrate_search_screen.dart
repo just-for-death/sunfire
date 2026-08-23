@@ -124,7 +124,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                 children: [
                   Icon(Icons.swap_horiz_rounded, color: Colors.blueAccent, size: 24),
                   SizedBox(width: 10),
-                  Text('Migrate Manga (Mihon)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                  Text('Migrate Manga', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
                 ],
               ),
               content: SizedBox(
@@ -241,10 +241,10 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
   }) async {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final targetSourceName = targetSource['displayName'] as String? ?? targetSource['name'] as String;
-    final targetMangaId = targetManga['id'] as int;
+    final targetMangaId = parseIntSafe(targetManga['id']);
 
     // 1. Fetch Target Manga into Suwayomi Library
-    if (GraphQLClientService.instance.isConfigured) {
+    if (GraphQLClientService.instance.isConfigured && targetMangaId > 0) {
       try {
         await GraphQLClientService.instance.fetchMangaAndChapters(targetMangaId);
         await GraphQLClientService.instance.updateMangaLibraryState(targetMangaId, true);
@@ -254,9 +254,9 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
           final existingTracks = await GraphQLClientService.instance.fetchTrackRecords(widget.manga.serverId);
           final nodes = existingTracks?['trackRecords']?['nodes'] as List<dynamic>? ?? [];
           for (final tr in nodes) {
-            final trackerId = tr['trackerId'] as int?;
+            final trackerId = parseIntSafe(tr['trackerId']);
             final remoteId = tr['remoteId']?.toString() ?? tr['id']?.toString();
-            if (trackerId != null && remoteId != null) {
+            if (trackerId > 0 && remoteId != null) {
               await GraphQLClientService.instance.bindTrack(targetMangaId, trackerId, remoteId);
             }
           }

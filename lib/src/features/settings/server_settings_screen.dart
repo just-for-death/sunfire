@@ -93,9 +93,9 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
             _serverTrackers = nodes.map((n) {
               final map = n as Map<String, dynamic>;
               return {
-                'id': map['id'],
+                'id': parseIntSafe(map['id']),
                 'name': map['name'] as String? ?? 'Tracker',
-                'isLoggedIn': map['isLoggedIn'] as bool? ?? false,
+                'isLoggedIn': parseBoolSafe(map['isLoggedIn']),
                 'authUrl': map['authUrl'] as String? ?? '',
               };
             }).toList();
@@ -104,13 +104,14 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       }
 
       if (_serverTrackers.isEmpty) {
+        final serverBase = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
         _serverTrackers = [
-          {'id': 1, 'name': 'MyAnimeList', 'isLoggedIn': true, 'authUrl': 'http://localhost:4567/api/v1/tracker/1/login'},
-          {'id': 2, 'name': 'AniList', 'isLoggedIn': true, 'authUrl': 'http://localhost:4567/api/v1/tracker/2/login'},
-          {'id': 3, 'name': 'Kitsu', 'isLoggedIn': true, 'authUrl': 'http://localhost:4567/api/v1/tracker/3/login'},
-          {'id': 4, 'name': 'MangaUpdates', 'isLoggedIn': true, 'authUrl': 'http://localhost:4567/api/v1/tracker/4/login'},
-          {'id': 5, 'name': 'Shikimori', 'isLoggedIn': false, 'authUrl': 'http://localhost:4567/api/v1/tracker/5/login'},
-          {'id': 6, 'name': 'Bangumi', 'isLoggedIn': false, 'authUrl': 'http://localhost:4567/api/v1/tracker/6/login'},
+          {'id': 1, 'name': 'MyAnimeList', 'isLoggedIn': true, 'authUrl': '$serverBase/api/v1/tracker/1/login'},
+          {'id': 2, 'name': 'AniList', 'isLoggedIn': true, 'authUrl': '$serverBase/api/v1/tracker/2/login'},
+          {'id': 3, 'name': 'Kitsu', 'isLoggedIn': true, 'authUrl': '$serverBase/api/v1/tracker/3/login'},
+          {'id': 4, 'name': 'MangaUpdates', 'isLoggedIn': true, 'authUrl': '$serverBase/api/v1/tracker/4/login'},
+          {'id': 5, 'name': 'Shikimori', 'isLoggedIn': false, 'authUrl': '$serverBase/api/v1/tracker/5/login'},
+          {'id': 6, 'name': 'Bangumi', 'isLoggedIn': false, 'authUrl': '$serverBase/api/v1/tracker/6/login'},
         ];
       }
     } catch (e, stack) {

@@ -24,9 +24,16 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  String get serverUrl => _prefs?.getString('server_url') ?? 'http://localhost:4567';
+  String get serverUrl {
+    final s = _prefs?.getString('server_url');
+    if (s != null && s.isNotEmpty) return s;
+    final sf = _prefs?.getString('sunfire_server_url');
+    if (sf != null && sf.isNotEmpty) return sf;
+    return 'http://localhost:4567';
+  }
   set serverUrl(String value) {
     _prefs?.setString('server_url', value);
+    _prefs?.setString('sunfire_server_url', value);
     notifyListeners();
   }
 

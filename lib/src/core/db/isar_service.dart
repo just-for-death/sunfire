@@ -138,8 +138,18 @@ class IsarService {
     return all;
   }
 
+  Future<void> deleteManga(int serverId) async {
+    await _isar.writeTxn(() async {
+      final manga = await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
+      if (manga != null) {
+        await _isar.mangas.delete(manga.id);
+      }
+    });
+  }
+
   // ── CATEGORY CRUD ───────────────────────────────────────
   Future<void> saveCategories(List<Category> categories) async {
+    if (categories.isEmpty) return;
     await _isar.writeTxn(() async {
       await _isar.categorys.clear();
       await _isar.categorys.putAll(categories);
