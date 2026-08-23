@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -275,7 +274,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     ChapterPagesResult resolved;
     if (prefetchedUrls != null && prefetchedUrls.isNotEmpty) {
-      print('[Reader] Using prefetched ${prefetchedUrls.length} pages for chapter $chapterId');
+      debugPrint('[Reader] Using prefetched ${prefetchedUrls.length} pages for chapter $chapterId');
       resolved = ChapterPagesResult(
         pageUrls: prefetchedUrls,
         source: ContentSourceType.localExtension,
@@ -292,7 +291,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     _sourceName = resolved.effectiveSourceName ?? sourceName;
     _pageUrls = resolved.pageUrls;
-    print('[Reader] Resolved ${_pageUrls.length} pages for source=$_sourceName: ${_pageUrls.take(3).toList()}');
+    debugPrint('[Reader] Resolved ${_pageUrls.length} pages for source=$_sourceName: ${_pageUrls.take(3).toList()}');
 
     if (_chapter != null && _chapter!.lastPageRead > 0 && _chapter!.lastPageRead <= _pageUrls.length) {
       _currentPage = _chapter!.lastPageRead;
@@ -337,10 +336,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
       );
       if (resolved.pageUrls.isNotEmpty) {
         _prefetchedChapters[sid] = resolved.pageUrls;
-        print('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter $sid');
+        debugPrint('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter $sid');
       }
     } catch (e) {
-      print('[Reader] Prefetch failed for chapter $sid: $e');
+      debugPrint('[Reader] Prefetch failed for chapter $sid: $e');
     } finally {
       _prefetchingChapters.remove(sid);
     }
@@ -713,17 +712,30 @@ class _ReaderScreenState extends State<ReaderScreen> {
     if (_recoveringUrls.contains(url) || _recoveredImageBytes.containsKey(url)) return;
     _recoveringUrls.add(url);
     try {
-      final client = MClient.init();
-      final uri = Uri.parse(url);
       final headers = QuickJsService.getImageHeaders(_sourceName ?? '', url);
-      final res = await client.get(uri, headers: headers).timeout(const Duration(seconds: 15));
+
+      // First attempt with whatever cookies we already have
+      var client = MClient.init();
+      var res = await client.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 15));
       debugPrint('[Reader] Image fetch $url -> ${res.statusCode} (${res.bodyBytes.length} bytes)');
+
+      // If blocked, prewarm FlareSolverr for this domain then retry
+      if ([403, 503, 429, 520, 521, 522].contains(res.statusCode)) {
+        debugPrint('[Reader] Blocked $url – prewarm FlareSolverr...');
+        await MClient.prewarmSession(url, forceRenew: true);
+        client = MClient.init();
+        res = await client.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 20));
+        debugPrint('[Reader] Image retry $url -> ${res.statusCode} (${res.bodyBytes.length} bytes)');
+      }
+
       if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
         if (mounted) {
           setState(() {
             _recoveredImageBytes[url] = res.bodyBytes;
           });
         }
+      } else {
+        debugPrint('[Reader] ❌ Image still failed $url -> ${res.statusCode}');
       }
     } catch (e) {
       debugPrint('[Reader] Image fetch error for $url: $e');
