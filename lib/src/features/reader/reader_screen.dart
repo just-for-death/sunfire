@@ -302,9 +302,23 @@ class _ReaderScreenState extends State<ReaderScreen> {
       setState(() => _isLoading = false);
     }
 
+    // Preload first batch of images immediately with native MClient
+    if (_pageUrls.isNotEmpty) {
+      _preloadCurrentPages(_pageUrls.take(8).toList());
+    }
+
     // Kick off next-chapter prefetch in background after current chapter is displayed
     if (_nextChapter != null) {
       unawaited(_prefetchChapter(_nextChapter!));
+    }
+  }
+
+  void _preloadCurrentPages(List<String> urls) {
+    for (int i = 0; i < urls.length; i++) {
+      final u = urls[i];
+      if (u.startsWith('http') && !_recoveredImageBytes.containsKey(u)) {
+        unawaited(_recoverImage(u, i));
+      }
     }
   }
 
@@ -702,7 +716,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
       final client = MClient.init();
       final uri = Uri.parse(url);
       final headers = QuickJsService.getImageHeaders(_sourceName ?? '', url);
-      final res = await client.get(uri, headers: headers);
+      final res = await client.get(uri, headers: headers).timeout(const Duration(seconds: 15));
+      debugPrint('[Reader] Image fetch $url -> ${res.statusCode} (${res.bodyBytes.length} bytes)');
       if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
         if (mounted) {
           setState(() {
@@ -710,7 +725,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
           });
         }
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[Reader] Image fetch error for $url: $e');
     } finally {
       _recoveringUrls.remove(url);
     }
@@ -719,6 +735,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Widget _buildPageWidget(String url, int index, {BoxConstraints? constraints, bool isPaged = false}) {
     final isWebtoon = _readingMode == ReadingMode.webtoon;
     final boxFit = isWebtoon ? BoxFit.fitWidth : _imageBoxFit;
+
+    if (!_recoveredImageBytes.containsKey(url) && url.startsWith('http')) {
+      _recoverImage(url, index);
+    }
 
     Widget image;
     if (_recoveredImageBytes.containsKey(url)) {
