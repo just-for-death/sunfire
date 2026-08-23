@@ -66,6 +66,7 @@ class ImageCacheHelper {
 class MangaCoverImage extends StatelessWidget {
   final int mangaServerId;
   final String? thumbnailUrl;
+  final String? sourceName;
   final double? width;
   final double? height;
   final BoxFit fit;
@@ -74,6 +75,7 @@ class MangaCoverImage extends StatelessWidget {
     super.key,
     required this.mangaServerId,
     this.thumbnailUrl,
+    this.sourceName,
     this.width,
     this.height,
     this.fit = BoxFit.cover,
@@ -108,7 +110,8 @@ class MangaCoverImage extends StatelessWidget {
     }
 
     if (thumbnailUrl != null && thumbnailUrl!.isNotEmpty) {
-      final headers = QuickJsService.getImageHeaders(thumbnailUrl!);
+      final effectiveSource = sourceName ?? '';
+      final headers = QuickJsService.getImageHeaders(effectiveSource, thumbnailUrl!);
 
       // Proactively cache to local storage in background
       if (mangaServerId > 0) {

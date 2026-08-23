@@ -662,6 +662,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     child: MangaCoverImage(
                       mangaServerId: manga.serverId,
                       thumbnailUrl: manga.thumbnailUrl,
+                      sourceName: manga.sourceName,
                       width: double.infinity,
                       height: double.infinity,
                       fit: BoxFit.cover,
@@ -740,6 +741,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
             child: MangaCoverImage(
               mangaServerId: manga.serverId,
               thumbnailUrl: manga.thumbnailUrl,
+              sourceName: manga.sourceName,
               width: 40,
               height: 56,
               fit: BoxFit.cover,
