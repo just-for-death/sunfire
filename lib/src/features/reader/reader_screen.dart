@@ -293,18 +293,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _pageUrls = resolved.pageUrls;
     debugPrint('[Reader] Resolved ${_pageUrls.length} pages for source=$_sourceName: ${_pageUrls.take(3).toList()}');
 
-    if (_chapter != null && _chapter!.lastPageRead > 0 && _chapter!.lastPageRead <= _pageUrls.length) {
-      _currentPage = _chapter!.lastPageRead;
-    }
+    _currentPage = (_chapter != null && _chapter!.lastPageRead > 0 && _chapter!.lastPageRead <= _pageUrls.length)
+        ? _chapter!.lastPageRead
+        : 1;
 
     if (mounted) {
       setState(() => _isLoading = false);
     }
 
-    // Preload first batch of images immediately with native MClient
-    if (_pageUrls.isNotEmpty) {
-      _preloadCurrentPages(_pageUrls.take(8).toList());
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
+    });
 
     // Kick off next-chapter prefetch in background after current chapter is displayed
     if (_nextChapter != null) {
@@ -312,14 +313,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
-  void _preloadCurrentPages(List<String> urls) {
-    for (int i = 0; i < urls.length; i++) {
-      final u = urls[i];
-      if (u.startsWith('http') && !_recoveredImageBytes.containsKey(u)) {
-        unawaited(_recoverImage(u, i));
-      }
-    }
-  }
+  void _preloadCurrentPages(List<String> urls) {}
 
   /// Prefetch the next chapter's page URLs into cache so navigation is instant.
   Future<void> _prefetchChapter(Chapter chapter) async {
