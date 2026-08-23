@@ -227,15 +227,7 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  static const List<String> defaultRepositories = [
-    'https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json',
-  ];
-
-  List<String> get customRepos {
-    final list = _prefs?.getStringList('custom_repos');
-    if (list != null && list.isNotEmpty) return list;
-    return defaultRepositories;
-  }
+  List<String> get customRepos => _prefs?.getStringList('custom_repos') ?? [];
 
   Future<void> addCustomRepo(String url) async {
     final list = List<String>.from(customRepos);
