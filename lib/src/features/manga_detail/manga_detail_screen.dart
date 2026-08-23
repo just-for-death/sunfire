@@ -187,7 +187,12 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 ..url = chUrl
                 ..realUrl = chUrl
                 ..mangaTitle = _manga!.title;
-              fetched.add(ch);
+            final existingChapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+            if (existingChapters.isNotEmpty) {
+              final isar = IsarService.instance.db;
+              await isar.writeTxn(() async {
+                await isar.chapters.deleteAll(existingChapters.map((c) => c.id).toList());
+              });
             }
             await IsarService.instance.saveChapters(fetched);
             _chapters = fetched;
@@ -204,6 +209,17 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     if (_chapters.isEmpty) {
       _chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
     }
+
+    // Deduplicate chapters by URL or name/number
+    final seenCh = <String>{};
+    final uniqueChapters = <Chapter>[];
+    for (final c in _chapters) {
+      final key = c.url.isNotEmpty ? c.url : '${c.chapterNumber}_${c.name}';
+      if (seenCh.add(key)) {
+        uniqueChapters.add(c);
+      }
+    }
+    _chapters = uniqueChapters;
 
     if (mounted) {
       setState(() => _isLoading = false);
