@@ -187,9 +187,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 ..url = chUrl
                 ..realUrl = chUrl
                 ..mangaTitle = _manga!.title;
+              fetched.add(ch);
+            }
             final existingChapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
             if (existingChapters.isNotEmpty) {
-              final isar = IsarService.instance.db;
+              final isar = IsarService.instance.isar;
               await isar.writeTxn(() async {
                 await isar.chapters.deleteAll(existingChapters.map((c) => c.id).toList());
               });
