@@ -399,14 +399,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                                             ),
                                             child: ClipRRect(
                                               borderRadius: BorderRadius.circular(8),
-                                                child: MangaCoverImage(
-                                                  mangaServerId: mangaId,
-                                                  thumbnailUrl: thumb,
-                                                  sourceName: _mangaSourceNames[mangaId],
-                                                  width: 44,
-                                                  height: 60,
-                                                  fit: BoxFit.cover,
-                                                ),
+                                              child: MangaCoverImage(
+                                                mangaServerId: mangaId,
+                                                thumbnailUrl: thumb,
+                                                sourceName: item['sourceName'] as String?,
+                                                width: 44,
+                                                height: 60,
+                                                fit: BoxFit.cover,
+                                              ),
                                             ),
                                           ),
                                           title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
