@@ -141,7 +141,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             }
           }
         }
-      } catch (e, st) {
+      } catch (e) {
         await LoggerService.instance.logWarning('Failed to fetch server chapters: $e', 'MangaDetail');
       }
     }

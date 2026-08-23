@@ -484,7 +484,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       body: RefreshIndicator(
         color: primaryColor,
         onRefresh: _handleRefresh,
-        child: displayManga.isEmpty
+        child: _isLoading
+            ? Center(child: CircularProgressIndicator(color: primaryColor))
+            : displayManga.isEmpty
             ? CustomScrollView(
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 cacheExtent: 800,
