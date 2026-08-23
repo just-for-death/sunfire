@@ -250,6 +250,28 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         });
       }
 
+      // 3. Append any locally installed extensions not present in the repo lists
+      for (final installedName in QuickJsService.instance.getInstalledSourceNames()) {
+        final key = 'js_${installedName}_en'.toLowerCase();
+        if (!seenKeys.add(key)) continue;
+
+        final installedVer = QuickJsService.instance.getInstalledVersion(installedName);
+        final iconUrl = QuickJsService.instance.getSourceIconUrl(installedName);
+
+        items.add({
+          'id': '${installedName}_en',
+          'name': installedName,
+          'lang': 'en',
+          'version': installedVer.isNotEmpty ? installedVer : '1.0.0',
+          'installedVersion': installedVer,
+          'hasUpdate': false,
+          'isInstalled': true,
+          'sourceCodeUrl': '',
+          'iconUrl': iconUrl,
+          'isJs': true,
+        });
+      }
+
       if (mounted) {
         setState(() {
           _extensionList = items;
