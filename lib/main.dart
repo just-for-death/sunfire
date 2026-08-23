@@ -8,6 +8,7 @@ import 'src/core/engine/javascript/m_client.dart';
 import 'src/core/engine/quickjs_service.dart';
 import 'src/core/logging/logger_service.dart';
 import 'src/core/services/download_manager_service.dart';
+import 'src/core/services/image_cache_helper.dart';
 import 'src/core/services/settings_service.dart';
 import 'src/core/sync/graphql_client_service.dart';
 import 'src/core/sync/sync_engine.dart';
@@ -25,6 +26,7 @@ void main() async {
       await LoggerService.instance.initialize();
       await IsarService.instance.initialize();
       await SettingsService.instance.initialize();
+      await ImageCacheHelper.initialize();
       await QuickJsService.instance.initialize();
       ImageTransportService.instance.initialize();
 

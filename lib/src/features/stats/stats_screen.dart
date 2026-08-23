@@ -83,7 +83,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Statistics (Mihon)', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        title: const Text('Statistics', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),

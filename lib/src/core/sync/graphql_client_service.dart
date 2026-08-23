@@ -1,6 +1,35 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../logging/logger_service.dart';
+import '../services/settings_service.dart';
+
+int parseIntSafe(dynamic value, [int fallback = 0]) {
+  if (value == null) return fallback;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? fallback;
+  return fallback;
+}
+
+double parseDoubleSafe(dynamic value, [double fallback = 0.0]) {
+  if (value == null) return fallback;
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? fallback;
+  return fallback;
+}
+
+bool parseBoolSafe(dynamic value, [bool fallback = false]) {
+  if (value == null) return fallback;
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  if (value is String) {
+    final lower = value.toLowerCase().trim();
+    if (lower == 'true' || lower == '1') return true;
+    if (lower == 'false' || lower == '0') return false;
+  }
+  return fallback;
+}
 
 class GraphQLClientService {
   static GraphQLClientService? _instance;
@@ -45,8 +74,8 @@ class GraphQLClientService {
         '',
         data: jsonEncode({'query': '{ aboutServer { version } }'}),
         options: Options(
-          sendTimeout: const Duration(milliseconds: 1500),
-          receiveTimeout: const Duration(milliseconds: 1500),
+          sendTimeout: const Duration(milliseconds: 3000),
+          receiveTimeout: const Duration(milliseconds: 3000),
         ),
       );
       _lastReachableStatus = (res.statusCode == 200);
@@ -59,13 +88,11 @@ class GraphQLClientService {
 
   Future<Map<String, dynamic>?> query(String document, {Map<String, dynamic>? variables, String? label}) async {
     if (!isConfigured) return null;
-    
-    // Quick server reachability check to prevent hanging or connection errors when server is offline
-    if (label != 'healthCheck') {
-      final isOnline = await checkServerReachable();
-      if (!isOnline) {
-        return null;
-      }
+
+    // Fast-fail if server was recently determined offline
+    final now = DateTime.now();
+    if (!_lastReachableStatus && _lastReachableCheck != null && now.difference(_lastReachableCheck!) < const Duration(seconds: 15)) {
+      return null;
     }
 
     try {
@@ -75,7 +102,14 @@ class GraphQLClientService {
           'query': document,
           'variables': variables ?? {},
         }),
+        options: Options(
+          sendTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 5),
+        ),
       );
+
+      _lastReachableStatus = true;
+      _lastReachableCheck = DateTime.now();
 
       var data = response.data;
       if (data is String) {
@@ -90,11 +124,17 @@ class GraphQLClientService {
         return data['data'] as Map<String, dynamic>?;
       }
       return null;
-    } on DioException {
+    } on DioException catch (e) {
       _lastReachableStatus = false;
+      _lastReachableCheck = DateTime.now();
+      // Suppress spammy connection refused errors during offline operation
+      if (e.message != null && !e.message!.contains('Connection refused')) {
+        await LoggerService.instance.logWarning('GraphQL request failed [$label]: ${e.message}', 'GraphQL');
+      }
       return null;
     } catch (e) {
-      await LoggerService.instance.logWarning('GraphQL query failed [$label]: $e', 'GraphQL');
+      _lastReachableStatus = false;
+      _lastReachableCheck = DateTime.now();
       return null;
     }
   }
@@ -138,10 +178,10 @@ class GraphQLClientService {
     return await query(queryStr, label: 'fetchExtensions');
   }
 
-  Future<Map<String, dynamic>?> updateExtension(String pkgName, String action) async {
+  Future<bool> installServerExtension(String pkgName) async {
     const mutStr = r'''
-      mutation($pkgName: String!, $action: ExtensionAction!) {
-        updateExtension(input: { pkgName: $pkgName, action: $action }) {
+      mutation($id: String!, $patch: UpdateExtensionPatchInput!) {
+        updateExtension(input: { id: $id, patch: $patch }) {
           extension {
             pkgName
             isInstalled
@@ -149,7 +189,59 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'pkgName': pkgName, 'action': action}, label: 'updateExtension');
+    final res = await query(mutStr, variables: {
+      'id': pkgName,
+      'patch': {'install': true},
+    }, label: 'installServerExtension');
+    return res != null;
+  }
+
+  Future<bool> uninstallServerExtension(String pkgName) async {
+    const mutStr = r'''
+      mutation($id: String!, $patch: UpdateExtensionPatchInput!) {
+        updateExtension(input: { id: $id, patch: $patch }) {
+          extension {
+            pkgName
+            isInstalled
+          }
+        }
+      }
+    ''';
+    final res = await query(mutStr, variables: {
+      'id': pkgName,
+      'patch': {'uninstall': true},
+    }, label: 'uninstallServerExtension');
+    return res != null;
+  }
+
+  Future<bool> updateServerExtension(String pkgName) async {
+    const mutStr = r'''
+      mutation($id: String!, $patch: UpdateExtensionPatchInput!) {
+        updateExtension(input: { id: $id, patch: $patch }) {
+          extension {
+            pkgName
+            isInstalled
+          }
+        }
+      }
+    ''';
+    final res = await query(mutStr, variables: {
+      'id': pkgName,
+      'patch': {'update': true},
+    }, label: 'updateServerExtension');
+    return res != null;
+  }
+
+  Future<Map<String, dynamic>?> updateExtension(String pkgName, String action) async {
+    final act = action.toUpperCase();
+    if (act == 'INSTALL') {
+      await installServerExtension(pkgName);
+    } else if (act == 'UNINSTALL') {
+      await uninstallServerExtension(pkgName);
+    } else if (act == 'UPDATE') {
+      await updateServerExtension(pkgName);
+    }
+    return {'status': 'ok'};
   }
 
   Future<Map<String, dynamic>?> fetchSourceManga(String sourceId, {bool isLatest = false, int page = 1, String? searchQuery}) async {

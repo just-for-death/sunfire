@@ -21,6 +21,35 @@ class SunfireApp extends StatefulWidget {
 class _SunfireAppState extends State<SunfireApp> {
   late final GoRouter _router;
 
+  CustomTransitionPage<void> _buildTransitionPage({
+    required GoRouterState state,
+    required Widget child,
+  }) {
+    return CustomTransitionPage<void>(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 260),
+      reverseTransitionDuration: const Duration(milliseconds: 220),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curveAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curveAnimation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.04, 0.0),
+              end: Offset.zero,
+            ).animate(curveAnimation),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -29,34 +58,52 @@ class _SunfireAppState extends State<SunfireApp> {
       routes: [
         GoRoute(
           path: '/onboarding',
-          builder: (context, state) => const OnboardingScreen(),
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const OnboardingScreen(),
+          ),
         ),
         GoRoute(
           path: '/library',
-          builder: (context, state) => const MainShell(),
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const MainShell(),
+          ),
         ),
         GoRoute(
           path: '/downloads',
-          builder: (context, state) => const DownloadQueueScreen(),
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const DownloadQueueScreen(),
+          ),
         ),
         GoRoute(
           path: '/stats',
-          builder: (context, state) => const StatsScreen(),
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const StatsScreen(),
+          ),
         ),
         GoRoute(
           path: '/manga/:id',
-          builder: (context, state) {
+          pageBuilder: (context, state) {
             final idStr = state.pathParameters['id'] ?? '0';
             final id = int.tryParse(idStr) ?? 0;
-            return MangaDetailScreen(mangaServerId: id);
+            return _buildTransitionPage(
+              state: state,
+              child: MangaDetailScreen(mangaServerId: id),
+            );
           },
         ),
         GoRoute(
           path: '/reader/:id',
-          builder: (context, state) {
+          pageBuilder: (context, state) {
             final idStr = state.pathParameters['id'] ?? '0';
             final id = int.tryParse(idStr) ?? 0;
-            return ReaderScreen(chapterServerId: id);
+            return _buildTransitionPage(
+              state: state,
+              child: ReaderScreen(chapterServerId: id),
+            );
           },
         ),
       ],
