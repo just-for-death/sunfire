@@ -14,11 +14,45 @@ class QuickJsService {
   final Map<String, String> _installedVersions = {};
   final Map<String, String> _installedIcons = {};
 
+  // JS runtime pool — reuse live JsExtensionService instances (LRU, max 5)
+  final Map<String, JsExtensionService> _runtimePool = {};
+  final List<String> _poolAccessOrder = []; // tracks LRU order
+  static const int _poolMaxSize = 5;
+
   QuickJsService._();
 
   static QuickJsService get instance {
     _instance ??= QuickJsService._();
     return _instance!;
+  }
+
+  /// Get a pooled (or new) JsExtensionService for [sourceName].
+  /// Reuses existing runtime if available; evicts LRU when pool is full.
+  JsExtensionService _getOrCreateRuntime(String sourceName, String jsCode) {
+    if (_runtimePool.containsKey(sourceName)) {
+      // Move to end of LRU list (most recently used)
+      _poolAccessOrder.remove(sourceName);
+      _poolAccessOrder.add(sourceName);
+      return _runtimePool[sourceName]!;
+    }
+    // Evict LRU entry when pool is full
+    if (_runtimePool.length >= _poolMaxSize && _poolAccessOrder.isNotEmpty) {
+      final lruKey = _poolAccessOrder.removeAt(0);
+      _runtimePool.remove(lruKey)?.dispose();
+    }
+    final service = JsExtensionService(
+      sourceMeta: extractSourceMetadata(jsCode),
+      sourceCode: jsCode,
+    );
+    _runtimePool[sourceName] = service;
+    _poolAccessOrder.add(sourceName);
+    return service;
+  }
+
+  /// Invalidate a pooled runtime (e.g. when JS code is updated).
+  void _invalidateRuntime(String sourceName) {
+    _runtimePool.remove(sourceName)?.dispose();
+    _poolAccessOrder.remove(sourceName);
   }
 
 
@@ -460,10 +494,8 @@ class QuickJsService {
       return [];
     }
 
-    final service = JsExtensionService(
-      sourceMeta: extractSourceMetadata(jsCode),
-      sourceCode: jsCode,
-    );
+    // Use pooled runtime — avoids re-init overhead (~300–500ms) on every call
+    final service = _getOrCreateRuntime(sourceName, jsCode);
 
     try {
       final pages = await service.getPageList(chapterUrl);
@@ -476,11 +508,12 @@ class QuickJsService {
           final matchedUrls = mockPagesMatch.map((m) => m.group(1)!).where((u) => u.contains('png') || u.contains('jpg') || u.contains('webp') || u.contains('image')).toList();
           if (matchedUrls.isNotEmpty) return matchedUrls;
         }
+        // Pooled runtime may be corrupted — evict and let it be recreated next call
+        _invalidateRuntime(sourceName);
       }
       await LoggerService.instance.logWarning('Local chapter page scraping failed for $sourceName: $e', 'QuickJS');
-    } finally {
-      service.dispose();
     }
+    // NOTE: do NOT dispose — runtime stays in pool for reuse
     return [];
   }
 
@@ -489,19 +522,23 @@ class QuickJsService {
     final jsCode = getExtensionCode(sourceName);
     if (jsCode == null || jsCode.isEmpty) return [];
 
-    final service = JsExtensionService(
-      sourceMeta: extractSourceMetadata(jsCode),
-      sourceCode: jsCode,
-    );
+    // Use pooled runtime for filters too
+    final service = _getOrCreateRuntime(sourceName, jsCode);
 
     try {
       return await service.extensionCallAsync<List<dynamic>>('getFilterList()');
     } catch (_) {
       return [];
-    } finally {
-      service.dispose();
     }
+    // NOTE: do NOT dispose — runtime stays in pool
   }
 
-  void dispose() {}
+  void dispose() {
+    // Drain pool and release all JS runtimes
+    for (final s in _runtimePool.values) {
+      try { s.dispose(); } catch (_) {}
+    }
+    _runtimePool.clear();
+    _poolAccessOrder.clear();
+  }
 }
