@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -39,6 +40,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
   bool _isLoading = true;
   bool _showControls = true;
   int _currentPage = 1;
+
+  // Prefetch cache: chapterServerId → resolved page URLs
+  final Map<int, List<String>> _prefetchedChapters = {};
+  final Set<int> _prefetchingChapters = {};
 
   late ReadingMode _readingMode;
   late ReaderThemeMode _readerTheme;
@@ -256,11 +261,34 @@ class _ReaderScreenState extends State<ReaderScreen> {
             ? _chapter!.realUrl
             : _chapter?.localPath);
 
-    final resolved = await ContentResolverService.instance.resolveChapterPages(
-      chapterServerId: chapterId,
-      chapterUrl: chapterUrlToResolve,
-      sourceName: sourceName,
-    );
+    // Pre-warm FlareSolverr session for this source immediately before resolving,
+    // so cookies are ready when images start loading.
+    if (chapterUrlToResolve != null && chapterUrlToResolve.startsWith('http')) {
+      try {
+        final uri = Uri.parse(chapterUrlToResolve);
+        unawaited(MClient.prewarmSession('${uri.scheme}://${uri.host}'));
+      } catch (_) {}
+    }
+
+    // Use prefetched pages if already available (instant load on next-chapter nav)
+    List<String>? prefetchedUrls = _prefetchedChapters.remove(chapterId);
+
+    ChapterPagesResult resolved;
+    if (prefetchedUrls != null && prefetchedUrls.isNotEmpty) {
+      print('[Reader] Using prefetched ${prefetchedUrls.length} pages for chapter $chapterId');
+      resolved = ChapterPagesResult(
+        pageUrls: prefetchedUrls,
+        source: ContentSourceType.localExtension,
+        effectiveSourceName: sourceName,
+        isLocalFiles: false,
+      );
+    } else {
+      resolved = await ContentResolverService.instance.resolveChapterPages(
+        chapterServerId: chapterId,
+        chapterUrl: chapterUrlToResolve,
+        sourceName: sourceName,
+      );
+    }
 
     _sourceName = resolved.effectiveSourceName ?? sourceName;
     _pageUrls = resolved.pageUrls;
@@ -272,6 +300,35 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     if (mounted) {
       setState(() => _isLoading = false);
+    }
+
+    // Kick off next-chapter prefetch in background after current chapter is displayed
+    if (_nextChapter != null) {
+      unawaited(_prefetchChapter(_nextChapter!));
+    }
+  }
+
+  /// Prefetch the next chapter's page URLs into cache so navigation is instant.
+  Future<void> _prefetchChapter(Chapter chapter) async {
+    final sid = chapter.serverId;
+    if (_prefetchedChapters.containsKey(sid) || _prefetchingChapters.contains(sid)) return;
+    _prefetchingChapters.add(sid);
+    try {
+      final manga = await IsarService.instance.getMangaByServerId(chapter.mangaId);
+      final url = chapter.url.isNotEmpty ? chapter.url : chapter.realUrl;
+      final resolved = await ContentResolverService.instance.resolveChapterPages(
+        chapterServerId: sid,
+        chapterUrl: url.isNotEmpty ? url : null,
+        sourceName: manga?.sourceName,
+      );
+      if (resolved.pageUrls.isNotEmpty) {
+        _prefetchedChapters[sid] = resolved.pageUrls;
+        print('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter $sid');
+      }
+    } catch (e) {
+      print('[Reader] Prefetch failed for chapter $sid: $e');
+    } finally {
+      _prefetchingChapters.remove(sid);
     }
   }
 

@@ -31,6 +31,9 @@ class MClient {
   static String _userAgent = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6832.64 Mobile Safari/537.36';
   static String cfProxyUrl = '';
 
+  // Deduplication map — one in-flight Future per domain root
+  static final Map<String, Future<void>> _activeSolves = {};
+
   static String get userAgent => _userAgent;
 
   static InterceptedClient init({
@@ -53,6 +56,48 @@ class MClient {
     }
     return host;
   }
+
+  static bool hasCookieFor(String url) {
+    try {
+      final host = Uri.parse(url).host;
+      final root = _extractRootDomain(host);
+      if (_cookies.containsKey(host) || _cookies.containsKey(root)) return true;
+      for (final key in _cookies.keys) {
+        if (host.endsWith(key) || key.endsWith(root)) return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Pre-warm a FlareSolverr session for [url]'s domain.
+  /// Concurrent calls for the same root domain share one solve (deduplication).
+  static Future<void> prewarmSession(String url) async {
+    if (cfProxyUrl.isEmpty) return;
+    try {
+      final host = Uri.parse(url).host;
+      final root = _extractRootDomain(host);
+      // Already have a valid cookie — no need to re-solve
+      if (hasCookieFor(url)) return;
+      // Deduplicate: return the existing in-flight solve if one is running
+      if (_activeSolves.containsKey(root)) {
+        return _activeSolves[root]!;
+      }
+      final future = _doPrewarm(url, root);
+      _activeSolves[root] = future;
+      try {
+        await future;
+      } finally {
+        _activeSolves.remove(root);
+      }
+    } catch (_) {}
+  }
+
+  static Future<void> _doPrewarm(String url, String root) async {
+    debugPrint('[MClient] Pre-warming session for $root');
+    final origin = '${Uri.parse(url).scheme}://$root';
+    await solveAndFetchWithProxy(origin);
+  }
+
 
   static Map<String, String> getCookiesPref(String url) {
     try {
