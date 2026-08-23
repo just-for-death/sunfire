@@ -1,12 +1,34 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:cronet_http/cronet_http.dart';
+import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_interceptor/http_interceptor.dart';
 
+http.Client _createNativeEngineClient() {
+  if (!kIsWeb && Platform.isAndroid) {
+    try {
+      final engine = CronetEngine.build(
+        cacheMode: CacheMode.memory,
+        cacheMaxSize: 32 * 1024 * 1024,
+        enableHttp2: true,
+        enableQuic: true,
+        enableBrotli: true,
+      );
+      return CronetClient.fromCronetEngine(engine);
+    } catch (_) {}
+  } else if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
+    try {
+      return CupertinoClient.defaultSessionConfiguration();
+    } catch (_) {}
+  }
+  return http.Client();
+}
+
 class MClient {
   static final Map<String, String> _cookies = {};
-  static String _userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6832.64 Safari/537.36';
+  static String _userAgent = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6832.64 Mobile Safari/537.36';
   static String cfProxyUrl = '';
 
   static String get userAgent => _userAgent;
@@ -16,7 +38,7 @@ class MClient {
     bool showCloudFlareError = true,
   }) {
     return InterceptedClient.build(
-      client: http.Client(),
+      client: _createNativeEngineClient(),
       interceptors: [
         MCookieManager(reqcopyWith),
         LoggerInterceptor(showCloudFlareError),
