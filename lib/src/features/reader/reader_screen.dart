@@ -789,25 +789,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
         gaplessPlayback: true,
         loadingBuilder: (_, child, progress) {
           if (progress == null) return child;
-          if (isWebtoon) {
-            return Container(
-              height: 180,
-              width: constraints?.maxWidth,
-              color: _canvasBackgroundColor,
-              child: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)),
-            );
-          }
+          final placeholderHeight = isWebtoon ? (constraints?.maxHeight ?? 600.0) : 400.0;
           return Container(
-            height: 400,
+            height: placeholderHeight,
+            width: constraints?.maxWidth ?? double.infinity,
             color: _canvasBackgroundColor,
             child: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)),
           );
         },
         errorBuilder: (context, error, stackTrace) {
           _recoverImage(url, index);
+          final placeholderHeight = isWebtoon ? (constraints?.maxHeight ?? 600.0) : 300.0;
           return Container(
-            height: isWebtoon ? 200 : 300,
-            color: const Color(0xFF1A1A22),
+            height: placeholderHeight,
+            width: constraints?.maxWidth ?? double.infinity,
+            color: _canvasBackgroundColor,
             child: Center(
               child: _recoveringUrls.contains(url)
                   ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
