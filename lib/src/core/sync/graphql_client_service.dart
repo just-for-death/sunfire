@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../logging/logger_service.dart';
-import '../services/settings_service.dart';
 
 int parseIntSafe(dynamic value, [int fallback = 0]) {
   if (value == null) return fallback;
