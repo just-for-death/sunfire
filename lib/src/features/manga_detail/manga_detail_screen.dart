@@ -701,6 +701,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       child: MangaCoverImage(
                         mangaServerId: manga.serverId,
                         thumbnailUrl: manga.thumbnailUrl,
+                        sourceName: manga.sourceName,
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -930,6 +931,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   MangaCoverImage(
                     mangaServerId: manga.serverId,
                     thumbnailUrl: manga.thumbnailUrl,
+                    sourceName: manga.sourceName,
                     fit: BoxFit.cover,
                   ),
                   Container(
