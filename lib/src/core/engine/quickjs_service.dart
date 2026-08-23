@@ -295,26 +295,8 @@ class QuickJsService {
       }
     }
 
-    // 3. Generic Referer derivation from image URL host if not provided by source extension
-    if (targetUrl.contains('readcomicsonline.ru') || headers['Referer'] == '') {
-      headers.remove('Referer');
-    } else if (!headers.containsKey('Referer') || headers['Referer']!.isEmpty) {
-      if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
-        try {
-          final uri = Uri.parse(targetUrl);
-          var host = uri.host;
-          if (host.startsWith('cdn.') || host.startsWith('img.') || host.startsWith('images.') || host.startsWith('s1.') || host.startsWith('s2.')) {
-            final parts = host.split('.');
-            if (parts.length > 2) {
-              host = parts.sublist(1).join('.');
-            }
-          }
-          headers['Referer'] = '${uri.scheme}://$host/';
-        } catch (_) {}
-      }
-    }
-
-    if (headers['Referer'] == '') {
+    // 3. If the extension explicitly provided an empty Referer (""), respect it and remove it
+    if (headers.containsKey('Referer') && headers['Referer']!.isEmpty) {
       headers.remove('Referer');
     }
 
