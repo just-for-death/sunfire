@@ -234,11 +234,8 @@ class LoggerInterceptor extends InterceptorContract {
 }
 
 bool isCloudflare(BaseResponse response) {
-  final server = response.headers["server"]?.toLowerCase() ?? '';
   final isBlockedStatus = [403, 503, 429, 520, 521, 522].contains(response.statusCode);
-  final isCfServer = server.contains("cloudflare") || server.contains("ddos") || server.contains("sucuri");
-  debugPrint('[MClient] Response ${response.statusCode} server="$server" isBlocked=$isBlockedStatus');
-  return isBlockedStatus || isCfServer;
+  return isBlockedStatus;
 }
 
 class ResolveCloudFlareChallenge extends RetryPolicy {
