@@ -535,7 +535,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        const Text('Quick Actions (Mihon)', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        const Text('Quick Actions', style: TextStyle(color: Colors.grey, fontSize: 12)),
                       ],
                     ),
                   ),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../db/isar_service.dart';
 import '../db/models/category.dart';
 import '../db/models/chapter.dart';
@@ -8,6 +9,7 @@ import '../engine/quickjs_service.dart';
 import '../engine/repo_manager.dart';
 import '../engine/source_migration_service.dart';
 import '../logging/logger_service.dart';
+import '../services/image_cache_helper.dart';
 import '../services/settings_service.dart';
 import 'graphql_client_service.dart';
 
@@ -43,6 +45,9 @@ class SyncEngine {
 
     _isSyncing = true;
     try {
+      try {
+        await WakelockPlus.enable();
+      } catch (_) {}
       await LoggerService.instance.logInfo('Starting sync cycle with server...', 'SyncEngine');
       await _flushPendingMutations();
       await _pullServerState();
@@ -50,6 +55,9 @@ class SyncEngine {
     } catch (e, stack) {
       await LoggerService.instance.logError('Sync cycle error: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
     } finally {
+      try {
+        await WakelockPlus.disable();
+      } catch (_) {}
       _isSyncing = false;
     }
   }
@@ -72,26 +80,26 @@ class SyncEngine {
         switch (record.entityType) {
           case SyncEntityType.chapter:
             if (record.action == SyncAction.update) {
-              final chapterId = payload['chapterId'] as int;
-              final isRead = payload['isRead'] as bool;
-              final lastPageRead = payload['lastPageRead'] as int;
+              final chapterId = parseIntSafe(payload['chapterId']);
+              final isRead = parseBoolSafe(payload['isRead']);
+              final lastPageRead = parseIntSafe(payload['lastPageRead']);
               final res = await GraphQLClientService.instance.updateChapterReadStatus(chapterId, isRead, lastPageRead);
               success = res != null;
             }
             break;
           case SyncEntityType.tracker:
             if (record.action == SyncAction.update) {
-              final trackerId = payload['trackerId'] as int;
-              final mangaId = payload['mangaId'] as int;
-              final chapterNumber = (payload['chapterNumber'] as num).toDouble();
+              final trackerId = parseIntSafe(payload['trackerId']);
+              final mangaId = parseIntSafe(payload['mangaId']);
+              final chapterNumber = parseDoubleSafe(payload['chapterNumber']);
               final res = await GraphQLClientService.instance.trackProgress(mangaId, trackerId, chapterNumber);
               success = res != null;
             }
             break;
           case SyncEntityType.manga:
             if (record.action == SyncAction.update || record.action == SyncAction.delete) {
-              final mangaId = payload['mangaId'] as int;
-              final inLibrary = payload['inLibrary'] as bool;
+              final mangaId = parseIntSafe(payload['mangaId']);
+              final inLibrary = parseBoolSafe(payload['inLibrary']);
               final res = await GraphQLClientService.instance.updateMangaLibraryState(mangaId, inLibrary);
               success = res != null;
             }
@@ -173,10 +181,10 @@ class SyncEngine {
         for (final n in nodes) {
           final map = n as Map<String, dynamic>;
           final cat = Category()
-            ..serverId = map['id'] as int
+            ..serverId = parseIntSafe(map['id'])
             ..name = map['name'] as String? ?? 'Default'
-            ..order = map['order'] as int? ?? 0
-            ..isDefault = map['default'] as bool? ?? false;
+            ..order = parseIntSafe(map['order'])
+            ..isDefault = parseBoolSafe(map['default']);
           categories.add(cat);
         }
         await IsarService.instance.saveCategories(categories);
@@ -196,7 +204,7 @@ class SyncEngine {
     try {
       final libData = await GraphQLClientService.instance
           .fetchLibrary()
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 8));
       if (libData != null && libData.containsKey('mangas')) {
         serverReachable = true;
         final nodes = libData['mangas']['nodes'] as List<dynamic>;
@@ -204,7 +212,7 @@ class SyncEngine {
 
         for (final n in nodes) {
           final nodeMap = n as Map<String, dynamic>;
-          final serverId = nodeMap['id'] as int;
+          final serverId = parseIntSafe(nodeMap['id']);
           var manga = await IsarService.instance.getMangaByServerId(serverId);
           manga ??= Manga()..serverId = serverId;
 
@@ -213,7 +221,7 @@ class SyncEngine {
           manga.description = nodeMap['description'] as String?;
           manga.inLibrary = true;
           manga.inLibraryAt = nodeMap['inLibraryAt'] != null ? int.tryParse(nodeMap['inLibraryAt'].toString()) : null;
-          manga.unreadCount = nodeMap['unreadCount'] as int?;
+          manga.unreadCount = parseIntSafe(nodeMap['unreadCount']);
           manga.lastFetchedAt = nowUnix;
 
           final rawThumb = nodeMap['thumbnailUrl'] as String?;
@@ -224,7 +232,7 @@ class SyncEngine {
           if (nodeMap.containsKey('categories') && nodeMap['categories'] != null) {
             final catNodes = nodeMap['categories']['nodes'] as List<dynamic>?;
             if (catNodes != null) {
-              manga.categoryIds = catNodes.map((c) => (c as Map<String, dynamic>)['id'] as int).toList();
+              manga.categoryIds = catNodes.map((c) => parseIntSafe((c as Map<String, dynamic>)['id'])).toList();
             }
           }
 
@@ -241,6 +249,13 @@ class SyncEngine {
           serverMangas.add(manga);
         }
         await IsarService.instance.saveMangas(serverMangas);
+
+        // Pre-cache cover images to local disk for offline resilience
+        for (final m in serverMangas) {
+          if (m.thumbnailUrl != null && m.thumbnailUrl!.isNotEmpty) {
+            ImageCacheHelper.cacheThumbnail(m.serverId, m.thumbnailUrl!);
+          }
+        }
 
         // ── WIPE GUARD: Never cascade a server wipe to local Isar ─────────
         // If server returned far fewer manga than Isar has, something is wrong
@@ -328,22 +343,22 @@ class SyncEngine {
 
             for (final c in chapterNodes) {
               final chMap = c as Map<String, dynamic>;
-              final chServerId = chMap['id'] as int;
+              final chServerId = parseIntSafe(chMap['id']);
 
               var chapter = await IsarService.instance.getChapterByServerId(chServerId);
               chapter ??= Chapter()..serverId = chServerId;
 
               chapter.mangaId = manga.serverId;
-              chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber']}';
-              chapter.chapterNumber = (chMap['chapterNumber'] as num? ?? 0).toDouble();
-              chapter.pageCount = chMap['pageCount'] as int? ?? chapter.pageCount;
+              chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber'] ?? ""}';
+              chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
+              chapter.pageCount = parseIntSafe(chMap['pageCount'], chapter.pageCount);
 
               // Monotonic read merge — read state can only go true, never false
-              final serverIsRead = chMap['isRead'] as bool? ?? false;
+              final serverIsRead = parseBoolSafe(chMap['isRead']);
               chapter.isRead = chapter.isRead || serverIsRead;
 
               // Monotonic lastPageRead merge — highest wins
-              final serverLastPageRead = chMap['lastPageRead'] as int? ?? 0;
+              final serverLastPageRead = parseIntSafe(chMap['lastPageRead']);
               chapter.lastPageRead = chapter.lastPageRead > serverLastPageRead
                   ? chapter.lastPageRead
                   : serverLastPageRead;
@@ -401,19 +416,19 @@ class SyncEngine {
 
         for (final c in chNodes) {
           final chMap = c as Map<String, dynamic>;
-          final chServerId = chMap['id'] as int;
-          final mangaServerId = chMap['mangaId'] as int;
-          final serverIsRead = chMap['isRead'] as bool? ?? false;
-          final serverLastPageRead = chMap['lastPageRead'] as int? ?? 0;
+          final chServerId = parseIntSafe(chMap['id']);
+          final mangaServerId = parseIntSafe(chMap['mangaId']);
+          final serverIsRead = parseBoolSafe(chMap['isRead']);
+          final serverLastPageRead = parseIntSafe(chMap['lastPageRead']);
           final serverLastReadAt = chMap['lastReadAt'] != null ? int.tryParse(chMap['lastReadAt'].toString()) : null;
 
           var chapter = await IsarService.instance.getChapterByServerId(chServerId);
           chapter ??= Chapter()..serverId = chServerId;
 
           chapter.mangaId = mangaServerId;
-          chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber']}';
-          chapter.chapterNumber = (chMap['chapterNumber'] as num? ?? 0).toDouble();
-          chapter.pageCount = chMap['pageCount'] as int? ?? chapter.pageCount;
+          chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber'] ?? ""}';
+          chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
+          chapter.pageCount = parseIntSafe(chMap['pageCount'], chapter.pageCount);
 
           // Monotonic merge
           chapter.isRead = chapter.isRead || serverIsRead;
@@ -432,7 +447,7 @@ class SyncEngine {
             }
 
             // Also upsert parent manga into Isar if not already there
-            final mServerId = mangaMap['id'] as int? ?? mangaServerId;
+            final mServerId = parseIntSafe(mangaMap['id'], mangaServerId);
             var parentManga = await IsarService.instance.getMangaByServerId(mServerId);
             parentManga ??= Manga()..serverId = mServerId;
             if (parentManga.title.isEmpty || parentManga.title == 'Untitled') {
@@ -470,17 +485,17 @@ class SyncEngine {
 
       for (final n in nodes) {
         final map = n as Map<String, dynamic>;
-        final chServerId = map['id'] as int;
+        final chServerId = parseIntSafe(map['id']);
 
         var chapter = await IsarService.instance.getChapterByServerId(chServerId);
         chapter ??= Chapter()..serverId = chServerId;
 
-        chapter.mangaId = map['mangaId'] as int? ?? chapter.mangaId;
+        chapter.mangaId = parseIntSafe(map['mangaId'], chapter.mangaId);
         chapter.name = map['name'] as String? ?? chapter.name;
-        chapter.chapterNumber = (map['chapterNumber'] as num? ?? chapter.chapterNumber).toDouble();
-        chapter.isRead = (map['isRead'] as bool? ?? false) || chapter.isRead;
-        chapter.lastPageRead = map['lastPageRead'] as int? ?? chapter.lastPageRead;
-        chapter.isDownloadedOnServer = map['isDownloaded'] as bool? ?? chapter.isDownloadedOnServer;
+        chapter.chapterNumber = parseDoubleSafe(map['chapterNumber'], chapter.chapterNumber);
+        chapter.isRead = parseBoolSafe(map['isRead']) || chapter.isRead;
+        chapter.lastPageRead = parseIntSafe(map['lastPageRead'], chapter.lastPageRead);
+        chapter.isDownloadedOnServer = parseBoolSafe(map['isDownloaded']) || chapter.isDownloadedOnServer;
 
         final rawFetchedAt = map['fetchedAt'];
         if (rawFetchedAt != null) {
