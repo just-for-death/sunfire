@@ -304,6 +304,12 @@ class Document {
         );
         return new Element(key);
     }
+    querySelector(selector) {
+        return this.selectFirst(selector);
+    }
+    querySelectorAll(selector) {
+        return this.select(selector);
+    }
     attr(attr) {
         return sendMessage(
             "doc_attr",
