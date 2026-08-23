@@ -30,6 +30,9 @@ class ImageTransportService {
         ),
       );
 
+      if (response.data == null || response.data!.isEmpty) {
+        return null;
+      }
       final file = File(savePath);
       await file.create(recursive: true);
       await file.writeAsBytes(response.data!);

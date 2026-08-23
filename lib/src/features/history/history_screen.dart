@@ -14,7 +14,9 @@ class HistoryScreen extends StatefulWidget {
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
-class _HistoryScreenState extends State<HistoryScreen> {
+class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   List<Map<String, dynamic>> _historyItems = [];
   bool _isLoading = false;
 
@@ -52,6 +54,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
@@ -112,6 +115,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     )
                         : ListView.builder(
                             physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                            cacheExtent: 800,
                             padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0, bottom: 120.0),
                       itemCount: _historyItems.length,
                       itemBuilder: (context, index) {
@@ -130,9 +134,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ? 'Page $currentPage / ${ch.pageCount} (${(progressValue * 100).toInt()}%)'
                             : (ch.isRead ? 'Completed' : 'Page $currentPage');
 
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6.0),
-                          child: Material(
+                        return RepaintBoundary(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6.0),
+                            child: Material(
                             color: const Color(0x1F2A2A32),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
@@ -186,8 +191,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               ),
                             ),
                           ),
-                        );
-                      },
+                        ),
+                      );
+                    },
                     ),
       ),
     );

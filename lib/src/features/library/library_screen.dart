@@ -8,6 +8,7 @@ import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../main_shell.dart';
 
 
 class LibraryScreen extends StatefulWidget {
@@ -17,7 +18,9 @@ class LibraryScreen extends StatefulWidget {
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> {
+class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   final SettingsService _settings = SettingsService.instance;
   int _selectedCategoryIndex = 0;
   List<Manga> _allManga = [];
@@ -359,6 +362,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
     final displayManga = _filteredManga;
     final displayMode = _settings.libraryDisplayMode;
@@ -483,6 +487,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         child: displayManga.isEmpty
             ? CustomScrollView(
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                cacheExtent: 800,
                 slivers: [
                   if (_isOffline)
                     SliverToBoxAdapter(
@@ -532,7 +537,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               ),
                               icon: const Icon(Icons.explore_outlined, color: Colors.white, size: 18),
                               label: const Text('Browse Sources', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                              onPressed: () => context.go('/browse'),
+                              onPressed: () => MainShell.switchToTab(3),
                             ),
                           ],
                         ),
@@ -542,6 +547,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ],
               )
             : CustomScrollView(
+                cacheExtent: 1500,
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 slivers: [
                   if (_isOffline)
@@ -573,6 +579,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         delegate: SliverChildBuilderDelegate(
                           (context, index) => _buildMangaListItem(displayManga[index]),
                           childCount: displayManga.length,
+                          addAutomaticKeepAlives: true,
+                          addRepaintBoundaries: true,
+                          addSemanticIndexes: false,
                         ),
                       ),
                     )
@@ -589,6 +598,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         delegate: SliverChildBuilderDelegate(
                           (context, index) => _buildMangaCard(displayManga[index], isCompact: isCompact),
                           childCount: displayManga.length,
+                          addAutomaticKeepAlives: true,
+                          addRepaintBoundaries: true,
+                          addSemanticIndexes: false,
                         ),
                       ),
                     ),
@@ -618,8 +630,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final isSelected = _selectedMangaIds.contains(manga.serverId);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    return GestureDetector(
-      onTap: () {
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: () {
         if (_isBatchMode) {
           _toggleBatchSelection(manga.serverId);
         } else {
@@ -694,16 +707,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ],
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildMangaListItem(Manga manga) {
     final isSelected = _selectedMangaIds.contains(manga.serverId);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Material(
+    return RepaintBoundary(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4.0),
+        child: Material(
         color: isSelected ? primaryColor.withAlpha(40) : const Color(0x1F2A2A32),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
@@ -739,6 +754,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               : null,
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
