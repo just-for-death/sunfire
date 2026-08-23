@@ -956,12 +956,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         }
                         final pageWidget = _buildPageWidget(_pageUrls[index], index, constraints: constraints, isPaged: false);
                         return RepaintBoundary(
-                          child: _readingMode == ReadingMode.continuousVertical
-                              ? Padding(
-                                  padding: const EdgeInsets.only(bottom: 12.0),
-                                  child: Center(child: pageWidget),
-                                )
-                              : pageWidget,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minHeight: constraints.maxHeight * 0.75),
+                            child: _readingMode == ReadingMode.continuousVertical
+                                ? Padding(
+                                    padding: const EdgeInsets.only(bottom: 12.0),
+                                    child: Center(child: pageWidget),
+                                  )
+                                : pageWidget,
+                          ),
                         );
                       },
                     )
