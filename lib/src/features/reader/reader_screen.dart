@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/engine/content_resolver_service.dart';
+import '../../core/engine/javascript/m_client.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
@@ -32,6 +34,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Chapter? _prevChapter;
   List<Chapter> _siblingChapters = [];
   List<String> _pageUrls = [];
+  final Map<String, Uint8List> _recoveredImageBytes = {};
+  final Set<String> _recoveringUrls = {};
   bool _isLoading = true;
   bool _showControls = true;
   int _currentPage = 1;
@@ -260,6 +264,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     _sourceName = resolved.effectiveSourceName ?? sourceName;
     _pageUrls = resolved.pageUrls;
+    print('[Reader] Resolved ${_pageUrls.length} pages for source=$_sourceName: ${_pageUrls.take(3).toList()}');
 
     if (_chapter != null && _chapter!.lastPageRead > 0 && _chapter!.lastPageRead <= _pageUrls.length) {
       _currentPage = _chapter!.lastPageRead;
@@ -633,12 +638,40 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
+  Future<void> _recoverImage(String url, int index) async {
+    if (_recoveringUrls.contains(url) || _recoveredImageBytes.containsKey(url)) return;
+    _recoveringUrls.add(url);
+    try {
+      final client = MClient.init();
+      final uri = Uri.parse(url);
+      final headers = QuickJsService.getImageHeaders(_sourceName ?? '', url);
+      final res = await client.get(uri, headers: headers);
+      if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _recoveredImageBytes[url] = res.bodyBytes;
+          });
+        }
+      }
+    } catch (_) {
+    } finally {
+      _recoveringUrls.remove(url);
+    }
+  }
+
   Widget _buildPageWidget(String url, int index, {BoxConstraints? constraints, bool isPaged = false}) {
     final isWebtoon = _readingMode == ReadingMode.webtoon;
     final boxFit = isWebtoon ? BoxFit.fitWidth : _imageBoxFit;
 
     Widget image;
-    if (url.startsWith('/')) {
+    if (_recoveredImageBytes.containsKey(url)) {
+      image = Image.memory(
+        _recoveredImageBytes[url]!,
+        width: isWebtoon ? (constraints?.maxWidth ?? double.infinity) : null,
+        fit: boxFit,
+        gaplessPlayback: true,
+      );
+    } else if (url.startsWith('/')) {
       image = Image.file(
         File(url),
         width: isWebtoon ? (constraints?.maxWidth ?? double.infinity) : null,
@@ -677,13 +710,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
             child: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)),
           );
         },
-        errorBuilder: (_, __, ___) => Container(
-          height: 300,
-          color: const Color(0xFF1A1A22),
-          child: Center(
-            child: Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.grey)),
-          ),
-        ),
+        errorBuilder: (context, error, stackTrace) {
+          _recoverImage(url, index);
+          return Container(
+            height: isWebtoon ? 200 : 300,
+            color: const Color(0xFF1A1A22),
+            child: Center(
+              child: _recoveringUrls.contains(url)
+                  ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
+                  : Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.grey)),
+            ),
+          );
+        },
       );
     }
 

@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../logging/logger_service.dart';
 import 'javascript/js_extension_service.dart';
+import 'javascript/m_client.dart';
 
 class QuickJsService {
   static QuickJsService? _instance;
@@ -236,7 +237,7 @@ class QuickJsService {
   static Map<String, String> getImageHeaders(String sourceOrUrl, [String? imageUrl]) {
     final targetUrl = (imageUrl != null && imageUrl.isNotEmpty) ? imageUrl : sourceOrUrl;
     final headers = <String, String>{
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'User-Agent': MClient.userAgent,
     };
 
     // 1. Query extension headers dynamically from the installed JS source
@@ -252,7 +253,15 @@ class QuickJsService {
       } catch (_) {}
     }
 
-    // 2. Generic Referer derivation from image URL host if not provided by source extension
+    // 2. Attach domain / Cloudflare cookies from MClient
+    if (targetUrl.isNotEmpty) {
+      final cookies = MClient.getCookiesPref(targetUrl);
+      if (cookies.isNotEmpty) {
+        headers.addAll(cookies);
+      }
+    }
+
+    // 3. Generic Referer derivation from image URL host if not provided by source extension
     if (!headers.containsKey('Referer') || headers['Referer']!.isEmpty) {
       if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
         try {
