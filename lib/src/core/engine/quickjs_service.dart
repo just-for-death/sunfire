@@ -296,7 +296,9 @@ class QuickJsService {
     }
 
     // 3. Generic Referer derivation from image URL host if not provided by source extension
-    if (!headers.containsKey('Referer') || headers['Referer']!.isEmpty) {
+    if (targetUrl.contains('readcomicsonline.ru') || headers['Referer'] == '') {
+      headers.remove('Referer');
+    } else if (!headers.containsKey('Referer') || headers['Referer']!.isEmpty) {
       if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
         try {
           final uri = Uri.parse(targetUrl);
@@ -310,6 +312,10 @@ class QuickJsService {
           headers['Referer'] = '${uri.scheme}://$host/';
         } catch (_) {}
       }
+    }
+
+    if (headers['Referer'] == '') {
+      headers.remove('Referer');
     }
 
     return headers;
