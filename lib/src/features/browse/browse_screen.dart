@@ -307,7 +307,6 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   void _toggleExtensionInstallation(Map<String, dynamic> ext, {bool isUpdate = false}) async {
     final name = ext['name'] as String;
     final isInstalled = ext['isInstalled'] as bool;
-    final id = ext['id'] as String;
     final isJs = ext['isJs'] as bool? ?? false;
     final sourceCodeUrl = ext['sourceCodeUrl'] as String? ?? '';
     final version = ext['version'] as String? ?? '1.0.0';

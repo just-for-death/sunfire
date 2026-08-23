@@ -71,17 +71,18 @@ class MClient {
 
   /// Pre-warm a FlareSolverr session for [url]'s domain.
   /// Concurrent calls for the same root domain share one solve (deduplication).
-  static Future<void> prewarmSession(String url) async {
+  static Future<void> prewarmSession(String url, {bool forceRenew = false}) async {
     if (cfProxyUrl.isEmpty) return;
     try {
       final host = Uri.parse(url).host;
       final root = _extractRootDomain(host);
-      // Already have a valid cookie — no need to re-solve
-      if (hasCookieFor(url)) return;
+      // Already have a valid cookie — no need to re-solve (unless forced)
+      if (!forceRenew && hasCookieFor(url)) return;
       // Deduplicate: return the existing in-flight solve if one is running
       if (_activeSolves.containsKey(root)) {
-        return _activeSolves[root]!;
+        return await _activeSolves[root]!;
       }
+      // Use the actual URL for CDN subdomains so FlareSolverr visits that domain
       final future = _doPrewarm(url, root);
       _activeSolves[root] = future;
       try {
@@ -94,7 +95,9 @@ class MClient {
 
   static Future<void> _doPrewarm(String url, String root) async {
     debugPrint('[MClient] Pre-warming session for $root');
-    final origin = '${Uri.parse(url).scheme}://$root';
+    // Visit the actual URL (not just origin root) so subdomains like cdn.* get solved
+    final uri = Uri.parse(url);
+    final origin = '${uri.scheme}://${uri.host}';
     await solveAndFetchWithProxy(origin);
   }
 
