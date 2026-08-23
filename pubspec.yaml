@@ -56,6 +56,9 @@ dependencies:
   pseudom: ^1.0.1
   xpath_selector_html_parser: ^3.0.1
   http_interceptor: ^2.0.0
+  http2: ^2.3.1
+  cronet_http: ^1.9.0
+  cupertino_http: ^2.4.0
 
 dev_dependencies:
   build_runner: ^2.4.13
