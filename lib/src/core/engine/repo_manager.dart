@@ -159,8 +159,10 @@ class RepoManager {
     final normalizedUrl = normalizeRepoUrl(indexUrl);
     final cacheFile = await _cacheFileFor(normalizedUrl);
     try {
+      final sep = normalizedUrl.contains('?') ? '&' : '?';
+      final freshUrl = '$normalizedUrl${sep}_t=${DateTime.now().millisecondsSinceEpoch}';
       final response = await _dio
-          .get(normalizedUrl)
+          .get(freshUrl)
           .timeout(const Duration(seconds: 10));
       final raw = response.data is String
           ? response.data as String
@@ -205,8 +207,10 @@ class RepoManager {
 
   Future<String?> downloadJsSourceCode(String jsUrl) async {
     try {
+      final sep = jsUrl.contains('?') ? '&' : '?';
+      final freshUrl = '$jsUrl${sep}_t=${DateTime.now().millisecondsSinceEpoch}';
       final response = await _dio.get<String>(
-        jsUrl,
+        freshUrl,
         options: Options(
           responseType: ResponseType.plain,
           validateStatus: (status) => status != null && status >= 200 && status < 300,
