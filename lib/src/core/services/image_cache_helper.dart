@@ -82,8 +82,8 @@ class MangaCoverImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dpr = MediaQuery.of(context).devicePixelRatio;
-    final int? targetCacheWidth = width != null ? (width! * dpr).clamp(100.0, 600.0).round() : 360;
-    final int? targetCacheHeight = height != null ? (height! * dpr).clamp(150.0, 900.0).round() : 520;
+    final int targetCacheWidth = width != null ? (width! * dpr).clamp(100.0, 600.0).round() : 360;
+    final int targetCacheHeight = height != null ? (height! * dpr).clamp(150.0, 900.0).round() : 520;
 
     final localPath = ImageCacheHelper.getLocalCoverPath(mangaServerId);
     if (localPath != null) {

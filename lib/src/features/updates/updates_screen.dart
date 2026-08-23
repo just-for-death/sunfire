@@ -302,9 +302,11 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       body: RefreshIndicator(
         color: primaryColor,
         onRefresh: _checkServerForUpdates,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          cacheExtent: 800,
+        child: _isLoading
+            ? Center(child: CircularProgressIndicator(color: primaryColor))
+            : CustomScrollView(
+                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                cacheExtent: 800,
           slivers: [
                         if (_lastUpdateText != null)
                           SliverToBoxAdapter(

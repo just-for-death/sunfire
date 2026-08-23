@@ -76,7 +76,9 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
           await SyncEngine.instance.triggerSync();
           await _loadHistory();
         },
-        child: _historyItems.isEmpty
+        child: _isLoading
+            ? Center(child: CircularProgressIndicator(color: primaryColor))
+            : _historyItems.isEmpty
             ? CustomScrollView(
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 slivers: [
