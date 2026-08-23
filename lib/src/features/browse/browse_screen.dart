@@ -251,7 +251,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       }
 
       // 3. Append any locally installed extensions not present in the repo lists
-      for (final installedName in QuickJsService.instance.getInstalledSourceNames()) {
+      for (final installedName in QuickJsService.instance.getInstalledExtensionNames()) {
         final key = 'js_${installedName}_en'.toLowerCase();
         if (!seenKeys.add(key)) continue;
 
