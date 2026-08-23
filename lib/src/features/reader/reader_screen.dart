@@ -633,12 +633,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
-  Widget _buildPageWidget(String url, int index, {bool isPaged = false}) {
+  Widget _buildPageWidget(String url, int index, {BoxConstraints? constraints, bool isPaged = false}) {
+    final isWebtoon = _readingMode == ReadingMode.webtoon;
+    final boxFit = isWebtoon ? BoxFit.fitWidth : _imageBoxFit;
+
     Widget image;
     if (url.startsWith('/')) {
       image = Image.file(
         File(url),
-        fit: _imageBoxFit,
+        width: isWebtoon ? (constraints?.maxWidth ?? double.infinity) : null,
+        fit: boxFit,
+        gaplessPlayback: true,
         errorBuilder: (_, __, ___) => Container(
           height: 300,
           color: const Color(0xFF1A1A22),
@@ -653,9 +658,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
       image = Image.network(
         url,
         headers: headers,
-        fit: _imageBoxFit,
+        width: isWebtoon ? (constraints?.maxWidth ?? double.infinity) : null,
+        fit: boxFit,
+        gaplessPlayback: true,
         loadingBuilder: (_, child, progress) {
           if (progress == null) return child;
+          if (isWebtoon) {
+            return Container(
+              height: 180,
+              width: constraints?.maxWidth,
+              color: _canvasBackgroundColor,
+              child: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)),
+            );
+          }
           return Container(
             height: 400,
             color: _canvasBackgroundColor,
@@ -814,24 +829,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   if (_readingMode == ReadingMode.webtoon || _readingMode == ReadingMode.continuousVertical)
                     ListView.builder(
                       controller: _scrollController,
+                      padding: EdgeInsets.zero,
                       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                      cacheExtent: 1500,
+                      cacheExtent: 2500,
                       itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
                       itemBuilder: (context, index) {
                         if (index == _pageUrls.length) {
                           return _buildChapterTransitionCard();
                         }
+                        final pageWidget = _buildPageWidget(_pageUrls[index], index, constraints: constraints, isPaged: false);
                         return RepaintBoundary(
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minHeight: constraints.maxHeight,
-                              minWidth: constraints.maxWidth,
-                            ),
-                            child: Padding(
-                              padding: EdgeInsets.only(bottom: _readingMode == ReadingMode.continuousVertical ? 8.0 : 0.0),
-                              child: _buildPageWidget(_pageUrls[index], index, isPaged: false),
-                            ),
-                          ),
+                          child: _readingMode == ReadingMode.continuousVertical
+                              ? Padding(
+                                  padding: const EdgeInsets.only(bottom: 12.0),
+                                  child: Center(child: pageWidget),
+                                )
+                              : pageWidget,
                         );
                       },
                     )
@@ -844,7 +857,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       onPageChanged: _onPageChanged,
                       itemBuilder: (context, index) {
                         return RepaintBoundary(
-                          child: Center(child: _buildPageWidget(_pageUrls[index], index, isPaged: true)),
+                          child: Center(child: _buildPageWidget(_pageUrls[index], index, constraints: constraints, isPaged: true)),
                         );
                       },
                     ),
