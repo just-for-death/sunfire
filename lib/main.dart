@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
@@ -13,8 +14,17 @@ import 'src/core/services/settings_service.dart';
 import 'src/core/sync/graphql_client_service.dart';
 import 'src/core/sync/sync_engine.dart';
 
+class _AppHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  HttpOverrides.global = _AppHttpOverrides();
 
   await SentryFlutter.init(
     (options) {
