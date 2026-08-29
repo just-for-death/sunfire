@@ -162,7 +162,7 @@ class QuickJsService {
       }));
       return true;
     } catch (e) {
-      await LoggerService.instance.logWarning('Failed to persist extension $sourceName: $e', 'QuickJS');
+      await LoggerService.instance.logError('Failed to persist extension $sourceName: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
       return false;
     }
   }
@@ -331,7 +331,8 @@ class QuickJsService {
       final h = service.getHeaders();
       _headersCache[cacheKey] = h;
       return h;
-    } catch (_) {
+    } catch (e, stack) {
+      LoggerService.instance.logError('Failed to fetch headers: $e', exception: e, stackTrace: stack, category: 'QuickJS');
       return {};
     } finally {
       service.dispose();
@@ -473,7 +474,7 @@ class QuickJsService {
           return mockList;
         }
       }
-      await LoggerService.instance.logWarning('Local scraping failed for $sourceName: $e', 'QuickJS');
+      await LoggerService.instance.logError('Local scraping failed for $sourceName: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
     } finally {
       service.dispose();
     }
@@ -510,7 +511,7 @@ class QuickJsService {
       final result = await service.getDetail(targetUrl);
       return result;
     } catch (e) {
-      await LoggerService.instance.logWarning('Local getDetail failed for $sourceName ($targetUrl): $e', 'QuickJS');
+      await LoggerService.instance.logError('Local getDetail failed for $sourceName ($targetUrl): $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
     } finally {
       service.dispose();
     }
@@ -541,7 +542,7 @@ class QuickJsService {
         // Pooled runtime may be corrupted — evict and let it be recreated next call
         _invalidateRuntime(sourceName);
       }
-      await LoggerService.instance.logWarning('Local chapter page scraping failed for $sourceName: $e', 'QuickJS');
+      await LoggerService.instance.logError('Local chapter page scraping failed for $sourceName: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
     }
     // NOTE: do NOT dispose — runtime stays in pool for reuse
     return [];
@@ -557,7 +558,8 @@ class QuickJsService {
 
     try {
       return await service.extensionCallAsync<List<dynamic>>('getFilterList()');
-    } catch (_) {
+    } catch (e, stack) {
+      LoggerService.instance.logError('Failed to fetch source filters for $sourceName: $e', exception: e, stackTrace: stack, category: 'QuickJS');
       return [];
     }
     // NOTE: do NOT dispose — runtime stays in pool

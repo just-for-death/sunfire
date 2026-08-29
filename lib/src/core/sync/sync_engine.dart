@@ -189,7 +189,9 @@ class SyncEngine {
         }
         await IsarService.instance.saveCategories(categories);
       }
-    } catch (_) {}
+    } catch (e, stack) {
+      await LoggerService.instance.logError('Failed to pull categories: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+    }
   }
 
   Future<void> _performFullSync() async {
@@ -305,7 +307,9 @@ class SyncEngine {
     await IsarService.instance.setMeta('last_sync_unix', nowUnix.toString());
     try {
       await GraphQLClientService.instance.setGlobalMeta('lastSync_$_deviceId', nowUnix.toString());
-    } catch (_) {}
+    } catch (e) {
+      await LoggerService.instance.logWarning('Failed to set global meta lastSync: $e', 'SyncEngine');
+    }
   }
 
   // ── FULL CHAPTER SNAPSHOT FOR EVERY LIBRARY MANGA ──────────────────────
