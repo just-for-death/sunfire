@@ -198,9 +198,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     //    - Every chapter has an empty name (truly invalid data)
     // NOTE: Server chapters from GraphQL intentionally have no page URLs — that's normal.
     //       URLs are resolved lazily at read time via ContentResolverService.
-    final chaptersAreTrulyMissing = _chapters.isEmpty ||
-        _chapters.every((c) => c.name.trim().isEmpty);
-    if (chaptersAreTrulyMissing && _manga != null && _manga!.sourceName.isNotEmpty) {
+    final chaptersNeedEnrichment = _chapters.isEmpty ||
+        _chapters.every((c) => c.name.trim().isEmpty) ||
+        _chapters.any((c) => c.fetchedAt == null || c.fetchedAt == 0);
+    if (chaptersNeedEnrichment && _manga != null && _manga!.sourceName.isNotEmpty) {
       try {
         final localData = await QuickJsService.instance.fetchMangaDetailsLocal(
           _manga!.sourceName,
@@ -298,20 +299,51 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       _chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
     }
 
-    // Deduplicate chapters by URL or name/number
-    final seenCh = <String>{};
-    final uniqueChapters = <Chapter>[];
-    for (final c in _chapters) {
-      final key = c.url.isNotEmpty ? c.url : '${c.chapterNumber}_${c.name}';
-      if (seenCh.add(key)) {
-        uniqueChapters.add(c);
-      }
-    }
-    _chapters = uniqueChapters;
+    // Merge and deduplicate chapters cleanly
+    _chapters = _mergeAndDeduplicateChapters(_chapters);
 
     if (mounted) {
       setState(() => _isLoading = false);
     }
+  }
+
+  List<Chapter> _mergeAndDeduplicateChapters(List<Chapter> list) {
+    final map = <String, Chapter>{};
+
+    for (final ch in list) {
+      var cleanName = ch.name.trim();
+      cleanName = cleanName.replaceAll(RegExp(r'\s*\([Cc]h\.?\s*\d+\)$'), '').trim();
+      ch.name = cleanName;
+
+      final extractedNum = _extractChapterNumber(cleanName, 0, list.length);
+      if (extractedNum > 0) {
+        ch.chapterNumber = extractedNum;
+      }
+
+      final numKey = ch.chapterNumber > 0 ? 'num_${ch.chapterNumber.toStringAsFixed(2)}' : null;
+      final urlKey = ch.url.isNotEmpty ? 'url_${ch.url.toLowerCase().trim()}' : null;
+      final nameKey = 'name_${cleanName.toLowerCase()}';
+
+      final key = numKey ?? urlKey ?? nameKey;
+
+      if (!map.containsKey(key)) {
+        map[key] = ch;
+      } else {
+        final existing = map[key]!;
+        if (existing.url.isEmpty && ch.url.isNotEmpty) existing.url = ch.url;
+        if (existing.realUrl.isEmpty && ch.realUrl.isNotEmpty) existing.realUrl = ch.realUrl;
+        if ((existing.fetchedAt == null || existing.fetchedAt == 0) && ch.fetchedAt != null && ch.fetchedAt! > 0) {
+          existing.fetchedAt = ch.fetchedAt;
+        }
+        if (!existing.isRead && ch.isRead) existing.isRead = true;
+        if (existing.lastPageRead == 0 && ch.lastPageRead > 0) existing.lastPageRead = ch.lastPageRead;
+        if (existing.lastReadAt == null && ch.lastReadAt != null) existing.lastReadAt = ch.lastReadAt;
+        if (!existing.isDownloaded && ch.isDownloaded) existing.isDownloaded = true;
+        if (existing.pageCount == 0 && ch.pageCount > 0) existing.pageCount = ch.pageCount;
+      }
+    }
+
+    return map.values.toList();
   }
 
   void _toggleInLibrary() async {
