@@ -207,6 +207,18 @@ class ContentResolverService {
             sourceBaseUrl = 'https://ninehentai.to';
             cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
           }
+
+          // Universal fallback: dynamically extract baseUrl from extension code
+          if (sourceBaseUrl == null) {
+            final jsCode = QuickJsService.instance.getExtensionCode(effectiveSourceName);
+            if (jsCode != null && jsCode.isNotEmpty) {
+              final metaUrl = QuickJsService.instance.extractBaseUrl(jsCode);
+              if (metaUrl != null && metaUrl.isNotEmpty) {
+                sourceBaseUrl = metaUrl.endsWith('/') ? metaUrl.substring(0, metaUrl.length - 1) : metaUrl;
+                cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
+              }
+            }
+          }
         } else if (cleanChapterUrl.startsWith('http')) {
           // Extract base URL from full chapter URL
           try {
