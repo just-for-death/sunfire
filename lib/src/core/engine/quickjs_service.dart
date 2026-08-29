@@ -411,6 +411,7 @@ class QuickJsService {
     String? selectedSort,
     String? selectedStatus,
     String? selectedType,
+    List<dynamic>? dynamicFilters,
   }) async {
     final jsCode = getExtensionCode(sourceName);
     if (jsCode == null || jsCode.isEmpty) {
@@ -423,14 +424,18 @@ class QuickJsService {
     );
 
     try {
-      final hasFilters = (selectedSort != null && selectedSort != 'Popularity') ||
+      final hasLegacyFilters = (selectedSort != null && selectedSort != 'Popularity') ||
           (selectedStatus != null && selectedStatus != 'All') ||
           (selectedType != null && selectedType != 'All');
+          
+      final hasDynamicFilters = dynamicFilters != null && dynamicFilters.isNotEmpty;
 
       Map<String, dynamic> result;
       if (searchQuery != null && searchQuery.isNotEmpty) {
-        result = await service.search(searchQuery, page);
-      } else if (hasFilters) {
+        result = await service.search(searchQuery, page, hasDynamicFilters ? dynamicFilters : null);
+      } else if (hasDynamicFilters) {
+        result = await service.search('', page, dynamicFilters);
+      } else if (hasLegacyFilters) {
         // Build a structured filter list so JS extensions can use the correct filtered URL
         // instead of doing an empty search which returns nothing.
         final filterList = <Map<String, dynamic>>[];
