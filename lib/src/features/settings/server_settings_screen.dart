@@ -53,12 +53,13 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     final ok = GraphQLClientService.instance.isConfigured;
     if (ok) {
       try {
-        await GraphQLClientService.instance.fetchCategories();
+        final res = await GraphQLClientService.instance.fetchCategories();
         final elapsed = DateTime.now().difference(start).inMilliseconds;
+        final connected = res != null;
         if (mounted) {
           setState(() {
-            _isConnected = true;
-            _latencyMs = elapsed;
+            _isConnected = connected;
+            _latencyMs = connected ? elapsed : null;
           });
         }
       } catch (_) {
