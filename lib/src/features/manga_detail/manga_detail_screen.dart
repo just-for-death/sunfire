@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
@@ -940,7 +941,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   ) {
     return CustomScrollView(
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-      cacheExtent: 1000,
+      scrollCacheExtent: ScrollCacheExtent.pixels(1000),
       slivers: [
         if (!isSelecting)
           SliverAppBar(

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
@@ -731,6 +732,26 @@ class _ReaderScreenState extends State<ReaderScreen> {
           });
         }
       } else {
+        // Desktop fallback: if Dart HTTP client was blocked by Cloudflare TLS fingerprint, fetch via curl
+        if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+          try {
+            final args = <String>['-s', '-L', '--max-time', '15'];
+            initialHeaders.forEach((k, v) => args.addAll(['-H', '$k: $v']));
+            args.add(url);
+            final processRes = await Process.run('curl', args, stdoutEncoding: null);
+            if (processRes.exitCode == 0) {
+              final bytes = processRes.stdout as List<int>;
+              if (bytes.length > 200) {
+                if (mounted) {
+                  setState(() {
+                    _recoveredImageBytes[url] = Uint8List.fromList(bytes);
+                  });
+                }
+                return;
+              }
+            }
+          } catch (_) {}
+        }
         debugPrint('[Reader] ❌ Image still failed $url -> ${res.statusCode}');
       }
     } catch (e) {
@@ -946,7 +967,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       controller: _scrollController,
                       padding: EdgeInsets.zero,
                       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                      cacheExtent: 2500,
+                      scrollCacheExtent: ScrollCacheExtent.pixels(2500),
                       itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
                       itemBuilder: (context, index) {
                         if (index == _pageUrls.length) {
