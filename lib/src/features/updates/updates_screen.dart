@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -306,7 +307,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
             ? Center(child: CircularProgressIndicator(color: primaryColor))
             : CustomScrollView(
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                cacheExtent: 800,
+                scrollCacheExtent: ScrollCacheExtent.pixels(800),
           slivers: [
                         if (_lastUpdateText != null)
                           SliverToBoxAdapter(

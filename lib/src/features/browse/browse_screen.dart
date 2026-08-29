@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
@@ -1107,7 +1108,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     )
                   : ListView.builder(
                       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                      cacheExtent: 800,
+                      scrollCacheExtent: ScrollCacheExtent.pixels(800),
                       padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 8.0, bottom: 120.0),
                       itemCount: sortedList.length,
                       itemBuilder: (context, index) {
