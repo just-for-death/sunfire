@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import '../engine/quickjs_service.dart';
 
 class ImageCacheHelper {
-  static String? _basePath;
+  static final List<String> _candidateCoverPaths = [];
   static final Map<String, Uint8List> _memoryCache = {};
   static final Set<String> _inFlightFetches = {};
 
@@ -14,25 +14,44 @@ class ImageCacheHelper {
       PaintingBinding.instance.imageCache.maximumSize = 1000;
       PaintingBinding.instance.imageCache.maximumSizeBytes = 128 * 1024 * 1024; // 128MB
 
-      Directory dir;
+      final paths = <String>[];
       try {
         final appSupportDir = await getApplicationSupportDirectory();
-        dir = Directory('${appSupportDir.path}/covers');
-      } catch (_) {
+        paths.add('${appSupportDir.path}/covers');
+      } catch (_) {}
+      try {
         final appDir = await getApplicationDocumentsDirectory();
-        dir = Directory('${appDir.path}/covers');
+        paths.add('${appDir.path}/covers');
+      } catch (_) {}
+
+      // Common Linux user paths
+      if (Platform.isLinux) {
+        final home = Platform.environment['HOME'];
+        if (home != null) {
+          paths.add('$home/Documents/covers');
+          paths.add('$home/.local/share/com.sunfire.sunfire/covers');
+          paths.add('$home/.local/share/sunfire/covers');
+        }
       }
-      if (!await dir.exists()) {
-        await dir.create(recursive: true);
+
+      for (final p in paths) {
+        if (!_candidateCoverPaths.contains(p)) {
+          _candidateCoverPaths.add(p);
+          try {
+            final dir = Directory(p);
+            if (!await dir.exists()) {
+              await dir.create(recursive: true);
+            }
+          } catch (_) {}
+        }
       }
-      _basePath = dir.path;
     } catch (_) {}
   }
 
   static String? getLocalCoverPath(int mangaServerId) {
     if (mangaServerId <= 0) return null;
-    if (_basePath != null) {
-      final f = File('$_basePath/$mangaServerId.jpg');
+    for (final basePath in _candidateCoverPaths) {
+      final f = File('$basePath/$mangaServerId.jpg');
       if (f.existsSync() && f.lengthSync() > 100) {
         return f.path;
       }
@@ -46,17 +65,17 @@ class ImageCacheHelper {
 
   static Future<void> clearCache() async {
     _memoryCache.clear();
-    try {
-      if (_basePath != null) {
-        final dir = Directory(_basePath!);
+    for (final basePath in _candidateCoverPaths) {
+      try {
+        final dir = Directory(basePath);
         if (await dir.exists()) {
           final files = await dir.list().toList();
           for (final f in files) {
             await f.delete();
           }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
 
   static Future<Uint8List?> fetchImageBytes(
@@ -67,16 +86,14 @@ class ImageCacheHelper {
     if (url.isEmpty) return null;
     if (_memoryCache.containsKey(url)) return _memoryCache[url];
 
-    // Check disk cache first
-    if (mangaServerId > 0 && _basePath != null) {
-      final f = File('$_basePath/$mangaServerId.jpg');
-      if (f.existsSync() && f.lengthSync() > 100) {
-        try {
-          final bytes = await f.readAsBytes();
-          _memoryCache[url] = bytes;
-          return bytes;
-        } catch (_) {}
-      }
+    // Check disk cache first across all candidate directories
+    final localPath = getLocalCoverPath(mangaServerId);
+    if (localPath != null) {
+      try {
+        final bytes = await File(localPath).readAsBytes();
+        _memoryCache[url] = bytes;
+        return bytes;
+      } catch (_) {}
     }
 
     if (_inFlightFetches.contains(url)) return null;
@@ -122,11 +139,13 @@ class ImageCacheHelper {
 
       if (bytes != null && bytes.length > 200) {
         _memoryCache[url] = bytes;
-        if (mangaServerId > 0 && _basePath != null) {
-          try {
-            final file = File('$_basePath/$mangaServerId.jpg');
-            await file.writeAsBytes(bytes);
-          } catch (_) {}
+        if (mangaServerId > 0) {
+          for (final basePath in _candidateCoverPaths) {
+            try {
+              final file = File('$basePath/$mangaServerId.jpg');
+              await file.writeAsBytes(bytes);
+            } catch (_) {}
+          }
         }
         return bytes;
       }
