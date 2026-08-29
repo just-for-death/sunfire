@@ -71,6 +71,19 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     }
   }
 
+  Future<void> _loadFromIsarOnly() async {
+    try {
+      final list = await IsarService.instance.getLibraryManga();
+      final cats = await IsarService.instance.getCategories();
+      if (mounted) {
+        setState(() {
+          _allManga = list;
+          _categories = cats;
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> _backgroundSync() async {
     if (_isSyncing) return;
     setState(() => _isSyncing = true);
@@ -635,11 +648,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
 
     return RepaintBoundary(
       child: GestureDetector(
-        onTap: () {
+        onTap: () async {
         if (_isBatchMode) {
           _toggleBatchSelection(manga.serverId);
         } else {
-          context.push('/manga/${manga.serverId}');
+          await context.push('/manga/${manga.serverId}');
+          if (mounted) {
+            await _loadFromIsarOnly();
+          }
         }
       },
       onLongPress: () => _toggleBatchSelection(manga.serverId),
@@ -729,11 +745,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           side: BorderSide(color: isSelected ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
         ),
         child: ListTile(
-          onTap: () {
+          onTap: () async {
             if (_isBatchMode) {
               _toggleBatchSelection(manga.serverId);
             } else {
-              context.push('/manga/${manga.serverId}');
+              await context.push('/manga/${manga.serverId}');
+              if (mounted) {
+                await _loadFromIsarOnly();
+              }
             }
           },
           onLongPress: () => _toggleBatchSelection(manga.serverId),

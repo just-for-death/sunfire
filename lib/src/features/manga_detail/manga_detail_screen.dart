@@ -54,6 +54,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       parts.add('Page ${ch.lastPageRead}');
     }
 
+    if (ch.scanlator != null && ch.scanlator!.isNotEmpty) {
+      parts.add(ch.scanlator!);
+    }
+
     if (parts.isEmpty) {
       final nameLower = ch.name.toLowerCase();
       if (!nameLower.contains('chapter') && !nameLower.contains('ch.') && !nameLower.contains('ep.')) {
@@ -62,6 +66,28 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
     }
     return parts.join(' • ');
+  }
+
+  String _formatRelativeTime(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.isNegative) return 'Just now';
+    if (diff.inDays == 0) {
+      if (diff.inHours == 0) {
+        if (diff.inMinutes <= 1) return 'Just now';
+        return '${diff.inMinutes}m ago';
+      }
+      return '${diff.inHours}h ago';
+    } else if (diff.inDays == 1) {
+      return 'Yesterday';
+    } else if (diff.inDays < 30) {
+      return '${diff.inDays}d ago';
+    } else if (diff.inDays < 365) {
+      final months = (diff.inDays / 30).floor();
+      return '${months}mo ago';
+    } else {
+      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    }
   }
 
   @override
@@ -1287,15 +1313,34 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 : ch.isBookmarked
                     ? const Icon(Icons.bookmark_rounded, color: Colors.amber, size: 20)
                     : null,
-            title: Text(
-              ch.name.trim().isNotEmpty
-                  ? ch.name
-                  : 'Chapter ${ch.chapterNumber.toString().replaceAll(RegExp(r'\.0$'), '')}',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: ch.isRead ? Colors.grey : Colors.white,
-              ),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    ch.name.trim().isNotEmpty
+                        ? ch.name
+                        : 'Chapter ${ch.chapterNumber.toString().replaceAll(RegExp(r'\.0$'), '')}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: ch.isRead ? Colors.grey : Colors.white,
+                    ),
+                  ),
+                ),
+                if (ch.fetchedAt != null && ch.fetchedAt! > 0) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    _formatRelativeTime(ch.fetchedAt! > 1000000000000
+                        ? DateTime.fromMillisecondsSinceEpoch(ch.fetchedAt!)
+                        : DateTime.fromMillisecondsSinceEpoch(ch.fetchedAt! * 1000)),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey[500],
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ],
             ),
             subtitle: _formatChapterSubtitle(ch).isNotEmpty
                 ? Text(
