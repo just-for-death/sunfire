@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'core/services/settings_service.dart';
 import 'core/theme/app_theme.dart';
+import 'core/logging/logger_service.dart';
 import 'features/downloads/download_queue_screen.dart';
 import 'features/manga_detail/manga_detail_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
@@ -55,6 +56,7 @@ class _SunfireAppState extends State<SunfireApp> {
     super.initState();
     _router = GoRouter(
       initialLocation: SettingsService.instance.onboardingCompleted ? '/library' : '/onboarding',
+      observers: [_NavigationLogger()],
       routes: [
         GoRoute(
           path: '/onboarding',
@@ -140,5 +142,23 @@ class _SunfireAppState extends State<SunfireApp> {
         );
       },
     );
+  }
+}
+
+class _NavigationLogger extends NavigatorObserver {
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    if (route.settings.name != null || route.settings.name == null) {
+      LoggerService.instance.logInfo('Navigated to ${route.settings.name ?? route.runtimeType}', 'Navigation');
+    }
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    if (route.settings.name != null || route.settings.name == null) {
+      LoggerService.instance.logInfo('Popped from ${route.settings.name ?? route.runtimeType}', 'Navigation');
+    }
   }
 }

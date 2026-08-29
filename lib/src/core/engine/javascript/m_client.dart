@@ -5,6 +5,7 @@ import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_interceptor/http_interceptor.dart';
+import '../../logging/logger_service.dart';
 
 http.Client _createNativeEngineClient() {
   if (!kIsWeb && Platform.isAndroid) {
@@ -228,11 +229,26 @@ class LoggerInterceptor extends InterceptorContract {
 
   @override
   Future<BaseRequest> interceptRequest({required BaseRequest request}) async {
+    try {
+      final method = request.method;
+      final url = request.url.toString();
+      LoggerService.instance.logNetwork('-> HTTP $method $url', 'MClient');
+    } catch (_) {}
     return request;
   }
 
   @override
   Future<BaseResponse> interceptResponse({required BaseResponse response}) async {
+    try {
+      final method = response.request?.method ?? 'GET';
+      final url = response.request?.url.toString() ?? 'Unknown URL';
+      final status = response.statusCode;
+      if (status >= 400) {
+        LoggerService.instance.logError('<- HTTP $status $method $url', category: 'MClient');
+      } else {
+        LoggerService.instance.logNetwork('<- HTTP $status $method $url', 'MClient');
+      }
+    } catch (_) {}
     return response;
   }
 }
