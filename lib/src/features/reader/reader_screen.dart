@@ -313,8 +313,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
-  void _preloadCurrentPages(List<String> urls) {}
-
   /// Prefetch the next chapter's page URLs into cache so navigation is instant.
   Future<void> _prefetchChapter(Chapter chapter) async {
     final sid = chapter.serverId;

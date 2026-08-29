@@ -190,7 +190,27 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               fetched.add(ch);
             }
             final existingChapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+
+            // Transfer read progress from existing chapters to freshly scraped ones
+            // so we don't wipe reading history when the chapter list refreshes
             if (existingChapters.isNotEmpty) {
+              // Build lookup map keyed by URL and by name for fuzzy matching
+              final progressByUrl = <String, Chapter>{};
+              final progressByName = <String, Chapter>{};
+              for (final existing in existingChapters) {
+                if (existing.url.isNotEmpty) progressByUrl[existing.url] = existing;
+                progressByName[existing.name.trim().toLowerCase()] = existing;
+              }
+              for (final ch in fetched) {
+                final match = progressByUrl[ch.url] ?? progressByName[ch.name.trim().toLowerCase()];
+                if (match != null) {
+                  ch.isRead = match.isRead;
+                  ch.lastPageRead = match.lastPageRead;
+                  ch.lastReadAt = match.lastReadAt;
+                  ch.isDownloaded = match.isDownloaded;
+                }
+              }
+
               final isar = IsarService.instance.isar;
               await isar.writeTxn(() async {
                 await isar.chapters.deleteAll(existingChapters.map((c) => c.id).toList());
