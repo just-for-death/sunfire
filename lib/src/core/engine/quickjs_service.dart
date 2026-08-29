@@ -380,9 +380,11 @@ class QuickJsService {
 
   Map<String, dynamic> extractSourceMetadata(String jsCode) {
     try {
-      final match = RegExp(r'''const\s+mangayomiSources\s*=\s*(\[\s*\{[\s\S]*?\}\s*\]);''').firstMatch(jsCode);
+      final match = RegExp(r'''(?:const|var|let)\s+mangayomiSources\s*=\s*(\[\s*\{[\s\S]*?\}\s*\]);''').firstMatch(jsCode);
       if (match != null) {
-        final jsonStr = match.group(1)!;
+        var jsonStr = match.group(1)!;
+        // Strip trailing commas before closing braces/brackets
+        jsonStr = jsonStr.replaceAll(RegExp(r',\s*([\]\}])'), r'$1');
         final decoded = jsonDecode(jsonStr);
         if (decoded is List && decoded.isNotEmpty) {
           return Map<String, dynamic>.from(decoded[0] as Map);
