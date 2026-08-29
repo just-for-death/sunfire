@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
@@ -489,7 +490,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
             : displayManga.isEmpty
             ? CustomScrollView(
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                cacheExtent: 800,
+                scrollCacheExtent: ScrollCacheExtent.pixels(800),
                 slivers: [
                   if (_isOffline)
                     SliverToBoxAdapter(
@@ -549,7 +550,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                 ],
               )
             : CustomScrollView(
-                cacheExtent: 1500,
+                scrollCacheExtent: ScrollCacheExtent.pixels(1500),
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 slivers: [
                   if (_isOffline)
