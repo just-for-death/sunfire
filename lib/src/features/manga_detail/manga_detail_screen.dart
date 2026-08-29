@@ -44,6 +44,16 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   String _formatChapterSubtitle(Chapter ch) {
     final parts = <String>[];
+
+    // 1. Upload / Release Date
+    if (ch.fetchedAt != null && ch.fetchedAt! > 0) {
+      final uploadTime = ch.fetchedAt! > 1000000000000
+          ? DateTime.fromMillisecondsSinceEpoch(ch.fetchedAt!)
+          : DateTime.fromMillisecondsSinceEpoch(ch.fetchedAt! * 1000);
+      parts.add(_formatRelativeTime(uploadTime));
+    }
+
+    // 2. Reading progress or page count
     if (ch.pageCount > 0) {
       if (ch.lastPageRead > 0) {
         parts.add('Page ${ch.lastPageRead}/${ch.pageCount}');
@@ -54,6 +64,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       parts.add('Page ${ch.lastPageRead}');
     }
 
+    // 3. Scanlator group
     if (ch.scanlator != null && ch.scanlator!.isNotEmpty) {
       parts.add(ch.scanlator!);
     }
@@ -153,6 +164,14 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               final fetched = <Chapter>[];
               for (final n in chNodes) {
                 final chMap = n as Map<String, dynamic>;
+                final rawFetched = chMap['fetchedAt'] ?? chMap['uploadDate'] ?? chMap['dateUpload'];
+                int? fetchedTimestamp;
+                if (rawFetched is num) {
+                  fetchedTimestamp = rawFetched.toInt();
+                } else if (rawFetched is String && rawFetched.isNotEmpty) {
+                  fetchedTimestamp = int.tryParse(rawFetched) ?? (DateTime.tryParse(rawFetched)?.millisecondsSinceEpoch != null ? DateTime.tryParse(rawFetched)!.millisecondsSinceEpoch ~/ 1000 : null);
+                }
+
                 final ch = Chapter()
                   ..serverId = parseIntSafe(chMap['id'])
                   ..mangaId = widget.mangaServerId
@@ -160,7 +179,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   ..chapterNumber = parseDoubleSafe(chMap['chapterNumber'])
                   ..isRead = parseBoolSafe(chMap['isRead'])
                   ..lastPageRead = parseIntSafe(chMap['lastPageRead'])
-                  ..pageCount = parseIntSafe(chMap['pageCount']);
+                  ..pageCount = parseIntSafe(chMap['pageCount'])
+                  ..fetchedAt = fetchedTimestamp;
                 fetched.add(ch);
               }
               await IsarService.instance.saveChapters(fetched);
@@ -212,6 +232,14 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   ? (widget.mangaServerId * 10000 + i + 1)
                   : ((widget.mangaServerId.hashCode & 0x3FFFFFFF) * 1000 + i + 1);
 
+              final rawDate = cMap['dateUpload'] ?? cMap['uploadDate'] ?? cMap['date'] ?? cMap['releaseDate'];
+              int? parsedDate;
+              if (rawDate is num) {
+                parsedDate = rawDate.toInt();
+              } else if (rawDate is String && rawDate.isNotEmpty) {
+                parsedDate = int.tryParse(rawDate) ?? (DateTime.tryParse(rawDate)?.millisecondsSinceEpoch != null ? DateTime.tryParse(rawDate)!.millisecondsSinceEpoch ~/ 1000 : null);
+              }
+
               final ch = Chapter()
                 ..serverId = chServerId
                 ..mangaId = widget.mangaServerId
@@ -219,7 +247,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 ..chapterNumber = chNum
                 ..url = chUrl
                 ..realUrl = chUrl
-                ..mangaTitle = _manga!.title;
+                ..mangaTitle = _manga!.title
+                ..fetchedAt = parsedDate;
               fetched.add(ch);
             }
             final existingChapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
