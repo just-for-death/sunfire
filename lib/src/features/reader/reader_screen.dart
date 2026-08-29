@@ -321,8 +321,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(0);
+      final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
+      if (isPaged && _pageController.hasClients && _currentPage > 1) {
+        _pageController.jumpToPage(_currentPage - 1);
+      } else if (!isPaged && _scrollController.hasClients) {
+        if (_currentPage > 1) {
+           // Estimate the scroll position for vertical Webtoons based on average screen height
+           final screenHeight = MediaQuery.of(context).size.height;
+           final estimatedOffset = (_currentPage - 1) * screenHeight;
+           _scrollController.jumpTo(estimatedOffset);
+        } else {
+           _scrollController.jumpTo(0);
+        }
       }
     });
 

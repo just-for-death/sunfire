@@ -9,6 +9,7 @@ import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/widgets/empty_state_widget.dart';
 import '../../main_shell.dart';
 
 
@@ -30,6 +31,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   bool _isSearching = false;
   String _searchQuery = '';
   String _sortBy = 'Title';
+  bool _isSortAscending = true;
 
   // Offline banner state
   bool _isOffline = false;
@@ -144,13 +146,17 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     }
 
     // 3. Sorting
-    if (_sortBy == 'Title') {
-      list.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-    } else if (_sortBy == 'Unread') {
-      list.sort((a, b) => (b.unreadCount ?? 0).compareTo(a.unreadCount ?? 0));
-    } else if (_sortBy == 'Recent') {
-      list.sort((a, b) => (b.inLibraryAt ?? 0).compareTo(a.inLibraryAt ?? 0));
-    }
+    list.sort((a, b) {
+      int cmp = 0;
+      if (_sortBy == 'Title') {
+        cmp = a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      } else if (_sortBy == 'Unread') {
+        cmp = (b.unreadCount ?? 0).compareTo(a.unreadCount ?? 0);
+      } else if (_sortBy == 'Recent') {
+        cmp = (b.inLibraryAt ?? 0).compareTo(a.inLibraryAt ?? 0);
+      }
+      return _isSortAscending ? -cmp : cmp;
+    });
 
     return list;
   }
@@ -340,7 +346,19 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     }).toList(),
                   ),
                   const SizedBox(height: 16),
-                  const Text('SORT BY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('SORT BY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                      IconButton(
+                        icon: Icon(_isSortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: 20, color: primaryColor),
+                        onPressed: () {
+                          setState(() => _isSortAscending = !_isSortAscending);
+                          setSheetState(() {});
+                        },
+                      ),
+                    ],
+                  ),
                   ListTile(
                     title: const Text('Title (A-Z)'),
                     trailing: _sortBy == 'Title' ? Icon(Icons.check_rounded, color: primaryColor) : null,
@@ -588,7 +606,29 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         ),
                       ),
                     ),
-                  if (displayMode == 'List')
+                  if (displayManga.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: EmptyStateWidget(
+                        icon: Icons.auto_stories_rounded,
+                        title: _searchQuery.isNotEmpty ? 'No Results Found' : 'Your Library is Empty',
+                        subtitle: _searchQuery.isNotEmpty 
+                           ? 'Try adjusting your search query.'
+                           : 'Browse extensions to find and add manga to your library.',
+                        actionLabel: _searchQuery.isNotEmpty ? 'Clear Search' : 'Browse Sources',
+                        onAction: () {
+                          if (_searchQuery.isNotEmpty) {
+                            setState(() {
+                              _searchQuery = '';
+                              _isSearching = false;
+                            });
+                          } else {
+                            context.go('/browse');
+                          }
+                        },
+                      ),
+                    )
+                  else if (displayMode == 'List')
                     SliverPadding(
                       padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 120),
                       sliver: SliverList(
