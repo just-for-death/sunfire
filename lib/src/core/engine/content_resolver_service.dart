@@ -330,6 +330,7 @@ class ContentResolverService {
     String? selectedSort,
     String? selectedStatus,
     String? selectedType,
+    List<dynamic>? dynamicFilters,
   }) async {
     // ── PRIORITY 1: LOCAL EXTENSION ───────────────────────────────────────
     try {
@@ -341,6 +342,7 @@ class ContentResolverService {
         selectedSort: selectedSort,
         selectedStatus: selectedStatus,
         selectedType: selectedType,
+        dynamicFilters: dynamicFilters,
       );
       if (localResults.isNotEmpty) {
         await LoggerService.instance.logInfo('Fetched ${localResults.length} titles via Local Extension ($sourceName)', 'ContentResolver');
