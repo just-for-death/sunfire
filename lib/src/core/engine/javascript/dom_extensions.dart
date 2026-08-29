@@ -289,6 +289,21 @@ extension DocumentExtension on Document? {
       _initPseudoSelector();
       final dom = this?.documentElement;
       if (dom == null) return null;
+      if (selector.contains(',')) {
+        final results = <Element>[];
+        final seen = <Element>{};
+        for (final part in selector.split(',')) {
+          final trimmed = part.trim();
+          if (trimmed.isEmpty) continue;
+          try {
+            final subList = pseudom.parse(_fixSelector(trimmed)).select(dom);
+            for (final el in subList) {
+              if (seen.add(el)) results.add(el);
+            }
+          } catch (_) {}
+        }
+        return results;
+      }
       return pseudom.parse(_fixSelector(selector)).select(dom).toList();
     } catch (_) {
       return null;
@@ -300,6 +315,17 @@ extension DocumentExtension on Document? {
       _initPseudoSelector();
       final dom = this?.documentElement;
       if (dom == null) return null;
+      if (selector.contains(',')) {
+        for (final part in selector.split(',')) {
+          final trimmed = part.trim();
+          if (trimmed.isEmpty) continue;
+          try {
+            final el = pseudom.parse(_fixSelector(trimmed)).selectFirst(dom);
+            if (el != null) return el;
+          } catch (_) {}
+        }
+        return null;
+      }
       return pseudom.parse(_fixSelector(selector)).selectFirst(dom);
     } catch (_) {
       return null;
@@ -342,6 +368,21 @@ extension ElementExtension on Element {
   List<Element>? select(String selector) {
     try {
       _initPseudoSelector();
+      if (selector.contains(',')) {
+        final results = <Element>[];
+        final seen = <Element>{};
+        for (final part in selector.split(',')) {
+          final trimmed = part.trim();
+          if (trimmed.isEmpty) continue;
+          try {
+            final subList = pseudom.parse(_fixSelector(trimmed)).select(this);
+            for (final el in subList) {
+              if (seen.add(el)) results.add(el);
+            }
+          } catch (_) {}
+        }
+        return results;
+      }
       return pseudom.parse(_fixSelector(selector)).select(this).toList();
     } catch (_) {
       try {
@@ -357,6 +398,17 @@ extension ElementExtension on Element {
   Element? selectFirst(String selector) {
     try {
       _initPseudoSelector();
+      if (selector.contains(',')) {
+        for (final part in selector.split(',')) {
+          final trimmed = part.trim();
+          if (trimmed.isEmpty) continue;
+          try {
+            final el = pseudom.parse(_fixSelector(trimmed)).selectFirst(this);
+            if (el != null) return el;
+          } catch (_) {}
+        }
+        return null;
+      }
       return pseudom.parse(_fixSelector(selector)).selectFirst(this);
     } catch (_) {
       try {
