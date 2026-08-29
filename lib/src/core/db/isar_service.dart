@@ -1,5 +1,6 @@
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import '../logging/logger_service.dart';
 
 import 'models/category.dart';
 import 'models/chapter.dart';
@@ -112,7 +113,8 @@ class IsarService {
           .lastReadAtGreaterThan(0)
           .sortByLastReadAtDesc()
           .findAll();
-    } catch (_) {
+    } catch (e, stack) {
+      LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'Database');
       return [];
     }
   }
@@ -127,7 +129,8 @@ class IsarService {
           .sortByFetchedAtDesc()
           .limit(limit)
           .findAll();
-    } catch (_) {
+    } catch (e, stack) {
+      LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'Database');
       return [];
     }
   }
