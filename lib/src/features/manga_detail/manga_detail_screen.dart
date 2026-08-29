@@ -45,15 +45,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   String _formatChapterSubtitle(Chapter ch) {
     final parts = <String>[];
 
-    // 1. Upload / Release Date
-    if (ch.fetchedAt != null && ch.fetchedAt! > 0) {
-      final uploadTime = ch.fetchedAt! > 1000000000000
-          ? DateTime.fromMillisecondsSinceEpoch(ch.fetchedAt!)
-          : DateTime.fromMillisecondsSinceEpoch(ch.fetchedAt! * 1000);
-      parts.add(_formatRelativeTime(uploadTime));
-    }
-
-    // 2. Reading progress or page count
+    // 1. Reading progress or page count
     if (ch.pageCount > 0) {
       if (ch.lastPageRead > 0) {
         parts.add('Page ${ch.lastPageRead}/${ch.pageCount}');
@@ -64,18 +56,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       parts.add('Page ${ch.lastPageRead}');
     }
 
-    // 3. Scanlator group
+    // 2. Scanlator group
     if (ch.scanlator != null && ch.scanlator!.isNotEmpty) {
       parts.add(ch.scanlator!);
     }
 
-    if (parts.isEmpty) {
-      final nameLower = ch.name.toLowerCase();
-      if (!nameLower.contains('chapter') && !nameLower.contains('ch.') && !nameLower.contains('ep.')) {
-        final numStr = ch.chapterNumber.toString().replaceAll(RegExp(r'\.0$'), '');
-        parts.add('Ch. $numStr');
-      }
-    }
     return parts.join(' • ');
   }
 
