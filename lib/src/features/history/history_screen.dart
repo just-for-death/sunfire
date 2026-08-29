@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
@@ -117,7 +118,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                     )
                         : ListView.builder(
                             physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                            cacheExtent: 800,
+                            scrollCacheExtent: ScrollCacheExtent.pixels(800),
                             padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0, bottom: 120.0),
                       itemCount: _historyItems.length,
                       itemBuilder: (context, index) {
