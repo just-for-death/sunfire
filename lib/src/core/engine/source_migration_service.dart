@@ -94,6 +94,8 @@ class SourceMigrationService {
     var clean = name.toLowerCase();
     // Strip language suffixes like (EN), (ALL), [EN], etc.
     clean = clean.replaceAll(RegExp(r'[\(\[\{].*?[\)\]\}]'), '');
+    // Strip common domain extensions like .com, .net, .org, .me, .cc, .to, .ru, .io
+    clean = clean.replaceAll(RegExp(r'\.(com|net|org|me|cc|to|ru|io)'), '');
     // Strip non-alphanumeric characters except spaces
     clean = clean.replaceAll(RegExp(r'[^a-z0-9\s]'), '');
     // Collapse multiple whitespace to single space
