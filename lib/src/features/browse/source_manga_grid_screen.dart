@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
+import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
@@ -38,11 +39,20 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   String _selectedSort = 'Popularity';
   String _selectedStatus = 'All';
   String _selectedType = 'All';
+  
+  List<dynamic> _dynamicFilters = [];
+  bool _hasDynamicFilters = false;
 
   @override
   void initState() {
     super.initState();
     _isLatestMode = widget.isLatest;
+    _fetchFiltersAndManga();
+  }
+  
+  Future<void> _fetchFiltersAndManga() async {
+    _dynamicFilters = await QuickJsService.instance.fetchSourceFiltersLocal(widget.sourceName);
+    _hasDynamicFilters = _dynamicFilters.isNotEmpty;
     _fetchSourceManga();
   }
 
@@ -65,6 +75,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
         selectedSort: _selectedSort,
         selectedStatus: _selectedStatus,
         selectedType: _selectedType,
+        dynamicFilters: _hasDynamicFilters ? _dynamicFilters : null,
       );
     } catch (e, stack) {
       await LoggerService.instance.logError('Failed to fetch source manga: $e', exception: e, stackTrace: stack, category: 'SourceGrid');
@@ -97,9 +108,17 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                       TextButton(
                         onPressed: () {
                           setSheetState(() {
-                            _selectedSort = 'Popularity';
-                            _selectedStatus = 'All';
-                            _selectedType = 'All';
+                            if (_hasDynamicFilters) {
+                               for(var f in _dynamicFilters) {
+                                  if (f['type_name'] == 'SelectFilter' || f['type_name'] == 'SortFilter') {
+                                      f['state'] = 0;
+                                  }
+                               }
+                            } else {
+                                _selectedSort = 'Popularity';
+                                _selectedStatus = 'All';
+                                _selectedType = 'All';
+                            }
                           });
                         },
                         child: Text('Reset', style: TextStyle(color: primaryColor)),
@@ -107,73 +126,74 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                     ],
                   ),
                   const SizedBox(height: 16),
-
-                  // 1. Sort By
-                  const Text('Sort By', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: ['Popularity', 'Latest', 'Title', 'Rating'].map((s) {
-                      final isSelected = _selectedSort == s;
-                      return ChoiceChip(
-                        label: Text(s),
-                        selected: isSelected,
-                        selectedColor: primaryColor,
-                        backgroundColor: const Color(0x1F2A2A32),
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
-                        onSelected: (_) {
-                          setSheetState(() => _selectedSort = s);
-                        },
-                      );
-                    }).toList(),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // 2. Status
-                  const Text('Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: ['All', 'Ongoing', 'Completed', 'Hiatus'].map((st) {
-                      final isSelected = _selectedStatus == st;
-                      return ChoiceChip(
-                        label: Text(st),
-                        selected: isSelected,
-                        selectedColor: primaryColor,
-                        backgroundColor: const Color(0x1F2A2A32),
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
-                        onSelected: (_) {
-                          setSheetState(() => _selectedStatus = st);
-                        },
-                      );
-                    }).toList(),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // 3. Type
-                  const Text('Content Type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: ['All', 'Manga', 'Manhwa', 'Manhua', 'Comic'].map((t) {
-                      final isSelected = _selectedType == t;
-                      return ChoiceChip(
-                        label: Text(t),
-                        selected: isSelected,
-                        selectedColor: primaryColor,
-                        backgroundColor: const Color(0x1F2A2A32),
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
-                        onSelected: (_) {
-                          setSheetState(() => _selectedType = t);
-                        },
-                      );
-                    }).toList(),
-                  ),
-
+                  
+                  if (_hasDynamicFilters) ...[
+                     for (int i = 0; i < _dynamicFilters.length; i++) ...[
+                        Text((_dynamicFilters[i]['name'] ?? 'Filter').toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                        const SizedBox(height: 8),
+                        if (_dynamicFilters[i]['type_name'] == 'SelectFilter' || _dynamicFilters[i]['type_name'] == 'SortFilter')
+                           Wrap(
+                             spacing: 8,
+                             children: ((_dynamicFilters[i]['values'] as List<dynamic>?) ?? []).asMap().entries.map((entry) {
+                               final idx = entry.key;
+                               final valObj = entry.value;
+                               final isSelected = _dynamicFilters[i]['state'] == idx;
+                               return ChoiceChip(
+                                 label: Text((valObj['name'] ?? valObj['value'] ?? '').toString()),
+                                 selected: isSelected,
+                                 selectedColor: primaryColor,
+                                 backgroundColor: const Color(0x1F2A2A32),
+                                 labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                                 onSelected: (_) {
+                                   setSheetState(() => _dynamicFilters[i]['state'] = idx);
+                                 },
+                               );
+                             }).toList(),
+                           ),
+                        const SizedBox(height: 16),
+                     ]
+                  ] else ...[
+                     const Text('Sort By', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                     const SizedBox(height: 8),
+                     Wrap(
+                       spacing: 8,
+                       children: ['Popularity', 'Latest', 'Title', 'Rating'].map((s) {
+                         final isSelected = _selectedSort == s;
+                         return ChoiceChip(
+                           label: Text(s),
+                           selected: isSelected,
+                           selectedColor: primaryColor,
+                           backgroundColor: const Color(0x1F2A2A32),
+                           labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                           onSelected: (_) {
+                             setSheetState(() => _selectedSort = s);
+                           },
+                         );
+                       }).toList(),
+                     ),
+                     const SizedBox(height: 16),
+                     const Text('Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                     const SizedBox(height: 8),
+                     Wrap(
+                       spacing: 8,
+                       children: ['All', 'Ongoing', 'Completed', 'Hiatus'].map((st) {
+                         final isSelected = _selectedStatus == st;
+                         return ChoiceChip(
+                           label: Text(st),
+                           selected: isSelected,
+                           selectedColor: primaryColor,
+                           backgroundColor: const Color(0x1F2A2A32),
+                           labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                           onSelected: (_) {
+                             setSheetState(() => _selectedStatus = st);
+                           },
+                         );
+                       }).toList(),
+                     ),
+                  ],
+                  
                   const SizedBox(height: 24),
-
+                  
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
@@ -184,7 +204,9 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                       Navigator.pop(sheetContext);
                       setState(() {
                         _currentPage = 1;
-                        _isLatestMode = _selectedSort == 'Latest';
+                        if (!_hasDynamicFilters) {
+                          _isLatestMode = _selectedSort == 'Latest';
+                        }
                       });
                       _fetchSourceManga();
                     },
