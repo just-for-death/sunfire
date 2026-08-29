@@ -43,14 +43,16 @@ class ImageCacheHelper {
     } catch (_) {}
   }
 
-  static Future<void> cacheThumbnail(int mangaServerId, String url) async {
+  static Future<void> cacheThumbnail(int mangaServerId, String url, {String sourceName = ''}) async {
     if (_basePath == null) await initialize();
     final localPath = getLocalCoverPath(mangaServerId);
     if (localPath != null) return;
 
     try {
+      final headers = QuickJsService.getImageHeaders(sourceName, url);
       final client = HttpClient();
       final req = await client.getUrl(Uri.parse(url));
+      headers.forEach((k, v) => req.headers.set(k, v));
       final resp = await req.close();
       if (resp.statusCode == 200) {
         final bytes = await resp.fold<List<int>>([], (p, c) => p..addAll(c));
@@ -115,7 +117,7 @@ class MangaCoverImage extends StatelessWidget {
 
       // Proactively cache to local storage in background
       if (mangaServerId > 0) {
-        ImageCacheHelper.cacheThumbnail(mangaServerId, thumbnailUrl!);
+        ImageCacheHelper.cacheThumbnail(mangaServerId, thumbnailUrl!, sourceName: effectiveSource);
       }
 
       return Image.network(
