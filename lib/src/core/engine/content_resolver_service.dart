@@ -68,6 +68,15 @@ class ContentResolverService {
       }
     }
 
+    // Map effectiveSourceName to installed local extension name immediately
+    if (effectiveSourceName != null) {
+      final installedNames = QuickJsService.instance.getInstalledExtensionNames();
+      final matchedName = SourceMigrationService.instance.matchServerSourceToLocalJs(effectiveSourceName, installedNames);
+      if (matchedName != null) {
+        effectiveSourceName = matchedName;
+      }
+    }
+
     // Retrieve from local DB if missing
     if (effectiveChapterUrl == null || effectiveChapterUrl.isEmpty || effectiveSourceName == null) {
       try {
@@ -79,6 +88,13 @@ class ContentResolverService {
           if (effectiveSourceName == null) {
             final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
             effectiveSourceName = m?.sourceName;
+            if (effectiveSourceName != null) {
+              final installedNames = QuickJsService.instance.getInstalledExtensionNames();
+              final matchedName = SourceMigrationService.instance.matchServerSourceToLocalJs(effectiveSourceName, installedNames);
+              if (matchedName != null) {
+                effectiveSourceName = matchedName;
+              }
+            }
           }
         }
       } catch (_) {}
@@ -91,23 +107,13 @@ class ContentResolverService {
         if (ch != null) {
           final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
           if (m != null) {
-            if (m.url.isEmpty) {
-              final searchResults = await QuickJsService.instance.fetchSourceMangaLocal(
-                effectiveSourceName,
-                searchQuery: m.title,
-              );
-              if (searchResults.isNotEmpty) {
-                final found = searchResults.first;
-                final link = (found['link'] ?? found['url'] ?? '').toString();
-                if (link.isNotEmpty) {
-                  m.url = link;
-                  await IsarService.instance.saveManga(m);
-                }
+            final mangaLookup = m.url.isNotEmpty ? m.url : m.title;
+            final localData = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSourceName, mangaLookup);
+            if (localData.isNotEmpty) {
+              if (m.url.isEmpty && localData['url'] != null) {
+                m.url = localData['url'].toString();
+                await IsarService.instance.saveManga(m);
               }
-            }
-
-            if (m.url.isNotEmpty) {
-              final localData = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSourceName, m.url);
               final chList = (localData['chapters'] ?? localData['chapterList'] ?? localData['epList'] ?? localData['episodes']) as List<dynamic>?;
               if (chList != null && chList.isNotEmpty) {
                 // Pre-extract chapter numbers from scraped list
@@ -163,15 +169,6 @@ class ContentResolverService {
           }
         }
       } catch (_) {}
-    }
-
-    // Map effectiveSourceName to installed local extension name if available
-    if (effectiveSourceName != null) {
-      final installedNames = QuickJsService.instance.getInstalledExtensionNames();
-      final matchedName = SourceMigrationService.instance.matchServerSourceToLocalJs(effectiveSourceName, installedNames);
-      if (matchedName != null) {
-        effectiveSourceName = matchedName;
-      }
     }
 
     // ── PRIORITY 2: LOCAL EXTENSION SCRAPER (Mangayomi / QuickJS) ─────────
