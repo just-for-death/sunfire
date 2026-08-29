@@ -103,10 +103,15 @@ class IsarService {
 
   Future<List<Chapter>> getReadingHistory() async {
     try {
-      final all = await _isar.chapters.where().findAll();
-      final list = all.where((c) => c.isRead || c.lastPageRead > 0 || (c.lastReadAt != null && c.lastReadAt! > 0)).toList();
-      list.sort((a, b) => (b.lastReadAt ?? 0).compareTo(a.lastReadAt ?? 0));
-      return list;
+      return await _isar.chapters
+          .filter()
+          .isReadEqualTo(true)
+          .or()
+          .lastPageReadGreaterThan(0)
+          .or()
+          .lastReadAtGreaterThan(0)
+          .sortByLastReadAtDesc()
+          .findAll();
     } catch (_) {
       return [];
     }
@@ -117,9 +122,11 @@ class IsarService {
   /// the Updates tab fully without any network or join.
   Future<List<Chapter>> getRecentChapters({int limit = 100}) async {
     try {
-      final all = await _isar.chapters.where().findAll();
-      all.sort((a, b) => (b.fetchedAt ?? b.lastReadAt ?? 0).compareTo(a.fetchedAt ?? a.lastReadAt ?? 0));
-      return all.take(limit).toList();
+      return await _isar.chapters
+          .where()
+          .sortByFetchedAtDesc()
+          .limit(limit)
+          .findAll();
     } catch (_) {
       return [];
     }
