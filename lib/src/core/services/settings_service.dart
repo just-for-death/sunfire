@@ -16,6 +16,13 @@ class SettingsService extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
   }
 
+  // ── MANGA DETAILS ────────────────────────────────────────
+  bool get chapterSortAscending => _prefs?.getBool('chapter_sort_ascending') ?? false;
+  set chapterSortAscending(bool value) {
+    _prefs?.setBool('chapter_sort_ascending', value);
+    notifyListeners();
+  }
+
   // ── ONBOARDING & SERVER ──────────────────────────────────
   bool get onboardingCompleted => _prefs?.getBool('sunfire_onboarding_completed') ?? _prefs?.getBool('onboarding_completed') ?? false;
   set onboardingCompleted(bool value) {

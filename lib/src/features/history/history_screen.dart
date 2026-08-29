@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 
+
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
