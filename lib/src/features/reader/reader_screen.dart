@@ -283,11 +283,29 @@ class _ReaderScreenState extends State<ReaderScreen> {
         isLocalFiles: false,
       );
     } else {
-      resolved = await ContentResolverService.instance.resolveChapterPages(
-        chapterServerId: chapterId,
-        chapterUrl: chapterUrlToResolve,
-        sourceName: sourceName,
-      );
+      try {
+        resolved = await ContentResolverService.instance.resolveChapterPages(
+          chapterServerId: chapterId,
+          chapterUrl: chapterUrlToResolve,
+          sourceName: sourceName,
+        ).timeout(const Duration(seconds: 30), onTimeout: () {
+          debugPrint('[Reader] ⏱️ Resolution timed out for chapter $chapterId');
+          return ChapterPagesResult(
+            pageUrls: [],
+            source: ContentSourceType.fallback,
+            effectiveSourceName: sourceName,
+            isLocalFiles: false,
+          );
+        });
+      } catch (e) {
+        debugPrint('[Reader] ❌ Resolution threw: $e');
+        resolved = ChapterPagesResult(
+          pageUrls: [],
+          source: ContentSourceType.fallback,
+          effectiveSourceName: sourceName,
+          isLocalFiles: false,
+        );
+      }
     }
 
     _sourceName = resolved.effectiveSourceName ?? sourceName;
