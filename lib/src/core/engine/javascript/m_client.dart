@@ -46,6 +46,7 @@ class MClient {
         MCookieManager(reqcopyWith),
         LoggerInterceptor(showCloudFlareError),
       ],
+      retryPolicy: ResolveCloudFlareChallenge(showCloudFlareError),
     );
   }
 
