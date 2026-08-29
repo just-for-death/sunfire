@@ -67,7 +67,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   String _formatRelativeTime(DateTime date) {
     final now = DateTime.now();
     final diff = now.difference(date);
-    if (diff.isNegative) return 'Just now';
+    if (diff.isNegative) return 'Today';
     if (diff.inDays == 0) {
       if (diff.inHours == 0) {
         if (diff.inMinutes <= 1) return 'Just now';
@@ -82,7 +82,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       final months = (diff.inDays / 30).floor();
       return '${months}mo ago';
     } else {
-      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final years = (diff.inDays / 365).floor();
+      return '${years}y ago';
     }
   }
 
@@ -294,10 +295,20 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   List<Chapter> _mergeAndDeduplicateChapters(List<Chapter> list) {
     final map = <String, Chapter>{};
+    final mangaTitleLower = _manga?.title.trim().toLowerCase() ?? '';
 
     for (final ch in list) {
       var cleanName = ch.name.trim();
+
+      // Strip redundant leading manga title prefix if present (e.g. Mangahere)
+      if (mangaTitleLower.isNotEmpty && cleanName.toLowerCase().startsWith(mangaTitleLower)) {
+        final stripped = cleanName.substring(mangaTitleLower.length).replaceAll(RegExp(r'^[\s\-–—:]+'), '').trim();
+        if (stripped.isNotEmpty) cleanName = stripped;
+      }
+
+      // Strip redundant trailing (ch. 1115) or (Ch. 1115) suffix
       cleanName = cleanName.replaceAll(RegExp(r'\s*\([Cc]h\.?\s*\d+\)$'), '').trim();
+      if (cleanName.isEmpty) cleanName = ch.name.trim();
       ch.name = cleanName;
 
       final extractedNum = _extractChapterNumber(cleanName, 0, list.length);
