@@ -69,9 +69,14 @@ class LoggerService {
 
   void installGlobalErrorHooks() {
     FlutterError.onError = (FlutterErrorDetails details) {
+      final msg = details.exceptionAsString();
+      // Filter out noisy Linux GTK keyboard modifier assertion from legacy RawKeyboard
+      if (msg.contains('raw_keyboard.dart') || msg.contains('keysPressed.isNotEmpty')) {
+        return;
+      }
       FlutterError.presentError(details);
       logError(
-        details.exceptionAsString(),
+        msg,
         exception: details.exception,
         stackTrace: details.stack,
         category: 'FlutterError',
@@ -79,8 +84,12 @@ class LoggerService {
     };
 
     PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+      final msg = error.toString();
+      if (msg.contains('raw_keyboard.dart') || msg.contains('keysPressed.isNotEmpty')) {
+        return true;
+      }
       logError(
-        error.toString(),
+        msg,
         exception: error,
         stackTrace: stack,
         category: 'PlatformError',
