@@ -268,23 +268,30 @@ class QuickJsService {
     return _canonicalDisplayNames.values.toList();
   }
 
+  static final Map<String, Map<String, String>> _headersCache = {};
+
   static Map<String, String> getImageHeaders(String sourceOrUrl, [String? imageUrl]) {
     final targetUrl = (imageUrl != null && imageUrl.isNotEmpty) ? imageUrl : sourceOrUrl;
     final headers = <String, String>{
       'User-Agent': MClient.userAgent,
     };
 
-    // 1. Query extension headers dynamically from the installed JS source
+    // 1. Query extension headers dynamically from the installed JS source (with memory caching)
     if (sourceOrUrl.isNotEmpty) {
-      try {
-        final jsCode = instance.getExtensionCode(sourceOrUrl);
-        if (jsCode != null && jsCode.isNotEmpty) {
-          final extHeaders = instance.getSourceHeaders(jsCode);
-          if (extHeaders.isNotEmpty) {
-            headers.addAll(extHeaders);
+      if (_headersCache.containsKey(sourceOrUrl)) {
+        headers.addAll(_headersCache[sourceOrUrl]!);
+      } else {
+        try {
+          final jsCode = instance.getExtensionCode(sourceOrUrl);
+          if (jsCode != null && jsCode.isNotEmpty) {
+            final extHeaders = instance.getSourceHeaders(jsCode);
+            if (extHeaders.isNotEmpty) {
+              _headersCache[sourceOrUrl] = extHeaders;
+              headers.addAll(extHeaders);
+            }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
     }
 
     // 2. Attach domain / Cloudflare cookies from MClient
@@ -304,12 +311,18 @@ class QuickJsService {
   }
 
   Map<String, String> getSourceHeaders(String jsCode) {
+    final cacheKey = jsCode.hashCode.toString();
+    if (_headersCache.containsKey(cacheKey)) {
+      return _headersCache[cacheKey]!;
+    }
     final service = JsExtensionService(
       sourceMeta: extractSourceMetadata(jsCode),
       sourceCode: jsCode,
     );
     try {
-      return service.getHeaders();
+      final h = service.getHeaders();
+      _headersCache[cacheKey] = h;
+      return h;
     } catch (_) {
       return {};
     } finally {

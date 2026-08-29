@@ -51,6 +51,8 @@ class ImageCacheHelper {
     try {
       final headers = QuickJsService.getImageHeaders(sourceName, url);
       final client = HttpClient();
+      client.badCertificateCallback = (cert, host, port) => true;
+      client.connectionTimeout = const Duration(seconds: 10);
       final req = await client.getUrl(Uri.parse(url));
       headers.forEach((k, v) => req.headers.set(k, v));
       final resp = await req.close();
