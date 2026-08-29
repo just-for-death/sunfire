@@ -472,16 +472,30 @@ class QuickJsService {
       return {};
     }
 
+    var targetUrl = mangaUrl.trim();
+    // If not a URL or relative path, search source by title first
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('/')) {
+      try {
+        final searchResults = await fetchSourceMangaLocal(sourceName, searchQuery: targetUrl);
+        if (searchResults.isNotEmpty) {
+          final link = (searchResults.first['link'] ?? searchResults.first['url'])?.toString();
+          if (link != null && link.isNotEmpty) {
+            targetUrl = link;
+          }
+        }
+      } catch (_) {}
+    }
+
     final service = JsExtensionService(
       sourceMeta: extractSourceMetadata(jsCode),
       sourceCode: jsCode,
     );
 
     try {
-      final result = await service.getDetail(mangaUrl);
+      final result = await service.getDetail(targetUrl);
       return result;
     } catch (e) {
-      await LoggerService.instance.logWarning('Local getDetail failed for $sourceName ($mangaUrl): $e', 'QuickJS');
+      await LoggerService.instance.logWarning('Local getDetail failed for $sourceName ($targetUrl): $e', 'QuickJS');
     } finally {
       service.dispose();
     }
