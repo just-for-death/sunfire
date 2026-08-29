@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
-import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
+import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 
@@ -447,16 +447,14 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                       ),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(16),
-                                        child: thumb != null && thumb.isNotEmpty
-                                            ? Image.network(
-                                                thumb,
-                                                headers: QuickJsService.getImageHeaders(widget.sourceName, thumb),
-                                                width: double.infinity,
-                                                height: double.infinity,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.book_rounded, color: Colors.grey)),
-                                              )
-                                            : const Center(child: Icon(Icons.book_rounded, color: Colors.grey)),
+                                        child: MangaCoverImage(
+                                          mangaServerId: id,
+                                          thumbnailUrl: thumb,
+                                          sourceName: widget.sourceName,
+                                          width: double.infinity,
+                                          height: double.infinity,
+                                          fit: BoxFit.cover,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -527,7 +525,14 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                   if (thumb != null && thumb.isNotEmpty)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(thumb, width: 40, height: 55, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded)),
+                      child: MangaCoverImage(
+                        mangaServerId: mangaId,
+                        thumbnailUrl: thumb,
+                        sourceName: widget.sourceName,
+                        width: 40,
+                        height: 55,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   const SizedBox(width: 12),
                   Expanded(

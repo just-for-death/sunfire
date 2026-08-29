@@ -253,7 +253,7 @@ class SyncEngine {
         // Pre-cache cover images to local disk for offline resilience
         for (final m in serverMangas) {
           if (m.thumbnailUrl != null && m.thumbnailUrl!.isNotEmpty) {
-            ImageCacheHelper.cacheThumbnail(m.serverId, m.thumbnailUrl!);
+            ImageCacheHelper.cacheThumbnail(m.serverId, m.thumbnailUrl!, sourceName: m.sourceName);
           }
         }
 

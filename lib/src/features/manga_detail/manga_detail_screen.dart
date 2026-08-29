@@ -146,8 +146,14 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
     }
 
-    // 3. Offline / Local Scraper: Scrape chapters directly via QuickJS if empty, missing URLs, or server offline
-    if ((_chapters.isEmpty || _chapters.any((c) => c.url.isEmpty)) && _manga != null && _manga!.sourceName.isNotEmpty) {
+    // 3. Offline / Local Scraper: Scrape chapters directly via QuickJS ONLY if:
+    //    - Chapters list is completely empty, OR
+    //    - Every chapter has an empty name (truly invalid data)
+    // NOTE: Server chapters from GraphQL intentionally have no page URLs — that's normal.
+    //       URLs are resolved lazily at read time via ContentResolverService.
+    final chaptersAreTrulyMissing = _chapters.isEmpty ||
+        _chapters.every((c) => c.name.trim().isEmpty);
+    if (chaptersAreTrulyMissing && _manga != null && _manga!.sourceName.isNotEmpty) {
       try {
         final localData = await QuickJsService.instance.fetchMangaDetailsLocal(
           _manga!.sourceName,
