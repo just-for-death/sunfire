@@ -990,7 +990,12 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         ),
                         IconButton(
                           icon: Icon(_sortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, color: primaryColor),
-                          onPressed: () => setState(() => _sortAscending = !_sortAscending),
+                          onPressed: () {
+                            setState(() {
+                              _sortAscending = !_sortAscending;
+                              SettingsService.instance.chapterSortAscending = _sortAscending;
+                            });
+                          },
                         ),
                       ],
                     ),
@@ -1195,19 +1200,24 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0x33FFFFFF),
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(46),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  onPressed: _continueReading,
-                  icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: 24),
-                  label: const Text(
-                    'Continue Reading',
-                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                  ),
+                Builder(
+                  builder: (context) {
+                    final hasReadAny = _chapters.any((c) => c.isRead || c.lastPageRead > 0);
+                    return ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0x33FFFFFF),
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(46),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: _continueReading,
+                      icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: 24),
+                      label: Text(
+                        hasReadAny ? 'Continue Reading' : 'Start Reading',
+                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                    );
+                  }
                 ),
                 const SizedBox(height: 16),
                 if (manga.genres.isNotEmpty) ...[
@@ -1283,7 +1293,12 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         ),
                         IconButton(
                           icon: Icon(_sortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, color: primaryColor),
-                          onPressed: () => setState(() => _sortAscending = !_sortAscending),
+                          onPressed: () {
+                            setState(() {
+                              _sortAscending = !_sortAscending;
+                              SettingsService.instance.chapterSortAscending = _sortAscending;
+                            });
+                          },
                         ),
                       ],
                     ),
@@ -1412,6 +1427,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   const Padding(
                     padding: EdgeInsets.only(right: 4.0),
                     child: Icon(Icons.phone_android_rounded, color: Colors.greenAccent, size: 18),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.download_rounded, color: Colors.grey, size: 20),
+                    onPressed: () {
+                      DownloadManagerService.instance.enqueueLocalDownload(chapterId: ch.serverId, mangaId: _manga!.serverId, chapterName: ch.name, mangaTitle: _manga!.title);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Queued ${ch.name} for local download')));
+                      setState(() {});
+                    },
                   ),
                 if (DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId) || ch.isDownloaded)
                   const Padding(
