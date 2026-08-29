@@ -204,12 +204,16 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               // Build lookup map keyed by URL and by name for fuzzy matching
               final progressByUrl = <String, Chapter>{};
               final progressByName = <String, Chapter>{};
+              final progressByNum = <double, Chapter>{};
               for (final existing in existingChapters) {
                 if (existing.url.isNotEmpty) progressByUrl[existing.url] = existing;
                 progressByName[existing.name.trim().toLowerCase()] = existing;
+                if (existing.chapterNumber > 0) progressByNum[existing.chapterNumber] = existing;
               }
               for (final ch in fetched) {
-                final match = progressByUrl[ch.url] ?? progressByName[ch.name.trim().toLowerCase()];
+                final match = progressByUrl[ch.url] ??
+                    (ch.chapterNumber > 0 ? progressByNum[ch.chapterNumber] : null) ??
+                    progressByName[ch.name.trim().toLowerCase()];
                 if (match != null) {
                   ch.isRead = match.isRead;
                   ch.lastPageRead = match.lastPageRead;

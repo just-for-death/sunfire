@@ -172,15 +172,39 @@ class DownloadManagerService extends ChangeNotifier {
       final file = File('${chapterDir.path}/page_${(i + 1).toString().padLeft(3, '0')}.jpg');
 
       final headers = QuickJsService.getImageHeaders(effectiveSource, pageUrl);
-      final response = await _dio.get<List<int>>(
-        pageUrl,
-        options: Options(
-          headers: headers,
-          responseType: ResponseType.bytes,
-        ),
-      );
-      if (response.data != null && response.data!.isNotEmpty) {
-        await file.writeAsBytes(response.data!);
+      List<int>? pageBytes;
+
+      try {
+        final response = await _dio.get<List<int>>(
+          pageUrl,
+          options: Options(
+            headers: headers,
+            responseType: ResponseType.bytes,
+          ),
+        );
+        if (response.data != null && response.data!.isNotEmpty) {
+          pageBytes = response.data;
+        }
+      } catch (_) {}
+
+      // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl
+      if ((pageBytes == null || pageBytes.isEmpty) && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
+        try {
+          final args = <String>['-s', '-L', '--max-time', '20'];
+          headers.forEach((k, v) => args.addAll(['-H', '$k: $v']));
+          args.add(pageUrl);
+          final res = await Process.run('curl', args, stdoutEncoding: null);
+          if (res.exitCode == 0) {
+            final b = res.stdout as List<int>;
+            if (b.length > 200) {
+              pageBytes = b;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (pageBytes != null && pageBytes.isNotEmpty) {
+        await file.writeAsBytes(pageBytes);
       }
 
       task.progress = (i + 1) / totalPages;
