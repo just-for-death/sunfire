@@ -43,6 +43,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   
   List<dynamic> _dynamicFilters = [];
   bool _hasDynamicFilters = false;
+  bool _isFilterApplied = false;
 
   @override
   void initState() {
@@ -76,7 +77,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
         selectedSort: _selectedSort,
         selectedStatus: _selectedStatus,
         selectedType: _selectedType,
-        dynamicFilters: _hasDynamicFilters ? _dynamicFilters : null,
+        dynamicFilters: (_hasDynamicFilters && (_isFilterApplied || _searchQuery.trim().isNotEmpty)) ? _dynamicFilters : null,
       );
     } catch (e, stack) {
       await LoggerService.instance.logError('Failed to fetch source manga: $e', exception: e, stackTrace: stack, category: 'SourceGrid');
@@ -205,8 +206,10 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                       Navigator.pop(sheetContext);
                       setState(() {
                         _currentPage = 1;
+                        _isFilterApplied = true;
                         if (!_hasDynamicFilters) {
                           _isLatestMode = _selectedSort == 'Latest';
+                          // Legacy filters apply via the same _isFilterApplied flag
                         }
                       });
                       _fetchSourceManga();
