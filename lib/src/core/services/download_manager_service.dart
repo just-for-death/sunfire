@@ -71,7 +71,9 @@ class DownloadManagerService extends ChangeNotifier {
         }
       }
       notifyListeners();
-    } catch (_) {}
+    } catch (e) {
+      LoggerService.instance.logError('deleteLocalDownload error: $e', category: 'DownloadManager');
+    }
   }
 
   bool isChapterDownloadedLocally(int chapterId) => _downloadedLocalChapterIds.contains(chapterId);
@@ -103,6 +105,7 @@ class DownloadManagerService extends ChangeNotifier {
       chapterName: chapterName,
       mangaTitle: mangaTitle,
     );
+    _localTasks.removeWhere((t) => t.chapterId == chapterId && t.status == LocalDownloadStatus.failed);
     _localTasks.add(task);
     notifyListeners();
 
@@ -167,48 +170,71 @@ class DownloadManagerService extends ChangeNotifier {
 
     final totalPages = rawPages.length;
     final effectiveSource = resolved.effectiveSourceName ?? sourceName ?? '';
-    for (int i = 0; i < totalPages; i++) {
-      final pageUrl = rawPages[i];
-      final file = File('${chapterDir.path}/page_${(i + 1).toString().padLeft(3, '0')}.jpg');
 
-      final headers = QuickJsService.getImageHeaders(effectiveSource, pageUrl);
-      List<int>? pageBytes;
+    // Download pages with bounded concurrency instead of one-at-a-time.
+    // Each page fetch is dominated by network round-trip latency, not CPU,
+    // so running several in parallel cuts total chapter time roughly by the
+    // concurrency factor (e.g. a 50-page chapter at ~1s/page sequentially
+    // takes ~50s; at 5-way concurrency it takes closer to ~10s).
+    const concurrency = 5;
+    var completed = 0;
+    for (var start = 0; start < totalPages; start += concurrency) {
+      final end = (start + concurrency < totalPages) ? start + concurrency : totalPages;
+      if (task.status == LocalDownloadStatus.failed) throw Exception('Cancelled');
+      await Future.wait(List.generate(end - start, (offset) async {
+        final i = start + offset;
+        await _downloadSinglePage(chapterDir, effectiveSource, rawPages[i], i);
+        completed++;
+        task.progress = completed / totalPages;
+        notifyListeners();
+      }));
+    }
+    final existingFiles = chapterDir.listSync().whereType<File>().toList();
+    if (existingFiles.length < totalPages) {
+      throw Exception('Incomplete download: only ${existingFiles.length}/$totalPages pages saved');
+    }
+  }
 
+  Future<void> _downloadSinglePage(Directory chapterDir, String effectiveSource, String pageUrl, int index) async {
+    final file = File('${chapterDir.path}/page_${(index + 1).toString().padLeft(3, '0')}.jpg');
+    final headers = QuickJsService.getImageHeaders(effectiveSource, pageUrl);
+    List<int>? pageBytes;
+
+    try {
+      final response = await _dio.get<List<int>>(
+        pageUrl,
+        options: Options(
+          headers: headers,
+          responseType: ResponseType.bytes,
+        ),
+      );
+      if (response.data != null && response.data!.isNotEmpty) {
+        pageBytes = response.data;
+      }
+    } catch (e) {
+      LoggerService.instance.logError('deleteLocalDownload error: $e', category: 'DownloadManager');
+    }
+
+    // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl
+    if ((pageBytes == null || pageBytes.isEmpty) && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
       try {
-        final response = await _dio.get<List<int>>(
-          pageUrl,
-          options: Options(
-            headers: headers,
-            responseType: ResponseType.bytes,
-          ),
-        );
-        if (response.data != null && response.data!.isNotEmpty) {
-          pageBytes = response.data;
-        }
-      } catch (_) {}
-
-      // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl
-      if ((pageBytes == null || pageBytes.isEmpty) && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-        try {
-          final args = <String>['-s', '-L', '--max-time', '20'];
-          headers.forEach((k, v) => args.addAll(['-H', '$k: $v']));
-          args.add(pageUrl);
-          final res = await Process.run('curl', args, stdoutEncoding: null);
-          if (res.exitCode == 0) {
-            final b = res.stdout as List<int>;
-            if (b.length > 200) {
-              pageBytes = b;
-            }
+        final args = <String>['-s', '-L', '--max-time', '20'];
+        headers.forEach((k, v) => args.addAll(['-H', '$k: $v']));
+        args.add(pageUrl);
+        final res = await Process.run('curl', args, stdoutEncoding: null);
+        if (res.exitCode == 0) {
+          final b = res.stdout as List<int>;
+          if (b.length > 200) {
+            pageBytes = b;
           }
-        } catch (_) {}
-      }
+        }
+      } catch (e) {
+      LoggerService.instance.logError('deleteLocalDownload error: $e', category: 'DownloadManager');
+    }
+    }
 
-      if (pageBytes != null && pageBytes.isNotEmpty) {
-        await file.writeAsBytes(pageBytes);
-      }
-
-      task.progress = (i + 1) / totalPages;
-      notifyListeners();
+    if (pageBytes != null && pageBytes.isNotEmpty) {
+      await file.writeAsBytes(pageBytes);
     }
   }
 
@@ -228,7 +254,9 @@ class DownloadManagerService extends ChangeNotifier {
         await IsarService.instance.saveChapter(ch);
       }
       notifyListeners();
-    } catch (_) {}
+    } catch (e) {
+      LoggerService.instance.logError('deleteLocalDownload error: $e', category: 'DownloadManager');
+    }
   }
 
   void cancelLocalDownload(int chapterId) {

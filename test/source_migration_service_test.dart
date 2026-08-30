@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sunfire/src/core/db/models/manga.dart';
 import 'package:sunfire/src/core/engine/source_migration_service.dart';
 
@@ -7,6 +9,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late SourceMigrationService migrationService;
+
+
 
   setUp(() {
     migrationService = SourceMigrationService.instance;
@@ -236,7 +240,7 @@ void main() {
 
       await migrationService.markOnboardingCompleted(
         serverUrl: 'http://192.168.1.100:4567',
-        authHeader: 'Bearer test_token_123',
+        authHeader: null,
         selectedRepos: ['m2k3a', 'Mallyd11', 'Swakshan'],
         prefs: prefs,
       );
@@ -244,7 +248,6 @@ void main() {
       final isCompleted = await migrationService.isOnboardingCompleted(prefs);
       expect(isCompleted, isTrue);
       expect(prefs.getString(SourceMigrationService.keyServerUrl), equals('http://192.168.1.100:4567'));
-      expect(prefs.getString(SourceMigrationService.keyServerAuth), equals('Bearer test_token_123'));
       expect(
         prefs.getStringList(SourceMigrationService.keySelectedRepos),
         equals(['m2k3a', 'Mallyd11', 'Swakshan']),
