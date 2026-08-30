@@ -1,7 +1,27 @@
+import 'dart:ffi';
 import 'dart:io';
+import 'package:ffi/ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/engine/javascript/m_client.dart';
 import 'package:sunfire/src/core/engine/quickjs_service.dart';
+
+const int _rtldNow = 2;
+const int _rtldGlobal = 0x100;
+
+typedef _DlopenNative = Pointer Function(Pointer<Utf8> filename, Int32 flag);
+typedef _DlopenDart = Pointer Function(Pointer<Utf8> filename, int flag);
+
+void _loadQuickJsPluginGlobally(String path) {
+  final libc = DynamicLibrary.process();
+  final dlopen = libc.lookupFunction<_DlopenNative, _DlopenDart>('dlopen');
+  final pathPtr = path.toNativeUtf8();
+  try {
+    final handle = dlopen(pathPtr, _rtldNow | _rtldGlobal);
+    if (handle == nullptr) throw StateError('dlopen failed for $path');
+  } finally {
+    calloc.free(pathPtr);
+  }
+}
 
 /// Comprehensive Extension Integration Test Suite
 /// This test suite performs real-world testing of all manga extensions
@@ -13,6 +33,13 @@ void main() {
   late QuickJsService quickJs;
 
   setUpAll(() async {
+    HttpOverrides.global = null;
+    try {
+      _loadQuickJsPluginGlobally(
+        '/home/zoro/Documents/Projects/manga/sunfire/build/linux/x64/debug/bundle/lib/libflutter_qjs_plugin.so',
+      );
+    } catch (_) {}
+
     quickJs = QuickJsService.instance;
     await quickJs.initialize();
     
