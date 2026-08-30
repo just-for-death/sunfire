@@ -5,6 +5,7 @@ import '../../core/engine/repo_manager.dart';
 import '../../core/engine/source_migration_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/settings_service.dart';
+import '../../core/sync/background_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/websocket_service.dart';
@@ -117,11 +118,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() {
       _isHydrating = true;
       _hydrationStep = 1;
-      _sourcesStatusText = 'Fetching installed server sources and matching local JS scrapers...';
+      _sourcesStatusText = 'Installing all available extensions from repositories...';
     });
 
     try {
-      // ── STEP 1: HYDRATE & MATCH SOURCES ──
+      // ── STEP 1: Install ALL English/universal extensions from all repos ──
+      // This ensures the device has 100% of available scrapers, not just the
+      // ones the Suwayomi server currently has installed.
+      final totalInstalled = await RepoManager.instance.downloadAndInstallAllRepoExtensions(
+        userRepoUrls: _userRepoUrls,
+      );
+
+      setState(() {
+        _sourcesStatusText = 'Matching installed extensions to server sources...';
+      });
+
+      // ── STEP 1b: Fetch server sources & match them to local JS ──
       final List<ServerSourceItem> serverSources = [];
       if (GraphQLClientService.instance.isConfigured) {
         final sourcesData = await GraphQLClientService.instance
@@ -143,7 +155,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         }
       }
 
-      // Download and install JS scrapers ONLY for installed server sources
+      // Also install server-matched sources in case they weren't in the repo index
       final installedSources = await RepoManager.instance.downloadAndInstallMatchingSources(
         serverSourceNames: serverSources.map((s) => s.name).toList(),
         userRepoUrls: _userRepoUrls,
@@ -156,7 +168,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
       setState(() {
         _matchedSourcesCount = migrationResult.matchedSources.length;
-        _sourcesStatusText = '✓ Replicated ${migrationResult.matchedSources.length} sources to Local JS (${migrationResult.serverOnlySources.length} server fallbacks)';
+        _sourcesStatusText =
+            '✓ Installed $totalInstalled extensions locally (${migrationResult.matchedSources.length} matched to server, ${migrationResult.serverOnlySources.length} server fallbacks)';
         _hydrationStep = 2;
         _libraryStatusText = 'Fetching complete library manga and caching chapters in Isar DB...';
       });
@@ -216,6 +229,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (cleanUrl.isNotEmpty) {
       GraphQLClientService.instance.initialize(cleanUrl, authToken: auth);
       SyncEngine.instance.initialize();
+      await BackgroundService.instance.initialize();
     }
 
     if (mounted) {
