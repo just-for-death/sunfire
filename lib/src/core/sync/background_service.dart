@@ -72,7 +72,6 @@ class BackgroundService {
     try {
       await Workmanager().initialize(
         callbackDispatcher,
-        isInDebugMode: false,
       );
 
       // Register periodic sync — Android minimum interval is 15 minutes.
@@ -86,7 +85,7 @@ class BackgroundService {
           requiresBatteryNotLow: false,
           requiresCharging: false,
         ),
-        existingWorkPolicy: ExistingWorkPolicy.keep,
+        existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
         backoffPolicy: BackoffPolicy.exponential,
         backoffPolicyDelay: const Duration(minutes: 2),
       );

@@ -145,6 +145,11 @@ class QuickJsService {
       _installedIcons[cleanName] = iconUrl;
     }
 
+    // Invalidate any previously cached runtime instance so updated JS takes effect immediately
+    _invalidateRuntime(cleanName);
+    _invalidateRuntime(displayName);
+    _invalidateRuntime(sourceName);
+
     try {
       final appDir = await getApplicationDocumentsDirectory();
       final extDir = Directory('${appDir.path}/extensions');
@@ -212,6 +217,7 @@ class QuickJsService {
       _canonicalDisplayNames.remove(k);
       _installedVersions.remove(k);
       _installedIcons.remove(k);
+      _invalidateRuntime(k);
     }
     try {
       final appDir = await getApplicationDocumentsDirectory();

@@ -150,12 +150,15 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       int cmp = 0;
       if (_sortBy == 'Title') {
         cmp = a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        return _isSortAscending ? cmp : -cmp;
       } else if (_sortBy == 'Unread') {
         cmp = (b.unreadCount ?? 0).compareTo(a.unreadCount ?? 0);
+        return _isSortAscending ? cmp : -cmp;
       } else if (_sortBy == 'Recent') {
         cmp = (b.inLibraryAt ?? 0).compareTo(a.inLibraryAt ?? 0);
+        return _isSortAscending ? cmp : -cmp;
       }
-      return _isSortAscending ? -cmp : cmp;
+      return cmp;
     });
 
     return list;
