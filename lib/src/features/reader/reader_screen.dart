@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -54,6 +55,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   final ScrollController _scrollController = ScrollController();
   late PageController _pageController;
+  Timer? _progressDebounceTimer;
 
   @override
   void initState() {
@@ -218,6 +220,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   void dispose() {
+    _progressDebounceTimer?.cancel();
+    if (_chapter != null) {
+      _updateProgress(_currentPage);
+    }
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _focusNode.dispose();
     _scrollController.removeListener(_onVerticalScroll);
@@ -376,15 +382,28 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final computedPage = ((pageRatio * (_pageUrls.length - 1)) + 1).round();
 
     if (computedPage != _currentPage) {
-      setState(() => _currentPage = computedPage);
-      _updateProgress(computedPage);
+      _currentPage = computedPage;
+      if (_showControls && mounted) {
+        setState(() {});
+      }
+      _debouncedUpdateProgress(computedPage);
     }
   }
 
   void _onPageChanged(int index) {
     final page = index + 1;
-    setState(() => _currentPage = page);
-    _updateProgress(page);
+    _currentPage = page;
+    if (_showControls && mounted) {
+      setState(() {});
+    }
+    _debouncedUpdateProgress(page);
+  }
+
+  void _debouncedUpdateProgress(int page) {
+    _progressDebounceTimer?.cancel();
+    _progressDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      _updateProgress(page);
+    });
   }
 
   void _updateProgress(int page) {
@@ -700,6 +719,105 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
+  void _showChapterSelectorSheet() {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final currentIndex = _siblingChapters.indexWhere((c) => c.serverId == _chapter?.serverId);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF18181D),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.65,
+          minChildSize: 0.35,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (context, scrollController) {
+            if (currentIndex > 0) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (scrollController.hasClients) {
+                  final targetOffset = (currentIndex * 58.0).clamp(0.0, scrollController.position.maxScrollExtent);
+                  scrollController.jumpTo(targetOffset);
+                }
+              });
+            }
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              child: Column(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Chapters', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text('${_siblingChapters.length} Total', style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                      itemCount: _siblingChapters.length,
+                      itemBuilder: (context, index) {
+                        final ch = _siblingChapters[index];
+                        final isCurrent = ch.serverId == _chapter?.serverId;
+                        return Container(
+                          margin: const EdgeInsets.symmetric(vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isCurrent ? primaryColor.withValues(alpha: 0.15) : const Color(0x1F2A2A32),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isCurrent ? primaryColor.withValues(alpha: 0.6) : const Color(0x2BFFFFFF),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: ListTile(
+                            dense: true,
+                            title: Text(
+                              ch.name.isNotEmpty ? ch.name : 'Chapter ${ch.chapterNumber}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: isCurrent ? primaryColor : (ch.isRead ? Colors.grey : Colors.white),
+                                fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 13,
+                              ),
+                            ),
+                            trailing: isCurrent
+                                ? Icon(Icons.check_circle_rounded, color: primaryColor, size: 18)
+                                : (ch.isRead ? const Icon(Icons.done_rounded, color: Colors.grey, size: 16) : null),
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              if (!isCurrent) {
+                                _loadChapterAndPages(ch.serverId);
+                              }
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
@@ -1002,12 +1120,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
                           return _buildChapterTransitionCard();
                         }
                         final pageWidget = _buildPageWidget(_pageUrls[index], index, constraints: constraints, isPaged: false);
+                        final isWideScreen = constraints.maxWidth > 800;
+                        final contentWidth = isWideScreen ? 780.0 : constraints.maxWidth;
+
                         if (_readingMode == ReadingMode.webtoon) {
                           // Webtoon: zero gap — image height is determined by fitWidth alone.
                           return RepaintBoundary(
-                            child: SizedBox(
-                              width: constraints.maxWidth,
-                              child: pageWidget,
+                            child: Center(
+                              child: SizedBox(
+                                width: contentWidth,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(minHeight: (constraints.maxHeight * 0.75).clamp(300.0, 900.0)),
+                                  child: pageWidget,
+                                ),
+                              ),
                             ),
                           );
                         }
@@ -1015,7 +1141,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         return RepaintBoundary(
                           child: Padding(
                             padding: const EdgeInsets.only(bottom: 12.0),
-                            child: Center(child: pageWidget),
+                            child: Center(
+                              child: SizedBox(
+                                width: contentWidth,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(minHeight: (constraints.maxHeight * 0.75).clamp(300.0, 900.0)),
+                                  child: pageWidget,
+                                ),
+                              ),
+                            ),
                           ),
                         );
                       },
@@ -1074,7 +1208,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
                               ),
                             ),
                             IconButton(
+                              icon: const Icon(Icons.format_list_bulleted_rounded, color: Colors.white),
+                              tooltip: 'Chapters',
+                              onPressed: _showChapterSelectorSheet,
+                            ),
+                            IconButton(
                               icon: const Icon(Icons.tune_rounded, color: Colors.white),
+                              tooltip: 'Settings',
                               onPressed: _showReaderSettingsSheet,
                             ),
                           ],
@@ -1088,16 +1228,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       left: 16,
                       right: 16,
                       child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xE61F1F24),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
-                            boxShadow: const [
-                              BoxShadow(color: Color(0x66000000), blurRadius: 16, offset: Offset(0, 4)),
-                            ],
-                          ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xE614141A),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
+                                boxShadow: const [
+                                  BoxShadow(color: Color(0x66000000), blurRadius: 16, offset: Offset(0, 4)),
+                                ],
+                              ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -1123,32 +1267,34 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                 ],
                               ),
                               if (_pageUrls.length > 1)
-                                SizedBox(
-                                  width: 260,
-                                  height: 28,
-                                  child: SliderTheme(
-                                    data: SliderThemeData(
-                                      activeTrackColor: primaryColor,
-                                      inactiveTrackColor: Colors.grey[800],
-                                      thumbColor: primaryColor,
-                                      trackHeight: 3,
-                                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                                    ),
-                                    child: Slider(
-                                      value: _currentPage.toDouble().clamp(1.0, _pageUrls.length.toDouble()),
-                                      min: 1.0,
-                                      max: _pageUrls.length.toDouble(),
-                                      divisions: _pageUrls.length > 1 ? _pageUrls.length - 1 : 1,
-                                      onChanged: (val) {
-                                        final targetPage = val.round();
-                                        setState(() => _currentPage = targetPage);
-                                        if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
-                                          _pageController.jumpToPage(targetPage - 1);
-                                        } else {
-                                          final targetOffset = ((targetPage - 1) / (_pageUrls.length - 1)) * _scrollController.position.maxScrollExtent;
-                                          _scrollController.jumpTo(targetOffset);
-                                        }
-                                      },
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(maxWidth: (MediaQuery.of(context).size.width - 64).clamp(180.0, 320.0)),
+                                  child: SizedBox(
+                                    height: 28,
+                                    child: SliderTheme(
+                                      data: SliderThemeData(
+                                        activeTrackColor: primaryColor,
+                                        inactiveTrackColor: Colors.grey[800],
+                                        thumbColor: primaryColor,
+                                        trackHeight: 3,
+                                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                      ),
+                                      child: Slider(
+                                        value: _currentPage.toDouble().clamp(1.0, _pageUrls.length.toDouble()),
+                                        min: 1.0,
+                                        max: _pageUrls.length.toDouble(),
+                                        divisions: _pageUrls.length > 1 ? _pageUrls.length - 1 : 1,
+                                        onChanged: (val) {
+                                          final targetPage = val.round();
+                                          setState(() => _currentPage = targetPage);
+                                          if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
+                                            _pageController.jumpToPage(targetPage - 1);
+                                          } else {
+                                            final targetOffset = ((targetPage - 1) / (_pageUrls.length - 1)) * _scrollController.position.maxScrollExtent;
+                                            _scrollController.jumpTo(targetOffset);
+                                          }
+                                        },
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1157,10 +1303,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         ),
                       ),
                     ),
-                  ],
-                ],
-              ),
-            );
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
           },
         ),
       ),

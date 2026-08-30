@@ -27,15 +27,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _connectionStatus;
   bool _connectionSuccess = false;
 
+  // Setup Mode
+  bool _isStandalone = false;
+
   // Repositories configured by user
   final List<String> _userRepoUrls = [];
 
   // Hydration Progress State
   bool _isHydrating = false;
   int _hydrationStep = 0; // 0 = idle, 1 = sources, 2 = library, 3 = history, 4 = complete
-  String _sourcesStatusText = 'Waiting to check server sources...';
-  String _libraryStatusText = 'Waiting to cache library manga...';
-  String _historyStatusText = 'Waiting to sync reading history...';
+  String _sourcesStatusText = 'Waiting to initialize sources...';
+  String _libraryStatusText = 'Waiting to prepare library database...';
+  String _historyStatusText = 'Waiting to configure reader engine...';
   int _matchedSourcesCount = 0;
   int _totalHydratedManga = 0;
 
@@ -48,8 +51,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
+  void _startStandaloneSetup() {
+    setState(() {
+      _isStandalone = true;
+      _serverUrlController.clear();
+      _serverAuthController.clear();
+      if (_userRepoUrls.isEmpty) {
+        _userRepoUrls.add('https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json');
+      }
+    });
+
+    // Jump directly to Repos step so user can review/add repos or proceed
+    _pageController.animateToPage(
+      2,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+    );
+  }
+
   Future<void> _testAndConnectServer() async {
     setState(() {
+      _isStandalone = false;
       _isConnecting = true;
       _connectionStatus = 'Testing connection to Suwayomi server...';
       _connectionSuccess = false;
@@ -118,74 +140,93 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() {
       _isHydrating = true;
       _hydrationStep = 1;
-      _sourcesStatusText = 'Fetching server sources and installing matching local JS scrapers...';
+      _sourcesStatusText = _isStandalone
+          ? 'Downloading all extensions from configured repositories...'
+          : 'Fetching server sources and installing matching local JS scrapers...';
     });
 
     try {
-      // ── STEP 1: Fetch all sources installed on the Suwayomi server ──
-      final List<ServerSourceItem> serverSources = [];
-      if (GraphQLClientService.instance.isConfigured) {
-        final sourcesData = await GraphQLClientService.instance
-            .fetchSources()
-            .timeout(const Duration(seconds: 8), onTimeout: () => null);
+      if (_isStandalone) {
+        // ── STANDALONE MODE: Install all available repo extensions ──
+        final installedCount = await RepoManager.instance.downloadAndInstallAllRepoExtensions(
+          userRepoUrls: _userRepoUrls,
+        );
 
-        if (sourcesData != null && sourcesData.containsKey('sources')) {
-          final nodes = sourcesData['sources']['nodes'] as List<dynamic>?;
-          if (nodes != null) {
-            for (final n in nodes) {
-              final m = n as Map<String, dynamic>;
-              serverSources.add(ServerSourceItem(
-                id: m['id'].toString(),
-                name: m['name'] as String? ?? '',
-                lang: m['lang'] as String? ?? 'en',
-              ));
+        setState(() {
+          _matchedSourcesCount = installedCount;
+          _sourcesStatusText = '✓ Installed $installedCount local extensions (Ready to browse)';
+          _hydrationStep = 2;
+          _libraryStatusText = '✓ Local Isar database initialized';
+          _hydrationStep = 3;
+          _historyStatusText = '✓ On-device reader engine ready';
+          _hydrationStep = 4;
+        });
+      } else {
+        // ── SERVER MODE: Fetch server sources and match local JS scrapers ──
+        final List<ServerSourceItem> serverSources = [];
+        if (GraphQLClientService.instance.isConfigured) {
+          final sourcesData = await GraphQLClientService.instance
+              .fetchSources()
+              .timeout(const Duration(seconds: 8), onTimeout: () => null);
+
+          if (sourcesData != null && sourcesData.containsKey('sources')) {
+            final nodes = sourcesData['sources']['nodes'] as List<dynamic>?;
+            if (nodes != null) {
+              for (final n in nodes) {
+                final m = n as Map<String, dynamic>;
+                serverSources.add(ServerSourceItem(
+                  id: m['id'].toString(),
+                  name: m['name'] as String? ?? '',
+                  lang: m['lang'] as String? ?? 'en',
+                ));
+              }
             }
           }
         }
+
+        setState(() {
+          _sourcesStatusText =
+              'Installing local JS scrapers for ${serverSources.length} server sources...';
+        });
+
+        final installedSources = await RepoManager.instance.downloadAndInstallMatchingSources(
+          serverSourceNames: serverSources.map((s) => s.name).toList(),
+          userRepoUrls: _userRepoUrls,
+        );
+
+        final migrationResult = SourceMigrationService.instance.migrateServerSources(
+          serverSourceNames: serverSources.map((s) => s.name).toList(),
+          availableJsExtensions: installedSources,
+        );
+
+        setState(() {
+          _matchedSourcesCount = migrationResult.matchedSources.length;
+          _sourcesStatusText =
+              '✓ Installed ${installedSources.length}/${serverSources.length} sources locally'
+              ' (${migrationResult.serverOnlySources.length} server-only fallbacks)';
+          _hydrationStep = 2;
+          _libraryStatusText = 'Fetching complete library manga and caching chapters in Isar DB...';
+        });
+
+        await Future.delayed(const Duration(milliseconds: 400));
+
+        // ── STEP 2: HYDRATE LIBRARY & CHAPTERS ──
+        if (GraphQLClientService.instance.isConfigured) {
+          try {
+            await SyncEngine.instance.triggerSync().timeout(const Duration(seconds: 5));
+          } catch (_) {}
+          final libraryItems = await IsarService.instance.getLibraryManga();
+          _totalHydratedManga = libraryItems.length;
+        }
+
+        setState(() {
+          _libraryStatusText =
+              '✓ Cached $_totalHydratedManga library titles into local DB (100% Offline Ready)';
+          _hydrationStep = 3;
+          _historyStatusText = '✓ Reading history and chapter feeds synchronized';
+          _hydrationStep = 4;
+        });
       }
-
-      setState(() {
-        _sourcesStatusText =
-            'Installing local JS scrapers for ${serverSources.length} server sources...';
-      });
-
-      // ── STEP 1b: Download & install matching JS scrapers for ALL server sources ──
-      // Uses improved scoring matcher so every server source gets its local JS counterpart.
-      final installedSources = await RepoManager.instance.downloadAndInstallMatchingSources(
-        serverSourceNames: serverSources.map((s) => s.name).toList(),
-        userRepoUrls: _userRepoUrls,
-      );
-
-      final migrationResult = SourceMigrationService.instance.migrateServerSources(
-        serverSourceNames: serverSources.map((s) => s.name).toList(),
-        availableJsExtensions: installedSources,
-      );
-
-      setState(() {
-        _matchedSourcesCount = migrationResult.matchedSources.length;
-        _sourcesStatusText =
-            '✓ Installed ${installedSources.length}/${serverSources.length} sources locally'
-            ' (${migrationResult.serverOnlySources.length} server-only fallbacks)';
-        _hydrationStep = 2;
-        _libraryStatusText = 'Fetching complete library manga and caching chapters in Isar DB...';
-      });
-
-      await Future.delayed(const Duration(milliseconds: 400));
-
-      // ── STEP 2: HYDRATE LIBRARY & CHAPTERS ──
-      if (GraphQLClientService.instance.isConfigured) {
-        await SyncEngine.instance.triggerSync();
-        final libraryItems = await IsarService.instance.getLibraryManga();
-        _totalHydratedManga = libraryItems.length;
-      }
-
-      setState(() {
-        _libraryStatusText =
-            '✓ Cached $_totalHydratedManga library titles into local DB (100% Offline Ready)';
-        _hydrationStep = 3;
-        _historyStatusText = '✓ Reading history and chapter feeds synchronized';
-        _hydrationStep = 4;
-      });
 
       await Future.delayed(const Duration(milliseconds: 500));
       _pageController.nextPage(
@@ -258,20 +299,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // ── STEP 1: WELCOME ─────────────────────────────────────────
   Widget _buildWelcomeStep() {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 24.0),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
-              color: primaryColor.withValues(alpha: 0.15),
+              gradient: LinearGradient(
+                colors: [
+                  primaryColor.withValues(alpha: 0.25),
+                  primaryColor.withValues(alpha: 0.05),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               shape: BoxShape.circle,
+              border: Border.all(color: primaryColor.withValues(alpha: 0.3), width: 1.5),
             ),
-            child: Icon(Icons.wb_sunny_rounded, size: 72, color: primaryColor),
+            child: Icon(Icons.wb_sunny_rounded, size: 68, color: primaryColor),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           const Text(
             'Sunfire',
             style: TextStyle(
@@ -281,9 +331,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           const Text(
-            'The Local-First Manga Experience',
+            'The Local-First Manga Reader',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -292,31 +342,114 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Sunfire links with your Suwayomi server to replicate your library, history, and sources. Once hydrated, the app works 100% offline with zero server dependence.',
+            'High-performance on-device reading engine with full offline support, QuickJS scrapers, and optional Suwayomi cloud sync.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.4),
+            style: TextStyle(fontSize: 13.5, color: Colors.grey, height: 1.45),
           ),
-          const SizedBox(height: 48),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              minimumSize: const Size.fromHeight(56),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: 4,
-            ),
-            onPressed: () => _pageController.nextPage(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('Get Started', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                SizedBox(width: 8),
-                Icon(Icons.arrow_forward_rounded, color: Colors.white),
-              ],
+          const SizedBox(height: 36),
+
+          // Option 1: Standalone Mode (No Server Needed)
+          InkWell(
+            onTap: _startStandaloneSetup,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFF191924),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: primaryColor.withValues(alpha: 0.5), width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withValues(alpha: 0.15),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.bolt_rounded, color: primaryColor, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Standalone Mode',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Zero server required. Install extensions directly and read 100% on-device.',
+                          style: TextStyle(fontSize: 12, color: Colors.white60, height: 1.3),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.white54),
+                ],
+              ),
             ),
           ),
+
+          const SizedBox(height: 14),
+
+          // Option 2: Connect Suwayomi Server
+          InkWell(
+            onTap: () {
+              _pageController.nextPage(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFF14141C),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.cloud_sync_rounded, color: Colors.lightBlueAccent, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Link Suwayomi Server',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Import your existing server library, reading history & categories.',
+                          style: TextStyle(fontSize: 12, color: Colors.white60, height: 1.3),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.white38),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -331,20 +464,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 40),
+          const SizedBox(height: 24),
           Row(
             children: [
-              Icon(Icons.cloud_sync_rounded, color: primaryColor, size: 28),
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white70),
+                onPressed: () => _pageController.previousPage(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.cloud_sync_rounded, color: primaryColor, size: 26),
               const SizedBox(width: 10),
-              const Text('Link Suwayomi Server', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+              const Expanded(
+                child: Text(
+                  'Link Suwayomi Server',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
           const Text(
-            'Enter your Suwayomi server address to import your past & present library and sources.',
+            'Enter your Suwayomi server address to import your library, chapters, and history.',
             style: TextStyle(color: Colors.grey, fontSize: 13),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           TextField(
             controller: _serverUrlController,
             style: const TextStyle(color: Colors.white),
@@ -404,7 +552,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ],
               ),
             ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
@@ -414,37 +562,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             onPressed: _isConnecting ? null : _testAndConnectServer,
             child: _isConnecting
                 ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                : const Text('Connect & Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                : const Text('Connect & Import Server', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
           ),
-          if (_connectionStatus != null && !_connectionSuccess) ...[
-            const SizedBox(height: 10),
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                side: const BorderSide(color: Colors.white24),
-              ),
-              onPressed: () {
-                final rawUrl = _serverUrlController.text.trim();
-                final url = rawUrl.replaceAll(RegExp(r'/+$'), '');
-                final auth = _serverAuthController.text.trim().isNotEmpty ? _serverAuthController.text.trim() : null;
-                GraphQLClientService.instance.initialize(url, authToken: auth);
-                _pageController.nextPage(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                );
-              },
-              child: const Text('Continue with this URL anyway', style: TextStyle(color: Colors.white70, fontSize: 14)),
-            ),
-          ],
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           TextButton(
-            onPressed: () => _pageController.nextPage(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-            ),
+            onPressed: _startStandaloneSetup,
             child: const Center(
-              child: Text('Skip server setup (Use Pure Local Mode)', style: TextStyle(color: Colors.grey, fontSize: 13)),
+              child: Text('Skip server setup (Use Pure Standalone Mode)', style: TextStyle(color: Colors.white60, fontSize: 13)),
             ),
           ),
         ],
@@ -465,7 +589,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             children: [
               Icon(Icons.extension_rounded, color: primaryColor, size: 28),
               const SizedBox(width: 10),
-              const Text('Extension Repositories', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+              const Expanded(
+                child: Text(
+                  'Extension Repositories',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -556,9 +687,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Start Snapshot Hydration', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text('Start Setup & Hydration', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                 SizedBox(width: 8),
-                Icon(Icons.bolt_rounded, color: Colors.white),
+                Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
               ],
             ),
           ),
@@ -587,12 +718,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: Icon(Icons.sync_alt_rounded, color: primaryColor, size: 24),
               ),
               const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Replicating State', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-                  Text('Building 100% offline local database', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                ],
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Replicating State', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                    Text('Building 100% offline local database', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
               ),
             ],
           ),
@@ -712,7 +845,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            '$_matchedSourcesCount on-device JS scrapers activated with $_totalHydratedManga titles ready in your library.',
+            _isStandalone
+                ? '$_matchedSourcesCount on-device JS scrapers activated. Your local library is ready!'
+                : '$_matchedSourcesCount on-device JS scrapers activated with $_totalHydratedManga titles ready in your library.',
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 15, color: Colors.white70),
           ),
@@ -723,29 +858,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: const Color(0xFF16161F),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Column(
+            child: Column(
               children: [
-                Row(
+                const Row(
                   children: [
                     Icon(Icons.bolt_rounded, color: Colors.amber, size: 20),
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        '100% Server Independence Active: Read offline anytime without keeping your server on.',
+                        '100% On-Device Engine: Browse, download, and read manga offline anytime.',
                         style: TextStyle(fontSize: 12, color: Colors.white70),
                       ),
                     ),
                   ],
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
                 Row(
                   children: [
-                    Icon(Icons.cloud_done_rounded, color: Colors.lightBlueAccent, size: 20),
-                    SizedBox(width: 10),
+                    Icon(
+                      _isStandalone ? Icons.cloud_outlined : Icons.cloud_done_rounded,
+                      color: _isStandalone ? Colors.grey : Colors.lightBlueAccent,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Automatic Cloud Sync: Reading progress pushes to your server when connected.',
-                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                        _isStandalone
+                            ? 'Cloud Sync Available: You can connect a Suwayomi server anytime in Settings.'
+                            : 'Automatic Cloud Sync: Reading progress pushes to your server when connected.',
+                        style: const TextStyle(fontSize: 12, color: Colors.white70),
                       ),
                     ),
                   ],

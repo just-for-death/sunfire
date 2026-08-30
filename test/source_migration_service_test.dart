@@ -162,7 +162,7 @@ void main() {
       expect(result.isInstalledLocally, isTrue);
       expect(result.isAvailableOnServer, isTrue);
       expect(result.serverSourceName, equals('MangaDex (EN)'));
-      expect(result.statusMessage, contains('Installed locally & ☁ synced with server'));
+      expect(result.statusMessage, contains('Installed locally & synced with server'));
     });
 
     test('7. Installing source NOT available on server installs locally with clear status message', () {

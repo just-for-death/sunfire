@@ -30,11 +30,13 @@ class SourceMangaGridScreen extends StatefulWidget {
 class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with SingleTickerProviderStateMixin {
   List<Map<String, dynamic>> _mangaList = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
   int _currentPage = 1;
-  final bool _hasNextPage = true;
+  bool _hasNextPage = true;
   String _searchQuery = '';
   late bool _isLatestMode;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   // Mihon Source Filter State
   String _selectedSort = 'Popularity';
@@ -49,9 +51,19 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   void initState() {
     super.initState();
     _isLatestMode = widget.isLatest;
+    _scrollController.addListener(_onScroll);
     _fetchFiltersAndManga();
   }
   
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 400 &&
+        !_isLoading &&
+        !_isLoadingMore &&
+        _hasNextPage) {
+      _loadMoreManga();
+    }
+  }
+
   Future<void> _fetchFiltersAndManga() async {
     _dynamicFilters = await QuickJsService.instance.fetchSourceFiltersLocal(widget.sourceName);
     _hasDynamicFilters = _dynamicFilters.isNotEmpty;
@@ -60,29 +72,73 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _fetchSourceManga() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _currentPage = 1;
+      _hasNextPage = true;
+    });
 
     try {
       _mangaList = await ContentResolverService.instance.resolveSourceManga(
         sourceId: widget.sourceId,
         sourceName: widget.sourceName,
         isLatest: _isLatestMode,
-        page: _currentPage,
+        page: 1,
         searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
         selectedSort: _selectedSort,
         selectedStatus: _selectedStatus,
         selectedType: _selectedType,
         dynamicFilters: (_hasDynamicFilters && (_isFilterApplied || _searchQuery.trim().isNotEmpty)) ? _dynamicFilters : null,
       );
+      if (_mangaList.length < 10) {
+        _hasNextPage = false;
+      }
     } catch (e, stack) {
       await LoggerService.instance.logError('Failed to fetch source manga: $e', exception: e, stackTrace: stack, category: 'SourceGrid');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadMoreManga() async {
+    if (_isLoadingMore || !_hasNextPage) return;
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final nextPage = _currentPage + 1;
+      final newManga = await ContentResolverService.instance.resolveSourceManga(
+        sourceId: widget.sourceId,
+        sourceName: widget.sourceName,
+        isLatest: _isLatestMode,
+        page: nextPage,
+        searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
+        selectedSort: _selectedSort,
+        selectedStatus: _selectedStatus,
+        selectedType: _selectedType,
+        dynamicFilters: (_hasDynamicFilters && (_isFilterApplied || _searchQuery.trim().isNotEmpty)) ? _dynamicFilters : null,
+      );
+
+      if (mounted) {
+        setState(() {
+          if (newManga.isEmpty) {
+            _hasNextPage = false;
+          } else {
+            _currentPage = nextPage;
+            _mangaList.addAll(newManga);
+            if (newManga.length < 8) _hasNextPage = false;
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _hasNextPage = false);
+    } finally {
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -405,118 +461,112 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                       : LayoutBuilder(
                           builder: (context, constraints) {
                             final dynamicColumns = (constraints.maxWidth / 135).floor().clamp(2, 8);
-                            return GridView.builder(
-                              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: dynamicColumns,
-                                childAspectRatio: 0.62,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 16,
-                              ),
-                              itemCount: _mangaList.length,
-                              itemBuilder: (context, index) {
-                            final manga = _mangaList[index];
-                            final title = (manga['title'] ?? manga['name'] ?? 'Unknown Manga').toString();
-                            final thumb = (manga['thumbnailUrl'] ?? manga['imageUrl'])?.toString();
-                            final link = (manga['link'] ?? manga['url'] ?? '').toString();
+                            return Column(
+                              children: [
+                                Expanded(
+                                  child: GridView.builder(
+                                    controller: _scrollController,
+                                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: dynamicColumns,
+                                      childAspectRatio: 0.62,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 16,
+                                    ),
+                                    itemCount: _mangaList.length,
+                                    itemBuilder: (context, index) {
+                                      final manga = _mangaList[index];
+                                      final title = (manga['title'] ?? manga['name'] ?? 'Unknown Manga').toString();
+                                      final thumb = (manga['thumbnailUrl'] ?? manga['imageUrl'])?.toString();
+                                      final link = (manga['link'] ?? manga['url'] ?? '').toString();
 
-                            final rawId = manga['id'];
-                            int id = rawId is int ? rawId : (int.tryParse(rawId?.toString() ?? '0') ?? 0);
-                            if (id <= 0 && link.isNotEmpty) {
-                              id = (link.hashCode ^ widget.sourceName.hashCode).abs();
-                            } else if (id <= 0 && title.isNotEmpty) {
-                              id = (title.hashCode ^ widget.sourceName.hashCode).abs();
-                            }
+                                      final rawId = manga['id'];
+                                      int id = rawId is int ? rawId : (int.tryParse(rawId?.toString() ?? '0') ?? 0);
+                                      if (id <= 0 && link.isNotEmpty) {
+                                        id = (link.hashCode ^ widget.sourceName.hashCode).abs();
+                                      } else if (id <= 0 && title.isNotEmpty) {
+                                        id = (title.hashCode ^ widget.sourceName.hashCode).abs();
+                                      }
 
-                            return GestureDetector(
-                              onTap: () async {
-                                if (id > 0) {
-                                  var existing = await IsarService.instance.getMangaByServerId(id);
-                                  if (existing == null) {
-                                    final newManga = Manga()
-                                      ..serverId = id
-                                      ..title = title
-                                      ..url = link
-                                      ..thumbnailUrl = thumb
-                                      ..sourceName = widget.sourceName;
-                                    await IsarService.instance.saveManga(newManga);
-                                  } else {
-                                    if (existing.url.isEmpty && link.isNotEmpty) {
-                                      existing.url = link;
-                                      await IsarService.instance.saveManga(existing);
-                                    }
-                                  }
-                                  if (context.mounted) {
-                                    context.push('/manga/$id');
-                                  }
-                                }
-                              },
-                              onLongPress: () => _showMangaQuickActions(id, title, thumb),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(16),
-                                        color: Colors.grey[900],
-                                        border: Border.all(color: const Color(0x1AFFFFFF), width: 0.8),
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(16),
-                                        child: MangaCoverImage(
-                                          mangaServerId: id,
-                                          thumbnailUrl: thumb,
-                                          sourceName: widget.sourceName,
-                                          width: double.infinity,
-                                          height: double.infinity,
-                                          fit: BoxFit.cover,
+                                      return Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(16),
+                                          onTap: () async {
+                                            if (id > 0) {
+                                              var existing = await IsarService.instance.getMangaByServerId(id);
+                                              if (existing == null) {
+                                                final newManga = Manga()
+                                                  ..serverId = id
+                                                  ..title = title
+                                                  ..url = link
+                                                  ..thumbnailUrl = thumb
+                                                  ..sourceName = widget.sourceName;
+                                                await IsarService.instance.saveManga(newManga);
+                                              } else {
+                                                if (existing.url.isEmpty && link.isNotEmpty) {
+                                                  existing.url = link;
+                                                  await IsarService.instance.saveManga(existing);
+                                                }
+                                              }
+                                              if (context.mounted) {
+                                                context.push('/manga/$id');
+                                              }
+                                            }
+                                          },
+                                          onLongPress: () => _showMangaQuickActions(id, title, thumb),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(
+                                                child: Container(
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  color: Colors.grey[900],
+                                                  border: Border.all(color: const Color(0x1AFFFFFF), width: 0.8),
+                                                ),
+                                                child: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  child: MangaCoverImage(
+                                                    mangaServerId: id,
+                                                    thumbnailUrl: thumb,
+                                                    sourceName: widget.sourceName,
+                                                    width: double.infinity,
+                                                    height: double.infinity,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                              Text(
+                                                title,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, height: 1.25),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                if (_isLoadingMore)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    alignment: Alignment.center,
+                                    child: SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(strokeWidth: 2.5, color: primaryColor),
                                     ),
                                   ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ],
-                              ),
+                              ],
                             );
                           },
-                        );
-                      },
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  ElevatedButton(
-                    onPressed: _currentPage > 1
-                        ? () {
-                            setState(() => _currentPage--);
-                            _fetchSourceManga();
-                          }
-                        : null,
-                    child: const Text('Previous'),
-                  ),
-                  Text('Page $_currentPage', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ElevatedButton(
-                    onPressed: _hasNextPage
-                        ? () {
-                            setState(() => _currentPage++);
-                            _fetchSourceManga();
-                          }
-                        : null,
-                    child: const Text('Next'),
-                  ),
-                ],
-              ),
+                        ),
             ),
           ],
         ),

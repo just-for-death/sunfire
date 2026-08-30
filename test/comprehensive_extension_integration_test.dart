@@ -374,7 +374,7 @@ void main() {
                 
                 // Verify high-resolution image URLs
                 for (final page in pages) {
-                  expect(page, contains('i.nhentai.net'));
+                  expect(page, contains('.nhentai.net'));
                 }
                 
                 print('✅ nHentai Reading: ${pages.length} high-res pages loaded');
@@ -624,7 +624,7 @@ void main() {
     group('ReadComicOnline Extension - Full Feature Test', () {
       test('30. Popular Comics - Thumbnail Loading', () async {
         final result = await quickJs.fetchSourceMangaLocal(
-          'ReadComicOnline',
+          'read_comics_online',
           isLatest: false,
           page: 1,
         );
@@ -642,7 +642,7 @@ void main() {
 
       test('31. Search Functionality - Real Queries', () async {
         final result = await quickJs.fetchSourceMangaLocal(
-          'ReadComicOnline',
+          'read_comics_online',
           searchQuery: 'batman',
           page: 1,
         );

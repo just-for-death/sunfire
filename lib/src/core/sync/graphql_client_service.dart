@@ -44,6 +44,8 @@ class GraphQLClientService {
 
   void initialize(String baseUrl, {String? authToken}) {
     _baseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    _lastReachableCheck = null;
+    _lastReachableStatus = true;
     final headers = <String, dynamic>{'Content-Type': 'application/json'};
     if (authToken != null && authToken.isNotEmpty) {
       headers['Authorization'] = authToken.startsWith('Bearer ') ? authToken : 'Bearer $authToken';

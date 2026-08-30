@@ -301,15 +301,19 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           ),
         ],
       ),
-      body: RefreshIndicator(
-        color: primaryColor,
-        onRefresh: _checkServerForUpdates,
-        child: _isLoading
-            ? Center(child: CircularProgressIndicator(color: primaryColor))
-            : CustomScrollView(
-                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                scrollCacheExtent: ScrollCacheExtent.pixels(800),
-          slivers: [
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: RefreshIndicator(
+            color: primaryColor,
+            onRefresh: _checkServerForUpdates,
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator(color: primaryColor))
+                : CustomScrollView(
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                    scrollCacheExtent: ScrollCacheExtent.pixels(800),
+              slivers: [
                         if (_lastUpdateText != null)
                           SliverToBoxAdapter(
                             child: Padding(
@@ -413,14 +417,24 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                                           ),
                                           title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                                           subtitle: Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w600)),
-                                          trailing: IconButton(
-                                            icon: Icon(
-                                              isDownloaded ? Icons.cloud_done_rounded : Icons.download_rounded,
-                                              color: isDownloaded ? Colors.greenAccent : Colors.grey,
-                                              size: 24,
-                                            ),
-                                            tooltip: 'Download options',
-                                            onPressed: () => _showDownloadOptions(item),
+                                          trailing: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                icon: Icon(
+                                                  isDownloaded ? Icons.cloud_done_rounded : Icons.download_rounded,
+                                                  color: isDownloaded ? Colors.greenAccent : Colors.grey,
+                                                  size: 22,
+                                                ),
+                                                tooltip: 'Download options',
+                                                onPressed: () => _showDownloadOptions(item),
+                                              ),
+                                              IconButton(
+                                                icon: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 26),
+                                                tooltip: 'Read chapter',
+                                                onPressed: () => context.push('/reader/${ch.serverId}'),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ),
@@ -435,7 +449,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                         const SliverToBoxAdapter(child: SizedBox(height: 120)),
                       ],
                     ],
+                  ),
           ),
+        ),
       ),
     );
   }

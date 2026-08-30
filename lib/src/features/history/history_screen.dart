@@ -32,12 +32,33 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
     try {
       final chapters = await IsarService.instance.getReadingHistory();
       final items = <Map<String, dynamic>>[];
+      final now = DateTime.now();
 
       for (final ch in chapters) {
         final manga = await IsarService.instance.getMangaByServerId(ch.mangaId);
+        final lastRead = ch.lastReadAt ?? 0;
+        final readDate = lastRead > 0
+            ? (lastRead > 1000000000000
+                ? DateTime.fromMillisecondsSinceEpoch(lastRead)
+                : DateTime.fromMillisecondsSinceEpoch(lastRead * 1000))
+            : now;
+
+        final diff = now.difference(readDate);
+        String dateHeader;
+        if (diff.inDays == 0 && now.day == readDate.day) {
+          dateHeader = 'Today';
+        } else if (diff.inDays <= 1 || (diff.inDays == 0 && now.day != readDate.day)) {
+          dateHeader = 'Yesterday';
+        } else if (diff.inDays < 7) {
+          dateHeader = 'Past Week';
+        } else {
+          dateHeader = '${readDate.year}-${readDate.month.toString().padLeft(2, '0')}-${readDate.day.toString().padLeft(2, '0')}';
+        }
+
         items.add({
           'chapter': ch,
           'manga': manga,
+          'dateHeader': dateHeader,
         });
       }
 
@@ -54,6 +75,44 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
     }
   }
 
+  Future<void> _clearHistory() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F24),
+        title: const Text('Clear Reading History?'),
+        content: const Text('This will reset your reading progress and history timestamps locally.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Clear', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final chapters = await IsarService.instance.getReadingHistory();
+      for (final ch in chapters) {
+        ch.lastPageRead = 0;
+        ch.lastReadAt = 0;
+        ch.isRead = false;
+      }
+      await IsarService.instance.saveChapters(chapters);
+      await _loadHistory();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Reading history cleared')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -63,8 +122,15 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
       appBar: AppBar(
         title: const Text('History', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
         actions: [
+          if (_historyItems.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep_outlined, color: Colors.white70),
+              tooltip: 'Clear History',
+              onPressed: _clearHistory,
+            ),
           IconButton(
             icon: Icon(Icons.sync_rounded, color: primaryColor),
+            tooltip: 'Sync History',
             onPressed: () async {
               await SyncEngine.instance.triggerSync();
               await _loadHistory();
@@ -72,17 +138,21 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
           ),
         ],
       ),
-      body: RefreshIndicator(
-        color: primaryColor,
-        onRefresh: () async {
-          await SyncEngine.instance.triggerSync();
-          await _loadHistory();
-        },
-        child: _isLoading
-            ? Center(child: CircularProgressIndicator(color: primaryColor))
-            : _historyItems.isEmpty
-            ? CustomScrollView(
-                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: RefreshIndicator(
+            color: primaryColor,
+            onRefresh: () async {
+              await SyncEngine.instance.triggerSync();
+              await _loadHistory();
+            },
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator(color: primaryColor))
+                : _historyItems.isEmpty
+                ? CustomScrollView(
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 slivers: [
                         SliverToBoxAdapter(
                           child: Container(
@@ -128,6 +198,8 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                         final manga = item['manga'] as Manga?;
                         final title = manga?.title ?? 'Manga #${ch.mangaId}';
                         final thumb = manga?.thumbnailUrl;
+                        final dateHeader = item['dateHeader'] as String;
+                        final bool showHeader = index == 0 || _historyItems[index - 1]['dateHeader'] != dateHeader;
 
                         final double progressValue = ch.pageCount > 0
                             ? (ch.lastPageRead / ch.pageCount).clamp(0.0, 1.0)
@@ -138,16 +210,27 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                             ? 'Page $currentPage / ${ch.pageCount} (${(progressValue * 100).toInt()}%)'
                             : (ch.isRead ? 'Completed' : 'Page $currentPage');
 
-                        return RepaintBoundary(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6.0),
-                            child: Material(
-                            color: const Color(0x1F2A2A32),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
-                            ),
-                            child: ListTile(
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (showHeader)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 14.0, bottom: 8.0, left: 4.0),
+                                child: Text(
+                                  dateHeader,
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            RepaintBoundary(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: Material(
+                                  color: const Color(0x1F2A2A32),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                                  ),
+                                  child: ListTile(
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               onTap: () => context.push('/reader/${ch.serverId}'),
@@ -197,10 +280,14 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                             ),
                           ),
                         ),
-                      );
-                    },
-                    ),
-      ),
-    );
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
   }
 }

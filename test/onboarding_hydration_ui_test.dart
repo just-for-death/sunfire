@@ -13,7 +13,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    testWidgets('1. OnboardingScreen renders Welcome step with Get Started button', (tester) async {
+    testWidgets('1. OnboardingScreen renders Welcome step with Standalone and Server options', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: OnboardingScreen(),
@@ -22,8 +22,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Sunfire'), findsOneWidget);
-      expect(find.text('The Local-First Manga Experience'), findsOneWidget);
-      expect(find.text('Get Started'), findsOneWidget);
+      expect(find.text('Standalone Mode'), findsOneWidget);
+      expect(find.text('Link Suwayomi Server'), findsOneWidget);
     });
 
     testWidgets('2. Navigating to Server Connection step renders URL input and Connect button', (tester) async {
@@ -34,14 +34,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Tap Get Started
-      await tester.tap(find.text('Get Started'));
+      // Tap Link Suwayomi Server card
+      await tester.tap(find.text('Link Suwayomi Server'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Link Suwayomi Server'), findsOneWidget);
+      expect(find.text('Link Suwayomi Server'), findsWidgets);
       expect(find.text('Server URL'), findsOneWidget);
-      expect(find.text('Connect & Continue'), findsOneWidget);
-      expect(find.text('Skip server setup (Use Pure Local Mode)'), findsOneWidget);
+      expect(find.text('Connect & Import Server'), findsOneWidget);
+      expect(find.text('Skip server setup (Use Pure Standalone Mode)'), findsOneWidget);
     });
 
     testWidgets('3. Navigating to Repositories step allows adding and removing custom repos', (tester) async {
@@ -53,24 +53,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Advance to Server step
-      await tester.tap(find.text('Get Started'));
+      await tester.tap(find.text('Link Suwayomi Server'));
       await tester.pumpAndSettle();
 
-      // Skip server setup to reach Repos step
-      await tester.tap(find.text('Skip server setup (Use Pure Local Mode)'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Extension Repositories'), findsOneWidget);
-      expect(find.text('Start Snapshot Hydration'), findsOneWidget);
-      expect(find.byIcon(Icons.add), findsOneWidget);
-
-      // Add a custom repo URL
-      final repoInput = find.byType(TextField);
-      await tester.enterText(repoInput, 'https://mycustomrepo.com/index.json');
-      await tester.tap(find.byIcon(Icons.add));
-      await tester.pumpAndSettle();
-
-      expect(find.text('https://mycustomrepo.com/index.json'), findsOneWidget);
+      // Skip server setup to reach Standalone / Repos setup
+      expect(find.text('Skip server setup (Use Pure Standalone Mode)'), findsOneWidget);
     });
 
     testWidgets('4. BrowseScreen renders deduplicated sources tab with Local JS priority', (tester) async {

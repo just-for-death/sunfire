@@ -13,6 +13,7 @@ class RepoSourceItem {
   final String iconUrl;
   final String version;
   final bool isJs;
+  final String baseUrl;
 
   const RepoSourceItem({
     required this.name,
@@ -21,6 +22,7 @@ class RepoSourceItem {
     required this.iconUrl,
     required this.version,
     required this.isJs,
+    this.baseUrl = '',
   });
 
   factory RepoSourceItem.fromJson(Map<String, dynamic> json, [String repoIndexUrl = '']) {
@@ -47,6 +49,7 @@ class RepoSourceItem {
       iconUrl: json['iconUrl'] as String? ?? '',
       version: json['version'] as String? ?? '1.0.0',
       isJs: isJs,
+      baseUrl: json['baseUrl'] as String? ?? '',
     );
   }
 }
@@ -208,7 +211,33 @@ class RepoManager {
         }
       }
     }
-    return bestVersionMap.values.toList();
+    // Deduplicate multiple extensions pointing to the same site domain (e.g. nHentai vs nHentai.com)
+    final Map<String, RepoSourceItem> siteDedupMap = {};
+    for (final item in bestVersionMap.values) {
+      String siteKey = '';
+      if (item.baseUrl.isNotEmpty) {
+        final uri = Uri.tryParse(item.baseUrl);
+        if (uri != null && uri.host.isNotEmpty) {
+          siteKey = uri.host.replaceAll('www.', '').toLowerCase();
+        }
+      }
+      if (siteKey.isEmpty) {
+        siteKey = item.name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+      }
+      final fullKey = '${siteKey}_${item.lang}'.toLowerCase();
+      if (!siteDedupMap.containsKey(fullKey)) {
+        siteDedupMap[fullKey] = item;
+      } else {
+        final existing = siteDedupMap[fullKey]!;
+        // Keep the one with higher version, or cleaner/canonical name
+        if (compareVersions(item.version, existing.version) > 0 ||
+            (compareVersions(item.version, existing.version) == 0 && item.name.length < existing.name.length)) {
+          siteDedupMap[fullKey] = item;
+        }
+      }
+    }
+
+    return siteDedupMap.values.toList();
   }
 
   Future<String?> downloadJsSourceCode(String jsUrl) async {

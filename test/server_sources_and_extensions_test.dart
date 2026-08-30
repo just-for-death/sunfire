@@ -82,15 +82,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Search extensions...'), findsOneWidget);
-      expect(find.text('☁ Server APK (Suwayomi)'), findsOneWidget);
-      expect(find.text('⚡ Local JS (iOS & Android)'), findsOneWidget);
+      expect(find.text('Server APK'), findsOneWidget);
+      expect(find.text('Local JS'), findsOneWidget);
 
       // Tap Server APK filter
-      await tester.tap(find.text('☁ Server APK (Suwayomi)'));
+      await tester.tap(find.text('Server APK'));
       await tester.pumpAndSettle();
 
       // Verify Server APK filter is active
-      expect(find.text('☁ Server APK (Suwayomi)'), findsOneWidget);
+      expect(find.text('Server APK'), findsOneWidget);
     });
   });
 }
