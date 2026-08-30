@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/services/download_manager_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/widgets/empty_state_widget.dart';
 
 class DownloadQueueScreen extends StatefulWidget {
   const DownloadQueueScreen({super.key});
@@ -102,15 +103,10 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
       builder: (context, _) {
         final tasks = _downloadService.localTasks;
         if (tasks.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.download_done_rounded, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('No local downloads active or queued.', style: TextStyle(color: Colors.grey, fontSize: 16)),
-              ],
-            ),
+          return const EmptyStateWidget(
+            icon: Icons.download_done_rounded,
+            title: 'No Active Downloads',
+            subtitle: 'There are no local downloads currently active or queued.',
           );
         }
 
@@ -186,15 +182,10 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
     final state = _serverStatus?['state'] as String? ?? 'STOPPED';
 
     if (queue.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.cloud_done_rounded, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text('Server Downloader is $state.\nQueue is empty.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey, fontSize: 16)),
-          ],
-        ),
+      return EmptyStateWidget(
+        icon: Icons.cloud_done_rounded,
+        title: 'Server Queue Empty',
+        subtitle: 'Server Downloader is $state.',
       );
     }
 

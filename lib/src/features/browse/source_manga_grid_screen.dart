@@ -9,6 +9,7 @@ import '../../core/logging/logger_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/widgets/empty_state_widget.dart';
 
 class SourceMangaGridScreen extends StatefulWidget {
   final String sourceId;
@@ -391,20 +392,12 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
               child: _isLoading
                   ? Center(child: CircularProgressIndicator(color: primaryColor))
                   : _mangaList.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.wifi_off_rounded, size: 48, color: Colors.grey),
-                              const SizedBox(height: 12),
-                              const Text('No manga found or source timed out.', style: TextStyle(color: Colors.grey)),
-                              const SizedBox(height: 12),
-                              ElevatedButton(
-                                onPressed: _fetchSourceManga,
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          ),
+                      ? EmptyStateWidget(
+                          icon: Icons.wifi_off_rounded,
+                          title: 'No Manga Found',
+                          subtitle: 'Source timed out or no results match your query.',
+                          actionLabel: 'Retry',
+                          onAction: _fetchSourceManga,
                         )
                       : LayoutBuilder(
                           builder: (context, constraints) {

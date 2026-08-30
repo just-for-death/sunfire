@@ -1,13 +1,17 @@
+import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+
 import '../engine/quickjs_service.dart';
 
 class ImageCacheHelper {
   static final List<String> _candidateCoverPaths = [];
-  static final Map<String, Uint8List> _memoryCache = {};
-  static final Set<String> _inFlightFetches = {};
+  static final LinkedHashMap<String, Uint8List> _memoryCache = LinkedHashMap<String, Uint8List>();
+  static final Map<String, Future<Uint8List?>> _inFlightFetches = {};
+  static final Map<int, String> _resolvedPaths = {};
 
   static Future<void> initialize() async {
     try {
@@ -92,13 +96,23 @@ class ImageCacheHelper {
       try {
         final bytes = await File(localPath).readAsBytes();
         _memoryCache[url] = bytes;
+        if (_memoryCache.length > 200) _memoryCache.remove(_memoryCache.keys.first);
         return bytes;
       } catch (_) {}
     }
 
-    if (_inFlightFetches.contains(url)) return null;
-    _inFlightFetches.add(url);
+    if (_inFlightFetches.containsKey(url)) return _inFlightFetches[url];
+    
+    final completer = _inFlightFetches[url] = _doFetch(url, sourceName, mangaServerId);
+    try {
+      final res = await completer;
+      return res;
+    } finally {
+      _inFlightFetches.remove(url);
+    }
+  }
 
+  static Future<Uint8List?> _doFetch(String url, String sourceName, int mangaServerId) async {
     try {
       final headers = QuickJsService.getImageHeaders(sourceName, url);
       Uint8List? bytes;
@@ -106,7 +120,7 @@ class ImageCacheHelper {
       // 1. Try standard HttpClient
       try {
         final client = HttpClient();
-        client.badCertificateCallback = (cert, host, port) => true;
+        
         client.connectionTimeout = const Duration(seconds: 8);
         final req = await client.getUrl(Uri.parse(url));
         headers.forEach((k, v) => req.headers.set(k, v));
@@ -139,19 +153,17 @@ class ImageCacheHelper {
 
       if (bytes != null && bytes.length > 200) {
         _memoryCache[url] = bytes;
-        if (mangaServerId > 0) {
-          for (final basePath in _candidateCoverPaths) {
-            try {
-              final file = File('$basePath/$mangaServerId.jpg');
-              await file.writeAsBytes(bytes);
-            } catch (_) {}
-          }
+        if (_memoryCache.length > 200) _memoryCache.remove(_memoryCache.keys.first);
+        if (mangaServerId > 0 && _candidateCoverPaths.isNotEmpty) {
+          try {
+            final file = File('${_candidateCoverPaths.first}/$mangaServerId.jpg');
+            await file.writeAsBytes(bytes);
+            _resolvedPaths[mangaServerId] = file.path;
+          } catch (_) {}
         }
         return bytes;
       }
-    } finally {
-      _inFlightFetches.remove(url);
-    }
+    } catch (_) {}
     return null;
   }
 

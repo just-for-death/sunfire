@@ -159,9 +159,17 @@ class IsarService {
 
   // ── CATEGORY CRUD ───────────────────────────────────────
   Future<void> saveCategories(List<Category> categories) async {
-    if (categories.isEmpty) return;
     await _isar.writeTxn(() async {
-      await _isar.categorys.clear();
+      final existing = await _isar.categorys.where().findAll();
+      final existingMap = {for (var e in existing) e.serverId: e.id};
+      for (var c in categories) {
+        if (existingMap.containsKey(c.serverId)) {
+          c.id = existingMap[c.serverId]!;
+        }
+      }
+      final newServerIds = categories.map((c) => c.serverId).toSet();
+      final toDelete = existing.where((e) => !newServerIds.contains(e.serverId)).map((e) => e.id).toList();
+      await _isar.categorys.deleteAll(toDelete);
       await _isar.categorys.putAll(categories);
     });
   }

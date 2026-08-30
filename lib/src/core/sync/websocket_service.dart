@@ -8,6 +8,8 @@ class WebSocketService {
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   String? _wsUrl;
+  String? _authToken;
+  Timer? _handshakeTimer;
   bool _isConnected = false;
   int _reconnectDelaySeconds = 5;
   Timer? _reconnectTimer;
@@ -26,11 +28,22 @@ class WebSocketService {
   Stream<Map<String, dynamic>> get onDownloadStatus => _downloadStatusController.stream;
   bool get isConnected => _isConnected;
 
-  void initialize(String httpUrl) {
+  void initialize(String httpUrl, {String? authToken}) {
     final cleanUrl = httpUrl.endsWith('/') ? httpUrl.substring(0, httpUrl.length - 1) : httpUrl;
     final wsScheme = cleanUrl.startsWith('https') ? 'wss' : 'ws';
     final hostAndPort = cleanUrl.replaceAll(RegExp(r'https?://'), '');
-    _wsUrl = '$wsScheme://$hostAndPort/api/graphql';
+    final newWsUrl = '$wsScheme://$hostAndPort/api/graphql';
+    
+    if (_wsUrl != newWsUrl || authToken != _authToken) {
+      if (_channel != null) {
+        _channel!.sink.close();
+        _channel = null;
+      }
+      _isConnected = false;
+    }
+    
+    _wsUrl = newWsUrl;
+    _authToken = authToken;
     connect();
   }
 
@@ -43,8 +56,12 @@ class WebSocketService {
         protocols: ['graphql-transport-ws'],
       );
 
-      // Step 1: Send connection_init
-      _channel!.sink.add(jsonEncode({'type': 'connection_init', 'payload': {}}));
+      final payload = <String, dynamic>{};
+      if (_authToken != null && _authToken!.isNotEmpty) {
+        payload['Authorization'] = _authToken!.startsWith('Bearer ') ? _authToken : 'Bearer $_authToken';
+      }
+
+      _channel!.sink.add(jsonEncode({'type': 'connection_init', 'payload': payload}));
 
       _subscription = _channel!.stream.listen(
         (message) => _handleMessage(message),
@@ -52,9 +69,13 @@ class WebSocketService {
         onDone: () => _handleDisconnect('WebSocket closed by server'),
       );
 
-      _isConnected = true;
-      _reconnectDelaySeconds = 5;
-      LoggerService.instance.logInfo('WebSocket connected to $_wsUrl', 'WebSocket');
+      _handshakeTimer?.cancel();
+      _handshakeTimer = Timer(const Duration(seconds: 10), () {
+        if (!_isConnected) {
+          _handleDisconnect('WebSocket handshake timeout');
+        }
+      });
+      LoggerService.instance.logInfo('WebSocket connecting to $_wsUrl...', 'WebSocket');
     } catch (e) {
       _handleDisconnect('WebSocket connection failed: $e');
     }
@@ -66,6 +87,9 @@ class WebSocketService {
       final type = data['type'];
 
       if (type == 'connection_ack') {
+        _isConnected = true;
+        _reconnectDelaySeconds = 5;
+        _handshakeTimer?.cancel();
         LoggerService.instance.logInfo('WebSocket connection_ack received', 'WebSocket');
         _subscribeEvents();
       } else if (type == 'next' || type == 'data') {
@@ -113,6 +137,7 @@ class WebSocketService {
     LoggerService.instance.logWarning('$reason. Reconnecting in ${_reconnectDelaySeconds}s...', 'WebSocket');
 
     _reconnectTimer?.cancel();
+    _handshakeTimer?.cancel();
     _reconnectTimer = Timer(Duration(seconds: _reconnectDelaySeconds), () {
       _reconnectDelaySeconds = (_reconnectDelaySeconds * 2).clamp(5, 300);
       connect();
@@ -121,6 +146,7 @@ class WebSocketService {
 
   void dispose() {
     _reconnectTimer?.cancel();
+    _handshakeTimer?.cancel();
     _subscription?.cancel();
     _channel?.sink.close();
     _updateStatusController.close();

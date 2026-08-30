@@ -278,11 +278,23 @@ class QuickJsService {
 
   static final Map<String, Map<String, String>> _headersCache = {};
 
+  static void cacheImageHeaders(String url, Map<String, String> headers) {
+    if (url.isNotEmpty && headers.isNotEmpty) {
+      _headersCache[url] = headers;
+    }
+  }
+
   static Map<String, String> getImageHeaders(String sourceOrUrl, [String? imageUrl]) {
     final targetUrl = (imageUrl != null && imageUrl.isNotEmpty) ? imageUrl : sourceOrUrl;
     final headers = <String, String>{
       'User-Agent': MClient.userAgent,
     };
+
+    // 0. Check if this exact image URL has specific headers registered by the extension
+    if (targetUrl.isNotEmpty && _headersCache.containsKey(targetUrl)) {
+      headers.addAll(_headersCache[targetUrl]!);
+      return headers;
+    }
 
     // 1. Query extension headers dynamically from the installed JS source (with memory caching)
     if (sourceOrUrl.isNotEmpty) {
