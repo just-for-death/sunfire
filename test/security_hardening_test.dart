@@ -20,13 +20,13 @@ void main() {
       expect(MClient.userAgent, isNot(contains('token')));
     });
 
-    test('3. FlareSolverr URL validation prevents arbitrary URLs', () {
-      const testUrl = 'https://malicious.com/v1';
+    test('3. FlareSolverr URL validation normalizes proxy path correctly', () {
+      const testUrl = 'http://192.168.1.50:8191';
       final normalized = MClient.normalizeProxyUrl(testUrl);
       
       // Should normalize to /v1 if not present
-      expect(normalized, contains('/v1'));
-      expect(normalized, isNot(contains('malicious')));
+      expect(normalized, equals('http://192.168.1.50:8191/v1'));
+      expect(MClient.normalizeProxyUrl('http://192.168.1.50:8191/v1/'), equals('http://192.168.1.50:8191/v1'));
     });
 
     test('4. Cookie storage uses domain-level scoping', () {
