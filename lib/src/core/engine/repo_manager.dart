@@ -51,6 +51,12 @@ class RepoSourceItem {
   }
 }
 
+class _ScoredCandidate {
+  final RepoSourceItem item;
+  final int score;
+  const _ScoredCandidate({required this.item, required this.score});
+}
+
 class RepoManager {
   static RepoManager? _instance;
   final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 30)));
@@ -223,14 +229,16 @@ class RepoManager {
     }
   }
 
-  /// Finds and downloads JS scrapers ONLY for sources installed on the user's server.
-  /// - Strictly prioritizes English ('en' or 'all') variants over non-English.
-  /// - Automatically falls back to other repository candidate URLs if one returns 404.
+  /// Finds and downloads JS scrapers for EVERY source installed on the user's server.
+  /// Fixes:
+  /// 1. Dedup uses raw server name (not normalized) so nHentai and nHentai.com both install.
+  /// 2. Domain-aware matching: "nHentai.com" prefers "nhentai_com.js" over "nhentai.js".
+  /// 3. Full filename scoring: pkg basename match weighted highest.
   Future<List<String>> downloadAndInstallMatchingSources({
     required List<String> serverSourceNames,
     required List<String> userRepoUrls,
   }) async {
-    // Fetch all raw sources across all user repositories without discarding alternative mirrors
+    // Fetch all raw sources across all user repositories
     final allRepoSources = <RepoSourceItem>[];
     final effectiveRepoUrls = List<String>.from(userRepoUrls);
     if (effectiveRepoUrls.isEmpty) {
@@ -242,51 +250,90 @@ class RepoManager {
     }
 
     final installed = <String>[];
-    final installedNormalized = <String>{};
+    // Use raw server name (not normalized) as dedup key so "nHentai" and "nHentai.com"
+    // are treated as two distinct install targets.
+    final installedServerNames = <String>{};
 
     for (final serverName in serverSourceNames) {
+      if (installedServerNames.contains(serverName)) continue;
+
       final cleanServerName = SourceMigrationService.instance.normalizeSourceName(serverName);
-      if (cleanServerName.isEmpty || installedNormalized.contains(cleanServerName)) {
+      if (cleanServerName.isEmpty) continue;
+
+      // Build a domain-aware key — preserves ".com", ".net" etc for pkg matching
+      // e.g. "nHentai.com" → domain hint "com" → look for "nhentai_com.js" first
+      final serverDomainHint = _extractDomainHint(serverName); // e.g. 'com', 'net', ''
+
+      // 1. Gather all candidates matching this server source name
+      final candidates = <_ScoredCandidate>[];
+      for (final item in allRepoSources) {
+        final cleanRepoName = SourceMigrationService.instance.normalizeSourceName(item.name);
+        final pkgBase = item.sourceCodeUrl.split('/').last.replaceAll('.js', '');
+        final cleanPkg = pkgBase.replaceAll('_', ' ').toLowerCase().trim();
+        final alphaRepo = cleanRepoName.replaceAll(' ', '');
+        final alphaServer = cleanServerName.replaceAll(' ', '');
+        final alphaPkg = cleanPkg.replaceAll(' ', '');
+
+        if (!item.sourceCodeUrl.toLowerCase().endsWith('.js')) continue;
+
+        int score = 0;
+
+        // Exact name match (highest priority)
+        if (cleanRepoName == cleanServerName) {
+          score += 100;
+        } else if (alphaRepo == alphaServer) {
+          score += 90;
+        } else if (alphaPkg == alphaServer) {
+          // Pkg filename exact match
+          score += 85;
+        } else if (serverDomainHint.isNotEmpty && pkgBase.endsWith('_$serverDomainHint') && alphaRepo.startsWith(alphaServer.replaceAll(serverDomainHint, ''))) {
+          // Domain-aware: if server name ends with ".com" and pkg has "_com"
+          score += 80;
+        } else {
+          // Stemmed match (comics→comic, scans→scan)
+          final stemServer = _stemName(alphaServer);
+          final stemRepo = _stemName(alphaRepo);
+          final stemPkg = _stemName(alphaPkg);
+          if (stemRepo == stemServer || stemPkg == stemServer) {
+            score += 70;
+          } else if (alphaServer.length > 4 && alphaRepo.startsWith(alphaServer)) {
+            // Prefix match
+            score += 50;
+          } else if (alphaRepo.length > 4 && alphaServer.startsWith(alphaRepo)) {
+            score += 40;
+          } else if (alphaServer.length >= 4 && alphaRepo.contains(alphaServer)) {
+            // Contains match
+            score += 30;
+          } else if (alphaRepo.length >= 4 && alphaServer.contains(alphaRepo)) {
+            score += 20;
+          }
+        }
+
+        if (score <= 0) continue;
+
+        // Language bonus: prefer en/all over non-English
+        final lang = item.lang.toLowerCase();
+        if (lang == 'en' || lang == 'all') score += 10;
+
+        candidates.add(_ScoredCandidate(item: item, score: score));
+      }
+
+      if (candidates.isEmpty) {
+        await LoggerService.instance.logWarning(
+          '✗ No repo match found for server source: $serverName (normalized: $cleanServerName)',
+          'RepoManager',
+        );
         continue;
       }
 
-      // 1. Gather all candidates matching this server source name
-      final candidates = <RepoSourceItem>[];
-      for (final item in allRepoSources) {
-        final cleanRepoName = SourceMigrationService.instance.normalizeSourceName(item.name);
-        final cleanPkg = SourceMigrationService.instance.normalizeSourceName(item.sourceCodeUrl.split('/').last.replaceAll('.js', ''));
-        final isMatch = cleanRepoName == cleanServerName ||
-            cleanRepoName.replaceAll('_', '') == cleanServerName.replaceAll('_', '') ||
-            cleanPkg == cleanServerName ||
-            cleanPkg.replaceAll('_', '') == cleanServerName.replaceAll('_', '') ||
-            (cleanServerName.length > 4 && cleanRepoName.startsWith(cleanServerName)) ||
-            (cleanRepoName.length > 4 && cleanServerName.startsWith(cleanRepoName));
-
-        if (isMatch &&
-            item.sourceCodeUrl.isNotEmpty &&
-            item.sourceCodeUrl.toLowerCase().endsWith('.js')) {
-          candidates.add(item);
-        }
-      }
-
-      if (candidates.isEmpty) continue;
-
-      // 2. Sort candidates:
-      //    a. English ('en' or 'all') first
-      //    b. Higher version first
+      // 2. Sort by score desc, then by version desc
       candidates.sort((a, b) {
-        final aLang = a.lang.toLowerCase();
-        final bLang = b.lang.toLowerCase();
-        final aIsEn = aLang == 'en' || aLang == 'all';
-        final bIsEn = bLang == 'en' || bLang == 'all';
-
-        if (aIsEn && !bIsEn) return -1;
-        if (!aIsEn && bIsEn) return 1;
-
-        return compareVersions(b.version, a.version);
+        final scoreDiff = b.score.compareTo(a.score);
+        if (scoreDiff != 0) return scoreDiff;
+        return compareVersions(b.item.version, a.item.version);
       });
 
-      // 3. Filter out non-English variants if English / default source is expected
+      // 3. Filter out non-English unless server source explicitly targets non-English
       final serverLower = serverName.toLowerCase();
       final expectsNonEnglish = serverLower.contains('(fr)') ||
           serverLower.contains('(es)') ||
@@ -294,19 +341,22 @@ class RepoManager {
           serverLower.contains('(ar)') ||
           serverLower.contains('(id)') ||
           serverLower.contains('(ko)') ||
-          serverLower.contains('(ru)');
+          serverLower.contains('(ru)') ||
+          serverLower.contains('(pt)') ||
+          serverLower.contains('(zh)');
 
-      final filteredCandidates = expectsNonEnglish
+      final prioritized = expectsNonEnglish
           ? candidates
           : candidates.where((c) {
-              final lang = c.lang.toLowerCase();
+              final lang = c.item.lang.toLowerCase();
               return lang == 'en' || lang == 'all';
             }).toList();
 
-      final listToTry = filteredCandidates.isNotEmpty ? filteredCandidates : candidates;
+      final listToTry = prioritized.isNotEmpty ? prioritized : candidates;
 
-      // 4. Try candidates sequentially until one downloads successfully (working mirror)
-      for (final item in listToTry) {
+      // 4. Try candidates sequentially until one downloads successfully
+      for (final scored in listToTry) {
+        final item = scored.item;
         final jsCode = await downloadJsSourceCode(item.sourceCodeUrl);
         if (jsCode != null && jsCode.trim().isNotEmpty) {
           await QuickJsService.instance.saveLocalExtension(
@@ -316,17 +366,42 @@ class RepoManager {
             iconUrl: item.iconUrl,
           );
           installed.add(item.name);
-          installedNormalized.add(cleanServerName);
+          installedServerNames.add(serverName);
           await LoggerService.instance.logInfo(
-            '✓ Auto-installed local JS scraper: ${item.name} (${item.lang}) v${item.version} from ${item.sourceCodeUrl}',
+            '✓ Installed local JS scraper: ${item.name} (${item.lang}) v${item.version} [score=${scored.score}] for server source "$serverName"',
             'RepoManager',
           );
           break;
         }
       }
+
+      if (!installedServerNames.contains(serverName)) {
+        await LoggerService.instance.logWarning(
+          '✗ Download failed for all candidates of: $serverName',
+          'RepoManager',
+        );
+      }
     }
+
+    await LoggerService.instance.logInfo(
+      '✓ downloadAndInstallMatchingSources: ${installed.length}/${serverSourceNames.length} server sources installed locally',
+      'RepoManager',
+    );
     return installed;
   }
+
+  /// Extracts domain extension hint from a source name.
+  /// e.g. "nHentai.com" → "com", "MangaFreak" → ""
+  static String _extractDomainHint(String name) {
+    final match = RegExp(r'\.(com|net|org|me|cc|to|ru|io|tv)$', caseSensitive: false).firstMatch(name.trim());
+    return match?.group(1)?.toLowerCase() ?? '';
+  }
+
+  /// Applies word-stemming to an alphanumeric-only source name string.
+  static String _stemName(String s) =>
+      s.replaceAll(RegExp(r'comics?'), 'comic')
+       .replaceAll(RegExp(r'scans?'), 'scan')
+       .replaceAll(RegExp(r'mangas?'), 'manga');
 
   /// ── INSTALL ALL AVAILABLE REPO EXTENSIONS (used during onboarding) ───
   /// Downloads and installs EVERY English / universal JS scraper found across
