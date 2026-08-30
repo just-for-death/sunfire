@@ -11,40 +11,22 @@ subprojects {
         rootProject.layout.buildDirectory.dir(project.name)
     )
 }
-subprojects {
-    project.evaluationDependsOn(':app')
-}
 
-// Workaround for older Flutter plugins (e.g. flutter_qjs 0.3.x) that don't
-// declare an Android `namespace` in their build.gradle. AGP 8+ requires it.
-// See: https://d.android.com/r/tools/upgrade-assistant/set-namespace
-// We fall back to the plugin's Gradle `group` (set in its own build.gradle).
-//
-// Uses `plugins.withId` (not `afterEvaluate`) because the existing
-// `subprojects { project.evaluationDependsOn(':app') }` above forces all
-// subprojects to be evaluated immediately, which makes `afterEvaluate` throw
-// "Cannot run Project.afterEvaluate(Closure) when the project is already
-// evaluated." `plugins.withId` fires during the subproject's own
-// configuration phase, before evaluation completes.
 subprojects { subproject ->
-    subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask).configureEach {
-        compilerOptions {
-            languageVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_8
-            apiVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_8
-        }
+    subproject.tasks.withType(JavaCompile).configureEach {
+        options.compilerArgs << "-Xlint:-options"
     }
-    subproject.plugins.withId('com.android.library') {
-        subproject.android {
-            if (namespace == null) {
-                def g = subproject.group?.toString()
-                if (g != null && !g.isEmpty()) {
-                    namespace = g
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            project.android {
+                if (namespace == null) {
+                    def g = project.group?.toString()
+                    if (g != null && !g.isEmpty()) {
+                        namespace = g
+                    }
                 }
-            }
-            compileSdkVersion 35
-            buildToolsVersion "35.0.0"
-            defaultConfig {
-                minSdkVersion 21
+                compileSdkVersion 36
+                buildToolsVersion "36.0.0"
             }
         }
     }
