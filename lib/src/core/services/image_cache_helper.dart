@@ -112,6 +112,26 @@ class ImageCacheHelper {
     }
   }
 
+  static bool _isValidImageBytes(List<int> b) {
+    if (b.length < 12) return false;
+    // JPEG: FF D8
+    if (b[0] == 0xFF && b[1] == 0xD8) return true;
+    // PNG: 89 50 4E 47
+    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return true;
+    // WebP: RIFF ... WEBP
+    if (b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 &&
+        b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50) {
+      return true;
+    }
+    // GIF: GIF87a / GIF89a
+    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return true;
+    // BMP: 42 4D
+    if (b[0] == 0x42 && b[1] == 0x4D) return true;
+    // Reject HTML/XML/JSON error responses (<, {, [)
+    if (b[0] == 60 || b[0] == 123 || b[0] == 91) return false;
+    return b.length > 500;
+  }
+
   static Future<Uint8List?> _doFetch(String url, String sourceName, int mangaServerId) async {
     try {
       final headers = QuickJsService.getImageHeaders(sourceName, url);
@@ -127,14 +147,12 @@ class ImageCacheHelper {
         final resp = await req.close();
         if (resp.statusCode == 200) {
           final b = await resp.fold<List<int>>([], (p, c) => p..addAll(c));
-          if (b.length > 200) {
-            bytes = Uint8List.fromList(b);
-          }
+          if (_isValidImageBytes(b)) { bytes = Uint8List.fromList(b); }
         }
       } catch (_) {}
 
       // 2. Fallback on desktop: use curl process to bypass TLS fingerprint blocking from Cloudflare CDNs
-      if ((bytes == null || bytes.isEmpty) && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
+      if (bytes == null && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
         try {
           final args = <String>['-s', '-L', '--max-time', '12'];
           headers.forEach((k, v) {
@@ -144,9 +162,7 @@ class ImageCacheHelper {
           final res = await Process.run('curl', args, stdoutEncoding: null);
           if (res.exitCode == 0) {
             final b = res.stdout as List<int>;
-            if (b.length > 200) {
-              bytes = Uint8List.fromList(b);
-            }
+            if (_isValidImageBytes(b)) { bytes = Uint8List.fromList(b); }
           }
         } catch (_) {}
       }
