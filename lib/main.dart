@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -18,24 +16,15 @@ import 'src/core/sync/graphql_client_service.dart';
 import 'src/core/sync/sync_engine.dart';
 import 'src/core/sync/websocket_service.dart';
 
-class _AppHttpOverrides extends HttpOverrides {
-  @override
-  HttpClient createHttpClient(SecurityContext? context) {
-    return super.createHttpClient(context)
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-  }
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (kDebugMode) {
-    HttpOverrides.global = _AppHttpOverrides();
-  }
 
   await SentryFlutter.init(
     (options) {
-      options.dsn = '';
-      options.tracesSampleRate = 1.0;
+      // Configure Sentry DSN for production builds
+      // For development, leave empty to disable error reporting
+      options.dsn = kReleaseMode ? '' : '';
+      options.tracesSampleRate = kReleaseMode ? 1.0 : 0.0;
       options.sendDefaultPii = false;
     },
     appRunner: () async {
