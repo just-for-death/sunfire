@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sentry_flutter/sentry_flutter.dart';
 
 class LogEntry {
   final DateTime timestamp;
@@ -158,16 +157,6 @@ class LoggerService {
       stackTrace: stackTrace,
     );
     await _recordLog(entry);
-
-    if (exception != null) {
-      try {
-        await Sentry.captureException(
-          exception,
-          stackTrace: stackTrace,
-          hint: Hint.withMap({'category': category ?? 'General', 'message': message}),
-        );
-      } catch (_) {}
-    }
   }
 
   Future<void> _writeToLogFile(String text) async {
