@@ -87,7 +87,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       localJsSources.add({
         'id': localId,
         'name': name,
-        'displayName': '$name ⚡',
+        'displayName': name,
         'lang': 'EN',
         'supportsLatest': true,
         'isPinned': SettingsService.instance.isSourcePinned(localId),
@@ -521,13 +521,19 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildSourcesTab(),
-          _buildExtensionsTab(),
-          _buildMigrateTab(),
-        ],
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildSourcesTab(),
+              _buildExtensionsTab(),
+              _buildMigrateTab(),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -614,53 +620,89 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   selected: _selectedSourceFilter == 'All',
                   selectedColor: primaryColor,
                   backgroundColor: const Color(0x1F2A2A32),
+                  showCheckmark: false,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   labelStyle: TextStyle(
-                    color: _selectedSourceFilter == 'All' ? Colors.white : Colors.grey,
-                    fontWeight: _selectedSourceFilter == 'All' ? FontWeight.bold : FontWeight.normal,
+                    color: _selectedSourceFilter == 'All' ? Colors.white : Colors.grey[400],
+                    fontWeight: _selectedSourceFilter == 'All' ? FontWeight.bold : FontWeight.w500,
+                    fontSize: 13,
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color: _selectedSourceFilter == 'All' ? primaryColor : const Color(0x2BFFFFFF),
+                      width: _selectedSourceFilter == 'All' ? 1.2 : 0.8,
+                    ),
+                  ),
                   onSelected: (_) => setState(() => _selectedSourceFilter = 'All'),
                 ),
                 const SizedBox(width: 8),
                 ChoiceChip(
-                  avatar: const Icon(Icons.flash_on_rounded, size: 16, color: Colors.tealAccent),
+                  avatar: const Icon(Icons.flash_on_rounded, size: 15, color: Colors.tealAccent),
                   label: const Text('Local JS'),
                   selected: _selectedSourceFilter == 'Local JS',
                   selectedColor: Colors.teal.shade800,
                   backgroundColor: const Color(0x1F2A2A32),
+                  showCheckmark: false,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   labelStyle: TextStyle(
-                    color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : Colors.grey,
-                    fontWeight: _selectedSourceFilter == 'Local JS' ? FontWeight.bold : FontWeight.normal,
+                    color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : Colors.grey[400],
+                    fontWeight: _selectedSourceFilter == 'Local JS' ? FontWeight.bold : FontWeight.w500,
+                    fontSize: 13,
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : const Color(0x2BFFFFFF),
+                      width: _selectedSourceFilter == 'Local JS' ? 1.2 : 0.8,
+                    ),
+                  ),
                   onSelected: (_) => setState(() => _selectedSourceFilter = 'Local JS'),
                 ),
                 const SizedBox(width: 8),
                 ChoiceChip(
-                  avatar: const Icon(Icons.cloud_queue_rounded, size: 16, color: Colors.lightBlueAccent),
+                  avatar: const Icon(Icons.cloud_queue_rounded, size: 15, color: Colors.lightBlueAccent),
                   label: const Text('Server (Suwayomi)'),
                   selected: _selectedSourceFilter == 'Server',
                   selectedColor: Colors.blue.shade800,
                   backgroundColor: const Color(0x1F2A2A32),
+                  showCheckmark: false,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   labelStyle: TextStyle(
-                    color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : Colors.grey,
-                    fontWeight: _selectedSourceFilter == 'Server' ? FontWeight.bold : FontWeight.normal,
+                    color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : Colors.grey[400],
+                    fontWeight: _selectedSourceFilter == 'Server' ? FontWeight.bold : FontWeight.w500,
+                    fontSize: 13,
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : const Color(0x2BFFFFFF),
+                      width: _selectedSourceFilter == 'Server' ? 1.2 : 0.8,
+                    ),
+                  ),
                   onSelected: (_) => setState(() => _selectedSourceFilter = 'Server'),
                 ),
                 const SizedBox(width: 8),
                 ChoiceChip(
-                  avatar: const Icon(Icons.push_pin_rounded, size: 16, color: Colors.amberAccent),
+                  avatar: const Icon(Icons.push_pin_rounded, size: 15, color: Colors.amberAccent),
                   label: const Text('Pinned'),
                   selected: _selectedSourceFilter == 'Pinned',
                   selectedColor: Colors.amber.shade900,
                   backgroundColor: const Color(0x1F2A2A32),
+                  showCheckmark: false,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   labelStyle: TextStyle(
-                    color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : Colors.grey,
-                    fontWeight: _selectedSourceFilter == 'Pinned' ? FontWeight.bold : FontWeight.normal,
+                    color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : Colors.grey[400],
+                    fontWeight: _selectedSourceFilter == 'Pinned' ? FontWeight.bold : FontWeight.w500,
+                    fontSize: 13,
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : const Color(0x2BFFFFFF),
+                      width: _selectedSourceFilter == 'Pinned' ? 1.2 : 0.8,
+                    ),
+                  ),
                   onSelected: (_) => setState(() => _selectedSourceFilter = 'Pinned'),
                 ),
               ],
@@ -678,8 +720,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
           if (localJsUnpinned.isNotEmpty && _selectedSourceFilter != 'Server') ...[
             const Text(
-              '⚡ LOCAL EXTENSIONS (On-Device Scrapers)',
-              style: TextStyle(color: Colors.tealAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+              'LOCAL EXTENSIONS (ON-DEVICE)',
+              style: TextStyle(color: Colors.tealAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8),
             ),
             const SizedBox(height: 8),
             ...localJsUnpinned.map((s) => _buildSourceItemTile(s)),
@@ -688,8 +730,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
           if (serverUnpinned.isNotEmpty && _selectedSourceFilter != 'Local JS') ...[
             const Text(
-              '☁ SERVER SOURCES (Suwayomi Proxy)',
-              style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+              'SERVER SOURCES (SUWAYOMI)',
+              style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8),
             ),
             const SizedBox(height: 8),
             ...serverUnpinned.map((s) => _buildSourceItemTile(s)),
@@ -827,20 +869,20 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         runSpacing: 2,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                            decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(4)),
-                            child: Text(lang, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: const Color(0x22FFFFFF), borderRadius: BorderRadius.circular(6)),
+                            child: Text(lang, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: isLocalJs ? Colors.teal.withAlpha(50) : Colors.blue.withAlpha(50),
-                              borderRadius: BorderRadius.circular(4),
+                              color: isLocalJs ? Colors.teal.withValues(alpha: 0.15) : Colors.blue.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              isLocalJs ? '⚡ Local' : '☁ Server',
+                              isLocalJs ? 'Local' : 'Server',
                               style: TextStyle(
-                                fontSize: 9,
+                                fontSize: 10,
                                 fontWeight: FontWeight.bold,
                                 color: isLocalJs ? Colors.tealAccent : Colors.lightBlueAccent,
                               ),
@@ -889,6 +931,23 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     ),
   );
 }
+
+  Future<void> _installAllJsExtensions() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Installing all repository extensions locally...')),
+    );
+    final count = await RepoManager.instance.downloadAndInstallAllRepoExtensions(
+      userRepoUrls: SettingsService.instance.customRepos,
+    );
+    await _fetchServerSources();
+    await _fetchExtensions();
+    if (mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Successfully installed/updated $count extensions locally')),
+      );
+    }
+  }
 
   // ═════════════════════════════════════════════════════════
   String _selectedExtensionFilter = 'All'; // 'All', 'Local JS', 'Server APK', 'Installed'
@@ -1013,29 +1072,89 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               FilterChip(
                 label: const Text('All'),
                 selected: _selectedExtensionFilter == 'All',
-                selectedColor: primaryColor.withAlpha(80),
+                selectedColor: primaryColor.withValues(alpha: 0.25),
+                backgroundColor: const Color(0x1F2A2A32),
+                labelStyle: TextStyle(
+                  color: _selectedExtensionFilter == 'All' ? primaryColor : Colors.white70,
+                  fontWeight: _selectedExtensionFilter == 'All' ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(
+                    color: _selectedExtensionFilter == 'All' ? primaryColor : const Color(0x2BFFFFFF),
+                    width: 0.8,
+                  ),
+                ),
                 onSelected: (_) => setState(() => _selectedExtensionFilter = 'All'),
               ),
               const SizedBox(width: 6),
               FilterChip(
-                label: const Text('⚡ Local JS (iOS & Android)'),
+                label: const Text('Local JS'),
                 selected: _selectedExtensionFilter == 'Local JS',
-                selectedColor: Colors.teal.withAlpha(80),
+                selectedColor: Colors.teal.withValues(alpha: 0.25),
+                backgroundColor: const Color(0x1F2A2A32),
+                labelStyle: TextStyle(
+                  color: _selectedExtensionFilter == 'Local JS' ? Colors.tealAccent : Colors.white70,
+                  fontWeight: _selectedExtensionFilter == 'Local JS' ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(
+                    color: _selectedExtensionFilter == 'Local JS' ? Colors.teal : const Color(0x2BFFFFFF),
+                    width: 0.8,
+                  ),
+                ),
                 onSelected: (_) => setState(() => _selectedExtensionFilter = 'Local JS'),
               ),
               const SizedBox(width: 6),
               FilterChip(
-                label: const Text('☁ Server APK (Suwayomi)'),
+                label: const Text('Server APK'),
                 selected: _selectedExtensionFilter == 'Server APK',
-                selectedColor: Colors.blue.withAlpha(80),
+                selectedColor: Colors.blue.withValues(alpha: 0.25),
+                backgroundColor: const Color(0x1F2A2A32),
+                labelStyle: TextStyle(
+                  color: _selectedExtensionFilter == 'Server APK' ? Colors.lightBlueAccent : Colors.white70,
+                  fontWeight: _selectedExtensionFilter == 'Server APK' ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(
+                    color: _selectedExtensionFilter == 'Server APK' ? Colors.blue : const Color(0x2BFFFFFF),
+                    width: 0.8,
+                  ),
+                ),
                 onSelected: (_) => setState(() => _selectedExtensionFilter = 'Server APK'),
               ),
               const SizedBox(width: 6),
               FilterChip(
                 label: const Text('Installed'),
                 selected: _selectedExtensionFilter == 'Installed',
-                selectedColor: Colors.purple.withAlpha(80),
+                selectedColor: primaryColor.withValues(alpha: 0.25),
+                backgroundColor: const Color(0x1F2A2A32),
+                labelStyle: TextStyle(
+                  color: _selectedExtensionFilter == 'Installed' ? primaryColor : Colors.white70,
+                  fontWeight: _selectedExtensionFilter == 'Installed' ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(
+                    color: _selectedExtensionFilter == 'Installed' ? primaryColor : const Color(0x2BFFFFFF),
+                    width: 0.8,
+                  ),
+                ),
                 onSelected: (_) => setState(() => _selectedExtensionFilter = 'Installed'),
+              ),
+              const SizedBox(width: 8),
+              ActionChip(
+                avatar: const Icon(Icons.download_done_rounded, size: 16, color: Colors.tealAccent),
+                label: const Text('Install All', style: TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                backgroundColor: Colors.teal.withValues(alpha: 0.15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Colors.teal, width: 0.8)),
+                onPressed: _installAllJsExtensions,
               ),
             ],
           ),
@@ -1183,13 +1302,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                         ),
                                         const SizedBox(width: 6),
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                                           decoration: BoxDecoration(
-                                            color: isJs ? Colors.teal.withAlpha(35) : Colors.blue.withAlpha(35),
+                                            color: isJs ? Colors.teal.withValues(alpha: 0.15) : Colors.blue.withValues(alpha: 0.15),
                                             borderRadius: BorderRadius.circular(6),
                                           ),
                                           child: Text(
-                                            isJs ? '⚡ Local' : '☁ Server',
+                                            isJs ? 'Local' : 'Server',
                                             style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isJs ? Colors.tealAccent : Colors.lightBlueAccent),
                                           ),
                                         ),

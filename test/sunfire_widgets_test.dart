@@ -14,8 +14,8 @@ void main() {
       );
 
       expect(find.text('Sunfire'), findsOneWidget);
-      expect(find.text('The Local-First Manga Experience'), findsOneWidget);
-      expect(find.text('Get Started'), findsOneWidget);
+      expect(find.text('Standalone Mode'), findsOneWidget);
+      expect(find.text('Link Suwayomi Server'), findsOneWidget);
     });
 
     testWidgets('UpdatesScreen renders initial state', (WidgetTester tester) async {

@@ -268,8 +268,8 @@ class SourceMigrationService {
       isAvailableOnServer: isAvailableOnServer,
       serverSourceName: matchedServerSource,
       statusMessage: isAvailableOnServer
-          ? '⚡ Installed locally & ☁ synced with server ($matchedServerSource)'
-          : '⚡ Installed locally on device (Source not available on server repo)',
+          ? 'Installed locally & synced with server ($matchedServerSource)'
+          : 'Installed locally on device (Source not available on server repo)',
     );
   }
 

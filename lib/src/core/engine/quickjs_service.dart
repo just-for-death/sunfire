@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../logging/logger_service.dart';
@@ -26,27 +28,27 @@ class QuickJsService {
     return _instance!;
   }
 
-  /// Get a pooled (or new) JsExtensionService for [sourceName].
-  /// Reuses existing runtime if available; evicts LRU when pool is full.
+  /// Check whether QuickJS C-FFI bindings are functional on the current host.
+  bool get isSupported => !kIsWeb;
+
+  /// Get or create a pooled JsExtensionService runtime for [sourceName].
   JsExtensionService _getOrCreateRuntime(String sourceName, String jsCode) {
     if (_runtimePool.containsKey(sourceName)) {
-      // Move to end of LRU list (most recently used)
       _poolAccessOrder.remove(sourceName);
       _poolAccessOrder.add(sourceName);
       return _runtimePool[sourceName]!;
     }
-    // Evict LRU entry when pool is full
     if (_runtimePool.length >= _poolMaxSize && _poolAccessOrder.isNotEmpty) {
-      final lruKey = _poolAccessOrder.removeAt(0);
-      _runtimePool.remove(lruKey)?.dispose();
+      final oldest = _poolAccessOrder.removeAt(0);
+      _runtimePool.remove(oldest)?.dispose();
     }
-    final service = JsExtensionService(
+    final runtime = JsExtensionService(
       sourceMeta: extractSourceMetadata(jsCode),
       sourceCode: jsCode,
     );
-    _runtimePool[sourceName] = service;
+    _runtimePool[sourceName] = runtime;
     _poolAccessOrder.add(sourceName);
-    return service;
+    return runtime;
   }
 
   /// Invalidate a pooled runtime (e.g. when JS code is updated).
@@ -59,9 +61,29 @@ class QuickJsService {
   Future<void> initialize() async {
     try {
       await _loadInstalledExtensionsFromDisk();
+      await _loadBundledExtensionsFromAssets();
     } catch (e, stack) {
       await LoggerService.instance.logError('Failed to initialize QuickJS: $e', exception: e, stackTrace: stack, category: 'QuickJS');
     }
+  }
+
+  Future<void> _loadBundledExtensionsFromAssets() async {
+    try {
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      final assetPaths = manifest.listAssets().where((p) => p.startsWith('assets/extensions/') && p.endsWith('.js')).toList();
+      for (final path in assetPaths) {
+        try {
+          final code = await rootBundle.loadString(path);
+          final fileName = path.split('/').last.replaceAll('.js', '');
+          final cleanKey = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
+          final displayName = fileName.replaceAll('_', ' ').trim();
+          if (!_installedJsSources.containsKey(cleanKey)) {
+            _installedJsSources[cleanKey] = code;
+            _canonicalDisplayNames[cleanKey] = displayName;
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadInstalledExtensionsFromDisk() async {
@@ -315,12 +337,25 @@ class QuickJsService {
               _headersCache[sourceOrUrl] = extHeaders;
               headers.addAll(extHeaders);
             }
+            // If Referer wasn't in extHeaders, extract baseUrl and set it
+            if (!headers.containsKey('Referer')) {
+              final baseUrl = instance.extractBaseUrl(jsCode);
+              if (baseUrl != null && baseUrl.isNotEmpty) {
+                headers['Referer'] = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
+              }
+            }
           }
         } catch (_) {}
       }
     }
 
-    // 2. Attach domain / Cloudflare cookies from MClient
+    // 2. Fallback for Webtoons images
+    if ((targetUrl.contains('webtoon') || targetUrl.contains('pstatic.net') || sourceOrUrl.toLowerCase().contains('webtoon')) &&
+        (!headers.containsKey('Referer') || headers['Referer']!.isEmpty)) {
+      headers['Referer'] = 'https://www.webtoons.com/';
+    }
+
+    // 3. Attach domain / Cloudflare cookies from MClient
     if (targetUrl.isNotEmpty) {
       final cookies = MClient.getCookiesPref(targetUrl);
       if (cookies.isNotEmpty) {
@@ -328,7 +363,7 @@ class QuickJsService {
       }
     }
 
-    // 3. If the extension explicitly provided an empty Referer (""), respect it and remove it
+    // 4. If the extension explicitly provided an empty Referer (""), respect it and remove it
     if (headers.containsKey('Referer') && headers['Referer']!.isEmpty) {
       headers.remove('Referer');
     }
@@ -533,18 +568,27 @@ class QuickJsService {
     return {};
   }
 
-  /// ── SCRAPE CHAPTER PAGES VIA MANGAYOMI RUNTIME ────────────────
   Future<List<String>> fetchChapterPagesLocal(String sourceName, String chapterUrl) async {
     final jsCode = getExtensionCode(sourceName);
     if (jsCode == null || jsCode.isEmpty) {
       return [];
     }
 
+    var targetUrl = chapterUrl;
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      final metaUrl = extractBaseUrl(jsCode);
+      if (metaUrl != null && metaUrl.isNotEmpty) {
+        final base = metaUrl.endsWith('/') ? metaUrl.substring(0, metaUrl.length - 1) : metaUrl;
+        final path = targetUrl.startsWith('/') ? targetUrl : '/$targetUrl';
+        targetUrl = '$base$path';
+      }
+    }
+
     // Use pooled runtime — avoids re-init overhead (~300–500ms) on every call
     final service = _getOrCreateRuntime(sourceName, jsCode);
 
     try {
-      final pages = await service.getPageList(chapterUrl);
+      final pages = await service.getPageList(targetUrl);
       if (pages.isNotEmpty) return pages;
     } catch (e) {
       // In test mock mode or if quickjs symbol lookup fails in unit test runner
