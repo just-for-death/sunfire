@@ -348,6 +348,10 @@ class SyncEngine {
           // Update manga fields from detail response
           manga.description = mangaData['description'] as String? ?? manga.description;
           manga.status = mangaData['status'] as String? ?? manga.status;
+          final rawMangaUrl = (mangaData['url'] ?? mangaData['realUrl']) as String?;
+          if (rawMangaUrl != null && rawMangaUrl.isNotEmpty) {
+            manga.url = rawMangaUrl;
+          }
           final genresList = mangaData['genre'] as List<dynamic>?;
           if (genresList != null) {
             manga.genres = genresList.map((g) => g.toString()).toList();

@@ -29,6 +29,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   bool _sortAscending = false;
   bool _isDescExpanded = false;
 
+  // Chapter filter & search
+  String _chapterFilter = 'All'; // 'All', 'Unread', 'Downloaded', 'Bookmarked'
+  String _chapterSearch = '';
+  bool _isSearchingChapters = false;
+
   // Multi-chapter selection state
   final Set<int> _selectedChapterIds = {};
 
@@ -64,6 +69,16 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     return parts.join(' • ');
   }
 
+  String? _formatChapterDate(int? rawTimestamp) {
+    if (rawTimestamp == null || rawTimestamp <= 0) return null;
+    final ms = rawTimestamp > 1000000000000 ? rawTimestamp : rawTimestamp * 1000;
+    final date = DateTime.fromMillisecondsSinceEpoch(ms);
+    if (date.year < 2005 || date.isAfter(DateTime.now().add(const Duration(days: 2)))) {
+      return null;
+    }
+    return _formatRelativeTime(date);
+  }
+
   String _formatRelativeTime(DateTime date) {
     final now = DateTime.now();
     final diff = now.difference(date);
@@ -82,8 +97,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       final months = (diff.inDays / 30).floor();
       return '${months}mo ago';
     } else {
-      final years = (diff.inDays / 365).floor();
-      return '${years}y ago';
+      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     }
   }
 
@@ -126,6 +140,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           _manga!.status = mMap['status'] as String?;
           _manga!.inLibrary = mMap['inLibrary'] as bool? ?? _manga!.inLibrary;
 
+          final rawMangaUrl = (mMap['url'] ?? mMap['realUrl']) as String?;
+          if (rawMangaUrl != null && rawMangaUrl.isNotEmpty) {
+            _manga!.url = rawMangaUrl;
+          }
+
           final rawThumb = mMap['thumbnailUrl'] as String?;
           if (rawThumb != null && rawThumb.isNotEmpty) {
             _manga!.thumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
@@ -158,14 +177,22 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   fetchedTimestamp = int.tryParse(rawFetched) ?? (DateTime.tryParse(rawFetched)?.millisecondsSinceEpoch != null ? DateTime.tryParse(rawFetched)!.millisecondsSinceEpoch ~/ 1000 : null);
                 }
 
+                final rawChUrl = (chMap['url'] ?? chMap['realUrl'] ?? '').toString();
+                final rawChRealUrl = (chMap['realUrl'] ?? chMap['url'] ?? '').toString();
+
                 final ch = Chapter()
                   ..serverId = parseIntSafe(chMap['id'])
                   ..mangaId = widget.mangaServerId
                   ..name = chMap['name']?.toString() ?? 'Chapter ${chMap['chapterNumber'] ?? ""}'
                   ..chapterNumber = parseDoubleSafe(chMap['chapterNumber'])
+                  ..url = rawChUrl
+                  ..realUrl = rawChRealUrl
                   ..isRead = parseBoolSafe(chMap['isRead'])
                   ..lastPageRead = parseIntSafe(chMap['lastPageRead'])
+                  ..lastReadAt = parseIntSafe(chMap['lastReadAt'])
                   ..pageCount = parseIntSafe(chMap['pageCount'])
+                  ..mangaTitle = _manga!.title
+                  ..mangaThumbnailUrl = _manga!.thumbnailUrl
                   ..fetchedAt = fetchedTimestamp;
                 fetched.add(ch);
               }
@@ -381,7 +408,16 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   void _continueReading() {
     if (_chapters.isEmpty) return;
-    final unread = _chapters.firstWhere((c) => !c.isRead, orElse: () => _chapters.first);
+    // 1. Resume chapter currently in progress
+    final inProgress = _chapters.where((c) => !c.isRead && c.lastPageRead > 0).toList();
+    if (inProgress.isNotEmpty) {
+      inProgress.sort((a, b) => (b.lastReadAt ?? 0).compareTo(a.lastReadAt ?? 0));
+      _openReader(inProgress.first.serverId);
+      return;
+    }
+    // 2. Find next unread chapter in reading order (lowest chapter number)
+    final sortedByNum = List<Chapter>.from(_chapters)..sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
+    final unread = sortedByNum.firstWhere((c) => !c.isRead, orElse: () => sortedByNum.first);
     _openReader(unread.serverId);
   }
 
@@ -716,7 +752,30 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
 
     final manga = _manga!;
-    final sortedChapters = List<Chapter>.from(_chapters);
+    var sortedChapters = List<Chapter>.from(_chapters);
+
+    // Filter by Read/Downloaded/Bookmarked status
+    if (_chapterFilter == 'Unread') {
+      sortedChapters = sortedChapters.where((c) => !c.isRead).toList();
+    } else if (_chapterFilter == 'Downloaded') {
+      sortedChapters = sortedChapters.where((c) =>
+        DownloadManagerService.instance.isChapterDownloadedLocally(c.serverId) ||
+        DownloadManagerService.instance.isChapterDownloadedOnServer(c.serverId) ||
+        c.isDownloaded
+      ).toList();
+    } else if (_chapterFilter == 'Bookmarked') {
+      sortedChapters = sortedChapters.where((c) => c.isBookmarked).toList();
+    }
+
+    // Filter by search query
+    if (_chapterSearch.trim().isNotEmpty) {
+      final q = _chapterSearch.trim().toLowerCase();
+      sortedChapters = sortedChapters.where((c) =>
+        c.name.toLowerCase().contains(q) ||
+        c.chapterNumber.toString().contains(q)
+      ).toList();
+    }
+
     if (_sortAscending) {
       sortedChapters.sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
     } else {
@@ -1040,6 +1099,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           SliverAppBar(
             expandedHeight: 320,
             pinned: true,
+            backgroundColor: const Color(0xFF121216),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
               onPressed: () => Navigator.pop(context),
@@ -1204,18 +1264,33 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 Builder(
                   builder: (context) {
                     final hasReadAny = _chapters.any((c) => c.isRead || c.lastPageRead > 0);
-                    return ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0x33FFFFFF),
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(46),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    return Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        gradient: LinearGradient(
+                          colors: [
+                            primaryColor.withValues(alpha: 0.25),
+                            const Color(0x1F2A2A32),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        border: Border.all(color: primaryColor.withValues(alpha: 0.4), width: 0.8),
                       ),
-                      onPressed: _continueReading,
-                      icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: 24),
-                      label: Text(
-                        hasReadAny ? 'Continue Reading' : 'Start Reading',
-                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: _continueReading,
+                        icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: 24),
+                        label: Text(
+                          hasReadAny ? 'Continue Reading' : 'Start Reading',
+                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: -0.2),
+                        ),
                       ),
                     );
                   }
@@ -1227,13 +1302,16 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     runSpacing: 8,
                     children: manga.genres.map((g) {
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
                         decoration: BoxDecoration(
-                          color: const Color(0x1F2A2A32),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
+                          color: const Color(0x1A2A2A32),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0x2EFFFFFF), width: 0.8),
                         ),
-                        child: Text(g, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                        child: Text(
+                          g,
+                          style: const TextStyle(fontSize: 11.5, color: Colors.white70, fontWeight: FontWeight.w500),
+                        ),
                       );
                     }).toList(),
                   ),
@@ -1242,33 +1320,37 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 GestureDetector(
                   onTap: () => setState(() => _isDescExpanded = !_isDescExpanded),
                   child: Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: const Color(0x1F2A2A32),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          manga.description ?? 'No synopsis available for this manga.',
-                          maxLines: _isDescExpanded ? null : 3,
-                          overflow: _isDescExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
-                        ),
-                        if (manga.description != null && manga.description!.length > 100) ...[
-                          const SizedBox(height: 6),
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOut,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            _isDescExpanded ? 'Show less' : 'Read more',
-                            style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
+                            manga.description ?? 'No synopsis available for this manga.',
+                            maxLines: _isDescExpanded ? null : 3,
+                            overflow: _isDescExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white70, fontSize: 13.5, height: 1.45),
                           ),
+                          if (manga.description != null && manga.description!.length > 100) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              _isDescExpanded ? 'Show less' : 'Read more',
+                              style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -1278,6 +1360,14 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     ),
                     Row(
                       children: [
+                        IconButton(
+                          icon: Icon(_isSearchingChapters ? Icons.search_off_rounded : Icons.search_rounded),
+                          tooltip: 'Search Chapters',
+                          onPressed: () => setState(() {
+                            _isSearchingChapters = !_isSearchingChapters;
+                            if (!_isSearchingChapters) _chapterSearch = '';
+                          }),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.checklist_rounded),
                           tooltip: 'Select Chapters',
@@ -1294,6 +1384,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         ),
                         IconButton(
                           icon: Icon(_sortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, color: primaryColor),
+                          tooltip: _sortAscending ? 'Sort Oldest First' : 'Sort Newest First',
                           onPressed: () {
                             setState(() {
                               _sortAscending = !_sortAscending;
@@ -1304,6 +1395,60 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       ],
                     ),
                   ],
+                ),
+                if (_isSearchingChapters) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    autofocus: true,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Search chapters (e.g. 10 or Prologue)...',
+                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                      prefixIcon: Icon(Icons.search_rounded, color: primaryColor, size: 20),
+                      suffixIcon: _chapterSearch.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 18),
+                              onPressed: () => setState(() => _chapterSearch = ''),
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: const Color(0xFF1F1F24),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
+                    onChanged: (val) => setState(() => _chapterSearch = val),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: ['All', 'Unread', 'Downloaded', 'Bookmarked'].map((filter) {
+                      final isSel = _chapterFilter == filter;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: FilterChip(
+                          label: Text(filter),
+                          selected: isSel,
+                          selectedColor: primaryColor.withValues(alpha: 0.25),
+                          backgroundColor: const Color(0x1F2A2A32),
+                          labelStyle: TextStyle(
+                            color: isSel ? primaryColor : Colors.white70,
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: isSel ? primaryColor : const Color(0x2BFFFFFF),
+                              width: 0.8,
+                            ),
+                          ),
+                          onSelected: (_) => setState(() => _chapterFilter = filter),
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ],
             ),
@@ -1354,6 +1499,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             ),
           ),
           child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             onTap: () {
               if (isSelecting) {
@@ -1384,7 +1530,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     },
                   )
                 : ch.isBookmarked
-                    ? const Icon(Icons.bookmark_rounded, color: Colors.amber, size: 20)
+                    ? const Icon(Icons.bookmark_rounded, color: Colors.amber, size: 18)
                     : null,
             title: Row(
               children: [
@@ -1393,45 +1539,72 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     ch.name.trim().isNotEmpty
                         ? ch.name
                         : 'Chapter ${ch.chapterNumber.toString().replaceAll(RegExp(r'\.0$'), '')}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 13.5,
                       color: ch.isRead ? Colors.grey : Colors.white,
                     ),
                   ),
                 ),
-                if (ch.fetchedAt != null && ch.fetchedAt! > 0) ...[
-                  const SizedBox(width: 8),
+                Builder(
+                  builder: (context) {
+                    final dateStr = _formatChapterDate(ch.fetchedAt);
+                    if (dateStr == null) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 6.0),
+                      child: Text(
+                        dateStr,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[500],
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_formatChapterSubtitle(ch).isNotEmpty)
                   Text(
-                    _formatRelativeTime(ch.fetchedAt! > 1000000000000
-                        ? DateTime.fromMillisecondsSinceEpoch(ch.fetchedAt!)
-                        : DateTime.fromMillisecondsSinceEpoch(ch.fetchedAt! * 1000)),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey[500],
-                      fontWeight: FontWeight.w400,
+                    _formatChapterSubtitle(ch),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.5, color: ch.isRead ? Colors.grey[600] : primaryColor),
+                  ),
+                if (!ch.isRead && ch.lastPageRead > 0 && ch.pageCount > 0) ...[
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: (ch.lastPageRead / ch.pageCount).clamp(0.0, 1.0),
+                      minHeight: 3,
+                      backgroundColor: const Color(0x33FFFFFF),
+                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                     ),
                   ),
                 ],
               ],
             ),
-            subtitle: _formatChapterSubtitle(ch).isNotEmpty
-                ? Text(
-                    _formatChapterSubtitle(ch),
-                    style: TextStyle(fontSize: 12, color: ch.isRead ? Colors.grey[600] : primaryColor),
-                  )
-                : null,
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (DownloadManagerService.instance.isChapterDownloadedLocally(ch.serverId))
                   const Padding(
-                    padding: EdgeInsets.only(right: 4.0),
-                    child: Icon(Icons.phone_android_rounded, color: Colors.greenAccent, size: 18),
+                    padding: EdgeInsets.only(right: 2.0),
+                    child: Icon(Icons.phone_android_rounded, color: Colors.greenAccent, size: 16),
                   )
                 else
                   IconButton(
-                    icon: const Icon(Icons.download_rounded, color: Colors.grey, size: 20),
+                    icon: const Icon(Icons.download_rounded, color: Colors.grey, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    visualDensity: VisualDensity.compact,
                     onPressed: () {
                       DownloadManagerService.instance.enqueueLocalDownload(chapterId: ch.serverId, mangaId: _manga!.serverId, chapterName: ch.name, mangaTitle: _manga!.title);
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Queued ${ch.name} for local download')));
@@ -1440,17 +1613,20 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   ),
                 if (DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId) || ch.isDownloaded)
                   const Padding(
-                    padding: EdgeInsets.only(right: 4.0),
-                    child: Icon(Icons.cloud_done_rounded, color: Colors.cyanAccent, size: 18),
+                    padding: EdgeInsets.only(right: 2.0),
+                    child: Icon(Icons.cloud_done_rounded, color: Colors.cyanAccent, size: 16),
                   ),
                 IconButton(
-                  icon: const Icon(Icons.more_vert_rounded, color: Colors.grey, size: 20),
+                  icon: const Icon(Icons.more_vert_rounded, color: Colors.grey, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  visualDensity: VisualDensity.compact,
                   onPressed: () => _showSingleChapterOptions(ch),
                 ),
                 if (ch.isRead)
-                  const Icon(Icons.check_circle_rounded, color: Colors.grey, size: 20)
+                  const Icon(Icons.check_circle_rounded, color: Colors.grey, size: 18)
                 else
-                  Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 24),
+                  Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 22),
               ],
             ),
           ),

@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/category.dart';
+import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
+import '../../core/engine/quickjs_service.dart';
+import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
@@ -32,6 +35,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   String _searchQuery = '';
   String _sortBy = 'Title';
   bool _isSortAscending = true;
+  String _statusFilter = 'All'; // 'All', 'Unread', 'Downloaded', 'Completed'
 
   // Offline banner state
   bool _isOffline = false;
@@ -113,7 +117,12 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   Future<void> _handleRefresh() async {
     setState(() => _isSyncing = true);
     try {
-      await SyncEngine.instance.triggerSync();
+      if (GraphQLClientService.instance.isConfigured) {
+        await SyncEngine.instance.triggerSync();
+      } else {
+        // Standalone mode: check local JS extensions for new chapters across library titles
+        await _checkStandaloneUpdates();
+      }
       final list = await IsarService.instance.getLibraryManga();
       final cats = await IsarService.instance.getCategories();
       if (mounted) {
@@ -130,8 +139,61 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     }
   }
 
+  Future<void> _checkStandaloneUpdates() async {
+    final libraryManga = await IsarService.instance.getLibraryManga();
+    for (final manga in libraryManga) {
+      if (manga.sourceName.isEmpty || manga.url.isEmpty) continue;
+      try {
+        final detail = await QuickJsService.instance.fetchMangaDetailsLocal(
+          manga.sourceName,
+          manga.url,
+        );
+        if (detail.containsKey('chapters')) {
+          final rawChapters = detail['chapters'] as List<dynamic>?;
+          if (rawChapters != null && rawChapters.isNotEmpty) {
+            final existingChapters = await IsarService.instance.getChaptersForManga(manga.serverId);
+            final existingUrls = existingChapters.map((c) => c.url).toSet();
+            final newChapters = <Chapter>[];
+            for (int i = 0; i < rawChapters.length; i++) {
+              final chMap = rawChapters[i] as Map<String, dynamic>;
+              final chUrl = chMap['url']?.toString() ?? '';
+              if (chUrl.isNotEmpty && !existingUrls.contains(chUrl)) {
+                final ch = Chapter()
+                  ..serverId = manga.serverId * 10000 + i + 1
+                  ..mangaId = manga.serverId
+                  ..name = chMap['name']?.toString() ?? 'Chapter ${i + 1}'
+                  ..chapterNumber = (chMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble()
+                  ..url = chUrl
+                  ..realUrl = chUrl
+                  ..fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000
+                  ..isRead = false
+                  ..lastPageRead = 0;
+                newChapters.add(ch);
+              }
+            }
+            if (newChapters.isNotEmpty) {
+              await IsarService.instance.saveChapters(newChapters);
+              manga.unreadCount = (manga.unreadCount ?? 0) + newChapters.length;
+              await IsarService.instance.saveManga(manga);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
   List<Manga> get _filteredManga {
     var list = List<Manga>.from(_allManga);
+
+    // 0. Status Filter
+    if (_statusFilter == 'Unread') {
+      list = list.where((m) => (m.unreadCount ?? 0) > 0).toList();
+    } else if (_statusFilter == 'Downloaded') {
+      final downloadedChapters = DownloadManagerService.instance.downloadedLocalChapterIds;
+      list = list.where((m) => downloadedChapters.contains(m.serverId)).toList();
+    } else if (_statusFilter == 'Completed') {
+      list = list.where((m) => (m.status ?? '').toLowerCase() == 'completed').toList();
+    }
 
     // 1. Category Filter
     if (_selectedCategoryIndex > 0 && _selectedCategoryIndex <= _categories.length) {
@@ -156,6 +218,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         return _isSortAscending ? cmp : -cmp;
       } else if (_sortBy == 'Recent') {
         cmp = (b.inLibraryAt ?? 0).compareTo(a.inLibraryAt ?? 0);
+        return _isSortAscending ? cmp : -cmp;
+      } else if (_sortBy == 'Chapters') {
+        cmp = b.chapterCount.compareTo(a.chapterCount);
         return _isSortAscending ? cmp : -cmp;
       }
       return cmp;
@@ -187,6 +252,112 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         _isBatchMode = true;
       }
     });
+  }
+
+  Future<void> _batchMoveToCategory() async {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    int? selectedCatId;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1F1F24),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetBuilderContext, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Move to Category', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  if (_categories.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text('No categories created yet. Tap "Edit Categories" to create one.', style: TextStyle(color: Colors.grey)),
+                    )
+                  else
+                    ..._categories.map((cat) {
+                      final isSel = selectedCatId == cat.serverId;
+                      return ListTile(
+                        title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        trailing: isSel ? Icon(Icons.check_circle_rounded, color: primaryColor) : const Icon(Icons.radio_button_unchecked_rounded, color: Colors.grey),
+                        onTap: () {
+                          setSheetState(() => selectedCatId = cat.serverId);
+                        },
+                      );
+                    }),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: selectedCatId == null
+                        ? null
+                        : () async {
+                            for (final id in _selectedMangaIds) {
+                              final m = await IsarService.instance.getMangaByServerId(id);
+                              if (m != null) {
+                                m.categoryIds = [selectedCatId!];
+                                await IsarService.instance.saveManga(m);
+                                if (GraphQLClientService.instance.isConfigured) {
+                                  await GraphQLClientService.instance.updateMangaCategories(id, [selectedCatId!]);
+                                }
+                              }
+                            }
+                            if (sheetContext.mounted) {
+                              Navigator.pop(sheetContext);
+                            }
+                            if (!mounted) return;
+                            setState(() {
+                              _selectedMangaIds.clear();
+                              _isBatchMode = false;
+                            });
+                            await _loadFromIsarOnly();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Category updated for selected titles')),
+                              );
+                            }
+                          },
+                    child: const Text('Move', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _batchMarkRead(bool isRead) async {
+    for (final id in _selectedMangaIds) {
+      final chapters = await IsarService.instance.getChaptersForManga(id);
+      for (final ch in chapters) {
+        ch.isRead = isRead;
+      }
+      await IsarService.instance.saveChapters(chapters);
+      final m = await IsarService.instance.getMangaByServerId(id);
+      if (m != null) {
+        m.unreadCount = isRead ? 0 : chapters.length;
+        await IsarService.instance.saveManga(m);
+      }
+    }
+    setState(() {
+      _selectedMangaIds.clear();
+      _isBatchMode = false;
+    });
+    await _loadFromIsarOnly();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isRead ? 'Marked all as read' : 'Marked all as unread')),
+      );
+    }
   }
 
   Future<void> _batchRemoveFromLibrary() async {
@@ -265,6 +436,11 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         onPressed: () async {
                           final name = textController.text.trim();
                           if (name.isNotEmpty) {
+                            final newCat = Category()
+                              ..serverId = DateTime.now().millisecondsSinceEpoch
+                              ..name = name
+                              ..order = _categories.length;
+                            await IsarService.instance.saveCategories([newCat]);
                             if (GraphQLClientService.instance.isConfigured) {
                               await GraphQLClientService.instance.createCategory(name);
                             }
@@ -290,6 +466,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
                             onPressed: () async {
+                              await IsarService.instance.deleteCategory(cat.serverId);
                               if (GraphQLClientService.instance.isConfigured) {
                                 await GraphQLClientService.instance.deleteCategory(cat.serverId);
                               }
@@ -332,7 +509,8 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
-                    children: ['Comfortable Grid', 'Compact Grid', 'List'].map((mode) {
+                    runSpacing: 8,
+                    children: ['Comfortable Grid', 'Compact Grid', 'Cover Only', 'List'].map((mode) {
                       final isSel = _settings.libraryDisplayMode == mode;
                       return ChoiceChip(
                         label: Text(mode),
@@ -343,6 +521,28 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : const Color(0x2BFFFFFF), width: 0.8)),
                         onSelected: (_) {
                           setState(() => _settings.libraryDisplayMode = mode);
+                          setSheetState(() {});
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('FILTER BY STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: ['All', 'Unread', 'Downloaded', 'Completed'].map((filter) {
+                      final isSel = _statusFilter == filter;
+                      return ChoiceChip(
+                        label: Text(filter),
+                        selected: isSel,
+                        selectedColor: primaryColor,
+                        backgroundColor: const Color(0x1F2A2A32),
+                        labelStyle: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : const Color(0x2BFFFFFF), width: 0.8)),
+                        onSelected: (_) {
+                          setState(() => _statusFilter = filter);
                           setSheetState(() {});
                         },
                       );
@@ -363,7 +563,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     ],
                   ),
                   ListTile(
-                    title: const Text('Title (A-Z)'),
+                    title: const Text('Title (Alphabetical)'),
                     trailing: _sortBy == 'Title' ? Icon(Icons.check_rounded, color: primaryColor) : null,
                     onTap: () {
                       setState(() => _sortBy = 'Title');
@@ -386,6 +586,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       Navigator.pop(context);
                     },
                   ),
+                  ListTile(
+                    title: const Text('Total Chapters'),
+                    trailing: _sortBy == 'Chapters' ? Icon(Icons.check_rounded, color: primaryColor) : null,
+                    onTap: () {
+                      setState(() => _sortBy = 'Chapters');
+                      Navigator.pop(context);
+                    },
+                  ),
                 ],
               ),
             );
@@ -401,8 +609,11 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final primaryColor = Theme.of(context).colorScheme.primary;
     final displayManga = _filteredManga;
     final displayMode = _settings.libraryDisplayMode;
+    final isCoverOnly = displayMode == 'Cover Only';
     final isCompact = displayMode == 'Compact Grid';
-    final targetWidth = isCompact ? 110.0 : 145.0;
+    final isList = displayMode == 'List';
+    final targetWidth = isCoverOnly ? 120.0 : (isCompact ? 110.0 : 145.0);
+    final childAspectRatio = isCoverOnly ? 0.70 : (isCompact ? 0.70 : 0.65);
 
     return Scaffold(
       appBar: AppBar(
@@ -464,7 +675,23 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     onPressed: () => setState(() => _isSearching = true),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.tune_rounded, size: 26),
+                    icon: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Icon(Icons.tune_rounded, size: 26),
+                        if (_statusFilter != 'All')
+                          Positioned(
+                            top: -2,
+                            right: -2,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle),
+                            ),
+                          ),
+                      ],
+                    ),
+                    tooltip: 'Filter & Display',
                     onPressed: _showSortAndDisplayDialog,
                   ),
                   IconButton(
@@ -493,15 +720,18 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     selected: isSelected,
                     selectedColor: primaryColor,
                     backgroundColor: const Color(0x1F2A2A32),
+                    showCheckmark: false,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : Colors.grey,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? Colors.white : Colors.grey[400],
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 13,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                       side: BorderSide(
                         color: isSelected ? primaryColor : const Color(0x2BFFFFFF),
-                        width: 0.8,
+                        width: isSelected ? 1.2 : 0.8,
                       ),
                     ),
                     onSelected: (selected) {
@@ -584,7 +814,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                 ],
               )
             : CustomScrollView(
-                scrollCacheExtent: ScrollCacheExtent.pixels(1500),
+                scrollCacheExtent: ScrollCacheExtent.pixels(1200),
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 slivers: [
                   if (_isOffline)
@@ -616,8 +846,8 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         icon: Icons.auto_stories_rounded,
                         title: _searchQuery.isNotEmpty ? 'No Results Found' : 'Your Library is Empty',
                         subtitle: _searchQuery.isNotEmpty 
-                           ? 'Try adjusting your search query.'
-                           : 'Browse extensions to find and add manga to your library.',
+                            ? 'Try adjusting your search query.'
+                            : 'Browse extensions to find and add manga to your library.',
                         actionLabel: _searchQuery.isNotEmpty ? 'Clear Search' : 'Browse Sources',
                         onAction: () {
                           if (_searchQuery.isNotEmpty) {
@@ -626,12 +856,12 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                               _isSearching = false;
                             });
                           } else {
-                            context.go('/browse');
+                            MainShell.switchToTab(3);
                           }
                         },
                       ),
                     )
-                  else if (displayMode == 'List')
+                  else if (isList)
                     SliverPadding(
                       padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 120),
                       sliver: SliverList(
@@ -650,12 +880,16 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       sliver: SliverGrid(
                         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                           maxCrossAxisExtent: targetWidth + 40,
-                          childAspectRatio: isCompact ? 0.70 : 0.65,
+                          childAspectRatio: childAspectRatio,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 16,
                         ),
                         delegate: SliverChildBuilderDelegate(
-                          (context, index) => _buildMangaCard(displayManga[index], isCompact: isCompact),
+                          (context, index) => _buildMangaCard(
+                            displayManga[index],
+                            isCompact: isCompact,
+                            isCoverOnly: isCoverOnly,
+                          ),
                           childCount: displayManga.length,
                           addAutomaticKeepAlives: true,
                           addRepaintBoundaries: true,
@@ -668,111 +902,164 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       ),
       bottomNavigationBar: _isBatchMode
           ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: const BoxDecoration(color: Color(0xFF1F1F24), border: Border(top: BorderSide(color: Color(0x2BFFFFFF)))),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                    tooltip: 'Remove from Library',
-                    onPressed: _batchRemoveFromLibrary,
-                  ),
-                ],
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1F1F24),
+                border: Border(top: BorderSide(color: Color(0x2BFFFFFF))),
+              ),
+              child: SafeArea(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.drive_file_move_outlined, color: Colors.white70),
+                      tooltip: 'Move Category',
+                      onPressed: _batchMoveToCategory,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.done_all_rounded, color: Colors.greenAccent),
+                      tooltip: 'Mark Read',
+                      onPressed: () => _batchMarkRead(true),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.remove_done_rounded, color: Colors.amberAccent),
+                      tooltip: 'Mark Unread',
+                      onPressed: () => _batchMarkRead(false),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                      tooltip: 'Remove',
+                      onPressed: _batchRemoveFromLibrary,
+                    ),
+                  ],
+                ),
               ),
             )
           : null,
     );
   }
 
-  Widget _buildMangaCard(Manga manga, {bool isCompact = false}) {
+  Widget _buildMangaCard(Manga manga, {bool isCompact = false, bool isCoverOnly = false}) {
     final isSelected = _selectedMangaIds.contains(manga.serverId);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return RepaintBoundary(
-      child: GestureDetector(
-        onTap: () async {
-        if (_isBatchMode) {
-          _toggleBatchSelection(manga.serverId);
-        } else {
-          await context.push('/manga/${manga.serverId}');
-          if (mounted) {
-            await _loadFromIsarOnly();
-          }
-        }
-      },
-      onLongPress: () => _toggleBatchSelection(manga.serverId),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    color: const Color(0xFF1F1F24),
-                    border: Border.all(
-                      color: isSelected ? primaryColor : const Color(0x1AFFFFFF),
-                      width: isSelected ? 2.5 : 0.8,
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: MangaCoverImage(
-                      mangaServerId: manga.serverId,
-                      thumbnailUrl: manga.thumbnailUrl,
-                      sourceName: manga.sourceName,
-                      width: double.infinity,
-                      height: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                if (isSelected)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle),
-                      child: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
-                    ),
-                  ),
-                if (manga.unreadCount != null && manga.unreadCount! > 0 && !isSelected)
-                  Positioned(
-                    bottom: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xCC000000),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () async {
+            if (_isBatchMode) {
+              _toggleBatchSelection(manga.serverId);
+            } else {
+              await context.push('/manga/${manga.serverId}');
+              if (mounted) {
+                await _loadFromIsarOnly();
+              }
+            }
+          },
+          onLongPress: () => _toggleBatchSelection(manga.serverId),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: const Color(0xFF1F1F24),
+                      border: Border.all(
+                        color: isSelected ? primaryColor : const Color(0x1AFFFFFF),
+                        width: isSelected ? 2.5 : 0.8,
                       ),
-                      child: Text(
-                        '${manga.unreadCount}',
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: MangaCoverImage(
+                        mangaServerId: manga.serverId,
+                        thumbnailUrl: manga.thumbnailUrl,
+                        sourceName: manga.sourceName,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
                       ),
                     ),
                   ),
-              ],
+                  if (isSelected)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle),
+                        child: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+                      ),
+                    ),
+                  if (_settings.showUnreadBadges && manga.unreadCount != null && manga.unreadCount! > 0 && !isSelected)
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: primaryColor,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.4),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          '${manga.unreadCount}',
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  if (isCoverOnly && !isSelected)
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.transparent, Color(0xEE000000)],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                          borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+                        ),
+                        child: Text(
+                          manga.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-          if (!isCompact) ...[
-            const SizedBox(height: 6),
-            Text(
-              manga.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-            ),
+            if (!isCompact && !isCoverOnly) ...[
+              const SizedBox(height: 6),
+              Text(
+                manga.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, height: 1.25),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     ),
   );
-  }
+}
 
   Widget _buildMangaListItem(Manga manga) {
     final isSelected = _selectedMangaIds.contains(manga.serverId);
