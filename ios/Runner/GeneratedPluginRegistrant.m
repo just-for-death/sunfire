@@ -42,6 +42,12 @@
 @import fluttertoast;
 #endif
 
+#if __has_include(<integration_test/IntegrationTestPlugin.h>)
+#import <integration_test/IntegrationTestPlugin.h>
+#else
+@import integration_test;
+#endif
+
 #if __has_include(<isar_flutter_libs/IsarFlutterLibsPlugin.h>)
 #import <isar_flutter_libs/IsarFlutterLibsPlugin.h>
 #else
@@ -105,6 +111,7 @@
   [FlutterQjsPlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterQjsPlugin"]];
   [FlutterSecureStoragePlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterSecureStoragePlugin"]];
   [FluttertoastPlugin registerWithRegistrar:[registry registrarForPlugin:@"FluttertoastPlugin"]];
+  [IntegrationTestPlugin registerWithRegistrar:[registry registrarForPlugin:@"IntegrationTestPlugin"]];
   [IsarFlutterLibsPlugin registerWithRegistrar:[registry registrarForPlugin:@"IsarFlutterLibsPlugin"]];
   [FPPPackageInfoPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"FPPPackageInfoPlusPlugin"]];
   [PathProviderPlugin registerWithRegistrar:[registry registrarForPlugin:@"PathProviderPlugin"]];

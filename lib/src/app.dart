@@ -2,9 +2,9 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/logging/logger_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/theme/app_theme.dart';
-import 'core/logging/logger_service.dart';
 import 'features/downloads/download_queue_screen.dart';
 import 'features/manga_detail/manga_detail_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
