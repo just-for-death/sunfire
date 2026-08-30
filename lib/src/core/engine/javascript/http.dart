@@ -127,31 +127,32 @@ class Client {
       final uri = Uri.parse(urlStr);
       http.Response response;
 
+      const requestTimeout = Duration(seconds: 25);
       switch (method.toUpperCase()) {
         case 'GET':
-          response = await client.get(uri, headers: headers);
+          response = await client.get(uri, headers: headers).timeout(requestTimeout);
           break;
         case 'POST':
           response = await client.post(
             uri,
             headers: headers,
             body: body is Map ? jsonEncode(body) : body,
-          );
+          ).timeout(requestTimeout);
           break;
         case 'HEAD':
-          response = await client.head(uri, headers: headers);
+          response = await client.head(uri, headers: headers).timeout(requestTimeout);
           break;
         case 'PUT':
-          response = await client.put(uri, headers: headers, body: body);
+          response = await client.put(uri, headers: headers, body: body).timeout(requestTimeout);
           break;
         case 'DELETE':
-          response = await client.delete(uri, headers: headers, body: body);
+          response = await client.delete(uri, headers: headers, body: body).timeout(requestTimeout);
           break;
         case 'PATCH':
-          response = await client.patch(uri, headers: headers, body: body);
+          response = await client.patch(uri, headers: headers, body: body).timeout(requestTimeout);
           break;
         default:
-          response = await client.get(uri, headers: headers);
+          response = await client.get(uri, headers: headers).timeout(requestTimeout);
       }
 
       // If Cloudflare block was received (403/503 with Cloudflare headers), attempt direct FlareSolverr fetch

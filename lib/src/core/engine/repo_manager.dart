@@ -53,7 +53,7 @@ class RepoSourceItem {
 
 class RepoManager {
   static RepoManager? _instance;
-  final Dio _dio = Dio();
+  final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 30)));
   final List<Map<String, String>> _userRepos = [];
 
   RepoManager._();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/logging/logger_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 
 class TrackingBottomSheet extends StatefulWidget {
@@ -89,7 +90,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
           _isLoading = false;
         });
       }
-    } catch (_) {
+    } catch (e, stack) {
+      LoggerService.instance.logError('Failed to fetch trackers: $e', exception: e, stackTrace: stack, category: 'Tracking');
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -110,7 +112,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
           _isSearching = false;
         });
       }
-    } catch (_) {
+    } catch (e, stack) {
+      LoggerService.instance.logError('Failed to search tracker: $e', exception: e, stackTrace: stack, category: 'Tracking');
       if (mounted) setState(() => _isSearching = false);
     }
   }
