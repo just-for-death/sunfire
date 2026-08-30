@@ -232,7 +232,11 @@ class RepoManager {
   }) async {
     // Fetch all raw sources across all user repositories without discarding alternative mirrors
     final allRepoSources = <RepoSourceItem>[];
-    for (final url in userRepoUrls) {
+    final effectiveRepoUrls = List<String>.from(userRepoUrls);
+    if (effectiveRepoUrls.isEmpty) {
+      effectiveRepoUrls.add('https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json');
+    }
+    for (final url in effectiveRepoUrls) {
       final items = await fetchRepoSources(url);
       allRepoSources.addAll(items);
     }
@@ -250,8 +254,11 @@ class RepoManager {
       final candidates = <RepoSourceItem>[];
       for (final item in allRepoSources) {
         final cleanRepoName = SourceMigrationService.instance.normalizeSourceName(item.name);
+        final cleanPkg = SourceMigrationService.instance.normalizeSourceName(item.sourceCodeUrl.split('/').last.replaceAll('.js', ''));
         final isMatch = cleanRepoName == cleanServerName ||
             cleanRepoName.replaceAll('_', '') == cleanServerName.replaceAll('_', '') ||
+            cleanPkg == cleanServerName ||
+            cleanPkg.replaceAll('_', '') == cleanServerName.replaceAll('_', '') ||
             (cleanServerName.length > 4 && cleanRepoName.startsWith(cleanServerName)) ||
             (cleanRepoName.length > 4 && cleanServerName.startsWith(cleanRepoName));
 
