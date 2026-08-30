@@ -25,9 +25,6 @@ workflows:
           flutter build apk --release --split-per-abi
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
-    publishing:
-      email:
-        recipients: []
 
   # ── WORKFLOW 2: IOS UNSIGNED IPA (Sideload / iPad / AltStore) ────
   ios-unsigned-ipa:
@@ -63,9 +60,6 @@ workflows:
       - build/ios/iphoneos/*.ipa
       - Sunfire-unsigned.ipa
       - build/ios/iphoneos/Runner.app
-    publishing:
-      email:
-        recipients: []
 
   # ── WORKFLOW 3: MULTI-PLATFORM (BOTH APK & IPA IN ONE GO) ─────────
   all-platforms-unsigned:
@@ -108,6 +102,3 @@ workflows:
       - build/app/outputs/flutter-apk/*.apk
       - build/ios/iphoneos/*.ipa
       - Sunfire-unsigned.ipa
-    publishing:
-      email:
-        recipients: []
