@@ -97,7 +97,7 @@ var extention = new DefaultExtension();
 
   Map<String, String> getHeaders() {
     return _extensionCall<Map>(
-      'getHeaders(${jsonEncode(sourceMeta['baseUrl'] ?? '')})',
+      'typeof extention.getHeaders === "function" ? extention.getHeaders(${jsonEncode(sourceMeta['baseUrl'] ?? '')}) : (extention.headers || {})',
       {},
     ).map((k, v) => MapEntry(k.toString(), v.toString()));
   }

@@ -20,6 +20,21 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
   @override
   bool get wantKeepAlive => true;
 
+  Widget _buildLeadingIcon(IconData icon, Color color) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 0.8),
+      ),
+      child: Center(
+        child: Icon(icon, color: color, size: 20),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -75,10 +90,10 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                   children: [
                     // 1. READER SETTINGS
                     ListTile(
-                      leading: Icon(Icons.chrome_reader_mode_rounded, color: primaryColor),
-                      title: const Text('Reader Settings', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Reading mode, direction, tap zones, volume keys & crop'),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                      leading: _buildLeadingIcon(Icons.chrome_reader_mode_rounded, Colors.purpleAccent),
+                      title: const Text('Reader Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Reading mode, direction, tap zones, volume keys & crop', style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -86,14 +101,14 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                         );
                       },
                     ),
-                    const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, indent: 64, endIndent: 16, color: Color(0x1AFFFFFF)),
 
                     // 2. APPEARANCE & THEMES
                     ListTile(
-                      leading: Icon(Icons.palette_rounded, color: primaryColor),
-                      title: const Text('Appearance & Themes', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Accent colors, OLED Pure Black, Material You dynamic color'),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                      leading: _buildLeadingIcon(Icons.palette_rounded, Colors.pinkAccent),
+                      title: const Text('Appearance & Themes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Accent colors, OLED Pure Black, Material You dynamic color', style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -101,14 +116,14 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                         );
                       },
                     ),
-                    const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, indent: 64, endIndent: 16, color: Color(0x1AFFFFFF)),
 
                     // 3. LIBRARY & CATEGORIES
                     ListTile(
-                      leading: Icon(Icons.collections_bookmark_rounded, color: primaryColor),
-                      title: const Text('Library & Categories', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Category sync, default category, unread badges'),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                      leading: _buildLeadingIcon(Icons.collections_bookmark_rounded, Colors.cyanAccent),
+                      title: const Text('Library & Categories', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Category sync, default category, unread badges', style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -116,34 +131,34 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                         );
                       },
                     ),
-                    const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, indent: 64, endIndent: 16, color: Color(0x1AFFFFFF)),
 
                     // 4. DOWNLOADS & STORAGE
                     ListTile(
-                      leading: Icon(Icons.downloading_rounded, color: primaryColor),
-                      title: const Text('Download Manager', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Manage active local & server download queues'),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                      leading: _buildLeadingIcon(Icons.downloading_rounded, Colors.greenAccent),
+                      title: const Text('Download Manager', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Manage active local & server download queues', style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
                       onTap: () => context.push('/downloads'),
                     ),
-                    const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, indent: 64, endIndent: 16, color: Color(0x1AFFFFFF)),
 
                     // 5. STATISTICS
                     ListTile(
-                      leading: Icon(Icons.insights_rounded, color: primaryColor),
-                      title: const Text('Statistics', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Read counts, reading time, genres & sources breakdown'),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                      leading: _buildLeadingIcon(Icons.insights_rounded, Colors.amberAccent),
+                      title: const Text('Statistics', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Read counts, reading time, genres & sources breakdown', style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
                       onTap: () => context.push('/stats'),
                     ),
-                    const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, indent: 64, endIndent: 16, color: Color(0x1AFFFFFF)),
 
                     // 6. STORAGE & CACHE
                     ListTile(
-                      leading: Icon(Icons.folder_zip_rounded, color: primaryColor),
-                      title: const Text('Storage & Cache', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Auto-download, WiFi restrictions, auto-delete, clear cache'),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                      leading: _buildLeadingIcon(Icons.folder_zip_rounded, Colors.orangeAccent),
+                      title: const Text('Storage & Cache', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Auto-download, WiFi restrictions, auto-delete, clear cache', style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -151,14 +166,14 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                         );
                       },
                     ),
-                    const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, indent: 64, endIndent: 16, color: Color(0x1AFFFFFF)),
 
                     // 7. EXTENSION REPOSITORIES
                     ListTile(
-                      leading: Icon(Icons.extension_rounded, color: primaryColor),
-                      title: const Text('Extension Repositories', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Register custom JS repos, auto-update sources'),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                      leading: _buildLeadingIcon(Icons.extension_rounded, Colors.lightBlueAccent),
+                      title: const Text('Extension Repositories', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Register custom JS repos, auto-update sources', style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -166,14 +181,14 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                         );
                       },
                     ),
-                    const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, indent: 64, endIndent: 16, color: Color(0x1AFFFFFF)),
 
-                    // 6. ADVANCED & DIAGNOSTICS
+                    // 8. ADVANCED & DIAGNOSTICS
                     ListTile(
-                      leading: Icon(Icons.bug_report_rounded, color: primaryColor),
-                      title: const Text('Advanced & Diagnostics', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Diagnostic logs, clear logs, system info'),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                      leading: _buildLeadingIcon(Icons.bug_report_rounded, Colors.redAccent),
+                      title: const Text('Advanced & Diagnostics', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Diagnostic logs, clear logs, system info', style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
                       onTap: () {
                         Navigator.push(
                           context,

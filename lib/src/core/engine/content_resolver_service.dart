@@ -177,13 +177,14 @@ class ContentResolverService {
         var cleanChapterUrl = effectiveChapterUrl;
         String? sourceBaseUrl; // Track base URL for pre-warming
 
-        if (cleanChapterUrl.startsWith('/')) {
+        if (!cleanChapterUrl.startsWith('http://') && !cleanChapterUrl.startsWith('https://')) {
           final jsCode = QuickJsService.instance.getExtensionCode(effectiveSourceName);
           if (jsCode != null && jsCode.isNotEmpty) {
             final metaUrl = QuickJsService.instance.extractBaseUrl(jsCode);
             if (metaUrl != null && metaUrl.isNotEmpty) {
               sourceBaseUrl = metaUrl.endsWith('/') ? metaUrl.substring(0, metaUrl.length - 1) : metaUrl;
-              cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
+              final path = cleanChapterUrl.startsWith('/') ? cleanChapterUrl : '/$cleanChapterUrl';
+              cleanChapterUrl = '$sourceBaseUrl$path';
             }
           }
         } else if (cleanChapterUrl.startsWith('http')) {
