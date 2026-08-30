@@ -382,11 +382,8 @@ class QuickJsService {
 
   String? extractBaseUrl(String jsCode) {
     try {
-      final match = RegExp(r'''"baseUrl"\s*:\s*"([^"]+)''').firstMatch(jsCode);
+      final match = RegExp(r'''(?:['"]?baseUrl['"]?)\s*:\s*['"]([^'"]+)''').firstMatch(jsCode);
       if (match != null) return match.group(1);
-
-      final singleMatch = RegExp(r''''baseUrl'\s*:\s*'([^']+)''').firstMatch(jsCode);
-      if (singleMatch != null) return singleMatch.group(1);
     } catch (_) {}
     return null;
   }
