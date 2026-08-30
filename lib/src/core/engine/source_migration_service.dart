@@ -93,7 +93,7 @@ class SourceMigrationService {
   /// Example: "MangaDex (EN) [v1.4]" -> "mangadex"
   String normalizeSourceName(String name) {
     var clean = name.toLowerCase();
-    // Strip language suffixes like (EN), (ALL), [EN], etc.
+    // Strip language and variant suffixes like (EN), (ALL), (unoriginal), (preview), [EN], etc.
     clean = clean.replaceAll(RegExp(r'[\(\[\{].*?[\)\]\}]'), '');
     // Strip common domain extensions like .com, .net, .org, .me, .cc, .to, .ru, .io
     clean = clean.replaceAll(RegExp(r'\.(com|net|org|me|cc|to|ru|io)'), '');
@@ -110,33 +110,40 @@ class SourceMigrationService {
   String? matchServerSourceToLocalJs(String serverSourceName, List<String> availableJsExtensions) {
     final normalized = normalizeSourceName(serverSourceName);
     final alphanumericOnly = normalized.replaceAll(RegExp(r'\s+'), '');
+    final stemmedAlpha = alphanumericOnly.replaceAll(RegExp(r'comics?'), 'comic').replaceAll(RegExp(r'scans?'), 'scan');
 
     // 1. Exact match against extension names (without .js / local_js_ prefix)
     for (final ext in availableJsExtensions) {
-      final extClean = ext.replaceAll('.js', '').replaceAll('local_js_', '').toLowerCase();
+      final extClean = normalizeSourceName(ext.replaceAll('.js', '').replaceAll('local_js_', ''));
       final extAlpha = extClean.replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final extStemmed = extAlpha.replaceAll(RegExp(r'comics?'), 'comic').replaceAll(RegExp(r'scans?'), 'scan');
       
-      if (extClean == normalized || extAlpha == alphanumericOnly) {
+      if (extClean == normalized || extAlpha == alphanumericOnly || extStemmed == stemmedAlpha) {
         return ext;
       }
     }
 
     // 2. Substring containment match (e.g. "mangadex" in "mangadex_org")
     for (final ext in availableJsExtensions) {
-      final extClean = ext.replaceAll('.js', '').replaceAll('local_js_', '').toLowerCase();
-      if (extClean.contains(alphanumericOnly) || (alphanumericOnly.length >= 4 && alphanumericOnly.contains(extClean))) {
+      final extClean = normalizeSourceName(ext.replaceAll('.js', '').replaceAll('local_js_', ''));
+      final extAlpha = extClean.replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final extStemmed = extAlpha.replaceAll(RegExp(r'comics?'), 'comic').replaceAll(RegExp(r'scans?'), 'scan');
+      if (extAlpha.contains(alphanumericOnly) ||
+          (alphanumericOnly.length >= 4 && alphanumericOnly.contains(extAlpha)) ||
+          extStemmed.contains(stemmedAlpha) ||
+          (stemmedAlpha.length >= 4 && stemmedAlpha.contains(extStemmed))) {
         return ext;
       }
     }
 
     // 3. Synonym & Token prefix match (e.g. "Flame Comics" vs "flame_scans.js", "Asura Comics" vs "asura_scans.js")
-    final serverWords = normalized.split(' ').where((w) => w.isNotEmpty && w != 'comics' && w != 'scans' && w != 'manga' && w != 'scan' && w != 'scanlations').toList();
+    final serverWords = normalized.split(' ').where((w) => w.isNotEmpty && w != 'comics' && w != 'comic' && w != 'scans' && w != 'scan' && w != 'manga' && w != 'scanlations').toList();
     if (serverWords.isNotEmpty) {
       final primaryToken = serverWords.first;
       if (primaryToken.length >= 3) {
         for (final ext in availableJsExtensions) {
-          final extClean = ext.replaceAll('.js', '').replaceAll('local_js_', '').toLowerCase();
-          final extTokens = extClean.split('_').where((w) => w.isNotEmpty && w != 'comics' && w != 'scans' && w != 'manga' && w != 'scan' && w != 'scanlations').toList();
+          final extClean = normalizeSourceName(ext.replaceAll('.js', '').replaceAll('local_js_', ''));
+          final extTokens = extClean.split(' ').where((w) => w.isNotEmpty && w != 'comics' && w != 'comic' && w != 'scans' && w != 'scan' && w != 'manga' && w != 'scanlations').toList();
           if (extTokens.isNotEmpty && extTokens.first == primaryToken) {
             return ext;
           }

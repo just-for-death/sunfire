@@ -161,10 +161,13 @@ class SyncEngine {
           final installedLocalJs = QuickJsService.instance.getInstalledExtensionNames();
           final libraryManga = await IsarService.instance.getLibraryManga();
 
+          final allRepoSources = await RepoManager.instance.fetchCombinedRepoSources(userRepos);
+          final availableRepoNames = allRepoSources.map((r) => r.name).toList();
+
           final report = SourceMigrationService.instance.syncAndReplicateServerSources(
             currentServerInstalledSources: serverSources,
             currentlyInstalledLocalJs: installedLocalJs,
-            availableMangayomiRepoExtensions: installedLocalJs,
+            availableMangayomiRepoExtensions: availableRepoNames,
             currentLibraryManga: libraryManga,
           );
 
