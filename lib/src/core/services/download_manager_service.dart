@@ -72,7 +72,7 @@ class DownloadManagerService extends ChangeNotifier {
       }
       notifyListeners();
     } catch (e) {
-      LoggerService.instance.logError('deleteLocalDownload error: $e', category: 'DownloadManager');
+      LoggerService.instance.logError('_scanDownloadedLocalChapters error: $e', category: 'DownloadManager');
     }
   }
 
@@ -212,7 +212,7 @@ class DownloadManagerService extends ChangeNotifier {
         pageBytes = response.data;
       }
     } catch (e) {
-      LoggerService.instance.logError('deleteLocalDownload error: $e', category: 'DownloadManager');
+      LoggerService.instance.logError('_downloadSinglePage error: $e', category: 'DownloadManager');
     }
 
     // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl
