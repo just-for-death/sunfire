@@ -118,27 +118,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() {
       _isHydrating = true;
       _hydrationStep = 1;
-      _sourcesStatusText = 'Installing all available extensions from repositories...';
+      _sourcesStatusText = 'Fetching server sources and installing matching local JS scrapers...';
     });
 
     try {
-      // ── STEP 1: Install ALL English/universal extensions from all repos ──
-      // This ensures the device has 100% of available scrapers, not just the
-      // ones the Suwayomi server currently has installed.
-      final totalInstalled = await RepoManager.instance.downloadAndInstallAllRepoExtensions(
-        userRepoUrls: _userRepoUrls,
-      );
-
-      setState(() {
-        _sourcesStatusText = 'Matching installed extensions to server sources...';
-      });
-
-      // ── STEP 1b: Fetch server sources & match them to local JS ──
+      // ── STEP 1: Fetch all sources installed on the Suwayomi server ──
       final List<ServerSourceItem> serverSources = [];
       if (GraphQLClientService.instance.isConfigured) {
         final sourcesData = await GraphQLClientService.instance
             .fetchSources()
-            .timeout(const Duration(seconds: 6), onTimeout: () => null);
+            .timeout(const Duration(seconds: 8), onTimeout: () => null);
 
         if (sourcesData != null && sourcesData.containsKey('sources')) {
           final nodes = sourcesData['sources']['nodes'] as List<dynamic>?;
@@ -155,7 +144,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         }
       }
 
-      // Also install server-matched sources in case they weren't in the repo index
+      setState(() {
+        _sourcesStatusText =
+            'Installing local JS scrapers for ${serverSources.length} server sources...';
+      });
+
+      // ── STEP 1b: Download & install matching JS scrapers for ALL server sources ──
+      // Uses improved scoring matcher so every server source gets its local JS counterpart.
       final installedSources = await RepoManager.instance.downloadAndInstallMatchingSources(
         serverSourceNames: serverSources.map((s) => s.name).toList(),
         userRepoUrls: _userRepoUrls,
@@ -169,7 +164,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       setState(() {
         _matchedSourcesCount = migrationResult.matchedSources.length;
         _sourcesStatusText =
-            '✓ Installed $totalInstalled extensions locally (${migrationResult.matchedSources.length} matched to server, ${migrationResult.serverOnlySources.length} server fallbacks)';
+            '✓ Installed ${installedSources.length}/${serverSources.length} sources locally'
+            ' (${migrationResult.serverOnlySources.length} server-only fallbacks)';
         _hydrationStep = 2;
         _libraryStatusText = 'Fetching complete library manga and caching chapters in Isar DB...';
       });
@@ -184,7 +180,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       }
 
       setState(() {
-        _libraryStatusText = '✓ Cached $_totalHydratedManga library titles into local DB (100% Offline Ready)';
+        _libraryStatusText =
+            '✓ Cached $_totalHydratedManga library titles into local DB (100% Offline Ready)';
         _hydrationStep = 3;
         _historyStatusText = '✓ Reading history and chapter feeds synchronized';
         _hydrationStep = 4;
@@ -196,7 +193,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } catch (e, st) {
-      LoggerService.instance.logError('Initial hydration error', exception: e, stackTrace: st, category: 'Onboarding');
+      LoggerService.instance.logError('Initial hydration error',
+          exception: e, stackTrace: st, category: 'Onboarding');
       setState(() {
         _sourcesStatusText = '✓ Local-first mode active (Offline ready)';
         _libraryStatusText = '✓ Local database initialized';
