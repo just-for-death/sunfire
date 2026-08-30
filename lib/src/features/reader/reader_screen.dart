@@ -1002,15 +1002,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
                           return _buildChapterTransitionCard();
                         }
                         final pageWidget = _buildPageWidget(_pageUrls[index], index, constraints: constraints, isPaged: false);
+                        if (_readingMode == ReadingMode.webtoon) {
+                          // Webtoon: zero gap — image height is determined by fitWidth alone.
+                          return RepaintBoundary(
+                            child: SizedBox(
+                              width: constraints.maxWidth,
+                              child: pageWidget,
+                            ),
+                          );
+                        }
+                        // ContinuousVertical: add bottom spacing between pages.
                         return RepaintBoundary(
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(minHeight: constraints.maxHeight * 0.75),
-                            child: _readingMode == ReadingMode.continuousVertical
-                                ? Padding(
-                                    padding: const EdgeInsets.only(bottom: 12.0),
-                                    child: Center(child: pageWidget),
-                                  )
-                                : pageWidget,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 12.0),
+                            child: Center(child: pageWidget),
                           ),
                         );
                       },
