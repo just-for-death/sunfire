@@ -12,6 +12,7 @@ import 'src/core/logging/logger_service.dart';
 import 'src/core/services/download_manager_service.dart';
 import 'src/core/services/image_cache_helper.dart';
 import 'src/core/services/settings_service.dart';
+import 'src/core/sync/background_service.dart';
 import 'src/core/sync/graphql_client_service.dart';
 import 'src/core/sync/sync_engine.dart';
 import 'src/core/sync/websocket_service.dart';
@@ -42,6 +43,7 @@ void main() async {
         GraphQLClientService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
         WebSocketService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
         SyncEngine.instance.initialize();
+        await BackgroundService.instance.initialize();
       }
 
       // Load saved FlareSolverr / Byparr URL into MClient so Cloudflare-protected

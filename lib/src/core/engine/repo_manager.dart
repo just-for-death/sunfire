@@ -328,6 +328,76 @@ class RepoManager {
     return installed;
   }
 
+  /// ── INSTALL ALL AVAILABLE REPO EXTENSIONS (used during onboarding) ───
+  /// Downloads and installs EVERY English / universal JS scraper found across
+  /// all user-configured repos — not just those matching the server's sources.
+  /// This ensures the device has the full extension library from day one.
+  Future<int> downloadAndInstallAllRepoExtensions({
+    required List<String> userRepoUrls,
+  }) async {
+    final effectiveRepoUrls = List<String>.from(userRepoUrls);
+    if (effectiveRepoUrls.isEmpty) {
+      effectiveRepoUrls.add('https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json');
+    }
+
+    // Aggregate all sources across repos, keeping the highest version per name+lang
+    final allSources = await fetchCombinedRepoSources(effectiveRepoUrls);
+
+    // Only install English and universal scrapers
+    final targets = allSources.where((s) {
+      final lang = s.lang.toLowerCase();
+      return (lang == 'en' || lang == 'all') &&
+          s.isJs &&
+          s.sourceCodeUrl.isNotEmpty &&
+          s.sourceCodeUrl.toLowerCase().endsWith('.js');
+    }).toList();
+
+    int installedCount = 0;
+    final alreadyInstalledNames = QuickJsService.instance.getInstalledExtensionNames()
+        .map((n) => n.trim().toLowerCase())
+        .toSet();
+
+    for (final source in targets) {
+      final normalizedName = source.name.trim().toLowerCase();
+      // Skip if already installed at same or newer version
+      if (alreadyInstalledNames.contains(normalizedName)) {
+        final currentVer = QuickJsService.instance.getInstalledVersion(source.name);
+        if (currentVer.isNotEmpty && compareVersions(source.version, currentVer) <= 0) {
+          continue;
+        }
+      }
+
+      try {
+        final jsCode = await downloadJsSourceCode(source.sourceCodeUrl);
+        if (jsCode != null && jsCode.trim().isNotEmpty) {
+          await QuickJsService.instance.saveLocalExtension(
+            source.name,
+            jsCode,
+            version: source.version,
+            iconUrl: source.iconUrl,
+          );
+          installedCount++;
+          alreadyInstalledNames.add(normalizedName);
+          await LoggerService.instance.logInfo(
+            '✓ Onboarding installed: ${source.name} (${source.lang}) v${source.version}',
+            'RepoManager',
+          );
+        }
+      } catch (e) {
+        await LoggerService.instance.logWarning(
+          'Skipped ${source.name}: $e',
+          'RepoManager',
+        );
+      }
+    }
+
+    await LoggerService.instance.logInfo(
+      '✓ Onboarding: installed $installedCount extensions from ${effectiveRepoUrls.length} repo(s) (${targets.length} total available)',
+      'RepoManager',
+    );
+    return installedCount;
+  }
+
   /// ── UPDATE ALL INSTALLED EXTENSIONS ──────────────────────────────
   /// Checks configured repositories for newer versions of installed JS extensions
   /// and updates them if a newer version is available.
