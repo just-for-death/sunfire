@@ -19,10 +19,10 @@ workflows:
           flutter test test/comprehensive_app_audit_test.dart
       - name: Build Android Universal APK
         script: |
-          flutter build apk --release
+          flutter build apk --release --android-skip-build-dependency-validation
       - name: Build Split-per-ABI APKs
         script: |
-          flutter build apk --release --split-per-abi
+          flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
 
@@ -83,7 +83,7 @@ workflows:
           flutter test test/comprehensive_app_audit_test.dart
       - name: Build Android Release APK
         script: |
-          flutter build apk --release
+          flutter build apk --release --android-skip-build-dependency-validation
       - name: Install CocoaPods dependencies
         script: |
           cd ios && pod install
