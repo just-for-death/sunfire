@@ -178,45 +178,12 @@ class ContentResolverService {
         String? sourceBaseUrl; // Track base URL for pre-warming
 
         if (cleanChapterUrl.startsWith('/')) {
-          final sNameLower = effectiveSourceName.toLowerCase();
-          if (sNameLower.contains('weeb')) {
-            sourceBaseUrl = 'https://weebcentral.com';
-            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
-          } else if (sNameLower.contains('mangahere') || sNameLower.contains('here')) {
-            sourceBaseUrl = 'https://www.mangahere.cc';
-            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
-          } else if (sNameLower.contains('freak')) {
-            sourceBaseUrl = 'https://ww3.mangafreak.me';
-            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
-          } else if (sNameLower.contains('pill')) {
-            sourceBaseUrl = 'https://mangapill.com';
-            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
-          } else if (sNameLower.contains('webtoon')) {
-            sourceBaseUrl = 'https://www.webtoons.com';
-            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
-          } else if (sNameLower.contains('mangago') || sNameLower.contains('gogo')) {
-            sourceBaseUrl = 'https://www.mangago.me';
-            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
-          } else if (sNameLower.contains('readcomic') || sNameLower.contains('comic')) {
-            sourceBaseUrl = 'https://readcomicsonline.ru';
-            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
-          } else if (sNameLower.contains('nhentai')) {
-            sourceBaseUrl = 'https://nhentai.net';
-            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
-          } else if (sNameLower.contains('ninehentai')) {
-            sourceBaseUrl = 'https://ninehentai.to';
-            cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
-          }
-
-          // Universal fallback: dynamically extract baseUrl from extension code
-          if (sourceBaseUrl == null) {
-            final jsCode = QuickJsService.instance.getExtensionCode(effectiveSourceName);
-            if (jsCode != null && jsCode.isNotEmpty) {
-              final metaUrl = QuickJsService.instance.extractBaseUrl(jsCode);
-              if (metaUrl != null && metaUrl.isNotEmpty) {
-                sourceBaseUrl = metaUrl.endsWith('/') ? metaUrl.substring(0, metaUrl.length - 1) : metaUrl;
-                cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
-              }
+          final jsCode = QuickJsService.instance.getExtensionCode(effectiveSourceName);
+          if (jsCode != null && jsCode.isNotEmpty) {
+            final metaUrl = QuickJsService.instance.extractBaseUrl(jsCode);
+            if (metaUrl != null && metaUrl.isNotEmpty) {
+              sourceBaseUrl = metaUrl.endsWith('/') ? metaUrl.substring(0, metaUrl.length - 1) : metaUrl;
+              cleanChapterUrl = '$sourceBaseUrl$cleanChapterUrl';
             }
           }
         } else if (cleanChapterUrl.startsWith('http')) {

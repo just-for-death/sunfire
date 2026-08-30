@@ -47,7 +47,9 @@ class SyncEngine {
     try {
       try {
         await WakelockPlus.enable();
-      } catch (_) {}
+      } catch (e, stack) {
+      await LoggerService.instance.logError('Failed to sync sources: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+    }
       await LoggerService.instance.logInfo('Starting sync cycle with server...', 'SyncEngine');
       await _flushPendingMutations();
       await _pullServerState();
@@ -57,7 +59,9 @@ class SyncEngine {
     } finally {
       try {
         await WakelockPlus.disable();
-      } catch (_) {}
+      } catch (e, stack) {
+      await LoggerService.instance.logError('Failed to sync sources: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+    }
       _isSyncing = false;
     }
   }
@@ -169,7 +173,9 @@ class SyncEngine {
           }
         }
       }
-    } catch (_) {}
+    } catch (e, stack) {
+      await LoggerService.instance.logError('Failed to sync sources: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+    }
   }
 
   Future<void> _syncCategories() async {
@@ -264,8 +270,7 @@ class SyncEngine {
         // (server was wiped/reset). Skip marking local entries as removed.
         final serverCount = serverMangas.length;
         final removalSafe = localCountBefore == 0 ||
-            serverCount == 0 ||
-            (serverCount >= localCountBefore * 0.3); // server has at least 30% of what we had
+            (serverCount > 0 && serverCount >= localCountBefore * 0.3); // server has at least 30% of what we had
 
         if (removalSafe && serverCount > 0) {
           // Only soft-delete local entries that the server genuinely removed
@@ -277,6 +282,11 @@ class SyncEngine {
               await IsarService.instance.saveManga(local);
             }
           }
+        } else if (serverCount == 0 && localCountBefore > 0) {
+          await LoggerService.instance.logWarning(
+            'WIPE GUARD TRIGGERED: server returned 0 manga but Isar had $localCountBefore. Keeping local data safe.',
+            'SyncEngine'
+          );
         } else if (!removalSafe) {
           await LoggerService.instance.logWarning(
             'WIPE GUARD TRIGGERED: server returned $serverCount manga but Isar had $localCountBefore. '
@@ -322,10 +332,13 @@ class SyncEngine {
 
       await LoggerService.instance.logInfo('Full chapter snapshot: syncing ${library.length} manga', 'SyncEngine');
 
-      for (final manga in library) {
-        try {
-          final data = await GraphQLClientService.instance.fetchMangaDetails(manga.serverId);
-          if (data == null || !data.containsKey('manga')) continue;
+      // Chunk fetch for concurrency
+      for (var i = 0; i < library.length; i += 5) {
+        final chunk = library.skip(i).take(5).toList();
+        await Future.wait(chunk.map((manga) async {
+          try {
+            final data = await GraphQLClientService.instance.fetchMangaDetails(manga.serverId);
+            if (data == null || !data.containsKey('manga')) return;
 
           final mangaData = data['manga'] as Map<String, dynamic>;
 
@@ -402,6 +415,7 @@ class SyncEngine {
           // Individual manga chapter sync failure is non-fatal — continue with others
           await LoggerService.instance.logWarning('Chapter snapshot failed for manga ${manga.serverId}: $e', 'SyncEngine');
         }
+        }));
       }
 
       await LoggerService.instance.logInfo('Full chapter snapshot complete', 'SyncEngine');
