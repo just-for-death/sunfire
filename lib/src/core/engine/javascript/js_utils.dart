@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
 
 class JsUtils {
@@ -6,7 +9,15 @@ class JsUtils {
   JsUtils(this.runtime);
 
   void init() {
+    // Extensions call console.log/warn/error for their own debugging, but
+    // this was previously discarded entirely, making it impossible to
+    // diagnose extension-side issues (e.g. selector/parsing failures) from
+    // logs. Forward it to debugPrint so it shows up like any other trace.
     runtime.onMessage('log', (dynamic args) {
+      try {
+        final List<dynamic> params = args is String ? jsonDecode(args) : args;
+        debugPrint('[JS] ${params.join(' ')}');
+      } catch (_) {}
       return null;
     });
 

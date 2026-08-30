@@ -1,5 +1,9 @@
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
+
+import '../quickjs_service.dart';
 import 'dom_selector.dart';
 import 'http.dart';
 import 'js_utils.dart';
@@ -72,10 +76,13 @@ async function jsonStringify(fn) {
 }
 ''');
 
-    runtime.evaluate('''
+    final res = runtime.evaluate('''
 $sourceCode
 var extention = new DefaultExtension();
 ''');
+    if (res.isError) {
+      debugPrint('[JsExtensionService] ❌ Failed to instantiate extension: ${res.stringResult}');
+    }
     _isInitialized = true;
   }
 
@@ -129,24 +136,40 @@ var extention = new DefaultExtension();
       final baseUrl = (sourceMeta['baseUrl'] ?? '').toString();
       final cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
 
-      return rawList
-          .map((e) {
-            if (e is Map) {
-              final raw = (e['url'] ?? e['image'] ?? e['link'] ?? e['src'] ?? e['img'] ?? '').toString().trim();
-              return raw;
-            }
-            return e.toString().trim();
-          })
-          .where((u) => u.isNotEmpty)
-          .map((u) {
-            if (u.startsWith('//')) return 'https:$u';
-            if (!u.startsWith('http://') && !u.startsWith('https://') && cleanBase.isNotEmpty) {
-              final cleanPath = u.startsWith('/') ? u : '/$u';
-              return '$cleanBase$cleanPath';
-            }
-            return u;
-          })
-          .toList();
+      final results = <String>[];
+      for (final e in rawList) {
+        String raw = '';
+        Map<String, String>? headers;
+
+        if (e is Map) {
+          raw = (e['url'] ?? e['image'] ?? e['link'] ?? e['src'] ?? e['img'] ?? '').toString().trim();
+          if (e['headers'] is Map) {
+            headers = <String, String>{};
+            (e['headers'] as Map).forEach((k, v) {
+              if (k != null && v != null) headers![k.toString()] = v.toString();
+            });
+          }
+        } else {
+          raw = e.toString().trim();
+        }
+
+        if (raw.isEmpty) continue;
+
+        String finalUrl = raw;
+        if (finalUrl.startsWith('//')) {
+          finalUrl = 'https:$finalUrl';
+        } else if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://') && cleanBase.isNotEmpty) {
+          final cleanPath = finalUrl.startsWith('/') ? finalUrl : '/$finalUrl';
+          finalUrl = '$cleanBase$cleanPath';
+        }
+
+        if (headers != null && headers.isNotEmpty) {
+          QuickJsService.cacheImageHeaders(finalUrl, headers);
+        }
+
+        results.add(finalUrl);
+      }
+      return results;
     }
     return [];
   }

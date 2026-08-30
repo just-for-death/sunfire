@@ -1,5 +1,8 @@
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'src/app.dart';
@@ -13,6 +16,7 @@ import 'src/core/services/image_cache_helper.dart';
 import 'src/core/services/settings_service.dart';
 import 'src/core/sync/graphql_client_service.dart';
 import 'src/core/sync/sync_engine.dart';
+import 'src/core/sync/websocket_service.dart';
 
 class _AppHttpOverrides extends HttpOverrides {
   @override
@@ -24,7 +28,9 @@ class _AppHttpOverrides extends HttpOverrides {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  HttpOverrides.global = _AppHttpOverrides();
+  if (kDebugMode) {
+    HttpOverrides.global = _AppHttpOverrides();
+  }
 
   await SentryFlutter.init(
     (options) {
@@ -42,7 +48,10 @@ void main() async {
 
       // Configure Suwayomi GraphQL client and SyncEngine only after onboarding
       if (SettingsService.instance.onboardingCompleted) {
-        GraphQLClientService.instance.initialize(SettingsService.instance.serverUrl);
+        const secureStorage = FlutterSecureStorage();
+        final authToken = await secureStorage.read(key: 'sunfire_server_auth') ?? '';
+        GraphQLClientService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
+        WebSocketService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
         SyncEngine.instance.initialize();
       }
 
