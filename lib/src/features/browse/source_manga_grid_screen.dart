@@ -339,18 +339,69 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
     );
   }
 
+  bool _isSearchExpanded = false;
+
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.sourceName),
+        title: _isSearchExpanded
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(fontSize: 16),
+                decoration: InputDecoration(
+                  hintText: 'Search ${widget.sourceName}...',
+                  border: InputBorder.none,
+                  hintStyle: const TextStyle(color: Colors.white38),
+                ),
+                onSubmitted: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 1;
+                  });
+                  _fetchSourceManga();
+                },
+              )
+            : Text(widget.sourceName, style: const TextStyle(fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (_isSearchExpanded) {
+              setState(() {
+                _isSearchExpanded = false;
+                _searchController.clear();
+                _searchQuery = '';
+                _currentPage = 1;
+              });
+              _fetchSourceManga();
+            } else {
+              context.pop();
+            }
+          },
         ),
         actions: [
+          if (!_isSearchExpanded)
+            IconButton(
+              icon: const Icon(Icons.search_rounded),
+              tooltip: 'Search source',
+              onPressed: () => setState(() => _isSearchExpanded = true),
+            ),
+          if (_isSearchExpanded && _searchController.text.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.clear_rounded),
+              tooltip: 'Clear search',
+              onPressed: () {
+                _searchController.clear();
+                setState(() {
+                  _searchQuery = '';
+                  _currentPage = 1;
+                });
+                _fetchSourceManga();
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.tune_rounded),
             tooltip: 'Filter source',
@@ -366,17 +417,17 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
       body: SafeArea(
         child: Column(
           children: [
-            // ── MIHON POPULAR / LATEST TAB BAR (Centered & Constrained) ──
+            // ── MIHON POPULAR / LATEST TAB BAR (Compact & Centered) ──
             Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
+                constraints: const BoxConstraints(maxWidth: 380),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
                   child: Container(
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
                       color: const Color(0x1F2A2A32),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
                     ),
                     child: Row(
@@ -395,15 +446,15 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               curve: Curves.easeOutCubic,
-                              padding: const EdgeInsets.symmetric(vertical: 9),
+                              padding: const EdgeInsets.symmetric(vertical: 7),
                               decoration: BoxDecoration(
                                 color: !_isLatestMode ? primaryColor : Colors.transparent,
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(11),
                                 boxShadow: !_isLatestMode
                                     ? [
                                         BoxShadow(
                                           color: primaryColor.withValues(alpha: 0.3),
-                                          blurRadius: 8,
+                                          blurRadius: 6,
                                           offset: const Offset(0, 2),
                                         ),
                                       ]
@@ -414,7 +465,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                   'Popular',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 13,
+                                    fontSize: 12.5,
                                     color: !_isLatestMode ? Colors.white : Colors.grey.shade400,
                                   ),
                                 ),
@@ -422,7 +473,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                             ),
                           ),
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 3),
                         Expanded(
                           child: GestureDetector(
                             onTap: () {
@@ -437,15 +488,15 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               curve: Curves.easeOutCubic,
-                              padding: const EdgeInsets.symmetric(vertical: 9),
+                              padding: const EdgeInsets.symmetric(vertical: 7),
                               decoration: BoxDecoration(
                                 color: _isLatestMode ? primaryColor : Colors.transparent,
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(11),
                                 boxShadow: _isLatestMode
                                     ? [
                                         BoxShadow(
                                           color: primaryColor.withValues(alpha: 0.3),
-                                          blurRadius: 8,
+                                          blurRadius: 6,
                                           offset: const Offset(0, 2),
                                         ),
                                       ]
@@ -456,7 +507,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                   'Latest Updates',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 13,
+                                    fontSize: 12.5,
                                     color: _isLatestMode ? Colors.white : Colors.grey.shade400,
                                   ),
                                 ),
@@ -466,43 +517,6 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                         ),
                       ],
                     ),
-                  ),
-                ),
-              ),
-            ),
-
-            // Search Bar (Centered & Constrained)
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search ${widget.sourceName}...',
-                      prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                                _fetchSourceManga();
-                              },
-                            )
-                          : null,
-                      filled: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                    ),
-                    onSubmitted: (val) {
-                      setState(() {
-                        _searchQuery = val;
-                        _currentPage = 1;
-                      });
-                      _fetchSourceManga();
-                    },
                   ),
                 ),
               ),
