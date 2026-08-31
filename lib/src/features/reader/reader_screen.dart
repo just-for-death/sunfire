@@ -393,7 +393,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
-  /// Prefetch the next chapter's page URLs into cache so navigation is instant.
+  /// Prefetch the next chapter's page URLs into cache and precache image bitmaps into memory
   Future<void> _prefetchChapter(Chapter chapter) async {
     final sid = chapter.serverId;
     if (_prefetchedChapters.containsKey(sid) || _prefetchingChapters.contains(sid)) return;
@@ -409,6 +409,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
       if (resolved.pageUrls.isNotEmpty) {
         _prefetchedChapters[sid] = resolved.pageUrls;
         debugPrint('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter $sid');
+
+        // Precache first 3 image bitmaps into Flutter memory cache for 0ms transition
+        for (final pUrl in resolved.pageUrls.take(3)) {
+          if (mounted && pUrl.startsWith('http')) {
+            try {
+              final headers = QuickJsService.getImageHeaders(_sourceName ?? '', pUrl);
+              precacheImage(
+                NetworkImage(pUrl, headers: headers),
+                context,
+              );
+            } catch (_) {}
+          }
+        }
       }
     } catch (e) {
       debugPrint('[Reader] Prefetch failed for chapter $sid: $e');
@@ -426,6 +439,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final pageRatio = (currentScroll / maxScroll).clamp(0.0, 1.0);
     final computedPage = ((pageRatio * (_pageUrls.length - 1)) + 1).round();
 
+    // Trigger prefetch early when reaching 65% of chapter
+    if (pageRatio >= 0.65 && _nextChapter != null) {
+      _prefetchChapter(_nextChapter!);
+    }
+
     if (computedPage != _currentPage) {
       _currentPage = computedPage;
       if (_showControls && mounted) {
@@ -438,6 +456,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void _onPageChanged(int index) {
     final page = index + 1;
     _currentPage = page;
+
+    // Trigger prefetch early when reaching 65% of pages in paged mode
+    if (_pageUrls.isNotEmpty && page >= (_pageUrls.length * 0.65).round() && _nextChapter != null) {
+      _prefetchChapter(_nextChapter!);
+    }
+
     if (_showControls && mounted) {
       setState(() {});
     }
@@ -453,6 +477,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   void _updateProgress(int page) {
     if (_chapter == null) return;
+    // Privacy & Security: If Incognito Mode is enabled, do not persist reading progress or sync to server
+    if (_settings.incognitoMode) return;
+
     final isComplete = page >= _pageUrls.length;
     _chapter!.lastPageRead = page;
     if (isComplete) {
@@ -1256,6 +1283,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                   ),
                                 ],
                               ),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                _settings.incognitoMode ? Icons.visibility_off_rounded : Icons.visibility_outlined,
+                                color: _settings.incognitoMode ? Colors.amberAccent : Colors.white70,
+                              ),
+                              tooltip: _settings.incognitoMode ? 'Incognito Mode: ON' : 'Incognito Mode: OFF',
+                              onPressed: () {
+                                setState(() => _settings.incognitoMode = !_settings.incognitoMode);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(_settings.incognitoMode ? '🕵️ Incognito Mode Active (History & tracking paused)' : 'Incognito Mode Deactivated'),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              },
                             ),
                             IconButton(
                               icon: const Icon(Icons.format_list_bulleted_rounded, color: Colors.white),

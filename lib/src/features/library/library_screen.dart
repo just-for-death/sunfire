@@ -201,10 +201,50 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       list = list.where((m) => m.categoryIds.contains(selectedCatId)).toList();
     }
 
-    // 2. Search Query Filter
+    // 2. Smart Search Query Filter (Mihon / Mangayomi Tokens)
     if (_searchQuery.trim().isNotEmpty) {
-      final q = _searchQuery.toLowerCase().trim();
-      list = list.where((m) => m.title.toLowerCase().contains(q)).toList();
+      final downloadedChapters = DownloadManagerService.instance.downloadedLocalChapterIds;
+      final tokens = _searchQuery.trim().toLowerCase().split(RegExp(r'\s+'));
+      
+      list = list.where((m) {
+        final title = m.title.toLowerCase();
+        final source = m.sourceName.toLowerCase();
+        final author = (m.author ?? '').toLowerCase();
+        final artist = (m.artist ?? '').toLowerCase();
+        final genres = m.genres.map((g) => g.toLowerCase()).toList();
+        final status = (m.status ?? '').toLowerCase();
+        final isDownloaded = downloadedChapters.contains(m.serverId);
+
+        for (final token in tokens) {
+          if (token.isEmpty) continue;
+          if (token.startsWith('tag:') || token.startsWith('genre:')) {
+            final val = token.substring(token.indexOf(':') + 1);
+            if (!genres.any((g) => g.contains(val))) return false;
+          } else if (token.startsWith('src:') || token.startsWith('source:')) {
+            final val = token.substring(token.indexOf(':') + 1);
+            if (!source.contains(val)) return false;
+          } else if (token.startsWith('author:')) {
+            final val = token.substring(7);
+            if (!author.contains(val)) return false;
+          } else if (token.startsWith('artist:')) {
+            final val = token.substring(7);
+            if (!artist.contains(val)) return false;
+          } else if (token.startsWith('status:')) {
+            final val = token.substring(7);
+            if (!status.contains(val)) return false;
+          } else if (token == 'unread:true' || token == 'unread:yes') {
+            if ((m.unreadCount ?? 0) <= 0) return false;
+          } else if (token == 'downloaded:true' || token == 'downloaded:yes') {
+            if (!isDownloaded) return false;
+          } else {
+            // Default keyword search matches title, author, or source
+            if (!title.contains(token) && !source.contains(token) && !author.contains(token)) {
+              return false;
+            }
+          }
+        }
+        return true;
+      }).toList();
     }
 
     // 3. Sorting
