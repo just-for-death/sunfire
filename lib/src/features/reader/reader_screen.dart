@@ -12,6 +12,7 @@ import '../../core/db/models/chapter.dart';
 import '../../core/engine/content_resolver_service.dart';
 import '../../core/engine/javascript/m_client.dart';
 import '../../core/engine/quickjs_service.dart';
+import '../../core/services/download_manager_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 
@@ -351,6 +352,45 @@ class _ReaderScreenState extends State<ReaderScreen> {
     if (_nextChapter != null) {
       unawaited(_prefetchChapter(_nextChapter!));
     }
+
+    // Auto-download ahead trigger
+    if (_settings.autoDownloadWhileReading) {
+      _triggerDownloadAhead();
+    }
+
+    // "When next chapter opens" deletion check for previous read chapters
+    if (_settings.deleteFinishedChaptersWhileReading == 'When next chapter opens' && _prevChapter != null) {
+      if (_prevChapter!.isRead) {
+        if (!_prevChapter!.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
+          DownloadManagerService.instance.deleteLocalDownload(_prevChapter!.serverId);
+        }
+      }
+    }
+  }
+
+  void _triggerDownloadAhead() async {
+    final count = _settings.downloadAheadChapterCount;
+    if (count <= 0 || _chapter == null) return;
+    final currentIdx = _siblingChapters.indexWhere((c) => c.serverId == _chapter!.serverId);
+    if (currentIdx == -1) return;
+
+    final upcoming = _siblingChapters
+        .skip(currentIdx + 1)
+        .where((c) => !c.isRead && !DownloadManagerService.instance.isChapterDownloadedLocally(c.serverId))
+        .take(count)
+        .toList();
+
+    final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
+    final mangaTitle = manga?.title ?? 'Manga';
+
+    for (final ch in upcoming) {
+      DownloadManagerService.instance.enqueueLocalDownload(
+        chapterId: ch.serverId,
+        mangaId: ch.mangaId,
+        chapterName: ch.name,
+        mangaTitle: mangaTitle,
+      );
+    }
   }
 
   /// Prefetch the next chapter's page URLs into cache so navigation is instant.
@@ -417,6 +457,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _chapter!.lastPageRead = page;
     if (isComplete) {
       _chapter!.isRead = true;
+      if (_settings.deleteFinishedChaptersWhileReading == 'Immediately') {
+        if (!_chapter!.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
+          DownloadManagerService.instance.deleteLocalDownload(_chapter!.serverId);
+        }
+      }
     }
     _chapter!.lastReadAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     IsarService.instance.saveChapter(_chapter!);

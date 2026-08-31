@@ -23,6 +23,7 @@ class MangaDetailScreen extends StatefulWidget {
 }
 
 class _MangaDetailScreenState extends State<MangaDetailScreen> {
+  final SettingsService _settings = SettingsService.instance;
   Manga? _manga;
   List<Chapter> _chapters = [];
   bool _isLoading = true;
@@ -435,6 +436,12 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     });
     await IsarService.instance.saveChapter(ch);
 
+    if (newState && _settings.deleteChapterAfterMarkedRead && ch.isDownloaded) {
+      if (!ch.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
+        DownloadManagerService.instance.deleteLocalDownload(ch.serverId);
+      }
+    }
+
     if (GraphQLClientService.instance.isConfigured) {
       GraphQLClientService.instance.updateChapterReadStatus(ch.serverId, newState, ch.lastPageRead);
     }
@@ -459,6 +466,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final prevs = _chapters.where((c) => c.chapterNumber < ch.chapterNumber && !c.isRead).toList();
     for (final p in prevs) {
       p.isRead = true;
+      if (_settings.deleteChapterAfterMarkedRead && p.isDownloaded) {
+        if (!p.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
+          DownloadManagerService.instance.deleteLocalDownload(p.serverId);
+        }
+      }
       if (GraphQLClientService.instance.isConfigured) {
         GraphQLClientService.instance.updateChapterReadStatus(p.serverId, true, p.lastPageRead);
       }
@@ -494,6 +506,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     for (final c in targets) {
       c.isRead = read;
       if (!read) c.lastPageRead = 0;
+      if (read && _settings.deleteChapterAfterMarkedRead && c.isDownloaded) {
+        if (!c.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
+          DownloadManagerService.instance.deleteLocalDownload(c.serverId);
+        }
+      }
       if (GraphQLClientService.instance.isConfigured) {
         GraphQLClientService.instance.updateChapterReadStatus(c.serverId, read, c.lastPageRead);
       }
