@@ -173,7 +173,7 @@ class DefaultExtension extends MProvider {
             // Fallback: extract ULID from any attribute containing /chapters/
             if (!chapUrl) {
                 var raw = chap.attr("hx-get") || chap.attr("data-url") || "";
-                var m = raw.match(/\/chapters\/([A-Z0-9]{26})/);
+                var m = raw.match(/\/chapters\/([a-zA-Z0-9]{26})/i);
                 if (m) chapUrl = m[0];
             }
             // Ensure absolute URL

@@ -584,8 +584,16 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                                   ..sourceName = widget.sourceName;
                                                 await IsarService.instance.saveManga(newManga);
                                               } else {
+                                                bool needsUpdate = false;
                                                 if (existing.url.isEmpty && link.isNotEmpty) {
                                                   existing.url = link;
+                                                  needsUpdate = true;
+                                                }
+                                                if (existing.sourceName.isEmpty && widget.sourceName.isNotEmpty) {
+                                                  existing.sourceName = widget.sourceName;
+                                                  needsUpdate = true;
+                                                }
+                                                if (needsUpdate) {
                                                   await IsarService.instance.saveManga(existing);
                                                 }
                                               }

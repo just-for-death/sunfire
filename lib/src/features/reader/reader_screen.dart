@@ -373,6 +373,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _pageUrls = resolved.pageUrls;
     debugPrint('[Reader] Resolved ${_pageUrls.length} pages for source=$_sourceName: ${_pageUrls.take(3).toList()}');
 
+    // Proactively pre-fetch first 5 pages on desktop to bypass Cloudflare image CDN blocking immediately
+    if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+      for (int i = 0; i < _pageUrls.length && i < 5; i++) {
+        _recoverImage(_pageUrls[i], i);
+      }
+    }
+
     _currentPage = (_chapter != null && _chapter!.lastPageRead > 0 && _chapter!.lastPageRead <= _pageUrls.length)
         ? _chapter!.lastPageRead
         : 1;
@@ -993,17 +1000,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
       final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
       final cookieHeaders = MClient.getCookiesPref(url);
 
-      // 1. On Desktop: try curl-impersonate FIRST (bypasses Cloudflare TLS check instantly in ~50ms)
+      // 1. On Desktop: try curl-impersonate FIRST with clean baseHeaders (Referer only)
       if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
         for (final exe in ['/usr/bin/curl-impersonate', 'curl-impersonate', 'curl-impersonate-chrome', '/usr/bin/curl', 'curl']) {
           try {
             final args = <String>['-s', '-L', '--max-time', '15'];
-            final curlHeaders = <String, String>{
-              ...baseHeaders,
-              ...cookieHeaders,
-              if (!exe.contains('impersonate')) 'User-Agent': MClient.userAgent,
-            };
-            curlHeaders.forEach((k, v) => args.addAll(['-H', '$k: $v']));
+            baseHeaders.forEach((k, v) {
+              final kLower = k.toLowerCase();
+              if (kLower != 'user-agent' && kLower != 'cookie') {
+                args.addAll(['-H', '$k: $v']);
+              }
+            });
             args.add(url);
             final processRes = await Process.run(exe, args, stdoutEncoding: null);
             if (processRes.exitCode == 0) {
@@ -1044,6 +1051,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Widget _buildPageWidget(String url, int index, {BoxConstraints? constraints, bool isPaged = false}) {
     final isWebtoon = _readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps;
     final boxFit = isWebtoon ? BoxFit.fitWidth : _imageBoxFit;
+
+    if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+      if (!_recoveredImageBytes.containsKey(url) && (url.startsWith('http://') || url.startsWith('https://'))) {
+        _recoverImage(url, index);
+      }
+    }
 
     Widget image;
     if (_recoveredImageBytes.containsKey(url)) {

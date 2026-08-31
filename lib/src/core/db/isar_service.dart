@@ -162,6 +162,10 @@ class IsarService {
       if (manga != null) {
         await _isar.mangas.delete(manga.id);
       }
+      final chapters = await _isar.chapters.filter().mangaIdEqualTo(serverId).findAll();
+      if (chapters.isNotEmpty) {
+        await _isar.chapters.deleteAll(chapters.map((c) => c.id).toList());
+      }
     });
   }
 

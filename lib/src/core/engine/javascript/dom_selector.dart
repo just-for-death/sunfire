@@ -11,6 +11,19 @@ class JsDomSelector {
 
   JsDomSelector(this.runtime);
 
+  int? _storeElement(Element? element) {
+    if (element == null) return null;
+    if (_elements.length > 5000) {
+      final keysToRemove = _elements.keys.take(2500).toList();
+      for (final k in keysToRemove) {
+        _elements.remove(k);
+      }
+    }
+    _elementKey++;
+    _elements[_elementKey] = element;
+    return _elementKey;
+  }
+
   void init() {
     runtime.onMessage('get_doc_element', (dynamic args) {
       final input = args[0];
@@ -22,10 +35,7 @@ class JsDomSelector {
         'head' => doc.head,
         _ => doc.parent,
       };
-      if (element == null) return null;
-      _elementKey++;
-      _elements[_elementKey] = element;
-      return _elementKey;
+      return _storeElement(element);
     });
 
     runtime.onMessage('get_doc_string', (dynamic args) {
@@ -68,10 +78,7 @@ class JsDomSelector {
           element = doc.querySelector(selector);
         } catch (_) {}
       }
-      if (element == null) return null;
-      _elementKey++;
-      _elements[_elementKey] = element;
-      return _elementKey;
+      return _storeElement(element);
     });
 
     runtime.onMessage('ele_selectFirst', (dynamic args) {
@@ -84,10 +91,7 @@ class JsDomSelector {
           element = ele.querySelector(selector);
         } catch (_) {}
       }
-      if (element == null) return null;
-      _elementKey++;
-      _elements[_elementKey] = element;
-      return _elementKey;
+      return _storeElement(element);
     });
 
     runtime.onMessage('ele_element_sibling', (dynamic args) {
@@ -98,10 +102,7 @@ class JsDomSelector {
         'nextElementSibling' => ele?.nextElementSibling,
         _ => ele?.previousElementSibling,
       };
-      if (element == null) return null;
-      _elementKey++;
-      _elements[_elementKey] = element;
-      return _elementKey;
+      return _storeElement(element);
     });
 
     runtime.onMessage('ele_attr', (dynamic args) {
@@ -164,9 +165,8 @@ class JsDomSelector {
       };
       List<int> elementKeys = [];
       for (var element in elements) {
-        _elementKey++;
-        _elements[_elementKey] = element;
-        elementKeys.add(_elementKey);
+        final k = _storeElement(element);
+        if (k != null) elementKeys.add(k);
       }
       return jsonEncode(elementKeys);
     });
@@ -182,10 +182,9 @@ class JsDomSelector {
         _ => element?.getElementsByClassName(name),
       };
       List<int> elementKeys = [];
-      for (var element in elements ?? []) {
-        _elementKey++;
-        _elements[_elementKey] = element;
-        elementKeys.add(_elementKey);
+      for (var el in elements ?? []) {
+        final k = _storeElement(el);
+        if (k != null) elementKeys.add(k);
       }
       return jsonEncode(elementKeys);
     });
@@ -193,9 +192,7 @@ class JsDomSelector {
     runtime.onMessage('doc_get_element_by_id', (dynamic args) {
       final input = args[0];
       final id = args[1];
-      _elementKey++;
-      _elements[_elementKey] = parse(input).getElementById(id);
-      return _elementKey;
+      return _storeElement(parse(input).getElementById(id));
     });
 
     runtime.onMessage('doc_select', (dynamic args) {
@@ -210,9 +207,8 @@ class JsDomSelector {
       }
       List<int> elementKeys = [];
       for (var element in elements ?? []) {
-        _elementKey++;
-        _elements[_elementKey] = element;
-        elementKeys.add(_elementKey);
+        final k = _storeElement(element);
+        if (k != null) elementKeys.add(k);
       }
       return jsonEncode(elementKeys);
     });
@@ -229,9 +225,8 @@ class JsDomSelector {
       }
       List<int> elementKeys = [];
       for (var element in elements ?? []) {
-        _elementKey++;
-        _elements[_elementKey] = element;
-        elementKeys.add(_elementKey);
+        final k = _storeElement(element);
+        if (k != null) elementKeys.add(k);
       }
       return jsonEncode(elementKeys);
     });
