@@ -72,13 +72,34 @@ class MProvider {
     }
 }
 async function jsonStringify(fn) {
-    return JSON.stringify(await fn());
+    try {
+        const res = await fn();
+        return JSON.stringify(res !== undefined ? res : null);
+    } catch (err) {
+        return JSON.stringify({ "__error__": err ? (err.stack || err.message || err.toString()) : "Unknown error" });
+    }
+}
+function jsonStringifySync(fn) {
+    try {
+        const res = fn();
+        return JSON.stringify(res !== undefined ? res : null);
+    } catch (err) {
+        return JSON.stringify({ "__error__": err ? (err.stack || err.message || err.toString()) : "Unknown error" });
+    }
 }
 ''');
 
     final res = runtime.evaluate('''
 $sourceCode
-var extention = new DefaultExtension();
+if (typeof extention === "undefined") {
+    if (typeof DefaultExtension !== "undefined") {
+        var extention = new DefaultExtension();
+    } else if (typeof extension !== "undefined") {
+        var extention = extension;
+    } else if (typeof source !== "undefined") {
+        var extention = source;
+    }
+}
 ''');
     if (res.isError) {
       debugPrint('[JsExtensionService] ❌ Failed to instantiate extension: ${res.stringResult}');
@@ -177,8 +198,10 @@ var extention = new DefaultExtension();
   T _extensionCall<T>(String call, T def) {
     _init();
     try {
-      final res = runtime.evaluate('JSON.stringify(extention.$call)');
-      return jsonDecode(res.stringResult) as T;
+      final res = runtime.evaluate('jsonStringifySync(() => extention.$call)');
+      final decoded = jsonDecode(res.stringResult);
+      if (decoded is Map && decoded.containsKey('__error__')) return def;
+      return decoded as T;
     } catch (_) {
       return def;
     }
@@ -191,10 +214,10 @@ var extention = new DefaultExtension();
         await runtime.evaluateAsync('jsonStringify(() => extention.$call)'),
       );
       final rawStr = promised.stringResult;
-      if (rawStr.startsWith('SyntaxError:') || rawStr.startsWith('Error:') || rawStr.startsWith('TypeError:')) {
-        throw Exception(rawStr);
-      }
       final decoded = jsonDecode(rawStr);
+      if (decoded is Map && decoded.containsKey('__error__')) {
+        throw Exception(decoded['__error__']);
+      }
       if (decoded is T) return decoded;
       if (decoded is Map) {
         return Map<String, dynamic>.from(decoded) as T;
