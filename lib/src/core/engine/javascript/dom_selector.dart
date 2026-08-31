@@ -22,6 +22,7 @@ class JsDomSelector {
         'head' => doc.head,
         _ => doc.parent,
       };
+      if (element == null) return null;
       _elementKey++;
       _elements[_elementKey] = element;
       return _elementKey;
@@ -60,16 +61,20 @@ class JsDomSelector {
     runtime.onMessage('doc_select_first', (dynamic args) {
       final input = args[0];
       final selector = args[1];
+      final element = parse(input).selectFirst(selector);
+      if (element == null) return null;
       _elementKey++;
-      _elements[_elementKey] = parse(input).selectFirst(selector);
+      _elements[_elementKey] = element;
       return _elementKey;
     });
 
     runtime.onMessage('ele_selectFirst', (dynamic args) {
       final selector = args[0];
       final key = args[1];
+      final element = _elements[key]?.selectFirst(selector);
+      if (element == null) return null;
       _elementKey++;
-      _elements[_elementKey] = _elements[key]?.selectFirst(selector);
+      _elements[_elementKey] = element;
       return _elementKey;
     });
 
@@ -81,6 +86,7 @@ class JsDomSelector {
         'nextElementSibling' => ele?.nextElementSibling,
         _ => ele?.previousElementSibling,
       };
+      if (element == null) return null;
       _elementKey++;
       _elements[_elementKey] = element;
       return _elementKey;
@@ -216,7 +222,7 @@ class Document {
             "get_doc_element",
             JSON.stringify([this.html, type])
         );
-        return new Element(key);
+        return (key != null && key > 0) ? new Element(key) : null;
     }
     get body() {
         return this.getElement('body');
@@ -252,7 +258,7 @@ class Document {
             "doc_select_first",
             JSON.stringify([this.html, selector])
         );
-        return new Element(key);
+        return (key != null && key > 0) ? new Element(key) : null;
     }
     select(selector) {
         let elements = [];
@@ -260,7 +266,7 @@ class Document {
             JSON.parse(
                 sendMessage("doc_select", JSON.stringify([this.html, selector]))
             ).forEach((key) => {
-                elements.push(new Element(key));
+                if (key != null && key > 0) elements.push(new Element(key));
             });
         } catch (_) {}
         return elements;
@@ -284,7 +290,7 @@ class Document {
             "doc_get_elements_by",
             JSON.stringify([this.html, type, name]))
         ).forEach((key) => {
-            elements.push(new Element(key));
+            if (key != null && key > 0) elements.push(new Element(key));
         });
         return elements;
     }
@@ -302,13 +308,7 @@ class Document {
             "doc_get_element_by_id",
             JSON.stringify([this.html, id])
         );
-        return new Element(key);
-    }
-    querySelector(selector) {
-        return this.selectFirst(selector);
-    }
-    querySelectorAll(selector) {
-        return this.select(selector);
+        return (key != null && key > 0) ? new Element(key) : null;
     }
     attr(attr) {
         return sendMessage(
@@ -369,7 +369,7 @@ class Element {
             "ele_element_sibling",
             JSON.stringify([type, this.key])
         );
-        return new Element(key);
+        return (key != null && key > 0) ? new Element(key) : null;
     }
     get previousElementSibling() {
         return this.getElementSibling("previousElementSibling");
@@ -384,7 +384,7 @@ class Element {
             "ele_get_elements_by",
             JSON.stringify([type, name, this.key]))
         ).forEach((key) => {
-            elements.push(new Element(key));
+            if (key != null && key > 0) elements.push(new Element(key));
         });
         return elements;
     }
@@ -426,7 +426,7 @@ class Element {
             "ele_selectFirst",
             JSON.stringify([selector, this.key])
         );
-        return new Element(key);
+        return (key != null && key > 0) ? new Element(key) : null;
     }
     select(selector) {
         let elements = [];
@@ -434,7 +434,7 @@ class Element {
             JSON.parse(
                 sendMessage("ele_select", JSON.stringify([selector, this.key]))
             ).forEach((key) => {
-                elements.push(new Element(key));
+                if (key != null && key > 0) elements.push(new Element(key));
             });
         } catch (_) {}
         return elements;
