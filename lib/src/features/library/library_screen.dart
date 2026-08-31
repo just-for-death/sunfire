@@ -487,116 +487,195 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     );
   }
 
+  int _getCategoryMangaCount(int catServerId) {
+    return _allManga.where((m) => m.categoryIds.contains(catServerId)).length;
+  }
+
   void _showSortAndDisplayDialog() {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1F1F24),
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Library View & Sort', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  const Text('DISPLAY MODE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: ['Comfortable Grid', 'Compact Grid', 'Cover Only', 'List'].map((mode) {
-                      final isSel = _settings.libraryDisplayMode == mode;
-                      return ChoiceChip(
-                        label: Text(mode),
-                        selected: isSel,
-                        selectedColor: primaryColor,
-                        backgroundColor: const Color(0x1F2A2A32),
-                        labelStyle: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : const Color(0x2BFFFFFF), width: 0.8)),
-                        onSelected: (_) {
-                          setState(() => _settings.libraryDisplayMode = mode);
-                          setSheetState(() {});
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('FILTER BY STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: ['All', 'Unread', 'Downloaded', 'Completed'].map((filter) {
-                      final isSel = _statusFilter == filter;
-                      return ChoiceChip(
-                        label: Text(filter),
-                        selected: isSel,
-                        selectedColor: primaryColor,
-                        backgroundColor: const Color(0x1F2A2A32),
-                        labelStyle: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : const Color(0x2BFFFFFF), width: 0.8)),
-                        onSelected: (_) {
-                          setState(() => _statusFilter = filter);
-                          setSheetState(() {});
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('SORT BY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-                      IconButton(
-                        icon: Icon(_isSortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: 20, color: primaryColor),
-                        onPressed: () {
-                          setState(() => _isSortAscending = !_isSortAscending);
-                          setSheetState(() {});
-                        },
+            return DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.4,
+              maxChildSize: 0.9,
+              expand: false,
+              builder: (context, scrollController) {
+                return ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(20.0),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
-                    ],
-                  ),
-                  ListTile(
-                    title: const Text('Title (Alphabetical)'),
-                    trailing: _sortBy == 'Title' ? Icon(Icons.check_rounded, color: primaryColor) : null,
-                    onTap: () {
-                      setState(() => _sortBy = 'Title');
-                      Navigator.pop(context);
-                    },
-                  ),
-                  ListTile(
-                    title: const Text('Unread Count'),
-                    trailing: _sortBy == 'Unread' ? Icon(Icons.check_rounded, color: primaryColor) : null,
-                    onTap: () {
-                      setState(() => _sortBy = 'Unread');
-                      Navigator.pop(context);
-                    },
-                  ),
-                  ListTile(
-                    title: const Text('Recently Added'),
-                    trailing: _sortBy == 'Recent' ? Icon(Icons.check_rounded, color: primaryColor) : null,
-                    onTap: () {
-                      setState(() => _sortBy = 'Recent');
-                      Navigator.pop(context);
-                    },
-                  ),
-                  ListTile(
-                    title: const Text('Total Chapters'),
-                    trailing: _sortBy == 'Chapters' ? Icon(Icons.check_rounded, color: primaryColor) : null,
-                    onTap: () {
-                      setState(() => _sortBy = 'Chapters');
-                      Navigator.pop(context);
-                    },
-                  ),
-                ],
-              ),
-            );
+                    ),
+                    const Text('Library View & Sort', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    const Text('DISPLAY MODE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: ['Comfortable Grid', 'Compact Grid', 'Cover Only', 'List'].map((mode) {
+                        final isSel = _settings.libraryDisplayMode == mode;
+                        return ChoiceChip(
+                          label: Text(mode),
+                          selected: isSel,
+                          selectedColor: primaryColor,
+                          backgroundColor: const Color(0x1F2A2A32),
+                          labelStyle: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : const Color(0x2BFFFFFF), width: 0.8)),
+                          onSelected: (_) {
+                            setState(() => _settings.libraryDisplayMode = mode);
+                            setSheetState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('GRID COLUMNS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        {'label': 'Auto', 'val': 0},
+                        {'label': '2', 'val': 2},
+                        {'label': '3', 'val': 3},
+                        {'label': '4', 'val': 4},
+                        {'label': '5', 'val': 5},
+                        {'label': '6', 'val': 6},
+                      ].map((item) {
+                        final isSel = _settings.gridColumnCount == (item['val'] as int);
+                        return ChoiceChip(
+                          label: Text(item['label'] as String),
+                          selected: isSel,
+                          selectedColor: primaryColor,
+                          backgroundColor: const Color(0x1F2A2A32),
+                          labelStyle: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : const Color(0x2BFFFFFF), width: 0.8)),
+                          onSelected: (_) {
+                            setState(() => _settings.gridColumnCount = item['val'] as int);
+                            setSheetState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('BADGES & INDICATORS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilterChip(
+                          label: const Text('Unread Count'),
+                          selected: _settings.showUnreadBadges,
+                          selectedColor: primaryColor.withAlpha(80),
+                          checkmarkColor: Colors.white,
+                          onSelected: (val) {
+                            setState(() => _settings.showUnreadBadges = val);
+                            setSheetState(() {});
+                          },
+                        ),
+                        FilterChip(
+                          label: const Text('Downloaded Check'),
+                          selected: _settings.showDownloadedBadges,
+                          selectedColor: primaryColor.withAlpha(80),
+                          checkmarkColor: Colors.white,
+                          onSelected: (val) {
+                            setState(() => _settings.showDownloadedBadges = val);
+                            setSheetState(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('FILTER BY STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: ['All', 'Unread', 'Downloaded', 'Completed'].map((filter) {
+                        final isSel = _statusFilter == filter;
+                        return ChoiceChip(
+                          label: Text(filter),
+                          selected: isSel,
+                          selectedColor: primaryColor,
+                          backgroundColor: const Color(0x1F2A2A32),
+                          labelStyle: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : const Color(0x2BFFFFFF), width: 0.8)),
+                          onSelected: (_) {
+                            setState(() => _statusFilter = filter);
+                            setSheetState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('SORT BY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                        IconButton(
+                          icon: Icon(_isSortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: 20, color: primaryColor),
+                          onPressed: () {
+                            setState(() => _isSortAscending = !_isSortAscending);
+                            setSheetState(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                    ListTile(
+                      title: const Text('Title (Alphabetical)'),
+                      trailing: _sortBy == 'Title' ? Icon(Icons.check_rounded, color: primaryColor) : null,
+                      onTap: () {
+                        setState(() => _sortBy = 'Title');
+                        Navigator.pop(context);
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Unread Count'),
+                      trailing: _sortBy == 'Unread' ? Icon(Icons.check_rounded, color: primaryColor) : null,
+                      onTap: () {
+                        setState(() => _sortBy = 'Unread');
+                        Navigator.pop(context);
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Recently Added'),
+                      trailing: _sortBy == 'Recent' ? Icon(Icons.check_rounded, color: primaryColor) : null,
+                      onTap: () {
+                        setState(() => _sortBy = 'Recent');
+                        Navigator.pop(context);
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Total Chapters'),
+                      trailing: _sortBy == 'Chapters' ? Icon(Icons.check_rounded, color: primaryColor) : null,
+                      onTap: () {
+                        setState(() => _sortBy = 'Chapters');
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ],
+                );
+              },
+);
           },
         );
       },
@@ -616,7 +695,11 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final isTablet = screenWidth >= 720;
     final bottomPadding = isTablet ? 36.0 : 120.0;
     final horizontalPadding = isTablet ? 24.0 : 16.0;
-    final targetWidth = isCoverOnly ? (isTablet ? 140.0 : 120.0) : (isCompact ? (isTablet ? 130.0 : 110.0) : (isTablet ? 170.0 : 145.0));
+    
+    final columnsSetting = _settings.gridColumnCount;
+    final int crossAxisCount = columnsSetting > 0
+        ? columnsSetting
+        : (isTablet ? (screenWidth ~/ 160).clamp(3, 7) : (screenWidth ~/ 120).clamp(2, 4));
     final childAspectRatio = isCoverOnly ? 0.70 : (isCompact ? 0.70 : 0.65);
 
     return Scaffold(
@@ -683,7 +766,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       clipBehavior: Clip.none,
                       children: [
                         const Icon(Icons.tune_rounded, size: 26),
-                        if (_statusFilter != 'All')
+                        if (_statusFilter != 'All' || _settings.gridColumnCount > 0)
                           Positioned(
                             top: -2,
                             right: -2,
@@ -716,7 +799,8 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
               itemCount: _categories.length + 1,
               itemBuilder: (context, index) {
                 final isSelected = _selectedCategoryIndex == index;
-                final label = index == 0 ? 'All (${_allManga.length})' : _categories[index - 1].name;
+                final count = index == 0 ? _allManga.length : _getCategoryMangaCount(_categories[index - 1].serverId);
+                final label = index == 0 ? 'All ($count)' : '${_categories[index - 1].name} ($count)';
                 return Padding(
                   padding: const EdgeInsets.only(right: 8.0),
                   child: ChoiceChip(
@@ -755,71 +839,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         onRefresh: _handleRefresh,
         child: _isLoading
             ? Center(child: CircularProgressIndicator(color: primaryColor))
-            : displayManga.isEmpty
-            ? CustomScrollView(
+            : CustomScrollView(
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 scrollCacheExtent: ScrollCacheExtent.pixels(800),
-                slivers: [
-                  if (_isOffline)
-                    SliverToBoxAdapter(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withAlpha(30),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.orange.withAlpha(80), width: 0.8),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.wifi_off_rounded, color: Colors.orange, size: 16),
-                            SizedBox(width: 8),
-                            Text(
-                              'Offline — Showing cached library',
-                              style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.auto_stories_outlined, size: 64, color: primaryColor.withAlpha(120)),
-                            const SizedBox(height: 16),
-                            const Text('Library is empty', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Browse to add manga or pull down\nto sync with your server.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.grey, fontSize: 13),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: primaryColor,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                              ),
-                              icon: const Icon(Icons.explore_outlined, color: Colors.white, size: 18),
-                              label: const Text('Browse Sources', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                              onPressed: () => MainShell.switchToTab(3),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            : CustomScrollView(
-                scrollCacheExtent: ScrollCacheExtent.pixels(1200),
-                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 slivers: [
                   if (_isOffline)
                     SliverToBoxAdapter(
@@ -882,8 +904,8 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     SliverPadding(
                       padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 8, bottom: bottomPadding),
                       sliver: SliverGrid(
-                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: targetWidth + (isTablet ? 60 : 40),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
                           childAspectRatio: childAspectRatio,
                           crossAxisSpacing: isTablet ? 16 : 12,
                           mainAxisSpacing: isTablet ? 20 : 16,
@@ -946,6 +968,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   Widget _buildMangaCard(Manga manga, {bool isCompact = false, bool isCoverOnly = false}) {
     final isSelected = _selectedMangaIds.contains(manga.serverId);
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final isDownloaded = DownloadManagerService.instance.downloadedLocalChapterIds.contains(manga.serverId);
 
     return RepaintBoundary(
       child: Material(
@@ -966,153 +989,214 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      color: const Color(0xFF1F1F24),
-                      border: Border.all(
-                        color: isSelected ? primaryColor : const Color(0x1AFFFFFF),
-                        width: isSelected ? 2.5 : 0.8,
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: MangaCoverImage(
-                        mangaServerId: manga.serverId,
-                        thumbnailUrl: manga.thumbnailUrl,
-                        sourceName: manga.sourceName,
-                        width: double.infinity,
-                        height: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  if (isSelected)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle),
-                        child: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
-                      ),
-                    ),
-                  if (_settings.showUnreadBadges && manga.unreadCount != null && manga.unreadCount! > 0 && !isSelected)
-                    Positioned(
-                      bottom: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: primaryColor,
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.4),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: const Color(0xFF1F1F24),
+                        border: Border.all(
+                          color: isSelected ? primaryColor : const Color(0x1AFFFFFF),
+                          width: isSelected ? 2.5 : 0.8,
                         ),
-                        child: Text(
-                          '${manga.unreadCount}',
-                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  if (isCoverOnly && !isSelected)
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.transparent, Color(0xEE000000)],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 6,
+                            offset: const Offset(0, 3),
                           ),
-                          borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
-                        ),
-                        child: Text(
-                          manga.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: MangaCoverImage(
+                          mangaServerId: manga.serverId,
+                          thumbnailUrl: manga.thumbnailUrl,
+                          sourceName: manga.sourceName,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover,
                         ),
                       ),
                     ),
-                ],
+                    if (isCompact && !isSelected)
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.transparent, Color(0xD9000000), Color(0xF2000000)],
+                              stops: [0.0, 0.5, 1.0],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                            borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+                          ),
+                          child: Text(
+                            manga.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.white, height: 1.2),
+                          ),
+                        ),
+                      ),
+                    if (isSelected)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle),
+                          child: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+                        ),
+                      ),
+                    if (_settings.showUnreadBadges && (manga.unreadCount ?? 0) > 0 && !isSelected)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: primaryColor,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            '${manga.unreadCount}',
+                            style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ),
+                    if (_settings.showDownloadedBadges && isDownloaded && !isSelected)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xCC10B981),
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                blurRadius: 3,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.download_done_rounded, size: 12, color: Colors.white),
+                        ),
+                      ),
+                    if (isCoverOnly && !isSelected)
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.transparent, Color(0xCC000000)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                            borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+                          ),
+                          child: Text(
+                            manga.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            if (!isCompact && !isCoverOnly) ...[
-              const SizedBox(height: 6),
-              Text(
-                manga.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, height: 1.25),
-              ),
+              if (!isCompact && !isCoverOnly) ...[
+                const SizedBox(height: 6),
+                Text(
+                  manga.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, height: 1.25),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildMangaListItem(Manga manga) {
     final isSelected = _selectedMangaIds.contains(manga.serverId);
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final isDownloaded = DownloadManagerService.instance.downloadedLocalChapterIds.contains(manga.serverId);
 
     return RepaintBoundary(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4.0),
         child: Material(
-        color: isSelected ? primaryColor.withAlpha(40) : const Color(0x1F2A2A32),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: isSelected ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
-        ),
-        child: ListTile(
-          onTap: () async {
-            if (_isBatchMode) {
-              _toggleBatchSelection(manga.serverId);
-            } else {
-              await context.push('/manga/${manga.serverId}');
-              if (mounted) {
-                await _loadFromIsarOnly();
-              }
-            }
-          },
-          onLongPress: () => _toggleBatchSelection(manga.serverId),
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: MangaCoverImage(
-              mangaServerId: manga.serverId,
-              thumbnailUrl: manga.thumbnailUrl,
-              sourceName: manga.sourceName,
-              width: 40,
-              height: 56,
-              fit: BoxFit.cover,
-            ),
+          color: isSelected ? primaryColor.withAlpha(40) : const Color(0x1F2A2A32),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: isSelected ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
           ),
-          title: Text(manga.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text(manga.sourceName, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-          trailing: manga.unreadCount != null && manga.unreadCount! > 0
-              ? Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: primaryColor, borderRadius: BorderRadius.circular(10)),
-                  child: Text('${manga.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                )
-              : null,
+          child: ListTile(
+            onTap: () async {
+              if (_isBatchMode) {
+                _toggleBatchSelection(manga.serverId);
+              } else {
+                await context.push('/manga/${manga.serverId}');
+                if (mounted) {
+                  await _loadFromIsarOnly();
+                }
+              }
+            },
+            onLongPress: () => _toggleBatchSelection(manga.serverId),
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: MangaCoverImage(
+                mangaServerId: manga.serverId,
+                thumbnailUrl: manga.thumbnailUrl,
+                sourceName: manga.sourceName,
+                width: 40,
+                height: 56,
+                fit: BoxFit.cover,
+              ),
+            ),
+            title: Text(manga.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Row(
+              children: [
+                Flexible(child: Text(manga.sourceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 12))),
+                if (isDownloaded && _settings.showDownloadedBadges) ...[
+                  const SizedBox(width: 6),
+                  const Icon(Icons.download_done_rounded, size: 14, color: Color(0xFF10B981)),
+                ],
+              ],
+            ),
+            trailing: _settings.showUnreadBadges && manga.unreadCount != null && manga.unreadCount! > 0
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: primaryColor, borderRadius: BorderRadius.circular(10)),
+                    child: Text('${manga.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  )
+                : null,
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
