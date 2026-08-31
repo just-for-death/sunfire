@@ -1017,27 +1017,29 @@ class _ReaderScreenState extends State<ReaderScreen> {
           });
         }
       } else {
-        // Desktop fallback: fetch via curl with TLS bypass
+        // Desktop fallback: fetch via curl-impersonate / curl with Chrome TLS bypass
         if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
-          try {
-            final args = <String>['-s', '-L', '--max-time', '15'];
-            final freshCookies = MClient.getCookiesPref(url);
-            final curlHeaders = {...baseHeaders, ...freshCookies, 'User-Agent': MClient.userAgent};
-            curlHeaders.forEach((k, v) => args.addAll(['-H', '$k: $v']));
-            args.add(url);
-            final processRes = await Process.run('curl', args, stdoutEncoding: null);
-            if (processRes.exitCode == 0) {
-              final bytes = processRes.stdout as List<int>;
-              if (bytes.length > 200 && _isMagicImage(bytes)) {
-                if (mounted) {
-                  setState(() {
-                    _recoveredImageBytes[url] = Uint8List.fromList(bytes);
-                  });
+          for (final exe in ['curl-impersonate', 'curl-impersonate-chrome', 'curl']) {
+            try {
+              final args = <String>['-s', '-L', '--max-time', '15'];
+              final freshCookies = MClient.getCookiesPref(url);
+              final curlHeaders = {...baseHeaders, ...freshCookies, 'User-Agent': MClient.userAgent};
+              curlHeaders.forEach((k, v) => args.addAll(['-H', '$k: $v']));
+              args.add(url);
+              final processRes = await Process.run(exe, args, stdoutEncoding: null);
+              if (processRes.exitCode == 0) {
+                final bytes = processRes.stdout as List<int>;
+                if (bytes.length > 200 && _isMagicImage(bytes)) {
+                  if (mounted) {
+                    setState(() {
+                      _recoveredImageBytes[url] = Uint8List.fromList(bytes);
+                    });
+                  }
+                  return;
                 }
-                return;
               }
-            }
-          } catch (_) {}
+            } catch (_) {}
+          }
         }
         debugPrint('[Reader] ❌ Image still failed $url -> ${res.statusCode}');
       }
