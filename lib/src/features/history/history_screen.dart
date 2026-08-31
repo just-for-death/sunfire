@@ -190,7 +190,12 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                         : ListView.builder(
                             physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                             scrollCacheExtent: ScrollCacheExtent.pixels(800),
-                            padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0, bottom: 120.0),
+                            padding: EdgeInsets.only(
+                              left: MediaQuery.of(context).size.width >= 720 ? 24.0 : 16.0,
+                              right: MediaQuery.of(context).size.width >= 720 ? 24.0 : 16.0,
+                              top: 12.0,
+                              bottom: MediaQuery.of(context).size.width >= 720 ? 36.0 : 120.0,
+                            ),
                       itemCount: _historyItems.length,
                       itemBuilder: (context, index) {
                         final item = _historyItems[index];
