@@ -76,10 +76,19 @@ class QuickJsService {
           final code = await rootBundle.loadString(path);
           final fileName = path.split('/').last.replaceAll('.js', '');
           final cleanKey = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
-          final displayName = fileName.replaceAll('_', ' ').trim();
+          final meta = extractSourceMetadata(code);
+          final displayName = (meta['name'] != null && meta['name'].toString().isNotEmpty)
+              ? meta['name'].toString()
+              : fileName.replaceAll('_', ' ').trim();
           if (!_installedJsSources.containsKey(cleanKey)) {
             _installedJsSources[cleanKey] = code;
             _canonicalDisplayNames[cleanKey] = displayName;
+            if (meta['version'] != null && meta['version'].toString().isNotEmpty) {
+              _installedVersions[cleanKey] = meta['version'].toString();
+            }
+            if (meta['iconUrl'] != null && meta['iconUrl'].toString().isNotEmpty) {
+              _installedIcons[cleanKey] = meta['iconUrl'].toString();
+            }
           }
         } catch (_) {}
       }
@@ -430,26 +439,77 @@ class QuickJsService {
   }
 
   Map<String, dynamic> extractSourceMetadata(String jsCode) {
+    String name = '';
+    String baseUrl = '';
+    String apiUrl = '';
+    String iconUrl = '';
+    String version = '1.0.0';
+    String lang = 'en';
+    dynamic id = 0;
+
+    // 1. Try standard JSON decode of mangayomiSources array
     try {
-      final match = RegExp(r'''(?:const|var|let)\s+mangayomiSources\s*=\s*(\[\s*\{[\s\S]*?\}\s*\]);''').firstMatch(jsCode);
+      final match = RegExp(r'''(?:const|var|let)\s+mangayomiSources\s*=\s*(\[\s*\{[\s\S]*?\}\s*\]);?''').firstMatch(jsCode);
       if (match != null) {
         var jsonStr = match.group(1)!;
-        // Strip trailing commas before closing braces/brackets
         jsonStr = jsonStr.replaceAll(RegExp(r',\s*([\]\}])'), r'$1');
         final decoded = jsonDecode(jsonStr);
         if (decoded is List && decoded.isNotEmpty) {
-          return Map<String, dynamic>.from(decoded[0] as Map);
+          final map = Map<String, dynamic>.from(decoded[0] as Map);
+          name = map['name']?.toString() ?? '';
+          baseUrl = map['baseUrl']?.toString() ?? '';
+          apiUrl = map['apiUrl']?.toString() ?? '';
+          iconUrl = map['iconUrl']?.toString() ?? '';
+          version = map['version']?.toString() ?? '1.0.0';
+          lang = (map['lang'] ?? map['langs'] ?? 'en').toString();
+          id = map['id'] ?? 0;
         }
       }
     } catch (_) {}
 
-    final baseUrl = extractBaseUrl(jsCode) ?? '';
+    // 2. If any core fields are empty, extract via robust regex patterns
+    if (name.isEmpty) {
+      final nameMatch = RegExp(r'''(?:['"]?name['"]?)\s*:\s*['"]([^'"]+)['"]''').firstMatch(jsCode);
+      if (nameMatch != null) name = nameMatch.group(1)!.trim();
+    }
+    if (baseUrl.isEmpty) {
+      final baseMatch = RegExp(r'''(?:['"]?baseUrl['"]?)\s*:\s*['"]([^'"]+)['"]''').firstMatch(jsCode);
+      if (baseMatch != null) baseUrl = baseMatch.group(1)!.trim();
+    }
+    if (apiUrl.isEmpty) {
+      final apiMatch = RegExp(r'''(?:['"]?apiUrl['"]?)\s*:\s*['"]([^'"]+)['"]''').firstMatch(jsCode);
+      if (apiMatch != null) apiUrl = apiMatch.group(1)!.trim();
+    }
+    if (iconUrl.isEmpty) {
+      final iconMatch = RegExp(r'''(?:['"]?iconUrl['"]?)\s*:\s*['"]([^'"]+)['"]''').firstMatch(jsCode);
+      if (iconMatch != null) iconUrl = iconMatch.group(1)!.trim();
+    }
+    if (version == '1.0.0') {
+      final verMatch = RegExp(r'''(?:['"]?version['"]?)\s*:\s*['"]([^'"]+)['"]''').firstMatch(jsCode);
+      if (verMatch != null) version = verMatch.group(1)!.trim();
+    }
+    if (id == 0) {
+      final idMatch = RegExp(r'''(?:['"]?id['"]?)\s*:\s*([0-9]+)''').firstMatch(jsCode);
+      if (idMatch != null) id = int.tryParse(idMatch.group(1)!) ?? 0;
+    }
+
+    // 3. Fallback to domain favicon if iconUrl is empty but baseUrl exists
+    if (iconUrl.isEmpty && baseUrl.isNotEmpty) {
+      final uri = Uri.tryParse(baseUrl);
+      final host = uri?.host.isNotEmpty == true ? uri!.host : baseUrl.replaceAll(RegExp(r'^https?:\/\/'), '').split('/').first;
+      if (host.isNotEmpty) {
+        iconUrl = 'https://www.google.com/s2/favicons?domain=$host&sz=128';
+      }
+    }
+
     return {
-      'name': '',
+      'name': name,
       'baseUrl': baseUrl,
-      'apiUrl': '',
-      'lang': 'en',
-      'id': 0,
+      'apiUrl': apiUrl,
+      'iconUrl': iconUrl,
+      'version': version,
+      'lang': lang,
+      'id': id,
     };
   }
 
