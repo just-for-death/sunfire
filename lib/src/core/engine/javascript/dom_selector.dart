@@ -61,7 +61,13 @@ class JsDomSelector {
     runtime.onMessage('doc_select_first', (dynamic args) {
       final input = args[0];
       final selector = args[1];
-      final element = parse(input).selectFirst(selector);
+      final doc = parse(input);
+      var element = doc.selectFirst(selector);
+      if (element == null) {
+        try {
+          element = doc.querySelector(selector);
+        } catch (_) {}
+      }
       if (element == null) return null;
       _elementKey++;
       _elements[_elementKey] = element;
@@ -71,7 +77,13 @@ class JsDomSelector {
     runtime.onMessage('ele_selectFirst', (dynamic args) {
       final selector = args[0];
       final key = args[1];
-      final element = _elements[key]?.selectFirst(selector);
+      final ele = _elements[key];
+      var element = ele?.selectFirst(selector);
+      if (element == null && ele != null) {
+        try {
+          element = ele.querySelector(selector);
+        } catch (_) {}
+      }
       if (element == null) return null;
       _elementKey++;
       _elements[_elementKey] = element;
@@ -189,7 +201,13 @@ class JsDomSelector {
     runtime.onMessage('doc_select', (dynamic args) {
       final input = args[0];
       final selector = args[1];
-      final elements = parse(input).select(selector);
+      final doc = parse(input);
+      var elements = doc.select(selector);
+      if (elements == null || elements.isEmpty) {
+        try {
+          elements = doc.querySelectorAll(selector);
+        } catch (_) {}
+      }
       List<int> elementKeys = [];
       for (var element in elements ?? []) {
         _elementKey++;
@@ -202,7 +220,13 @@ class JsDomSelector {
     runtime.onMessage('ele_select', (dynamic args) {
       final selector = args[0];
       final key = args[1];
-      final elements = _elements[key]?.select(selector);
+      final ele = _elements[key];
+      var elements = ele?.select(selector);
+      if (elements == null || elements.isEmpty) {
+        try {
+          elements = ele?.querySelectorAll(selector);
+        } catch (_) {}
+      }
       List<int> elementKeys = [];
       for (var element in elements ?? []) {
         _elementKey++;
