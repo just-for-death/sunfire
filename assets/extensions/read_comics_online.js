@@ -59,7 +59,7 @@ class DefaultExtension extends MProvider {
     return {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6832.64 Safari/537.36",
-      "Referer": "" // Deliberately empty per site requirements,
+      "Referer": "https://readcomicsonline.ru/"
     };
   }
 
@@ -90,7 +90,7 @@ class DefaultExtension extends MProvider {
         imageUrl = img.attr("src") || img.attr("data-src") || "";
       }
       if (!imageUrl || imageUrl.includes("loading") || !imageUrl.startsWith("http")) {
-        imageUrl = `https://cdn.readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
+        imageUrl = `https://readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
       }
 
       list.push({
@@ -133,7 +133,7 @@ class DefaultExtension extends MProvider {
         imageUrl = img.attr("src") || img.attr("data-src") || "";
       }
       if (!imageUrl || imageUrl.includes("loading") || !imageUrl.startsWith("http")) {
-        imageUrl = `https://cdn.readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
+        imageUrl = `https://readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
       }
 
       list.push({
@@ -266,7 +266,7 @@ class DefaultExtension extends MProvider {
                 imageUrl = img.attr("src") || img.attr("data-src") || "";
             }
             if (!imageUrl || imageUrl.includes("loading") || !imageUrl.startsWith("http")) {
-                imageUrl = `https://cdn.readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
+                imageUrl = `https://readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
             }
 
             list.push({
@@ -295,7 +295,7 @@ class DefaultExtension extends MProvider {
     let imageUrl = imgEl ? (imgEl.attr("src") || imgEl.attr("data-src") || "") : "";
     if (!imageUrl || !imageUrl.startsWith("http")) {
       const slug = fullUrl.replace("https://readcomicsonline.ru/comic/", "").split("/")[0].split("?")[0];
-      imageUrl = `https://cdn.readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
+      imageUrl = `https://readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
     }
 
     const descEl = doc.querySelector(".manga-details .p-desc") || doc.querySelector(".panel-body p");
@@ -349,7 +349,7 @@ class DefaultExtension extends MProvider {
           seen.add(cleanSrc);
           pages.push({
             url: cleanSrc,
-            headers: { "Referer": "" /* Deliberately empty per site requirements */ }
+            headers: { "Referer": "https://readcomicsonline.ru/" }
           });
         }
       }
