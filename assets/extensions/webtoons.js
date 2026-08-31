@@ -211,11 +211,11 @@ class DefaultExtension extends MProvider {
 
     parsePageEpisodes(doc);
 
-    // Fetch remaining episode pages only if pagination links exist
+    // Fetch remaining episode pages only if pagination links exist (cap at 3 pages to avoid network storms)
     const hasNextOnFirst = doc.selectFirst("a.pg_next, div.paginate a, .paginate a");
     if (hasNextOnFirst) {
       let p = 2;
-      while (p <= 200) {
+      while (p <= 3) {
         try {
           const pUrl = `${url}${url.includes('?') ? '&' : '?'}page=${p}`;
           const pRes = await new Client().get(pUrl, this.getHeaders(pUrl));
@@ -412,37 +412,119 @@ class DefaultExtension extends MProvider {
       const base = this.getBaseUrl() || "https://www.webtoons.com";
       cleanUrl = `${base.endsWith("/") ? base.slice(0, -1) : base}${cleanUrl.startsWith("/") ? "" : "/"}${cleanUrl}`;
     }
-    const res = await new Client().get(cleanUrl, this.getHeaders(cleanUrl));
-    const doc = new Document(res.body);
-    const urls = [];
-    const seen = new Set();
-    
-    // 1. Primary selector: Webtoons standard reading viewer images (both Desktop & Mobile)
-    let images = [];
-    if (typeof doc.select === "function") {
-      images = doc.select("img._images");
-      if (!images || images.length === 0) {
-        images = doc.select("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img");
+
+    const fetchImagesFromDoc = (doc) => {
+      const urls = [];
+      const seen = new Set();
+      let images = [];
+      if (typeof doc.select === "function") {
+        images = doc.select("img._images");
+        if (!images || images.length === 0) {
+          images = doc.select("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img");
+        }
+      } else if (typeof doc.querySelectorAll === "function") {
+        images = doc.querySelectorAll("img._images");
+        if (!images || images.length === 0) {
+          images = doc.querySelectorAll("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img");
+        }
       }
-    } else if (typeof doc.querySelectorAll === "function") {
-      images = doc.querySelectorAll("img._images");
-      if (!images || images.length === 0) {
-        images = doc.querySelectorAll("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img");
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        const src = (typeof img.attr === "function" ? (img.attr("data-url") || img.attr("data-src") || img.attr("src")) : (img.getSrc || img.getAttribute?.("data-url") || img.getAttribute?.("data-src") || img.getAttribute?.("src"))) || "";
+        if (src && !src.includes("sp_error") && !src.includes("banner") && !src.includes("logo") && !src.includes("bg_transparency") && !src.includes("Thumb") && !src.includes("thumb_") && !src.includes("type=f218") && !src.includes("type=a92") && !seen.has(src)) {
+          seen.add(src);
+          urls.push({
+            url: src.trim(),
+            headers: { "Referer": "https://www.webtoons.com/" }
+          });
+        }
       }
+      return urls;
+    };
+
+    // If cleanUrl is already a valid slugged viewer URL, try it directly
+    const isGenericViewer = cleanUrl.includes('/viewer?') && !cleanUrl.match(/\/ep[^\/]+\/viewer/i);
+    if (!isGenericViewer) {
+      try {
+        const res = await new Client().get(cleanUrl, this.getHeaders(cleanUrl));
+        if (res && res.statusCode === 200 && res.body) {
+          const doc = new Document(res.body);
+          const urls = fetchImagesFromDoc(doc);
+          if (urls.length > 0) return urls;
+        }
+      } catch (_) {}
     }
 
-    for (let i = 0; i < images.length; i++) {
-      const img = images[i];
-      const src = (typeof img.attr === "function" ? (img.attr("data-url") || img.attr("data-src") || img.attr("src")) : (img.getSrc || img.getAttribute?.("data-url") || img.getAttribute?.("data-src") || img.getAttribute?.("src"))) || "";
-      if (src && !src.includes("sp_error") && !src.includes("banner") && !src.includes("logo") && !src.includes("bg_transparency") && !src.includes("Thumb") && !src.includes("thumb_") && !src.includes("type=f218") && !src.includes("type=a92") && !seen.has(src)) {
-        seen.add(src);
-        urls.push({
-          url: src.trim(),
-          headers: { "Referer": "https://www.webtoons.com/" }
-        });
-      }
+    // Auto-recovery for generic slugless viewer URLs or 500 error URLs:
+    // Extract title_no and episode_no, find the exact viewer URL from the list page in 1 fast calculation
+    const titleMatch = cleanUrl.match(/[?&]title_no=(\d+)/i);
+    const epMatch = cleanUrl.match(/[?&]episode_no=(\d+)/i);
+    if (titleMatch && epMatch) {
+      try {
+        const titleNo = titleMatch[1];
+        const epNo = parseInt(epMatch[1], 10);
+        let listBase = cleanUrl.split('/viewer')[0].replace(/\/ep[^\/]+$/i, '');
+        if (!listBase.includes('/list')) {
+          listBase = `${listBase}/list`;
+        }
+        const listUrl = `${listBase}?title_no=${titleNo}`;
+
+        // 1. Fetch page 1 of list
+        const p1Url = `${listUrl}&page=1`;
+        const p1Res = await new Client().get(p1Url, this.getHeaders(p1Url));
+        if (p1Res && p1Res.body) {
+          const p1Doc = new Document(p1Res.body);
+          const p1Links = p1Doc.select("ul#_listUl li a, #_episodeList li a, li._episodeItem a, a[href*='episode_no=']");
+          
+          for (let i = 0; i < p1Links.length; i++) {
+            let directUrl = (typeof p1Links[i].attr === "function" ? p1Links[i].attr("href") : p1Links[i].getHref) || "";
+            if (directUrl && directUrl.includes(`episode_no=${epNo}`)) {
+              if (!directUrl.startsWith("http")) directUrl = `https://www.webtoons.com${directUrl.startsWith("/") ? "" : "/"}${directUrl}`;
+              const dRes = await new Client().get(directUrl, this.getHeaders(directUrl));
+              if (dRes && dRes.body) {
+                const dDoc = new Document(dRes.body);
+                const urls = fetchImagesFromDoc(dDoc);
+                if (urls.length > 0) return urls;
+              }
+            }
+          }
+
+          // 2. If not on page 1, calculate candidate pages: Webtoons lists ~10 episodes per page descending
+          if (p1Links.length > 0) {
+            const firstEpUrl = (typeof p1Links[0].attr === "function" ? p1Links[0].attr("href") : p1Links[0].getHref) || "";
+            const maxEpMatch = firstEpUrl.match(/[?&]episode_no=(\d+)/);
+            if (maxEpMatch) {
+              const maxEp = parseInt(maxEpMatch[1], 10);
+              const estPage = Math.max(1, Math.floor((maxEp - epNo) / 10) + 1);
+              const candidatePages = [estPage, estPage + 1, estPage - 1].filter((p) => p >= 1 && p !== 1);
+
+              for (const pageNum of candidatePages) {
+                const pTargetUrl = `${listUrl}&page=${pageNum}`;
+                const ptRes = await new Client().get(pTargetUrl, this.getHeaders(pTargetUrl));
+                if (ptRes && ptRes.body) {
+                  const ptDoc = new Document(ptRes.body);
+                  const ptLinks = ptDoc.select("ul#_listUl li a, #_episodeList li a, li._episodeItem a, a[href*='episode_no=']");
+                  for (let i = 0; i < ptLinks.length; i++) {
+                    let directUrl = (typeof ptLinks[i].attr === "function" ? ptLinks[i].attr("href") : ptLinks[i].getHref) || "";
+                    if (directUrl && directUrl.includes(`episode_no=${epNo}`)) {
+                      if (!directUrl.startsWith("http")) directUrl = `https://www.webtoons.com${directUrl.startsWith("/") ? "" : "/"}${directUrl}`;
+                      const dRes = await new Client().get(directUrl, this.getHeaders(directUrl));
+                      if (dRes && dRes.body) {
+                        const dDoc = new Document(dRes.body);
+                        const urls = fetchImagesFromDoc(dDoc);
+                        if (urls.length > 0) return urls;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {}
     }
-    return urls;
+
+    return [];
   }
 
   getFilterList() {

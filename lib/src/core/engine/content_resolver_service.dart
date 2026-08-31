@@ -100,77 +100,6 @@ class ContentResolverService {
       } catch (_) {}
     }
 
-    // If chapter URL is still missing, scrape the manga details locally to hydrate chapters with real URLs!
-    if ((effectiveChapterUrl == null || effectiveChapterUrl.isEmpty) && effectiveSourceName != null) {
-      try {
-        final ch = await IsarService.instance.getChapterByServerId(chapterServerId);
-        if (ch != null) {
-          final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
-          if (m != null) {
-            final mangaLookup = m.url.isNotEmpty ? m.url : m.title;
-            final localData = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSourceName, mangaLookup);
-            if (localData.isNotEmpty) {
-              if (m.url.isEmpty && localData['url'] != null) {
-                m.url = localData['url'].toString();
-                await IsarService.instance.saveManga(m);
-              }
-              final chList = (localData['chapters'] ?? localData['chapterList'] ?? localData['epList'] ?? localData['episodes']) as List<dynamic>?;
-              if (chList != null && chList.isNotEmpty) {
-                // Pre-extract chapter numbers from scraped list
-                final parsedScraped = <Map<String, dynamic>>[];
-                for (final c in chList) {
-                  final cMap = Map<String, dynamic>.from(c as Map);
-                  final cName = cMap['name']?.toString() ?? '';
-                  final cUrl = (cMap['url'] ?? cMap['link'])?.toString() ?? '';
-                  double parsedNum = -1.0;
-                  if (cMap['chapterNumber'] != null) {
-                    parsedNum = (cMap['chapterNumber'] as num).toDouble();
-                  } else {
-                    final numMatch = RegExp(r'(?:ch(?:apter)?\.?|episode|#)?\s*(\d+(?:\.\d+)?)', caseSensitive: false).firstMatch(cName);
-                    if (numMatch != null) {
-                      parsedNum = double.tryParse(numMatch.group(1)!) ?? -1.0;
-                    }
-                  }
-                  parsedScraped.add({
-                    'name': cName,
-                    'url': cUrl,
-                    'num': parsedNum,
-                  });
-                }
-
-                // 1. Exact name match or chapter number match
-                for (final p in parsedScraped) {
-                  final cName = p['name'] as String;
-                  final cUrl = p['url'] as String;
-                  final pNum = p['num'] as double;
-
-                  final numMatches = ch.chapterNumber > 0 && pNum > 0 && (pNum - ch.chapterNumber).abs() < 0.001;
-                  final nameMatches = cName.trim().toLowerCase() == ch.name.trim().toLowerCase();
-
-                  if (numMatches || nameMatches) {
-                    effectiveChapterUrl = cUrl;
-                    ch.url = cUrl;
-                    ch.realUrl = cUrl;
-                    await IsarService.instance.saveChapter(ch);
-                    break;
-                  }
-                }
-
-                if ((effectiveChapterUrl == null || effectiveChapterUrl.isEmpty) && parsedScraped.isNotEmpty) {
-                  effectiveChapterUrl = parsedScraped.first['url'] as String?;
-                  if (effectiveChapterUrl != null) {
-                    ch.url = effectiveChapterUrl;
-                    ch.realUrl = effectiveChapterUrl;
-                    await IsarService.instance.saveChapter(ch);
-                  }
-                }
-              }
-            }
-          }
-        }
-      } catch (_) {}
-    }
-
     // ── PRIORITY 2: LOCAL EXTENSION SCRAPER (Mangayomi / QuickJS) ─────────
     if (effectiveSourceName != null && effectiveChapterUrl != null && effectiveChapterUrl.isNotEmpty) {
       try {
@@ -210,57 +139,6 @@ class ContentResolverService {
             effectiveSourceName: effectiveSourceName,
             isLocalFiles: false,
           );
-        }
-
-        // Fallback: If 0 pages were returned (e.g. invalid stub URL or manga URL saved on chapter), re-hydrate from manga details
-        if (localPages.isEmpty && chapterServerId > 0) {
-          final ch = await IsarService.instance.getChapterByServerId(chapterServerId);
-          if (ch != null) {
-            final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
-            if (m != null) {
-              final lookup = m.url.isNotEmpty ? m.url : m.title;
-              final localData = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSourceName, lookup);
-              final chList = (localData['chapters'] ?? localData['chapterList'] ?? localData['epList'] ?? localData['episodes']) as List<dynamic>?;
-              if (chList != null && chList.isNotEmpty) {
-                for (var i = 0; i < chList.length; i++) {
-                  final cMap = Map<String, dynamic>.from(chList[i] as Map);
-                  final cName = cMap['name']?.toString() ?? '';
-                  final cUrl = (cMap['url'] ?? cMap['link'])?.toString() ?? '';
-                  
-                  double rawNum = -1.0;
-                  if (cMap['chapterNumber'] != null) {
-                    rawNum = (cMap['chapterNumber'] as num).toDouble();
-                  } else {
-                    final numMatch = RegExp(r'(?:ep(?:isode)?\.?|ch(?:apter)?\.?|#)?\s*(\d+(?:\.\d+)?)', caseSensitive: false).firstMatch(cName);
-                    if (numMatch != null) {
-                      rawNum = double.tryParse(numMatch.group(1)!) ?? -1.0;
-                    }
-                  }
-
-                  final numMatches = ch.chapterNumber > 0 && rawNum > 0 && (rawNum - ch.chapterNumber).abs() < 0.001;
-                  final nameMatches = cName.trim().toLowerCase() == ch.name.trim().toLowerCase();
-                  final urlMatchesEpisode = ch.chapterNumber > 0 && (cUrl.contains('episode_no=${ch.chapterNumber.toInt()}') || cUrl.contains('chapter=${ch.chapterNumber.toInt()}'));
-                  final indexMatches = ch.chapterNumber > 0 && (rawNum < 0 && (chList.length - i == ch.chapterNumber.toInt() || i + 1 == ch.chapterNumber.toInt()));
-
-                  if ((numMatches || nameMatches || urlMatchesEpisode || indexMatches) && cUrl.isNotEmpty) {
-                    ch.url = cUrl;
-                    ch.realUrl = cUrl;
-                    await IsarService.instance.saveChapter(ch);
-                    final retryPages = await QuickJsService.instance.fetchChapterPagesLocal(effectiveSourceName, cUrl);
-                    if (retryPages.isNotEmpty) {
-                      await LoggerService.instance.logInfo('Re-hydrated and resolved ${retryPages.length} pages via Local Extension ($effectiveSourceName)', 'ContentResolver');
-                      return ChapterPagesResult(
-                        pageUrls: retryPages,
-                        source: ContentSourceType.localExtension,
-                        effectiveSourceName: effectiveSourceName,
-                        isLocalFiles: false,
-                      );
-                    }
-                  }
-                }
-              }
-            }
-          }
         }
       } catch (e) {
         await LoggerService.instance.logWarning('Local extension resolution failed for $effectiveSourceName: $e', 'ContentResolver');
