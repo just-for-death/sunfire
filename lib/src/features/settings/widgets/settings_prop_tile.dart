@@ -8,6 +8,12 @@ enum SettingsPropKind {
   actionTile,
 }
 
+enum SettingScope {
+  server,
+  local,
+  none,
+}
+
 class SettingsPropTile extends StatelessWidget {
   const SettingsPropTile({
     super.key,
@@ -18,6 +24,7 @@ class SettingsPropTile extends StatelessWidget {
     this.leading,
     this.trailing,
     this.kind = SettingsPropKind.actionTile,
+    this.scope = SettingScope.none,
     this.boolValue,
     this.stringValue,
     this.intValue,
@@ -42,6 +49,7 @@ class SettingsPropTile extends StatelessWidget {
   final Widget? leading;
   final Widget? trailing;
   final SettingsPropKind kind;
+  final SettingScope scope;
 
   final bool? boolValue;
   final String? stringValue;
@@ -60,6 +68,32 @@ class SettingsPropTile extends StatelessWidget {
   final ValueChanged<double>? onDoubleChanged;
   final VoidCallback? onTap;
 
+  Widget _buildScopeBadge(BuildContext context) {
+    if (scope == SettingScope.none) return const SizedBox.shrink();
+
+    final isServer = scope == SettingScope.server;
+    final color = isServer ? Colors.tealAccent : Colors.purpleAccent;
+
+    return Container(
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.4), width: 0.8),
+      ),
+      child: Text(
+        isServer ? 'SERVER' : 'LOCAL',
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
   void _showTextFieldDialog(BuildContext context) {
     final controller = TextEditingController(text: stringValue ?? '');
     bool isObscured = canObscure;
@@ -71,7 +105,12 @@ class SettingsPropTile extends StatelessWidget {
           builder: (context, setDlgState) {
             return AlertDialog(
               backgroundColor: const Color(0xFF1F1F24),
-              title: titleWidget ?? Text(title ?? 'Edit Setting', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              title: Row(
+                children: [
+                  Expanded(child: titleWidget ?? Text(title ?? 'Edit Setting', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+                  _buildScopeBadge(context),
+                ],
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,7 +176,12 @@ class SettingsPropTile extends StatelessWidget {
 
             return AlertDialog(
               backgroundColor: const Color(0xFF1F1F24),
-              title: titleWidget ?? Text(title ?? 'Adjust Value', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              title: Row(
+                children: [
+                  Expanded(child: titleWidget ?? Text(title ?? 'Adjust Value', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+                  _buildScopeBadge(context),
+                ],
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -188,11 +232,21 @@ class SettingsPropTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final titleRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: titleWidget ?? Text(title ?? '', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+        ),
+        _buildScopeBadge(context),
+      ],
+    );
+
     if (kind == SettingsPropKind.switchTile) {
       return SwitchListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         secondary: leading,
-        title: titleWidget ?? Text(title ?? '', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+        title: titleRow,
         subtitle: subtitle != null ? Text(subtitle!, style: const TextStyle(fontSize: 12, color: Colors.grey)) : null,
         value: boolValue ?? false,
         onChanged: onBoolChanged,
@@ -202,7 +256,7 @@ class SettingsPropTile extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       leading: leading,
-      title: titleWidget ?? Text(title ?? '', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+      title: titleRow,
       subtitle: subtitle != null ? Text(subtitle!, style: const TextStyle(fontSize: 12, color: Colors.grey)) : null,
       trailing: trailing,
       onTap: () {
