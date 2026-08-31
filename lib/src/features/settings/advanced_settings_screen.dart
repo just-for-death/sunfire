@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../core/db/isar_service.dart';
 import '../../core/logging/logger_service.dart';
+import '../../core/services/image_cache_helper.dart';
+import 'widgets/section_title.dart';
+import 'widgets/settings_subpage_scaffold.dart';
 
 class AdvancedSettingsScreen extends StatefulWidget {
   const AdvancedSettingsScreen({super.key});
@@ -13,6 +18,36 @@ class AdvancedSettingsScreen extends StatefulWidget {
 }
 
 class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
+  int _mangaCount = 0;
+  int _chapterCount = 0;
+  int _categoryCount = 0;
+  bool _isLoadingStats = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    setState(() => _isLoadingStats = true);
+    try {
+      final manga = await IsarService.instance.getAllManga();
+      final chapters = await IsarService.instance.getAllChapters();
+      final cats = await IsarService.instance.getCategories();
+      if (mounted) {
+        setState(() {
+          _mangaCount = manga.length;
+          _chapterCount = chapters.length;
+          _categoryCount = cats.length;
+          _isLoadingStats = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingStats = false);
+    }
+  }
+
   void _showLogsModal() {
     showModalBottomSheet(
       context: context,
@@ -25,61 +60,109 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Advanced & Diagnostics'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      body: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: ListView(
-            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-            padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 120.0),
-            children: [
-              Text('REAL-TIME DIAGNOSTICS', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-              const SizedBox(height: 8),
-              Material(
-                color: const Color(0x1F2A2A32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+    return SettingsSubpageScaffold(
+      title: 'Advanced & Diagnostics',
+      onRefresh: _loadStats,
+      body: ListView(
+        children: [
+          // ── 1. LOGS & CONSOLE ──
+          const SectionTitle(title: 'Diagnostics & Telemetry'),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            leading: const Icon(Icons.terminal_rounded),
+            title: Row(
+              children: [
+                const Text('Live Diagnostic Console', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.purpleAccent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.4), width: 0.8),
+                  ),
+                  child: const Text('LOCAL', style: TextStyle(color: Colors.purpleAccent, fontSize: 9, fontWeight: FontWeight.bold)),
                 ),
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: Icon(Icons.terminal_rounded, color: primaryColor),
-                      title: const Text('Live Diagnostic Console', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Stream real-time app events, JS scrapers, network & errors'),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-                      onTap: _showLogsModal,
-                    ),
-                    const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0x1AFFFFFF)),
-                    ListTile(
-                      leading: const Icon(Icons.cleaning_services_rounded, color: Colors.redAccent),
-                      title: const Text('Clear Diagnostic Logs', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Truncate on-device log file and in-memory buffer'),
-                      onTap: () async {
-                        await LoggerService.instance.clearLogs();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Diagnostic logs cleared.')),
-                          );
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
+            subtitle: const Text('Stream live app events, JS scrapers, network & errors', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            onTap: _showLogsModal,
           ),
-        ),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            leading: const Icon(Icons.cleaning_services_rounded, color: Colors.redAccent),
+            title: const Text('Clear Diagnostic Logs', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+            subtitle: const Text('Truncate on-device log file and in-memory buffer', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            onTap: () async {
+              await LoggerService.instance.clearLogs();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Diagnostic logs cleared.')),
+                );
+              }
+            },
+          ),
+
+          const Divider(height: 1, color: Color(0x1AFFFFFF)),
+
+          // ── 2. CACHE & STORAGE ──
+          const SectionTitle(title: 'Disk & Memory Cache'),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            leading: const Icon(Icons.delete_sweep_rounded, color: Colors.orangeAccent),
+            title: Row(
+              children: [
+                const Text('Clear Image Disk Cache', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.purpleAccent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.4), width: 0.8),
+                  ),
+                  child: const Text('LOCAL', style: TextStyle(color: Colors.purpleAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            subtitle: const Text('Free cached cover thumbnails & manga page images', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            onTap: () async {
+              await ImageCacheHelper.clearCache();
+              imageCache.clear();
+              imageCache.clearLiveImages();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Image disk & memory cache cleared!')),
+                );
+              }
+            },
+          ),
+
+          const Divider(height: 1, color: Color(0x1AFFFFFF)),
+
+          // ── 3. DATABASE STATS ──
+          const SectionTitle(title: 'Local Database (Isar)'),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            leading: const Icon(Icons.storage_rounded),
+            title: const Text('Database Statistics', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+            subtitle: _isLoadingStats
+                ? const Text('Loading database metrics...', style: TextStyle(fontSize: 12, color: Colors.grey))
+                : Text('$_mangaCount manga entries • $_chapterCount cached chapters • $_categoryCount categories', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ),
+
+          const Divider(height: 1, color: Color(0x1AFFFFFF)),
+
+          // ── 4. SYSTEM INFORMATION ──
+          const SectionTitle(title: 'System Information'),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            leading: const Icon(Icons.info_outline_rounded),
+            title: const Text('Sunfire Client Version', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+            subtitle: Text('v1.2.0 • Platform: ${Platform.operatingSystem} (${Platform.operatingSystemVersion})', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ),
+        ],
       ),
     );
   }
@@ -97,7 +180,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
   final TextEditingController _searchController = TextEditingController();
   StreamSubscription<LogEntry>? _subscription;
   List<LogEntry> _logs = [];
-  String _selectedLevel = 'ALL'; // ALL, ERROR, WARN, INFO, NETWORK
+  String _selectedLevel = 'ALL';
   String _searchQuery = '';
   bool _autoScroll = true;
 
@@ -179,7 +262,6 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Bar
           Row(
             children: [
               Icon(Icons.terminal_rounded, color: primaryColor),
@@ -209,8 +291,6 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
             ],
           ),
           const SizedBox(height: 8),
-
-          // Search Bar
           TextField(
             controller: _searchController,
             onChanged: (val) => setState(() => _searchQuery = val.trim()),
@@ -233,8 +313,6 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
             ),
           ),
           const SizedBox(height: 8),
-
-          // Level Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -255,8 +333,6 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
             ),
           ),
           const SizedBox(height: 8),
-
-          // Terminal Canvas
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(12),

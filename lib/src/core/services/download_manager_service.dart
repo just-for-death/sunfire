@@ -229,8 +229,8 @@ class DownloadManagerService extends ChangeNotifier {
           }
         }
       } catch (e) {
-      LoggerService.instance.logError('deleteLocalDownload error: $e', category: 'DownloadManager');
-    }
+        LoggerService.instance.logError('_downloadSinglePage curl fallback error: $e', category: 'DownloadManager');
+      }
     }
 
     if (pageBytes != null && pageBytes.isNotEmpty) {
