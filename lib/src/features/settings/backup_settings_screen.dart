@@ -19,7 +19,16 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
   String _backupPath = '';
   int _backupInterval = 1;
   int _backupTTL = 14;
-  String _backupTime = '12:00';
+  String _backupTime = '00:00';
+
+  // Backup inclusions
+  bool _includeCategories = true;
+  bool _includeChapters = true;
+  bool _includeHistory = true;
+  bool _includeManga = true;
+  bool _includeTracking = true;
+  bool _includeServerSettings = true;
+  bool _includeClientData = true;
 
   @override
   void initState() {
@@ -38,7 +47,15 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
           _backupPath = (s['backupPath'] as String?) ?? '';
           _backupInterval = parseIntSafe(s['backupInterval'], 1);
           _backupTTL = parseIntSafe(s['backupTTL'], 14);
-          _backupTime = (s['backupTime'] as String?) ?? '12:00';
+          _backupTime = (s['backupTime'] as String?) ?? '00:00';
+
+          _includeCategories = parseBoolSafe(s['autoBackupIncludeCategories'], true);
+          _includeChapters = parseBoolSafe(s['autoBackupIncludeChapters'], true);
+          _includeHistory = parseBoolSafe(s['autoBackupIncludeHistory'], true);
+          _includeManga = parseBoolSafe(s['autoBackupIncludeManga'], true);
+          _includeTracking = parseBoolSafe(s['autoBackupIncludeTracking'], true);
+          _includeServerSettings = parseBoolSafe(s['autoBackupIncludeServerSettings'], true);
+          _includeClientData = parseBoolSafe(s['autoBackupIncludeClientData'], true);
         });
       } else {
         setState(() => _isConnected = false);
@@ -71,8 +88,8 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
   }
 
   void _showCreateBackupDialog() {
-    bool includeCategories = true;
-    bool includeChapters = true;
+    bool includeCats = true;
+    bool includeChs = true;
 
     showDialog(
       context: context,
@@ -90,14 +107,14 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Include Categories', style: TextStyle(fontSize: 14)),
-                    value: includeCategories,
-                    onChanged: (val) => setDlgState(() => includeCategories = val ?? true),
+                    value: includeCats,
+                    onChanged: (val) => setDlgState(() => includeCats = val ?? true),
                   ),
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Include Chapter Data', style: TextStyle(fontSize: 14)),
-                    value: includeChapters,
-                    onChanged: (val) => setDlgState(() => includeChapters = val ?? true),
+                    value: includeChs,
+                    onChanged: (val) => setDlgState(() => includeChs = val ?? true),
                   ),
                 ],
               ),
@@ -112,13 +129,13 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                     Navigator.pop(context);
                     try {
                       final res = await GraphQLClientService.instance.createServerBackup(
-                        includeCategories: includeCategories,
-                        includeChapters: includeChapters,
+                        includeCategories: includeCats,
+                        includeChapters: includeChs,
                       );
                       if (context.mounted) {
                         final url = res?['createBackup']?['url']?.toString() ?? 'data/backups';
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('✅ Backup created: $url')),
+                          SnackBar(content: Text('✅ Backup created on server: $url')),
                         );
                       }
                     } catch (e) {
@@ -150,26 +167,55 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                   leading: const Icon(Icons.backup_rounded),
-                  title: const Text('Create Backup', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                  subtitle: const Text('Can be used to restore current library', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  title: Row(
+                    children: [
+                      const Text('Create Server Backup', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.tealAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
+                        ),
+                        child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  subtitle: const Text('Generate a .tachibk archive on Suwayomi host', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   onTap: _showCreateBackupDialog,
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                   leading: const Icon(Icons.settings_backup_restore_rounded),
-                  title: const Text('Restore Backup', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                  subtitle: const Text('Restores library from a .tachibk or .proto.gz backup file', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  title: Row(
+                    children: [
+                      const Text('Restore Server Backup', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.tealAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
+                        ),
+                        child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  subtitle: const Text('Restore library from a .tachibk backup file on server', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Upload backup archive on Suwayomi WebUI or server backups directory')),
+                      const SnackBar(content: Text('Upload backup archive to Suwayomi WebUI or server backups directory')),
                     );
                   },
                 ),
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
-                const SectionTitle(title: 'Automatic Backup'),
+                const SectionTitle(title: 'Automatic Backup Schedule (Server)'),
                 SettingsPropTile(
                   title: 'Backup location',
-                  description: 'Directory on Suwayomi host where automatic backups are saved',
+                  description: 'Host directory on Suwayomi server where backups are saved',
+                  scope: SettingScope.server,
                   kind: SettingsPropKind.textField,
                   stringValue: _backupPath,
                   subtitle: _backupPath.isNotEmpty ? _backupPath : 'Default (Server data/backups)',
@@ -179,9 +225,10 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   },
                 ),
                 SettingsPropTile(
-                  title: 'Backup schedule interval',
+                  title: 'Schedule interval',
                   subtitle: _backupInterval == 0 ? 'Disabled' : 'Every $_backupInterval day(s)',
-                  description: 'Frequency of automatic full server backups',
+                  description: 'Frequency of automated server library backups',
+                  scope: SettingScope.server,
                   kind: SettingsPropKind.numberSlider,
                   intValue: _backupInterval,
                   min: 0,
@@ -194,11 +241,25 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  title: const Text('Backup execution time', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                  title: Row(
+                    children: [
+                      const Text('Execution time', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.tealAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
+                        ),
+                        child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
                   subtitle: Text('Triggers at $_backupTime UTC', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   onTap: () async {
                     final parts = _backupTime.split(':');
-                    final hour = int.tryParse(parts.first) ?? 12;
+                    final hour = int.tryParse(parts.first) ?? 0;
                     final min = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
                     final picked = await showTimePicker(
                       context: context,
@@ -212,9 +273,10 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   },
                 ),
                 SettingsPropTile(
-                  title: 'Backup retention limit',
+                  title: 'Retention limit (TTL)',
                   subtitle: _backupTTL == 0 ? 'Keep indefinitely' : 'Keep for $_backupTTL days',
-                  description: 'Old automatic backups past this TTL are automatically deleted',
+                  description: 'Old backups past this age are automatically deleted',
+                  scope: SettingScope.server,
                   kind: SettingsPropKind.numberSlider,
                   intValue: _backupTTL,
                   min: 0,
@@ -223,6 +285,78 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   onIntChanged: (v) {
                     setState(() => _backupTTL = v);
                     _update('backupTTL', v);
+                  },
+                ),
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const SectionTitle(title: 'Auto-Backup Content Inclusions (Server)'),
+                SettingsPropTile(
+                  title: 'Include Categories',
+                  scope: SettingScope.server,
+                  kind: SettingsPropKind.switchTile,
+                  boolValue: _includeCategories,
+                  onBoolChanged: (v) {
+                    setState(() => _includeCategories = v);
+                    _update('autoBackupIncludeCategories', v);
+                  },
+                ),
+                SettingsPropTile(
+                  title: 'Include Chapter Data',
+                  scope: SettingScope.server,
+                  kind: SettingsPropKind.switchTile,
+                  boolValue: _includeChapters,
+                  onBoolChanged: (v) {
+                    setState(() => _includeChapters = v);
+                    _update('autoBackupIncludeChapters', v);
+                  },
+                ),
+                SettingsPropTile(
+                  title: 'Include Reading History',
+                  scope: SettingScope.server,
+                  kind: SettingsPropKind.switchTile,
+                  boolValue: _includeHistory,
+                  onBoolChanged: (v) {
+                    setState(() => _includeHistory = v);
+                    _update('autoBackupIncludeHistory', v);
+                  },
+                ),
+                SettingsPropTile(
+                  title: 'Include Manga Details',
+                  scope: SettingScope.server,
+                  kind: SettingsPropKind.switchTile,
+                  boolValue: _includeManga,
+                  onBoolChanged: (v) {
+                    setState(() => _includeManga = v);
+                    _update('autoBackupIncludeManga', v);
+                  },
+                ),
+                SettingsPropTile(
+                  title: 'Include Tracker Status',
+                  scope: SettingScope.server,
+                  kind: SettingsPropKind.switchTile,
+                  boolValue: _includeTracking,
+                  onBoolChanged: (v) {
+                    setState(() => _includeTracking = v);
+                    _update('autoBackupIncludeTracking', v);
+                  },
+                ),
+                SettingsPropTile(
+                  title: 'Include Server Settings',
+                  scope: SettingScope.server,
+                  kind: SettingsPropKind.switchTile,
+                  boolValue: _includeServerSettings,
+                  onBoolChanged: (v) {
+                    setState(() => _includeServerSettings = v);
+                    _update('autoBackupIncludeServerSettings', v);
+                  },
+                ),
+                SettingsPropTile(
+                  title: 'Include Client Data',
+                  scope: SettingScope.server,
+                  kind: SettingsPropKind.switchTile,
+                  boolValue: _includeClientData,
+                  onBoolChanged: (v) {
+                    setState(() => _includeClientData = v);
+                    _update('autoBackupIncludeClientData', v);
                   },
                 ),
               ],
