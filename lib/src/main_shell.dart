@@ -75,7 +75,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
   void _handleTabSelect(int index) {
     if (_currentIndex != index) {
-      HapticFeedback.selectionClick();
+      if (Theme.of(context).platform == TargetPlatform.iOS) {
+        HapticFeedback.lightImpact();
+      } else {
+        HapticFeedback.selectionClick();
+      }
       setState(() => _currentIndex = index);
       if (_pageController.hasClients) {
         _pageController.animateToPage(
