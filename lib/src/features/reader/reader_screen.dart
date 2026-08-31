@@ -992,24 +992,39 @@ class _ReaderScreenState extends State<ReaderScreen> {
     try {
       final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
       final cookieHeaders = MClient.getCookiesPref(url);
-      final initialHeaders = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
 
-      // First attempt with whatever cookies we already have
-      var client = MClient.init();
-      var res = await client.get(Uri.parse(url), headers: initialHeaders).timeout(const Duration(seconds: 30));
-      debugPrint('[Reader] Image fetch $url -> ${res.statusCode} (${res.bodyBytes.length} bytes)');
-
-      // If blocked, prewarm FlareSolverr for this domain then retry
-      if ([403, 503, 429, 520, 521, 522].contains(res.statusCode)) {
-        debugPrint('[Reader] Blocked $url – prewarm FlareSolverr...');
-        await MClient.prewarmSession(url, forceRenew: true);
-        final freshCookies = MClient.getCookiesPref(url);
-        final retryHeaders = {...baseHeaders, ...freshCookies, 'User-Agent': MClient.userAgent};
-        client = MClient.init();
-        res = await client.get(Uri.parse(url), headers: retryHeaders).timeout(const Duration(seconds: 30));
-        debugPrint('[Reader] Image retry $url -> ${res.statusCode} (${res.bodyBytes.length} bytes)');
+      // 1. On Desktop: try curl-impersonate FIRST (bypasses Cloudflare TLS check instantly in ~50ms)
+      if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+        for (final exe in ['/usr/bin/curl-impersonate', 'curl-impersonate', 'curl-impersonate-chrome', '/usr/bin/curl', 'curl']) {
+          try {
+            final args = <String>['-s', '-L', '--max-time', '15'];
+            final curlHeaders = <String, String>{
+              ...baseHeaders,
+              ...cookieHeaders,
+              if (!exe.contains('impersonate')) 'User-Agent': MClient.userAgent,
+            };
+            curlHeaders.forEach((k, v) => args.addAll(['-H', '$k: $v']));
+            args.add(url);
+            final processRes = await Process.run(exe, args, stdoutEncoding: null);
+            if (processRes.exitCode == 0) {
+              final bytes = processRes.stdout as List<int>;
+              if (bytes.length > 200 && _isMagicImage(bytes)) {
+                if (mounted) {
+                  setState(() {
+                    _recoveredImageBytes[url] = Uint8List.fromList(bytes);
+                  });
+                }
+                return;
+              }
+            }
+          } catch (_) {}
+        }
       }
 
+      // 2. Standard HTTP fetch fallback
+      final initialHeaders = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
+      final client = MClient.init(showCloudFlareError: false);
+      final res = await client.get(Uri.parse(url), headers: initialHeaders).timeout(const Duration(seconds: 15));
       if (res.statusCode == 200 && res.bodyBytes.isNotEmpty && _isMagicImage(res.bodyBytes)) {
         if (mounted) {
           setState(() {
@@ -1017,34 +1032,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
           });
         }
       } else {
-        // Desktop fallback: fetch via curl-impersonate / curl with Chrome TLS bypass
-        if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
-          for (final exe in ['curl-impersonate', 'curl-impersonate-chrome', 'curl']) {
-            try {
-              final args = <String>['-s', '-L', '--max-time', '15'];
-              final freshCookies = MClient.getCookiesPref(url);
-              final curlHeaders = <String, String>{
-                ...baseHeaders,
-                ...freshCookies,
-                if (!exe.contains('impersonate')) 'User-Agent': MClient.userAgent,
-              };
-              curlHeaders.forEach((k, v) => args.addAll(['-H', '$k: $v']));
-              args.add(url);
-              final processRes = await Process.run(exe, args, stdoutEncoding: null);
-              if (processRes.exitCode == 0) {
-                final bytes = processRes.stdout as List<int>;
-                if (bytes.length > 200 && _isMagicImage(bytes)) {
-                  if (mounted) {
-                    setState(() {
-                      _recoveredImageBytes[url] = Uint8List.fromList(bytes);
-                    });
-                  }
-                  return;
-                }
-              }
-            } catch (_) {}
-          }
-        }
         debugPrint('[Reader] ❌ Image still failed $url -> ${res.statusCode}');
       }
     } catch (e) {
