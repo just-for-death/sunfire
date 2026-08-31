@@ -61,15 +61,6 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
               style: const TextStyle(color: Colors.grey, fontSize: 13),
             ),
           ),
-          const SizedBox(height: 4),
-          Center(
-            child: Text(
-              'https://github.com/keiyoushi/extensions/raw/repo/index.pb',
-              style: const TextStyle(color: Colors.grey, fontSize: 11),
-              textAlign: TextAlign.center,
-            ),
-          ),
-
           const SizedBox(height: 24),
 
           Row(
