@@ -285,11 +285,11 @@ class RepoManager {
     required List<String> userRepoUrls,
   }) async {
     // Fetch all raw sources across all user repositories
-    final allRepoSources = <RepoSourceItem>[];
     final effectiveRepoUrls = List<String>.from(userRepoUrls);
     if (effectiveRepoUrls.isEmpty) {
-      effectiveRepoUrls.add('https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json');
+      return <String>[];
     }
+    final allRepoSources = <RepoSourceItem>[];
     for (final url in effectiveRepoUrls) {
       final items = await fetchRepoSources(url);
       allRepoSources.addAll(items);
@@ -465,7 +465,7 @@ class RepoManager {
   }) async {
     final effectiveRepoUrls = List<String>.from(userRepoUrls);
     if (effectiveRepoUrls.isEmpty) {
-      effectiveRepoUrls.add('https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json');
+      return 0;
     }
 
     // Aggregate all sources across repos, keeping the highest version per name+lang
