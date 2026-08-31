@@ -449,7 +449,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
     }
 
-    if (GraphQLClientService.instance.isConfigured) {
+    final isLocal = QuickJsService.instance.hasExtension(_manga?.sourceName ?? '');
+    if (GraphQLClientService.instance.isConfigured && !isLocal) {
       GraphQLClientService.instance.updateChapterReadStatus(ch.serverId, newState, ch.lastPageRead);
     }
   }
@@ -459,7 +460,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     setState(() => ch.isBookmarked = newState);
     await IsarService.instance.saveChapter(ch);
 
-    if (GraphQLClientService.instance.isConfigured) {
+    final isLocal = QuickJsService.instance.hasExtension(_manga?.sourceName ?? '');
+    if (GraphQLClientService.instance.isConfigured && !isLocal) {
       GraphQLClientService.instance.updateChapterBookmark(ch.serverId, newState);
     }
     if (mounted) {
@@ -471,6 +473,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   void _markPreviousChaptersRead(Chapter ch) async {
     final prevs = _chapters.where((c) => c.chapterNumber < ch.chapterNumber && !c.isRead).toList();
+    final isLocal = QuickJsService.instance.hasExtension(_manga?.sourceName ?? '');
     for (final p in prevs) {
       p.isRead = true;
       if (_settings.deleteChapterAfterMarkedRead && p.isDownloaded) {
@@ -478,7 +481,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           DownloadManagerService.instance.deleteLocalDownload(p.serverId);
         }
       }
-      if (GraphQLClientService.instance.isConfigured) {
+      if (GraphQLClientService.instance.isConfigured && !isLocal) {
         GraphQLClientService.instance.updateChapterReadStatus(p.serverId, true, p.lastPageRead);
       }
     }
@@ -510,6 +513,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   void _markSelectedRead(bool read) async {
     final targets = _chapters.where((c) => _selectedChapterIds.contains(c.serverId)).toList();
+    final isLocal = QuickJsService.instance.hasExtension(_manga?.sourceName ?? '');
     for (final c in targets) {
       c.isRead = read;
       if (!read) c.lastPageRead = 0;
@@ -518,7 +522,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           DownloadManagerService.instance.deleteLocalDownload(c.serverId);
         }
       }
-      if (GraphQLClientService.instance.isConfigured) {
+      if (GraphQLClientService.instance.isConfigured && !isLocal) {
         GraphQLClientService.instance.updateChapterReadStatus(c.serverId, read, c.lastPageRead);
       }
     }
