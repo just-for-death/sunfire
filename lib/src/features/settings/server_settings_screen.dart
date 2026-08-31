@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/db/isar_service.dart';
-import '../../core/engine/javascript/m_client.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
@@ -21,10 +20,24 @@ class ServerSettingsScreen extends StatefulWidget {
 
 class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
   final TextEditingController _urlController = TextEditingController();
+  
+  // Binding & Proxy Controllers
+  final TextEditingController _serverIpController = TextEditingController();
+  final TextEditingController _serverPortController = TextEditingController();
+  final TextEditingController _socksHostController = TextEditingController();
+  final TextEditingController _socksPortController = TextEditingController();
+  final TextEditingController _socksUsernameController = TextEditingController();
+  final TextEditingController _socksPasswordController = TextEditingController();
+  
+  // FlareSolverr Controllers
   final TextEditingController _cfProxyController = TextEditingController();
+  final TextEditingController _flareSolverrSessionNameController = TextEditingController();
+
+  // Storage & Paths Controllers
   final TextEditingController _downloadsPathController = TextEditingController();
   final TextEditingController _backupPathController = TextEditingController();
   final TextEditingController _localSourcePathController = TextEditingController();
+  final TextEditingController _webUIInterfaceController = TextEditingController();
 
   bool _isConnected = false;
   String _serverVersion = 'v2.3.2321';
@@ -33,25 +46,53 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
   bool _isLoadingTrackers = true;
   int? _latencyMs;
   bool _isUpdatingLibrary = false;
-  bool _isDockerBusy = false;
   bool _isCfTesting = false;
   bool _isSavingSetting = false;
+  bool _obscureSocksPassword = true;
 
-  // ── LIVE SUWAYOMI SERVER SETTINGS STATE ──
+  // ── FULL SUWAYOMI SERVER SETTINGS STATE (CATALYST SPEC) ──
+  // 1. Server Binding
+  String _serverIp = '0.0.0.0';
+  int _serverPort = 4567;
+
+  // 2. SOCKS Proxy
+  bool _socksProxyEnabled = false;
+  int _socksProxyVersion = 5;
+
+  // 3. CloudFlare Bypass (FlareSolverr)
+  bool _flareSolverrEnabled = true;
+  int _flareSolverrTimeout = 73;
+  int _flareSolverrSessionTtl = 20;
+  bool _flareSolverrAsResponseFallback = true;
+
+  // 4. Downloads & Storage
   bool _downloadAsCbz = true;
   bool _autoDownloadNewChapters = true;
   int _autoDownloadLimit = 0;
+  bool _excludeEntryWithUnreadChapters = false;
+  bool _autoDownloadIgnoreReUploads = true;
+
+  // 5. Library & Automated Updates
   double _globalUpdateInterval = 12.0;
   bool _updateMangas = true;
   bool _excludeCompleted = false;
+  bool _excludeNotStarted = false;
   bool _excludeUnreadChapters = false;
-  int _maxSourcesInParallel = 6;
-  bool _flareSolverrEnabled = true;
-  int _flareSolverrTimeout = 73;
+
+  // 6. Automatic Backup
   int _backupInterval = 1;
   int _backupTTL = 14;
+  String _backupTime = '12:00';
+
+  // 7. Browse & Scrapers Engine
+  int _maxSourcesInParallel = 6;
+
+  // 8. WebUI & Misc
   String _webUIFlavor = 'CUSTOM';
+  String _webUIInterface = '0.0.0.0';
+  String _webUIChannel = 'STABLE';
   bool _debugLogsEnabled = true;
+  bool _systemTrayEnabled = true;
 
   @override
   void initState() {
@@ -66,10 +107,18 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
   @override
   void dispose() {
     _urlController.dispose();
+    _serverIpController.dispose();
+    _serverPortController.dispose();
+    _socksHostController.dispose();
+    _socksPortController.dispose();
+    _socksUsernameController.dispose();
+    _socksPasswordController.dispose();
     _cfProxyController.dispose();
+    _flareSolverrSessionNameController.dispose();
     _downloadsPathController.dispose();
     _backupPathController.dispose();
     _localSourcePathController.dispose();
+    _webUIInterfaceController.dispose();
     super.dispose();
   }
 
@@ -116,27 +165,62 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
 
     if (s != null) {
       setState(() {
-        _downloadAsCbz = parseBoolSafe(s['downloadAsCbz'], true);
-        _autoDownloadNewChapters = parseBoolSafe(s['autoDownloadNewChapters'], true);
-        _autoDownloadLimit = parseIntSafe(s['autoDownloadNewChaptersLimit'], 0);
-        _globalUpdateInterval = parseDoubleSafe(s['globalUpdateInterval'], 12.0);
-        _updateMangas = parseBoolSafe(s['updateMangas'], true);
-        _excludeCompleted = parseBoolSafe(s['excludeCompleted'], false);
-        _excludeUnreadChapters = parseBoolSafe(s['excludeUnreadChapters'], false);
-        _maxSourcesInParallel = parseIntSafe(s['maxSourcesInParallel'], 6);
+        // Server Binding
+        _serverIp = (s['ip'] as String?) ?? '0.0.0.0';
+        _serverPort = parseIntSafe(s['port'], 4567);
+        _serverIpController.text = _serverIp;
+        _serverPortController.text = _serverPort.toString();
+
+        // SOCKS Proxy
+        _socksProxyEnabled = parseBoolSafe(s['socksProxyEnabled'], false);
+        _socksProxyVersion = parseIntSafe(s['socksProxyVersion'], 5);
+        _socksHostController.text = (s['socksProxyHost'] as String?) ?? '';
+        _socksPortController.text = (s['socksProxyPort']?.toString()) ?? '1080';
+        _socksUsernameController.text = (s['socksProxyUsername'] as String?) ?? '';
+        _socksPasswordController.text = (s['socksProxyPassword'] as String?) ?? '';
+
+        // FlareSolverr
         _flareSolverrEnabled = parseBoolSafe(s['flareSolverrEnabled'], true);
         _flareSolverrTimeout = parseIntSafe(s['flareSolverrTimeout'], 73);
-        _backupInterval = parseIntSafe(s['backupInterval'], 1);
-        _backupTTL = parseIntSafe(s['backupTTL'], 14);
-        _webUIFlavor = (s['webUIFlavor'] as String?) ?? 'CUSTOM';
-        _debugLogsEnabled = parseBoolSafe(s['debugLogsEnabled'], true);
-
-        _downloadsPathController.text = (s['downloadsPath'] as String?) ?? '';
-        _backupPathController.text = (s['backupPath'] as String?) ?? '';
-        _localSourcePathController.text = (s['localSourcePath'] as String?) ?? '';
+        _flareSolverrSessionTtl = parseIntSafe(s['flareSolverrSessionTtl'], 20);
+        _flareSolverrAsResponseFallback = parseBoolSafe(s['flareSolverrAsResponseFallback'], true);
+        _flareSolverrSessionNameController.text = (s['flareSolverrSessionName'] as String?) ?? 'default';
         if (s['flareSolverrUrl'] != null && (s['flareSolverrUrl'] as String).isNotEmpty) {
           _cfProxyController.text = s['flareSolverrUrl'] as String;
         }
+
+        // Downloads
+        _downloadAsCbz = parseBoolSafe(s['downloadAsCbz'], true);
+        _autoDownloadNewChapters = parseBoolSafe(s['autoDownloadNewChapters'], true);
+        _autoDownloadLimit = parseIntSafe(s['autoDownloadNewChaptersLimit'], 0);
+        _excludeEntryWithUnreadChapters = parseBoolSafe(s['excludeEntryWithUnreadChapters'], false);
+        _autoDownloadIgnoreReUploads = parseBoolSafe(s['autoDownloadIgnoreReUploads'], true);
+        _downloadsPathController.text = (s['downloadsPath'] as String?) ?? '';
+
+        // Library Updates
+        _globalUpdateInterval = parseDoubleSafe(s['globalUpdateInterval'], 12.0);
+        _updateMangas = parseBoolSafe(s['updateMangas'], true);
+        _excludeCompleted = parseBoolSafe(s['excludeCompleted'], false);
+        _excludeNotStarted = parseBoolSafe(s['excludeNotStarted'], false);
+        _excludeUnreadChapters = parseBoolSafe(s['excludeUnreadChapters'], false);
+
+        // Backups
+        _backupInterval = parseIntSafe(s['backupInterval'], 1);
+        _backupTTL = parseIntSafe(s['backupTTL'], 14);
+        _backupTime = (s['backupTime'] as String?) ?? '12:00';
+        _backupPathController.text = (s['backupPath'] as String?) ?? '';
+
+        // Browse & Sources
+        _maxSourcesInParallel = parseIntSafe(s['maxSourcesInParallel'], 6);
+        _localSourcePathController.text = (s['localSourcePath'] as String?) ?? '';
+
+        // WebUI & Misc
+        _webUIFlavor = (s['webUIFlavor'] as String?) ?? 'CUSTOM';
+        _webUIInterface = (s['webUIInterface'] as String?) ?? '0.0.0.0';
+        _webUIInterfaceController.text = _webUIInterface;
+        _webUIChannel = (s['webUIChannel'] as String?) ?? 'STABLE';
+        _debugLogsEnabled = parseBoolSafe(s['debugLogsEnabled'], true);
+        _systemTrayEnabled = parseBoolSafe(s['systemTrayEnabled'], true);
       });
     }
   }
@@ -215,67 +299,6 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     }
   }
 
-  void _showTrackerAuthDialog(Map<String, dynamic> tracker) {
-    final name = tracker['name'] as String;
-    final isLoggedIn = tracker['isLoggedIn'] as bool;
-    final tokenController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        final primaryColor = Theme.of(context).colorScheme.primary;
-
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
-          title: Text(isLoggedIn ? '$name Active Session' : 'Authenticate $name', style: const TextStyle(fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isLoggedIn
-                    ? 'Suwayomi server is currently authenticated with $name.'
-                    : 'Enter username/token or authenticate on Suwayomi web dashboard for OAuth verification.',
-                style: const TextStyle(fontSize: 13, color: Colors.grey),
-              ),
-              if (!isLoggedIn) ...[
-                const SizedBox(height: 16),
-                TextField(
-                  controller: tokenController,
-                  decoration: const InputDecoration(labelText: 'OAuth Token / Key'),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close', style: TextStyle(color: Colors.grey)),
-            ),
-            if (isLoggedIn)
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                onPressed: () async {
-                  Navigator.pop(context);
-                  setState(() => tracker['isLoggedIn'] = false);
-                },
-                child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              )
-            else
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
-                onPressed: () {
-                  Navigator.pop(context);
-                  setState(() => tracker['isLoggedIn'] = true);
-                },
-                child: const Text('Save & Authorize', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
   Future<void> _saveAndTestServer() async {
     final messenger = ScaffoldMessenger.of(context);
     final url = _urlController.text.trim();
@@ -296,19 +319,34 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     }
   }
 
+  Future<void> _openWebUI() async {
+    final serverUrl = SettingsService.instance.serverUrl;
+    if (serverUrl.isEmpty) return;
+    try {
+      final uri = Uri.parse(serverUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open WebUI: $e')));
+      }
+    }
+  }
+
   Future<void> _triggerGlobalUpdate() async {
     setState(() => _isUpdatingLibrary = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      if (GraphQLClientService.instance.isConfigured) {
-        await GraphQLClientService.instance.triggerGlobalLibraryUpdate();
-      }
+      await GraphQLClientService.instance.triggerGlobalLibraryUpdate();
       if (mounted) {
-        messenger.showSnackBar(const SnackBar(content: Text('Global library update started on server!')));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('⚡ Global server library update started! Checking all sources...')),
+        );
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
-        messenger.showSnackBar(const SnackBar(content: Text('Could not trigger library update.')));
+        messenger.showSnackBar(SnackBar(content: Text('Error starting library update: $e')));
       }
     } finally {
       if (mounted) setState(() => _isUpdatingLibrary = false);
@@ -320,26 +358,107 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     try {
       await GraphQLClientService.instance.clearServerCachedImages();
       if (mounted) {
-        messenger.showSnackBar(const SnackBar(content: Text('✅ Server cached images purged successfully!')));
+        messenger.showSnackBar(const SnackBar(content: Text('🧹 Server image cache cleared successfully!')));
       }
     } catch (_) {
       if (mounted) messenger.showSnackBar(const SnackBar(content: Text('Failed to clear cache.')));
     }
   }
 
-  Future<void> _triggerCreateBackup() async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await GraphQLClientService.instance.createServerBackup();
-      if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('✅ Server backup created successfully! Saved to Suwayomi data/backups')),
+  void _showCreateBackupDialog() {
+    bool includeCategories = true;
+    bool includeChapters = true;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDlgState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1F1F24),
+              title: const Text('Create Server Backup', style: TextStyle(fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Export your Suwayomi library, categories, reading tracking, and history into a .tachibk archive.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  const SizedBox(height: 16),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Include Categories', style: TextStyle(fontSize: 14)),
+                    value: includeCategories,
+                    onChanged: (val) => setDlgState(() => includeCategories = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Include Chapter Data', style: TextStyle(fontSize: 14)),
+                    value: includeChapters,
+                    onChanged: (val) => setDlgState(() => includeChapters = val ?? true),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    try {
+                      final res = await GraphQLClientService.instance.createServerBackup(
+                        includeCategories: includeCategories,
+                        includeChapters: includeChapters,
+                      );
+                      if (context.mounted) {
+                        final url = res?['createBackup']?['url']?.toString() ?? 'data/backups';
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('✅ Backup created: $url')),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Backup triggered: $e')));
+                      }
+                    }
+                  },
+                  child: const Text('Create', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
         );
+      },
+    );
+  }
+
+  Future<void> _testFlareSolverr() async {
+    final url = _cfProxyController.text.trim();
+    if (url.isEmpty) return;
+    setState(() => _isCfTesting = true);
+
+    try {
+      final uri = Uri.parse(url);
+      final resp = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (mounted) {
+        if (resp.statusCode == 200 && resp.body.contains('FlareSolverr')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✅ FlareSolverr is active and reachable!'), backgroundColor: Colors.green),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('⚠️ Server responded with HTTP ${resp.statusCode} (unexpected payload)'), backgroundColor: Colors.orange),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text('Backup triggered: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ FlareSolverr unreachable: $e'), backgroundColor: Colors.redAccent),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _isCfTesting = false);
     }
   }
 
@@ -377,7 +496,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Server Admin & Settings'),
+        title: const Text('Suwayomi Server Admin'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
@@ -404,7 +523,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 8.0, bottom: 120.0),
         children: [
-          // ── 1. SERVER CONNECTION & LIVE HEALTH ──
+          // ── 1. SERVER CONNECTION & STATUS ──
           _buildSectionHeader('Server Connection & Status', Icons.dns_rounded, primaryColor),
           _buildCard(
             child: Column(
@@ -435,23 +554,13 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                         ],
                       ),
                     ),
-                    if (_isConnected)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.greenAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3)),
-                        ),
-                        child: const Text('ACTIVE', style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
                   ],
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _urlController,
                   decoration: InputDecoration(
-                    labelText: 'Server Host & Port',
+                    labelText: 'Client Target Server URL',
                     hintText: 'http://100.71.46.98:4567',
                     prefixIcon: Icon(Icons.link_rounded, color: primaryColor),
                     filled: true,
@@ -459,23 +568,36 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: _saveAndTestServer,
+                        child: const Text('Save & Connect', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
                     ),
-                    onPressed: _saveAndTestServer,
-                    child: const Text('Save & Test Connection', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+                      label: const Text('WebUI'),
+                      onPressed: _isConnected ? _openWebUI : null,
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
 
-          // ── 2. QUICK ACTIONS & GLOBAL TASKS ──
+          // ── 2. QUICK ACTIONS & TASKS ──
           _buildSectionHeader('Server Quick Actions', Icons.bolt_rounded, Colors.amberAccent),
           _buildCard(
             child: Column(
@@ -520,7 +642,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                         ),
                         icon: const Icon(Icons.save_rounded, size: 18, color: Colors.cyanAccent),
                         label: const Text('Create Backup', style: TextStyle(fontSize: 12)),
-                        onPressed: _isConnected ? _triggerCreateBackup : null,
+                        onPressed: _isConnected ? _showCreateBackupDialog : null,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -547,7 +669,43 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
             ),
           ),
 
-          // ── 3. LIBRARY & AUTOMATED UPDATES ──
+          // ── 3. SERVER BINDING (IP & PORT) ──
+          _buildSectionHeader('Server Bindings (Suwayomi Host)', Icons.settings_ethernet_rounded, Colors.lightBlueAccent),
+          _buildCard(
+            child: Column(
+              children: [
+                TextField(
+                  controller: _serverIpController,
+                  decoration: const InputDecoration(
+                    labelText: 'Server Binding IP',
+                    hintText: '0.0.0.0 (all interfaces)',
+                    filled: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+                  ),
+                  onSubmitted: (val) => _updateServerSetting('ip', val.trim()),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _serverPortController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Server Listening Port',
+                    hintText: '4567',
+                    filled: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+                  ),
+                  onSubmitted: (val) {
+                    final port = int.tryParse(val.trim());
+                    if (port != null && port > 0 && port <= 65535) {
+                      _updateServerSetting('port', port);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          // ── 4. LIBRARY & AUTOMATED UPDATES ──
           _buildSectionHeader('Library & Automated Updates', Icons.collections_bookmark_rounded, Colors.purpleAccent),
           _buildCard(
             child: Column(
@@ -606,6 +764,19 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
+                  title: const Text('Exclude Not Started Manga', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Skip series with zero read chapters', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  value: _excludeNotStarted,
+                  onChanged: _isConnected
+                      ? (val) {
+                          setState(() => _excludeNotStarted = val);
+                          _updateServerSetting('excludeNotStarted', val);
+                        }
+                      : null,
+                ),
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
                   title: const Text('Exclude Unread Chapters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   subtitle: const Text('Skip checking updates for manga with unread chapters', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   value: _excludeUnreadChapters,
@@ -616,42 +787,31 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                         }
                       : null,
                 ),
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Parallel Scrapers Concurrency', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text('$_maxSourcesInParallel simultaneous source scraping workers', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                ),
-                Slider(
-                  value: _maxSourcesInParallel.toDouble(),
-                  min: 1,
-                  max: 10,
-                  divisions: 9,
-                  label: '$_maxSourcesInParallel workers',
-                  onChanged: _isConnected
-                      ? (val) {
-                          setState(() => _maxSourcesInParallel = val.toInt());
-                        }
-                      : null,
-                  onChangeEnd: _isConnected
-                      ? (val) {
-                          _updateServerSetting('maxSourcesInParallel', val.toInt());
-                        }
-                      : null,
-                ),
               ],
             ),
           ),
 
-          // ── 4. DOWNLOADS & STORAGE ──
-          _buildSectionHeader('Downloads & Storage', Icons.download_for_offline_rounded, Colors.lightGreenAccent),
+          // ── 5. DOWNLOADS & STORAGE ──
+          _buildSectionHeader('Downloads & Server Storage', Icons.download_rounded, Colors.greenAccent),
           _buildCard(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                TextField(
+                  controller: _downloadsPathController,
+                  decoration: const InputDecoration(
+                    labelText: 'Server Downloads Directory',
+                    hintText: 'e.g. /home/user/suwayomi/downloads',
+                    filled: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+                  ),
+                  onSubmitted: (val) => _updateServerSetting('downloadsPath', val.trim()),
+                ),
+                const SizedBox(height: 12),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Save Chapters as CBZ Archive', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Package downloaded chapters into compressed .cbz files', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  title: const Text('Save as CBZ Archive', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Compress downloaded chapters into standard .cbz zip files', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   value: _downloadAsCbz,
                   onChanged: _isConnected
                       ? (val) {
@@ -664,7 +824,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Auto-Download New Chapters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Automatically download newly released chapters during update', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: const Text('Automatically download chapters when found during updates', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   value: _autoDownloadNewChapters,
                   onChanged: _isConnected
                       ? (val) {
@@ -676,18 +836,20 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Auto-Download Limit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  title: const Text('Auto-Download Chapter Limit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   subtitle: Text(_autoDownloadLimit == 0 ? 'Download all new chapters' : 'Limit to $_autoDownloadLimit newest chapters', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   trailing: DropdownButton<int>(
                     value: _autoDownloadLimit,
                     dropdownColor: const Color(0xFF22222A),
                     underline: const SizedBox(),
                     items: const [
-                      DropdownMenuItem(value: 0, child: Text('No Limit (All)')),
-                      DropdownMenuItem(value: 1, child: Text('1 Chapter')),
-                      DropdownMenuItem(value: 2, child: Text('2 Chapters')),
-                      DropdownMenuItem(value: 3, child: Text('3 Chapters')),
-                      DropdownMenuItem(value: 5, child: Text('5 Chapters')),
+                      DropdownMenuItem(value: 0, child: Text('All')),
+                      DropdownMenuItem(value: 1, child: Text('1 chapter')),
+                      DropdownMenuItem(value: 2, child: Text('2 chapters')),
+                      DropdownMenuItem(value: 3, child: Text('3 chapters')),
+                      DropdownMenuItem(value: 5, child: Text('5 chapters')),
+                      DropdownMenuItem(value: 10, child: Text('10 chapters')),
+                      DropdownMenuItem(value: 20, child: Text('20 chapters')),
                     ],
                     onChanged: _isConnected
                         ? (val) {
@@ -700,33 +862,45 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   ),
                 ),
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _downloadsPathController,
-                  decoration: InputDecoration(
-                    labelText: 'Server Downloads Directory',
-                    hintText: 'Default: (Suwayomi data/downloads)',
-                    prefixIcon: const Icon(Icons.folder_rounded, size: 20),
-                    filled: true,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                  onSubmitted: _isConnected
-                      ? (val) => _updateServerSetting('downloadsPath', val.trim())
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Exclude Entry With Unread Chapters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Do not auto-download if unread chapters exist', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  value: _excludeEntryWithUnreadChapters,
+                  onChanged: _isConnected
+                      ? (val) {
+                          setState(() => _excludeEntryWithUnreadChapters = val);
+                          _updateServerSetting('excludeEntryWithUnreadChapters', val);
+                        }
+                      : null,
+                ),
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Ignore Re-Uploads', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Do not re-download already downloaded chapter numbers', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  value: _autoDownloadIgnoreReUploads,
+                  onChanged: _isConnected
+                      ? (val) {
+                          setState(() => _autoDownloadIgnoreReUploads = val);
+                          _updateServerSetting('autoDownloadIgnoreReUploads', val);
+                        }
                       : null,
                 ),
               ],
             ),
           ),
 
-          // ── 5. CLOUDFLARE / FLARESOLVERR ──
-          _buildSectionHeader('Cloudflare Bypass (FlareSolverr)', Icons.shield_rounded, Colors.orangeAccent),
+          // ── 6. CLOUDFLARE BYPASS (FLARESOLVERR) ──
+          _buildSectionHeader('Cloudflare Bypass (FlareSolverr)', Icons.security_rounded, Colors.orangeAccent),
           _buildCard(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Server FlareSolverr Bypass', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Route protected extensions via FlareSolverr proxy', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  title: const Text('Enable Server FlareSolverr', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Route Cloudflare challenges through FlareSolverr proxy', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   value: _flareSolverrEnabled,
                   onChanged: _isConnected
                       ? (val) {
@@ -735,107 +909,241 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                         }
                       : null,
                 ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _cfProxyController,
-                  decoration: InputDecoration(
-                    labelText: 'FlareSolverr URL',
-                    hintText: 'http://100.85.171.6:8191/v1',
-                    prefixIcon: const Icon(Icons.vpn_lock_rounded, size: 20),
-                    filled: true,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('FlareSolverr Timeout', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text('$_flareSolverrTimeout seconds per challenge resolution', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                ),
-                Slider(
-                  value: _flareSolverrTimeout.toDouble(),
-                  min: 15,
-                  max: 120,
-                  divisions: 21,
-                  label: '$_flareSolverrTimeout s',
-                  onChanged: _isConnected
-                      ? (val) {
-                          setState(() => _flareSolverrTimeout = val.toInt());
-                        }
-                      : null,
-                  onChangeEnd: _isConnected
-                      ? (val) {
-                          _updateServerSetting('flareSolverrTimeout', val.toInt());
-                        }
-                      : null,
-                ),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                if (_flareSolverrEnabled) ...[
+                  const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _cfProxyController,
+                    decoration: const InputDecoration(
+                      labelText: 'FlareSolverr Endpoint URL',
+                      hintText: 'http://100.85.171.6:8191/v1',
+                      filled: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
                     ),
-                    onPressed: _isCfTesting
-                        ? null
-                        : () async {
-                            final messenger = ScaffoldMessenger.of(context);
-                            final url = _cfProxyController.text.trim();
-
-                            SettingsService.instance.cfProxyUrl = url;
-                            MClient.cfProxyUrl = url;
-                            if (_isConnected) {
-                              await _updateServerSetting('flareSolverrUrl', url);
-                            }
-
-                            if (url.isEmpty) {
-                              messenger.showSnackBar(const SnackBar(content: Text('Cloudflare bypass disabled.')));
-                              return;
-                            }
-
-                            setState(() => _isCfTesting = true);
-                            try {
-                              final res = await http.get(Uri.parse(url.replaceAll(RegExp(r'/v\d+$'), ''))).timeout(const Duration(seconds: 8));
-                              final ok = res.statusCode == 200;
-                              if (mounted) {
-                                messenger.showSnackBar(SnackBar(
-                                  content: Text(ok ? '✅ FlareSolverr reachable at $url' : '⚠️ Saved but HTTP ${res.statusCode} returned'),
-                                ));
-                              }
-                            } catch (e) {
-                              if (mounted) messenger.showSnackBar(SnackBar(content: Text('❌ Cannot reach FlareSolverr: $e')));
-                            } finally {
-                              if (mounted) setState(() => _isCfTesting = false);
-                            }
-                          },
-                    child: _isCfTesting
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Save & Test FlareSolverr', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    onSubmitted: (val) {
+                      SettingsService.instance.cfProxyUrl = val.trim();
+                      _updateServerSetting('flareSolverrUrl', val.trim());
+                    },
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _flareSolverrSessionNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Session Name',
+                            hintText: 'default',
+                            filled: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+                          ),
+                          onSubmitted: (val) => _updateServerSetting('flareSolverrSessionName', val.trim()),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: _isCfTesting
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.network_ping_rounded, size: 16),
+                        label: const Text('Test', style: TextStyle(fontSize: 12)),
+                        onPressed: _isCfTesting ? null : _testFlareSolverr,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('FlareSolverr Timeout', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    subtitle: Text('$_flareSolverrTimeout seconds challenge solve timeout', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  ),
+                  Slider(
+                    value: _flareSolverrTimeout.toDouble(),
+                    min: 20,
+                    max: 300,
+                    divisions: 28,
+                    label: '${_flareSolverrTimeout}s',
+                    onChanged: _isConnected
+                        ? (val) {
+                            setState(() => _flareSolverrTimeout = val.toInt());
+                            _updateServerSetting('flareSolverrTimeout', val.toInt());
+                          }
+                        : null,
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Session TTL (Lifetime)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    subtitle: Text('$_flareSolverrSessionTtl minutes session validity', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  ),
+                  Slider(
+                    value: _flareSolverrSessionTtl.toDouble(),
+                    min: 1,
+                    max: 60,
+                    divisions: 59,
+                    label: '${_flareSolverrSessionTtl}m',
+                    onChanged: _isConnected
+                        ? (val) {
+                            setState(() => _flareSolverrSessionTtl = val.toInt());
+                            _updateServerSetting('flareSolverrSessionTtl', val.toInt());
+                          }
+                        : null,
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Response Fallback Solving', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    subtitle: const Text('Solve Cloudflare on 403 / 503 response fallback', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    value: _flareSolverrAsResponseFallback,
+                    onChanged: _isConnected
+                        ? (val) {
+                            setState(() => _flareSolverrAsResponseFallback = val);
+                            _updateServerSetting('flareSolverrAsResponseFallback', val);
+                          }
+                        : null,
+                  ),
+                ],
               ],
             ),
           ),
 
-          // ── 6. BACKUPS & RETENTION ──
-          _buildSectionHeader('Server Backups & Retention', Icons.backup_rounded, Colors.cyanAccent),
+          // ── 7. SOCKS PROXY ──
+          _buildSectionHeader('SOCKS Proxy', Icons.vpn_lock_rounded, Colors.tealAccent),
+          _buildCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Enable SOCKS Proxy', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Tunnel server outbound requests via SOCKS4 / SOCKS5 proxy', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  value: _socksProxyEnabled,
+                  onChanged: _isConnected
+                      ? (val) {
+                          setState(() => _socksProxyEnabled = val);
+                          _updateServerSetting('socksProxyEnabled', val);
+                        }
+                      : null,
+                ),
+                if (_socksProxyEnabled) ...[
+                  const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('SOCKS Version', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    trailing: DropdownButton<int>(
+                      value: _socksProxyVersion,
+                      dropdownColor: const Color(0xFF22222A),
+                      underline: const SizedBox(),
+                      items: const [
+                        DropdownMenuItem(value: 4, child: Text('SOCKS 4')),
+                        DropdownMenuItem(value: 5, child: Text('SOCKS 5')),
+                      ],
+                      onChanged: _isConnected
+                          ? (val) {
+                              if (val != null) {
+                                setState(() => _socksProxyVersion = val);
+                                _updateServerSetting('socksProxyVersion', val);
+                              }
+                            }
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: TextField(
+                          controller: _socksHostController,
+                          decoration: const InputDecoration(
+                            labelText: 'Proxy Host',
+                            hintText: '127.0.0.1',
+                            filled: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+                          ),
+                          onSubmitted: (val) => _updateServerSetting('socksProxyHost', val.trim()),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: _socksPortController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Port',
+                            hintText: '1080',
+                            filled: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+                          ),
+                          onSubmitted: (val) => _updateServerSetting('socksProxyPort', val.trim()),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _socksUsernameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Proxy Username (optional)',
+                      filled: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+                    ),
+                    onSubmitted: (val) => _updateServerSetting('socksProxyUsername', val.trim()),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _socksPasswordController,
+                    obscureText: _obscureSocksPassword,
+                    decoration: InputDecoration(
+                      labelText: 'Proxy Password (optional)',
+                      filled: true,
+                      border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscureSocksPassword ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _obscureSocksPassword = !_obscureSocksPassword),
+                      ),
+                    ),
+                    onSubmitted: (val) => _updateServerSetting('socksProxyPassword', val.trim()),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // ── 8. AUTOMATIC BACKUPS & RETENTION ──
+          _buildSectionHeader('Automatic Backups & Retention', Icons.backup_rounded, Colors.cyanAccent),
           _buildCard(
             child: Column(
               children: [
+                TextField(
+                  controller: _backupPathController,
+                  decoration: const InputDecoration(
+                    labelText: 'Server Backup Directory',
+                    hintText: 'e.g. /home/user/suwayomi/data/backups',
+                    filled: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+                  ),
+                  onSubmitted: (val) => _updateServerSetting('backupPath', val.trim()),
+                ),
+                const SizedBox(height: 12),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Automatic Backup Interval', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text('Create backup every $_backupInterval day(s)', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  title: const Text('Backup Schedule Interval', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text(_backupInterval == 0 ? 'Automatic backups disabled' : 'Create backup every $_backupInterval days', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   trailing: DropdownButton<int>(
                     value: _backupInterval,
                     dropdownColor: const Color(0xFF22222A),
                     underline: const SizedBox(),
                     items: const [
                       DropdownMenuItem(value: 0, child: Text('Disabled')),
-                      DropdownMenuItem(value: 1, child: Text('Every Day')),
+                      DropdownMenuItem(value: 1, child: Text('Daily (Every 1d)')),
                       DropdownMenuItem(value: 2, child: Text('Every 2 Days')),
-                      DropdownMenuItem(value: 7, child: Text('Every Week')),
+                      DropdownMenuItem(value: 7, child: Text('Weekly (Every 7d)')),
+                      DropdownMenuItem(value: 14, child: Text('Bi-Weekly (14d)')),
+                      DropdownMenuItem(value: 30, child: Text('Monthly (30d)')),
                     ],
                     onChanged: _isConnected
                         ? (val) {
@@ -850,17 +1158,45 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Backup Retention (TTL)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text('Keep backups for $_backupTTL days before deleting', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  title: const Text('Backup Execution Time', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text('Triggers daily at $_backupTime UTC', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  trailing: TextButton.icon(
+                    icon: const Icon(Icons.access_time_rounded, size: 16),
+                    label: Text(_backupTime),
+                    onPressed: _isConnected
+                        ? () async {
+                            final parts = _backupTime.split(':');
+                            final hour = int.tryParse(parts.first) ?? 12;
+                            final min = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
+                            final picked = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay(hour: hour, minute: min),
+                            );
+                            if (picked != null) {
+                              final formatted = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+                              setState(() => _backupTime = formatted);
+                              _updateServerSetting('backupTime', formatted);
+                            }
+                          }
+                        : null,
+                  ),
+                ),
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Backup Retention TTL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text(_backupTTL == 0 ? 'Keep all backups indefinitely' : 'Automatically purge backups older than $_backupTTL days', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   trailing: DropdownButton<int>(
                     value: _backupTTL,
                     dropdownColor: const Color(0xFF22222A),
                     underline: const SizedBox(),
                     items: const [
+                      DropdownMenuItem(value: 0, child: Text('Indefinite')),
                       DropdownMenuItem(value: 7, child: Text('7 Days')),
                       DropdownMenuItem(value: 14, child: Text('14 Days')),
                       DropdownMenuItem(value: 30, child: Text('30 Days')),
                       DropdownMenuItem(value: 90, child: Text('90 Days')),
+                      DropdownMenuItem(value: 365, child: Text('1 Year')),
                     ],
                     onChanged: _isConnected
                         ? (val) {
@@ -876,22 +1212,60 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
             ),
           ),
 
-          // ── 7. WEBUI & SYSTEM DIAGNOSTICS ──
-          _buildSectionHeader('WebUI & System Diagnostics', Icons.terminal_rounded, Colors.blueGrey),
+          // ── 9. BROWSE & SCRAPER CONCURRENCY ──
+          _buildSectionHeader('Browse & Scraper Workers', Icons.language_rounded, Colors.indigoAccent),
+          _buildCard(
+            child: Column(
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Parallel Scrapers Concurrency', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text('$_maxSourcesInParallel simultaneous source scraping workers', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ),
+                Slider(
+                  value: _maxSourcesInParallel.toDouble(),
+                  min: 1,
+                  max: 20,
+                  divisions: 19,
+                  label: '$_maxSourcesInParallel workers',
+                  onChanged: _isConnected
+                      ? (val) {
+                          setState(() => _maxSourcesInParallel = val.toInt());
+                          _updateServerSetting('maxSourcesInParallel', val.toInt());
+                        }
+                      : null,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _localSourcePathController,
+                  decoration: const InputDecoration(
+                    labelText: 'Local Source Directory',
+                    hintText: 'e.g. /home/user/suwayomi/local_manga',
+                    filled: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+                  ),
+                  onSubmitted: (val) => _updateServerSetting('localSourcePath', val.trim()),
+                ),
+              ],
+            ),
+          ),
+
+          // ── 10. WEBUI & SYSTEM DIAGNOSTICS ──
+          _buildSectionHeader('WebUI & System Diagnostics', Icons.desktop_windows_rounded, Colors.deepPurpleAccent),
           _buildCard(
             child: Column(
               children: [
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('WebUI Interface Flavor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text('Current flavor: $_webUIFlavor', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: const Text('Web dashboard visual theme & layout', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   trailing: DropdownButton<String>(
                     value: _webUIFlavor,
                     dropdownColor: const Color(0xFF22222A),
                     underline: const SizedBox(),
                     items: const [
-                      DropdownMenuItem(value: 'CUSTOM', child: Text('CUSTOM')),
-                      DropdownMenuItem(value: 'TAIDI', child: Text('TAIDI')),
+                      DropdownMenuItem(value: 'CUSTOM', child: Text('Suwayomi Modern')),
+                      DropdownMenuItem(value: 'TAIDI', child: Text('Taidi Classic')),
                     ],
                     onChanged: _isConnected
                         ? (val) {
@@ -904,10 +1278,32 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   ),
                 ),
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('WebUI Release Channel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  trailing: DropdownButton<String>(
+                    value: _webUIChannel,
+                    dropdownColor: const Color(0xFF22222A),
+                    underline: const SizedBox(),
+                    items: const [
+                      DropdownMenuItem(value: 'STABLE', child: Text('Stable')),
+                      DropdownMenuItem(value: 'PREVIEW', child: Text('Preview')),
+                    ],
+                    onChanged: _isConnected
+                        ? (val) {
+                            if (val != null) {
+                              setState(() => _webUIChannel = val);
+                              _updateServerSetting('webUIChannel', val);
+                            }
+                          }
+                        : null,
+                  ),
+                ),
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Debug Logs Enabled', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Enable verbose diagnostic logging on Suwayomi server', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  title: const Text('Server Debug Logs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Verbose debug logging for scraping and GraphQL requests', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   value: _debugLogsEnabled,
                   onChanged: _isConnected
                       ? (val) {
@@ -916,137 +1312,77 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                         }
                       : null,
                 ),
-              ],
-            ),
-          ),
-
-          // ── 8. DOCKER SERVER CONTROL ──
-          _buildSectionHeader('Docker Server Control', Icons.developer_board_rounded, Colors.blueAccent),
-          _buildCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Local Container Controller', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                const SizedBox(height: 4),
-                const Text(
-                  'Manage weeb-suwayomi-1 container on this host machine.',
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade700,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: _isDockerBusy
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.play_arrow_rounded, color: Colors.white),
-                        label: const Text('Start Server', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        onPressed: _isDockerBusy
-                            ? null
-                            : () async {
-                                final messenger = ScaffoldMessenger.of(context);
-                                setState(() => _isDockerBusy = true);
-                                try {
-                                  await Process.run('docker', ['start', 'weeb-suwayomi-1']);
-                                  bool alive = false;
-                                  for (int i = 0; i < 10; i++) {
-                                    await Future<void>.delayed(const Duration(seconds: 2));
-                                    alive = await GraphQLClientService.instance.checkServerReachable(force: true);
-                                    if (alive) break;
-                                  }
-                                  if (mounted) {
-                                    setState(() => _isConnected = alive);
-                                    messenger.showSnackBar(SnackBar(
-                                      content: Text(alive ? '✅ Server is up and reachable' : '⚠️ Container started, waiting for ready state'),
-                                    ));
-                                    if (alive) await _checkServerConnection();
-                                  }
-                                } catch (e) {
-                                  if (mounted) messenger.showSnackBar(SnackBar(content: Text('❌ Failed to start: $e')));
-                                } finally {
-                                  if (mounted) setState(() => _isDockerBusy = false);
-                                }
-                              },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red.shade700,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: _isDockerBusy
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.stop_rounded, color: Colors.white),
-                        label: const Text('Stop Server', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        onPressed: _isDockerBusy
-                            ? null
-                            : () async {
-                                final messenger = ScaffoldMessenger.of(context);
-                                setState(() => _isDockerBusy = true);
-                                try {
-                                  await Process.run('docker', ['stop', 'weeb-suwayomi-1']);
-                                  if (mounted) {
-                                    setState(() => _isConnected = false);
-                                    messenger.showSnackBar(const SnackBar(content: Text('🛑 Server stopped')));
-                                  }
-                                } catch (e) {
-                                  if (mounted) messenger.showSnackBar(SnackBar(content: Text('❌ Failed to stop: $e')));
-                                } finally {
-                                  if (mounted) setState(() => _isDockerBusy = false);
-                                }
-                              },
-                      ),
-                    ),
-                  ],
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Server System Tray Icon', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Show Suwayomi status icon in host OS tray', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  value: _systemTrayEnabled,
+                  onChanged: _isConnected
+                      ? (val) {
+                          setState(() => _systemTrayEnabled = val);
+                          _updateServerSetting('systemTrayEnabled', val);
+                        }
+                      : null,
                 ),
               ],
             ),
           ),
 
-          // ── 9. SERVER TRACKERS ──
-          _buildSectionHeader('Server Trackers (MAL, AniList, Kitsu)', Icons.track_changes_rounded, Colors.indigoAccent),
+          // ── 11. TRACKERS INTEGRATION ──
+          _buildSectionHeader('Manga Trackers & Sync', Icons.sync_alt_rounded, Colors.pinkAccent),
           _buildCard(
             child: _isLoadingTrackers
-                ? const Padding(padding: EdgeInsets.all(20.0), child: Center(child: CircularProgressIndicator()))
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  )
                 : Column(
-                    children: _serverTrackers.map((t) {
-                      final isLoggedIn = t['isLoggedIn'] as bool;
-                      final name = t['name'] as String;
+                    children: _serverTrackers.map((tracker) {
+                      final name = tracker['name'] as String;
+                      final isLoggedIn = tracker['isLoggedIn'] as bool;
 
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Icon(
-                          isLoggedIn ? Icons.check_circle_rounded : Icons.account_circle_outlined,
-                          color: isLoggedIn ? Colors.greenAccent : Colors.grey,
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isLoggedIn ? Colors.greenAccent.withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            isLoggedIn ? Icons.verified_rounded : Icons.link_off_rounded,
+                            color: isLoggedIn ? Colors.greenAccent : Colors.grey,
+                            size: 20,
+                          ),
                         ),
                         title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         subtitle: Text(
-                          isLoggedIn ? 'Authenticated on Suwayomi server' : 'Not authenticated',
-                          style: TextStyle(color: isLoggedIn ? Colors.grey : Colors.orangeAccent, fontSize: 12),
+                          isLoggedIn ? 'Authenticated with Server' : 'Not Logged In',
+                          style: TextStyle(fontSize: 11, color: isLoggedIn ? Colors.greenAccent : Colors.grey),
                         ),
-                        trailing: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isLoggedIn ? const Color(0x33FFFFFF) : primaryColor,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        trailing: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            side: BorderSide(color: isLoggedIn ? Colors.redAccent.withValues(alpha: 0.5) : primaryColor),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                          onPressed: () => _showTrackerAuthDialog(t),
-                          child: Text(isLoggedIn ? 'Active' : 'Log In', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          onPressed: () => _showTrackerAuthDialog(tracker),
+                          child: Text(
+                            isLoggedIn ? 'Manage' : 'Log In',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isLoggedIn ? Colors.redAccent : primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       );
                     }).toList(),
                   ),
           ),
 
-          // ── 10. SYNC ENGINE & OFFLINE QUEUE ──
+          // ── 12. SYNC ENGINE & OFFLINE QUEUE ──
           _buildSectionHeader('Sync Engine & Offline Queue', Icons.sync_alt_rounded, Colors.tealAccent),
           _buildCard(
             child: ListTile(
@@ -1073,6 +1409,67 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showTrackerAuthDialog(Map<String, dynamic> tracker) {
+    final name = tracker['name'] as String;
+    final isLoggedIn = tracker['isLoggedIn'] as bool;
+    final tokenController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        final primaryColor = Theme.of(context).colorScheme.primary;
+
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1F1F24),
+          title: Text(isLoggedIn ? '$name Active Session' : 'Authenticate $name', style: const TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isLoggedIn
+                    ? 'Suwayomi server is currently authenticated with $name.'
+                    : 'Enter username/token or authenticate on Suwayomi web dashboard for OAuth verification.',
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              if (!isLoggedIn) ...[
+                const SizedBox(height: 16),
+                TextField(
+                  controller: tokenController,
+                  decoration: const InputDecoration(labelText: 'OAuth Token / Key'),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close', style: TextStyle(color: Colors.grey)),
+            ),
+            if (isLoggedIn)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                onPressed: () async {
+                  Navigator.pop(context);
+                  setState(() => tracker['isLoggedIn'] = false);
+                },
+                child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              )
+            else
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+                onPressed: () {
+                  Navigator.pop(context);
+                  setState(() => tracker['isLoggedIn'] = true);
+                },
+                child: const Text('Save & Authorize', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+          ],
+        );
+      },
     );
   }
 }
