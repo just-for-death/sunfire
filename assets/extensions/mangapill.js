@@ -199,14 +199,16 @@ class DefaultExtension extends MProvider {
     }
 
     var chapters = [];
-    var chapList = doc.select("div.my-3.grid > a");
+    var chapList = doc.select("div.my-3.grid > a, div#chapters a, div.grid a[href*='/chapters/'], a[href*='/chapters/']");
     for (var chap of chapList) {
-      var name = chap.text;
+      var name = chap.text ? chap.text.trim() : "Chapter";
       var chapUrl = chap.getHref || chap.attr("href") || "";
       if (chapUrl && !chapUrl.startsWith("http")) {
         chapUrl = `${baseUrl}${chapUrl.startsWith('/') ? chapUrl : '/' + chapUrl}`;
       }
-      chapters.push({ name, url: chapUrl });
+      if (chapUrl) {
+        chapters.push({ name, url: chapUrl });
+      }
     }
     return {
       name: mangaName,
@@ -236,23 +238,14 @@ class DefaultExtension extends MProvider {
 
     var pages = [];
     var seen = new Set();
-    var imgElements = doc.select("chapter-page img, picture img, img[data-src]");
+    var imgElements = doc.select("chapter-page img, picture img, img[data-src], img.js-page, img");
     for (var img of imgElements) {
       var src = img.attr("data-src") || img.attr("src") || img.getSrc || "";
-      if (src && !seen.has(src) && !src.includes("logo") && !src.includes("banner")) {
+      if (src && !seen.has(src) && !src.includes("logo") && !src.includes("banner") && !src.includes("avatar")) {
         seen.add(src);
         pages.push({ url: src, headers: { "Referer": "https://mangapill.com/" } });
       }
     }
-    if (pages.length === 0) {
-      var allImgs = doc.select("img");
-      for (var fImg of allImgs) {
-        var src = fImg.attr("data-src") || fImg.attr("src") || fImg.getSrc || "";
-        if (src && !seen.has(src) && !src.includes("logo") && !src.includes("banner") && src.startsWith("http")) {
-          seen.add(src);
-          pages.push({ url: src, headers: { "Referer": "https://mangapill.com/" } });
-        }
-      }
     }
 
     return pages;
