@@ -46,9 +46,9 @@ class DefaultExtension extends MProvider {
   }
 
   async getPopular(page) {
-    const res = await this.client.get(`${API_BASE}/galleries/popular?page=${page}`, this.getHeaders());
+    const res = await this.client.get(`${API_BASE}/search?query=language:english&sort=popular&page=${page}&per_page=25`, this.getHeaders());
     const data = JSON.parse(res.body);
-    const result = Array.isArray(data) ? data : (data.result || []);
+    const result = data.result || (Array.isArray(data) ? data : []);
     const list = result.map(g => this._mapGallery(g)).filter(Boolean);
     return { list: list, hasNextPage: list.length >= 20 };
   }
