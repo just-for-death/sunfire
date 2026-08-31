@@ -3,31 +3,31 @@ import 'package:pseudom/pseudom.dart' as pseudom;
 import 'package:xpath_selector_html_parser/xpath_selector_html_parser.dart';
 
 String regHrefMatcher(String input) {
-  final exp = RegExp(r'href="([^"]+)"');
+  final exp = RegExp(r'''href\s*=\s*["']([^"']+)["']''', caseSensitive: false);
   final matches = exp.allMatches(input);
   if (matches.isEmpty) return '';
-  return matches.first.group(1) ?? '';
+  return matches.first.group(1)?.trim() ?? '';
 }
 
 String regDataSrcMatcher(String input) {
-  final exp = RegExp(r'data-src="([^"]+)"');
+  final exp = RegExp(r'''(?:data-src|data-url|data-lazy-src|data-original)\s*=\s*["']([^"']+)["']''', caseSensitive: false);
   final matches = exp.allMatches(input);
   if (matches.isEmpty) return '';
-  return matches.first.group(1) ?? '';
+  return matches.first.group(1)?.trim() ?? '';
 }
 
 String regSrcMatcher(String input) {
-  final exp = RegExp(r'src="([^"]+)"');
+  final exp = RegExp(r'''src\s*=\s*["']([^"']+)["']''', caseSensitive: false);
   final matches = exp.allMatches(input);
   if (matches.isEmpty) return '';
-  return matches.first.group(1) ?? '';
+  return matches.first.group(1)?.trim() ?? '';
 }
 
 String regImgMatcher(String input) {
-  final exp = RegExp(r'img="([^"]+)"');
+  final exp = RegExp(r'''(?:img|image)\s*=\s*["']([^"']+)["']''', caseSensitive: false);
   final matches = exp.allMatches(input);
   if (matches.isEmpty) return '';
-  return matches.first.group(1) ?? '';
+  return matches.first.group(1)?.trim() ?? '';
 }
 
 void _initPseudoSelector() {
@@ -438,7 +438,17 @@ extension ElementExtension on Element {
 
   String? attr(String attribute) {
     try {
-      return attributes[attribute];
+      if (attributes.containsKey(attribute)) return attributes[attribute];
+      final keyLower = attribute.toLowerCase();
+      for (final entry in attributes.entries) {
+        if (entry.key.toString().toLowerCase() == keyLower) {
+          return entry.value;
+        }
+      }
+      final exp = RegExp('''(?:^|\\s)${RegExp.escape(attribute)}\\s*=\\s*["']([^"']+)["']''', caseSensitive: false);
+      final m = exp.firstMatch(outerHtml);
+      if (m != null) return m.group(1)?.trim();
+      return null;
     } catch (_) {
       return null;
     }
@@ -450,6 +460,8 @@ extension ElementExtension on Element {
 
   String? get getSrc {
     try {
+      final val = attr('src') ?? attr('data-src') ?? attr('data-url') ?? attr('data-lazy-src') ?? attr('data-original');
+      if (val != null && val.isNotEmpty) return val;
       return regSrcMatcher(outerHtml);
     } catch (_) {
       return null;
@@ -458,6 +470,8 @@ extension ElementExtension on Element {
 
   String? get getImg {
     try {
+      final val = attr('img') ?? attr('image') ?? attr('src');
+      if (val != null && val.isNotEmpty) return val;
       return regImgMatcher(outerHtml);
     } catch (_) {
       return null;
@@ -466,6 +480,8 @@ extension ElementExtension on Element {
 
   String? get getHref {
     try {
+      final val = attr('href') ?? attr('data-href');
+      if (val != null && val.isNotEmpty) return val;
       return regHrefMatcher(outerHtml);
     } catch (_) {
       return null;
@@ -474,6 +490,8 @@ extension ElementExtension on Element {
 
   String? get getDataSrc {
     try {
+      final val = attr('data-src') ?? attr('data-url') ?? attr('data-lazy-src') ?? attr('data-original') ?? attr('src');
+      if (val != null && val.isNotEmpty) return val;
       return regDataSrcMatcher(outerHtml);
     } catch (_) {
       return null;
