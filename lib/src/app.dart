@@ -120,9 +120,11 @@ class _SunfireAppState extends State<SunfireApp> {
         return DynamicColorBuilder(
           builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
             final useMaterialYou = SettingsService.instance.materialYouEnabled;
-            final isOled = SettingsService.instance.themeMode == 'OLED Black';
+            final modeStr = SettingsService.instance.themeMode;
+            final isOled = modeStr == 'OLED Black';
 
             final effectiveDarkTheme = AppTheme.darkTheme(useMaterialYou ? darkDynamic : null);
+            final effectiveLightTheme = AppTheme.lightTheme(useMaterialYou ? lightDynamic : null);
 
             final themeData = isOled
                 ? effectiveDarkTheme.copyWith(
@@ -131,10 +133,20 @@ class _SunfireAppState extends State<SunfireApp> {
                   )
                 : effectiveDarkTheme;
 
+            ThemeMode effectiveMode;
+            if (modeStr == 'System Default') {
+              effectiveMode = ThemeMode.system;
+            } else if (modeStr == 'Light') {
+              effectiveMode = ThemeMode.light;
+            } else {
+              effectiveMode = ThemeMode.dark;
+            }
+
             return MaterialApp.router(
               title: 'Sunfire',
               debugShowCheckedModeBanner: false,
-              themeMode: ThemeMode.dark,
+              themeMode: effectiveMode,
+              theme: effectiveLightTheme,
               darkTheme: themeData,
               routerConfig: _router,
             );
