@@ -160,7 +160,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             leading: const Icon(Icons.info_outline_rounded),
             title: const Text('Sunfire Client Version', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-            subtitle: Text('v1.2.0 • Platform: ${Platform.operatingSystem} (${Platform.operatingSystemVersion})', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            subtitle: Text('v2.0.0-beta • Platform: ${Platform.operatingSystem} (${Platform.operatingSystemVersion})', style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ),
         ],
       ),
