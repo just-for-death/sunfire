@@ -98,9 +98,22 @@ class DefaultExtension extends MProvider {
         name: "Sort By",
         state: 0,
         values: [
-          { type_name: "SelectOption", name: "Recent", value: "1" },
-          { type_name: "SelectOption", name: "Popular", value: "2" },
-          { type_name: "SelectOption", name: "Downloads", value: "3" }
+          { type_name: "SelectOption", name: "Popular (Most Viewed)", value: "1" },
+          { type_name: "SelectOption", name: "Newest / Recent", value: "0" },
+          { type_name: "SelectOption", name: "Top Rated", value: "2" },
+          { type_name: "SelectOption", name: "Most Downloaded", value: "3" }
+        ]
+      },
+      {
+        type_name: "GroupFilter",
+        name: "Categories",
+        state: [
+          { type_name: "CheckBox", name: "Manga", value: "Manga", state: false },
+          { type_name: "CheckBox", name: "Doujinshi", value: "Doujinshi", state: false },
+          { type_name: "CheckBox", name: "Western", value: "Western", state: false },
+          { type_name: "CheckBox", name: "Non-H", value: "Non-H", state: false },
+          { type_name: "CheckBox", name: "Artist CG", value: "Artist CG", state: false },
+          { type_name: "CheckBox", name: "Game CG", value: "Game CG", state: false }
         ]
       }
     ];
@@ -108,12 +121,22 @@ class DefaultExtension extends MProvider {
 
   async search(query, page, filters) {
     let sortVal = 1;
+    const includedTags = [];
+
     if (filters && filters.length > 0) {
-      const f = filters[0];
-      if (f.type_name === "SelectFilter" && f.values && f.values.length > f.state) {
-        sortVal = parseInt(f.values[f.state].value) || 1;
+      for (const f of filters) {
+        if (f.name === "Sort By" && f.values && f.values.length > f.state) {
+          sortVal = parseInt(f.values[f.state].value) || 0;
+        } else if (f.type_name === "GroupFilter" && Array.isArray(f.state)) {
+          for (const cb of f.state) {
+            if (cb.state && cb.value) {
+              includedTags.push(cb.value);
+            }
+          }
+        }
       }
     }
+
     const url = "https://9hentai.so/api/getBook";
     const body = {
       search: {
@@ -121,7 +144,12 @@ class DefaultExtension extends MProvider {
         page: page - 1,
         sort: sortVal,
         pages: { range: [0, 2000] },
-        tag: { text: "", type: 1, tags: [], items: { included: [], excluded: [] } }
+        tag: {
+          text: "",
+          type: 1,
+          tags: includedTags,
+          items: { included: [], excluded: [] }
+        }
       }
     };
     try {
