@@ -56,9 +56,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _isStandalone = true;
       _serverUrlController.clear();
       _serverAuthController.clear();
-      if (_userRepoUrls.isEmpty) {
-        _userRepoUrls.add('https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json');
-      }
     });
 
     // Jump directly to Repos step so user can review/add repos or proceed
