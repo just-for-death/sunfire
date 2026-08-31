@@ -245,7 +245,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
               final chServerId = (widget.mangaServerId > 0 && widget.mangaServerId < 200000)
                   ? (widget.mangaServerId * 10000 + i + 1)
-                  : ((widget.mangaServerId.hashCode & 0x3FFFFFFF) * 1000 + i + 1);
+                  : (((widget.mangaServerId.hashCode & 0x0007FFFF) * 1000) + (i + 1));
 
               final rawDate = cMap['dateUpload'] ?? cMap['uploadDate'] ?? cMap['date'] ?? cMap['releaseDate'];
               int? parsedDate;
@@ -304,6 +304,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             }
             await IsarService.instance.saveChapters(fetched);
             _chapters = fetched;
+            if (_manga != null) {
+              await IsarService.instance.saveManga(_manga!);
+            }
           }
         }
       } catch (_) {}
@@ -313,6 +316,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       ..serverId = widget.mangaServerId
       ..title = 'Manga #${widget.mangaServerId}'
       ..inLibrary = true;
+
+    if (_manga != null) {
+      await IsarService.instance.saveManga(_manga!);
+    }
 
     if (_chapters.isEmpty) {
       _chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);

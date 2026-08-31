@@ -80,7 +80,8 @@ class ContentResolverService {
     // Retrieve from local DB if missing
     if (effectiveChapterUrl == null || effectiveChapterUrl.isEmpty || effectiveSourceName == null) {
       try {
-        final ch = await IsarService.instance.getChapterByServerId(chapterServerId);
+        final ch = await IsarService.instance.getChapterByServerId(chapterServerId) ??
+            (await IsarService.instance.getAllChapters()).where((c) => c.serverId == chapterServerId || c.id == chapterServerId).firstOrNull;
         if (ch != null) {
           if (effectiveChapterUrl == null || effectiveChapterUrl.isEmpty) {
             effectiveChapterUrl = ch.url.isNotEmpty ? ch.url : ch.realUrl;
@@ -98,6 +99,27 @@ class ContentResolverService {
           }
         }
       } catch (_) {}
+    }
+
+    // Auto-detect source name from URL domain if still missing
+    if ((effectiveSourceName == null || effectiveSourceName.isEmpty) && effectiveChapterUrl != null && effectiveChapterUrl.isNotEmpty) {
+      final installedNames = QuickJsService.instance.getInstalledExtensionNames();
+      final urlLower = effectiveChapterUrl.toLowerCase();
+      for (final name in installedNames) {
+        final code = QuickJsService.instance.getExtensionCode(name);
+        if (code != null) {
+          final baseUrl = QuickJsService.instance.extractBaseUrl(code);
+          if (baseUrl != null && baseUrl.isNotEmpty) {
+            try {
+              final host = Uri.parse(baseUrl).host.replaceAll('www.', '').toLowerCase();
+              if (host.isNotEmpty && urlLower.contains(host)) {
+                effectiveSourceName = name;
+                break;
+              }
+            } catch (_) {}
+          }
+        }
+      }
     }
 
     // ── PRIORITY 2: LOCAL EXTENSION SCRAPER (Mangayomi / QuickJS) ─────────
