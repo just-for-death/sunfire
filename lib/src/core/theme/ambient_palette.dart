@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:palette_generator/palette_generator.dart';
 
 class AmbientPalette {
   static Future<Color> extractDominantColor(ImageProvider imageProvider, {Color fallback = const Color(0xFF1F1F24)}) async {
     try {
-      final palette = await PaletteGenerator.fromImageProvider(
-        imageProvider,
-        maximumColorCount: 8,
+      final scheme = await ColorScheme.fromImageProvider(
+        provider: imageProvider,
+        brightness: Brightness.dark,
       );
-      return palette.dominantColor?.color ?? palette.vibrantColor?.color ?? fallback;
+      return scheme.primary;
     } catch (_) {
       return fallback;
     }
