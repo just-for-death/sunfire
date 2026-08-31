@@ -217,18 +217,32 @@ class ContentResolverService {
           final ch = await IsarService.instance.getChapterByServerId(chapterServerId);
           if (ch != null) {
             final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
-            if (m != null && m.url.isNotEmpty) {
-              final localData = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSourceName, m.url);
+            if (m != null) {
+              final lookup = m.url.isNotEmpty ? m.url : m.title;
+              final localData = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSourceName, lookup);
               final chList = (localData['chapters'] ?? localData['chapterList'] ?? localData['epList'] ?? localData['episodes']) as List<dynamic>?;
               if (chList != null && chList.isNotEmpty) {
-                for (final c in chList) {
-                  final cMap = Map<String, dynamic>.from(c as Map);
+                for (var i = 0; i < chList.length; i++) {
+                  final cMap = Map<String, dynamic>.from(chList[i] as Map);
                   final cName = cMap['name']?.toString() ?? '';
                   final cUrl = (cMap['url'] ?? cMap['link'])?.toString() ?? '';
-                  final double rawNum = (cMap['chapterNumber'] as num?)?.toDouble() ?? -1.0;
+                  
+                  double rawNum = -1.0;
+                  if (cMap['chapterNumber'] != null) {
+                    rawNum = (cMap['chapterNumber'] as num).toDouble();
+                  } else {
+                    final numMatch = RegExp(r'(?:ep(?:isode)?\.?|ch(?:apter)?\.?|#)?\s*(\d+(?:\.\d+)?)', caseSensitive: false).firstMatch(cName);
+                    if (numMatch != null) {
+                      rawNum = double.tryParse(numMatch.group(1)!) ?? -1.0;
+                    }
+                  }
+
                   final numMatches = ch.chapterNumber > 0 && rawNum > 0 && (rawNum - ch.chapterNumber).abs() < 0.001;
                   final nameMatches = cName.trim().toLowerCase() == ch.name.trim().toLowerCase();
-                  if ((numMatches || nameMatches) && cUrl.isNotEmpty && cUrl != cleanChapterUrl) {
+                  final urlMatchesEpisode = ch.chapterNumber > 0 && (cUrl.contains('episode_no=${ch.chapterNumber.toInt()}') || cUrl.contains('chapter=${ch.chapterNumber.toInt()}'));
+                  final indexMatches = ch.chapterNumber > 0 && (rawNum < 0 && (chList.length - i == ch.chapterNumber.toInt() || i + 1 == ch.chapterNumber.toInt()));
+
+                  if ((numMatches || nameMatches || urlMatchesEpisode || indexMatches) && cUrl.isNotEmpty) {
                     ch.url = cUrl;
                     ch.realUrl = cUrl;
                     await IsarService.instance.saveChapter(ch);
