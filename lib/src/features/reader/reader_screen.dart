@@ -973,13 +973,26 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
+  bool _isMagicImage(List<int> bytes) {
+    if (bytes.length < 4) return false;
+    // JPEG: FF D8 FF
+    if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return true;
+    // PNG: 89 50 4E 47
+    if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return true;
+    // GIF: 47 49 46 38
+    if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) return true;
+    // WebP: RIFF ... WEBP
+    if (bytes.length >= 12 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) return true;
+    return false;
+  }
+
   Future<void> _recoverImage(String url, int index) async {
     if (_recoveringUrls.contains(url) || _recoveredImageBytes.containsKey(url)) return;
     _recoveringUrls.add(url);
     try {
       final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
       final cookieHeaders = MClient.getCookiesPref(url);
-      final initialHeaders = {...baseHeaders, ...cookieHeaders};
+      final initialHeaders = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
 
       // First attempt with whatever cookies we already have
       var client = MClient.init();
@@ -991,29 +1004,31 @@ class _ReaderScreenState extends State<ReaderScreen> {
         debugPrint('[Reader] Blocked $url – prewarm FlareSolverr...');
         await MClient.prewarmSession(url, forceRenew: true);
         final freshCookies = MClient.getCookiesPref(url);
-        final retryHeaders = {...baseHeaders, ...freshCookies};
+        final retryHeaders = {...baseHeaders, ...freshCookies, 'User-Agent': MClient.userAgent};
         client = MClient.init();
         res = await client.get(Uri.parse(url), headers: retryHeaders).timeout(const Duration(seconds: 30));
         debugPrint('[Reader] Image retry $url -> ${res.statusCode} (${res.bodyBytes.length} bytes)');
       }
 
-      if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
+      if (res.statusCode == 200 && res.bodyBytes.isNotEmpty && _isMagicImage(res.bodyBytes)) {
         if (mounted) {
           setState(() {
             _recoveredImageBytes[url] = res.bodyBytes;
           });
         }
       } else {
-        // Desktop fallback: if Dart HTTP client was blocked by Cloudflare TLS fingerprint, fetch via curl
+        // Desktop fallback: fetch via curl with TLS bypass
         if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
           try {
             final args = <String>['-s', '-L', '--max-time', '15'];
-            initialHeaders.forEach((k, v) => args.addAll(['-H', '$k: $v']));
+            final freshCookies = MClient.getCookiesPref(url);
+            final curlHeaders = {...baseHeaders, ...freshCookies, 'User-Agent': MClient.userAgent};
+            curlHeaders.forEach((k, v) => args.addAll(['-H', '$k: $v']));
             args.add(url);
             final processRes = await Process.run('curl', args, stdoutEncoding: null);
             if (processRes.exitCode == 0) {
               final bytes = processRes.stdout as List<int>;
-              if (bytes.length > 200) {
+              if (bytes.length > 200 && _isMagicImage(bytes)) {
                 if (mounted) {
                   setState(() {
                     _recoveredImageBytes[url] = Uint8List.fromList(bytes);
@@ -1044,6 +1059,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
         width: isWebtoon ? (constraints?.maxWidth ?? double.infinity) : null,
         fit: boxFit,
         gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => Container(
+          height: isWebtoon ? (constraints?.maxHeight ?? 600.0) : 300.0,
+          color: const Color(0xFF1A1A22),
+          child: Center(
+            child: Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.grey)),
+          ),
+        ),
       );
     } else if (url.startsWith('/')) {
       image = Image.file(
