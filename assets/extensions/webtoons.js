@@ -211,22 +211,25 @@ class DefaultExtension extends MProvider {
 
     parsePageEpisodes(doc);
 
-    // Fetch remaining episode pages until the end of the series
-    let p = 2;
-    while (p <= 200) {
-      try {
-        const pUrl = `${url}${url.includes('?') ? '&' : '?'}page=${p}`;
-        const pRes = await new Client().get(pUrl, this.getHeaders(pUrl));
-        const pDoc = new Document(pRes.body);
-        const countBefore = chapters.length;
-        parsePageEpisodes(pDoc);
-        if (chapters.length === countBefore) {
-          // No more episodes on this page -> reached the end of the series
+    // Fetch remaining episode pages only if pagination links exist
+    const hasNextOnFirst = doc.selectFirst("a.pg_next, div.paginate a, .paginate a");
+    if (hasNextOnFirst) {
+      let p = 2;
+      while (p <= 200) {
+        try {
+          const pUrl = `${url}${url.includes('?') ? '&' : '?'}page=${p}`;
+          const pRes = await new Client().get(pUrl, this.getHeaders(pUrl));
+          const pDoc = new Document(pRes.body);
+          const countBefore = chapters.length;
+          parsePageEpisodes(pDoc);
+          if (chapters.length === countBefore || !pDoc.selectFirst("a.pg_next, a.pg_page, .paginate a")) {
+            // No more episodes or reached end of pagination
+            break;
+          }
+          p++;
+        } catch (_) {
           break;
         }
-        p++;
-      } catch (_) {
-        break;
       }
     }
 
@@ -276,6 +279,7 @@ class DefaultExtension extends MProvider {
   }
 
   langCode() {
+    const lang = (this.source && (this.source.lang || (this.source.langs && this.source.langs[0]))) || "en";
     return {
       en: "en",
       fr: "fr",
@@ -284,7 +288,7 @@ class DefaultExtension extends MProvider {
       es: "es",
       zh: "zh-hant",
       de: "de",
-    }[this.source.lang || (this.source.langs && this.source.langs[0]) || "en"];
+    }[lang] || "en";
   }
 
   formatDateString(dateStr, lang) {
@@ -412,12 +416,25 @@ class DefaultExtension extends MProvider {
     const doc = new Document(res.body);
     const urls = [];
     const seen = new Set();
-    const images = (typeof doc.select === "function" ? doc.select("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img, img[data-url], img[data-src], img[id*=image], ._images img") : null) ||
-                   (typeof doc.querySelectorAll === "function" ? doc.querySelectorAll("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img, img[data-url], img[data-src], img[id*=image], ._images img") : []);
+    
+    // 1. Primary selector: Webtoons standard reading viewer images (both Desktop & Mobile)
+    let images = [];
+    if (typeof doc.select === "function") {
+      images = doc.select("img._images");
+      if (!images || images.length === 0) {
+        images = doc.select("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img");
+      }
+    } else if (typeof doc.querySelectorAll === "function") {
+      images = doc.querySelectorAll("img._images");
+      if (!images || images.length === 0) {
+        images = doc.querySelectorAll("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img");
+      }
+    }
+
     for (let i = 0; i < images.length; i++) {
       const img = images[i];
       const src = (typeof img.attr === "function" ? (img.attr("data-url") || img.attr("data-src") || img.attr("src")) : (img.getSrc || img.getAttribute?.("data-url") || img.getAttribute?.("data-src") || img.getAttribute?.("src"))) || "";
-      if (src && !src.includes("sp_error") && !src.includes("banner") && !src.includes("logo") && !seen.has(src)) {
+      if (src && !src.includes("sp_error") && !src.includes("banner") && !src.includes("logo") && !src.includes("bg_transparency") && !src.includes("Thumb") && !src.includes("thumb_") && !src.includes("type=f218") && !src.includes("type=a92") && !seen.has(src)) {
         seen.add(src);
         urls.push({
           url: src.trim(),
