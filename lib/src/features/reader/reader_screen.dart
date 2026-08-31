@@ -247,7 +247,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
       _prevChapter = null;
     });
 
-    _chapter = await IsarService.instance.getChapterByServerId(chapterId);
+    _chapter = await IsarService.instance.getChapterByServerId(chapterId) ??
+        (await IsarService.instance.getAllChapters()).where((c) => c.serverId == chapterId || c.id == chapterId).firstOrNull;
 
     if (_chapter != null) {
       _siblingChapters = await IsarService.instance.getChaptersForManga(_chapter!.mangaId);
@@ -265,13 +266,34 @@ class _ReaderScreenState extends State<ReaderScreen> {
       final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
       sourceName = manga?.sourceName;
     }
-    _sourceName = sourceName;
 
     final chapterUrlToResolve = (_chapter?.url.isNotEmpty == true)
         ? _chapter!.url
         : ((_chapter?.realUrl.isNotEmpty == true)
             ? _chapter!.realUrl
             : _chapter?.localPath);
+
+    // Auto-detect source name from URL if missing
+    if ((sourceName == null || sourceName.isEmpty) && chapterUrlToResolve != null && chapterUrlToResolve.isNotEmpty) {
+      final installed = QuickJsService.instance.getInstalledExtensionNames();
+      final urlLower = chapterUrlToResolve.toLowerCase();
+      for (final name in installed) {
+        final code = QuickJsService.instance.getExtensionCode(name);
+        if (code != null) {
+          final baseUrl = QuickJsService.instance.extractBaseUrl(code);
+          if (baseUrl != null && baseUrl.isNotEmpty) {
+            try {
+              final host = Uri.parse(baseUrl).host.replaceAll('www.', '').toLowerCase();
+              if (host.isNotEmpty && urlLower.contains(host)) {
+                sourceName = name;
+                break;
+              }
+            } catch (_) {}
+          }
+        }
+      }
+    }
+    _sourceName = sourceName;
 
     // Pre-warm FlareSolverr session for this source immediately before resolving,
     // so cookies are ready when images start loading.
