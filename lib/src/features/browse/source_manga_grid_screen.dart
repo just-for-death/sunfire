@@ -129,9 +129,29 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
           if (newManga.isEmpty) {
             _hasNextPage = false;
           } else {
-            _currentPage = nextPage;
-            _mangaList.addAll(newManga);
-            if (newManga.length < 8) _hasNextPage = false;
+            // Deduplicate incoming manga against already loaded items
+            final existingKeys = _mangaList.map((m) {
+              final url = (m['url'] ?? m['link'] ?? '').toString().trim();
+              if (url.isNotEmpty) return url;
+              final name = (m['name'] ?? m['title'] ?? '').toString().trim().toLowerCase();
+              return name;
+            }).where((k) => k.isNotEmpty).toSet();
+
+            final uniqueNewManga = newManga.where((m) {
+              final url = (m['url'] ?? m['link'] ?? '').toString().trim();
+              final name = (m['name'] ?? m['title'] ?? '').toString().trim().toLowerCase();
+              if (url.isNotEmpty && existingKeys.contains(url)) return false;
+              if (url.isEmpty && name.isNotEmpty && existingKeys.contains(name)) return false;
+              return true;
+            }).toList();
+
+            if (uniqueNewManga.isEmpty) {
+              _hasNextPage = false;
+            } else {
+              _currentPage = nextPage;
+              _mangaList.addAll(uniqueNewManga);
+              if (newManga.length < 8) _hasNextPage = false;
+            }
           }
         });
       }
