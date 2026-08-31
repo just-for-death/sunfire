@@ -362,9 +362,9 @@ class QuickJsService {
     if ((targetUrl.contains('webtoon') || targetUrl.contains('pstatic.net') || sourceOrUrl.toLowerCase().contains('webtoon')) &&
         (!headers.containsKey('Referer') || headers['Referer']!.isEmpty)) {
       headers['Referer'] = 'https://www.webtoons.com/';
-    } else if ((targetUrl.contains('readcomicsonline') || sourceOrUrl.toLowerCase().contains('read comics online')) &&
-        (!headers.containsKey('Referer') || headers['Referer']!.isEmpty)) {
-      headers['Referer'] = 'https://readcomicsonline.ru/';
+    } else if (targetUrl.contains('readcomicsonline') || sourceOrUrl.toLowerCase().contains('read comics online')) {
+      // cdn.readcomicsonline.ru returns HTTP 403 challenge if Referer is present; omit Referer
+      headers.remove('Referer');
     } else if ((targetUrl.contains('readdetectiveconan') || targetUrl.contains('mangapill') || sourceOrUrl.toLowerCase().contains('mangapill')) &&
         (!headers.containsKey('Referer') || headers['Referer']!.isEmpty)) {
       headers['Referer'] = 'https://mangapill.com/';
