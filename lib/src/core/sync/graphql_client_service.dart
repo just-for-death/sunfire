@@ -845,12 +845,59 @@ class GraphQLClientService {
 
   // ── SERVER SETTINGS INTEGRATION ────────────────────────────────────────
 
-  /// Fetch complete categorized settings from Suwayomi server matching Catalyst's full schema
+  /// Fetch complete categorized settings from Suwayomi server (all 69 fields)
   Future<Map<String, dynamic>?> fetchServerSettings() async {
     const queryStr = '''
       query {
         settings {
+          authMode
+          authPassword
+          authUsername
+          autoBackupIncludeCategories
+          autoBackupIncludeChapters
+          autoBackupIncludeClientData
+          autoBackupIncludeHistory
+          autoBackupIncludeManga
+          autoBackupIncludeServerSettings
+          autoBackupIncludeTracking
+          autoDownloadIgnoreReUploads
+          autoDownloadNewChapters
+          autoDownloadNewChaptersLimit
+          backupInterval
+          backupPath
+          backupTTL
+          backupTime
+          debugLogsEnabled
+          downloadAsCbz
+          downloadsPath
+          electronPath
+          excludeCompleted
+          excludeEntryWithUnreadChapters
+          excludeNotStarted
+          excludeUnreadChapters
+          extensionRepos
+          flareSolverrAsResponseFallback
+          flareSolverrEnabled
+          flareSolverrSessionName
+          flareSolverrSessionTtl
+          flareSolverrTimeout
+          flareSolverrUrl
+          globalUpdateInterval
+          initialOpenInBrowserEnabled
           ip
+          kcefEnabled
+          localSourcePath
+          maxLogFiles
+          maxLogFileSize
+          maxLogFolderSize
+          maxSourcesInParallel
+          opdsEnablePageReadProgress
+          opdsItemsPerPage
+          opdsMarkAsReadOnDownload
+          opdsShowOnlyDownloadedChapters
+          opdsShowOnlyUnreadChapters
+          opdsSkipChapterMetadataFeed
+          opdsUseBinaryFileSizes
           port
           socksProxyEnabled
           socksProxyHost
@@ -858,36 +905,21 @@ class GraphQLClientService {
           socksProxyPort
           socksProxyUsername
           socksProxyVersion
-          downloadsPath
-          downloadAsCbz
-          autoDownloadNewChapters
-          autoDownloadNewChaptersLimit
-          autoDownloadIgnoreReUploads
-          excludeEntryWithUnreadChapters
-          globalUpdateInterval
-          updateMangas
-          excludeCompleted
-          excludeNotStarted
-          excludeUnreadChapters
-          extensionRepos
-          maxSourcesInParallel
-          localSourcePath
-          flareSolverrEnabled
-          flareSolverrUrl
-          flareSolverrTimeout
-          flareSolverrSessionName
-          flareSolverrSessionTtl
-          flareSolverrAsResponseFallback
-          backupPath
-          backupInterval
-          backupTTL
-          backupTime
-          webUIInterface
-          webUIFlavor
-          webUIChannel
-          webUIUpdateCheckInterval
-          debugLogsEnabled
+          syncDataCategories
+          syncDataChapters
+          syncDataHistory
+          syncDataManga
+          syncDataTracking
+          syncYomiApiKey
+          syncYomiEnabled
+          syncYomiHost
           systemTrayEnabled
+          updateMangas
+          useHikariConnectionPool
+          webUIChannel
+          webUIFlavor
+          webUIInterface
+          webUIUpdateCheckInterval
         }
         aboutServer {
           version
@@ -904,7 +936,54 @@ class GraphQLClientService {
       mutation SetServerSettings($settings: PartialSettingsTypeInput!) {
         setSettings(input: { settings: $settings }) {
           settings {
+            authMode
+            authPassword
+            authUsername
+            autoBackupIncludeCategories
+            autoBackupIncludeChapters
+            autoBackupIncludeClientData
+            autoBackupIncludeHistory
+            autoBackupIncludeManga
+            autoBackupIncludeServerSettings
+            autoBackupIncludeTracking
+            autoDownloadIgnoreReUploads
+            autoDownloadNewChapters
+            autoDownloadNewChaptersLimit
+            backupInterval
+            backupPath
+            backupTTL
+            backupTime
+            debugLogsEnabled
+            downloadAsCbz
+            downloadsPath
+            electronPath
+            excludeCompleted
+            excludeEntryWithUnreadChapters
+            excludeNotStarted
+            excludeUnreadChapters
+            extensionRepos
+            flareSolverrAsResponseFallback
+            flareSolverrEnabled
+            flareSolverrSessionName
+            flareSolverrSessionTtl
+            flareSolverrTimeout
+            flareSolverrUrl
+            globalUpdateInterval
+            initialOpenInBrowserEnabled
             ip
+            kcefEnabled
+            localSourcePath
+            maxLogFiles
+            maxLogFileSize
+            maxLogFolderSize
+            maxSourcesInParallel
+            opdsEnablePageReadProgress
+            opdsItemsPerPage
+            opdsMarkAsReadOnDownload
+            opdsShowOnlyDownloadedChapters
+            opdsShowOnlyUnreadChapters
+            opdsSkipChapterMetadataFeed
+            opdsUseBinaryFileSizes
             port
             socksProxyEnabled
             socksProxyHost
@@ -912,36 +991,21 @@ class GraphQLClientService {
             socksProxyPort
             socksProxyUsername
             socksProxyVersion
-            downloadsPath
-            downloadAsCbz
-            autoDownloadNewChapters
-            autoDownloadNewChaptersLimit
-            autoDownloadIgnoreReUploads
-            excludeEntryWithUnreadChapters
-            globalUpdateInterval
-            updateMangas
-            excludeCompleted
-            excludeNotStarted
-            excludeUnreadChapters
-            extensionRepos
-            maxSourcesInParallel
-            localSourcePath
-            flareSolverrEnabled
-            flareSolverrUrl
-            flareSolverrTimeout
-            flareSolverrSessionName
-            flareSolverrSessionTtl
-            flareSolverrAsResponseFallback
-            backupPath
-            backupInterval
-            backupTTL
-            backupTime
-            webUIInterface
-            webUIFlavor
-            webUIChannel
-            webUIUpdateCheckInterval
-            debugLogsEnabled
+            syncDataCategories
+            syncDataChapters
+            syncDataHistory
+            syncDataManga
+            syncDataTracking
+            syncYomiApiKey
+            syncYomiEnabled
+            syncYomiHost
             systemTrayEnabled
+            updateMangas
+            useHikariConnectionPool
+            webUIChannel
+            webUIFlavor
+            webUIInterface
+            webUIUpdateCheckInterval
           }
         }
       }

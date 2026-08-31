@@ -229,7 +229,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
           builder: (context, setDlgState) {
             return AlertDialog(
               backgroundColor: const Color(0xFF1F1F24),
-              title: const Text('Skip Updating Entries', style: TextStyle(fontWeight: FontWeight.bold)),
+              title: const Text('Skip Updating Entries (Server)', style: TextStyle(fontWeight: FontWeight.bold)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -300,10 +300,24 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
               ? const Center(child: CircularProgressIndicator())
               : ListView(
                   children: [
-                    const SectionTitle(title: 'Global Update'),
+                    const SectionTitle(title: 'Global Update (Server)'),
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                      title: const Text('Global Update Interval', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      title: Row(
+                        children: [
+                          const Text('Global Update Interval', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.tealAccent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
+                            ),
+                            child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
                       subtitle: Text(_globalUpdateInterval == 0 ? 'Disabled' : 'Every ${_globalUpdateInterval.toInt()} hours', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                       trailing: DropdownButton<double>(
                         value: _globalUpdateInterval,
@@ -327,6 +341,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     SettingsPropTile(
                       title: 'Refresh Manga Metadata',
                       subtitle: 'Update cover art, status, and description during updates',
+                      scope: SettingScope.server,
                       kind: SettingsPropKind.switchTile,
                       boolValue: _updateMangas,
                       onBoolChanged: (v) {
@@ -336,22 +351,37 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     ),
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                      title: const Text('Skip Updating Entries', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      title: Row(
+                        children: [
+                          const Text('Skip Updating Entries', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.tealAccent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
+                            ),
+                            child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
                       subtitle: const Text('Configure rules to skip specific manga from global updates', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                       onTap: _showSkipUpdatingDialog,
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
-                    const SectionTitle(title: 'Display & Badges'),
+                    const SectionTitle(title: 'Display & Badges (Local)'),
                     SettingsPropTile(
                       title: 'Show Unread Badges',
                       subtitle: 'Display unread counter badges on library covers',
+                      scope: SettingScope.local,
                       kind: SettingsPropKind.switchTile,
                       boolValue: _settings.showUnreadBadges,
                       onBoolChanged: (v) => _settings.showUnreadBadges = v,
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
-                    const SectionTitle(title: 'Categories'),
+                    const SectionTitle(title: 'Categories (Server Synced)'),
                     if (_categories.isEmpty)
                       const ListTile(
                         leading: Icon(Icons.info_outline_rounded, color: Colors.grey),
@@ -363,7 +393,20 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                           leading: const Icon(Icons.label_outline_rounded),
-                          title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          title: Row(
+                            children: [
+                              Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.tealAccent.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 8, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
