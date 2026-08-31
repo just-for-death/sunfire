@@ -1023,7 +1023,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
             try {
               final args = <String>['-s', '-L', '--max-time', '15'];
               final freshCookies = MClient.getCookiesPref(url);
-              final curlHeaders = {...baseHeaders, ...freshCookies, 'User-Agent': MClient.userAgent};
+              final curlHeaders = <String, String>{
+                ...baseHeaders,
+                ...freshCookies,
+                if (!exe.contains('impersonate')) 'User-Agent': MClient.userAgent,
+              };
               curlHeaders.forEach((k, v) => args.addAll(['-H', '$k: $v']));
               args.add(url);
               final processRes = await Process.run(exe, args, stdoutEncoding: null);
