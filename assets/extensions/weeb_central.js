@@ -192,8 +192,8 @@ class DefaultExtension extends MProvider {
 
     async getPageList(url) {
         var clean = url.replace(/^https?:\/\/[^\/]+/, '');
-        // Extract ULID chapter ID robustly
-        var chapMatch = clean.match(/\/chapters\/([A-Z0-9]{26})/);
+        // Extract ULID chapter ID robustly (case-insensitive)
+        var chapMatch = clean.match(/\/chapters\/([a-zA-Z0-9]{26})/i);
         var chapId = chapMatch ? chapMatch[1] : clean.replace(/.*chapters\//, '').replace(/\/.*$/, '').trim();
         if (!chapId) return [];
 
@@ -202,11 +202,7 @@ class DefaultExtension extends MProvider {
 
         var urls = [];
         
-        var images = doc.select("section[id*='chapter'] img, #chapter-images img, section#chapter-images img, img[src*='lastation'], img[src*='scans'], img[src*='compsci88'], img[src*='lowee'], img[src*='weebcentral'], img[src*='/manga/']");
-        // If no specific selector found, fall back to all imgs in body
-        if (images.length === 0) {
-            images = doc.select("body img[src]");
-        }
+        var images = doc.select("section[id*='chapter'] img, #chapter-images img, section#chapter-images img, img[src*='lastation'], img[src*='scans'], img[src*='compsci88'], img[src*='lowee'], img[src*='weebcentral'], img[src*='/manga/'], chapter-page img, img");
         for (var page of images) {
             var src = page.attr("src") || page.attr("data-src") || page.getSrc || "";
             src = src.trim();
