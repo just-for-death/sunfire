@@ -48,8 +48,8 @@ class SyncEngine {
       try {
         await WakelockPlus.enable();
       } catch (e, stack) {
-      await LoggerService.instance.logError('Failed to sync sources: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
-    }
+        await LoggerService.instance.logError('Failed to enable wakelock: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+      }
       await LoggerService.instance.logInfo('Starting sync cycle with server...', 'SyncEngine');
       await _flushPendingMutations();
       await _pullServerState();
@@ -60,8 +60,8 @@ class SyncEngine {
       try {
         await WakelockPlus.disable();
       } catch (e, stack) {
-      await LoggerService.instance.logError('Failed to sync sources: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
-    }
+        await LoggerService.instance.logError('Failed to disable wakelock: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+      }
       _isSyncing = false;
     }
   }
