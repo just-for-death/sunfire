@@ -246,7 +246,6 @@ class DefaultExtension extends MProvider {
         pages.push({ url: src, headers: { "Referer": "https://mangapill.com/" } });
       }
     }
-    }
 
     return pages;
   }

@@ -104,7 +104,8 @@ class DefaultExtension extends MProvider {
   }
 
   async getDetail(url) {
-    const id = url.replace(/\/$/, "").split("/").pop();
+    const idMatch = url.match(/\/g\/(\d+)/);
+    const id = idMatch ? idMatch[1] : url.split("?")[0].replace(/\/$/, "").split("/").pop();
     const res = await this.client.get(`${API_BASE}/galleries/${id}`, this.getHeaders());
     const g = JSON.parse(res.body);
 
@@ -128,7 +129,8 @@ class DefaultExtension extends MProvider {
   }
 
   async getPageList(url) {
-    const id = url.replace(/\/$/, "").split("/").pop();
+    const idMatch = url.match(/\/g\/(\d+)/);
+    const id = idMatch ? idMatch[1] : url.split("?")[0].replace(/\/$/, "").split("/").pop();
     const res = await this.client.get(`${API_BASE}/galleries/${id}`, this.getHeaders());
     const g = JSON.parse(res.body);
 

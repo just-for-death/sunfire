@@ -159,12 +159,12 @@ class DefaultExtension extends MProvider {
         }
 
         const chapters = [];
-        const rows = doc.querySelectorAll("#chapter_table tr, table.uk-table tr, #raws_table tr");
+        const rows = doc.querySelectorAll("#chapter_table tr, table.uk-table tr, #raws_table tr, tr");
         for (const row of rows) {
-            const a = row.querySelector("a.chico, a.chapter");
+            const a = row.querySelector("a.chico, a.chapter, a[href*='/read-manga/'], a");
             if (a) {
                 const chTitle = a.text.trim();
-                const chLink = a.attr("href");
+                const chLink = a.attr("href") || a.getHref || "";
                 if (chTitle && chLink) {
                     chapters.push({
                         name: chTitle,
