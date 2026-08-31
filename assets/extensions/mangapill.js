@@ -92,14 +92,31 @@ class DefaultExtension extends MProvider {
   }
 
   async getPopular(page) {
-    return await this.getMangaList(`chapters?page=${page}`);
-  }
-  get supportsLatest() {
-    throw new Error("supportsLatest not implemented");
+    if (page === 1) {
+      // On page 1: combine homepage Trending Mangas with page 1 catalog
+      var homeRes = await this.getMangaList("");
+      var catRes = await this.getMangaList("search?type=manga&page=1");
+      var combined = [];
+      var seen = new Set();
+      for (var item of (homeRes.list || [])) {
+        if (item.link && !seen.has(item.link)) {
+          seen.add(item.link);
+          combined.push(item);
+        }
+      }
+      for (var item of (catRes.list || [])) {
+        if (item.link && !seen.has(item.link)) {
+          seen.add(item.link);
+          combined.push(item);
+        }
+      }
+      return { list: combined, hasNextPage: true };
+    }
+    return await this.getMangaList(`search?type=manga&page=${page}`);
   }
 
   async getLatestUpdates(page) {
-    return await this.getMangaList(`mangas/new?page=${page}`);
+    return await this.getMangaList(`chapters?page=${page}`);
   }
 
   async searchManga(query, status, type, genre, page) {
