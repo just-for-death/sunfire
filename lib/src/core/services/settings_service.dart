@@ -72,6 +72,12 @@ class SettingsService extends ChangeNotifier {
   Color get accentColor => accentColors[accentColorName] ?? const Color(0xFFFF5722);
 
   // ── READER SETTINGS (MIHON PARITY) ───────────────────────
+  bool get incognitoMode => _prefs?.getBool('incognito_mode') ?? false;
+  set incognitoMode(bool value) {
+    _prefs?.setBool('incognito_mode', value);
+    notifyListeners();
+  }
+
   String get readingMode => _prefs?.getString('reading_mode') ?? 'Long Strip';
   set readingMode(String value) {
     _prefs?.setString('reading_mode', value);
