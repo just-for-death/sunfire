@@ -64,9 +64,7 @@ class DefaultExtension extends MProvider {
   }
 
   async getPopular(page) {
-    const url = page === 1 
-      ? `https://readcomicsonline.ru/changeMangaList?type=top_views`
-      : `https://readcomicsonline.ru/comic-list?page=${page}&sort=views`;
+    const url = `https://readcomicsonline.ru/comic-list?page=${page}&sort=views`;
     const res = await this.client.get(url, this.getHeaders());
     const doc = new Document(res.body);
     const list = [];

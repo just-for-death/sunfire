@@ -72,7 +72,7 @@ class SettingsService extends ChangeNotifier {
   Color get accentColor => accentColors[accentColorName] ?? const Color(0xFFFF5722);
 
   // ── READER SETTINGS (MIHON PARITY) ───────────────────────
-  String get readingMode => _prefs?.getString('reading_mode') ?? 'Webtoon';
+  String get readingMode => _prefs?.getString('reading_mode') ?? 'Long Strip';
   set readingMode(String value) {
     _prefs?.setString('reading_mode', value);
     notifyListeners();
