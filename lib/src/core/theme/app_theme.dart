@@ -42,4 +42,35 @@ class AppTheme {
       ),
     );
   }
+
+  static ThemeData lightTheme([ColorScheme? dynamicColorScheme]) {
+    final seedColor = SettingsService.instance.accentColor;
+
+    final baseColorScheme = dynamicColorScheme ?? ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: Brightness.light,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      primaryColor: baseColorScheme.primary,
+      colorScheme: baseColorScheme,
+      scaffoldBackgroundColor: const Color(0xFFF8F9FA),
+      textTheme: GoogleFonts.plusJakartaSansTextTheme(ThemeData.light().textTheme),
+      cardTheme: CardThemeData(
+        color: Colors.white,
+        elevation: 0.5,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0x1F000000), width: 0.8),
+        ),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+      ),
+    );
+  }
 }
