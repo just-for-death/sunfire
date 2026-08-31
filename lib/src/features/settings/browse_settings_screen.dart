@@ -85,16 +85,18 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                     SettingsPropTile(
                       title: 'Show NSFW sources',
                       subtitle: 'Display 18+ and adult extensions in browse feeds',
+                      scope: SettingScope.local,
                       kind: SettingsPropKind.switchTile,
                       boolValue: _settings.showNsfwSources,
                       onBoolChanged: (v) => _settings.showNsfwSources = v,
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
-                    const SectionTitle(title: 'Scraper Engine & Paths'),
+                    const SectionTitle(title: 'Server Scraper Engine'),
                     SettingsPropTile(
                       title: 'Parallel scrapers concurrency',
                       subtitle: '$_maxSourcesInParallel simultaneous workers',
                       description: 'Number of parallel requests allowed when scraping sources simultaneously',
+                      scope: SettingScope.server,
                       kind: SettingsPropKind.numberSlider,
                       intValue: _maxSourcesInParallel,
                       min: 1,
@@ -107,7 +109,8 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                     ),
                     SettingsPropTile(
                       title: 'Local source location',
-                      description: 'Host directory for custom local CBZ/folder manga',
+                      description: 'Host directory for custom local CBZ/folder manga on Suwayomi server',
+                      scope: SettingScope.server,
                       kind: SettingsPropKind.textField,
                       stringValue: _localSourcePath,
                       subtitle: _localSourcePath.isNotEmpty ? _localSourcePath : 'Default (Server data/local)',
@@ -117,11 +120,33 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                       },
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
-                    const SectionTitle(title: 'Extensions'),
+                    const SectionTitle(title: 'Extension Repositories'),
+                    SettingsPropTile(
+                      title: 'Auto-update JS scrapers',
+                      subtitle: 'Automatically pull latest bugfixes from registered repos',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.switchTile,
+                      boolValue: _settings.autoUpdateJsSources,
+                      onBoolChanged: (v) => _settings.autoUpdateJsSources = v,
+                    ),
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                       leading: const Icon(Icons.extension_rounded),
-                      title: const Text('Extension Repositories', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      title: Row(
+                        children: [
+                          const Text('Extension Repositories', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.purpleAccent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.4), width: 0.8),
+                            ),
+                            child: const Text('LOCAL', style: TextStyle(color: Colors.purpleAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
                       subtitle: const Text('Add community MangaYomi index.json repositories', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                       onTap: () {
