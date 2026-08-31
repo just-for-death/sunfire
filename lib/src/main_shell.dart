@@ -85,6 +85,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     ),
                   ),
                   child: SafeArea(
+                    right: false,
                     child: Column(
                       children: [
                         const SizedBox(height: 16),
