@@ -85,10 +85,17 @@ class SyncEngine {
           case SyncEntityType.chapter:
             if (record.action == SyncAction.update) {
               final chapterId = parseIntSafe(payload['chapterId']);
-              final isRead = parseBoolSafe(payload['isRead']);
-              final lastPageRead = parseIntSafe(payload['lastPageRead']);
-              final res = await GraphQLClientService.instance.updateChapterReadStatus(chapterId, isRead, lastPageRead);
-              success = res != null;
+              final ch = await IsarService.instance.getChapterByServerId(chapterId);
+              final manga = ch != null ? await IsarService.instance.getMangaByServerId(ch.mangaId) : null;
+              final isLocal = QuickJsService.instance.hasExtension(manga?.sourceName ?? '');
+              if (isLocal) {
+                success = true;
+              } else {
+                final isRead = parseBoolSafe(payload['isRead']);
+                final lastPageRead = parseIntSafe(payload['lastPageRead']);
+                final res = await GraphQLClientService.instance.updateChapterReadStatus(chapterId, isRead, lastPageRead);
+                success = res != null;
+              }
             }
             break;
           case SyncEntityType.tracker:

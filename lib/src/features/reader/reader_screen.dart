@@ -549,7 +549,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _chapter!.lastReadAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     IsarService.instance.saveChapter(_chapter!);
 
-    if (GraphQLClientService.instance.isConfigured) {
+    final isLocal = QuickJsService.instance.hasExtension(_sourceName ?? '');
+    if (GraphQLClientService.instance.isConfigured && !isLocal) {
       GraphQLClientService.instance.updateChapterReadStatus(_chapter!.serverId, _chapter!.isRead, page);
     }
   }
