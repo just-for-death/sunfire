@@ -59,10 +59,16 @@ class DefaultExtension extends MProvider {
       var prev = parent ? parent.previousElementSibling : a.previousElementSibling;
       var img = a.selectFirst("img") || (parent ? parent.selectFirst("img") : null) || (grandParent ? grandParent.selectFirst("img") : null) || (prev ? prev.selectFirst("img") : null);
 
+      var match = link.match(/\/manga\/(\d+)/);
+      var mangaId = match ? match[1] : "";
+
       var imageUrl = "";
       if (img) {
-        var src = img.getSrc || img.attr("data-src") || img.attr("src") || "";
+        var src = img.attr("data-src") || img.attr("src") || img.getDataSrc || img.getSrc || "";
         if (src) imageUrl = src.startsWith("//") ? `https:${src}` : src;
+      }
+      if (!imageUrl && mangaId) {
+        imageUrl = `https://cdn.readdetectiveconan.com/file/mangapill/i/${mangaId}.jpeg`;
       }
 
       var titleEl = a.selectFirst("div.font-bold, div.font-black, div.line-clamp-2");
