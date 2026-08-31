@@ -213,7 +213,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     //       URLs are resolved lazily at read time via ContentResolverService.
     final chaptersNeedEnrichment = _chapters.isEmpty ||
         _chapters.every((c) => c.name.trim().isEmpty) ||
-        _chapters.any((c) => c.fetchedAt == null || c.fetchedAt == 0);
+        _chapters.any((c) => c.fetchedAt == null || c.fetchedAt == 0) ||
+        _chapters.any((c) => c.url.isEmpty || !c.url.startsWith('http'));
     if (chaptersNeedEnrichment && _manga != null && _manga!.sourceName.isNotEmpty) {
       try {
         final localData = await QuickJsService.instance.fetchMangaDetailsLocal(
@@ -270,7 +271,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             // Transfer read progress from existing chapters to freshly scraped ones
             // so we don't wipe reading history when the chapter list refreshes
             if (existingChapters.isNotEmpty) {
-              // Build lookup map keyed by URL and by name for fuzzy matching
+              // Build lookup map keyed by URL, by number, and by name for fuzzy matching
               final progressByUrl = <String, Chapter>{};
               final progressByName = <String, Chapter>{};
               final progressByNum = <double, Chapter>{};
@@ -284,12 +285,17 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     (ch.chapterNumber > 0 ? progressByNum[ch.chapterNumber] : null) ??
                     progressByName[ch.name.trim().toLowerCase()];
                 if (match != null) {
+                  ch.serverId = match.serverId; // Preserve canonical server ID
                   ch.isRead = match.isRead;
                   ch.lastPageRead = match.lastPageRead;
                   ch.lastReadAt = match.lastReadAt;
                   ch.isDownloaded = match.isDownloaded;
+                  ch.pageCount = match.pageCount;
+                  match.url = ch.url;
+                  match.realUrl = ch.realUrl;
                 }
               }
+              await IsarService.instance.saveChapters(existingChapters);
 
               final isar = IsarService.instance.isar;
               await isar.writeTxn(() async {
