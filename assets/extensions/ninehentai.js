@@ -30,6 +30,19 @@ class DefaultExtension extends MProvider {
     };
   }
 
+  _mapBook(b) {
+    if (!b || !b.id) return null;
+    let server = b.image_server || "https://i.9hentai.so/images/";
+    server = server.replace("i.9hentai.com", "i.9hentai.so");
+    if (!server.endsWith("/")) server += "/";
+    const imageUrl = `${server}${b.id}/cover-small.jpg`;
+    return {
+      name: (b.title || "Untitled").trim(),
+      imageUrl: imageUrl,
+      link: `https://9hentai.so/g/${b.id}/`
+    };
+  }
+
   async getPopular(page) {
     const url = "https://9hentai.so/api/getBook";
     const body = {
@@ -45,11 +58,7 @@ class DefaultExtension extends MProvider {
       const res = await this.client.post(url, this.getHeaders(), body);
       const data = typeof res.body === "string" ? JSON.parse(res.body) : res.body;
       const results = data.results || [];
-      const list = results.map((b) => ({
-        name: b.title || "Untitled",
-        imageUrl: b.image_server ? `${b.image_server}${b.id}/cover.jpg` : "",
-        link: `https://9hentai.so/g/${b.id}/`
-      }));
+      const list = results.map((b) => this._mapBook(b)).filter(Boolean);
 
       return {
         list: list,
@@ -75,11 +84,7 @@ class DefaultExtension extends MProvider {
       const res = await this.client.post(url, this.getHeaders(), body);
       const data = typeof res.body === "string" ? JSON.parse(res.body) : res.body;
       const results = data.results || [];
-      const list = results.map((b) => ({
-        name: b.title || "Untitled",
-        imageUrl: b.image_server ? `${b.image_server}${b.id}/cover.jpg` : "",
-        link: `https://9hentai.so/g/${b.id}/`
-      }));
+      const list = results.map((b) => this._mapBook(b)).filter(Boolean);
 
       return {
         list: list,
@@ -156,11 +161,7 @@ class DefaultExtension extends MProvider {
       const res = await this.client.post(url, this.getHeaders(), body);
       const data = typeof res.body === "string" ? JSON.parse(res.body) : res.body;
       const results = data.results || [];
-      const list = results.map((b) => ({
-        name: b.title || "Untitled",
-        imageUrl: b.image_server ? `${b.image_server}${b.id}/cover.jpg` : "",
-        link: `https://9hentai.so/g/${b.id}/`
-      }));
+      const list = results.map((b) => this._mapBook(b)).filter(Boolean);
 
       return {
         list: list,
@@ -181,7 +182,10 @@ class DefaultExtension extends MProvider {
       const b = data.results || data;
 
       const tags = (b.tags || []).map((t) => t.name || t);
-      const imageUrl = b.image_server ? `${b.image_server}${b.id}/cover.jpg` : "";
+      let rawServer = b.image_server || "https://i.9hentai.so/images/";
+      rawServer = rawServer.replace("i.9hentai.com", "i.9hentai.so");
+      if (!rawServer.endsWith("/")) rawServer += "/";
+      const imageUrl = `${rawServer}${b.id}/cover-small.jpg`;
 
       return {
         name: b.title || "Untitled",
