@@ -117,33 +117,77 @@ class _ExtensionReposScreenState extends State<ExtensionReposScreen> {
                   borderRadius: BorderRadius.circular(16),
                   side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
                 ),
-                child: customList.isEmpty
-                    ? const ListTile(
-                        leading: Icon(Icons.info_outline_rounded, color: Colors.grey),
-                        title: Text('No custom repositories added.', style: TextStyle(color: Colors.grey, fontSize: 13)),
-                        subtitle: Text('Tap + to register your custom MangaYomi index.json repository URL.'),
-                      )
-                    : Column(
-                        children: customList.map((url) {
-                          final title = RepoManager.deriveRepoTitle(url);
-                          return ListTile(
-                            leading: Icon(Icons.link_rounded, color: primaryColor),
-                            title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                            subtitle: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                              onPressed: () async {
-                                await _settings.removeCustomRepo(url);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Removed repository: $title')),
-                                  );
-                                }
-                              },
-                            ),
-                          );
-                        }).toList(),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      if (customList.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 20),
+                          child: Column(
+                            children: [
+                              Icon(Icons.extension_off_rounded, size: 36, color: Colors.grey),
+                              SizedBox(height: 8),
+                              Text('No repositories configured', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              SizedBox(height: 4),
+                              Text('Add a MangaYomi index.json repository URL below to discover and install community extensions.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            ],
+                          ),
+                        )
+                      else
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: customList.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                          itemBuilder: (context, idx) {
+                            final url = customList[idx];
+                            final title = RepoManager.deriveRepoTitle(url);
+
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: primaryColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(Icons.source_rounded, color: primaryColor, size: 20),
+                              ),
+                              title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              subtitle: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                                tooltip: 'Remove repository',
+                                onPressed: () async {
+                                  await _settings.removeCustomRepo(url);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Removed repository: $title')),
+                                    );
+                                  }
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                          label: const Text('Add Extension Repository', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          onPressed: _showAddRepoDialog,
+                        ),
                       ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
