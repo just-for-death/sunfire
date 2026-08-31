@@ -40,74 +40,45 @@ class DefaultExtension extends MProvider {
     return parseInt(preferences.get(key));
   }
 
-      async getMangaList(slug) {
-    var cleanSlug = slug || "mangas";
+  async getMangaList(slug) {
+    var cleanSlug = slug || "chapters";
     var url = cleanSlug.startsWith('http') ? cleanSlug : `${this.source.baseUrl}/${cleanSlug.replace(/^\//, '')}`;
     var res = await new Client().get(url, this.getHeaders());
     var doc = new Document(res.body);
     var list = [];
     var seen = new Set();
 
-    // 1. Try structured card container parsing (covers Homepage /?page=1, /mangas/new, /search)
-    var cards = doc.select("div[class*='grid'] > div, div.grid > div");
-    for (var card of cards) {
-      var mangaA = card.selectFirst("a[href*='/manga/']");
-      var img = card.selectFirst("img");
-      if (mangaA) {
-        var link = mangaA.getHref || mangaA.attr("href") || "";
-        if (!link || seen.has(link) || link.includes("/chapters/")) continue;
+    // Select all manga links
+    var anchors = doc.select("a[href*='/manga/']");
+    for (var a of anchors) {
+      var link = a.getHref || a.attr("href") || "";
+      if (!link || seen.has(link) || link.includes("/chapters/")) continue;
 
-        var name = mangaA.text ? mangaA.text.trim() : "";
-        if (!name && img) {
-          var alt = img.attr("alt") || "";
-          name = alt.includes("  ") ? alt.split("  ")[0].trim() : alt.trim();
-        }
+      var parent = a.parentElement;
+      var grandParent = parent ? parent.parentElement : null;
+      var prev = parent ? parent.previousElementSibling : a.previousElementSibling;
+      var img = a.selectFirst("img") || (parent ? parent.selectFirst("img") : null) || (grandParent ? grandParent.selectFirst("img") : null) || (prev ? prev.selectFirst("img") : null);
 
-        var imageUrl = "";
-        if (img) {
-          var src = img.getSrc || img.attr("data-src") || img.attr("src") || "";
-          if (src) imageUrl = src.startsWith("//") ? `https:${src}` : src;
-        }
-
-        if (name && link) {
-          seen.add(link);
-          list.push({
-            name: name,
-            imageUrl: imageUrl,
-            link: link.startsWith("http") ? link : `${this.source.baseUrl}${link.startsWith('/') ? link : '/' + link}`
-          });
-        }
+      var imageUrl = "";
+      if (img) {
+        var src = img.getSrc || img.attr("data-src") || img.attr("src") || "";
+        if (src) imageUrl = src.startsWith("//") ? `https:${src}` : src;
       }
-    }
 
-    // 2. Fallback to anchor iteration if no cards found
-    if (list.length === 0) {
-      var anchors = doc.select("a[href*='/manga/']");
-      for (var a of anchors) {
-        var link = a.getHref || a.attr("href") || "";
-        if (!link || seen.has(link) || link.includes("/chapters/")) continue;
+      var titleEl = a.selectFirst("div.font-bold, div.font-black, div.line-clamp-2");
+      var name = titleEl ? titleEl.text.trim() : (a.text ? a.text.trim() : "");
+      if (!name && img) {
+        var alt = img.attr("alt") || "";
+        name = alt.includes("  ") ? alt.split("  ")[0].trim() : alt.trim();
+      }
 
-        var img = a.selectFirst("img");
-        var imageUrl = "";
-        var name = a.text ? a.text.trim() : "";
-
-        if (img) {
-          var src = img.getSrc || img.attr("data-src") || img.attr("src") || "";
-          if (src) imageUrl = src.startsWith("//") ? `https:${src}` : src;
-          var alt = img.attr("alt") || "";
-          if (alt && !name) {
-            name = alt.includes("  ") ? alt.split("  ")[0].trim() : alt.trim();
-          }
-        }
-
-        if (name && link) {
-          seen.add(link);
-          list.push({
-            name: name,
-            imageUrl: imageUrl,
-            link: link.startsWith("http") ? link : `${this.source.baseUrl}${link.startsWith('/') ? link : '/' + link}`
-          });
-        }
+      if (name && link) {
+        seen.add(link);
+        list.push({
+          name: name,
+          imageUrl: imageUrl,
+          link: link.startsWith("http") ? link : `${this.source.baseUrl}${link.startsWith('/') ? link : '/' + link}`
+        });
       }
     }
 
