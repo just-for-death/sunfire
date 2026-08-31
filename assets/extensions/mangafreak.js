@@ -304,16 +304,17 @@ class DefaultExtension extends MProvider {
     async getPageList(url) {
         const fullUrl = url.startsWith('http') ? url : `${this.source.baseUrl}${url}`;
         const res = await this.client.get(fullUrl, this.getHeaders());
-        const doc = new Document(res.body);
+        const html = res.body || "";
+        const doc = new Document(html);
         const pages = [];
-        // ww3.mangafreak.me renders chapter pages inside div.mySlides.fade > img
-        // Old selectors (#gauto img, .my-slides img) no longer exist on the new domain
-        const imgTags = doc.querySelectorAll(".mySlides img");
+        const seen = new Set();
+        const imgTags = doc.select(".mySlides img, #gauto img, .my-slides img, div.slides_control img, img[src*='manga']");
         for (const img of imgTags) {
-            const src = img.attr("src") || img.attr("data-src");
-            if (src) {
+            const src = img.attr("src") || img.attr("data-src") || img.getSrc || "";
+            if (src && !src.includes("banner") && !src.includes("logo") && !seen.has(src)) {
+                seen.add(src);
                 pages.push({
-                    url: src,
+                    url: src.startsWith('http') ? src : `${this.source.baseUrl}${src.startsWith('/') ? '' : '/'}${src}`,
                     headers: {
                         "Referer": "https://ww3.mangafreak.me/",
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
