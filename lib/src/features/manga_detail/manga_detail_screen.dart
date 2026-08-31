@@ -113,10 +113,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     setState(() => _isLoading = true);
     final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
 
-    // 1. Check local Isar DB first to display immediate cached state
+    // 1. Check local Isar DB first to display immediate cached state only if valid
     _manga = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
     _chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
-    if (_manga != null && _chapters.isNotEmpty && mounted) {
+    final hasValidCachedChapters = _chapters.isNotEmpty && _chapters.every((c) => c.url.isNotEmpty);
+    if (_manga != null && hasValidCachedChapters && mounted) {
       setState(() => _isLoading = false);
     }
 
