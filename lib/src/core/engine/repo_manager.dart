@@ -400,6 +400,13 @@ class RepoManager {
 
       final listToTry = prioritized.isNotEmpty ? prioritized : candidates;
 
+      // If already installed (e.g. from bundled assets), preserve patched local version
+      if (QuickJsService.instance.isSourceInstalledLocally(serverName)) {
+        installed.add(serverName);
+        installedServerNames.add(serverName);
+        continue;
+      }
+
       // 4. Try candidates sequentially until one downloads successfully
       for (final scored in listToTry) {
         final item = scored.item;
