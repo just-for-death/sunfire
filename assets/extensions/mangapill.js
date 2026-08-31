@@ -41,14 +41,46 @@ class DefaultExtension extends MProvider {
   }
 
   async getMangaList(slug) {
-    var cleanSlug = slug || "chapters";
+    var cleanSlug = slug || "search?status=publishing";
     var url = cleanSlug.startsWith('http') ? cleanSlug : `${this.source.baseUrl}/${cleanSlug.replace(/^\//, '')}`;
     var res = await new Client().get(url, this.getHeaders());
     var doc = new Document(res.body);
     var list = [];
     var seen = new Set();
 
-    // Select all manga links
+    // 1. Iterate over every card in the grid
+    var cards = doc.select("div[class*='grid'] > div, div.grid > div, .featured-grid > div");
+    for (var card of cards) {
+      var mangaA = card.selectFirst("a[href*='/manga/']");
+      var img = card.selectFirst("img");
+      if (mangaA) {
+        var link = mangaA.getHref || mangaA.attr("href") || "";
+        if (!link || seen.has(link) || link.includes("/chapters/")) continue;
+
+        var name = mangaA.selectFirst("div") ? mangaA.selectFirst("div").text.trim() : (mangaA.text ? mangaA.text.trim() : "");
+        if (!name && img) {
+          var alt = img.attr("alt") || "";
+          name = alt.includes("  ") ? alt.split("  ")[0].trim() : alt.trim();
+        }
+
+        var imageUrl = "";
+        if (img) {
+          imageUrl = img.attr("data-src") || img.attr("src") || img.getDataSrc || img.getSrc || "";
+          if (imageUrl.startsWith("//")) imageUrl = `https:${imageUrl}`;
+        }
+
+        if (name && link) {
+          seen.add(link);
+          list.push({
+            name: name,
+            imageUrl: imageUrl,
+            link: link.startsWith("http") ? link : `${this.source.baseUrl}${link.startsWith('/') ? link : '/' + link}`
+          });
+        }
+      }
+    }
+
+    // 2. Fallback to anchor iteration if card parsing missed anything
     var anchors = doc.select("a[href*='/manga/']");
     for (var a of anchors) {
       var link = a.getHref || a.attr("href") || "";
@@ -59,16 +91,10 @@ class DefaultExtension extends MProvider {
       var prev = parent ? parent.previousElementSibling : a.previousElementSibling;
       var img = a.selectFirst("img") || (parent ? parent.selectFirst("img") : null) || (grandParent ? grandParent.selectFirst("img") : null) || (prev ? prev.selectFirst("img") : null);
 
-      var match = link.match(/\/manga\/(\d+)/);
-      var mangaId = match ? match[1] : "";
-
       var imageUrl = "";
       if (img) {
-        var src = img.attr("data-src") || img.attr("src") || img.getDataSrc || img.getSrc || "";
-        if (src) imageUrl = src.startsWith("//") ? `https:${src}` : src;
-      }
-      if (!imageUrl && mangaId) {
-        imageUrl = `https://cdn.readdetectiveconan.com/file/mangapill/i/${mangaId}.jpeg`;
+        imageUrl = img.attr("data-src") || img.attr("src") || img.getDataSrc || img.getSrc || "";
+        if (imageUrl.startsWith("//")) imageUrl = `https:${imageUrl}`;
       }
 
       var titleEl = a.selectFirst("div.font-bold, div.font-black, div.line-clamp-2");
@@ -92,27 +118,7 @@ class DefaultExtension extends MProvider {
   }
 
   async getPopular(page) {
-    if (page === 1) {
-      // On page 1: combine homepage Trending Mangas with page 1 catalog
-      var homeRes = await this.getMangaList("");
-      var catRes = await this.getMangaList("search?type=manga&page=1");
-      var combined = [];
-      var seen = new Set();
-      for (var item of (homeRes.list || [])) {
-        if (item.link && !seen.has(item.link)) {
-          seen.add(item.link);
-          combined.push(item);
-        }
-      }
-      for (var item of (catRes.list || [])) {
-        if (item.link && !seen.has(item.link)) {
-          seen.add(item.link);
-          combined.push(item);
-        }
-      }
-      return { list: combined, hasNextPage: true };
-    }
-    return await this.getMangaList(`search?type=manga&page=${page}`);
+    return await this.getMangaList(`search?status=publishing&page=${page}`);
   }
 
   async getLatestUpdates(page) {
