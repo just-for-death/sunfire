@@ -51,7 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
           constraints: const BoxConstraints(maxWidth: 800),
           child: ListView(
             physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-            padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 120.0),
+            padding: EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: MediaQuery.of(context).size.width >= 720 ? 36.0 : 120.0),
             children: [
               // ── HIGHLIGHTED SUWAYOMI SERVER ADMIN BANNER ──────
               Material(

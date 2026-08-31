@@ -25,6 +25,8 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
+  late final PageController _pageController;
+  bool _isSyncing = false;
 
   final List<Widget> _screens = const [
     LibraryScreen(),
@@ -37,6 +39,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _currentIndex);
     MainShell.selectedTabNotifier.addListener(_onExternalTabChange);
     WidgetsBinding.instance.addObserver(this);
   }
@@ -45,6 +48,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final target = MainShell.selectedTabNotifier.value;
     if (_currentIndex != target && mounted) {
       setState(() => _currentIndex = target);
+      if (_pageController.hasClients) {
+        _pageController.animateToPage(
+          target,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+        );
+      }
     }
   }
 
@@ -52,6 +62,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void dispose() {
     MainShell.selectedTabNotifier.removeListener(_onExternalTabChange);
     WidgetsBinding.instance.removeObserver(this);
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -59,6 +70,31 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       SyncEngine.instance.triggerSync();
+    }
+  }
+
+  void _handleTabSelect(int index) {
+    if (_currentIndex != index) {
+      HapticFeedback.selectionClick();
+      setState(() => _currentIndex = index);
+      if (_pageController.hasClients) {
+        _pageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    }
+  }
+
+  Future<void> _handleQuickSync() async {
+    if (_isSyncing) return;
+    HapticFeedback.mediumImpact();
+    setState(() => _isSyncing = true);
+    try {
+      await SyncEngine.instance.triggerSync();
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
     }
   }
 
@@ -72,14 +108,14 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       return Scaffold(
         body: Row(
           children: [
-            // Tablet / iPad Left Navigation Sidebar
+            // ── IPAD / TABLET GLASSMORPHIC NAVIGATION SIDEBAR ─────────────
             ClipRect(
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
                 child: Container(
-                  width: 96,
+                  width: 104,
                   decoration: const BoxDecoration(
-                    color: Color(0xE6121218),
+                    color: Color(0xF2121218),
                     border: Border(
                       right: BorderSide(color: Color(0x22FFFFFF), width: 0.8),
                     ),
@@ -88,40 +124,78 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     right: false,
                     child: Column(
                       children: [
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 18),
+                        // App Brand Logo
                         Container(
-                          width: 44,
-                          height: 44,
+                          width: 48,
+                          height: 48,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [primaryColor, primaryColor.withValues(alpha: 0.7)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: primaryColor.withValues(alpha: 0.3),
-                                blurRadius: 12,
+                                color: primaryColor.withValues(alpha: 0.35),
+                                blurRadius: 16,
                                 offset: const Offset(0, 4),
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 26),
+                          child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 28),
                         ),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 32),
+                        // Navigation Items
                         Expanded(
                           child: Column(
                             children: [
                               _buildTabletNavItem(0, Icons.auto_stories_rounded, Icons.auto_stories_outlined, 'Library'),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
                               _buildTabletNavItem(1, Icons.notifications_rounded, Icons.notifications_outlined, 'Updates'),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
                               _buildTabletNavItem(2, Icons.history_rounded, Icons.history_outlined, 'History'),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
                               _buildTabletNavItem(3, Icons.explore_rounded, Icons.explore_outlined, 'Browse'),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
                               _buildTabletNavItem(4, Icons.settings_rounded, Icons.settings_outlined, 'Settings'),
+                            ],
+                          ),
+                        ),
+                        // Bottom Quick Sync & Server Indicator on iPad
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Column(
+                            children: [
+                              IconButton(
+                                icon: AnimatedRotation(
+                                  turns: _isSyncing ? 1.0 : 0.0,
+                                  duration: const Duration(seconds: 1),
+                                  child: Icon(
+                                    Icons.sync_rounded,
+                                    color: _isSyncing ? primaryColor : Colors.white54,
+                                    size: 22,
+                                  ),
+                                ),
+                                tooltip: 'Sync Library & Server',
+                                onPressed: _handleQuickSync,
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: Colors.greenAccent,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.greenAccent.withValues(alpha: 0.6),
+                                      blurRadius: 6,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -131,18 +205,37 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 ),
               ),
             ),
-            // Content Screen
+            // ── TABLET CONTENT SCREEN (Smooth PageView) ───────────────────
             Expanded(
-              child: _buildScreenContent(),
+              child: PageView(
+                controller: _pageController,
+                physics: const BouncingScrollPhysics(),
+                onPageChanged: (index) {
+                  if (_currentIndex != index) {
+                    setState(() => _currentIndex = index);
+                  }
+                },
+                children: _screens,
+              ),
             ),
           ],
         ),
       );
     }
 
+    // ── MOBILE PHONE LAYOUT WITH SMOOTH SWIPE PAGEVIEW & FLOATING BAR ─────
     return Scaffold(
       extendBody: true,
-      body: _buildScreenContent(),
+      body: PageView(
+        controller: _pageController,
+        physics: const BouncingScrollPhysics(),
+        onPageChanged: (index) {
+          if (_currentIndex != index) {
+            setState(() => _currentIndex = index);
+          }
+        },
+        children: _screens,
+      ),
       bottomNavigationBar: SafeArea(
         child: Align(
           alignment: Alignment.bottomCenter,
@@ -188,23 +281,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildScreenContent() {
-    return Stack(
-      children: List.generate(_screens.length, (i) {
-        final isActive = i == _currentIndex;
-        return IgnorePointer(
-          ignoring: !isActive,
-          child: AnimatedOpacity(
-            opacity: isActive ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            child: _screens[i],
-          ),
-        );
-      }),
-    );
-  }
-
   Widget _buildTabletNavItem(int index, IconData selectedIcon, IconData unselectedIcon, String label) {
     final isSelected = _currentIndex == index;
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -212,23 +288,29 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          if (_currentIndex != index) {
-            HapticFeedback.selectionClick();
-            setState(() => _currentIndex = index);
-          }
-        },
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _handleTabSelect(index),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
-          width: 72,
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          width: 80,
+          padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: isSelected
               ? BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: primaryColor.withValues(alpha: 0.5), width: 1),
+                  gradient: LinearGradient(
+                    colors: [primaryColor.withValues(alpha: 0.24), primaryColor.withValues(alpha: 0.08)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: primaryColor.withValues(alpha: 0.6), width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withValues(alpha: 0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 )
               : null,
           child: Column(
@@ -237,15 +319,16 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               Icon(
                 isSelected ? selectedIcon : unselectedIcon,
                 color: isSelected ? primaryColor : Colors.white60,
-                size: 24,
+                size: 26,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 5),
               Text(
                 label,
                 style: TextStyle(
                   color: isSelected ? Colors.white : Colors.white60,
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  letterSpacing: isSelected ? 0.2 : 0,
                 ),
               ),
             ],
@@ -263,12 +346,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () {
-          if (_currentIndex != index) {
-            HapticFeedback.selectionClick();
-            setState(() => _currentIndex = index);
-          }
-        },
+        onTap: () => _handleTabSelect(index),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
