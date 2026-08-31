@@ -152,9 +152,27 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  int get gridColumnCount => _prefs?.getInt('library_grid_columns') ?? 0; // 0 = Auto
+  set gridColumnCount(int value) {
+    _prefs?.setInt('library_grid_columns', value);
+    notifyListeners();
+  }
+
   bool get showUnreadBadges => _prefs?.getBool('show_unread_badges') ?? true;
   set showUnreadBadges(bool value) {
     _prefs?.setBool('show_unread_badges', value);
+    notifyListeners();
+  }
+
+  bool get showDownloadedBadges => _prefs?.getBool('show_downloaded_badges') ?? true;
+  set showDownloadedBadges(bool value) {
+    _prefs?.setBool('show_downloaded_badges', value);
+    notifyListeners();
+  }
+
+  bool get showLanguageBadges => _prefs?.getBool('show_language_badges') ?? false;
+  set showLanguageBadges(bool value) {
+    _prefs?.setBool('show_language_badges', value);
     notifyListeners();
   }
 
