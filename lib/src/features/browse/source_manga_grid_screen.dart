@@ -366,104 +366,145 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
       body: SafeArea(
         child: Column(
           children: [
-            // ── MIHON POPULAR / LATEST TAB BAR ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        if (_isLatestMode) {
-                          setState(() {
-                            _isLatestMode = false;
-                            _currentPage = 1;
-                          });
-                          _fetchSourceManga();
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: !_isLatestMode ? primaryColor : const Color(0x1F2A2A32),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: !_isLatestMode ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Popular',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: !_isLatestMode ? Colors.white : Colors.grey,
+            // ── MIHON POPULAR / LATEST TAB BAR (Centered & Constrained) ──
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0x1F2A2A32),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              if (_isLatestMode) {
+                                setState(() {
+                                  _isLatestMode = false;
+                                  _currentPage = 1;
+                                });
+                                _fetchSourceManga();
+                              }
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOutCubic,
+                              padding: const EdgeInsets.symmetric(vertical: 9),
+                              decoration: BoxDecoration(
+                                color: !_isLatestMode ? primaryColor : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: !_isLatestMode
+                                    ? [
+                                        BoxShadow(
+                                          color: primaryColor.withValues(alpha: 0.3),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Popular',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: !_isLatestMode ? Colors.white : Colors.grey.shade400,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        if (!_isLatestMode) {
-                          setState(() {
-                            _isLatestMode = true;
-                            _currentPage = 1;
-                          });
-                          _fetchSourceManga();
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _isLatestMode ? primaryColor : const Color(0x1F2A2A32),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _isLatestMode ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Latest Updates',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: _isLatestMode ? Colors.white : Colors.grey,
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              if (!_isLatestMode) {
+                                setState(() {
+                                  _isLatestMode = true;
+                                  _currentPage = 1;
+                                });
+                                _fetchSourceManga();
+                              }
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOutCubic,
+                              padding: const EdgeInsets.symmetric(vertical: 9),
+                              decoration: BoxDecoration(
+                                color: _isLatestMode ? primaryColor : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: _isLatestMode
+                                    ? [
+                                        BoxShadow(
+                                          color: primaryColor.withValues(alpha: 0.3),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Latest Updates',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: _isLatestMode ? Colors.white : Colors.grey.shade400,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
 
-            // Search Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search ${widget.sourceName}...',
-                  prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear_rounded),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                            _fetchSourceManga();
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            // Search Bar (Centered & Constrained)
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search ${widget.sourceName}...',
+                      prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                                _fetchSourceManga();
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    ),
+                    onSubmitted: (val) {
+                      setState(() {
+                        _searchQuery = val;
+                        _currentPage = 1;
+                      });
+                      _fetchSourceManga();
+                    },
+                  ),
                 ),
-                onSubmitted: (val) {
-                  setState(() {
-                    _searchQuery = val;
-                    _currentPage = 1;
-                  });
-                  _fetchSourceManga();
-                },
               ),
             ),
 
@@ -480,19 +521,23 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                         )
                       : LayoutBuilder(
                           builder: (context, constraints) {
-                            final dynamicColumns = (constraints.maxWidth / 135).floor().clamp(2, 8);
+                            final isTablet = constraints.maxWidth >= 720;
+                            final targetWidth = isTablet ? 175.0 : 120.0;
+                            final dynamicColumns = (constraints.maxWidth / targetWidth).floor().clamp(2, 5);
+                            final horizontalPad = isTablet ? 24.0 : 16.0;
+
                             return Column(
                               children: [
                                 Expanded(
                                   child: GridView.builder(
                                     controller: _scrollController,
                                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    padding: EdgeInsets.symmetric(horizontal: horizontalPad, vertical: 12),
                                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: dynamicColumns,
-                                      childAspectRatio: 0.62,
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 16,
+                                      childAspectRatio: 0.68,
+                                      crossAxisSpacing: isTablet ? 16 : 12,
+                                      mainAxisSpacing: isTablet ? 20 : 16,
                                     ),
                                     itemCount: _mangaList.length,
                                     itemBuilder: (context, index) {
@@ -541,30 +586,41 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                             children: [
                                               Expanded(
                                                 child: Container(
-                                                decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius.circular(16),
-                                                  color: Colors.grey[900],
-                                                  border: Border.all(color: const Color(0x1AFFFFFF), width: 0.8),
-                                                ),
-                                                child: ClipRRect(
-                                                  borderRadius: BorderRadius.circular(16),
-                                                  child: MangaCoverImage(
-                                                    mangaServerId: id,
-                                                    thumbnailUrl: thumb,
-                                                    sourceName: widget.sourceName,
-                                                    width: double.infinity,
-                                                    height: double.infinity,
-                                                    fit: BoxFit.cover,
+                                                  decoration: BoxDecoration(
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    color: const Color(0xFF16161E),
+                                                    border: Border.all(color: const Color(0x1FFFFFFF), width: 0.8),
+                                                    boxShadow: const [
+                                                      BoxShadow(
+                                                        color: Color(0x33000000),
+                                                        blurRadius: 8,
+                                                        offset: Offset(0, 3),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: ClipRRect(
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    child: MangaCoverImage(
+                                                      mangaServerId: id,
+                                                      thumbnailUrl: thumb,
+                                                      sourceName: widget.sourceName,
+                                                      width: double.infinity,
+                                                      height: double.infinity,
+                                                      fit: BoxFit.cover,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(height: 6),
+                                              const SizedBox(height: 8),
                                               Text(
                                                 title,
                                                 maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, height: 1.25),
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: isTablet ? 13 : 12,
+                                                  height: 1.25,
+                                                ),
                                               ),
                                             ],
                                           ),
