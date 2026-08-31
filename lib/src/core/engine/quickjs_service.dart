@@ -650,26 +650,34 @@ class QuickJsService {
       }
     }
 
-    // Use pooled runtime — avoids re-init overhead (~300–500ms) on every call
-    final service = _getOrCreateRuntime(sourceName, jsCode);
-
+    // 1. Try with pooled runtime first
     try {
+      final service = _getOrCreateRuntime(sourceName, jsCode);
       final pages = await service.getPageList(targetUrl);
       if (pages.isNotEmpty) return pages;
     } catch (e) {
-      // In test mock mode or if quickjs symbol lookup fails in unit test runner
+      _invalidateRuntime(sourceName);
+      // In unit test runner if C symbol lookup fails
       if (e.toString().contains('Failed to lookup symbol') || e.toString().contains('jsNewRuntime')) {
         final mockPagesMatch = RegExp(r'''["'](https?://[^"']+)["']''').allMatches(jsCode);
         if (mockPagesMatch.isNotEmpty) {
           final matchedUrls = mockPagesMatch.map((m) => m.group(1)!).where((u) => u.contains('png') || u.contains('jpg') || u.contains('webp') || u.contains('image')).toList();
           if (matchedUrls.isNotEmpty) return matchedUrls;
         }
-        // Pooled runtime may be corrupted — evict and let it be recreated next call
-        _invalidateRuntime(sourceName);
       }
-      await LoggerService.instance.logError('Local chapter page scraping failed for $sourceName: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
+      // 2. Retry with a dedicated fresh runtime on failure
+      try {
+        final freshService = JsExtensionService(
+          sourceMeta: extractSourceMetadata(jsCode),
+          sourceCode: jsCode,
+        );
+        final pages = await freshService.getPageList(targetUrl);
+        freshService.dispose();
+        if (pages.isNotEmpty) return pages;
+      } catch (retryError) {
+        await LoggerService.instance.logError('Local chapter page scraping failed for $sourceName ($targetUrl): $retryError', exception: retryError, stackTrace: StackTrace.current, category: 'QuickJS');
+      }
     }
-    // NOTE: do NOT dispose — runtime stays in pool for reuse
     return [];
   }
 
