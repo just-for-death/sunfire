@@ -358,13 +358,16 @@ class QuickJsService {
       }
     }
 
-    // 2. Fallback for Webtoons and Read Comics Online images
+    // 2. Fallback for Webtoons, Read Comics Online, and Mangapill images
     if ((targetUrl.contains('webtoon') || targetUrl.contains('pstatic.net') || sourceOrUrl.toLowerCase().contains('webtoon')) &&
         (!headers.containsKey('Referer') || headers['Referer']!.isEmpty)) {
       headers['Referer'] = 'https://www.webtoons.com/';
     } else if ((targetUrl.contains('readcomicsonline') || sourceOrUrl.toLowerCase().contains('read comics online')) &&
         (!headers.containsKey('Referer') || headers['Referer']!.isEmpty)) {
       headers['Referer'] = 'https://readcomicsonline.ru/';
+    } else if ((targetUrl.contains('readdetectiveconan') || targetUrl.contains('mangapill') || sourceOrUrl.toLowerCase().contains('mangapill')) &&
+        (!headers.containsKey('Referer') || headers['Referer']!.isEmpty)) {
+      headers['Referer'] = 'https://mangapill.com/';
     }
 
     // 3. Attach domain / Cloudflare cookies from MClient
