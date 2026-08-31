@@ -612,7 +612,11 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final isCoverOnly = displayMode == 'Cover Only';
     final isCompact = displayMode == 'Compact Grid';
     final isList = displayMode == 'List';
-    final targetWidth = isCoverOnly ? 120.0 : (isCompact ? 110.0 : 145.0);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth >= 720;
+    final bottomPadding = isTablet ? 36.0 : 120.0;
+    final horizontalPadding = isTablet ? 24.0 : 16.0;
+    final targetWidth = isCoverOnly ? (isTablet ? 140.0 : 120.0) : (isCompact ? (isTablet ? 130.0 : 110.0) : (isTablet ? 170.0 : 145.0));
     final childAspectRatio = isCoverOnly ? 0.70 : (isCompact ? 0.70 : 0.65);
 
     return Scaffold(
@@ -863,7 +867,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     )
                   else if (isList)
                     SliverPadding(
-                      padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 120),
+                      padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 8, bottom: bottomPadding),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) => _buildMangaListItem(displayManga[index]),
@@ -876,13 +880,13 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     )
                   else
                     SliverPadding(
-                      padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 120),
+                      padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 8, bottom: bottomPadding),
                       sliver: SliverGrid(
                         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: targetWidth + 40,
+                          maxCrossAxisExtent: targetWidth + (isTablet ? 60 : 40),
                           childAspectRatio: childAspectRatio,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 16,
+                          crossAxisSpacing: isTablet ? 16 : 12,
+                          mainAxisSpacing: isTablet ? 20 : 16,
                         ),
                         delegate: SliverChildBuilderDelegate(
                           (context, index) => _buildMangaCard(
