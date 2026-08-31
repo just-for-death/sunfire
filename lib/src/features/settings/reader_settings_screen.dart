@@ -80,7 +80,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                       onTap: () {
                         _showRadioDialog(
                           title: 'Default Reading Mode',
-                          options: const ['Webtoon', 'Continuous Vertical', 'Paged LTR', 'Paged RTL (Manga)'],
+                          options: const ['Long Strip', 'Long Strip (Gaps)', 'Paged LTR', 'Paged RTL (Manga)'],
                           currentValue: _settings.readingMode,
                           onSelected: (val) => _settings.readingMode = val,
                         );

@@ -15,7 +15,7 @@ import '../../core/engine/quickjs_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 
-enum ReadingMode { webtoon, continuousVertical, pagedLtr, pagedRtl }
+enum ReadingMode { longStrip, longStripGaps, pagedLtr, pagedRtl }
 enum ReaderThemeMode { black, darkGray, white }
 enum ReaderColorFilter { none, invert, grayscale, nightAmber }
 enum ImageScaleType { fitWidth, fitHeight, fitScreen, original }
@@ -77,16 +77,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   ReadingMode _parseReadingMode(String str) {
     switch (str.toLowerCase()) {
+      case 'long strip (gaps)':
+      case 'long strip gaps':
       case 'continuous vertical':
-        return ReadingMode.continuousVertical;
+        return ReadingMode.longStripGaps;
       case 'paged ltr':
       case 'paged left-to-right':
         return ReadingMode.pagedLtr;
       case 'paged rtl':
+      case 'paged rtl (manga)':
       case 'paged right-to-left':
         return ReadingMode.pagedRtl;
+      case 'long strip':
+      case 'webtoon':
       default:
-        return ReadingMode.webtoon;
+        return ReadingMode.longStrip;
     }
   }
 
@@ -584,14 +589,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _buildFilterChip('Webtoon', _readingMode == ReadingMode.webtoon, () {
-                          setState(() => _readingMode = ReadingMode.webtoon);
-                          _settings.readingMode = 'Webtoon';
+                        _buildFilterChip('Long Strip', _readingMode == ReadingMode.longStrip, () {
+                          setState(() => _readingMode = ReadingMode.longStrip);
+                          _settings.readingMode = 'Long Strip';
                           setSheetState(() {});
                         }, primaryColor),
-                        _buildFilterChip('Continuous Vertical', _readingMode == ReadingMode.continuousVertical, () {
-                          setState(() => _readingMode = ReadingMode.continuousVertical);
-                          _settings.readingMode = 'Continuous Vertical';
+                        _buildFilterChip('Long Strip (Gaps)', _readingMode == ReadingMode.longStripGaps, () {
+                          setState(() => _readingMode = ReadingMode.longStripGaps);
+                          _settings.readingMode = 'Long Strip (Gaps)';
                           setSheetState(() {});
                         }, primaryColor),
                         _buildFilterChip('Paged LTR', _readingMode == ReadingMode.pagedLtr, () {
@@ -601,7 +606,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         }, primaryColor),
                         _buildFilterChip('Paged RTL (Manga)', _readingMode == ReadingMode.pagedRtl, () {
                           setState(() => _readingMode = ReadingMode.pagedRtl);
-                          _settings.readingMode = 'Paged RTL';
+                          _settings.readingMode = 'Paged RTL (Manga)';
                           setSheetState(() {});
                         }, primaryColor),
                       ],
@@ -908,7 +913,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Widget _buildPageWidget(String url, int index, {BoxConstraints? constraints, bool isPaged = false}) {
-    final isWebtoon = _readingMode == ReadingMode.webtoon;
+    final isWebtoon = _readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps;
     final boxFit = isWebtoon ? BoxFit.fitWidth : _imageBoxFit;
 
     Widget image;
@@ -1108,7 +1113,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
               child: Stack(
                 children: [
                   // ── 1. READER CANVAS ──────────────────────────────
-                  if (_readingMode == ReadingMode.webtoon || _readingMode == ReadingMode.continuousVertical)
+                  if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps)
                     ListView.builder(
                       controller: _scrollController,
                       padding: EdgeInsets.zero,
@@ -1123,8 +1128,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         final isWideScreen = constraints.maxWidth > 800;
                         final contentWidth = isWideScreen ? 780.0 : constraints.maxWidth;
 
-                        if (_readingMode == ReadingMode.webtoon) {
-                          // Webtoon: zero gap — image height is determined by fitWidth alone.
+                        if (_readingMode == ReadingMode.longStrip) {
+                          // Long Strip: continuous zero gap
                           return RepaintBoundary(
                             child: Center(
                               child: SizedBox(
@@ -1137,7 +1142,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                             ),
                           );
                         }
-                        // ContinuousVertical: add bottom spacing between pages.
+                        // Long Strip (Gaps): continuous vertical with 12px gap between pages
                         return RepaintBoundary(
                           child: Padding(
                             padding: const EdgeInsets.only(bottom: 12.0),
