@@ -838,4 +838,122 @@ class GraphQLClientService {
       return null;
     }
   }
+
+  // ── SERVER SETTINGS INTEGRATION ────────────────────────────────────────
+
+  /// Fetch full categorized settings from Suwayomi server
+  Future<Map<String, dynamic>?> fetchServerSettings() async {
+    const queryStr = '''
+      query {
+        settings {
+          ip
+          port
+          downloadsPath
+          downloadAsCbz
+          autoDownloadNewChapters
+          autoDownloadNewChaptersLimit
+          autoDownloadIgnoreReUploads
+          globalUpdateInterval
+          updateMangas
+          excludeCompleted
+          excludeUnreadChapters
+          excludeNotStarted
+          excludeEntryWithUnreadChapters
+          maxSourcesInParallel
+          flareSolverrEnabled
+          flareSolverrUrl
+          flareSolverrTimeout
+          flareSolverrSessionName
+          flareSolverrSessionTtl
+          flareSolverrAsResponseFallback
+          backupPath
+          backupInterval
+          backupTTL
+          backupTime
+          localSourcePath
+          webUIInterface
+          webUIFlavor
+          webUIChannel
+          webUIUpdateCheckInterval
+          debugLogsEnabled
+          systemTrayEnabled
+        }
+        aboutServer {
+          version
+          buildTime
+        }
+      }
+    ''';
+    return await query(queryStr, label: 'fetchServerSettings');
+  }
+
+  /// Update any partial settings on Suwayomi server
+  Future<Map<String, dynamic>?> updateServerSettings(Map<String, dynamic> partialSettings) async {
+    const mutStr = r'''
+      mutation SetServerSettings($settings: PartialSettingsTypeInput!) {
+        setSettings(input: { settings: $settings }) {
+          settings {
+            ip
+            port
+            downloadsPath
+            downloadAsCbz
+            autoDownloadNewChapters
+            autoDownloadNewChaptersLimit
+            globalUpdateInterval
+            updateMangas
+            excludeCompleted
+            excludeUnreadChapters
+            maxSourcesInParallel
+            flareSolverrEnabled
+            flareSolverrUrl
+            flareSolverrTimeout
+            backupPath
+            backupInterval
+            backupTTL
+            localSourcePath
+            webUIInterface
+            webUIFlavor
+            debugLogsEnabled
+          }
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'settings': partialSettings}, label: 'updateServerSettings');
+  }
+
+  /// Trigger global library update on server
+  Future<Map<String, dynamic>?> triggerGlobalLibraryUpdate() async {
+    const mutStr = '''
+      mutation {
+        updateLibrary(input: {}) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, label: 'updateLibrary');
+  }
+
+  /// Clear cached images on server
+  Future<Map<String, dynamic>?> clearServerCachedImages() async {
+    const mutStr = '''
+      mutation {
+        clearCachedImages(input: {}) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, label: 'clearCachedImages');
+  }
+
+  /// Create immediate backup on server
+  Future<Map<String, dynamic>?> createServerBackup() async {
+    const mutStr = '''
+      mutation {
+        createBackup(input: {}) {
+          clientMutationId
+        }
+      }
+    ''';
+    return await query(mutStr, label: 'createBackup');
+  }
 }
