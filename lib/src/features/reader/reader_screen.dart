@@ -267,11 +267,38 @@ class _ReaderScreenState extends State<ReaderScreen> {
       sourceName = manga?.sourceName;
     }
 
-    final chapterUrlToResolve = (_chapter?.url.isNotEmpty == true)
+    var chapterUrlToResolve = (_chapter?.url.isNotEmpty == true)
         ? _chapter!.url
         : ((_chapter?.realUrl.isNotEmpty == true)
             ? _chapter!.realUrl
             : _chapter?.localPath);
+
+    // On-demand self-healing: If chapter has empty/blank URL in DB, scrape parent manga details immediately!
+    if ((chapterUrlToResolve == null || chapterUrlToResolve.isEmpty) && _chapter != null) {
+      try {
+        final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
+        final effectiveSource = sourceName ?? manga?.sourceName ?? '';
+        if (manga != null && effectiveSource.isNotEmpty) {
+          final target = manga.url.isNotEmpty ? manga.url : manga.title;
+          final details = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSource, target);
+          final chList = (details['chapters'] ?? details['chapterList'] ?? details['epList']) as List<dynamic>?;
+          if (chList != null && chList.isNotEmpty) {
+            final match = chList.firstWhere(
+              (c) => (c['name'] != null && c['name'].toString().trim().toLowerCase() == _chapter!.name.trim().toLowerCase()) ||
+                     (c['chapterNumber'] != null && (c['chapterNumber'] as num).toDouble() == _chapter!.chapterNumber),
+              orElse: () => chList.first,
+            );
+            final freshUrl = (match['url'] ?? match['link'] ?? '').toString();
+            if (freshUrl.isNotEmpty) {
+              chapterUrlToResolve = freshUrl;
+              _chapter!.url = freshUrl;
+              _chapter!.realUrl = freshUrl;
+              await IsarService.instance.saveChapter(_chapter!);
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     // Auto-detect source name from URL if missing
     if ((sourceName == null || sourceName.isEmpty) && chapterUrlToResolve != null && chapterUrlToResolve.isNotEmpty) {
