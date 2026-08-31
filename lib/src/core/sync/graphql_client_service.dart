@@ -48,7 +48,11 @@ class GraphQLClientService {
     _lastReachableStatus = true;
     final headers = <String, dynamic>{'Content-Type': 'application/json'};
     if (authToken != null && authToken.isNotEmpty) {
-      headers['Authorization'] = authToken.startsWith('Bearer ') ? authToken : 'Bearer $authToken';
+      if (authToken.startsWith('Basic ') || authToken.startsWith('Bearer ')) {
+        headers['Authorization'] = authToken;
+      } else {
+        headers['Authorization'] = 'Bearer $authToken';
+      }
     }
     _dio = Dio(BaseOptions(
       baseUrl: '$_baseUrl/api/graphql',
@@ -841,25 +845,33 @@ class GraphQLClientService {
 
   // ── SERVER SETTINGS INTEGRATION ────────────────────────────────────────
 
-  /// Fetch full categorized settings from Suwayomi server
+  /// Fetch complete categorized settings from Suwayomi server matching Catalyst's full schema
   Future<Map<String, dynamic>?> fetchServerSettings() async {
     const queryStr = '''
       query {
         settings {
           ip
           port
+          socksProxyEnabled
+          socksProxyHost
+          socksProxyPassword
+          socksProxyPort
+          socksProxyUsername
+          socksProxyVersion
           downloadsPath
           downloadAsCbz
           autoDownloadNewChapters
           autoDownloadNewChaptersLimit
           autoDownloadIgnoreReUploads
+          excludeEntryWithUnreadChapters
           globalUpdateInterval
           updateMangas
           excludeCompleted
-          excludeUnreadChapters
           excludeNotStarted
-          excludeEntryWithUnreadChapters
+          excludeUnreadChapters
+          extensionRepos
           maxSourcesInParallel
+          localSourcePath
           flareSolverrEnabled
           flareSolverrUrl
           flareSolverrTimeout
@@ -870,7 +882,6 @@ class GraphQLClientService {
           backupInterval
           backupTTL
           backupTime
-          localSourcePath
           webUIInterface
           webUIFlavor
           webUIChannel
@@ -895,25 +906,42 @@ class GraphQLClientService {
           settings {
             ip
             port
+            socksProxyEnabled
+            socksProxyHost
+            socksProxyPassword
+            socksProxyPort
+            socksProxyUsername
+            socksProxyVersion
             downloadsPath
             downloadAsCbz
             autoDownloadNewChapters
             autoDownloadNewChaptersLimit
+            autoDownloadIgnoreReUploads
+            excludeEntryWithUnreadChapters
             globalUpdateInterval
             updateMangas
             excludeCompleted
+            excludeNotStarted
             excludeUnreadChapters
+            extensionRepos
             maxSourcesInParallel
+            localSourcePath
             flareSolverrEnabled
             flareSolverrUrl
             flareSolverrTimeout
+            flareSolverrSessionName
+            flareSolverrSessionTtl
+            flareSolverrAsResponseFallback
             backupPath
             backupInterval
             backupTTL
-            localSourcePath
+            backupTime
             webUIInterface
             webUIFlavor
+            webUIChannel
+            webUIUpdateCheckInterval
             debugLogsEnabled
+            systemTrayEnabled
           }
         }
       }
@@ -945,15 +973,30 @@ class GraphQLClientService {
     return await query(mutStr, label: 'clearCachedImages');
   }
 
-  /// Create immediate backup on server
-  Future<Map<String, dynamic>?> createServerBackup() async {
-    const mutStr = '''
-      mutation {
-        createBackup(input: {}) {
+  /// Create immediate backup on server with options
+  Future<Map<String, dynamic>?> createServerBackup({bool includeCategories = true, bool includeChapters = true}) async {
+    const mutStr = r'''
+      mutation CreateBackup($includeCategories: Boolean, $includeChapters: Boolean) {
+        createBackup(input: { includeCategories: $includeCategories, includeChapters: $includeChapters }) {
           clientMutationId
+          url
         }
       }
     ''';
-    return await query(mutStr, label: 'createBackup');
+    return await query(mutStr, variables: {'includeCategories': includeCategories, 'includeChapters': includeChapters}, label: 'createBackup');
+  }
+
+  /// Query restore status for ongoing backup restoration
+  Future<Map<String, dynamic>?> fetchRestoreStatus(String restoreId) async {
+    const queryStr = r'''
+      query RestoreStatus($restoreId: String!) {
+        restoreStatus(id: $restoreId) {
+          mangaProgress
+          state
+          totalManga
+        }
+      }
+    ''';
+    return await query(queryStr, variables: {'restoreId': restoreId}, label: 'fetchRestoreStatus');
   }
 }
