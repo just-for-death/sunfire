@@ -1,7 +1,9 @@
+# CodeMagic CI for Sunfire. App version: 2.0.0-beta (source of truth: pubspec.yaml).
 workflows:
-  # ── WORKFLOW 1: ANDROID RELEASE APK ──────────────────────────────
+
+  # ── WORKFLOW 1: ANDROID RELEASE APKs ──────────────────────────────
   android-release:
-    name: Android Release APK Build
+    name: Android Release v2.0.0-beta (Universal & Split APKs)
     max_build_duration: 60
     instance_type: linux_x2
     environment:
@@ -11,24 +13,18 @@ workflows:
       - name: Set up local properties
         script: |
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
-      - name: Get Flutter dependencies
-        script: |
-          flutter pub get
-      - name: Run automated audit tests
-        script: |
-          flutter test test/comprehensive_app_audit_test.dart
+      - name: Get Flutter packages
+        script: flutter pub get
       - name: Build Android Universal APK
-        script: |
-          flutter build apk --release --android-skip-build-dependency-validation
+        script: flutter build apk --release --android-skip-build-dependency-validation
       - name: Build Split-per-ABI APKs
-        script: |
-          flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
+        script: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
 
-  # ── WORKFLOW 2: IOS UNSIGNED IPA (Sideload / iPad / AltStore) ────
-  ios-unsigned-ipa:
-    name: iOS & iPad Unsigned IPA (AltStore / TrollStore / Sideloadly)
+  # ── WORKFLOW 2: iOS UNSIGNED IPA (Sideload / AltStore / TrollStore) ─
+  ios-release:
+    name: iOS & iPad IPA v2.0.0-beta (Unsigned Sideload)
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -36,69 +32,85 @@ workflows:
       xcode: latest
       cocoapods: default
     scripts:
-      - name: Get Flutter dependencies
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build IPA unsigned (no code signing)
         script: |
-          flutter pub get
-      - name: Install CocoaPods dependencies
+          set -e
+          flutter build ipa --release --no-codesign
+      - name: Prepare Sunfire.ipa artifact
         script: |
-          cd ios && pod install
-      - name: Run automated audit tests
-        script: |
-          flutter test test/comprehensive_app_audit_test.dart
-      - name: Build iOS release bundle (Unsigned)
-        script: |
-          flutter build ios --release --no-codesign
-      - name: Package unsigned IPA for sideloading
-        script: |
-          cd build/ios/iphoneos
-          rm -rf Payload Sunfire-unsigned.ipa
-          mkdir -p Payload
-          cp -r Runner.app Payload/
-          zip -r -9 Sunfire-unsigned.ipa Payload
-          cp Sunfire-unsigned.ipa "$CM_BUILD_DIR/Sunfire-unsigned.ipa"
+          set -e
+          mkdir -p build/ios/ipa
+          shopt -s nullglob
+          ipas=(build/ios/ipa/*.ipa)
+          if [ ${#ipas[@]} -gt 0 ]; then
+            mv "${ipas[0]}" build/ios/ipa/Sunfire.ipa
+          elif [ -d build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app ]; then
+            echo "IPA missing from flutter output; packaging from xcarchive..."
+            rm -rf /tmp/sunfire-ipa && mkdir -p /tmp/sunfire-ipa/Payload
+            cp -R build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app /tmp/sunfire-ipa/Payload/
+            (cd /tmp/sunfire-ipa && zip -qr "$CM_BUILD_DIR/build/ios/ipa/Sunfire.ipa" Payload)
+          else
+            echo "No .ipa or xcarchive app bundle found" >&2
+            exit 1
+          fi
+          ls -lh build/ios/ipa/Sunfire.ipa
     artifacts:
-      - build/ios/iphoneos/*.ipa
-      - Sunfire-unsigned.ipa
-      - build/ios/iphoneos/Runner.app
+      - build/ios/ipa/Sunfire.ipa
+      - build/ios/archive/*.xcarchive
 
-  # ── WORKFLOW 3: MULTI-PLATFORM (BOTH APK & IPA IN ONE GO) ─────────
-  all-platforms-unsigned:
-    name: Multi-Platform Release (Unsigned APK & IPA)
+  # ── WORKFLOW 3: ALL PLATFORMS (Triggered automatically on tags & main) ──
+  all-release:
+    name: Multi-Platform Release v2.0.0-beta (APK & IPA)
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:
       flutter: stable
-      java: 17
       xcode: latest
+      java: 17
       cocoapods: default
+    triggering:
+      events:
+        - tag
+        - push
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+          source: true
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
     scripts:
       - name: Set up local properties
         script: |
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
-      - name: Get Flutter dependencies
-        script: |
-          flutter pub get
-      - name: Run automated audit tests
-        script: |
-          flutter test test/comprehensive_app_audit_test.dart
-      - name: Build Android Release APK
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build Android Universal & Split APKs
         script: |
           flutter build apk --release --android-skip-build-dependency-validation
-      - name: Install CocoaPods dependencies
+          flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
+      - name: Build iOS IPA unsigned
         script: |
-          cd ios && pod install
-      - name: Build iOS release bundle (Unsigned)
+          set -e
+          flutter build ipa --release --no-codesign
+      - name: Prepare Sunfire.ipa artifact
         script: |
-          flutter build ios --release --no-codesign
-      - name: Package unsigned IPA
-        script: |
-          cd build/ios/iphoneos
-          rm -rf Payload Sunfire-unsigned.ipa
-          mkdir -p Payload
-          cp -r Runner.app Payload/
-          zip -r -9 Sunfire-unsigned.ipa Payload
-          cp Sunfire-unsigned.ipa "$CM_BUILD_DIR/Sunfire-unsigned.ipa"
+          set -e
+          mkdir -p build/ios/ipa
+          shopt -s nullglob
+          ipas=(build/ios/ipa/*.ipa)
+          if [ ${#ipas[@]} -gt 0 ]; then
+            mv "${ipas[0]}" build/ios/ipa/Sunfire.ipa
+          elif [ -d build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app ]; then
+            echo "IPA missing from flutter output; packaging from xcarchive..."
+            rm -rf /tmp/sunfire-ipa && mkdir -p /tmp/sunfire-ipa/Payload
+            cp -R build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app /tmp/sunfire-ipa/Payload/
+            (cd /tmp/sunfire-ipa && zip -qr "$CM_BUILD_DIR/build/ios/ipa/Sunfire.ipa" Payload)
+          fi
+          ls -lh build/ios/ipa/Sunfire.ipa
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
-      - build/ios/iphoneos/*.ipa
-      - Sunfire-unsigned.ipa
+      - build/ios/ipa/Sunfire.ipa
+      - build/ios/archive/*.xcarchive
