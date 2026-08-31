@@ -42,14 +42,31 @@ class RepoSourceItem {
         pkgPath.endsWith('.js') ||
         pkgPath.contains('javascript');
 
+    var icon = json['iconUrl'] as String? ?? '';
+    final baseUrl = json['baseUrl'] as String? ?? '';
+
+    if (icon.isNotEmpty && !icon.startsWith('http://') && !icon.startsWith('https://') && repoIndexUrl.isNotEmpty) {
+      final repoBase = repoIndexUrl.replaceAll(RegExp(r'/index\.json$'), '');
+      final cleanIcon = icon.startsWith('/') ? icon.substring(1) : icon;
+      icon = '$repoBase/$cleanIcon';
+    }
+
+    if (icon.isEmpty && baseUrl.isNotEmpty) {
+      final uri = Uri.tryParse(baseUrl);
+      final host = uri?.host.isNotEmpty == true ? uri!.host : baseUrl.replaceAll(RegExp(r'^https?:\/\/'), '').split('/').first;
+      if (host.isNotEmpty) {
+        icon = 'https://www.google.com/s2/favicons?domain=$host&sz=128';
+      }
+    }
+
     return RepoSourceItem(
       name: json['name'] as String? ?? 'Unknown',
       lang: json['lang'] as String? ?? 'all',
       sourceCodeUrl: url,
-      iconUrl: json['iconUrl'] as String? ?? '',
+      iconUrl: icon,
       version: json['version'] as String? ?? '1.0.0',
       isJs: isJs,
-      baseUrl: json['baseUrl'] as String? ?? '',
+      baseUrl: baseUrl,
     );
   }
 }
