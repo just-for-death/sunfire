@@ -350,7 +350,7 @@ class DefaultExtension extends MProvider {
       zh: [], // No need for month names; uses yyyy年MM月dd日 format
       de: [], // No need for month names; uses dd.MM.yyyy format
     };
-    const months = monthTranslations[lang];
+    const months = (monthTranslations && lang && monthTranslations[lang]) ? monthTranslations[lang] : (monthTranslations["en"] || []);
     let parts;
     let month;
     let day;
@@ -403,54 +403,29 @@ class DefaultExtension extends MProvider {
   }
 
   async getPageList(url) {
-    let cleanUrl = (url || "").replace(/&amp;/g, "&").trim();
+    let cleanUrl = url.replace(/&amp;/g, "&").trim();
     if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
       const base = this.getBaseUrl() || "https://www.webtoons.com";
       cleanUrl = `${base.endsWith("/") ? base.slice(0, -1) : base}${cleanUrl.startsWith("/") ? "" : "/"}${cleanUrl}`;
     }
-
-    const extractImagesFromDoc = (doc) => {
-      const urls = [];
-      const seen = new Set();
-      const images = (typeof doc.select === "function" ? doc.select("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img, img[data-url], img[data-src], img[id*=image], ._images img, ul._imageList img, div._imageList img") : null) ||
-                     (typeof doc.querySelectorAll === "function" ? doc.querySelectorAll("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img, img[data-url], img[data-src], img[id*=image], ._images img, ul._imageList img, div._imageList img") : []);
-      for (let i = 0; i < images.length; i++) {
-        const img = images[i];
-        const src = (typeof img.attr === "function" ? (img.attr("data-url") || img.attr("data-src") || img.attr("src")) : (img.getSrc || img.getAttribute?.("data-url") || img.getAttribute?.("data-src") || img.getAttribute?.("src"))) || "";
-        if (src && !src.includes("sp_error") && !src.includes("banner") && !src.includes("logo") && !src.includes("icon_") && !seen.has(src)) {
-          seen.add(src);
-          urls.push({
-            url: src.trim(),
-            headers: { "Referer": "https://www.webtoons.com/" }
-          });
-        }
+    const res = await new Client().get(cleanUrl, this.getHeaders(cleanUrl));
+    const doc = new Document(res.body);
+    const urls = [];
+    const seen = new Set();
+    const images = (typeof doc.select === "function" ? doc.select("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img, img[data-url], img[data-src], img[id*=image], ._images img") : null) ||
+                   (typeof doc.querySelectorAll === "function" ? doc.querySelectorAll("div#_imageList img, div.viewer_img img, .viewer_lst img, div.viewer img, div.viewer_img_lst img, img[data-url], img[data-src], img[id*=image], ._images img") : []);
+    for (let i = 0; i < images.length; i++) {
+      const img = images[i];
+      const src = (typeof img.attr === "function" ? (img.attr("data-url") || img.attr("data-src") || img.attr("src")) : (img.getSrc || img.getAttribute?.("data-url") || img.getAttribute?.("data-src") || img.getAttribute?.("src"))) || "";
+      if (src && !src.includes("sp_error") && !src.includes("banner") && !src.includes("logo") && !seen.has(src)) {
+        seen.add(src);
+        urls.push({
+          url: src.trim(),
+          headers: { "Referer": "https://www.webtoons.com/" }
+        });
       }
-      return urls;
-    };
-
-    // 1. Try primary URL
-    try {
-      const res = await new Client().get(cleanUrl, this.getHeaders(cleanUrl));
-      const doc = new Document(res.body);
-      const urls = extractImagesFromDoc(doc);
-      if (urls.length > 0) return urls;
-    } catch (_) {}
-
-    // 2. Fallback: Try Mobile URL (handles Tachiyomi / Suwayomi /viewer?title_no=... URLs)
-    try {
-      let mobUrl = cleanUrl;
-      if (mobUrl.includes("www.webtoons.com")) {
-        mobUrl = mobUrl.replace("www.webtoons.com", "m.webtoons.com");
-      } else if (!mobUrl.includes("m.webtoons.com")) {
-        mobUrl = `https://m.webtoons.com${mobUrl.startsWith("/") ? "" : "/"}${mobUrl}`;
-      }
-      const mobRes = await new Client().get(mobUrl, this.getHeaders(mobUrl));
-      const mobDoc = new Document(mobRes.body);
-      const mobUrls = extractImagesFromDoc(mobDoc);
-      if (mobUrls.length > 0) return mobUrls;
-    } catch (_) {}
-
-    return [];
+    }
+    return urls;
   }
 
   getFilterList() {
