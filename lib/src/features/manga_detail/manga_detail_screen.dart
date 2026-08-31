@@ -316,7 +316,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     _manga ??= Manga()
       ..serverId = widget.mangaServerId
       ..title = 'Manga #${widget.mangaServerId}'
-      ..inLibrary = true;
+      ..inLibrary = false;
 
     if (_manga != null) {
       await IsarService.instance.saveManga(_manga!);
