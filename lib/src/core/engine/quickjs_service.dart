@@ -427,6 +427,8 @@ class QuickJsService {
     return null;
   }
 
+  bool hasExtension(String sourceName) => getExtensionCode(sourceName) != null;
+
   Map<String, String> getInstalledSources() {
     final result = <String, String>{};
     for (final entry in _installedJsSources.entries) {
