@@ -335,15 +335,16 @@ class DefaultExtension extends MProvider {
     let fullUrl = url.startsWith("http") ? url : `https://readcomicsonline.ru${url}`;
     
     const res = await this.client.get(fullUrl, this.getHeaders());
-    const doc = new Document(res.body);
+    const html = res.body || "";
+    const doc = new Document(html);
 
     const pages = [];
     const seen = new Set();
-    const imgs = doc.querySelectorAll("img[src*='uploads/manga'], img[data-src*='uploads/manga'], img[src*='cdn.readcomicsonline.ru'], img.mx-auto, .img-responsive");
+    const imgs = doc.select("img");
 
     for (const img of imgs) {
       const src = img.attr("src") || img.attr("data-src");
-      if (src && !src.includes("banner") && !src.includes("no-image") && !src.includes("logo") && !src.includes("cover_")) {
+      if (src && !src.includes("banner") && !src.includes("no-image") && !src.includes("logo") && !src.includes("cover_") && (src.includes("uploads/manga") || src.includes("cdn.readcomicsonline.ru") || src.includes("/chapters/"))) {
         const cleanSrc = src.trim().startsWith("http") ? src.trim() : `https:${src.trim()}`;
         if (!seen.has(cleanSrc)) {
           seen.add(cleanSrc);
@@ -351,6 +352,23 @@ class DefaultExtension extends MProvider {
             url: cleanSrc,
             headers: { "Referer": "https://readcomicsonline.ru/" }
           });
+        }
+      }
+    }
+
+    // Fallback: Regex search across full HTML body if DOM selectors returned empty
+    if (pages.length === 0) {
+      const regex = /https:\/\/cdn\.readcomicsonline\.ru\/uploads\/manga\/[^\s"'<>]+\.(jpg|png|webp|jpeg)/gi;
+      const matches = html.match(regex);
+      if (matches) {
+        for (const m of matches) {
+          if (!seen.has(m) && !m.includes("cover_")) {
+            seen.add(m);
+            pages.push({
+              url: m,
+              headers: { "Referer": "https://readcomicsonline.ru/" }
+            });
+          }
         }
       }
     }
