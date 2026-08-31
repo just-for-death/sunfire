@@ -204,9 +204,57 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool get deleteChapterAfterMarkedRead => _prefs?.getBool('delete_chapter_after_marked_read') ?? false;
+  set deleteChapterAfterMarkedRead(bool value) {
+    _prefs?.setBool('delete_chapter_after_marked_read', value);
+    notifyListeners();
+  }
+
+  String get deleteFinishedChaptersWhileReading => _prefs?.getString('delete_finished_chapters_while_reading') ?? 'Disabled';
+  set deleteFinishedChaptersWhileReading(String value) {
+    _prefs?.setString('delete_finished_chapters_while_reading', value);
+    notifyListeners();
+  }
+
+  bool get allowDeletingBookmarkedChapters => _prefs?.getBool('allow_deleting_bookmarked_chapters') ?? false;
+  set allowDeletingBookmarkedChapters(bool value) {
+    _prefs?.setBool('allow_deleting_bookmarked_chapters', value);
+    notifyListeners();
+  }
+
+  bool get autoDownloadWhileReading => _prefs?.getBool('auto_download_while_reading') ?? false;
+  set autoDownloadWhileReading(bool value) {
+    _prefs?.setBool('auto_download_while_reading', value);
+    notifyListeners();
+  }
+
+  int get downloadAheadChapterCount => _prefs?.getInt('download_ahead_chapter_count') ?? 2;
+  set downloadAheadChapterCount(int value) {
+    _prefs?.setInt('download_ahead_chapter_count', value);
+    notifyListeners();
+  }
+
   bool get downloadOnlyOnWifi => _prefs?.getBool('download_only_on_wifi') ?? true;
   set downloadOnlyOnWifi(bool value) {
     _prefs?.setBool('download_only_on_wifi', value);
+    notifyListeners();
+  }
+
+  bool get downloadOnlyWhileCharging => _prefs?.getBool('download_only_while_charging') ?? false;
+  set downloadOnlyWhileCharging(bool value) {
+    _prefs?.setBool('download_only_while_charging', value);
+    notifyListeners();
+  }
+
+  List<String> get autoDownloadCategoriesInclude => _prefs?.getStringList('auto_download_categories_include') ?? [];
+  set autoDownloadCategoriesInclude(List<String> list) {
+    _prefs?.setStringList('auto_download_categories_include', list);
+    notifyListeners();
+  }
+
+  List<String> get autoDownloadCategoriesExclude => _prefs?.getStringList('auto_download_categories_exclude') ?? [];
+  set autoDownloadCategoriesExclude(List<String> list) {
+    _prefs?.setStringList('auto_download_categories_exclude', list);
     notifyListeners();
   }
 
