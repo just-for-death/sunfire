@@ -15,7 +15,8 @@ const mangayomiSources = [
   }
 ];
 
-const IMAGE_SERVER = "https://i1.nhentai.net/";
+const IMAGE_SERVER = "https://i3.nhentai.net/";
+const THUMB_SERVER = "https://t3.nhentai.net/";
 const API_BASE = "https://nhentai.net/api/v2";
 
 class DefaultExtension extends MProvider {
@@ -35,8 +36,12 @@ class DefaultExtension extends MProvider {
     if (!g || !g.id) return null;
     const title = (g.english_title || (g.title && (g.title.english || g.title.pretty || g.title.japanese)) || ("Gallery #" + g.id)).trim();
     let thumb = g.thumbnail || "";
-    if (thumb && !thumb.startsWith("http")) {
-      thumb = IMAGE_SERVER + thumb;
+    if (thumb) {
+      if (!thumb.startsWith("http")) {
+        thumb = THUMB_SERVER + thumb.replace(/^\//, '');
+      }
+    } else if (g.media_id) {
+      thumb = `${THUMB_SERVER}galleries/${g.media_id}/thumb.jpg`;
     }
     return {
       name: title,
