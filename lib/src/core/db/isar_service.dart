@@ -67,6 +67,10 @@ class IsarService {
     });
   }
 
+  Future<List<Manga>> getAllManga() async {
+    return await _isar.mangas.where().findAll();
+  }
+
   Future<List<Manga>> getLibraryManga() async {
     return await _isar.mangas.filter().inLibraryEqualTo(true).findAll();
   }
@@ -92,6 +96,10 @@ class IsarService {
     await _isar.writeTxn(() async {
       await _isar.chapters.putAll(chapters);
     });
+  }
+
+  Future<List<Chapter>> getAllChapters() async {
+    return await _isar.chapters.where().findAll();
   }
 
   Future<List<Chapter>> getChaptersForManga(int mangaId) async {
