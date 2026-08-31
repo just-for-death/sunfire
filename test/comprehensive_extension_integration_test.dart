@@ -1,9 +1,11 @@
 import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/engine/javascript/m_client.dart';
 import 'package:sunfire/src/core/engine/quickjs_service.dart';
+import 'package:sunfire/src/core/engine/repo_manager.dart';
 
 const int _rtldNow = 2;
 const int _rtldGlobal = 0x100;
@@ -34,6 +36,10 @@ void main() {
 
   setUpAll(() async {
     HttpOverrides.global = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (MethodCall methodCall) async => '/tmp/sunfire_test',
+    );
     try {
       _loadQuickJsPluginGlobally(
         '/home/zoro/Documents/Projects/manga/sunfire/build/linux/x64/debug/bundle/lib/libflutter_qjs_plugin.so',
@@ -715,6 +721,45 @@ void main() {
       expect(MClient.userAgent, isNotEmpty);
       expect(MClient.userAgent, contains('Mozilla'));
       print('✅ Security: MClient properly configured');
+    });
+
+    // ============= WOTAKU & MULTI-REPO DYNAMIC COMPATIBILITY TESTS =============
+    group('Wotaku & Multi-Repo Dynamic Compatibility Tests', () {
+      test('37. Normalize and Fetch from m2k3a Repo (Wotaku.wiki recommended)', () async {
+        const inputUrl = 'https://m2k3a.github.io/mangayomi-extensions';
+        final normalized = RepoManager.normalizeRepoUrl(inputUrl);
+        expect(normalized, equals('https://m2k3a.github.io/mangayomi-extensions/index.json'));
+
+        final sources = await RepoManager.instance.fetchRepoSources(normalized);
+        expect(sources, isNotEmpty);
+        print('✅ m2k3a Repo: Fetched ${sources.length} sources dynamically');
+        expect(sources.length, greaterThan(20));
+      }, timeout: const Timeout(Duration(minutes: 2)));
+
+      test('38. Normalize and Fetch from kodjodevf Repo', () async {
+        const inputUrl = 'https://github.com/kodjodevf/mangayomi-extensions';
+        final normalized = RepoManager.normalizeRepoUrl(inputUrl);
+        expect(normalized, equals('https://raw.githubusercontent.com/kodjodevf/mangayomi-extensions/main/index.json'));
+
+        final sources = await RepoManager.instance.fetchRepoSources(normalized);
+        expect(sources, isNotEmpty);
+        print('✅ kodjodevf Repo: Fetched ${sources.length} sources dynamically');
+      }, timeout: const Timeout(Duration(minutes: 2)));
+
+      test('39. Dynamic Scraper Installation & Execution from External Repo', () async {
+        final sources = await RepoManager.instance.fetchRepoSources('https://m2k3a.github.io/mangayomi-extensions/index.json');
+        final targetSource = sources.firstWhere(
+          (s) => s.isJs && s.lang == 'en',
+        );
+
+        final jsCode = await RepoManager.instance.downloadJsSourceCode(targetSource.sourceCodeUrl);
+        expect(jsCode, isNotNull);
+        expect(jsCode!.trim(), isNotEmpty);
+
+        final success = await quickJs.saveLocalExtension(targetSource.name, jsCode);
+        expect(success, isTrue);
+        print('✅ Dynamic Install: ${targetSource.name} downloaded and registered in QuickJS');
+      }, timeout: const Timeout(Duration(minutes: 2)));
     });
   });
 }
