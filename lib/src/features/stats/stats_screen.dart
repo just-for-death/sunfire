@@ -19,6 +19,8 @@ class _StatsScreenState extends State<StatsScreen> {
   Map<String, int> _genreCounts = {};
   Map<String, int> _sourceCounts = {};
 
+  int _readingStreakDays = 0;
+
   @override
   void initState() {
     super.initState();
@@ -29,6 +31,7 @@ class _StatsScreenState extends State<StatsScreen> {
     setState(() => _isLoading = true);
     try {
       final mangas = await IsarService.instance.getLibraryManga();
+      final historyChapters = await IsarService.instance.getReadingHistory();
 
       _totalManga = mangas.length;
       int allChCount = 0;
@@ -49,6 +52,29 @@ class _StatsScreenState extends State<StatsScreen> {
         sources[src] = (sources[src] ?? 0) + 1;
       }
 
+      // Calculate streak
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final uniqueDays = <DateTime>{};
+      for (final ch in historyChapters) {
+        final ts = ch.lastReadAt ?? 0;
+        if (ts > 0) {
+          final dt = ts > 1000000000000
+              ? DateTime.fromMillisecondsSinceEpoch(ts)
+              : DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+          uniqueDays.add(DateTime(dt.year, dt.month, dt.day));
+        }
+      }
+      int streak = 0;
+      var checkDate = today;
+      if (!uniqueDays.contains(checkDate)) {
+        checkDate = checkDate.subtract(const Duration(days: 1));
+      }
+      while (uniqueDays.contains(checkDate)) {
+        streak++;
+        checkDate = checkDate.subtract(const Duration(days: 1));
+      }
+
       // Estimate reading time: 4 minutes per read chapter
       _totalReadTimeSeconds = readChCount * 240;
 
@@ -58,6 +84,7 @@ class _StatsScreenState extends State<StatsScreen> {
           _totalReadChapters = readChCount;
           _genreCounts = genres;
           _sourceCounts = sources;
+          _readingStreakDays = streak;
           _isLoading = false;
         });
       }
@@ -97,7 +124,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 // ── SUMMARY CARDS ──
                 Row(
                   children: [
-                    Expanded(child: _buildMetricCard('Library Manga', '$_totalManga', Icons.auto_stories_rounded, primaryColor)),
+                    Expanded(child: _buildMetricCard('Reading Streak', '$_readingStreakDays days', Icons.local_fire_department_rounded, Colors.orangeAccent)),
                     const SizedBox(width: 12),
                     Expanded(child: _buildMetricCard('Chapters Read', '$_totalReadChapters', Icons.check_circle_rounded, Colors.greenAccent)),
                   ],
@@ -105,7 +132,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _buildMetricCard('Total Chapters', '$_totalChapters', Icons.format_list_numbered_rounded, Colors.amber)),
+                    Expanded(child: _buildMetricCard('Library Manga', '$_totalManga', Icons.auto_stories_rounded, primaryColor)),
                     const SizedBox(width: 12),
                     Expanded(child: _buildMetricCard('Est. Read Time', _formatReadingTime(_totalReadTimeSeconds), Icons.timer_rounded, Colors.cyanAccent)),
                   ],
