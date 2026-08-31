@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
@@ -1118,7 +1119,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       slivers: [
         if (!isSelecting)
           SliverAppBar(
-            expandedHeight: 320,
+            expandedHeight: 300,
             pinned: true,
             backgroundColor: const Color(0xFF121216),
             leading: IconButton(
@@ -1147,91 +1148,142 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  MangaCoverImage(
-                    mangaServerId: manga.serverId,
-                    thumbnailUrl: manga.thumbnailUrl,
-                    sourceName: manga.sourceName,
-                    fit: BoxFit.cover,
+                  // 1. Blurred Artwork Backdrop
+                  Positioned.fill(
+                    child: ImageFiltered(
+                      imageFilter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Transform.scale(
+                        scale: 1.15,
+                        child: MangaCoverImage(
+                          mangaServerId: manga.serverId,
+                          thumbnailUrl: manga.thumbnailUrl,
+                          sourceName: manga.sourceName,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
                   ),
+                  // 2. Gradient surface blend
                   Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Color(0xCC000000),
                           Color(0x80000000),
+                          Color(0xB3121216),
                           Color(0xFF121216),
                         ],
+                        stops: [0.0, 0.55, 1.0],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
                     ),
                   ),
+                  // 3. Foreground Hero Content
                   Positioned(
                     bottom: 16,
-                    left: 20,
-                    right: 20,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    left: 18,
+                    right: 18,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(
-                          manga.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.5),
+                        // Cover card
+                        Container(
+                          width: 90,
+                          height: 130,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0x33FFFFFF), width: 1.2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.6),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(11),
+                            child: MangaCoverImage(
+                              mangaServerId: manga.serverId,
+                              thumbnailUrl: manga.thumbnailUrl,
+                              sourceName: manga.sourceName,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            if (manga.author != null && manga.author!.isNotEmpty) ...[
-                              Flexible(
-                                child: Text(
+                        const SizedBox(width: 14),
+                        // Metadata column
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                manga.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  height: 1.2,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              if (manga.author != null && manga.author!.isNotEmpty)
+                                Text(
                                   manga.author!,
-                                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                                  style: const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.w500),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: primaryColor.withAlpha(40),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: primaryColor.withAlpha(120), width: 0.8),
+                                    ),
+                                    child: Text(
+                                      manga.sourceName,
+                                      style: TextStyle(color: primaryColor, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0x334CAF50),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.greenAccent.withAlpha(150), width: 0.8),
+                                    ),
+                                    child: Text(
+                                      (manga.status ?? 'Ongoing').toUpperCase(),
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.greenAccent),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0x1F2A2A32),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
+                                    ),
+                                    child: Text(
+                                      '${sortedChapters.length} CH',
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const Text(' • ', style: TextStyle(color: Colors.white70)),
                             ],
-                            Flexible(
-                              child: Text(
-                                manga.sourceName,
-                                style: TextStyle(color: primaryColor, fontSize: 13, fontWeight: FontWeight.bold),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0x334CAF50),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.greenAccent, width: 0.8),
-                              ),
-                              child: Text(
-                                (manga.status ?? 'Ongoing').toUpperCase(),
-                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.greenAccent),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0x1F2A2A32),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
-                              ),
-                              child: Text(
-                                '${sortedChapters.length} CHAPTERS',
-                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ],
                     ),
@@ -1322,16 +1374,31 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     children: manga.genres.map((g) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: const Color(0x1A2A2A32),
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0x2EFFFFFF), width: 0.8),
-                        ),
-                        child: Text(
-                          g,
-                          style: const TextStyle(fontSize: 11.5, color: Colors.white70, fontWeight: FontWeight.w500),
+                          onTap: () {
+                            // Quick search for this genre/tag
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Tag: $g'),
+                                duration: const Duration(seconds: 1),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0x1A2A2A32),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0x2EFFFFFF), width: 0.8),
+                            ),
+                            child: Text(
+                              g,
+                              style: const TextStyle(fontSize: 11.5, color: Colors.white70, fontWeight: FontWeight.w500),
+                            ),
+                          ),
                         ),
                       );
                     }).toList(),
