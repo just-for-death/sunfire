@@ -574,12 +574,16 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final localJsUnpinned = unpinned.where((s) => s['isLocalJs'] == true).toList();
     final serverUnpinned = unpinned.where((s) => s['isLocalJs'] != true).toList();
 
+    final isTablet = MediaQuery.of(context).size.width >= 720;
+    final bottomPadding = isTablet ? 36.0 : 120.0;
+    final horizontalPadding = isTablet ? 24.0 : 16.0;
+
     return RefreshIndicator(
       color: primaryColor,
       onRefresh: _fetchServerSources,
       child: ListView(
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-        padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0, bottom: 120.0),
+        padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 12.0, bottom: bottomPadding),
         children: [
           Row(
             children: [
@@ -985,6 +989,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       return (a['name'] as String).compareTo(b['name'] as String);
     });
 
+    final isTablet = MediaQuery.of(context).size.width >= 720;
+    final bottomPadding = isTablet ? 36.0 : 120.0;
+    final horizontalPadding = isTablet ? 24.0 : 16.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1228,7 +1236,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   : ListView.builder(
                       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                       scrollCacheExtent: ScrollCacheExtent.pixels(800),
-                      padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 8.0, bottom: 120.0),
+                      padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 8.0, bottom: bottomPadding),
                       itemCount: sortedList.length,
                       itemBuilder: (context, index) {
                         final ext = sortedList[index];
@@ -1432,9 +1440,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       migrationItems.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
     }
 
+    final isTablet = MediaQuery.of(context).size.width >= 720;
+    final bottomPadding = isTablet ? 36.0 : 120.0;
+    final horizontalPadding = isTablet ? 24.0 : 16.0;
+
     return ListView(
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-      padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 120.0),
+      padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 16.0, bottom: bottomPadding),
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -446,7 +446,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                             childCount: _updatesList.length,
                           ),
                         ),
-                        const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                        SliverToBoxAdapter(child: SizedBox(height: MediaQuery.of(context).size.width >= 720 ? 36 : 120)),
                       ],
                     ],
                   ),
