@@ -179,6 +179,12 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool get showNsfwSources => _prefs?.getBool('show_nsfw_sources') ?? true;
+  set showNsfwSources(bool value) {
+    _prefs?.setBool('show_nsfw_sources', value);
+    notifyListeners();
+  }
+
   // ── STORAGE & DOWNLOADS ──────────────────────────────────
   bool get autoDownloadEnabled => _prefs?.getBool('auto_download_enabled') ?? false;
   set autoDownloadEnabled(bool value) {
