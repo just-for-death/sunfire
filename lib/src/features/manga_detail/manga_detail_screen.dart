@@ -120,8 +120,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       setState(() => _isLoading = false);
     }
 
-    // 2. Fetch fresh details AND chapters from Suwayomi GraphQL
-    if (GraphQLClientService.instance.isConfigured && widget.mangaServerId > 0 && widget.mangaServerId < 2147483647) {
+    final isLocalExtension = QuickJsService.instance.hasExtension(_manga?.sourceName ?? '');
+
+    // 2. Fetch fresh details AND chapters from Suwayomi GraphQL ONLY for server manga
+    if (!isLocalExtension && GraphQLClientService.instance.isConfigured && widget.mangaServerId > 0 && widget.mangaServerId < 200000) {
       try {
         var detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
 
@@ -208,14 +210,12 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
     }
 
-    // 3. Offline / Local Scraper: Scrape chapters directly via QuickJS ONLY if:
-    //    - Chapters list is completely empty, OR
-    //    - Every chapter has an empty name (truly invalid data)
-    // NOTE: Server chapters from GraphQL intentionally have relative URLs or no page URLs — that's normal.
-    //       URLs are resolved lazily at read time via ContentResolverService.
+    // 3. Offline / Local Scraper: Scrape chapters directly via QuickJS if:
+    //    - Source is a local JS extension, OR
+    //    - Chapters list is empty or has blank names/URLs
     final chaptersNeedEnrichment = _chapters.isEmpty ||
-        _chapters.every((c) => c.name.trim().isEmpty);
-    if (chaptersNeedEnrichment && _manga != null && _manga!.sourceName.isNotEmpty) {
+        _chapters.every((c) => c.name.trim().isEmpty || c.url.trim().isEmpty);
+    if ((isLocalExtension || chaptersNeedEnrichment) && _manga != null && _manga!.sourceName.isNotEmpty) {
       try {
         final localData = await QuickJsService.instance.fetchMangaDetailsLocal(
           _manga!.sourceName,
