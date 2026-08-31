@@ -115,8 +115,8 @@ class DefaultExtension extends MProvider {
   }
 
   async getPopular(page) {
-    // mangapill.com homepage shows popular/trending manga
-    return await this.getMangaList(`?page=${page}`);
+    // mangapill.com/mangas lists the paginated catalog
+    return await this.getMangaList(`mangas?page=${page}`);
   }
   get supportsLatest() {
     throw new Error("supportsLatest not implemented");
