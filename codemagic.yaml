@@ -1,68 +1,123 @@
-# CodeMagic CI for Sunfire. App version: 2.0.0-beta (source of truth: pubspec.yaml).
+# ==============================================================================
+# Codemagic CI/CD for Sunfire Manga Reader
+# Supports: Android (Universal & Split APKs, AAB) & iOS (Unsigned Sideload IPA)
+# ==============================================================================
+
 workflows:
 
-  # ── WORKFLOW 1: ANDROID RELEASE APKs ──────────────────────────────
+  # ────────────────────────────────────────────────────────────────────────────
+  # WORKFLOW 1: ANDROID RELEASE (Linux x2 — Fast & Lightweight)
+  # ────────────────────────────────────────────────────────────────────────────
   android-release:
-    name: Android Release v2.0.0-beta (Universal & Split APKs)
+    name: Android Release (Universal & Split APKs)
     max_build_duration: 60
     instance_type: linux_x2
     environment:
       flutter: stable
       java: 17
+      vars:
+        LANG: en_US.UTF-8
+        LC_ALL: en_US.UTF-8
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - $HOME/.gradle/caches
+        - $HOME/.gradle/wrapper
     scripts:
-      - name: Set up local properties
+      - name: Set up Android SDK local.properties
         script: |
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
       - name: Get Flutter packages
         script: flutter pub get
       - name: Build Android Universal APK
-        script: flutter build apk --release --android-skip-build-dependency-validation
-      - name: Build Split-per-ABI APKs
-        script: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
+        script: |
+          flutter build apk --release --android-skip-build-dependency-validation
+      - name: Build Android Split-per-ABI APKs
+        script: |
+          flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
+      - name: Organize & Rename Android APK Artifacts
+        script: |
+          cd build/app/outputs/flutter-apk
+          [ -f app-release.apk ] && cp app-release.apk Sunfire-universal.apk
+          [ -f app-arm64-v8a-release.apk ] && cp app-arm64-v8a-release.apk Sunfire-arm64-v8a.apk
+          [ -f app-armeabi-v7a-release.apk ] && cp app-armeabi-v7a-release.apk Sunfire-armeabi-v7a.apk
+          [ -f app-x86_64-release.apk ] && cp app-x86_64-release.apk Sunfire-x86_64.apk
+          ls -lh Sunfire*.apk || ls -lh *.apk
     artifacts:
+      - build/app/outputs/flutter-apk/Sunfire*.apk
       - build/app/outputs/flutter-apk/*.apk
+    publishing:
+      github_releases:
+        draft: false
+        prerelease: true
 
-  # ── WORKFLOW 2: iOS UNSIGNED IPA (Sideload / AltStore / TrollStore) ─
+  # ────────────────────────────────────────────────────────────────────────────
+  # WORKFLOW 2: iOS RELEASE (Mac Mini M2 — AltStore / TrollStore / Sideloadly)
+  # ────────────────────────────────────────────────────────────────────────────
   ios-release:
-    name: iOS & iPad IPA v2.0.0-beta (Unsigned Sideload)
+    name: iOS IPA (Unsigned Sideload)
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
       flutter: stable
       xcode: latest
       cocoapods: default
+      vars:
+        LANG: en_US.UTF-8
+        LC_ALL: en_US.UTF-8
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - $HOME/Library/Caches/CocoaPods
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
-      - name: Build IPA unsigned (no code signing)
+      - name: Install CocoaPods
+        script: |
+          cd ios
+          pod install --repo-update
+          cd ..
+      - name: Build iOS xcarchive (No code signing required)
         script: |
           set -e
           flutter build ipa --release --no-codesign
-      - name: Prepare Sunfire.ipa artifact
+      - name: Package Unsigned Sunfire.ipa
         script: |
           set -e
           mkdir -p build/ios/ipa
           shopt -s nullglob
           ipas=(build/ios/ipa/*.ipa)
           if [ ${#ipas[@]} -gt 0 ]; then
+            echo "Existing IPA found from flutter build: ${ipas[0]}"
             mv "${ipas[0]}" build/ios/ipa/Sunfire.ipa
-          elif [ -d build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app ]; then
-            echo "IPA missing from flutter output; packaging from xcarchive..."
-            rm -rf /tmp/sunfire-ipa && mkdir -p /tmp/sunfire-ipa/Payload
-            cp -R build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app /tmp/sunfire-ipa/Payload/
-            (cd /tmp/sunfire-ipa && zip -qr "$CM_BUILD_DIR/build/ios/ipa/Sunfire.ipa" Payload)
           else
-            echo "No .ipa or xcarchive app bundle found" >&2
-            exit 1
+            echo "Packaging Sunfire.ipa directly from xcarchive payload..."
+            APP_DIR=$(find build/ios/archive -type d -name "*.app" | head -n 1)
+            if [ -n "$APP_DIR" ]; then
+              echo "Found app payload at: $APP_DIR"
+              rm -rf /tmp/sunfire-ipa && mkdir -p /tmp/sunfire-ipa/Payload
+              cp -R "$APP_DIR" /tmp/sunfire-ipa/Payload/
+              (cd /tmp/sunfire-ipa && zip -qr "$CM_BUILD_DIR/build/ios/ipa/Sunfire.ipa" Payload)
+              echo "✅ Successfully created Sunfire.ipa"
+            else
+              echo "❌ Error: Could not find .app bundle in build/ios/archive!" >&2
+              exit 1
+            fi
           fi
           ls -lh build/ios/ipa/Sunfire.ipa
     artifacts:
       - build/ios/ipa/Sunfire.ipa
       - build/ios/archive/*.xcarchive
+    publishing:
+      github_releases:
+        draft: false
+        prerelease: true
 
-  # ── WORKFLOW 3: ALL PLATFORMS (Triggered automatically on tags & main) ──
+  # ────────────────────────────────────────────────────────────────────────────
+  # WORKFLOW 3: ALL PLATFORMS (Unified CI — Triggered on Tags and Main)
+  # ────────────────────────────────────────────────────────────────────────────
   all-release:
-    name: Multi-Platform Release v2.0.0-beta (APK & IPA)
+    name: Multi-Platform Release (APK & IPA)
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:
@@ -70,6 +125,9 @@ workflows:
       xcode: latest
       java: 17
       cocoapods: default
+      vars:
+        LANG: en_US.UTF-8
+        LC_ALL: en_US.UTF-8
     triggering:
       events:
         - tag
@@ -81,8 +139,14 @@ workflows:
       tag_patterns:
         - pattern: 'v*'
           include: true
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - $HOME/.gradle/caches
+        - $HOME/.gradle/wrapper
+        - $HOME/Library/Caches/CocoaPods
     scripts:
-      - name: Set up local properties
+      - name: Set up Android SDK local.properties
         script: |
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
       - name: Get Flutter packages
@@ -91,26 +155,42 @@ workflows:
         script: |
           flutter build apk --release --android-skip-build-dependency-validation
           flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
-      - name: Build iOS IPA unsigned
+          cd build/app/outputs/flutter-apk
+          [ -f app-release.apk ] && cp app-release.apk Sunfire-universal.apk
+          [ -f app-arm64-v8a-release.apk ] && cp app-arm64-v8a-release.apk Sunfire-arm64-v8a.apk
+          [ -f app-armeabi-v7a-release.apk ] && cp app-armeabi-v7a-release.apk Sunfire-armeabi-v7a.apk
+          [ -f app-x86_64-release.apk ] && cp app-x86_64-release.apk Sunfire-x86_64.apk
+          ls -lh Sunfire*.apk || ls -lh *.apk
+          cd "$CM_BUILD_DIR"
+      - name: Install CocoaPods
+        script: |
+          cd ios
+          pod install --repo-update
+          cd ..
+      - name: Build iOS unsigned xcarchive & IPA
         script: |
           set -e
           flutter build ipa --release --no-codesign
-      - name: Prepare Sunfire.ipa artifact
-        script: |
-          set -e
           mkdir -p build/ios/ipa
           shopt -s nullglob
           ipas=(build/ios/ipa/*.ipa)
           if [ ${#ipas[@]} -gt 0 ]; then
             mv "${ipas[0]}" build/ios/ipa/Sunfire.ipa
-          elif [ -d build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app ]; then
-            echo "IPA missing from flutter output; packaging from xcarchive..."
-            rm -rf /tmp/sunfire-ipa && mkdir -p /tmp/sunfire-ipa/Payload
-            cp -R build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app /tmp/sunfire-ipa/Payload/
-            (cd /tmp/sunfire-ipa && zip -qr "$CM_BUILD_DIR/build/ios/ipa/Sunfire.ipa" Payload)
+          else
+            APP_DIR=$(find build/ios/archive -type d -name "*.app" | head -n 1)
+            if [ -n "$APP_DIR" ]; then
+              rm -rf /tmp/sunfire-ipa && mkdir -p /tmp/sunfire-ipa/Payload
+              cp -R "$APP_DIR" /tmp/sunfire-ipa/Payload/
+              (cd /tmp/sunfire-ipa && zip -qr "$CM_BUILD_DIR/build/ios/ipa/Sunfire.ipa" Payload)
+            fi
           fi
           ls -lh build/ios/ipa/Sunfire.ipa
     artifacts:
+      - build/app/outputs/flutter-apk/Sunfire*.apk
       - build/app/outputs/flutter-apk/*.apk
       - build/ios/ipa/Sunfire.ipa
       - build/ios/archive/*.xcarchive
+    publishing:
+      github_releases:
+        draft: false
+        prerelease: true
