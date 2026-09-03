@@ -442,20 +442,17 @@ class DefaultExtension extends MProvider {
       return urls;
     };
 
-    // If cleanUrl is already a valid slugged viewer URL, try it directly
-    const isGenericViewer = cleanUrl.includes('/viewer?') && !cleanUrl.match(/\/ep[^\/]+\/viewer/i);
-    if (!isGenericViewer) {
-      try {
-        const res = await new Client().get(cleanUrl, this.getHeaders(cleanUrl));
-        if (res && res.statusCode === 200 && res.body) {
-          const doc = new Document(res.body);
-          const urls = fetchImagesFromDoc(doc);
-          if (urls.length > 0) return urls;
-        }
-      } catch (_) {}
-    }
+    // 1. Try cleanUrl directly first
+    try {
+      const res = await new Client().get(cleanUrl, this.getHeaders(cleanUrl));
+      if (res && res.statusCode === 200 && res.body) {
+        const doc = new Document(res.body);
+        const urls = fetchImagesFromDoc(doc);
+        if (urls.length > 0) return urls;
+      }
+    } catch (_) {}
 
-    // Auto-recovery for generic slugless viewer URLs or 500 error URLs:
+    // 2. Auto-recovery for generic slugless viewer URLs or redirected episode URLs:
     // Extract title_no and episode_no, find the exact viewer URL from the list page in 1 fast calculation
     const titleMatch = cleanUrl.match(/[?&]title_no=(\d+)/i);
     const epMatch = cleanUrl.match(/[?&]episode_no=(\d+)/i);
@@ -463,7 +460,9 @@ class DefaultExtension extends MProvider {
       try {
         const titleNo = titleMatch[1];
         const epNo = parseInt(epMatch[1], 10);
-        let listBase = cleanUrl.split('/viewer')[0].replace(/\/ep[^\/]+$/i, '');
+        let listBase = cleanUrl.split('/viewer')[0];
+        // Strip the chapter/episode segment immediately preceding /viewer
+        listBase = listBase.replace(/\/[^\/]+$/, '');
         if (!listBase.includes('/list')) {
           listBase = `${listBase}/list`;
         }
