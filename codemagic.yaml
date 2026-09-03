@@ -46,10 +46,6 @@ workflows:
     artifacts:
       - build/app/outputs/flutter-apk/Sunfire*.apk
       - build/app/outputs/flutter-apk/*.apk
-    publishing:
-      github_releases:
-        draft: false
-        prerelease: true
 
   # ────────────────────────────────────────────────────────────────────────────
   # WORKFLOW 2: iOS RELEASE (Mac Mini M2 — AltStore / TrollStore / Sideloadly)
@@ -72,11 +68,6 @@ workflows:
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
-      - name: Install CocoaPods
-        script: |
-          cd ios
-          pod install --repo-update
-          cd ..
       - name: Build iOS xcarchive (No code signing required)
         script: |
           set -e
@@ -108,10 +99,6 @@ workflows:
     artifacts:
       - build/ios/ipa/Sunfire.ipa
       - build/ios/archive/*.xcarchive
-    publishing:
-      github_releases:
-        draft: false
-        prerelease: true
 
   # ────────────────────────────────────────────────────────────────────────────
   # WORKFLOW 3: ALL PLATFORMS (Unified CI — Triggered on Tags and Main)
@@ -162,11 +149,6 @@ workflows:
           [ -f app-x86_64-release.apk ] && cp app-x86_64-release.apk Sunfire-x86_64.apk
           ls -lh Sunfire*.apk || ls -lh *.apk
           cd "$CM_BUILD_DIR"
-      - name: Install CocoaPods
-        script: |
-          cd ios
-          pod install --repo-update
-          cd ..
       - name: Build iOS unsigned xcarchive & IPA
         script: |
           set -e
@@ -190,7 +172,3 @@ workflows:
       - build/app/outputs/flutter-apk/*.apk
       - build/ios/ipa/Sunfire.ipa
       - build/ios/archive/*.xcarchive
-    publishing:
-      github_releases:
-        draft: false
-        prerelease: true
