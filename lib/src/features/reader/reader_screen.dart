@@ -680,6 +680,29 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
+  void _cycleReadingMode() {
+    setState(() {
+      if (_readingMode == ReadingMode.longStrip) {
+        _readingMode = ReadingMode.pagedRtl;
+        _settings.readingMode = 'Paged RTL (Manga)';
+      } else if (_readingMode == ReadingMode.pagedRtl) {
+        _readingMode = ReadingMode.pagedLtr;
+        _settings.readingMode = 'Paged LTR';
+      } else {
+        _readingMode = ReadingMode.longStrip;
+        _settings.readingMode = 'Long Strip';
+      }
+    });
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Reading Mode: ${_readingMode == ReadingMode.longStrip ? "Webtoon (Long Strip)" : (_readingMode == ReadingMode.pagedRtl ? "Manga (Right to Left)" : "Comic (Left to Right)")}'),
+        duration: const Duration(milliseconds: 1200),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   void _showReaderSettingsSheet() {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
@@ -1458,6 +1481,43 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                   Text(
                                     'Page $_currentPage / ${_pageUrls.length}',
                                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  InkWell(
+                                    onTap: _cycleReadingMode,
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: primaryColor.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: primaryColor.withValues(alpha: 0.5), width: 0.8),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            _readingMode == ReadingMode.longStrip
+                                                ? Icons.swap_vert_rounded
+                                                : (_readingMode == ReadingMode.pagedRtl ? Icons.arrow_back_rounded : Icons.arrow_forward_rounded),
+                                            size: 13,
+                                            color: primaryColor,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _readingMode == ReadingMode.longStrip
+                                                ? 'WEBTOON'
+                                                : (_readingMode == ReadingMode.pagedRtl ? 'RTL' : 'LTR'),
+                                            style: TextStyle(
+                                              color: primaryColor,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                   const SizedBox(width: 8),
                                   IconButton(

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
+import '../../core/engine/quickjs_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
@@ -188,22 +189,76 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   // Legacy compat — kept for pull-to-refresh and server check button
   Future<void> _loadUpdatesFromServer() => _loadUpdates();
 
+  Future<int> _checkStandaloneUpdates() async {
+    int newFound = 0;
+    try {
+      final libraryManga = await IsarService.instance.getLibraryManga();
+      for (final manga in libraryManga) {
+        if (manga.sourceName.isEmpty || manga.url.isEmpty) continue;
+        try {
+          final detail = await QuickJsService.instance.fetchMangaDetailsLocal(
+            manga.sourceName,
+            manga.url,
+          );
+          if (detail.containsKey('chapters')) {
+            final rawChapters = detail['chapters'] as List<dynamic>?;
+            if (rawChapters != null && rawChapters.isNotEmpty) {
+              final existingChapters = await IsarService.instance.getChaptersForManga(manga.serverId);
+              final existingUrls = existingChapters.map((c) => c.url).toSet();
+              final newChapters = <Chapter>[];
+              for (int i = 0; i < rawChapters.length; i++) {
+                final chMap = rawChapters[i] as Map<String, dynamic>;
+                final chUrl = chMap['url']?.toString() ?? '';
+                if (chUrl.isNotEmpty && !existingUrls.contains(chUrl)) {
+                  final ch = Chapter()
+                    ..serverId = manga.serverId * 10000 + i + 1
+                    ..mangaId = manga.serverId
+                    ..name = chMap['name']?.toString() ?? 'Chapter ${i + 1}'
+                    ..chapterNumber = (chMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble()
+                    ..url = chUrl
+                    ..realUrl = chUrl
+                    ..fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000
+                    ..isRead = false
+                    ..lastPageRead = 0;
+                  newChapters.add(ch);
+                }
+              }
+              if (newChapters.isNotEmpty) {
+                await IsarService.instance.saveChapters(newChapters);
+                manga.unreadCount = (manga.unreadCount ?? 0) + newChapters.length;
+                await IsarService.instance.saveManga(manga);
+                newFound += newChapters.length;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return newFound;
+  }
 
   Future<void> _checkServerForUpdates() async {
     setState(() => _isCheckingServer = true);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
+    int newFound = 0;
     if (GraphQLClientService.instance.isConfigured) {
       await GraphQLClientService.instance.triggerServerLibraryUpdate();
+      await SyncEngine.instance.triggerSync();
+    } else {
+      newFound = await _checkStandaloneUpdates();
     }
-    await SyncEngine.instance.triggerSync();
-    await _loadUpdatesFromServer();
+    await _loadUpdates();
 
     if (mounted) {
       setState(() => _isCheckingServer = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Server library update completed'),
+          content: Text(
+            GraphQLClientService.instance.isConfigured
+                ? 'Server library update completed'
+                : (newFound > 0 ? 'Library updated ($newFound new chapters)' : 'Library is up to date'),
+          ),
           backgroundColor: primaryColor,
         ),
       );
@@ -284,7 +339,21 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Updates', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
-            if (_isOffline)
+            if (!GraphQLClientService.instance.isConfigured)
+              Container(
+                margin: const EdgeInsets.only(top: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: Colors.teal.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.6),
+                ),
+                child: const Text(
+                  'STANDALONE MODE',
+                  style: TextStyle(fontSize: 9.5, color: Colors.tealAccent, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                ),
+              )
+            else if (_isOffline)
               const Text(
                 'Offline — Cached updates',
                 style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w600),
@@ -296,7 +365,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
             icon: _isCheckingServer
                 ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2.5))
                 : Icon(Icons.refresh_rounded, color: primaryColor),
-            tooltip: 'Check Server Updates',
+            tooltip: GraphQLClientService.instance.isConfigured ? 'Check Server Updates' : 'Check for Updates',
             onPressed: _isCheckingServer ? null : _checkServerForUpdates,
           ),
         ],
