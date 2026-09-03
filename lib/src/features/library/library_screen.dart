@@ -742,7 +742,23 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         : (isTablet ? (screenWidth ~/ 160).clamp(3, 7) : (screenWidth ~/ 120).clamp(2, 4));
     final childAspectRatio = isCoverOnly ? 0.70 : (isCompact ? 0.70 : 0.65);
 
-    return Scaffold(
+    return PopScope(
+      canPop: !_isBatchMode && !_isSearching,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_isBatchMode) {
+          setState(() {
+            _selectedMangaIds.clear();
+            _isBatchMode = false;
+          });
+        } else if (_isSearching) {
+          setState(() {
+            _isSearching = false;
+            _searchQuery = '';
+          });
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: _isBatchMode
             ? Row(
@@ -1002,6 +1018,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
               ),
             )
           : null,
+      ),
     );
   }
 

@@ -1303,7 +1303,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
       );
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: _showControls,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (!_showControls) {
+          setState(() {
+            _showControls = true;
+            SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+          });
+        }
+      },
+      child: Scaffold(
       backgroundColor: _canvasBackgroundColor,
       body: Focus(
         focusNode: _focusNode,
@@ -1573,6 +1584,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           },
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

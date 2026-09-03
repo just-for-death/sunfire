@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'core/sync/graphql_client_service.dart';
 import 'core/sync/sync_engine.dart';
 import 'features/browse/browse_screen.dart';
 import 'features/history/history_screen.dart';
@@ -69,7 +70,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      SyncEngine.instance.triggerSync();
+      if (GraphQLClientService.instance.isConfigured) {
+        SyncEngine.instance.triggerSync();
+      }
     }
   }
 
@@ -108,9 +111,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final isTablet = screenWidth >= 720;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    if (isTablet) {
-      return Scaffold(
-        body: Row(
+    final scaffold = isTablet
+        ? Scaffold(
+            body: Row(
           children: [
             // ── IPAD / TABLET GLASSMORPHIC NAVIGATION SIDEBAR ─────────────
             ClipRect(
@@ -224,11 +227,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             ),
           ],
         ),
-      );
-    }
-
+      )
     // ── MOBILE PHONE LAYOUT WITH SMOOTH SWIPE PAGEVIEW & FLOATING BAR ─────
-    return Scaffold(
+    : Scaffold(
       extendBody: true,
       body: PageView(
         controller: _pageController,
@@ -282,6 +283,17 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           ),
         ),
       ),
+    );
+
+    return PopScope(
+      canPop: _currentIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_currentIndex != 0) {
+          _handleTabSelect(0);
+        }
+      },
+      child: scaffold,
     );
   }
 
