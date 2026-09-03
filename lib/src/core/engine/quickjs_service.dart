@@ -290,7 +290,9 @@ class QuickJsService {
   String getSourceIconUrl(String sourceName) {
     final canonQuery = _canonicalizeKey(sourceName);
     for (final entry in _installedIcons.entries) {
-      if ((entry.key == sourceName || _canonicalizeKey(entry.key) == canonQuery) && entry.value.isNotEmpty) {
+      if ((entry.key == sourceName || _canonicalizeKey(entry.key) == canonQuery) &&
+          entry.value.isNotEmpty &&
+          !entry.value.contains('raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/')) {
         return entry.value;
       }
     }
@@ -298,7 +300,9 @@ class QuickJsService {
     if (code != null && code.isNotEmpty) {
       final meta = extractSourceMetadata(code);
       final icon = meta['iconUrl']?.toString() ?? '';
-      if (icon.isNotEmpty && (icon.startsWith('http://') || icon.startsWith('https://'))) {
+      if (icon.isNotEmpty &&
+          (icon.startsWith('http://') || icon.startsWith('https://')) &&
+          !icon.contains('raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/')) {
         return icon;
       }
       final baseUrl = meta['baseUrl']?.toString() ?? '';
