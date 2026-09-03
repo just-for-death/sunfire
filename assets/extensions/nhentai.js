@@ -5,7 +5,7 @@ const mangayomiSources = [
     "id": 559183086,
     "baseUrl": "https://nhentai.net",
     "apiUrl": "https://nhentai.net/api/v2",
-    "iconUrl": "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/all.nhentai.png",
+    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://nhentai.net",
     "typeSource": "single",
     "isManga": true,
     "isNsfw": true,

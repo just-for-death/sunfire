@@ -4,7 +4,7 @@ const mangayomiSources = [{
     "lang": "en",
     "baseUrl": "https://fanfox.net",
     "apiUrl": "",
-    "iconUrl": "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/en.mangahere.png",
+    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://www.mangahere.cc",
     "typeSource": "single",
     "itemType": 0,
     "version": "1.1.1",
