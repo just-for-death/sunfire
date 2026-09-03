@@ -1053,11 +1053,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final isWebtoon = _readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps;
     final boxFit = isWebtoon ? BoxFit.fitWidth : _imageBoxFit;
 
-    if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
-      if (!_recoveredImageBytes.containsKey(url) && (url.startsWith('http://') || url.startsWith('https://'))) {
-        _recoverImage(url, index);
-      }
-    }
+    final isDesktop = Platform.isLinux || Platform.isMacOS || Platform.isWindows;
 
     Widget image;
     if (_recoveredImageBytes.containsKey(url)) {
@@ -1088,8 +1084,28 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ),
         ),
       );
+    } else if (isDesktop) {
+      // On desktop: fetch directly via curl-impersonate without firing failing Dart Image.network 403s
+      _recoverImage(url, index);
+      final placeholderHeight = isWebtoon ? (constraints?.maxHeight ?? 600.0) : 400.0;
+      image = Container(
+        height: placeholderHeight,
+        width: constraints?.maxWidth ?? double.infinity,
+        color: _canvasBackgroundColor,
+        child: Center(
+          child: _recoveringUrls.contains(url)
+              ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
+              : IconButton(
+                  icon: const Icon(Icons.refresh_rounded, color: Colors.grey),
+                  tooltip: 'Retry Page ${index + 1}',
+                  onPressed: () => _recoverImage(url, index),
+                ),
+        ),
+      );
     } else {
-      final headers = QuickJsService.getImageHeaders(_sourceName ?? '', url);
+      final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
+      final cookieHeaders = MClient.getCookiesPref(url);
+      final headers = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
 
       image = Image.network(
         url,
