@@ -5,7 +5,7 @@ const mangayomiSources = [
     "id": 768949056,
     "baseUrl": "https://9hentai.so",
     "apiUrl": "https://9hentai.so/api",
-    "iconUrl": "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/en.ninehentai.png",
+    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://9hentai.so",
     "typeSource": "single",
     "isManga": true,
     "isNsfw": true,

@@ -4,7 +4,7 @@ const mangayomiSources = [{
     "lang": "en",
     "baseUrl": "https://ww3.mangafreak.me",
     "apiUrl": "",
-    "iconUrl": "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/en.mangafreak.png",
+    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://ww3.mangafreak.me",
     "typeSource": "single",
     "itemType": 0,
     "version": "1.0.1",
@@ -24,6 +24,11 @@ class DefaultExtension extends MProvider {
         };
     }
 
+    _cleanImageUrl(url) {
+        if (!url) return "";
+        return url.replace("/mini_images/", "/manga_images/").replace(/\/55x85.*$/, ".jpg");
+    }
+
     async getPopular(page) {
         const url = `${this.source.baseUrl}/Genre/All/${page}`;
         const res = await this.client.get(url, this.getHeaders());
@@ -41,7 +46,7 @@ class DefaultExtension extends MProvider {
                 if (title && link) {
                     list.push({
                         name: title.trim(),
-                        imageUrl: imageUrl,
+                        imageUrl: this._cleanImageUrl(imageUrl),
                         link: link.startsWith('http') ? link : `${this.source.baseUrl}${link}`
                     });
                 }
@@ -73,7 +78,7 @@ class DefaultExtension extends MProvider {
                 if (title && link) {
                     list.push({
                         name: title.trim(),
-                        imageUrl: imageUrl,
+                        imageUrl: this._cleanImageUrl(imageUrl),
                         link: link.startsWith('http') ? link : `${this.source.baseUrl}${link}`
                     });
                 }
@@ -227,7 +232,7 @@ class DefaultExtension extends MProvider {
                     if (title && link) {
                         list.push({
                             name: title.trim(),
-                            imageUrl: imageUrl,
+                            imageUrl: this._cleanImageUrl(imageUrl),
                             link: link.startsWith('http') ? link : `${this.source.baseUrl}${link}`
                         });
                     }
@@ -256,7 +261,7 @@ class DefaultExtension extends MProvider {
                 if (title && title.trim() && link) {
                     list.push({
                         name: title.trim(),
-                        imageUrl: imageUrl,
+                        imageUrl: this._cleanImageUrl(imageUrl),
                         link: link.startsWith('http') ? link : `${this.source.baseUrl}${link}`
                     });
                 }
@@ -296,7 +301,7 @@ class DefaultExtension extends MProvider {
             name: title.trim(),
             title: title.trim(),
             description: description.trim(),
-            imageUrl: imageUrl,
+            imageUrl: this._cleanImageUrl(imageUrl),
             chapters: chapters
         };
     }
