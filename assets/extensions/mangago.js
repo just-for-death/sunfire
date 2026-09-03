@@ -20,17 +20,22 @@ class DefaultExtension extends MProvider {
         this.client = new Client();
     }
 
-    getHeaders() {
+    getHeaders(referer) {
         return {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://www.mangago.me/"
+            "Referer": referer || "https://www.mangago.me/"
         };
     }
 
-    _absUrl(link) {
+    _absUrl(link, base) {
         if (!link) return "";
         if (link.startsWith("http")) return link;
-        return `https://www.mangago.me${link.startsWith("/") ? "" : "/"}${link}`;
+        let origin = "https://www.mangago.me";
+        if (base && base.startsWith("http")) {
+            const m = base.match(/^(https?:\/\/[^\/]+)/i);
+            if (m) origin = m[1];
+        }
+        return `${origin}${link.startsWith("/") ? "" : "/"}${link}`;
     }
 
     async getPopular(page) {
@@ -257,7 +262,7 @@ class DefaultExtension extends MProvider {
             const batchUrls = [];
             for (let p = 1 + batchSize; p <= totalPages; p += batchSize) {
                 if (urlTemplate && urlTemplate.includes("{page}")) {
-                    batchUrls.push(this._absUrl(urlTemplate.replace("{page}", p)));
+                    batchUrls.push(this._absUrl(urlTemplate.replace("{page}", p), fullUrl));
                 } else {
                     const baseChapter = fullUrl.replace(/\/(\d+)?\/?$/, "/");
                     batchUrls.push(`${baseChapter}${p}/`);
@@ -270,7 +275,7 @@ class DefaultExtension extends MProvider {
                 const chunk = batchUrls.slice(i, i + chunkSize);
                 try {
                     const chunkResponses = await Promise.all(
-                        chunk.map(u => this.client.get(u, this.getHeaders()).catch(() => null))
+                        chunk.map(u => this.client.get(u, this.getHeaders(fullUrl)).catch(() => null))
                     );
                     for (const batchRes of chunkResponses) {
                         if (batchRes && batchRes.body) {

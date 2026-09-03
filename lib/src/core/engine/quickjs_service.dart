@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../logging/logger_service.dart';
 import 'javascript/js_extension_service.dart';
 import 'javascript/m_client.dart';
+import 'repo_manager.dart';
 
 class QuickJsService {
   static QuickJsService? _instance;
@@ -80,15 +81,24 @@ class QuickJsService {
           final displayName = (meta['name'] != null && meta['name'].toString().isNotEmpty)
               ? meta['name'].toString()
               : fileName.replaceAll('_', ' ').trim();
-          if (!_installedJsSources.containsKey(cleanKey)) {
+          final existingVer = _installedVersions[cleanKey];
+          final bundledVer = (meta['version'] != null && meta['version'].toString().isNotEmpty)
+              ? meta['version'].toString()
+              : '1.0.0';
+          final shouldOverride = !_installedJsSources.containsKey(cleanKey) ||
+              existingVer == null ||
+              RepoManager.compareVersions(bundledVer, existingVer) >= 0;
+
+          if (shouldOverride) {
             _installedJsSources[cleanKey] = code;
             _canonicalDisplayNames[cleanKey] = displayName;
-            if (meta['version'] != null && meta['version'].toString().isNotEmpty) {
-              _installedVersions[cleanKey] = meta['version'].toString();
-            }
+            _installedVersions[cleanKey] = bundledVer;
             if (meta['iconUrl'] != null && meta['iconUrl'].toString().isNotEmpty) {
               _installedIcons[cleanKey] = meta['iconUrl'].toString();
             }
+            _invalidateRuntime(cleanKey);
+            _invalidateRuntime(displayName);
+            _invalidateRuntime(fileName);
           }
         } catch (_) {}
       }
