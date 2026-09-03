@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "lang": "en",
     "baseUrl": "https://www.mangago.me",
     "apiUrl": "",
-    "iconUrl": "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/en.mangago.png",
+    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://www.mangago.me",
     "typeSource": "single",
     "itemType": 0,
     "version": "1.3.0",
@@ -205,6 +205,24 @@ class DefaultExtension extends MProvider {
         }
     }
 
+    _decryptImgSrcs(pageHtml, iv, keys) {
+        if (!iv || typeof CryptoJS === "undefined") return [];
+        const m = pageHtml.match(/var imgsrcs\s*=\s*['"]([^'"]+)['"]/);
+        if (!m) return [];
+        const imgsrcs = m[1];
+        for (const k of keys) {
+            try {
+                const key = CryptoJS.enc.Hex.parse(k);
+                const dec = CryptoJS.AES.decrypt(imgsrcs, key, { iv: iv, padding: CryptoJS.pad.ZeroPadding });
+                const utf8Str = dec.toString(CryptoJS.enc.Utf8);
+                if (utf8Str && utf8Str.includes("http")) {
+                    return utf8Str.split(",").map(u => u.trim()).filter(u => u.startsWith("http"));
+                }
+            } catch (_) {}
+        }
+        return [];
+    }
+
     async getPageList(url) {
         const fullUrl = this._absUrl(url);
         const res = await this.client.get(fullUrl, this.getHeaders());
@@ -212,50 +230,83 @@ class DefaultExtension extends MProvider {
         const pages = [];
         const seen = new Set();
 
-        const imgsrcsMatch = html.match(/var imgsrcs\s*=\s*['"]([^'"]+)['"]/);
-        if (imgsrcsMatch && typeof CryptoJS !== "undefined") {
-            const imgsrcs = imgsrcsMatch[1];
-            const candidateKeys = [
-                "e11adc3949ba59abbe56e057f20f883e",
-                "e10adc3949ba59abba56e057f20f883e"
-            ];
-            const iv = CryptoJS.enc.Hex.parse("1234567890abcdef1234567890abcdef");
+        const candidateKeys = [
+            "e11adc3949ba59abbe56e057f20f883e",
+            "e10adc3949ba59abba56e057f20f883e"
+        ];
+        const iv = typeof CryptoJS !== "undefined" ? CryptoJS.enc.Hex.parse("1234567890abcdef1234567890abcdef") : null;
 
-            // 1. Try known keys
-            for (const k of candidateKeys) {
+        // 1. Decrypt first batch
+        const firstBatch = this._decryptImgSrcs(html, iv, candidateKeys);
+        for (const rawUrl of firstBatch) {
+            const cleanUrl = rawUrl.replace(/^https:\/\/iweb_/, "http://iweb_");
+            if (!seen.has(cleanUrl)) {
+                seen.add(cleanUrl);
+                pages.push({ url: cleanUrl, headers: { "Referer": "https://www.mangago.me/" } });
+            }
+        }
+
+        // 2. Check for multi-page batch pagination (e.g. Solo Leveling Ch.191 with total_pages = 98)
+        const totalPagesMatch = html.match(/total_pages\s*=\s*(\d+)/);
+        const curlMatch = html.match(/id=['"]curl['"]\s+value=['"]([^'"]+)['"]/);
+        const totalPages = totalPagesMatch ? parseInt(totalPagesMatch[1], 10) : 0;
+        const urlTemplate = curlMatch ? curlMatch[1] : "";
+
+        if (totalPages > pages.length && pages.length > 0) {
+            const batchSize = pages.length; // usually 5
+            const batchUrls = [];
+            for (let p = 1 + batchSize; p <= totalPages; p += batchSize) {
+                if (urlTemplate && urlTemplate.includes("{page}")) {
+                    batchUrls.push(this._absUrl(urlTemplate.replace("{page}", p)));
+                } else {
+                    const baseChapter = fullUrl.replace(/\/(\d+)?\/?$/, "/");
+                    batchUrls.push(`${baseChapter}${p}/`);
+                }
+            }
+
+            // Fetch batches in concurrent chunks of 4
+            const chunkSize = 4;
+            for (let i = 0; i < batchUrls.length; i += chunkSize) {
+                const chunk = batchUrls.slice(i, i + chunkSize);
                 try {
-                    const key = CryptoJS.enc.Hex.parse(k);
-                    const dec = CryptoJS.AES.decrypt(imgsrcs, key, { iv: iv, padding: CryptoJS.pad.ZeroPadding });
-                    const utf8Str = dec.toString(CryptoJS.enc.Utf8);
-                    if (utf8Str && utf8Str.includes("http")) {
-                        const rawUrls = utf8Str.split(",").map(u => u.trim()).filter(u => u.startsWith("http"));
-                        for (const rawUrl of rawUrls) {
-                            const cleanUrl = rawUrl.replace(/^https:\/\/iweb_/, "http://iweb_");
-                            if (!seen.has(cleanUrl)) {
-                                seen.add(cleanUrl);
-                                pages.push({ url: cleanUrl, headers: { "Referer": "https://www.mangago.me/" } });
+                    const chunkResponses = await Promise.all(
+                        chunk.map(u => this.client.get(u, this.getHeaders()).catch(() => null))
+                    );
+                    for (const batchRes of chunkResponses) {
+                        if (batchRes && batchRes.body) {
+                            const batchUrls = this._decryptImgSrcs(batchRes.body, iv, candidateKeys);
+                            for (const rawUrl of batchUrls) {
+                                const cleanUrl = rawUrl.replace(/^https:\/\/iweb_/, "http://iweb_");
+                                if (!seen.has(cleanUrl)) {
+                                    seen.add(cleanUrl);
+                                    pages.push({ url: cleanUrl, headers: { "Referer": "https://www.mangago.me/" } });
+                                }
                             }
-                        }
-                        if (pages.length > 0) {
-                            return pages;
                         }
                     }
                 } catch (_) {}
             }
+        }
 
-            // 2. Dynamic key fallback: fetch chapter.js if keys rotated
-            try {
-                const chapterJsMatch = html.match(/src="([^"]*chapter\.js[^"]*)"/);
-                if (chapterJsMatch) {
-                    const chapterJsUrl = this._absUrl(chapterJsMatch[1]);
-                    const chapterJsRes = await this.client.get(chapterJsUrl, this.getHeaders());
-                    const deobf = this._deobfuscateSoJsonV4(chapterJsRes.body || "");
-                    const dynamicHexMatches = deobf.matchAll(/CryptoJS\.enc\.Hex\.parse\(["']([0-9a-fA-F]{32})["']\)/g);
-                    for (const m of dynamicHexMatches) {
-                        const k = m[1];
-                        try {
-                            const key = CryptoJS.enc.Hex.parse(k);
-                            const dec = CryptoJS.AES.decrypt(imgsrcs, key, { iv: iv, padding: CryptoJS.pad.ZeroPadding });
+        if (pages.length > 0) {
+            return pages;
+        }
+
+        // 3. Dynamic key fallback: fetch chapter.js if keys rotated
+        try {
+            const chapterJsMatch = html.match(/src="([^"]*chapter\.js[^"]*)"/);
+            if (chapterJsMatch) {
+                const chapterJsUrl = this._absUrl(chapterJsMatch[1]);
+                const chapterJsRes = await this.client.get(chapterJsUrl, this.getHeaders());
+                const deobf = this._deobfuscateSoJsonV4(chapterJsRes.body || "");
+                const dynamicHexMatches = deobf.matchAll(/CryptoJS\.enc\.Hex\.parse\(["']([0-9a-fA-F]{32})["']\)/g);
+                for (const m of dynamicHexMatches) {
+                    const k = m[1];
+                    try {
+                        const key = CryptoJS.enc.Hex.parse(k);
+                        const imgsrcsMatch = html.match(/var imgsrcs\s*=\s*['"]([^'"]+)['"]/);
+                        if (imgsrcsMatch) {
+                            const dec = CryptoJS.AES.decrypt(imgsrcsMatch[1], key, { iv: iv, padding: CryptoJS.pad.ZeroPadding });
                             const utf8Str = dec.toString(CryptoJS.enc.Utf8);
                             if (utf8Str && utf8Str.includes("http")) {
                                 const rawUrls = utf8Str.split(",").map(u => u.trim()).filter(u => u.startsWith("http"));
@@ -266,17 +317,15 @@ class DefaultExtension extends MProvider {
                                         pages.push({ url: cleanUrl, headers: { "Referer": "https://www.mangago.me/" } });
                                     }
                                 }
-                                if (pages.length > 0) {
-                                    return pages;
-                                }
+                                if (pages.length > 0) return pages;
                             }
-                        } catch (_) {}
-                    }
+                        }
+                    } catch (_) {}
                 }
-            } catch (_) {}
-        }
+            }
+        } catch (_) {}
 
-        // 3. Final DOM fallback
+        // 4. Final DOM fallback
         const doc = new Document(html);
         const allImgs = doc.querySelectorAll("img");
         for (const img of allImgs) {
