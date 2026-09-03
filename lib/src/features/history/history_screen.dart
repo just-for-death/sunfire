@@ -239,6 +239,29 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               onTap: () => context.push('/reader/${ch.serverId}'),
+                              onLongPress: () async {
+                                final remove = await showDialog<bool>(
+                                  context: context,
+                                  builder: (dCtx) => AlertDialog(
+                                    backgroundColor: const Color(0xFF1F1F24),
+                                    title: const Text('Remove from History?'),
+                                    content: Text('Remove "${ch.name}" from your reading history?'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Cancel')),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                        onPressed: () => Navigator.pop(dCtx, true),
+                                        child: const Text('Remove', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (remove == true) {
+                                  ch.lastReadAt = null;
+                                  await IsarService.instance.saveChapter(ch);
+                                  _loadHistory();
+                                }
+                              },
                               leading: Container(
                                 width: 44,
                                 height: 60,
