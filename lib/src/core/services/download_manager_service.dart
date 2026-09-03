@@ -215,21 +215,23 @@ class DownloadManagerService extends ChangeNotifier {
       LoggerService.instance.logError('_downloadSinglePage error: $e', category: 'DownloadManager');
     }
 
-    // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl
+    // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl-impersonate
     if ((pageBytes == null || pageBytes.isEmpty) && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-      try {
-        final args = <String>['-s', '-L', '--max-time', '20'];
-        headers.forEach((k, v) => args.addAll(['-H', '$k: $v']));
-        args.add(pageUrl);
-        final res = await Process.run('curl', args, stdoutEncoding: null);
-        if (res.exitCode == 0) {
-          final b = res.stdout as List<int>;
-          if (b.length > 200) {
-            pageBytes = b;
+      final candidates = ['/usr/bin/curl-impersonate', 'curl-impersonate', 'curl-impersonate-chrome', '/usr/bin/curl', 'curl'];
+      for (final exe in candidates) {
+        try {
+          final args = <String>['-s', '-L', '--max-time', '25'];
+          headers.forEach((k, v) => args.addAll(['-H', '$k: $v']));
+          args.add(pageUrl);
+          final res = await Process.run(exe, args, stdoutEncoding: null);
+          if (res.exitCode == 0) {
+            final b = res.stdout as List<int>;
+            if (b.length > 200) {
+              pageBytes = b;
+              break;
+            }
           }
-        }
-      } catch (e) {
-        LoggerService.instance.logError('_downloadSinglePage curl fallback error: $e', category: 'DownloadManager');
+        } catch (_) {}
       }
     }
 
