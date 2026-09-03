@@ -818,7 +818,20 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
     final isSelecting = _selectedChapterIds.isNotEmpty;
 
-    return Scaffold(
+    return PopScope(
+      canPop: !isSelecting && !_isSearchingChapters,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (isSelecting) {
+          setState(() => _selectedChapterIds.clear());
+        } else if (_isSearchingChapters) {
+          setState(() {
+            _isSearchingChapters = false;
+            _chapterSearch = '';
+          });
+        }
+      },
+      child: Scaffold(
       appBar: isSelecting
           ? AppBar(
               backgroundColor: const Color(0xFF1F1F24),
@@ -867,8 +880,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           return _buildPhoneLayout(context, manga, sortedChapters, primaryColor, isSelecting);
         },
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildTabletLayout(
     BuildContext context,
