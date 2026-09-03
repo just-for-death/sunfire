@@ -66,3 +66,9 @@ implementation_plan.md
 
 # FVM Version Cache
 .fvm/
+
+# Release Artifacts
+*.apk
+*.ipa
+*.part
+*.zip
