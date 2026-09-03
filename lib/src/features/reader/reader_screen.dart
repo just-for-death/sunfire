@@ -1049,11 +1049,25 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
+  void _prefetchUpcomingPages(int currentIndex) {
+    if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+      for (int i = currentIndex + 1; i <= currentIndex + 4 && i < _pageUrls.length; i++) {
+        final nextUrl = _pageUrls[i];
+        if (!_recoveredImageBytes.containsKey(nextUrl) && !_recoveringUrls.contains(nextUrl) && (nextUrl.startsWith('http://') || nextUrl.startsWith('https://'))) {
+          _recoverImage(nextUrl, i);
+        }
+      }
+    }
+  }
+
   Widget _buildPageWidget(String url, int index, {BoxConstraints? constraints, bool isPaged = false}) {
     final isWebtoon = _readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps;
     final boxFit = isWebtoon ? BoxFit.fitWidth : _imageBoxFit;
 
     final isDesktop = Platform.isLinux || Platform.isMacOS || Platform.isWindows;
+    if (isDesktop) {
+      _prefetchUpcomingPages(index);
+    }
 
     Widget image;
     if (_recoveredImageBytes.containsKey(url)) {
