@@ -1276,15 +1276,15 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                             cacheHeight: 120,
                                             errorBuilder: (_, __, ___) => Center(
                                               child: Text(
-                                                lang.substring(0, lang.length.clamp(0, 2)).toUpperCase(),
-                                                style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                                (name.isNotEmpty ? name[0] : (lang.isNotEmpty ? lang[0] : 'E')).toUpperCase(),
+                                                style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16),
                                               ),
                                             ),
                                           )
                                         : Center(
                                             child: Text(
-                                              lang.substring(0, lang.length.clamp(0, 2)).toUpperCase(),
-                                              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                              (name.isNotEmpty ? name[0] : (lang.isNotEmpty ? lang[0] : 'E')).toUpperCase(),
+                                              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16),
                                             ),
                                           ),
                                   ),

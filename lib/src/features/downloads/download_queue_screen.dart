@@ -174,6 +174,39 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
   }
 
   Widget _buildServerDownloadsTab(Color primaryColor) {
+    if (!GraphQLClientService.instance.isConfigured) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 54, color: Colors.grey.withAlpha(120)),
+              const SizedBox(height: 16),
+              const Text('No Suwayomi Server Connected', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 8),
+              const Text(
+                'Connect a Suwayomi server in Settings to manage remote server downloads, or use the Local Device tab for offline reading.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                icon: const Icon(Icons.settings_rounded, color: Colors.white),
+                label: const Text('Server Settings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                onPressed: () => context.push('/settings/server'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (_isLoadingServer) {
       return Center(child: CircularProgressIndicator(color: primaryColor));
     }
