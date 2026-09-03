@@ -599,17 +599,17 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      SegmentedButton<bool>(
-                        segments: const [
-                          ButtonSegment(value: true, label: Text('Device', style: TextStyle(fontSize: 11))),
-                          ButtonSegment(value: false, label: Text('Server', style: TextStyle(fontSize: 11))),
-                        ],
-                        selected: {downloadToLocal},
-                        onSelectionChanged: (set) {
-                          setSheetState(() => downloadToLocal = set.first);
-                        },
-                      ),
+                      if (GraphQLClientService.instance.isConfigured)
+                        SegmentedButton<bool>(
+                          segments: const [
+                            ButtonSegment(value: true, label: Text('Device', style: TextStyle(fontSize: 11))),
+                            ButtonSegment(value: false, label: Text('Server', style: TextStyle(fontSize: 11))),
+                          ],
+                          selected: {downloadToLocal},
+                          onSelectionChanged: (set) {
+                            setSheetState(() => downloadToLocal = set.first);
+                          },
+                        ),
                     ],
                   ),
                   const SizedBox(height: 16),

@@ -883,7 +883,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 scrollCacheExtent: ScrollCacheExtent.pixels(800),
                 slivers: [
-                  if (_isOffline)
+                  if (_isOffline && GraphQLClientService.instance.isConfigured)
                     SliverToBoxAdapter(
                       child: Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
