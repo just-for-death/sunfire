@@ -150,6 +150,12 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool get keepScreenAwake => _prefs?.getBool('keep_screen_awake') ?? true;
+  set keepScreenAwake(bool value) {
+    _prefs?.setBool('keep_screen_awake', value);
+    notifyListeners();
+  }
+
   // ── APPEARANCE & THEMES ───────────────────────────────────
   String get themeMode => _prefs?.getString('theme_mode') ?? 'OLED Black';
   set themeMode(String value) {

@@ -7,7 +7,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
@@ -46,6 +48,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
   bool _showControls = true;
   int _currentPage = 1;
 
+  // Zoom & Gestures
+  bool _isZoomed = false;
+  TapDownDetails? _doubleTapDetails;
+  final TransformationController _transformationController = TransformationController();
+
+  // Floating scroll indicator for Webtoon mode
+  Timer? _scrollIndicatorTimer;
+  bool _showScrollIndicator = false;
+
   // Prefetch cache: chapterServerId → resolved page URLs
   final Map<int, List<String>> _prefetchedChapters = {};
   final Set<int> _prefetchingChapters = {};
@@ -66,6 +77,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
     super.initState();
     _pageController = PageController();
     _initPreferences();
+    if (_settings.keepScreenAwake) {
+      unawaited(WakelockPlus.enable());
+    }
     _scrollController.addListener(_onVerticalScroll);
     _loadChapterAndPages(widget.chapterServerId);
   }
@@ -230,6 +244,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
   @override
   void dispose() {
     _progressDebounceTimer?.cancel();
+    _scrollIndicatorTimer?.cancel();
+    _transformationController.dispose();
+    if (_settings.keepScreenAwake) {
+      unawaited(WakelockPlus.disable());
+    }
     if (_chapter != null) {
       _updateProgress(_currentPage);
     }
@@ -242,6 +261,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Future<void> _loadChapterAndPages(int chapterId) async {
+    _progressDebounceTimer?.cancel();
+    _recoveredImageBytes.clear();
+    _recoveringUrls.clear();
+    if (_isZoomed) {
+      _transformationController.value = Matrix4.identity();
+      _isZoomed = false;
+    }
+
     setState(() {
       _isLoading = true;
       _pageUrls = [];
@@ -496,6 +523,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final currentScroll = _scrollController.offset;
     if (maxScroll <= 0) return;
 
+    // Show floating page indicator when scrolling with controls hidden
+    if (!_showControls) {
+      if (!_showScrollIndicator && mounted) {
+        setState(() => _showScrollIndicator = true);
+      }
+      _scrollIndicatorTimer?.cancel();
+      _scrollIndicatorTimer = Timer(const Duration(milliseconds: 1500), () {
+        if (mounted && _showScrollIndicator) {
+          setState(() => _showScrollIndicator = false);
+        }
+      });
+    }
+
     final pageRatio = (currentScroll / maxScroll).clamp(0.0, 1.0);
     final computedPage = ((pageRatio * (_pageUrls.length - 1)) + 1).round();
 
@@ -514,6 +554,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   void _onPageChanged(int index) {
+    if (_isZoomed) {
+      _transformationController.value = Matrix4.identity();
+      _isZoomed = false;
+    }
     final page = index + 1;
     _currentPage = page;
 
@@ -612,6 +656,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   void _handleTapZone(TapUpDetails details, BoxConstraints constraints) {
+    if (!_settings.tapZonesEnabled || _isZoomed) {
+      _toggleControls();
+      return;
+    }
+
     final width = constraints.maxWidth;
     final dx = details.localPosition.dx;
 
@@ -662,21 +711,84 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
+  void _handleDoubleTapZoom() {
+    final currentScale = _transformationController.value.getMaxScaleOnAxis();
+    if (currentScale > 1.05) {
+      setState(() {
+        _transformationController.value = Matrix4.identity();
+        _isZoomed = false;
+      });
+    } else {
+      final pos = _doubleTapDetails?.localPosition ?? Offset.zero;
+      final x = -pos.dx * 1.5;
+      final y = -pos.dy * 1.5;
+      final zoomedMatrix = Matrix4.identity()
+        ..translateByDouble(x, y, 0.0, 1.0)
+        ..scaleByDouble(2.5, 2.5, 1.0, 1.0);
+      setState(() {
+        _transformationController.value = zoomedMatrix;
+        _isZoomed = true;
+      });
+    }
+  }
+
   void _goToNextPage() {
-    if (_currentPage < _pageUrls.length) {
-      HapticFeedback.lightImpact();
-      _pageController.nextPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
-    } else if (_nextChapter != null) {
-      _loadChapterAndPages(_nextChapter!.serverId);
+    final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
+    if (isPaged) {
+      if (_currentPage < _pageUrls.length && _pageController.hasClients) {
+        HapticFeedback.lightImpact();
+        _pageController.nextPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
+      } else if (_nextChapter != null) {
+        _loadChapterAndPages(_nextChapter!.serverId);
+      }
+    } else {
+      if (_scrollController.hasClients) {
+        final screenHeight = MediaQuery.of(context).size.height;
+        final maxScroll = _scrollController.position.maxScrollExtent;
+        final currentOffset = _scrollController.offset;
+        if (currentOffset >= maxScroll - 20) {
+          if (_nextChapter != null) {
+            _loadChapterAndPages(_nextChapter!.serverId);
+          }
+        } else {
+          final targetOffset = (currentOffset + screenHeight * 0.85).clamp(0.0, maxScroll);
+          _scrollController.animateTo(
+            targetOffset,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      }
     }
   }
 
   void _goToPrevPage() {
-    if (_currentPage > 1) {
-      HapticFeedback.lightImpact();
-      _pageController.previousPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
-    } else if (_prevChapter != null) {
-      _loadChapterAndPages(_prevChapter!.serverId);
+    final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
+    if (isPaged) {
+      if (_currentPage > 1 && _pageController.hasClients) {
+        HapticFeedback.lightImpact();
+        _pageController.previousPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
+      } else if (_prevChapter != null) {
+        _loadChapterAndPages(_prevChapter!.serverId);
+      }
+    } else {
+      if (_scrollController.hasClients) {
+        final screenHeight = MediaQuery.of(context).size.height;
+        final maxScroll = _scrollController.position.maxScrollExtent;
+        final currentOffset = _scrollController.offset;
+        if (currentOffset <= 20) {
+          if (_prevChapter != null) {
+            _loadChapterAndPages(_prevChapter!.serverId);
+          }
+        } else {
+          final targetOffset = (currentOffset - screenHeight * 0.85).clamp(0.0, maxScroll);
+          _scrollController.animateTo(
+            targetOffset,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      }
     }
   }
 
@@ -908,6 +1020,16 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     // 5. NAVIGATION TOGGLES
                     _buildSectionHeader('NAVIGATION & GESTURES'),
                     SwitchListTile(
+                      title: const Text('3-Zone Tap Navigation'),
+                      subtitle: const Text('Tap left/right edges to turn pages'),
+                      value: _settings.tapZonesEnabled,
+                      activeThumbColor: primaryColor,
+                      onChanged: (val) {
+                        setState(() => _settings.tapZonesEnabled = val);
+                        setSheetState(() {});
+                      },
+                    ),
+                    SwitchListTile(
                       title: const Text('Invert Tap Zones'),
                       subtitle: const Text('Swap previous and next page tap areas'),
                       value: _invertTaps,
@@ -915,6 +1037,31 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       onChanged: (val) {
                         setState(() => _invertTaps = val);
                         _settings.invertTapZones = val;
+                        setSheetState(() {});
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Volume Key Page Turn'),
+                      subtitle: const Text('Turn pages with physical volume rocker'),
+                      value: _settings.volumeKeyTurn,
+                      activeThumbColor: primaryColor,
+                      onChanged: (val) {
+                        setState(() => _settings.volumeKeyTurn = val);
+                        setSheetState(() {});
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Keep Screen Awake'),
+                      subtitle: const Text('Prevent device display from sleeping'),
+                      value: _settings.keepScreenAwake,
+                      activeThumbColor: primaryColor,
+                      onChanged: (val) {
+                        setState(() => _settings.keepScreenAwake = val);
+                        if (val) {
+                          unawaited(WakelockPlus.enable());
+                        } else {
+                          unawaited(WakelockPlus.disable());
+                        }
                         setSheetState(() {});
                       },
                     ),
@@ -1272,7 +1419,23 @@ class _ReaderScreenState extends State<ReaderScreen> {
             child: Center(
               child: _recoveringUrls.contains(url)
                   ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
-                  : Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.grey)),
+                  : InkWell(
+                      onTap: () => _recoverImage(url, index),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.refresh_rounded, color: Colors.grey, size: 28),
+                            const SizedBox(height: 6),
+                            Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Text('Tap to Retry', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
             ),
           );
         },
@@ -1288,10 +1451,29 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
 
     if (isPaged) {
-      return InteractiveViewer(
-        minScale: 1.0,
-        maxScale: 3.5,
-        child: image,
+      return GestureDetector(
+        onDoubleTapDown: (details) => _doubleTapDetails = details,
+        onDoubleTap: _handleDoubleTapZoom,
+        child: InteractiveViewer(
+          transformationController: _transformationController,
+          minScale: 1.0,
+          maxScale: 3.5,
+          onInteractionUpdate: (_) {
+            final scale = _transformationController.value.getMaxScaleOnAxis();
+            final isNowZoomed = scale > 1.05;
+            if (isNowZoomed != _isZoomed) {
+              setState(() => _isZoomed = isNowZoomed);
+            }
+          },
+          onInteractionEnd: (_) {
+            final scale = _transformationController.value.getMaxScaleOnAxis();
+            final isNowZoomed = scale > 1.05;
+            if (isNowZoomed != _isZoomed) {
+              setState(() => _isZoomed = isNowZoomed);
+            }
+          },
+          child: image,
+        ),
       );
     }
 
@@ -1514,7 +1696,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   else
                     PageView.builder(
                       controller: _pageController,
-                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                      physics: _isZoomed
+                          ? const NeverScrollableScrollPhysics()
+                          : const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                       reverse: _readingMode == ReadingMode.pagedRtl,
                       itemCount: _pageUrls.length,
                       onPageChanged: _onPageChanged,
@@ -1526,196 +1710,265 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     ),
 
                   // ── 2. OVERLAY HUD (TOP APP BAR & BOTTOM SLIDER) ──
-                  if (_showControls) ...[
-                    // Top Overlay Bar
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 8, left: 16, right: 16, bottom: 12),
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Color(0xCC000000), Colors.transparent],
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                              onPressed: () => context.pop(),
-                            ),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _chapter?.name ?? 'Reader',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                  ),
-                                  Text(
-                                    '${_readingMode.name.toUpperCase()} • ${_readerTheme.name.toUpperCase()}',
-                                    style: TextStyle(color: primaryColor, fontSize: 10, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
+                  // Top Overlay Bar with smooth 200ms slide & fade
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: AnimatedSlide(
+                      offset: _showControls ? Offset.zero : const Offset(0, -1),
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      child: AnimatedOpacity(
+                        opacity: _showControls ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: IgnorePointer(
+                          ignoring: !_showControls,
+                          child: Container(
+                            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 8, left: 16, right: 16, bottom: 12),
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Color(0xCC000000), Colors.transparent],
                               ),
                             ),
-                            IconButton(
-                              icon: Icon(
-                                _settings.incognitoMode ? Icons.visibility_off_rounded : Icons.visibility_outlined,
-                                color: _settings.incognitoMode ? Colors.amberAccent : Colors.white70,
-                              ),
-                              tooltip: _settings.incognitoMode ? 'Incognito Mode: ON' : 'Incognito Mode: OFF',
-                              onPressed: () {
-                                setState(() => _settings.incognitoMode = !_settings.incognitoMode);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(_settings.incognitoMode ? '🕵️ Incognito Mode Active (History & tracking paused)' : 'Incognito Mode Deactivated'),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.format_list_bulleted_rounded, color: Colors.white),
-                              tooltip: 'Chapters',
-                              onPressed: _showChapterSelectorSheet,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.tune_rounded, color: Colors.white),
-                              tooltip: 'Settings',
-                              onPressed: _showReaderSettingsSheet,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Bottom HUD Bar with Scrubber Slider
-                    Positioned(
-                      bottom: 16 + MediaQuery.of(context).padding.bottom,
-                      left: 16,
-                      right: 16,
-                      child: Center(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(24),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xE614141A),
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
-                                boxShadow: const [
-                                  BoxShadow(color: Color(0x66000000), blurRadius: 16, offset: Offset(0, 4)),
-                                ],
-                              ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.skip_previous_rounded, color: Colors.white),
-                                    tooltip: 'Previous Chapter',
-                                    onPressed: _prevChapter != null ? () => _loadChapterAndPages(_prevChapter!.serverId) : null,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Page $_currentPage / ${_pageUrls.length}',
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  InkWell(
-                                    onTap: _cycleReadingMode,
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: primaryColor.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: primaryColor.withValues(alpha: 0.5), width: 0.8),
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                                  onPressed: () => context.pop(),
+                                ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _chapter?.name ?? 'Reader',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                                       ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
+                                      Row(
                                         children: [
-                                          Icon(
-                                            _readingMode == ReadingMode.longStrip
-                                                ? Icons.swap_vert_rounded
-                                                : (_readingMode == ReadingMode.pagedRtl ? Icons.arrow_back_rounded : Icons.arrow_forward_rounded),
-                                            size: 13,
-                                            color: primaryColor,
-                                          ),
-                                          const SizedBox(width: 4),
                                           Text(
-                                            _readingMode == ReadingMode.longStrip
-                                                ? 'WEBTOON'
-                                                : (_readingMode == ReadingMode.pagedRtl ? 'RTL' : 'LTR'),
-                                            style: TextStyle(
-                                              color: primaryColor,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing: 0.5,
-                                            ),
+                                            '${_readingMode.name.toUpperCase()} • ${_readerTheme.name.toUpperCase()}',
+                                            style: TextStyle(color: primaryColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '• ${DateFormat.jm().format(DateTime.now())}',
+                                            style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.w500),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
-                                    tooltip: 'Next Chapter',
-                                    onPressed: _nextChapter != null ? () => _loadChapterAndPages(_nextChapter!.serverId) : null,
-                                  ),
-                                ],
-                              ),
-                              if (_pageUrls.length > 1)
-                                ConstrainedBox(
-                                  constraints: BoxConstraints(maxWidth: (MediaQuery.of(context).size.width - 64).clamp(180.0, 320.0)),
-                                  child: SizedBox(
-                                    height: 28,
-                                    child: SliderTheme(
-                                      data: SliderThemeData(
-                                        activeTrackColor: primaryColor,
-                                        inactiveTrackColor: Colors.grey[800],
-                                        thumbColor: primaryColor,
-                                        trackHeight: 3,
-                                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                                      ),
-                                      child: Slider(
-                                        value: _currentPage.toDouble().clamp(1.0, _pageUrls.length.toDouble()),
-                                        min: 1.0,
-                                        max: _pageUrls.length.toDouble(),
-                                        divisions: _pageUrls.length > 1 ? _pageUrls.length - 1 : 1,
-                                        onChanged: (val) {
-                                          final targetPage = val.round();
-                                          setState(() => _currentPage = targetPage);
-                                          if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
-                                            _pageController.jumpToPage(targetPage - 1);
-                                          } else {
-                                            final targetOffset = ((targetPage - 1) / (_pageUrls.length - 1)) * _scrollController.position.maxScrollExtent;
-                                            _scrollController.jumpTo(targetOffset);
-                                          }
-                                        },
-                                      ),
-                                    ),
+                                    ],
                                   ),
                                 ),
-                            ],
+                                IconButton(
+                                  icon: Icon(
+                                    _settings.incognitoMode ? Icons.visibility_off_rounded : Icons.visibility_outlined,
+                                    color: _settings.incognitoMode ? Colors.amberAccent : Colors.white70,
+                                  ),
+                                  tooltip: _settings.incognitoMode ? 'Incognito Mode: ON' : 'Incognito Mode: OFF',
+                                  onPressed: () {
+                                    setState(() => _settings.incognitoMode = !_settings.incognitoMode);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(_settings.incognitoMode ? '🕵️ Incognito Mode Active (History & tracking paused)' : 'Incognito Mode Deactivated'),
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.format_list_bulleted_rounded, color: Colors.white),
+                                  tooltip: 'Chapters',
+                                  onPressed: _showChapterSelectorSheet,
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.tune_rounded, color: Colors.white),
+                                  tooltip: 'Settings',
+                                  onPressed: _showReaderSettingsSheet,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+
+                  // Bottom HUD Bar with Scrubber Slider with smooth 200ms slide & fade
+                  Positioned(
+                    bottom: 16 + MediaQuery.of(context).padding.bottom,
+                    left: 16,
+                    right: 16,
+                    child: AnimatedSlide(
+                      offset: _showControls ? Offset.zero : const Offset(0, 1),
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      child: AnimatedOpacity(
+                        opacity: _showControls ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: IgnorePointer(
+                          ignoring: !_showControls,
+                          child: Center(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xE614141A),
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
+                                    boxShadow: const [
+                                      BoxShadow(color: Color(0x66000000), blurRadius: 16, offset: Offset(0, 4)),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.skip_previous_rounded, color: Colors.white),
+                                            tooltip: 'Previous Chapter',
+                                            onPressed: _prevChapter != null ? () => _loadChapterAndPages(_prevChapter!.serverId) : null,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Page $_currentPage / ${_pageUrls.length}',
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          InkWell(
+                                            onTap: _cycleReadingMode,
+                                            borderRadius: BorderRadius.circular(10),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: primaryColor.withValues(alpha: 0.2),
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(color: primaryColor.withValues(alpha: 0.5), width: 0.8),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    _readingMode == ReadingMode.longStrip
+                                                        ? Icons.swap_vert_rounded
+                                                        : (_readingMode == ReadingMode.pagedRtl ? Icons.arrow_back_rounded : Icons.arrow_forward_rounded),
+                                                    size: 13,
+                                                    color: primaryColor,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    _readingMode == ReadingMode.longStrip
+                                                        ? 'WEBTOON'
+                                                        : (_readingMode == ReadingMode.pagedRtl ? 'RTL' : 'LTR'),
+                                                    style: TextStyle(
+                                                      color: primaryColor,
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      letterSpacing: 0.5,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          IconButton(
+                                            icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
+                                            tooltip: 'Next Chapter',
+                                            onPressed: _nextChapter != null ? () => _loadChapterAndPages(_nextChapter!.serverId) : null,
+                                          ),
+                                        ],
+                                      ),
+                                      if (_pageUrls.length > 1)
+                                        ConstrainedBox(
+                                          constraints: BoxConstraints(maxWidth: (MediaQuery.of(context).size.width - 64).clamp(180.0, 320.0)),
+                                          child: SizedBox(
+                                            height: 28,
+                                            child: SliderTheme(
+                                              data: SliderThemeData(
+                                                activeTrackColor: primaryColor,
+                                                inactiveTrackColor: Colors.grey[800],
+                                                thumbColor: primaryColor,
+                                                trackHeight: 3,
+                                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                              ),
+                                              child: Slider(
+                                                value: _currentPage.toDouble().clamp(1.0, _pageUrls.length.toDouble()),
+                                                min: 1.0,
+                                                max: _pageUrls.length.toDouble(),
+                                                divisions: _pageUrls.length > 1 ? _pageUrls.length - 1 : 1,
+                                                onChanged: (val) {
+                                                  final targetPage = val.round();
+                                                  setState(() => _currentPage = targetPage);
+                                                  if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
+                                                    if (_pageController.hasClients) {
+                                                      _pageController.jumpToPage(targetPage - 1);
+                                                    }
+                                                  } else {
+                                                    if (_scrollController.hasClients && _pageUrls.length > 1 && _scrollController.position.maxScrollExtent > 0) {
+                                                      final targetOffset = ((targetPage - 1) / (_pageUrls.length - 1)) * _scrollController.position.maxScrollExtent;
+                                                      _scrollController.jumpTo(targetOffset);
+                                                    }
+                                                  }
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // ── 3. FLOATING PAGE INDICATOR CAPSULE (Webtoon Mode) ──
+                  if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps)
+                    Positioned(
+                      bottom: 24 + MediaQuery.of(context).padding.bottom,
+                      right: 20,
+                      child: AnimatedOpacity(
+                        opacity: (!_showControls && _showScrollIndicator && _pageUrls.isNotEmpty) ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 250),
+                        child: IgnorePointer(
+                          ignoring: !_showScrollIndicator || _showControls,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xCC14141A),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
+                              boxShadow: const [
+                                BoxShadow(color: Color(0x40000000), blurRadius: 8, offset: Offset(0, 2)),
+                              ],
+                            ),
+                            child: Text(
+                              '$_currentPage / ${_pageUrls.length}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
             ],
           ),
         );

@@ -8,6 +8,7 @@ import 'core/services/download_manager_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/sync/graphql_client_service.dart';
 import 'core/sync/sync_engine.dart';
+import 'core/sync/websocket_service.dart';
 import 'features/browse/browse_screen.dart';
 import 'features/history/history_screen.dart';
 import 'features/library/library_screen.dart';
@@ -77,6 +78,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       DownloadManagerService.instance.resumeLocalQueue();
+      WebSocketService.instance.connect();
       if (GraphQLClientService.instance.isConfigured) {
         SyncEngine.instance.triggerSync();
       }
