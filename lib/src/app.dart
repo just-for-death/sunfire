@@ -161,8 +161,8 @@ class _SunfireAppState extends State<SunfireApp> {
                 // Guarantee minimum top safe area inset for iPadOS, LiveContainer,
                 // and sideload environments where safeAreaInsets.top can be reported as 0 or 24.
                 final minTopPadding = isTablet
-                    ? 44.0
-                    : (isApple ? 44.0 : 24.0);
+                    ? (isApple ? 54.0 : 48.0)
+                    : (isApple ? 48.0 : 24.0);
 
                 final effectiveTopPadding = math.max(mediaQuery.padding.top, minTopPadding);
                 final effectiveTopViewPadding = math.max(mediaQuery.viewPadding.top, minTopPadding);

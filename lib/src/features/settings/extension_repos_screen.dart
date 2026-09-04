@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/engine/repo_manager.dart';
 import '../../core/services/settings_service.dart';
+import '../../core/widgets/sunfire_badge.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
 
@@ -137,19 +138,13 @@ class _ExtensionReposScreenState extends State<ExtensionReposScreen> {
                       ),
                       child: Icon(Icons.hub_rounded, color: primaryColor, size: 20),
                     ),
-                    title: Row(
+                    title: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 4,
                       children: [
                         Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.purpleAccent.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.4), width: 0.8),
-                          ),
-                          child: const Text('LOCAL', style: TextStyle(color: Colors.purpleAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                        ),
+                        SunfireBadge.local(),
                       ],
                     ),
                     subtitle: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.grey)),

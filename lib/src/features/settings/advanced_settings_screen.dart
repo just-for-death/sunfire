@@ -3,11 +3,15 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/db/isar_service.dart';
+import '../../core/engine/javascript/m_client.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/image_cache_helper.dart';
+import '../../core/services/settings_service.dart';
+import '../../core/widgets/sunfire_badge.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
 
@@ -23,7 +27,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
   int _chapterCount = 0;
   int _categoryCount = 0;
   bool _isLoadingStats = true;
-  String _versionStr = 'v3.0.0-beta';
+  String _versionStr = 'v5.0.0-beta';
 
   @override
   void initState() {
@@ -37,7 +41,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
       final manga = await IsarService.instance.getAllManga();
       final chapters = await IsarService.instance.getAllChapters();
       final cats = await IsarService.instance.getCategories();
-      String versionDisplay = 'v3.0.0-beta';
+      String versionDisplay = 'v5.0.0-beta';
       try {
         final info = await PackageInfo.fromPlatform();
         if (info.version.isNotEmpty) {
@@ -68,6 +72,111 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
     );
   }
 
+  void _showCfProxyDialog() {
+    final controller = TextEditingController(text: SettingsService.instance.cfProxyUrl);
+    String testStatus = '';
+    bool testing = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E26),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.shield_outlined, color: Colors.amberAccent),
+              SizedBox(width: 8),
+              Text('FlareSolverr Proxy', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Bypasses Cloudflare Turnstile challenges for ReadComicOnline and protected extensions.',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Endpoint URL',
+                  hintText: 'http://192.168.1.50:8191/v1',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (testStatus.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  testStatus,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: testStatus.startsWith('✅') ? Colors.greenAccent : Colors.redAccent,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: testing
+                  ? null
+                  : () async {
+                      final text = controller.text.trim();
+                      if (text.isEmpty) {
+                        setDialogState(() => testStatus = '⚠️ Please enter a FlareSolverr endpoint URL.');
+                        return;
+                      }
+                      setDialogState(() {
+                        testing = true;
+                        testStatus = 'Testing reachability...';
+                      });
+                      final url = MClient.normalizeProxyUrl(text);
+                      try {
+                        final res = await http.post(
+                          Uri.parse(url),
+                          headers: {'Content-Type': 'application/json'},
+                          body: '{"cmd":"sessions.list"}',
+                        ).timeout(const Duration(seconds: 5));
+                        setDialogState(() {
+                          testing = false;
+                          testStatus = res.statusCode == 200 ? '✅ Online (HTTP ${res.statusCode})' : '❌ Responded with HTTP ${res.statusCode}';
+                        });
+                      } catch (e) {
+                        setDialogState(() {
+                          testing = false;
+                          testStatus = '❌ Reachability failed: $e';
+                        });
+                      }
+                    },
+              child: const Text('Test'),
+            ),
+            TextButton(
+              onPressed: () {
+                controller.clear();
+              },
+              child: const Text('Clear'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                SettingsService.instance.cfProxyUrl = controller.text.trim();
+                setState(() {});
+                Navigator.pop(dialogCtx);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SettingsSubpageScaffold(
@@ -80,19 +189,13 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             leading: const Icon(Icons.terminal_rounded),
-            title: Row(
+            title: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 4,
               children: [
                 const Text('Live Diagnostic Console', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.purpleAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.4), width: 0.8),
-                  ),
-                  child: const Text('LOCAL', style: TextStyle(color: Colors.purpleAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                ),
+                SunfireBadge.local(),
               ],
             ),
             subtitle: const Text('Stream live app events, JS scrapers, network & errors', style: TextStyle(fontSize: 12, color: Colors.grey)),
@@ -113,6 +216,27 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
               }
             },
           ),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            leading: const Icon(Icons.shield_outlined, color: Colors.amberAccent),
+            title: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                const Text('Cloudflare Bypass Proxy', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                SunfireBadge.proxy(),
+              ],
+            ),
+            subtitle: Text(
+              SettingsService.instance.cfProxyUrl.isEmpty
+                  ? 'Disabled (direct connection)'
+                  : SettingsService.instance.cfProxyUrl,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            onTap: _showCfProxyDialog,
+          ),
 
           const Divider(height: 1, color: Color(0x1AFFFFFF)),
 
@@ -121,19 +245,13 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             leading: const Icon(Icons.delete_sweep_rounded, color: Colors.orangeAccent),
-            title: Row(
+            title: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 4,
               children: [
                 const Text('Clear Image Disk Cache', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.purpleAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.4), width: 0.8),
-                  ),
-                  child: const Text('LOCAL', style: TextStyle(color: Colors.purpleAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                ),
+                SunfireBadge.local(),
               ],
             ),
             subtitle: const Text('Free cached cover thumbnails & manga page images', style: TextStyle(fontSize: 12, color: Colors.grey)),

@@ -29,7 +29,18 @@ class WebSocketService {
   bool get isConnected => _isConnected;
 
   void initialize(String httpUrl, {String? authToken}) {
-    final cleanUrl = httpUrl.endsWith('/') ? httpUrl.substring(0, httpUrl.length - 1) : httpUrl;
+    final trimmed = httpUrl.trim();
+    if (trimmed.isEmpty) {
+      if (_channel != null) {
+        _channel!.sink.close();
+        _channel = null;
+      }
+      _wsUrl = null;
+      _authToken = null;
+      _isConnected = false;
+      return;
+    }
+    final cleanUrl = trimmed.endsWith('/') ? trimmed.substring(0, trimmed.length - 1) : trimmed;
     final wsScheme = cleanUrl.startsWith('https') ? 'wss' : 'ws';
     final hostAndPort = cleanUrl.replaceAll(RegExp(r'https?://'), '');
     final newWsUrl = '$wsScheme://$hostAndPort/api/graphql';
@@ -58,7 +69,10 @@ class WebSocketService {
 
       final payload = <String, dynamic>{};
       if (_authToken != null && _authToken!.isNotEmpty) {
-        payload['Authorization'] = _authToken!.startsWith('Bearer ') ? _authToken : 'Bearer $_authToken';
+        final token = _authToken!.trim();
+        payload['Authorization'] = (token.startsWith('Basic ') || token.startsWith('Bearer '))
+            ? token
+            : 'Bearer $token';
       }
 
       _channel!.sink.add(jsonEncode({'type': 'connection_init', 'payload': payload}));

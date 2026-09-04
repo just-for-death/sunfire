@@ -263,6 +263,9 @@ class DownloadManagerService extends ChangeNotifier {
 
   Future<void> _downloadSinglePage(Directory chapterDir, String effectiveSource, String pageUrl, int index) async {
     final file = File('${chapterDir.path}/page_${(index + 1).toString().padLeft(3, '0')}.jpg');
+    if (await file.exists() && await file.length() > 500) {
+      return;
+    }
     final baseHeaders = QuickJsService.getImageHeaders(effectiveSource, pageUrl);
     final cookieHeaders = MClient.getCookiesPref(pageUrl);
     final headers = <String, dynamic>{

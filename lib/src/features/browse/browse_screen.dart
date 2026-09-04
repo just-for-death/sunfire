@@ -10,6 +10,7 @@ import '../../core/logging/logger_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/widgets/sunfire_badge.dart';
 import 'extension_details_screen.dart';
 import 'global_search_screen.dart';
 import 'migrate_search_screen.dart';
@@ -871,62 +872,45 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       const SizedBox(height: 3),
                       Wrap(
-                        spacing: 4,
-                        runSpacing: 2,
+                        spacing: 5,
+                        runSpacing: 3,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: const Color(0x22FFFFFF), borderRadius: BorderRadius.circular(6)),
-                            child: Text(lang, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                          SunfireBadge(
+                            label: lang,
+                            color: Colors.grey,
+                            textColor: Colors.white70,
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: isLocalJs ? Colors.teal.withValues(alpha: 0.15) : Colors.blue.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              isLocalJs ? 'Local' : 'Server',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: isLocalJs ? Colors.tealAccent : Colors.lightBlueAccent,
-                              ),
-                            ),
+                          SunfireBadge(
+                            label: isLocalJs ? 'Local' : 'Server',
+                            color: isLocalJs ? Colors.tealAccent : Colors.lightBlueAccent,
                           ),
                         ],
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (supportsLatest)
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4.0),
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            backgroundColor: Colors.white.withValues(alpha: 0.06),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () => _openSourceGrid(id, name, true),
+                          child: const Text('Latest', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
                         ),
-                        onPressed: () => _openSourceGrid(id, name, true),
-                        child: const Text('Latest', style: TextStyle(color: Colors.grey, fontSize: 11)),
                       ),
-                    const SizedBox(width: 4),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: () => _openSourceGrid(id, name, false),
-                      child: const Text('Popular', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
+                    const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
                   ],
                 ),
               ],
@@ -1289,7 +1273,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                               style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16),
                                             ),
                                           ),
-                                  ),
+),
                                 ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -1311,16 +1295,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                           style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500),
                                         ),
                                         const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                          decoration: BoxDecoration(
-                                            color: isJs ? Colors.teal.withValues(alpha: 0.15) : Colors.blue.withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            isJs ? 'Local' : 'Server',
-                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isJs ? Colors.tealAccent : Colors.lightBlueAccent),
-                                          ),
+                                        SunfireBadge(
+                                          label: isJs ? 'Local' : 'Server',
+                                          color: isJs ? Colors.tealAccent : Colors.lightBlueAccent,
                                         ),
                                       ],
                                     ),
