@@ -1052,10 +1052,28 @@ class _ReaderScreenState extends State<ReaderScreen> {
         }
       }
 
-      // 2. Standard HTTP fetch fallback
+      // 2. Standard HTTP fetch fallback with multi-pass self-healing
       final initialHeaders = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
       final client = MClient.init(showCloudFlareError: false);
-      final res = await client.get(Uri.parse(url), headers: initialHeaders).timeout(const Duration(seconds: 15));
+      var res = await client.get(Uri.parse(url), headers: initialHeaders).timeout(const Duration(seconds: 15));
+
+      // Pass 2: If failed and had Referer, retry with NO Referer (anti-hotlink bypass)
+      if ((res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) && initialHeaders.containsKey('Referer')) {
+        final noReferer = Map<String, String>.from(initialHeaders)..remove('Referer');
+        try {
+          res = await client.get(Uri.parse(url), headers: noReferer).timeout(const Duration(seconds: 15));
+        } catch (_) {}
+      }
+
+      // Pass 3: If still failed, retry with Origin Referer (same-origin requirement bypass)
+      if (res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) {
+        try {
+          final uri = Uri.parse(url);
+          final originReferer = Map<String, String>.from(initialHeaders)..['Referer'] = '${uri.origin}/';
+          res = await client.get(Uri.parse(url), headers: originReferer).timeout(const Duration(seconds: 15));
+        } catch (_) {}
+      }
+
       if (res.statusCode == 200 && res.bodyBytes.isNotEmpty && _isMagicImage(res.bodyBytes)) {
         if (mounted) {
           setState(() {
