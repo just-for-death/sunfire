@@ -151,6 +151,17 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                         );
                       },
                     ),
+                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const SectionTitle(title: 'Cloudflare Bypass - FlareSolverr (Local App)'),
+                    SettingsPropTile(
+                      title: 'Local FlareSolverr URL',
+                      subtitle: _settings.cfProxyUrl.isNotEmpty ? _settings.cfProxyUrl : 'Disabled (direct connection)',
+                      description: 'Proxy endpoint used by this device to solve Cloudflare Turnstile challenges for local extensions (ReadComicOnline, Mangago, etc.)',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.textField,
+                      stringValue: _settings.cfProxyUrl,
+                      onStringChanged: (v) => _settings.cfProxyUrl = v,
+                    ),
                   ],
                 ),
         );

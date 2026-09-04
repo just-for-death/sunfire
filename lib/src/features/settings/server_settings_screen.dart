@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/engine/javascript/m_client.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/server_auth_helper.dart';
@@ -87,7 +89,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
   void initState() {
     super.initState();
     _clientUrl = _settings.serverUrl;
-    _flareSolverrUrl = _settings.cfProxyUrl;
+    _flareSolverrUrl = '';
     _loadAuthAndSettings();
   }
 
@@ -130,7 +132,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
           _socksPassword = (s['socksProxyPassword'] as String?) ?? '';
 
           _flareSolverrEnabled = parseBoolSafe(s['flareSolverrEnabled'], true);
-          _flareSolverrUrl = (s['flareSolverrUrl'] as String?) ?? _settings.cfProxyUrl;
+          _flareSolverrUrl = (s['flareSolverrUrl'] as String?) ?? '';
           _flareSolverrTimeout = parseIntSafe(s['flareSolverrTimeout'], 73);
           _flareSolverrSessionName = (s['flareSolverrSessionName'] as String?) ?? 'default';
           _flareSolverrSessionTtl = parseIntSafe(s['flareSolverrSessionTtl'], 20);
@@ -204,6 +206,45 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open WebUI: $e')));
       }
+    }
+  }
+
+  bool _isTestingLocalCf = false;
+  Future<void> _testLocalFlareSolverr() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final url = _settings.cfProxyUrl.trim();
+    if (url.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Local FlareSolverr is disabled. Please enter an endpoint URL first.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+    setState(() => _isTestingLocalCf = true);
+    final target = MClient.normalizeProxyUrl(url);
+    try {
+      final res = await http.post(
+        Uri.parse(target),
+        headers: {'Content-Type': 'application/json'},
+        body: '{"cmd":"sessions.list"}',
+      ).timeout(const Duration(seconds: 6));
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+          content: Text(res.statusCode == 200 ? '✅ Local FlareSolverr is ONLINE!' : '⚠️ Responded with HTTP ${res.statusCode}'),
+          backgroundColor: res.statusCode == 200 ? Colors.green.shade800 : Colors.orange.shade800,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('❌ Local FlareSolverr unreachable: $e'),
+          backgroundColor: Colors.red.shade800,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isTestingLocalCf = false);
     }
   }
 
@@ -652,7 +693,6 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     subtitle: _flareSolverrUrl.isNotEmpty ? _flareSolverrUrl : 'Disabled',
                     onStringChanged: (v) {
                       setState(() => _flareSolverrUrl = v);
-                      _settings.cfProxyUrl = v;
                       _update('flareSolverrUrl', v);
                     },
                   ),
@@ -707,6 +747,36 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     },
                   ),
                 ],
+
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const SectionTitle(title: 'Cloudflare Bypass - FlareSolverr (Local App)'),
+                SettingsPropTile(
+                  title: 'Local FlareSolverr URL',
+                  description: 'Proxy endpoint used by this device to bypass Cloudflare Turnstile challenges on local extensions (ReadComicOnline, Mangago, etc.). Independent from server FlareSolverr.',
+                  scope: SettingScope.local,
+                  kind: SettingsPropKind.textField,
+                  stringValue: _settings.cfProxyUrl,
+                  subtitle: _settings.cfProxyUrl.isNotEmpty ? _settings.cfProxyUrl : 'Disabled (direct connection)',
+                  onStringChanged: (v) {
+                    _settings.cfProxyUrl = v;
+                    setState(() {});
+                  },
+                ),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  leading: const Icon(Icons.network_check_rounded, color: Colors.purpleAccent),
+                  title: const Text('Test Local Connection', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  subtitle: Text(
+                    _settings.cfProxyUrl.isNotEmpty
+                        ? 'Test reachability from this device to ${_settings.cfProxyUrl}'
+                        : 'Enter a local FlareSolverr URL above to test',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  trailing: _isTestingLocalCf
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.play_arrow_rounded, color: Colors.purpleAccent),
+                  onTap: _isTestingLocalCf ? null : _testLocalFlareSolverr,
+                ),
 
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
                 const SectionTitle(title: 'OPDS Server Feed (Server)'),
