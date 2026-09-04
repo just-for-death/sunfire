@@ -143,7 +143,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       }
       final max = _scrollController.position.maxScrollExtent;
       final cur = _scrollController.offset;
-      if (cur >= max - 10) {
+      if (max > 50 && cur >= max - 10) {
         _stopAutoScroll();
         if (_nextChapter != null) {
           _loadChapterAndPages(_nextChapter!.serverId);
@@ -813,9 +813,25 @@ class _ReaderScreenState extends State<ReaderScreen> {
       if (!isLeft && !isRight) {
         _toggleControls();
       } else if (isNext) {
-        _scrollVerticalBy(400);
+        if (_scrollController.hasClients &&
+            _scrollController.position.maxScrollExtent > 50 &&
+            _scrollController.offset >= _scrollController.position.maxScrollExtent - 20) {
+          if (_nextChapter != null) {
+            _loadChapterAndPages(_nextChapter!.serverId);
+          }
+        } else {
+          _scrollVerticalBy(400);
+        }
       } else if (isPrev) {
-        _scrollVerticalBy(-400);
+        if (_scrollController.hasClients &&
+            _scrollController.position.maxScrollExtent > 50 &&
+            _scrollController.offset <= 20) {
+          if (_prevChapter != null) {
+            _loadChapterAndPages(_prevChapter!.serverId);
+          }
+        } else {
+          _scrollVerticalBy(-400);
+        }
       }
     }
   }
@@ -855,7 +871,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         final screenHeight = MediaQuery.of(context).size.height;
         final maxScroll = _scrollController.position.maxScrollExtent;
         final currentOffset = _scrollController.offset;
-        if (currentOffset >= maxScroll - 20) {
+        if (maxScroll > 50 && currentOffset >= maxScroll - 20) {
           if (_nextChapter != null) {
             _loadChapterAndPages(_nextChapter!.serverId);
           }
@@ -975,7 +991,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       if (isPaged && _pageController.hasClients && _currentPage > 1) {
         _pageController.jumpToPage(_currentPage - 1);
       } else if (!isPaged && _scrollController.hasClients && _pageUrls.isNotEmpty) {
-        if (_currentPage > 1) {
+        if (_currentPage > 1 && _pageUrls.length > 1) {
           final targetOffset = ((_currentPage - 1) / (_pageUrls.length - 1)) * _scrollController.position.maxScrollExtent;
           _scrollController.jumpTo(targetOffset);
         } else {
