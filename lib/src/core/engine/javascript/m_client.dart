@@ -7,17 +7,19 @@ import 'package:http/http.dart' as http;
 import 'package:http_interceptor/http_interceptor.dart';
 import '../../logging/logger_service.dart';
 
+CronetEngine? _sharedCronetEngine;
+
 http.Client _createNativeEngineClient() {
   if (!kIsWeb && Platform.isAndroid) {
     try {
-      final engine = CronetEngine.build(
+      _sharedCronetEngine ??= CronetEngine.build(
         cacheMode: CacheMode.memory,
         cacheMaxSize: 32 * 1024 * 1024,
         enableHttp2: true,
         enableQuic: true,
         enableBrotli: true,
       );
-      return CronetClient.fromCronetEngine(engine);
+      return CronetClient.fromCronetEngine(_sharedCronetEngine!);
     } catch (_) {}
   } else if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
     try {
