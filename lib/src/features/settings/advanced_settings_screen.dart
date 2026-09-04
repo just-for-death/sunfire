@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/logging/logger_service.dart';
@@ -22,6 +23,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
   int _chapterCount = 0;
   int _categoryCount = 0;
   bool _isLoadingStats = true;
+  String _versionStr = 'v3.0.0-beta';
 
   @override
   void initState() {
@@ -35,11 +37,19 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
       final manga = await IsarService.instance.getAllManga();
       final chapters = await IsarService.instance.getAllChapters();
       final cats = await IsarService.instance.getCategories();
+      String versionDisplay = 'v3.0.0-beta';
+      try {
+        final info = await PackageInfo.fromPlatform();
+        if (info.version.isNotEmpty) {
+          versionDisplay = 'v${info.version}${info.buildNumber.isNotEmpty ? '+${info.buildNumber}' : ''}';
+        }
+      } catch (_) {}
       if (mounted) {
         setState(() {
           _mangaCount = manga.length;
           _chapterCount = chapters.length;
           _categoryCount = cats.length;
+          _versionStr = versionDisplay;
           _isLoadingStats = false;
         });
       }
@@ -160,7 +170,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             leading: const Icon(Icons.info_outline_rounded),
             title: const Text('Sunfire Client Version', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-            subtitle: Text('v2.0.0-beta • Platform: ${Platform.operatingSystem} (${Platform.operatingSystemVersion})', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            subtitle: Text('$_versionStr • Platform: ${Platform.operatingSystem} (${Platform.operatingSystemVersion})', style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ),
         ],
       ),

@@ -1,6 +1,6 @@
 # ==============================================================================
-# Codemagic CI/CD for Sunfire Manga Reader
-# Supports: Android (Universal & Split APKs, AAB) & iOS (Unsigned Sideload IPA)
+# Codemagic CI/CD for Sunfire Manga Reader — v3.0.0-beta
+# Supports: Android (Universal & Split APKs) & iOS (Unsigned Sideload IPA)
 # ==============================================================================
 
 workflows:
@@ -9,7 +9,7 @@ workflows:
   # WORKFLOW 1: ANDROID RELEASE (Linux x2 — Fast & Lightweight)
   # ────────────────────────────────────────────────────────────────────────────
   android-release:
-    name: Android Release (Universal & Split APKs)
+    name: Android Release (Universal & Split APKs) - v3.0.0-beta
     max_build_duration: 60
     instance_type: linux_x2
     environment:
@@ -31,17 +31,23 @@ workflows:
         script: flutter pub get
       - name: Build Android Universal APK
         script: |
+          set -e
+          VERSION=$(grep '^version:' "$CM_BUILD_DIR/pubspec.yaml" | sed -e 's/version: //' -e 's/["'\'']//g' -e 's/+.*//' -e 's/ //g')
           flutter build apk --release --android-skip-build-dependency-validation
+          cd build/app/outputs/flutter-apk
+          if [ -f app-release.apk ]; then
+            cp app-release.apk Sunfire-universal.apk
+            cp app-release.apk "Sunfire-v${VERSION}-universal.apk"
+          fi
       - name: Build Android Split-per-ABI APKs
         script: |
+          set -e
+          VERSION=$(grep '^version:' "$CM_BUILD_DIR/pubspec.yaml" | sed -e 's/version: //' -e 's/["'\'']//g' -e 's/+.*//' -e 's/ //g')
           flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
-      - name: Organize & Rename Android APK Artifacts
-        script: |
           cd build/app/outputs/flutter-apk
-          [ -f app-release.apk ] && cp app-release.apk Sunfire-universal.apk
-          [ -f app-arm64-v8a-release.apk ] && cp app-arm64-v8a-release.apk Sunfire-arm64-v8a.apk
-          [ -f app-armeabi-v7a-release.apk ] && cp app-armeabi-v7a-release.apk Sunfire-armeabi-v7a.apk
-          [ -f app-x86_64-release.apk ] && cp app-x86_64-release.apk Sunfire-x86_64.apk
+          [ -f app-arm64-v8a-release.apk ] && cp app-arm64-v8a-release.apk Sunfire-arm64-v8a.apk && cp app-arm64-v8a-release.apk "Sunfire-v${VERSION}-arm64-v8a.apk"
+          [ -f app-armeabi-v7a-release.apk ] && cp app-armeabi-v7a-release.apk Sunfire-armeabi-v7a.apk && cp app-armeabi-v7a-release.apk "Sunfire-v${VERSION}-armeabi-v7a.apk"
+          [ -f app-x86_64-release.apk ] && cp app-x86_64-release.apk Sunfire-x86_64.apk && cp app-x86_64-release.apk "Sunfire-v${VERSION}-x86_64.apk"
           ls -lh Sunfire*.apk || ls -lh *.apk
     artifacts:
       - build/app/outputs/flutter-apk/Sunfire*.apk
@@ -51,7 +57,7 @@ workflows:
   # WORKFLOW 2: iOS RELEASE (Mac Mini M2 — AltStore / TrollStore / Sideloadly)
   # ────────────────────────────────────────────────────────────────────────────
   ios-release:
-    name: iOS IPA (Unsigned Sideload)
+    name: iOS IPA (Unsigned Sideload) - v3.0.0-beta
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -75,6 +81,7 @@ workflows:
       - name: Package Unsigned Sunfire.ipa
         script: |
           set -e
+          VERSION=$(grep '^version:' "$CM_BUILD_DIR/pubspec.yaml" | sed -e 's/version: //' -e 's/["'\'']//g' -e 's/+.*//' -e 's/ //g')
           mkdir -p build/ios/ipa
           shopt -s nullglob
           ipas=(build/ios/ipa/*.ipa)
@@ -95,16 +102,17 @@ workflows:
               exit 1
             fi
           fi
-          ls -lh build/ios/ipa/Sunfire.ipa
+          cp build/ios/ipa/Sunfire.ipa "build/ios/ipa/Sunfire-v${VERSION}.ipa"
+          ls -lh build/ios/ipa/Sunfire*.ipa
     artifacts:
-      - build/ios/ipa/Sunfire.ipa
+      - build/ios/ipa/Sunfire*.ipa
       - build/ios/archive/*.xcarchive
 
   # ────────────────────────────────────────────────────────────────────────────
   # WORKFLOW 3: ALL PLATFORMS (Unified CI — Triggered on Tags and Main)
   # ────────────────────────────────────────────────────────────────────────────
   all-release:
-    name: Multi-Platform Release (APK & IPA)
+    name: Multi-Platform Release (APK & IPA) - v3.0.0-beta
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:
@@ -140,18 +148,26 @@ workflows:
         script: flutter pub get
       - name: Build Android Universal & Split APKs
         script: |
+          set -e
+          VERSION=$(grep '^version:' "$CM_BUILD_DIR/pubspec.yaml" | sed -e 's/version: //' -e 's/["'\'']//g' -e 's/+.*//' -e 's/ //g')
           flutter build apk --release --android-skip-build-dependency-validation
+          cd build/app/outputs/flutter-apk
+          if [ -f app-release.apk ]; then
+            cp app-release.apk Sunfire-universal.apk
+            cp app-release.apk "Sunfire-v${VERSION}-universal.apk"
+          fi
+          cd "$CM_BUILD_DIR"
           flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
           cd build/app/outputs/flutter-apk
-          [ -f app-release.apk ] && cp app-release.apk Sunfire-universal.apk
-          [ -f app-arm64-v8a-release.apk ] && cp app-arm64-v8a-release.apk Sunfire-arm64-v8a.apk
-          [ -f app-armeabi-v7a-release.apk ] && cp app-armeabi-v7a-release.apk Sunfire-armeabi-v7a.apk
-          [ -f app-x86_64-release.apk ] && cp app-x86_64-release.apk Sunfire-x86_64.apk
+          [ -f app-arm64-v8a-release.apk ] && cp app-arm64-v8a-release.apk Sunfire-arm64-v8a.apk && cp app-arm64-v8a-release.apk "Sunfire-v${VERSION}-arm64-v8a.apk"
+          [ -f app-armeabi-v7a-release.apk ] && cp app-armeabi-v7a-release.apk Sunfire-armeabi-v7a.apk && cp app-armeabi-v7a-release.apk "Sunfire-v${VERSION}-armeabi-v7a.apk"
+          [ -f app-x86_64-release.apk ] && cp app-x86_64-release.apk Sunfire-x86_64.apk && cp app-x86_64-release.apk "Sunfire-v${VERSION}-x86_64.apk"
           ls -lh Sunfire*.apk || ls -lh *.apk
           cd "$CM_BUILD_DIR"
       - name: Build iOS unsigned xcarchive & IPA
         script: |
           set -e
+          VERSION=$(grep '^version:' "$CM_BUILD_DIR/pubspec.yaml" | sed -e 's/version: //' -e 's/["'\'']//g' -e 's/+.*//' -e 's/ //g')
           flutter build ipa --release --no-codesign
           mkdir -p build/ios/ipa
           shopt -s nullglob
@@ -166,9 +182,10 @@ workflows:
               (cd /tmp/sunfire-ipa && zip -qr "$CM_BUILD_DIR/build/ios/ipa/Sunfire.ipa" Payload)
             fi
           fi
-          ls -lh build/ios/ipa/Sunfire.ipa
+          cp build/ios/ipa/Sunfire.ipa "build/ios/ipa/Sunfire-v${VERSION}.ipa"
+          ls -lh build/ios/ipa/Sunfire*.ipa
     artifacts:
       - build/app/outputs/flutter-apk/Sunfire*.apk
       - build/app/outputs/flutter-apk/*.apk
-      - build/ios/ipa/Sunfire.ipa
+      - build/ios/ipa/Sunfire*.ipa
       - build/ios/archive/*.xcarchive
