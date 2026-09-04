@@ -40,6 +40,7 @@ class DownloadManagerService extends ChangeNotifier {
   final List<LocalDownloadTask> _localTasks = [];
   final Set<int> _downloadedLocalChapterIds = {};
   final Set<int> _downloadedServerChapterIds = {};
+  final Set<int> _downloadedLocalMangaIds = {};
 
   bool _isProcessingLocalQueue = false;
   final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 30), receiveTimeout: const Duration(minutes: 2)));
@@ -47,6 +48,7 @@ class DownloadManagerService extends ChangeNotifier {
   List<LocalDownloadTask> get localTasks => List.unmodifiable(_localTasks);
   Set<int> get downloadedLocalChapterIds => _downloadedLocalChapterIds;
   Set<int> get downloadedServerChapterIds => _downloadedServerChapterIds;
+  Set<int> get downloadedMangaIds => _downloadedLocalMangaIds;
 
   Future<void> initialize() async {
     await _scanDownloadedLocalChapters();
@@ -65,6 +67,10 @@ class DownloadManagerService extends ChangeNotifier {
               final id = int.tryParse(segments.last);
               if (id != null) {
                 _downloadedLocalChapterIds.add(id);
+                final ch = await IsarService.instance.getChapterByServerId(id);
+                if (ch != null && ch.mangaId > 0) {
+                  _downloadedLocalMangaIds.add(ch.mangaId);
+                }
               }
             }
           }
@@ -126,6 +132,7 @@ class DownloadManagerService extends ChangeNotifier {
         task.status = LocalDownloadStatus.completed;
         task.progress = 1.0;
         _downloadedLocalChapterIds.add(task.chapterId);
+        _downloadedLocalMangaIds.add(task.mangaId);
 
         // Update Isar DB
         final ch = await IsarService.instance.getChapterByServerId(task.chapterId);
@@ -315,9 +322,17 @@ class DownloadManagerService extends ChangeNotifier {
       _localTasks.removeWhere((t) => t.chapterId == chapterId);
 
       final ch = await IsarService.instance.getChapterByServerId(chapterId);
+      final mId = ch?.mangaId;
       if (ch != null) {
         ch.isDownloaded = false;
         await IsarService.instance.saveChapter(ch);
+      }
+      if (mId != null && mId > 0) {
+        final remaining = await IsarService.instance.getChaptersForManga(mId);
+        final hasOther = remaining.any((c) => _downloadedLocalChapterIds.contains(c.serverId));
+        if (!hasOther) {
+          _downloadedLocalMangaIds.remove(mId);
+        }
       }
       notifyListeners();
     } catch (e) {
