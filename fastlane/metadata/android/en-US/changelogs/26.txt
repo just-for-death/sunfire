@@ -1,0 +1,8 @@
+Sunfire v6.0.0 Beta:
+• Android 15 & 16 16KB memory page size alignment.
+• Webtoon hands-free auto-scrolling with adjustable speed and boundary chapter transitions.
+• Eye-comfort Sepia color matrix filter.
+• Library reading status quick filter chips.
+• Hardware volume rocker and trackpad swipe navigation.
+• Comprehensive scraper hardening across Mangago, MangaPill, Webtoons, WeebCentral, and ReadComicOnline.
+• 100% guarded database initialization and QuickJS lifecycle isolation.
