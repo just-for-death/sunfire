@@ -760,6 +760,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       },
       child: Scaffold(
       appBar: AppBar(
+        toolbarHeight: isTablet ? 64.0 : kToolbarHeight,
         title: _isBatchMode
             ? Row(
                 children: [
