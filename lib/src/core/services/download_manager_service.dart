@@ -195,11 +195,32 @@ class DownloadManagerService extends ChangeNotifier {
     }
   }
 
+  static bool _isValidImageBytes(List<int>? b) {
+    if (b == null || b.length < 12) return false;
+    // JPEG: FF D8
+    if (b[0] == 0xFF && b[1] == 0xD8) return true;
+    // PNG: 89 50 4E 47
+    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return true;
+    // WebP: RIFF ... WEBP
+    if (b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 &&
+        b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50) {
+      return true;
+    }
+    // GIF: GIF87a / GIF89a
+    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return true;
+    // BMP: 42 4D
+    if (b[0] == 0x42 && b[1] == 0x4D) return true;
+    // Reject HTML/XML/JSON error responses (<, {, [)
+    if (b[0] == 60 || b[0] == 123 || b[0] == 91) return false;
+    return b.length > 500;
+  }
+
   Future<void> _downloadSinglePage(Directory chapterDir, String effectiveSource, String pageUrl, int index) async {
     final file = File('${chapterDir.path}/page_${(index + 1).toString().padLeft(3, '0')}.jpg');
     final headers = QuickJsService.getImageHeaders(effectiveSource, pageUrl);
     List<int>? pageBytes;
 
+    // Pass 1: Standard fetch
     try {
       final response = await _dio.get<List<int>>(
         pageUrl,
@@ -208,37 +229,54 @@ class DownloadManagerService extends ChangeNotifier {
           responseType: ResponseType.bytes,
         ),
       );
-      if (response.data != null && response.data!.isNotEmpty) {
+      if (_isValidImageBytes(response.data)) {
         pageBytes = response.data;
       }
-    } catch (_) {
-      // Pass 2: Retry with Referer stripped (anti-hotlink bypass)
-      if (headers.containsKey('Referer')) {
-        try {
-          final noRef = Map<String, dynamic>.from(headers)..remove('Referer');
-          final r2 = await _dio.get<List<int>>(
-            pageUrl,
-            options: Options(headers: noRef, responseType: ResponseType.bytes),
-          );
-          if (r2.data != null && r2.data!.isNotEmpty) {
-            pageBytes = r2.data;
-          }
-        } catch (_) {}
-      }
-      // Pass 3: Retry with Origin Referer
-      if (pageBytes == null) {
-        try {
-          final uri = Uri.parse(pageUrl);
-          final originRef = Map<String, dynamic>.from(headers)..['Referer'] = '${uri.origin}/';
-          final r3 = await _dio.get<List<int>>(
-            pageUrl,
-            options: Options(headers: originRef, responseType: ResponseType.bytes),
-          );
-          if (r3.data != null && r3.data!.isNotEmpty) {
-            pageBytes = r3.data;
-          }
-        } catch (_) {}
-      }
+    } catch (_) {}
+
+    // Pass 2: Retry with Referer stripped (anti-hotlink bypass)
+    if (pageBytes == null && headers.containsKey('Referer')) {
+      try {
+        final noRef = Map<String, dynamic>.from(headers)..remove('Referer');
+        final r2 = await _dio.get<List<int>>(
+          pageUrl,
+          options: Options(headers: noRef, responseType: ResponseType.bytes),
+        );
+        if (_isValidImageBytes(r2.data)) {
+          pageBytes = r2.data;
+        }
+      } catch (_) {}
+    }
+
+    // Pass 3: Retry with Origin Referer
+    if (pageBytes == null) {
+      try {
+        final uri = Uri.parse(pageUrl);
+        final originRef = Map<String, dynamic>.from(headers)..['Referer'] = '${uri.origin}/';
+        final r3 = await _dio.get<List<int>>(
+          pageUrl,
+          options: Options(headers: originRef, responseType: ResponseType.bytes),
+        );
+        if (_isValidImageBytes(r3.data)) {
+          pageBytes = r3.data;
+        }
+      } catch (_) {}
+    }
+
+    // Pass 4: Clean Desktop Chrome User-Agent and Image Accept headers
+    if (pageBytes == null) {
+      try {
+        final browserHeaders = Map<String, dynamic>.from(headers)
+          ..['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+          ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
+        final r4 = await _dio.get<List<int>>(
+          pageUrl,
+          options: Options(headers: browserHeaders, responseType: ResponseType.bytes),
+        );
+        if (_isValidImageBytes(r4.data)) {
+          pageBytes = r4.data;
+        }
+      } catch (_) {}
     }
 
     // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl-impersonate
@@ -252,7 +290,7 @@ class DownloadManagerService extends ChangeNotifier {
           final res = await Process.run(exe, args, stdoutEncoding: null);
           if (res.exitCode == 0) {
             final b = res.stdout as List<int>;
-            if (b.length > 200) {
+            if (_isValidImageBytes(b)) {
               pageBytes = b;
               break;
             }
@@ -261,7 +299,7 @@ class DownloadManagerService extends ChangeNotifier {
       }
     }
 
-    if (pageBytes != null && pageBytes.isNotEmpty) {
+    if (pageBytes != null && pageBytes.isNotEmpty && _isValidImageBytes(pageBytes)) {
       await file.writeAsBytes(pageBytes);
     }
   }
