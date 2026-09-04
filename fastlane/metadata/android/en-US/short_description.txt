@@ -1,0 +1,1 @@
+Local-first manga, webtoon, and comic reader with Suwayomi server sync.
