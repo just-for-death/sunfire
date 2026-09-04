@@ -43,15 +43,23 @@ class GraphQLClientService {
   }
 
   void initialize(String baseUrl, {String? authToken}) {
-    _baseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final clean = baseUrl.trim();
+    if (clean.isEmpty) {
+      _baseUrl = null;
+      _lastReachableCheck = null;
+      _lastReachableStatus = false;
+      return;
+    }
+    _baseUrl = clean.endsWith('/') ? clean.substring(0, clean.length - 1) : clean;
     _lastReachableCheck = null;
     _lastReachableStatus = true;
     final headers = <String, dynamic>{'Content-Type': 'application/json'};
-    if (authToken != null && authToken.isNotEmpty) {
-      if (authToken.startsWith('Basic ') || authToken.startsWith('Bearer ')) {
-        headers['Authorization'] = authToken;
+    if (authToken != null && authToken.trim().isNotEmpty) {
+      final token = authToken.trim();
+      if (token.startsWith('Basic ') || token.startsWith('Bearer ')) {
+        headers['Authorization'] = token;
       } else {
-        headers['Authorization'] = 'Bearer $authToken';
+        headers['Authorization'] = 'Bearer $token';
       }
     }
     _dio = Dio(BaseOptions(
@@ -62,7 +70,7 @@ class GraphQLClientService {
     ));
   }
 
-  bool get isConfigured => _baseUrl != null;
+  bool get isConfigured => _baseUrl != null && _baseUrl!.trim().isNotEmpty;
   String? get baseUrl => _baseUrl;
 
   DateTime? _lastReachableCheck;

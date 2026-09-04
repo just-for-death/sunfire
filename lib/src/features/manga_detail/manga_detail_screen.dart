@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
@@ -12,6 +13,7 @@ import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/widgets/sunfire_badge.dart';
 import 'tracking_bottom_sheet.dart';
 
 class MangaDetailScreen extends StatefulWidget {
@@ -111,7 +113,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   Future<void> _loadMangaDetails() async {
     setState(() => _isLoading = true);
-    final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+    final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
 
     // 1. Check local Isar DB first to display immediate cached state only if valid
     _manga = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
@@ -659,6 +661,44 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     );
   }
 
+  String? _resolveFullUrl(String? rawUrl) {
+    if (rawUrl == null || rawUrl.trim().isEmpty) return null;
+    final trimmed = rawUrl.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    final sourceName = _manga?.sourceName ?? '';
+    final baseUrl = QuickJsService.instance.getSourceBaseUrl(sourceName);
+    if (baseUrl != null && baseUrl.isNotEmpty) {
+      final cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+      final cleanPath = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+      return '$cleanBase$cleanPath';
+    }
+    return null;
+  }
+
+  Future<void> _openInBrowser(String rawUrl) async {
+    final fullUrl = _resolveFullUrl(rawUrl);
+    if (fullUrl == null || fullUrl.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No web link available for this item')),
+        );
+      }
+      return;
+    }
+    final uri = Uri.tryParse(fullUrl);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open $fullUrl')),
+        );
+      }
+    }
+  }
+
   void _showSingleChapterOptions(Chapter ch) {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final messenger = ScaffoldMessenger.of(context);
@@ -708,6 +748,21 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _markPreviousChaptersRead(ch);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.open_in_browser_rounded, color: Colors.blueAccent),
+                title: const Text('Open Chapter in Browser', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                  ch.url.isNotEmpty ? ch.url : (_manga?.url.isNotEmpty == true ? _manga!.url : 'View web page'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  final target = ch.url.isNotEmpty ? ch.url : (_manga?.url ?? '');
+                  _openInBrowser(target);
                 },
               ),
 
@@ -930,7 +985,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.refresh_rounded),
+                      tooltip: 'Refresh',
                       onPressed: _loadMangaDetails,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.public_rounded),
+                      tooltip: 'Open in Browser',
+                      onPressed: () => _openInBrowser(manga.url),
                     ),
                   ],
                 ),
@@ -969,30 +1030,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0x334CAF50),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.greenAccent, width: 0.8),
-                      ),
-                      child: Text(
-                        (manga.status ?? 'Ongoing').toUpperCase(),
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.greenAccent),
-                      ),
+                    SunfireBadge(
+                      label: (manga.status ?? 'Ongoing').toUpperCase(),
+                      color: Colors.greenAccent,
                     ),
                     const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0x1F2A2A32),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
-                      ),
-                      child: Text(
-                        '${sortedChapters.length} CHAPTERS',
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
-                      ),
+                    SunfireBadge(
+                      label: '${sortedChapters.length} CHAPTERS',
+                      color: Colors.grey,
+                      textColor: Colors.white70,
                     ),
                   ],
                 ),
@@ -1054,17 +1100,12 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 const SizedBox(height: 16),
                 if (manga.genres.isNotEmpty) ...[
                   Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: manga.genres.map((g) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0x1F2A2A32),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
-                        ),
-                        child: Text(g, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                      return SunfireBadge(
+                        label: g,
+                        variant: SunfireBadgeVariant.chip,
                       );
                     }).toList(),
                   ),
@@ -1158,7 +1199,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       slivers: [
         if (!isSelecting)
           SliverAppBar(
-            expandedHeight: 300,
+            expandedHeight: 320,
             pinned: true,
             backgroundColor: const Color(0xFF121216),
             leading: IconButton(
@@ -1180,7 +1221,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                tooltip: 'Refresh',
                 onPressed: _loadMangaDetails,
+              ),
+              IconButton(
+                icon: const Icon(Icons.public_rounded, color: Colors.white),
+                tooltip: 'Open in Browser',
+                onPressed: () => _openInBrowser(manga.url),
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
@@ -1283,41 +1330,18 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                                 runSpacing: 4,
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: primaryColor.withAlpha(40),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: primaryColor.withAlpha(120), width: 0.8),
-                                    ),
-                                    child: Text(
-                                      manga.sourceName,
-                                      style: TextStyle(color: primaryColor, fontSize: 10.5, fontWeight: FontWeight.bold),
-                                    ),
+                                  SunfireBadge(
+                                    label: manga.sourceName,
+                                    color: primaryColor,
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0x334CAF50),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: Colors.greenAccent.withAlpha(150), width: 0.8),
-                                    ),
-                                    child: Text(
-                                      (manga.status ?? 'Ongoing').toUpperCase(),
-                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.greenAccent),
-                                    ),
+                                  SunfireBadge(
+                                    label: (manga.status ?? 'Ongoing').toUpperCase(),
+                                    color: Colors.greenAccent,
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0x1F2A2A32),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
-                                    ),
-                                    child: Text(
-                                      '${sortedChapters.length} CH',
-                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
-                                    ),
+                                  SunfireBadge(
+                                    label: '${sortedChapters.length} CH',
+                                    color: Colors.grey,
+                                    textColor: Colors.white70,
                                   ),
                                 ],
                               ),
@@ -1413,32 +1437,17 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     children: manga.genres.map((g) {
-                      return Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: () {
-                            // Quick search for this genre/tag
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Tag: $g'),
-                                duration: const Duration(seconds: 1),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: const Color(0x1A2A2A32),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: const Color(0x2EFFFFFF), width: 0.8),
+                      return SunfireBadge(
+                        label: g,
+                        variant: SunfireBadgeVariant.chip,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Tag: $g'),
+                              duration: const Duration(seconds: 1),
                             ),
-                            child: Text(
-                              g,
-                              style: const TextStyle(fontSize: 11.5, color: Colors.white70, fontWeight: FontWeight.w500),
-                            ),
-                          ),
-                        ),
+                          );
+                        },
                       );
                     }).toList(),
                   ),
@@ -1659,64 +1668,52 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 : ch.isBookmarked
                     ? const Icon(Icons.bookmark_rounded, color: Colors.amber, size: 18)
                     : null,
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    ch.name.trim().isNotEmpty
-                        ? ch.name
-                        : 'Chapter ${ch.chapterNumber.toString().replaceAll(RegExp(r'\.0$'), '')}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13.5,
-                      color: ch.isRead ? Colors.grey : Colors.white,
-                    ),
-                  ),
-                ),
-                Builder(
-                  builder: (context) {
-                    final dateStr = _formatChapterDate(ch.fetchedAt);
-                    if (dateStr == null) return const SizedBox.shrink();
-                    return Padding(
-                      padding: const EdgeInsets.only(left: 6.0),
-                      child: Text(
-                        dateStr,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[500],
-                          fontWeight: FontWeight.w400,
+            title: Text(
+              ch.name.trim().isNotEmpty
+                  ? ch.name
+                  : 'Chapter ${ch.chapterNumber.toString().replaceAll(RegExp(r'\.0$'), '')}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13.5,
+                color: ch.isRead ? Colors.grey : Colors.white,
+              ),
+            ),
+            subtitle: Builder(
+              builder: (context) {
+                final dateStr = _formatChapterDate(ch.fetchedAt);
+                final sub = _formatChapterSubtitle(ch);
+                final metaText = [
+                  if (sub.isNotEmpty) sub,
+                  if (dateStr != null) dateStr,
+                ].join(' • ');
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (metaText.isNotEmpty)
+                      Text(
+                        metaText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11.5, color: ch.isRead ? Colors.grey[600] : primaryColor),
+                      ),
+                    if (!ch.isRead && ch.lastPageRead > 0 && ch.pageCount > 0) ...[
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: (ch.lastPageRead / ch.pageCount).clamp(0.0, 1.0),
+                          minHeight: 3,
+                          backgroundColor: const Color(0x33FFFFFF),
+                          valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                         ),
                       ),
-                    );
-                  },
-                ),
-              ],
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_formatChapterSubtitle(ch).isNotEmpty)
-                  Text(
-                    _formatChapterSubtitle(ch),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11.5, color: ch.isRead ? Colors.grey[600] : primaryColor),
-                  ),
-                if (!ch.isRead && ch.lastPageRead > 0 && ch.pageCount > 0) ...[
-                  const SizedBox(height: 4),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(3),
-                    child: LinearProgressIndicator(
-                      value: (ch.lastPageRead / ch.pageCount).clamp(0.0, 1.0),
-                      minHeight: 3,
-                      backgroundColor: const Color(0x33FFFFFF),
-                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                    ),
-                  ),
-                ],
-              ],
+                    ],
+                  ],
+                );
+              },
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,

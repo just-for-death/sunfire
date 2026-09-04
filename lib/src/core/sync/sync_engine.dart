@@ -212,7 +212,7 @@ class SyncEngine {
 
   Future<void> _performFullSync() async {
     final nowUnix = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+    final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
 
     // ── STEP 1: Read current local count BEFORE touching anything ────────
     final localCountBefore = await IsarService.instance.getMangaCount();

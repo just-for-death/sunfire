@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
@@ -16,6 +17,7 @@ import '../../core/engine/quickjs_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../settings/advanced_settings_screen.dart';
 
 enum ReadingMode { longStrip, longStripGaps, pagedLtr, pagedRtl }
 enum ReaderThemeMode { black, darkGray, white }
@@ -554,6 +556,46 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final isLocal = QuickJsService.instance.hasExtension(_sourceName ?? '');
     if (GraphQLClientService.instance.isConfigured && !isLocal) {
       GraphQLClientService.instance.updateChapterReadStatus(_chapter!.serverId, _chapter!.isRead, page);
+    }
+  }
+
+  Future<void> _openChapterInBrowser() async {
+    String? rawUrl = (_chapter?.url.isNotEmpty == true)
+        ? _chapter!.url
+        : ((_chapter?.realUrl.isNotEmpty == true) ? _chapter!.realUrl : null);
+
+    final manga = _chapter != null ? await IsarService.instance.getMangaByServerId(_chapter!.mangaId) : null;
+    rawUrl ??= manga?.url;
+
+    if (rawUrl == null || rawUrl.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No web URL available for this chapter')),
+        );
+      }
+      return;
+    }
+
+    var effectiveUrl = rawUrl.trim();
+    if (!effectiveUrl.startsWith('http://') && !effectiveUrl.startsWith('https://')) {
+      final sourceName = _sourceName ?? manga?.sourceName ?? '';
+      final baseUrl = QuickJsService.instance.getSourceBaseUrl(sourceName);
+      if (baseUrl != null && baseUrl.isNotEmpty) {
+        final cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+        final cleanPath = effectiveUrl.startsWith('/') ? effectiveUrl : '/$effectiveUrl';
+        effectiveUrl = '$cleanBase$cleanPath';
+      }
+    }
+
+    final uri = Uri.tryParse(effectiveUrl);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open $effectiveUrl')),
+        );
+      }
     }
   }
 
@@ -1347,14 +1389,50 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   style: TextStyle(color: Colors.grey, fontSize: 13),
                 ),
                 const SizedBox(height: 20),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                  onPressed: () => _loadChapterAndPages(widget.chapterServerId),
-                  child: const Text('Retry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      ),
+                      icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                      onPressed: () => _loadChapterAndPages(widget.chapterServerId),
+                      label: const Text('Retry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Color(0x33FFFFFF)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                      ),
+                      icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+                      onPressed: _openChapterInBrowser,
+                      label: const Text('Open in Browser', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    if (SettingsService.instance.cfProxyUrl.isEmpty)
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.amberAccent,
+                          side: const BorderSide(color: Colors.amberAccent),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        ),
+                        icon: const Icon(Icons.security_rounded, size: 18),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const AdvancedSettingsScreen()),
+                          );
+                        },
+                        label: const Text('Configure FlareSolverr', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                  ],
                 ),
               ],
             ),

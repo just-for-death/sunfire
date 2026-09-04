@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/sunfire_badge.dart';
+
 enum SettingsPropKind {
   textField,
   numberSlider,
@@ -74,23 +76,9 @@ class SettingsPropTile extends StatelessWidget {
     final isServer = scope == SettingScope.server;
     final color = isServer ? Colors.tealAccent : Colors.purpleAccent;
 
-    return Container(
-      margin: const EdgeInsets.only(left: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.4), width: 0.8),
-      ),
-      child: Text(
-        isServer ? 'SERVER' : 'LOCAL',
-        style: TextStyle(
-          color: color,
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
-      ),
+    return SunfireBadge(
+      label: isServer ? 'SERVER' : 'LOCAL',
+      color: color,
     );
   }
 
@@ -232,21 +220,29 @@ class SettingsPropTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleRow = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(
-          child: titleWidget ?? Text(title ?? '', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-        ),
-        _buildScopeBadge(context),
-      ],
-    );
+    final titleWidgetContent = titleWidget ??
+        Text(
+          title ?? '',
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+        );
+
+    final titleContent = scope == SettingScope.none
+        ? titleWidgetContent
+        : Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              titleWidgetContent,
+              _buildScopeBadge(context),
+            ],
+          );
 
     if (kind == SettingsPropKind.switchTile) {
       return SwitchListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         secondary: leading,
-        title: titleRow,
+        title: titleContent,
         subtitle: subtitle != null ? Text(subtitle!, style: const TextStyle(fontSize: 12, color: Colors.grey)) : null,
         value: boolValue ?? false,
         onChanged: onBoolChanged,
@@ -256,7 +252,7 @@ class SettingsPropTile extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       leading: leading,
-      title: titleRow,
+      title: titleContent,
       subtitle: subtitle != null ? Text(subtitle!, style: const TextStyle(fontSize: 12, color: Colors.grey)) : null,
       trailing: trailing,
       onTap: () {

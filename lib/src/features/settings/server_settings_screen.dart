@@ -5,6 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/server_auth_helper.dart';
+import '../../core/sync/websocket_service.dart';
+import '../../core/widgets/sunfire_badge.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -25,6 +28,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
 
   // Client
   String _clientUrl = '';
+  ServerAuthCredentials _clientAuth = const ServerAuthCredentials(type: ServerAuthType.none);
 
   // Auth
   String _authMode = 'NONE';
@@ -84,7 +88,13 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     super.initState();
     _clientUrl = _settings.serverUrl;
     _flareSolverrUrl = _settings.cfProxyUrl;
-    _loadSettings();
+    _loadAuthAndSettings();
+  }
+
+  Future<void> _loadAuthAndSettings() async {
+    final creds = await ServerAuthHelper.loadCredentials();
+    if (mounted) setState(() => _clientAuth = creds);
+    await _loadSettings();
   }
 
   Future<void> _loadSettings() async {
@@ -262,6 +272,123 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     );
   }
 
+  void _showClientCredentialsDialog() async {
+    final currentCreds = await ServerAuthHelper.loadCredentials();
+    ServerAuthType selectedType = currentCreds.type;
+    final userController = TextEditingController(text: currentCreds.username);
+    final passController = TextEditingController(text: currentCreds.password);
+    final tokenController = TextEditingController(text: currentCreds.token);
+    bool obscure = true;
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDlgState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E26),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.vpn_key_rounded, color: Colors.tealAccent),
+              SizedBox(width: 8),
+              Text('Client Credentials', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Configure credentials Sunfire uses to authenticate with Suwayomi.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<ServerAuthType>(
+                  segments: const [
+                    ButtonSegment(value: ServerAuthType.none, label: Text('None', style: TextStyle(fontSize: 12))),
+                    ButtonSegment(value: ServerAuthType.basic, label: Text('Basic', style: TextStyle(fontSize: 12))),
+                    ButtonSegment(value: ServerAuthType.bearer, label: Text('Bearer', style: TextStyle(fontSize: 12))),
+                  ],
+                  selected: {selectedType},
+                  onSelectionChanged: (set) => setDlgState(() => selectedType = set.first),
+                ),
+                const SizedBox(height: 16),
+                if (selectedType == ServerAuthType.basic) ...[
+                  TextField(
+                    controller: userController,
+                    decoration: const InputDecoration(
+                      labelText: 'Username',
+                      hintText: 'admin',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: passController,
+                    obscureText: obscure,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscure ? Icons.visibility_rounded : Icons.visibility_off_rounded),
+                        onPressed: () => setDlgState(() => obscure = !obscure),
+                      ),
+                    ),
+                  ),
+                ] else if (selectedType == ServerAuthType.bearer) ...[
+                  TextField(
+                    controller: tokenController,
+                    obscureText: obscure,
+                    decoration: InputDecoration(
+                      labelText: 'Token / Key',
+                      hintText: 'Bearer token or reverse proxy header',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscure ? Icons.visibility_rounded : Icons.visibility_off_rounded),
+                        onPressed: () => setDlgState(() => obscure = !obscure),
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  const Text('No authentication credentials sent to server.', style: TextStyle(fontSize: 13, color: Colors.white60)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final newCreds = ServerAuthCredentials(
+                  type: selectedType,
+                  username: userController.text.trim(),
+                  password: passController.text.trim(),
+                  token: tokenController.text.trim(),
+                );
+                await ServerAuthHelper.saveCredentials(newCreds);
+                if (dialogCtx.mounted) {
+                  Navigator.pop(dialogCtx);
+                }
+                if (mounted) {
+                  setState(() => _clientAuth = newCreds);
+                  final authHeader = newCreds.toHeaderValue();
+                  GraphQLClientService.instance.initialize(_clientUrl, authToken: authHeader);
+                  WebSocketService.instance.initialize(_clientUrl, authToken: authHeader);
+                  await _loadSettings();
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SettingsSubpageScaffold(
@@ -274,7 +401,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 const SectionTitle(title: 'Client Connection (App Target)'),
                 SettingsPropTile(
                   title: 'Server URL',
-                  subtitle: _clientUrl.isNotEmpty ? _clientUrl : 'http://100.71.46.98:4567',
+                  subtitle: _clientUrl.isNotEmpty ? _clientUrl : 'Not configured (Standalone mode)',
                   description: 'HTTP target address of your Suwayomi server',
                   scope: SettingScope.local,
                   kind: SettingsPropKind.textField,
@@ -282,24 +409,40 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   onStringChanged: (v) async {
                     setState(() => _clientUrl = v);
                     _settings.serverUrl = v;
-                    GraphQLClientService.instance.initialize(v);
+                    final auth = _clientAuth.toHeaderValue();
+                    GraphQLClientService.instance.initialize(v, authToken: auth);
+                    WebSocketService.instance.initialize(v, authToken: auth);
                     await _loadSettings();
                   },
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  title: Row(
+                  leading: const Icon(Icons.vpn_key_rounded, color: Colors.tealAccent),
+                  title: const Text('Client Credentials', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                  subtitle: Text(
+                    switch (_clientAuth.type) {
+                      ServerAuthType.none => 'None (No authentication)',
+                      ServerAuthType.basic => 'HTTP Basic Auth (${_clientAuth.username.isNotEmpty ? _clientAuth.username : "configured"})',
+                      ServerAuthType.bearer => 'Bearer Token',
+                    },
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  trailing: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
+                  onTap: _showClientCredentialsDialog,
+                ),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  title: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
                     children: [
                       const Text('Connection Status', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _isConnected ? Colors.greenAccent.withValues(alpha: 0.15) : Colors.redAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: _isConnected ? Colors.greenAccent : Colors.redAccent, width: 0.8),
-                        ),
-                        child: Text(_isConnected ? 'CONNECTED' : 'OFFLINE', style: TextStyle(color: _isConnected ? Colors.greenAccent : Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                      SunfireBadge(
+                        label: _isConnected ? 'CONNECTED' : 'OFFLINE',
+                        color: _isConnected ? Colors.greenAccent : Colors.redAccent,
+                        fontSize: 9.0,
+                        fontWeight: FontWeight.bold,
                       ),
                     ],
                   ),
@@ -321,19 +464,13 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 const SectionTitle(title: 'Authentication (Server)'),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  title: Row(
+                  title: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
                     children: [
                       const Text('Auth Mode', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.tealAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
-                        ),
-                        child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                      ),
+                      SunfireBadge.server(),
                     ],
                   ),
                   subtitle: Text(_authMode, style: const TextStyle(fontSize: 12, color: Colors.grey)),
@@ -514,7 +651,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     scope: SettingScope.server,
                     kind: SettingsPropKind.textField,
                     stringValue: _flareSolverrUrl,
-                    subtitle: _flareSolverrUrl.isNotEmpty ? _flareSolverrUrl : 'http://100.85.171.6:8191/v1',
+                    subtitle: _flareSolverrUrl.isNotEmpty ? _flareSolverrUrl : 'Disabled',
                     onStringChanged: (v) {
                       setState(() => _flareSolverrUrl = v);
                       _settings.cfProxyUrl = v;
@@ -692,19 +829,13 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 const SectionTitle(title: 'WebUI & Diagnostics (Server)'),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  title: Row(
+                  title: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
                     children: [
                       const Text('WebUI Flavor', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.tealAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
-                        ),
-                        child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                      ),
+                      SunfireBadge.server(),
                     ],
                   ),
                   subtitle: Text(_webUIFlavor, style: const TextStyle(fontSize: 12, color: Colors.grey)),
@@ -726,19 +857,13 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  title: Row(
+                  title: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
                     children: [
                       const Text('WebUI Release Channel', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.tealAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
-                        ),
-                        child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                      ),
+                      SunfireBadge.server(),
                     ],
                   ),
                   subtitle: Text(_webUIChannel, style: const TextStyle(fontSize: 12, color: Colors.grey)),
@@ -760,19 +885,13 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  title: Row(
+                  title: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
                     children: [
                       const Text('WebUI Interface', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.tealAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
-                        ),
-                        child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                      ),
+                      SunfireBadge.server(),
                     ],
                   ),
                   subtitle: Text(_webUIInterface, style: const TextStyle(fontSize: 12, color: Colors.grey)),

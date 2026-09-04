@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/widgets/sunfire_badge.dart';
 import 'extension_repos_screen.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
@@ -132,19 +133,13 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                       leading: const Icon(Icons.extension_rounded),
-                      title: Row(
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
                           const Text('Extension Repositories', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.purpleAccent.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.4), width: 0.8),
-                            ),
-                            child: const Text('LOCAL', style: TextStyle(color: Colors.purpleAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                          ),
+                          SunfireBadge.local(),
                         ],
                       ),
                       subtitle: const Text('Add community MangaYomi index.json repositories', style: TextStyle(fontSize: 12, color: Colors.grey)),

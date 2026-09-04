@@ -873,7 +873,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       fontSize: 13,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(14),
                       side: BorderSide(
                         color: isSelected ? primaryColor : const Color(0x2BFFFFFF),
                         width: isSelected ? 1.2 : 0.8,
@@ -1085,7 +1085,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         left: 0,
                         right: 0,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
                           decoration: const BoxDecoration(
                             gradient: LinearGradient(
                               colors: [Colors.transparent, Color(0xD9000000), Color(0xF2000000)],
@@ -1099,7 +1099,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                             manga.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.white, height: 1.2),
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.white, height: 1.25),
                           ),
                         ),
                       ),

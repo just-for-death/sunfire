@@ -176,7 +176,7 @@ class MClient {
           'session': session,
           'maxTimeout': 60000,
         }),
-      ).timeout(const Duration(seconds: 70));
+      ).timeout(const Duration(seconds: 25));
 
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -310,7 +310,11 @@ class ResolveCloudFlareChallenge extends RetryPolicy {
       final headers = response.request?.headers;
       return _solveWithCfProxy(proxyUrl, url, headers);
     }
-    debugPrint('[MClient] No CF proxy configured — bypass skipped');
+    debugPrint('[MClient] Cloudflare challenge detected for $url — no FlareSolverr proxy configured. Set up in Settings.');
+    LoggerService.instance.logWarning(
+      'Cloudflare challenge blocked $url. Configure FlareSolverr in Settings to bypass.',
+      'MClient',
+    );
     return false;
   }
 }
@@ -334,7 +338,7 @@ Future<bool> _solveWithCfProxy(String proxyUrl, String targetUrl, [Map<String, S
       Uri.parse(proxyUrl),
       headers: {HttpHeaders.contentTypeHeader: 'application/json'},
       body: jsonEncode(payload),
-    ).timeout(const Duration(seconds: 70));
+    ).timeout(const Duration(seconds: 25));
 
     debugPrint('[MClient] CF proxy response: ${res.statusCode}');
     if (res.statusCode != 200) return false;

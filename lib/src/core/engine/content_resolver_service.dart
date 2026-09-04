@@ -185,7 +185,7 @@ class ContentResolverService {
         if (data != null && data.containsKey('fetchChapterPages')) {
           final rawPages = data['fetchChapterPages']['pages'] as List<dynamic>?;
           if (rawPages != null && rawPages.isNotEmpty) {
-            final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+            final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
             final urls = rawPages.map((p) {
               final str = p.toString();
               return str.startsWith('http') ? str : '$serverUrl$str';

@@ -327,6 +327,16 @@ class QuickJsService {
     return _canonicalDisplayNames.values.toList();
   }
 
+  String? getSourceBaseUrl(String sourceName) {
+    final code = getExtensionCode(sourceName);
+    if (code != null && code.isNotEmpty) {
+      final meta = extractSourceMetadata(code);
+      final baseUrl = meta['baseUrl']?.toString().trim() ?? '';
+      if (baseUrl.isNotEmpty) return baseUrl;
+    }
+    return null;
+  }
+
   static final Map<String, Map<String, String>> _headersCache = {};
 
   static void cacheImageHeaders(String url, Map<String, String> headers) {
