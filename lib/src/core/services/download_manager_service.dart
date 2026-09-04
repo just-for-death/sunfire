@@ -455,7 +455,7 @@ class DownloadManagerService extends ChangeNotifier {
     }
 
     // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl-impersonate
-    if ((pageBytes == null || pageBytes.isEmpty) && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
+    if ((pageBytes == null || pageBytes.isEmpty) && !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
       final candidates = ['/usr/bin/curl-impersonate', 'curl-impersonate', 'curl-impersonate-chrome', '/usr/bin/curl', 'curl'];
       for (final exe in candidates) {
         try {

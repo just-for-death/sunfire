@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum ServerAuthType {
   none,
@@ -74,11 +75,23 @@ class ServerAuthCredentials {
 
 class ServerAuthHelper {
   static const String storageKey = 'sunfire_server_auth';
-  static const FlutterSecureStorage _storage = FlutterSecureStorage();
+  static const FlutterSecureStorage _storage = FlutterSecureStorage(
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
 
   static Future<ServerAuthCredentials> loadCredentials() async {
     try {
       final header = await _storage.read(key: storageKey);
+      if (header != null && header.isNotEmpty) {
+        return ServerAuthCredentials.fromHeaderValue(header);
+      }
+    } catch (_) {}
+
+    // Fallback to SharedPreferences if Keychain is restricted / fails
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final header = prefs.getString(storageKey);
       return ServerAuthCredentials.fromHeaderValue(header);
     } catch (_) {
       return const ServerAuthCredentials(type: ServerAuthType.none);
@@ -87,22 +100,47 @@ class ServerAuthHelper {
 
   static Future<void> saveCredentials(ServerAuthCredentials creds) async {
     final header = creds.toHeaderValue();
-    if (header.isEmpty) {
-      await _storage.delete(key: storageKey);
-    } else {
-      await _storage.write(key: storageKey, value: header);
-    }
+    try {
+      if (header.isEmpty) {
+        await _storage.delete(key: storageKey);
+      } else {
+        await _storage.write(key: storageKey, value: header);
+      }
+    } catch (_) {}
+
+    // Mirror to SharedPreferences as resilient fallback
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (header.isEmpty) {
+        await prefs.remove(storageKey);
+      } else {
+        await prefs.setString(storageKey, header);
+      }
+    } catch (_) {}
   }
 
   static Future<String> getRawAuthHeader() async {
     try {
-      return await _storage.read(key: storageKey) ?? '';
+      final val = await _storage.read(key: storageKey);
+      if (val != null && val.isNotEmpty) return val;
+    } catch (_) {}
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(storageKey) ?? '';
     } catch (_) {
       return '';
     }
   }
 
   static Future<void> clearCredentials() async {
-    await _storage.delete(key: storageKey);
+    try {
+      await _storage.delete(key: storageKey);
+    } catch (_) {}
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(storageKey);
+    } catch (_) {}
   }
 }

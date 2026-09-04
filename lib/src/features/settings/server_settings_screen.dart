@@ -199,9 +199,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     if (_clientUrl.isEmpty) return;
     try {
       final uri = Uri.parse(_clientUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open WebUI: $e')));

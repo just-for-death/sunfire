@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -80,10 +81,34 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _pageController = PageController();
     _initPreferences();
     if (_settings.keepScreenAwake) {
-      unawaited(WakelockPlus.enable());
+      _safeSetWakelock(true);
     }
     _scrollController.addListener(_onVerticalScroll);
     _loadChapterAndPages(widget.chapterServerId);
+  }
+
+  void _safeSetWakelock(bool enable) {
+    try {
+      if (enable) {
+        unawaited(WakelockPlus.enable().catchError((_) {}));
+      } else {
+        unawaited(WakelockPlus.disable().catchError((_) {}));
+      }
+    } catch (_) {}
+  }
+
+  void _scrollVerticalBy(double delta) {
+    if (!_scrollController.hasClients) return;
+    try {
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final currentOffset = _scrollController.offset;
+      final target = (currentOffset + delta).clamp(0.0, maxScroll);
+      _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    } catch (_) {}
   }
 
   void _initPreferences() {
@@ -185,11 +210,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           _goToNextPage();
         }
       } else {
-        _scrollController.animateTo(
-          _scrollController.offset + 500,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-        );
+        _scrollVerticalBy(500);
       }
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.pageUp) {
@@ -200,33 +221,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
           _goToPrevPage();
         }
       } else {
-        _scrollController.animateTo(
-          _scrollController.offset - 500,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-        );
+        _scrollVerticalBy(-500);
       }
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.arrowDown) {
       if (isPaged) {
         _goToNextPage();
       } else {
-        _scrollController.animateTo(
-          _scrollController.offset + 300,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-        );
+        _scrollVerticalBy(300);
       }
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.arrowUp) {
       if (isPaged) {
         _goToPrevPage();
       } else {
-        _scrollController.animateTo(
-          _scrollController.offset - 300,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-        );
+        _scrollVerticalBy(-300);
       }
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.escape) {
@@ -249,7 +258,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _scrollIndicatorTimer?.cancel();
     _transformationController.dispose();
     if (_settings.keepScreenAwake) {
-      unawaited(WakelockPlus.disable());
+      _safeSetWakelock(false);
     }
     if (_chapter != null) {
       _updateProgress(_currentPage);
@@ -407,7 +416,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     debugPrint('[Reader] Resolved ${_pageUrls.length} pages for source=$_sourceName: ${_pageUrls.take(3).toList()}');
 
     // Proactively pre-fetch first 5 pages on desktop to bypass Cloudflare image CDN blocking immediately
-    if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+    if (!kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
       for (int i = 0; i < _pageUrls.length && i < 5; i++) {
         _recoverImage(_pageUrls[i], i);
       }
@@ -637,8 +646,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
 
     final uri = Uri.tryParse(effectiveUrl);
-    if (uri != null && await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (uri != null) {
+      try {
+        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!launched && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open $effectiveUrl')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open $effectiveUrl: $e')),
+          );
+        }
+      }
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -701,17 +723,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
       if (!isLeft && !isRight) {
         _toggleControls();
       } else if (isRight) {
-        _scrollController.animateTo(
-          _scrollController.offset + 400,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-        );
+        _scrollVerticalBy(400);
       } else if (isLeft) {
-        _scrollController.animateTo(
-          _scrollController.offset - 400,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-        );
+        _scrollVerticalBy(-400);
       }
     }
   }
@@ -1062,11 +1076,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       activeThumbColor: primaryColor,
                       onChanged: (val) {
                         setState(() => _settings.keepScreenAwake = val);
-                        if (val) {
-                          unawaited(WakelockPlus.enable());
-                        } else {
-                          unawaited(WakelockPlus.disable());
-                        }
+                        _safeSetWakelock(val);
                         setSheetState(() {});
                       },
                     ),
@@ -1327,7 +1337,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   void _prefetchUpcomingPages(int currentIndex) {
-    if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+    if (!kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
       for (int i = currentIndex + 1; i <= currentIndex + 4 && i < _pageUrls.length; i++) {
         final nextUrl = _pageUrls[i];
         if (!_recoveredImageBytes.containsKey(nextUrl) && !_recoveringUrls.contains(nextUrl) && (nextUrl.startsWith('http://') || nextUrl.startsWith('https://'))) {
@@ -1341,7 +1351,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final isWebtoon = _readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps;
     final boxFit = isWebtoon ? BoxFit.fitWidth : _imageBoxFit;
 
-    final isDesktop = Platform.isLinux || Platform.isMacOS || Platform.isWindows;
+    final isDesktop = !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
     if (isDesktop) {
       _prefetchUpcomingPages(index);
     }
