@@ -132,42 +132,77 @@ class ImageCacheHelper {
     return b.length > 500;
   }
 
+  static Future<Uint8List?> _attemptHttpFetch(String url, Map<String, String> headers) async {
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 10);
+      final req = await client.getUrl(Uri.parse(url));
+      headers.forEach((k, v) => req.headers.set(k, v));
+      final resp = await req.close();
+      if (resp.statusCode == 200) {
+        final b = await resp.fold<List<int>>([], (p, c) => p..addAll(c));
+        if (_isValidImageBytes(b)) {
+          return Uint8List.fromList(b);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   static Future<Uint8List?> _doFetch(String url, String sourceName, int mangaServerId) async {
     try {
       final headers = QuickJsService.getImageHeaders(sourceName, url);
-      if (url.toLowerCase().contains('readcomicsonline') || sourceName.replaceAll(RegExp(r'[\s_\-]'), '').toLowerCase().contains('readcomiconline')) {
-        headers.remove('Referer');
-      }
       Uint8List? bytes;
 
-      // 1. Try standard HttpClient
-      try {
-        final client = HttpClient();
-        
-        client.connectionTimeout = const Duration(seconds: 8);
-        final req = await client.getUrl(Uri.parse(url));
-        headers.forEach((k, v) => req.headers.set(k, v));
-        final resp = await req.close();
-        if (resp.statusCode == 200) {
-          final b = await resp.fold<List<int>>([], (p, c) => p..addAll(c));
-          if (_isValidImageBytes(b)) { bytes = Uint8List.fromList(b); }
-        }
-      } catch (_) {}
+      // PASS 1: Standard fetch with configured headers
+      bytes = await _attemptHttpFetch(url, headers);
 
-      // 2. Fallback on desktop: use curl process to bypass TLS fingerprint blocking from Cloudflare CDNs
-      if (bytes == null && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
+      // PASS 2 (Self-Healing Anti-Hotlink): If failed and Referer was present, retry with NO Referer!
+      // Fixes any CDN enforcing anti-hotlink protection (ReadComicOnline, ImageKit, CloudFront, etc.)
+      if (bytes == null && headers.containsKey('Referer')) {
+        final noRefererHeaders = Map<String, String>.from(headers)..remove('Referer');
+        bytes = await _attemptHttpFetch(url, noRefererHeaders);
+      }
+
+      // PASS 3 (Self-Healing Origin Referer): If failed and had no Referer, retry with Origin Referer!
+      // Fixes CDNs requiring same-origin domain Referer (Webtoons, Naver, Pixiv, MangaDex)
+      if (bytes == null) {
         try {
-          final args = <String>['-s', '-L', '--max-time', '12'];
-          headers.forEach((k, v) {
-            args.addAll(['-H', '$k: $v']);
-          });
-          args.add(url);
-          final res = await Process.run('curl', args, stdoutEncoding: null);
-          if (res.exitCode == 0) {
-            final b = res.stdout as List<int>;
-            if (_isValidImageBytes(b)) { bytes = Uint8List.fromList(b); }
+          final uri = Uri.parse(url);
+          final originReferer = '${uri.origin}/';
+          if (headers['Referer'] != originReferer) {
+            final originHeaders = Map<String, String>.from(headers)..['Referer'] = originReferer;
+            bytes = await _attemptHttpFetch(url, originHeaders);
           }
         } catch (_) {}
+      }
+
+      // PASS 4 (Self-Healing Clean Browser): Retry with standard Chrome Desktop UA and Image Accept headers
+      if (bytes == null) {
+        final browserHeaders = Map<String, String>.from(headers)
+          ..['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+          ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
+        bytes = await _attemptHttpFetch(url, browserHeaders);
+      }
+
+      // PASS 5: Fallback on desktop with curl-impersonate / curl binaries to bypass TLS fingerprint blocks
+      if (bytes == null && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
+        final candidates = ['/usr/bin/curl-impersonate', 'curl-impersonate', 'curl-impersonate-chrome', '/usr/bin/curl', 'curl'];
+        for (final exe in candidates) {
+          try {
+            final args = <String>['-s', '-L', '--max-time', '15'];
+            headers.forEach((k, v) => args.addAll(['-H', '$k: $v']));
+            args.add(url);
+            final res = await Process.run(exe, args, stdoutEncoding: null);
+            if (res.exitCode == 0) {
+              final b = res.stdout as List<int>;
+              if (_isValidImageBytes(b)) {
+                bytes = Uint8List.fromList(b);
+                break;
+              }
+            }
+          } catch (_) {}
+        }
       }
 
       if (bytes != null && bytes.length > 200) {
