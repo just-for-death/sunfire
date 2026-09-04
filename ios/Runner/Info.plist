@@ -104,15 +104,5 @@
 		<true/>
 		<key>LSSupportsOpeningDocumentsInPlace</key>
 		<true/>
-		<key>UIBackgroundModes</key>
-		<array>
-			<string>fetch</string>
-			<string>processing</string>
-		</array>
-		<key>BGTaskSchedulerPermittedIdentifiers</key>
-		<array>
-			<string>sunfire_background_sync</string>
-			<string>sunfire_sync</string>
-		</array>
 	</dict>
 </plist>
