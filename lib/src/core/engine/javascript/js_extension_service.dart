@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -112,7 +113,20 @@ if (typeof extention === "undefined") {
     try {
       _jsDomSelector.dispose();
       _httpClient.dispose();
-      runtime.dispose();
+      runZoned(
+        () {
+          runtime.dispose();
+        },
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) {
+            if (line.contains('reference leak:') || line.contains('_JSFunction') || line.contains('JSError')) {
+              // Suppress flutter_qjs internal bridge teardown diagnostic
+              return;
+            }
+            parent.print(zone, line);
+          },
+        ),
+      );
     } catch (_) {}
     _isInitialized = false;
   }
