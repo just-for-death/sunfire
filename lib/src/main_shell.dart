@@ -90,6 +90,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         HapticFeedback.selectionClick();
       }
       setState(() => _currentIndex = index);
+      MainShell.selectedTabNotifier.value = index;
       if (_pageController.hasClients) {
         _pageController.animateToPage(
           index,
@@ -136,10 +137,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 Expanded(
                   child: PageView(
                     controller: _pageController,
-                    physics: const BouncingScrollPhysics(),
+                    physics: const NeverScrollableScrollPhysics(),
                     onPageChanged: (index) {
                       if (_currentIndex != index) {
                         setState(() => _currentIndex = index);
+                        MainShell.selectedTabNotifier.value = index;
                       }
                     },
                     children: _screens,
@@ -153,10 +155,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             extendBody: true,
             body: PageView(
               controller: _pageController,
-              physics: const BouncingScrollPhysics(),
+              physics: const NeverScrollableScrollPhysics(),
               onPageChanged: (index) {
                 if (_currentIndex != index) {
                   setState(() => _currentIndex = index);
+                  MainShell.selectedTabNotifier.value = index;
                 }
               },
               children: _screens,

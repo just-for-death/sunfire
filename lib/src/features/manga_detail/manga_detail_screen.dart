@@ -574,7 +574,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   void _showBatchDownloadModal() {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final unreadChapters = _chapters.where((c) => !c.isRead).toList();
+    // Sort unread chapters in ascending reading order so "Next chapter(s)" downloads the chronological next to read
+    final unreadChapters = _chapters.where((c) => !c.isRead).toList()
+      ..sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
     bool downloadToLocal = true;
 
     showModalBottomSheet(
@@ -1030,16 +1032,24 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0x33FFFFFF),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onPressed: _continueReading,
-                  icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: 22),
-                  label: const Text('Continue Reading', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                Builder(
+                  builder: (context) {
+                    final hasReadAny = _chapters.any((c) => c.isRead || c.lastPageRead > 0);
+                    return ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0x33FFFFFF),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      onPressed: _continueReading,
+                      icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: 22),
+                      label: Text(
+                        hasReadAny ? 'Continue Reading' : 'Start Reading',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
                 if (manga.genres.isNotEmpty) ...[

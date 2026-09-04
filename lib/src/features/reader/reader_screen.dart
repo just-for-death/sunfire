@@ -390,6 +390,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
       if (isPaged && _pageController.hasClients && _currentPage > 1) {
         _pageController.jumpToPage(_currentPage - 1);
@@ -580,9 +581,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
       if (_readingMode == ReadingMode.pagedRtl) {
-        if (isLeft) {
+        // In Manga RTL mode: Left is Next, Right is Prev by default; reversed if inverted
+        final isRtlNext = _invertTaps ? isRight : isLeft;
+        final isRtlPrev = _invertTaps ? isLeft : isRight;
+        if (isRtlNext) {
           _goToNextPage();
-        } else if (isRight) {
+        } else if (isRtlPrev) {
           _goToPrevPage();
         } else {
           _toggleControls();
@@ -694,6 +698,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
         _settings.readingMode = 'Long Strip';
       }
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
+      if (isPaged && _pageController.hasClients && _currentPage > 1) {
+        _pageController.jumpToPage(_currentPage - 1);
+      } else if (!isPaged && _scrollController.hasClients && _pageUrls.isNotEmpty) {
+        if (_currentPage > 1) {
+          final targetOffset = ((_currentPage - 1) / (_pageUrls.length - 1)) * _scrollController.position.maxScrollExtent;
+          _scrollController.jumpTo(targetOffset);
+        } else {
+          _scrollController.jumpTo(0);
+        }
+      }
+    });
+
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1499,7 +1519,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
                     // Bottom HUD Bar with Scrubber Slider
                     Positioned(
-                      bottom: 24,
+                      bottom: 16 + MediaQuery.of(context).padding.bottom,
                       left: 16,
                       right: 16,
                       child: Center(

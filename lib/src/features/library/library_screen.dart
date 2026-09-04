@@ -189,8 +189,8 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     if (_statusFilter == 'Unread') {
       list = list.where((m) => (m.unreadCount ?? 0) > 0).toList();
     } else if (_statusFilter == 'Downloaded') {
-      final downloadedChapters = DownloadManagerService.instance.downloadedLocalChapterIds;
-      list = list.where((m) => downloadedChapters.contains(m.serverId)).toList();
+      final downloadedMangaIds = DownloadManagerService.instance.downloadedMangaIds;
+      list = list.where((m) => downloadedMangaIds.contains(m.serverId)).toList();
     } else if (_statusFilter == 'Completed') {
       list = list.where((m) => (m.status ?? '').toLowerCase() == 'completed').toList();
     }
@@ -203,7 +203,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
 
     // 2. Smart Search Query Filter (Mihon / Mangayomi Tokens)
     if (_searchQuery.trim().isNotEmpty) {
-      final downloadedChapters = DownloadManagerService.instance.downloadedLocalChapterIds;
+      final downloadedMangaIds = DownloadManagerService.instance.downloadedMangaIds;
       final tokens = _searchQuery.trim().toLowerCase().split(RegExp(r'\s+'));
       
       list = list.where((m) {
@@ -213,7 +213,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         final artist = (m.artist ?? '').toLowerCase();
         final genres = m.genres.map((g) => g.toLowerCase()).toList();
         final status = (m.status ?? '').toLowerCase();
-        final isDownloaded = downloadedChapters.contains(m.serverId);
+        final isDownloaded = downloadedMangaIds.contains(m.serverId);
 
         for (final token in tokens) {
           if (token.isEmpty) continue;
