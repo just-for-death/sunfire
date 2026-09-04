@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 
@@ -68,6 +69,11 @@ class BackgroundService {
 
   /// Call once during app start (after onboarding) to register the periodic task.
   Future<void> initialize() async {
+    // WorkManager background scheduling is Android-only.
+    // On iOS, sideloaded environments (LiveContainer, AltStore, TrollStore) crash if BGTaskScheduler is called,
+    // and sync is cleanly handled on app resume via AppLifecycleState.resumed.
+    if (!Platform.isAndroid) return;
+
     try {
       await Workmanager().initialize(
         callbackDispatcher,
@@ -103,6 +109,7 @@ class BackgroundService {
 
   /// Cancel all scheduled background tasks (e.g. on sign-out or reset).
   Future<void> cancelAll() async {
+    if (!Platform.isAndroid) return;
     try {
       await Workmanager().cancelAll();
     } catch (_) {}
