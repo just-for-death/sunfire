@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../db/isar_service.dart';
 import '../engine/content_resolver_service.dart';
+import '../engine/javascript/m_client.dart';
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/graphql_client_service.dart';
@@ -35,7 +37,9 @@ class LocalDownloadTask {
 
 class DownloadManagerService extends ChangeNotifier {
   static final DownloadManagerService instance = DownloadManagerService._();
-  DownloadManagerService._();
+  DownloadManagerService._() {
+    _configureDio();
+  }
 
   final List<LocalDownloadTask> _localTasks = [];
   final Set<int> _downloadedLocalChapterIds = {};
@@ -43,12 +47,35 @@ class DownloadManagerService extends ChangeNotifier {
   final Set<int> _downloadedLocalMangaIds = {};
 
   bool _isProcessingLocalQueue = false;
-  final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 30), receiveTimeout: const Duration(minutes: 2)));
+  final Dio _dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 30),
+    receiveTimeout: const Duration(minutes: 2),
+    followRedirects: true,
+    maxRedirects: 5,
+  ));
+
+  void _configureDio() {
+    try {
+      if (_dio.httpClientAdapter is IOHttpClientAdapter) {
+        (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
+          final client = HttpClient();
+          client.badCertificateCallback = (cert, host, port) => true;
+          return client;
+        };
+      }
+    } catch (_) {}
+  }
 
   List<LocalDownloadTask> get localTasks => List.unmodifiable(_localTasks);
   Set<int> get downloadedLocalChapterIds => _downloadedLocalChapterIds;
   Set<int> get downloadedServerChapterIds => _downloadedServerChapterIds;
   Set<int> get downloadedMangaIds => _downloadedLocalMangaIds;
+
+  void resumeLocalQueue() {
+    if (!_isProcessingLocalQueue && _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
+      _processLocalQueue();
+    }
+  }
 
   Future<void> initialize() async {
     await _scanDownloadedLocalChapters();
@@ -196,7 +223,19 @@ class DownloadManagerService extends ChangeNotifier {
         notifyListeners();
       }));
     }
-    final existingFiles = chapterDir.listSync().whereType<File>().toList();
+    final existingFiles = chapterDir
+        .listSync()
+        .whereType<File>()
+        .where((f) {
+          final name = f.path.toLowerCase();
+          return name.endsWith('.jpg') ||
+              name.endsWith('.jpeg') ||
+              name.endsWith('.png') ||
+              name.endsWith('.webp') ||
+              name.endsWith('.gif') ||
+              name.endsWith('.bmp');
+        })
+        .toList();
     if (existingFiles.length < totalPages) {
       throw Exception('Incomplete download: only ${existingFiles.length}/$totalPages pages saved');
     }
@@ -224,7 +263,13 @@ class DownloadManagerService extends ChangeNotifier {
 
   Future<void> _downloadSinglePage(Directory chapterDir, String effectiveSource, String pageUrl, int index) async {
     final file = File('${chapterDir.path}/page_${(index + 1).toString().padLeft(3, '0')}.jpg');
-    final headers = QuickJsService.getImageHeaders(effectiveSource, pageUrl);
+    final baseHeaders = QuickJsService.getImageHeaders(effectiveSource, pageUrl);
+    final cookieHeaders = MClient.getCookiesPref(pageUrl);
+    final headers = <String, dynamic>{
+      ...baseHeaders,
+      ...cookieHeaders,
+      'User-Agent': MClient.userAgent,
+    };
     List<int>? pageBytes;
 
     // Pass 1: Standard fetch
