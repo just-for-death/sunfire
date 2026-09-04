@@ -71,6 +71,13 @@ class SettingsService extends ChangeNotifier {
 
   Color get accentColor => accentColors[accentColorName] ?? const Color(0xFFFF5722);
 
+  // ── TABLET NAVIGATION ─────────────────────────────────────
+  bool get tabletSidebarExpanded => _prefs?.getBool('tablet_sidebar_expanded') ?? true;
+  set tabletSidebarExpanded(bool value) {
+    _prefs?.setBool('tablet_sidebar_expanded', value);
+    notifyListeners();
+  }
+
   // ── READER SETTINGS (MIHON PARITY) ───────────────────────
   bool get incognitoMode => _prefs?.getBool('incognito_mode') ?? false;
   set incognitoMode(bool value) {
