@@ -699,8 +699,21 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       return;
     }
     final uri = Uri.tryParse(fullUrl);
-    if (uri != null && await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (uri != null) {
+      try {
+        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!launched && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open $fullUrl')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open $fullUrl: $e')),
+          );
+        }
+      }
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

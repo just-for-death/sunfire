@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'src/app.dart';
 import 'src/core/db/isar_service.dart';
@@ -13,6 +12,7 @@ import 'src/core/services/image_cache_helper.dart';
 import 'src/core/services/settings_service.dart';
 import 'src/core/sync/background_service.dart';
 import 'src/core/sync/graphql_client_service.dart';
+import 'src/core/sync/server_auth_helper.dart';
 import 'src/core/sync/sync_engine.dart';
 import 'src/core/sync/websocket_service.dart';
 
@@ -41,8 +41,7 @@ void main() async {
 
   // Configure Suwayomi GraphQL client and SyncEngine only after onboarding
   if (SettingsService.instance.onboardingCompleted) {
-    const secureStorage = FlutterSecureStorage();
-    final authToken = await secureStorage.read(key: 'sunfire_server_auth') ?? '';
+    final authToken = await ServerAuthHelper.getRawAuthHeader();
     GraphQLClientService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
     WebSocketService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
     SyncEngine.instance.initialize();

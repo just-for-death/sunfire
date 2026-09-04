@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../logging/logger_service.dart';
@@ -24,6 +25,12 @@ class IsarService {
 
   Future<void> initialize() async {
     if (_isInitialized) return;
+    final existing = Isar.getInstance();
+    if (existing != null) {
+      _isar = existing;
+      _isInitialized = true;
+      return;
+    }
     final dir = await getApplicationDocumentsDirectory();
     _isar = await Isar.open(
       [
@@ -34,7 +41,7 @@ class IsarService {
         SyncMetaSchema,
       ],
       directory: dir.path,
-      inspector: true,
+      inspector: kDebugMode,
     );
     _isInitialized = true;
   }
@@ -179,7 +186,7 @@ class IsarService {
           c.id = existingMap[c.serverId]!;
         }
       }
-      final newServerIds = categories.map((c) => c.serverId).toSet();
+      final newServerIds = categories.map((c) => c.serverId).whereType<int>().toSet();
       final toDelete = existing.where((e) => !newServerIds.contains(e.serverId)).map((e) => e.id).toList();
       await _isar.categorys.deleteAll(toDelete);
       await _isar.categorys.putAll(categories);

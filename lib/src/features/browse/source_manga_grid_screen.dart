@@ -56,6 +56,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   }
   
   void _onScroll() {
+    if (!_scrollController.hasClients) return;
     if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 400 &&
         !_isLoading &&
         !_isLoadingMore &&

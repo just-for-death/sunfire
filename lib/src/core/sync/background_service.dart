@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 
@@ -72,7 +73,7 @@ class BackgroundService {
     // WorkManager background scheduling is Android-only.
     // On iOS, sideloaded environments (LiveContainer, AltStore, TrollStore) crash if BGTaskScheduler is called,
     // and sync is cleanly handled on app resume via AppLifecycleState.resumed.
-    if (!Platform.isAndroid) return;
+    if (kIsWeb || !Platform.isAndroid) return;
 
     try {
       await Workmanager().initialize(
@@ -109,7 +110,7 @@ class BackgroundService {
 
   /// Cancel all scheduled background tasks (e.g. on sign-out or reset).
   Future<void> cancelAll() async {
-    if (!Platform.isAndroid) return;
+    if (kIsWeb || !Platform.isAndroid) return;
     try {
       await Workmanager().cancelAll();
     } catch (_) {}
