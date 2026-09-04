@@ -2,6 +2,7 @@ import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -29,7 +30,7 @@ class ImageCacheHelper {
       } catch (_) {}
 
       // Common Linux user paths
-      if (Platform.isLinux) {
+      if (!kIsWeb && Platform.isLinux) {
         final home = Platform.environment['HOME'];
         if (home != null) {
           paths.add('$home/Documents/covers');
@@ -206,7 +207,7 @@ class ImageCacheHelper {
       }
 
       // PASS 5: Fallback on desktop with curl-impersonate / curl binaries to bypass TLS fingerprint blocks
-      if (bytes == null && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
+      if (bytes == null && !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
         final candidates = ['/usr/bin/curl-impersonate', 'curl-impersonate', 'curl-impersonate-chrome', '/usr/bin/curl', 'curl'];
         for (final exe in candidates) {
           try {
