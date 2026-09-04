@@ -211,8 +211,34 @@ class DownloadManagerService extends ChangeNotifier {
       if (response.data != null && response.data!.isNotEmpty) {
         pageBytes = response.data;
       }
-    } catch (e) {
-      LoggerService.instance.logError('_downloadSinglePage error: $e', category: 'DownloadManager');
+    } catch (_) {
+      // Pass 2: Retry with Referer stripped (anti-hotlink bypass)
+      if (headers.containsKey('Referer')) {
+        try {
+          final noRef = Map<String, dynamic>.from(headers)..remove('Referer');
+          final r2 = await _dio.get<List<int>>(
+            pageUrl,
+            options: Options(headers: noRef, responseType: ResponseType.bytes),
+          );
+          if (r2.data != null && r2.data!.isNotEmpty) {
+            pageBytes = r2.data;
+          }
+        } catch (_) {}
+      }
+      // Pass 3: Retry with Origin Referer
+      if (pageBytes == null) {
+        try {
+          final uri = Uri.parse(pageUrl);
+          final originRef = Map<String, dynamic>.from(headers)..['Referer'] = '${uri.origin}/';
+          final r3 = await _dio.get<List<int>>(
+            pageUrl,
+            options: Options(headers: originRef, responseType: ResponseType.bytes),
+          );
+          if (r3.data != null && r3.data!.isNotEmpty) {
+            pageBytes = r3.data;
+          }
+        } catch (_) {}
+      }
     }
 
     // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl-impersonate
