@@ -146,9 +146,24 @@ class DownloadManagerService extends ChangeNotifier {
     }
   }
 
-  void resumeLocalQueue() {
+  bool _isQueuePaused = false;
+  bool get isQueuePaused => _isQueuePaused;
+
+  void pauseLocalQueue() {
+    _isQueuePaused = true;
     for (final task in _localTasks) {
-      if (task.status == LocalDownloadStatus.downloading) {
+      if (task.status == LocalDownloadStatus.downloading || task.status == LocalDownloadStatus.queued) {
+        task.status = LocalDownloadStatus.paused;
+      }
+    }
+    _saveQueueState();
+    notifyListeners();
+  }
+
+  void resumeLocalQueue() {
+    _isQueuePaused = false;
+    for (final task in _localTasks) {
+      if (task.status == LocalDownloadStatus.downloading || task.status == LocalDownloadStatus.paused) {
         task.status = LocalDownloadStatus.queued;
       }
     }
@@ -156,6 +171,7 @@ class DownloadManagerService extends ChangeNotifier {
     if (!_isProcessingLocalQueue && _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
       _processLocalQueue();
     }
+    notifyListeners();
   }
 
   Future<void> initialize() async {
@@ -234,6 +250,11 @@ class DownloadManagerService extends ChangeNotifier {
     _isProcessingLocalQueue = true;
 
     while (_localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
+      if (_isQueuePaused) {
+        _isProcessingLocalQueue = false;
+        notifyListeners();
+        return;
+      }
       // Check network constraints (Wi-Fi only)
       if (SettingsService.instance.downloadOnlyOnWifi) {
         final onWifi = await _isWifiConnected();
@@ -311,7 +332,9 @@ class DownloadManagerService extends ChangeNotifier {
     var completed = 0;
     for (var start = 0; start < totalPages; start += concurrency) {
       final end = (start + concurrency < totalPages) ? start + concurrency : totalPages;
-      if (task.status == LocalDownloadStatus.failed) throw Exception('Cancelled');
+      if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused) {
+        throw Exception('Cancelled or paused');
+      }
       await Future.wait(List.generate(end - start, (offset) async {
         final i = start + offset;
         await _downloadSinglePage(chapterDir, effectiveSource, rawPages[i], i);
