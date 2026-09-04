@@ -1,0 +1,12 @@
+Sunfire is a modern, high-performance manga, webtoon, and comic reader built for speed, elegance, and deep multi-platform reading.
+
+Key Features:
+• Local-First Offline Reading: Browse and read offline with automatic chapter caching and persistent SQLite/Isar database storage.
+• Suwayomi Server Synchronization: Real-time GraphQL and WebSocket synchronization for categories, reading history, unread badges, and progress tracking.
+• Multi-Source Extension Support: Built-in JavaScript scraping engine powered by QuickJS, compatible with community MangaYomi extensions.
+• Advanced Reader Modes: Webtoon (seamless vertical continuous scrolling), Manga (Right-to-Left), and Comic (Left-to-Right).
+• Hands-Free Webtoon Auto-Scroll: Continuous smooth auto-scrolling with adjustable speed, tap-to-pause, and smart chapter boundary transitions.
+• Eye Comfort Night Modes: Sepia, Amber Night, Grayscale, and Inverted Dark color filters.
+• Hardware Navigation: Physical volume rocker page turns, keyboard arrows, and trackpad gestures.
+• Cloudflare Turnstile Bypass: Integrated FlareSolverr proxy support with local headless fallback.
+• 16KB Page Size Alignment: Fully optimized and compliant with Android 15 & 16 modern memory architecture.
