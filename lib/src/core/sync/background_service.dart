@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:workmanager/workmanager.dart';
 
 import '../db/isar_service.dart';
@@ -10,6 +9,7 @@ import '../logging/logger_service.dart';
 import '../services/image_cache_helper.dart';
 import '../services/settings_service.dart';
 import 'graphql_client_service.dart';
+import 'server_auth_helper.dart';
 import 'sync_engine.dart';
 
 const _kSyncTaskName = 'sunfire_background_sync';
@@ -32,8 +32,7 @@ void callbackDispatcher() {
 
       if (!SettingsService.instance.onboardingCompleted) return true;
 
-      const secureStorage = FlutterSecureStorage();
-      final authToken = await secureStorage.read(key: 'sunfire_server_auth') ?? '';
+      final authToken = await ServerAuthHelper.getRawAuthHeader();
       GraphQLClientService.instance.initialize(
         SettingsService.instance.serverUrl,
         authToken: authToken,
