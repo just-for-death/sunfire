@@ -1,8 +1,8 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../db/models/manga.dart';
 import '../logging/logger_service.dart';
+import '../sync/server_auth_helper.dart';
 
 class ReplicationReport {
   final List<String> newlyInstalledLocalScrapers;
@@ -346,8 +346,7 @@ class SourceMigrationService {
     final sp = prefs ?? await SharedPreferences.getInstance();
     await sp.setString(keyServerUrl, serverUrl);
     if (authHeader != null && authHeader.isNotEmpty) {
-      const secureStorage = FlutterSecureStorage();
-      await secureStorage.write(key: keyServerAuth, value: authHeader);
+      await ServerAuthHelper.saveCredentials(ServerAuthCredentials.fromHeaderValue(authHeader));
     }
     if (selectedRepos != null && selectedRepos.isNotEmpty) {
       await sp.setStringList(keySelectedRepos, selectedRepos);
