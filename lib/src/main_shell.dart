@@ -131,7 +131,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     right: false,
                     child: Column(
                       children: [
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 24),
                         // App Brand Logo
                         Container(
                           width: 48,
@@ -214,15 +214,18 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             ),
             // ── TABLET CONTENT SCREEN (Smooth PageView) ───────────────────
             Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const BouncingScrollPhysics(),
-                onPageChanged: (index) {
-                  if (_currentIndex != index) {
-                    setState(() => _currentIndex = index);
-                  }
-                },
-                children: _screens,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 14.0),
+                child: PageView(
+                  controller: _pageController,
+                  physics: const BouncingScrollPhysics(),
+                  onPageChanged: (index) {
+                    if (_currentIndex != index) {
+                      setState(() => _currentIndex = index);
+                    }
+                  },
+                  children: _screens,
+                ),
               ),
             ),
           ],
