@@ -117,9 +117,11 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
   Widget build(BuildContext context) {
     super.build(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final isTablet = MediaQuery.of(context).size.width >= 720;
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: isTablet ? 64.0 : kToolbarHeight,
         title: const Text('History', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
         actions: [
           if (_historyItems.isNotEmpty)
