@@ -373,13 +373,16 @@ class QuickJsService {
     }
 
     // 2. Fallback for Webtoons, Read Comics Online, and Mangapill images
-    if ((targetUrl.contains('webtoon') || targetUrl.contains('pstatic.net') || sourceOrUrl.toLowerCase().contains('webtoon')) &&
+    final normSource = sourceOrUrl.replaceAll(RegExp(r'[\s_\-]'), '').toLowerCase();
+    final normTarget = targetUrl.toLowerCase();
+
+    if ((normTarget.contains('webtoon') || normTarget.contains('pstatic.net') || normSource.contains('webtoon')) &&
         (!headers.containsKey('Referer') || headers['Referer']!.isEmpty)) {
       headers['Referer'] = 'https://www.webtoons.com/';
-    } else if (targetUrl.contains('readcomicsonline') || sourceOrUrl.toLowerCase().contains('read comics online')) {
+    } else if (normTarget.contains('readcomicsonline') || normSource.contains('readcomiconline')) {
       // cdn.readcomicsonline.ru returns HTTP 403 challenge if Referer is present; omit Referer
       headers.remove('Referer');
-    } else if ((targetUrl.contains('readdetectiveconan') || targetUrl.contains('mangapill') || sourceOrUrl.toLowerCase().contains('mangapill')) &&
+    } else if ((normTarget.contains('readdetectiveconan') || normTarget.contains('mangapill') || normSource.contains('mangapill')) &&
         (!headers.containsKey('Referer') || headers['Referer']!.isEmpty)) {
       headers['Referer'] = 'https://mangapill.com/';
     }
