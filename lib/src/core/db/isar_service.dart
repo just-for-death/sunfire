@@ -49,11 +49,13 @@ class IsarService {
 
   // ── META HELPERS ─────────────────────────────────────────
   Future<String?> getMeta(String key) async {
+    if (!_isInitialized) return null;
     final meta = await _isar.syncMetas.filter().keyEqualTo(key).findFirst();
     return meta?.value;
   }
 
   Future<void> setMeta(String key, String value) async {
+    if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       final meta = SyncMeta()
         ..key = key
@@ -64,18 +66,21 @@ class IsarService {
 
   // ── MANGA CRUD ──────────────────────────────────────────
   Future<void> saveManga(Manga manga) async {
+    if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       await _isar.mangas.put(manga);
     });
   }
 
   Future<void> saveMangas(List<Manga> mangas) async {
+    if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       await _isar.mangas.putAll(mangas);
     });
   }
 
   Future<List<Manga>> getAllManga() async {
+    if (!_isInitialized) return [];
     return await _isar.mangas.where().findAll();
   }
 
@@ -98,12 +103,14 @@ class IsarService {
 
   // ── CHAPTER CRUD ────────────────────────────────────────
   Future<void> saveChapter(Chapter chapter) async {
+    if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       await _isar.chapters.put(chapter);
     });
   }
 
   Future<void> saveChapters(List<Chapter> chapters) async {
+    if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       await _isar.chapters.putAll(chapters);
     });
@@ -174,6 +181,7 @@ class IsarService {
   }
 
   Future<void> deleteManga(int serverId) async {
+    if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       final manga = await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
       if (manga != null) {
@@ -188,6 +196,7 @@ class IsarService {
 
   // ── CATEGORY CRUD ───────────────────────────────────────
   Future<void> saveCategories(List<Category> categories) async {
+    if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       final existing = await _isar.categorys.where().findAll();
       final existingMap = {for (var e in existing) e.serverId: e.id};
@@ -204,6 +213,7 @@ class IsarService {
   }
 
   Future<void> deleteCategory(int serverId) async {
+    if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       final cat = await _isar.categorys.filter().serverIdEqualTo(serverId).findFirst();
       if (cat != null) {
@@ -219,16 +229,19 @@ class IsarService {
 
   // ── SYNC RECORD CRUD ────────────────────────────────────
   Future<void> saveSyncRecord(SyncRecord record) async {
+    if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       await _isar.syncRecords.put(record);
     });
   }
 
   Future<List<SyncRecord>> getPendingSyncRecords() async {
+    if (!_isInitialized) return [];
     return await _isar.syncRecords.filter().stateEqualTo(SyncRecordState.pending).or().stateEqualTo(SyncRecordState.failed).findAll();
   }
 
   Future<void> deleteSyncRecord(Id id) async {
+    if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       await _isar.syncRecords.delete(id);
     });
@@ -236,6 +249,7 @@ class IsarService {
 
   // ── DATABASE MAINTENANCE ────────────────────────────────
   Future<void> clearAll() async {
+    if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       await _isar.clear();
     });
