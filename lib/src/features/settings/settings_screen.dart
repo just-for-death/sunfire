@@ -64,11 +64,11 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
       destination: (context) => const ServerSettingsScreen(),
     ),
     _SettingSearchItem(
-      title: 'FlareSolverr Cloudflare Bypass',
-      subtitle: 'Bypass Cloudflare Turnstile for ReadComicOnline & Mangago',
+      title: 'Server FlareSolverr Cloudflare Bypass',
+      subtitle: 'Configure remote Suwayomi server FlareSolverr endpoint',
       category: 'Server',
       icon: Icons.shield_outlined,
-      keywords: ['cloudflare', 'flaresolverr', 'proxy', 'turnstile', 'challenge', 'bypass', 'readcomiconline', 'mangago'],
+      keywords: ['cloudflare', 'flaresolverr', 'proxy', 'turnstile', 'challenge', 'bypass', 'server', 'suwayomi'],
       destination: (context) => const ServerSettingsScreen(),
     ),
     _SettingSearchItem(
@@ -278,11 +278,11 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
 
     // ── ADVANCED ──
     _SettingSearchItem(
-      title: 'Cloudflare Bypass Proxy (Local)',
-      subtitle: 'Configure FlareSolverr proxy endpoint to bypass Turnstile',
+      title: 'Local FlareSolverr (App Cloudflare Bypass)',
+      subtitle: 'Bypass Cloudflare Turnstile for ReadComicOnline & local extensions',
       category: 'Advanced',
       icon: Icons.shield_outlined,
-      keywords: ['cloudflare', 'flaresolverr', 'proxy', 'turnstile', 'challenge', 'bypass', 'local'],
+      keywords: ['cloudflare', 'flaresolverr', 'proxy', 'turnstile', 'challenge', 'bypass', 'local', 'readcomiconline', 'mangago'],
       destination: (context) => const AdvancedSettingsScreen(),
     ),
     _SettingSearchItem(
@@ -438,7 +438,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                     _buildTile(
                       icon: Icons.dns_outlined,
                       title: 'Server',
-                      subtitle: 'Connection, bindings, SOCKS proxy, FlareSolverr, OPDS, SyncYomi',
+                      subtitle: 'Connection, bindings, SOCKS proxy, FlareSolverr (Server & Local), OPDS, SyncYomi',
                       tags: ['SERVER'],
                       onTap: () {
                         Navigator.push(
@@ -480,7 +480,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                     _buildTile(
                       icon: Icons.explore_outlined,
                       title: 'Browse',
-                      subtitle: 'NSFW sources, parallel scrapers concurrency, local paths, repos',
+                      subtitle: 'NSFW sources, extension repos, local FlareSolverr, scrapers concurrency',
                       tags: ['SERVER', 'LOCAL'],
                       onTap: () {
                         Navigator.push(
