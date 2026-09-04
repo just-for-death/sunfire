@@ -50,7 +50,18 @@ class ContentResolverService {
         final chapterDir = Directory('${appDir.path}/downloads/$chapterServerId');
         if (await chapterDir.exists()) {
           final files = await chapterDir.list().toList();
-          final localImages = files.whereType<File>().toList();
+          final localImages = files
+              .whereType<File>()
+              .where((f) {
+                final name = f.path.toLowerCase();
+                return name.endsWith('.jpg') ||
+                    name.endsWith('.jpeg') ||
+                    name.endsWith('.png') ||
+                    name.endsWith('.webp') ||
+                    name.endsWith('.gif') ||
+                    name.endsWith('.bmp');
+              })
+              .toList();
           localImages.sort((a, b) => a.path.compareTo(b.path));
           if (localImages.isNotEmpty) {
             final paths = localImages.map((f) => f.path).toList();

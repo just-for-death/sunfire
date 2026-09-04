@@ -76,6 +76,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      DownloadManagerService.instance.resumeLocalQueue();
       if (GraphQLClientService.instance.isConfigured) {
         SyncEngine.instance.triggerSync();
       }
