@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../db/isar_service.dart';
 import '../engine/content_resolver_service.dart';
@@ -12,6 +15,7 @@ import '../engine/javascript/m_client.dart';
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/graphql_client_service.dart';
+import 'settings_service.dart';
 
 enum LocalDownloadStatus { queued, downloading, completed, failed, paused }
 
@@ -33,6 +37,31 @@ class LocalDownloadTask {
     this.status = LocalDownloadStatus.queued,
     this.error,
   });
+
+  Map<String, dynamic> toJson() => {
+    'chapterId': chapterId,
+    'mangaId': mangaId,
+    'chapterName': chapterName,
+    'mangaTitle': mangaTitle,
+    'progress': progress,
+    'status': status.name,
+    'error': error,
+  };
+
+  factory LocalDownloadTask.fromJson(Map<String, dynamic> map) {
+    return LocalDownloadTask(
+      chapterId: map['chapterId'] as int,
+      mangaId: map['mangaId'] as int,
+      chapterName: map['chapterName'] as String? ?? '',
+      mangaTitle: map['mangaTitle'] as String? ?? '',
+      progress: (map['progress'] as num?)?.toDouble() ?? 0.0,
+      status: LocalDownloadStatus.values.firstWhere(
+        (e) => e.name == map['status'],
+        orElse: () => LocalDownloadStatus.queued,
+      ),
+      error: map['error'] as String?,
+    );
+  }
 }
 
 class DownloadManagerService extends ChangeNotifier {
@@ -66,12 +95,64 @@ class DownloadManagerService extends ChangeNotifier {
     } catch (_) {}
   }
 
+  static const String _queuePrefKey = 'sunfire_download_queue_v1';
+
   List<LocalDownloadTask> get localTasks => List.unmodifiable(_localTasks);
   Set<int> get downloadedLocalChapterIds => _downloadedLocalChapterIds;
   Set<int> get downloadedServerChapterIds => _downloadedServerChapterIds;
   Set<int> get downloadedMangaIds => _downloadedLocalMangaIds;
 
+  Future<bool> _isWifiConnected() async {
+    try {
+      final results = await Connectivity().checkConnectivity();
+      return results.contains(ConnectivityResult.wifi) ||
+          results.contains(ConnectivityResult.ethernet);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> _saveQueueState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = _localTasks.map((t) => t.toJson()).toList();
+      await prefs.setString(_queuePrefKey, jsonEncode(jsonList));
+    } catch (e) {
+      debugPrint('[DownloadManager] Error saving queue state: $e');
+    }
+  }
+
+  Future<void> _loadQueueState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_queuePrefKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw) as List<dynamic>;
+        _localTasks.clear();
+        for (final item in decoded) {
+          if (item is Map<String, dynamic>) {
+            final task = LocalDownloadTask.fromJson(item);
+            // Any tasks interrupted mid-flight should reset to queued
+            if (task.status == LocalDownloadStatus.downloading) {
+              task.status = LocalDownloadStatus.queued;
+            }
+            _localTasks.add(task);
+          }
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[DownloadManager] Error loading queue state: $e');
+    }
+  }
+
   void resumeLocalQueue() {
+    for (final task in _localTasks) {
+      if (task.status == LocalDownloadStatus.downloading) {
+        task.status = LocalDownloadStatus.queued;
+      }
+    }
+    _saveQueueState();
     if (!_isProcessingLocalQueue && _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
       _processLocalQueue();
     }
@@ -79,6 +160,8 @@ class DownloadManagerService extends ChangeNotifier {
 
   Future<void> initialize() async {
     await _scanDownloadedLocalChapters();
+    await _loadQueueState();
+    resumeLocalQueue();
   }
 
   Future<void> _scanDownloadedLocalChapters() async {
@@ -140,6 +223,7 @@ class DownloadManagerService extends ChangeNotifier {
     );
     _localTasks.removeWhere((t) => t.chapterId == chapterId && t.status == LocalDownloadStatus.failed);
     _localTasks.add(task);
+    await _saveQueueState();
     notifyListeners();
 
     _processLocalQueue();
@@ -150,8 +234,20 @@ class DownloadManagerService extends ChangeNotifier {
     _isProcessingLocalQueue = true;
 
     while (_localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
+      // Check network constraints (Wi-Fi only)
+      if (SettingsService.instance.downloadOnlyOnWifi) {
+        final onWifi = await _isWifiConnected();
+        if (!onWifi) {
+          debugPrint('[DownloadManager] ⏸️ Pausing queue: Download only on Wi-Fi is enabled');
+          _isProcessingLocalQueue = false;
+          notifyListeners();
+          return;
+        }
+      }
+
       final task = _localTasks.firstWhere((t) => t.status == LocalDownloadStatus.queued);
       task.status = LocalDownloadStatus.downloading;
+      await _saveQueueState();
       notifyListeners();
 
       try {
@@ -172,6 +268,7 @@ class DownloadManagerService extends ChangeNotifier {
         task.error = e.toString();
         await LoggerService.instance.logError('Failed to download chapter ${task.chapterId}: $e', exception: e, stackTrace: stack, category: 'DownloadManager');
       }
+      await _saveQueueState();
       notifyListeners();
     }
 
@@ -368,6 +465,7 @@ class DownloadManagerService extends ChangeNotifier {
       }
       _downloadedLocalChapterIds.remove(chapterId);
       _localTasks.removeWhere((t) => t.chapterId == chapterId);
+      await _saveQueueState();
 
       final ch = await IsarService.instance.getChapterByServerId(chapterId);
       final mId = ch?.mangaId;
@@ -393,12 +491,20 @@ class DownloadManagerService extends ChangeNotifier {
     if (task.chapterId != 0) {
       task.status = LocalDownloadStatus.failed;
       task.error = 'Cancelled';
+      _saveQueueState();
       notifyListeners();
     }
   }
 
+  Future<void> dismissLocalTask(int chapterId) async {
+    _localTasks.removeWhere((t) => t.chapterId == chapterId);
+    await _saveQueueState();
+    notifyListeners();
+  }
+
   void clearCompletedDownloads() {
     _localTasks.removeWhere((t) => t.status == LocalDownloadStatus.completed);
+    _saveQueueState();
     notifyListeners();
   }
 

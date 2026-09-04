@@ -184,7 +184,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                                     IconButton(
                                       icon: const Icon(Icons.close_rounded, color: Colors.grey),
                                       tooltip: 'Dismiss',
-                                      onPressed: () => _downloadService.cancelLocalDownload(task.chapterId),
+                                      onPressed: () => _downloadService.dismissLocalTask(task.chapterId),
                                     ),
                                   ],
                                 )
