@@ -71,9 +71,11 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final isTablet = MediaQuery.of(context).size.width >= 720;
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: isTablet ? 64.0 : kToolbarHeight,
         title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
       ),
       body: Align(

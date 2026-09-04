@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -149,6 +151,30 @@ class _SunfireAppState extends State<SunfireApp> {
               theme: effectiveLightTheme,
               darkTheme: themeData,
               routerConfig: _router,
+              builder: (context, child) {
+                final mediaQuery = MediaQuery.of(context);
+                final screenWidth = mediaQuery.size.width;
+                final isTablet = screenWidth >= 720;
+                final isApple = Theme.of(context).platform == TargetPlatform.iOS ||
+                    Theme.of(context).platform == TargetPlatform.macOS;
+
+                // Guarantee minimum top safe area inset for iPadOS, LiveContainer,
+                // and sideload environments where safeAreaInsets.top can be reported as 0 or 24.
+                final minTopPadding = isTablet
+                    ? 44.0
+                    : (isApple ? 44.0 : 24.0);
+
+                final effectiveTopPadding = math.max(mediaQuery.padding.top, minTopPadding);
+                final effectiveTopViewPadding = math.max(mediaQuery.viewPadding.top, minTopPadding);
+
+                return MediaQuery(
+                  data: mediaQuery.copyWith(
+                    padding: mediaQuery.padding.copyWith(top: effectiveTopPadding),
+                    viewPadding: mediaQuery.viewPadding.copyWith(top: effectiveTopViewPadding),
+                  ),
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
             );
           },
         );
