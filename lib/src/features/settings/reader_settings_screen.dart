@@ -191,6 +191,14 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                 boolValue: _settings.seamlessTransitions,
                 onBoolChanged: (val) => _settings.seamlessTransitions = val,
               ),
+              SettingsPropTile(
+                title: 'Keep Screen Awake',
+                subtitle: 'Prevent device display from sleeping while reading',
+                scope: SettingScope.local,
+                kind: SettingsPropKind.switchTile,
+                boolValue: _settings.keepScreenAwake,
+                onBoolChanged: (val) => _settings.keepScreenAwake = val,
+              ),
             ],
           ),
         );
