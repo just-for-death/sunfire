@@ -64,7 +64,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
   Future<void> _fetchServerUpdatesInBackground() async {
     try {
-      final serverUrl = GraphQLClientService.instance.baseUrl ?? 'http://localhost:4567';
+      final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
       final items = <Map<String, dynamic>>[];
 
       // Fetch last update timestamp
