@@ -156,14 +156,37 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                   trailing: task.status == LocalDownloadStatus.downloading || task.status == LocalDownloadStatus.queued
                       ? IconButton(
                           icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
+                          tooltip: 'Cancel download',
                           onPressed: () => _downloadService.cancelLocalDownload(task.chapterId),
                         )
                       : task.status == LocalDownloadStatus.completed
                           ? IconButton(
                               icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey),
+                              tooltip: 'Delete downloaded files',
                               onPressed: () => _downloadService.deleteLocalDownload(task.chapterId),
                             )
-                          : null,
+                          : task.status == LocalDownloadStatus.failed
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.refresh_rounded, color: Colors.amberAccent),
+                                      tooltip: 'Retry download',
+                                      onPressed: () => _downloadService.enqueueLocalDownload(
+                                        chapterId: task.chapterId,
+                                        mangaId: task.mangaId,
+                                        chapterName: task.chapterName,
+                                        mangaTitle: task.mangaTitle,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.close_rounded, color: Colors.grey),
+                                      tooltip: 'Dismiss',
+                                      onPressed: () => _downloadService.cancelLocalDownload(task.chapterId),
+                                    ),
+                                  ],
+                                )
+                              : null,
                 ),
               ),
             );
