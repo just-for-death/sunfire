@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../engine/javascript/m_client.dart';
+
 class SettingsService extends ChangeNotifier {
   static SettingsService? _instance;
   SharedPreferences? _prefs;
@@ -33,22 +35,31 @@ class SettingsService extends ChangeNotifier {
 
   String get serverUrl {
     final s = _prefs?.getString('server_url');
-    if (s != null && s.isNotEmpty) return s;
+    if (s != null && s.trim().isNotEmpty) return s.trim();
     final sf = _prefs?.getString('sunfire_server_url');
-    if (sf != null && sf.isNotEmpty) return sf;
-    return 'http://localhost:4567';
+    if (sf != null && sf.trim().isNotEmpty) return sf.trim();
+    return '';
   }
   set serverUrl(String value) {
-    _prefs?.setString('server_url', value);
-    _prefs?.setString('sunfire_server_url', value);
+    final trimmed = value.trim();
+    _prefs?.setString('server_url', trimmed);
+    _prefs?.setString('sunfire_server_url', trimmed);
     notifyListeners();
   }
 
   /// FlareSolverr / Byparr proxy URL for Cloudflare bypass (e.g. http://192.168.1.x:8191/v1).
-  /// Leave empty to disable.
-  String get cfProxyUrl => _prefs?.getString('cf_proxy_url') ?? '';
+  /// Empty by default. Set to 'none', 'off', or empty to disable.
+  String get cfProxyUrl {
+    final saved = _prefs?.getString('cf_proxy_url');
+    if (saved == 'none' || saved == 'off') return '';
+    if (saved != null && saved.trim().isNotEmpty) return saved.trim();
+    return '';
+  }
+
   set cfProxyUrl(String value) {
-    _prefs?.setString('cf_proxy_url', value.trim());
+    final trimmed = value.trim();
+    _prefs?.setString('cf_proxy_url', trimmed);
+    MClient.cfProxyUrl = (trimmed == 'none' || trimmed == 'off') ? '' : trimmed;
     notifyListeners();
   }
 

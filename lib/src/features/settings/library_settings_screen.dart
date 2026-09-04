@@ -4,6 +4,7 @@ import '../../core/db/isar_service.dart';
 import '../../core/db/models/category.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/widgets/sunfire_badge.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -303,19 +304,13 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     const SectionTitle(title: 'Global Update (Server)'),
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                      title: Row(
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
                           const Text('Global Update Interval', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.tealAccent.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
-                            ),
-                            child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                          ),
+                          SunfireBadge.server(),
                         ],
                       ),
                       subtitle: Text(_globalUpdateInterval == 0 ? 'Disabled' : 'Every ${_globalUpdateInterval.toInt()} hours', style: const TextStyle(fontSize: 12, color: Colors.grey)),
@@ -351,19 +346,13 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     ),
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                      title: Row(
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
                           const Text('Skip Updating Entries', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.tealAccent.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
-                            ),
-                            child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                          ),
+                          SunfireBadge.server(),
                         ],
                       ),
                       subtitle: const Text('Configure rules to skip specific manga from global updates', style: TextStyle(fontSize: 12, color: Colors.grey)),
@@ -393,18 +382,13 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                           leading: const Icon(Icons.label_outline_rounded),
-                          title: Row(
+                          title: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 6,
+                            runSpacing: 4,
                             children: [
                               Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: Colors.tealAccent.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 8, fontWeight: FontWeight.bold)),
-                              ),
+                              SunfireBadge.server(),
                             ],
                           ),
                           trailing: Row(

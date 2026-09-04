@@ -40,6 +40,20 @@ class AppTheme {
         elevation: 0,
         centerTitle: false,
       ),
+      chipTheme: ChipThemeData(
+        backgroundColor: glassSurface,
+        disabledColor: glassSurface.withValues(alpha: 0.5),
+        selectedColor: baseColorScheme.primary.withValues(alpha: 0.25),
+        secondarySelectedColor: baseColorScheme.primary,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: glassBorder, width: 0.8),
+        ),
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white70),
+        secondaryLabelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: baseColorScheme.primary),
+        brightness: Brightness.dark,
+      ),
     );
   }
 
@@ -70,6 +84,18 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: const Color(0x0D000000),
+        selectedColor: baseColorScheme.primary.withValues(alpha: 0.15),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Color(0x1F000000), width: 0.8),
+        ),
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+        secondaryLabelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: baseColorScheme.primary),
+        brightness: Brightness.light,
       ),
     );
   }
