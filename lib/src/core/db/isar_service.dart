@@ -22,6 +22,7 @@ class IsarService {
   }
 
   Isar get isar => _isar;
+  bool get isInitialized => _isInitialized;
 
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -79,16 +80,19 @@ class IsarService {
   }
 
   Future<List<Manga>> getLibraryManga() async {
+    if (!_isInitialized) return [];
     return await _isar.mangas.filter().inLibraryEqualTo(true).findAll();
   }
 
   Future<Manga?> getMangaByServerId(int serverId) async {
+    if (!_isInitialized) return null;
     return await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
   }
 
   /// Returns the count of manga currently marked as inLibrary in Isar.
   /// Used by the wipe guard to detect suspicious server-side library wipes.
   Future<int> getMangaCount() async {
+    if (!_isInitialized) return 0;
     return await _isar.mangas.filter().inLibraryEqualTo(true).count();
   }
 
@@ -106,18 +110,22 @@ class IsarService {
   }
 
   Future<List<Chapter>> getAllChapters() async {
+    if (!_isInitialized) return [];
     return await _isar.chapters.where().findAll();
   }
 
   Future<List<Chapter>> getChaptersForManga(int mangaId) async {
+    if (!_isInitialized) return [];
     return await _isar.chapters.filter().mangaIdEqualTo(mangaId).sortByChapterNumberDesc().findAll();
   }
 
   Future<Chapter?> getChapterByServerId(int serverId) async {
+    if (!_isInitialized) return null;
     return await _isar.chapters.filter().serverIdEqualTo(serverId).findFirst();
   }
 
   Future<List<Chapter>> getReadingHistory() async {
+    if (!_isInitialized) return [];
     try {
       return await _isar.chapters
           .filter()
@@ -138,6 +146,7 @@ class IsarService {
   /// Chapters with denormalized [mangaTitle] and [mangaThumbnailUrl] render
   /// the Updates tab fully without any network or join.
   Future<List<Chapter>> getRecentChapters({int limit = 100}) async {
+    if (!_isInitialized) return [];
     try {
       return await _isar.chapters
           .where()
@@ -153,6 +162,7 @@ class IsarService {
   /// Returns chapters that are currently in-progress (opened but not finished).
   /// Useful for a "Continue Reading" widget that works fully offline.
   Future<List<Chapter>> getInProgressChapters({int limit = 20}) async {
+    if (!_isInitialized) return [];
     final all = await _isar.chapters
         .filter()
         .isReadEqualTo(false)
@@ -203,6 +213,7 @@ class IsarService {
   }
 
   Future<List<Category>> getCategories() async {
+    if (!_isInitialized) return [];
     return await _isar.categorys.where().sortByOrder().findAll();
   }
 
