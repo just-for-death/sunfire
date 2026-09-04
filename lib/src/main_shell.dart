@@ -386,7 +386,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                           border: Border.all(color: primaryColor.withValues(alpha: 0.4), width: 0.6),
                         ),
                         child: Text(
-                          'v3.0 BETA',
+                          'v5.0 BETA',
                           style: TextStyle(
                             color: primaryColor,
                             fontSize: 9,

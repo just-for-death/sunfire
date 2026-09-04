@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/widgets/sunfire_badge.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -167,19 +168,13 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                   leading: const Icon(Icons.backup_rounded),
-                  title: Row(
+                  title: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
                     children: [
                       const Text('Create Server Backup', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.tealAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
-                        ),
-                        child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                      ),
+                      SunfireBadge.server(),
                     ],
                   ),
                   subtitle: const Text('Generate a .tachibk archive on Suwayomi host', style: TextStyle(fontSize: 12, color: Colors.grey)),
@@ -188,19 +183,13 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                   leading: const Icon(Icons.settings_backup_restore_rounded),
-                  title: Row(
+                  title: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
                     children: [
                       const Text('Restore Server Backup', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.tealAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
-                        ),
-                        child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                      ),
+                      SunfireBadge.server(),
                     ],
                   ),
                   subtitle: const Text('Restore library from a .tachibk backup file on server', style: TextStyle(fontSize: 12, color: Colors.grey)),
@@ -241,19 +230,13 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  title: Row(
+                  title: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
                     children: [
                       const Text('Execution time', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.tealAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.8),
-                        ),
-                        child: const Text('SERVER', style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                      ),
+                      SunfireBadge.server(),
                     ],
                   ),
                   subtitle: Text('Triggers at $_backupTime UTC', style: const TextStyle(fontSize: 12, color: Colors.grey)),

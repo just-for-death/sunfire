@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import '../../core/db/isar_service.dart';
+import '../../core/engine/javascript/m_client.dart';
 import '../../core/engine/repo_manager.dart';
 import '../../core/engine/source_migration_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/background_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/server_auth_helper.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/websocket_service.dart';
 
@@ -19,9 +22,20 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
-  final TextEditingController _serverUrlController = TextEditingController(text: 'http://localhost:4567');
-  final TextEditingController _serverAuthController = TextEditingController();
+  final TextEditingController _serverUrlController = TextEditingController();
   final TextEditingController _newRepoUrlController = TextEditingController();
+
+  // Authentication
+  ServerAuthType _authType = ServerAuthType.none;
+  final TextEditingController _serverUsernameController = TextEditingController();
+  final TextEditingController _serverPasswordController = TextEditingController();
+  final TextEditingController _serverTokenController = TextEditingController();
+  bool _obscurePassword = true;
+
+  // FlareSolverr Proxy (Optional)
+  final TextEditingController _flareSolverrController = TextEditingController();
+  bool _isTestingFlareSolverr = false;
+  String? _flareSolverrStatus;
 
   bool _isConnecting = false;
   String? _connectionStatus;
@@ -46,16 +60,69 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void dispose() {
     _pageController.dispose();
     _serverUrlController.dispose();
-    _serverAuthController.dispose();
     _newRepoUrlController.dispose();
+    _serverUsernameController.dispose();
+    _serverPasswordController.dispose();
+    _serverTokenController.dispose();
+    _flareSolverrController.dispose();
     super.dispose();
+  }
+
+  String? _buildAuthHeader() {
+    switch (_authType) {
+      case ServerAuthType.none:
+        return null;
+      case ServerAuthType.basic:
+        final u = _serverUsernameController.text.trim();
+        final p = _serverPasswordController.text.trim();
+        if (u.isEmpty && p.isEmpty) return null;
+        return ServerAuthCredentials(type: ServerAuthType.basic, username: u, password: p).toHeaderValue();
+      case ServerAuthType.bearer:
+        final t = _serverTokenController.text.trim();
+        if (t.isEmpty) return null;
+        return ServerAuthCredentials(type: ServerAuthType.bearer, token: t).toHeaderValue();
+    }
+  }
+
+  Future<void> _testFlareSolverr() async {
+    final text = _flareSolverrController.text.trim();
+    if (text.isEmpty) {
+      setState(() => _flareSolverrStatus = '⚠️ Please enter a FlareSolverr endpoint URL.');
+      return;
+    }
+    setState(() {
+      _isTestingFlareSolverr = true;
+      _flareSolverrStatus = 'Testing proxy reachability...';
+    });
+    try {
+      final url = MClient.normalizeProxyUrl(text);
+      final res = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: '{"cmd":"sessions.list"}',
+      ).timeout(const Duration(seconds: 5));
+      setState(() {
+        _isTestingFlareSolverr = false;
+        _flareSolverrStatus = res.statusCode == 200
+            ? '✓ FlareSolverr online (HTTP ${res.statusCode})'
+            : '❌ HTTP ${res.statusCode} from proxy';
+      });
+    } catch (e) {
+      setState(() {
+        _isTestingFlareSolverr = false;
+        _flareSolverrStatus = '❌ Reachability failed: $e';
+      });
+    }
   }
 
   void _startStandaloneSetup() {
     setState(() {
       _isStandalone = true;
       _serverUrlController.clear();
-      _serverAuthController.clear();
+      _serverUsernameController.clear();
+      _serverPasswordController.clear();
+      _serverTokenController.clear();
+      _authType = ServerAuthType.none;
     });
 
     // Jump directly to Repos step so user can review/add repos or proceed
@@ -67,6 +134,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _testAndConnectServer() async {
+    final rawUrl = _serverUrlController.text.trim();
+    if (rawUrl.isEmpty) {
+      setState(() {
+        _connectionStatus = '⚠️ Please enter your Suwayomi server address.';
+      });
+      return;
+    }
+
     setState(() {
       _isStandalone = false;
       _isConnecting = true;
@@ -75,19 +150,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
 
     try {
-      final rawUrl = _serverUrlController.text.trim();
       final url = rawUrl.replaceAll(RegExp(r'/+$'), '');
-      final auth = _serverAuthController.text.trim().isNotEmpty ? _serverAuthController.text.trim() : null;
+      final auth = _buildAuthHeader();
 
       GraphQLClientService.instance.initialize(url, authToken: auth);
 
       final data = await GraphQLClientService.instance
           .query('{ aboutServer { version } }')
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 6));
 
       if (data != null && data.containsKey('aboutServer')) {
         final version = data['aboutServer']['version'] ?? 'v1.x';
-        WebSocketService.instance.initialize(url);
+        WebSocketService.instance.initialize(url, authToken: auth);
 
         setState(() {
           _connectionSuccess = true;
@@ -253,7 +327,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _finishOnboarding() async {
     final cleanUrl = _serverUrlController.text.trim().replaceAll(RegExp(r'/+$'), '');
-    final auth = _serverAuthController.text.trim().isNotEmpty ? _serverAuthController.text.trim() : null;
+    final auth = _buildAuthHeader();
 
     await SourceMigrationService.instance.markOnboardingCompleted(
       serverUrl: cleanUrl,
@@ -262,8 +336,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
     SettingsService.instance.onboardingCompleted = true;
 
+    if (_flareSolverrController.text.trim().isNotEmpty) {
+      SettingsService.instance.cfProxyUrl = _flareSolverrController.text.trim();
+    }
+
     if (cleanUrl.isNotEmpty) {
       GraphQLClientService.instance.initialize(cleanUrl, authToken: auth);
+      WebSocketService.instance.initialize(cleanUrl, authToken: auth);
       SyncEngine.instance.initialize();
       await BackgroundService.instance.initialize();
     }
@@ -496,7 +575,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             decoration: InputDecoration(
               labelText: 'Server URL',
               labelStyle: const TextStyle(color: Colors.grey),
-              hintText: 'http://192.168.1.100:4567',
+              hintText: 'http://192.168.1.50:4567 or https://manga.example.com',
               hintStyle: const TextStyle(color: Colors.white24),
               filled: true,
               fillColor: const Color(0xFF1B1B22),
@@ -504,20 +583,134 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               prefixIcon: const Icon(Icons.dns_rounded, color: Colors.grey),
             ),
           ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _serverAuthController,
-            style: const TextStyle(color: Colors.white),
-            obscureText: true,
-            decoration: InputDecoration(
-              labelText: 'Auth Token / Password (Optional)',
-              labelStyle: const TextStyle(color: Colors.grey),
-              hintText: 'Bearer token or empty',
-              hintStyle: const TextStyle(color: Colors.white24),
-              filled: true,
-              fillColor: const Color(0xFF1B1B22),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-              prefixIcon: const Icon(Icons.key_rounded, color: Colors.grey),
+          const SizedBox(height: 18),
+          const Text('Authentication', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.white70)),
+          const SizedBox(height: 8),
+          SegmentedButton<ServerAuthType>(
+            segments: const [
+              ButtonSegment(value: ServerAuthType.none, label: Text('None')),
+              ButtonSegment(value: ServerAuthType.basic, label: Text('Basic Auth')),
+              ButtonSegment(value: ServerAuthType.bearer, label: Text('Bearer Token')),
+            ],
+            selected: {_authType},
+            onSelectionChanged: (set) => setState(() => _authType = set.first),
+            style: const ButtonStyle(
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_authType == ServerAuthType.basic) ...[
+            TextField(
+              controller: _serverUsernameController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Username',
+                labelStyle: const TextStyle(color: Colors.grey),
+                hintText: 'admin',
+                hintStyle: const TextStyle(color: Colors.white24),
+                filled: true,
+                fillColor: const Color(0xFF1B1B22),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                prefixIcon: const Icon(Icons.person_rounded, color: Colors.grey),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _serverPasswordController,
+              style: const TextStyle(color: Colors.white),
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                labelStyle: const TextStyle(color: Colors.grey),
+                hintText: '••••••••',
+                hintStyle: const TextStyle(color: Colors.white24),
+                filled: true,
+                fillColor: const Color(0xFF1B1B22),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                prefixIcon: const Icon(Icons.lock_rounded, color: Colors.grey),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded, color: Colors.grey),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                ),
+              ),
+            ),
+          ] else if (_authType == ServerAuthType.bearer) ...[
+            TextField(
+              controller: _serverTokenController,
+              style: const TextStyle(color: Colors.white),
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: 'Bearer Token / API Key',
+                labelStyle: const TextStyle(color: Colors.grey),
+                hintText: 'e.g. eyJhbGciOi...',
+                hintStyle: const TextStyle(color: Colors.white24),
+                filled: true,
+                fillColor: const Color(0xFF1B1B22),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                prefixIcon: const Icon(Icons.key_rounded, color: Colors.grey),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded, color: Colors.grey),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          // FlareSolverr Proxy (Optional)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF14141C),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.shield_outlined, color: Colors.amberAccent, size: 20),
+                    SizedBox(width: 8),
+                    Text('FlareSolverr Proxy (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Bypasses Cloudflare Turnstile for protected sources (ReadComicOnline, Mangago).',
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _flareSolverrController,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Proxy Endpoint',
+                    labelStyle: const TextStyle(color: Colors.grey, fontSize: 12),
+                    hintText: 'http://192.168.1.50:8191/v1',
+                    hintStyle: const TextStyle(color: Colors.white24),
+                    filled: true,
+                    fillColor: const Color(0xFF1B1B22),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    suffixIcon: TextButton(
+                      onPressed: _isTestingFlareSolverr ? null : _testFlareSolverr,
+                      child: _isTestingFlareSolverr
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Test', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
+                if (_flareSolverrStatus != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    _flareSolverrStatus!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _flareSolverrStatus!.startsWith('✓') ? Colors.greenAccent : Colors.redAccent,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           const SizedBox(height: 16),
@@ -601,7 +794,42 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             'Sunfire is a neutral reader. Paste your Mangayomi JSON extension repositories below:',
             style: TextStyle(color: Colors.grey, fontSize: 13),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+          if (_userRepoUrls.isEmpty)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: primaryColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: primaryColor.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.auto_awesome_rounded, color: primaryColor, size: 22),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('MangaYomi Community Repository', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                        Text('100+ public scrapers (MangaDex, ComicK, etc.)', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                      ],
+                    ),
+                  ),
+                  FilledButton.tonal(
+                    onPressed: () {
+                      const defaultRepo = 'https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/index.json';
+                      if (!_userRepoUrls.contains(defaultRepo)) {
+                        setState(() => _userRepoUrls.insert(0, defaultRepo));
+                        RepoManager.instance.addUserRepo(RepoManager.deriveRepoTitle(defaultRepo), defaultRepo);
+                      }
+                    },
+                    child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
           Row(
             children: [
               Expanded(
@@ -667,7 +895,63 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               },
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          if (_isStandalone) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF14141C),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.shield_outlined, color: Colors.amberAccent, size: 18),
+                      SizedBox(width: 8),
+                      Text('FlareSolverr Proxy (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text('For Cloudflare protected sources (ReadComicOnline, Mangago)', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _flareSolverrController,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    decoration: InputDecoration(
+                      labelText: 'Proxy Endpoint',
+                      labelStyle: const TextStyle(color: Colors.grey, fontSize: 11),
+                      hintText: 'http://192.168.1.50:8191/v1',
+                      hintStyle: const TextStyle(color: Colors.white24),
+                      filled: true,
+                      fillColor: const Color(0xFF1B1B22),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      suffixIcon: TextButton(
+                        onPressed: _isTestingFlareSolverr ? null : _testFlareSolverr,
+                        child: _isTestingFlareSolverr
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Text('Test', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ),
+                  ),
+                  if (_flareSolverrStatus != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _flareSolverrStatus!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _flareSolverrStatus!.startsWith('✓') ? Colors.greenAccent : Colors.redAccent,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
