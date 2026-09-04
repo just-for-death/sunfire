@@ -71,10 +71,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
   final ScrollController _scrollController = ScrollController();
   late PageController _pageController;
   Timer? _progressDebounceTimer;
+  late int _currentChapterId;
 
   @override
   void initState() {
     super.initState();
+    _currentChapterId = widget.chapterServerId;
     _pageController = PageController();
     _initPreferences();
     if (_settings.keepScreenAwake) {
@@ -261,6 +263,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Future<void> _loadChapterAndPages(int chapterId) async {
+    _currentChapterId = chapterId;
     _progressDebounceTimer?.cancel();
     _recoveredImageBytes.clear();
     _recoveringUrls.clear();
@@ -428,7 +431,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
            // Estimate the scroll position for vertical Webtoons based on average screen height
            final screenHeight = MediaQuery.of(context).size.height;
            final estimatedOffset = (_currentPage - 1) * screenHeight;
-           _scrollController.jumpTo(estimatedOffset);
+           final maxScroll = _scrollController.position.maxScrollExtent;
+           final targetOffset = maxScroll > 0 ? estimatedOffset.clamp(0.0, maxScroll) : estimatedOffset;
+           _scrollController.jumpTo(targetOffset);
         } else {
            _scrollController.jumpTo(0);
         }
@@ -546,7 +551,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     if (computedPage != _currentPage) {
       _currentPage = computedPage;
-      if (_showControls && mounted) {
+      if (mounted) {
         setState(() {});
       }
       _debouncedUpdateProgress(computedPage);
@@ -566,7 +571,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       _prefetchChapter(_nextChapter!);
     }
 
-    if (_showControls && mounted) {
+    if (mounted) {
       setState(() {});
     }
     _debouncedUpdateProgress(page);
@@ -1583,7 +1588,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       ),
                       icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                      onPressed: () => _loadChapterAndPages(widget.chapterServerId),
+                      onPressed: () => _loadChapterAndPages(_currentChapterId),
                       label: const Text('Retry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                     OutlinedButton.icon(
