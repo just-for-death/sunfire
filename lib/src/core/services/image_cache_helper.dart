@@ -135,6 +135,9 @@ class ImageCacheHelper {
   static Future<Uint8List?> _doFetch(String url, String sourceName, int mangaServerId) async {
     try {
       final headers = QuickJsService.getImageHeaders(sourceName, url);
+      if (url.toLowerCase().contains('readcomicsonline') || sourceName.replaceAll(RegExp(r'[\s_\-]'), '').toLowerCase().contains('readcomiconline')) {
+        headers.remove('Referer');
+      }
       Uint8List? bytes;
 
       // 1. Try standard HttpClient
