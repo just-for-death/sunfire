@@ -922,6 +922,46 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         ),
                       ),
                     ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: ['All', 'Unread', 'Downloaded', 'Completed'].map((filter) {
+                            final isSel = _statusFilter == filter;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 6.0),
+                              child: FilterChip(
+                                label: Text(filter),
+                                selected: isSel,
+                                showCheckmark: false,
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                visualDensity: VisualDensity.compact,
+                                selectedColor: primaryColor.withValues(alpha: 0.25),
+                                backgroundColor: const Color(0x1F2A2A32),
+                                labelStyle: TextStyle(
+                                  color: isSel ? primaryColor : Colors.grey[400],
+                                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(
+                                    color: isSel ? primaryColor.withValues(alpha: 0.6) : const Color(0x2BFFFFFF),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                onSelected: (_) {
+                                  setState(() => _statusFilter = filter);
+                                },
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ),
                   if (displayManga.isEmpty)
                     SliverFillRemaining(
                       hasScrollBody: false,
