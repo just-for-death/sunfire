@@ -68,11 +68,11 @@ class _StatsScreenState extends State<StatsScreen> {
       int streak = 0;
       var checkDate = today;
       if (!uniqueDays.contains(checkDate)) {
-        checkDate = checkDate.subtract(const Duration(days: 1));
+        checkDate = DateTime(checkDate.year, checkDate.month, checkDate.day - 1);
       }
       while (uniqueDays.contains(checkDate)) {
         streak++;
-        checkDate = checkDate.subtract(const Duration(days: 1));
+        checkDate = DateTime(checkDate.year, checkDate.month, checkDate.day - 1);
       }
 
       // Estimate reading time: 4 minutes per read chapter
