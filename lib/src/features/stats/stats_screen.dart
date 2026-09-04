@@ -107,9 +107,11 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final isTablet = MediaQuery.of(context).size.width >= 720;
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: isTablet ? 64.0 : kToolbarHeight,
         title: const Text('Statistics', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
