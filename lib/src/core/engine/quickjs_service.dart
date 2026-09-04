@@ -117,7 +117,7 @@ class QuickJsService {
       candidateDirs.add('${appSupportDir.path}/extensions');
     } catch (_) {}
 
-    if (Platform.isLinux) {
+    if (!kIsWeb && Platform.isLinux) {
       final home = Platform.environment['HOME'];
       if (home != null) {
         candidateDirs.add('$home/.local/share/com.sunfire.sunfire/extensions');
