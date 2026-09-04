@@ -224,7 +224,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
               spacing: 6,
               runSpacing: 4,
               children: [
-                const Text('Cloudflare Bypass Proxy', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                const Text('Local FlareSolverr Proxy (Cloudflare Bypass)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                 SunfireBadge.proxy(),
               ],
             ),
