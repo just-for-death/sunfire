@@ -891,7 +891,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     Color primaryColor,
     bool isSelecting,
   ) {
-    return Row(
+    return SafeArea(
+      bottom: false,
+      child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── LEFT PANE: COVER, INFO & ACTIONS ─────────────────
@@ -1129,6 +1131,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           ),
         ),
       ],
+      ),
     );
   }
 
