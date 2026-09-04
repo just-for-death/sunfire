@@ -92,6 +92,7 @@ function btoa(a) {
     }
     return d;
 }
+void 0;
 ''');
   }
 }
