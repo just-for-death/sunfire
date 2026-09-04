@@ -8,6 +8,7 @@ import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../main_shell.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -26,6 +27,19 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
   void initState() {
     super.initState();
     _loadHistory();
+    MainShell.selectedTabNotifier.addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    if (MainShell.selectedTabNotifier.value == 1 && mounted) {
+      _loadHistory();
+    }
+  }
+
+  @override
+  void dispose() {
+    MainShell.selectedTabNotifier.removeListener(_onTabChanged);
+    super.dispose();
   }
 
   Future<void> _loadHistory() async {
@@ -238,76 +252,90 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                     side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
                                   ),
                                   child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              onTap: () => context.push('/reader/${ch.serverId}'),
-                              onLongPress: () async {
-                                final remove = await showDialog<bool>(
-                                  context: context,
-                                  builder: (dCtx) => AlertDialog(
-                                    backgroundColor: const Color(0xFF1F1F24),
-                                    title: const Text('Remove from History?'),
-                                    content: Text('Remove "${ch.name}" from your reading history?'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Cancel')),
-                                      ElevatedButton(
-                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                        onPressed: () => Navigator.pop(dCtx, true),
-                                        child: const Text('Remove', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (remove == true) {
-                                  ch.lastReadAt = null;
-                                  await IsarService.instance.saveChapter(ch);
-                                  _loadHistory();
-                                }
-                              },
-                              leading: Container(
-                                width: 44,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  color: Colors.grey[900],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: MangaCoverImage(
-                                    mangaServerId: ch.mangaId,
-                                    thumbnailUrl: thumb,
-                                    sourceName: manga?.sourceName,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                              title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 2),
-                                  Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 6),
-                                  // ── PROGRESS BAR (Sunfire & Mihon) ──
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: LinearProgressIndicator(
-                                      value: progressValue,
-                                      minHeight: 4,
-                                      backgroundColor: const Color(0x33FFFFFF),
-                                      valueColor: AlwaysStoppedAnimation<Color>(ch.isRead ? Colors.greenAccent : primaryColor),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(progressText, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                              trailing: IconButton(
-                                icon: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 32),
-                                tooltip: 'Resume reading',
-                                onPressed: () => context.push('/reader/${ch.serverId}'),
-                              ),
-                            ),
+                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                               onTap: () async {
+                                 await context.push('/reader/${ch.serverId}');
+                                 if (mounted) _loadHistory();
+                               },
+                               onLongPress: () async {
+                                 final remove = await showDialog<bool>(
+                                   context: context,
+                                   builder: (dCtx) => AlertDialog(
+                                     backgroundColor: const Color(0xFF1F1F24),
+                                     title: const Text('Remove from History?'),
+                                     content: Text('Remove "${ch.name}" from your reading history?'),
+                                     actions: [
+                                       TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Cancel')),
+                                       ElevatedButton(
+                                         style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                         onPressed: () => Navigator.pop(dCtx, true),
+                                         child: const Text('Remove', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                       ),
+                                     ],
+                                   ),
+                                 );
+                                 if (remove == true) {
+                                   ch.lastReadAt = null;
+                                   await IsarService.instance.saveChapter(ch);
+                                   _loadHistory();
+                                 }
+                               },
+                               leading: GestureDetector(
+                                 onTap: () async {
+                                   if (manga != null) {
+                                     await context.push('/manga/${manga.serverId}');
+                                     if (mounted) _loadHistory();
+                                   }
+                                 },
+                                 child: Container(
+                                   width: 44,
+                                   height: 60,
+                                   decoration: BoxDecoration(
+                                     borderRadius: BorderRadius.circular(8),
+                                     color: Colors.grey[900],
+                                   ),
+                                   child: ClipRRect(
+                                     borderRadius: BorderRadius.circular(8),
+                                     child: MangaCoverImage(
+                                       mangaServerId: ch.mangaId,
+                                       thumbnailUrl: thumb,
+                                       sourceName: manga?.sourceName,
+                                       fit: BoxFit.cover,
+                                     ),
+                                   ),
+                                 ),
+                               ),
+                               title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                               subtitle: Column(
+                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                 children: [
+                                   const SizedBox(height: 2),
+                                   Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w600)),
+                                   const SizedBox(height: 6),
+                                   // ── PROGRESS BAR (Sunfire & Mihon) ──
+                                   ClipRRect(
+                                     borderRadius: BorderRadius.circular(4),
+                                     child: LinearProgressIndicator(
+                                       value: progressValue,
+                                       minHeight: 4,
+                                       backgroundColor: const Color(0x33FFFFFF),
+                                       valueColor: AlwaysStoppedAnimation<Color>(ch.isRead ? Colors.greenAccent : primaryColor),
+                                     ),
+                                   ),
+                                   const SizedBox(height: 4),
+                                   Text(progressText, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500)),
+                                 ],
+                               ),
+                               trailing: IconButton(
+                                 icon: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 32),
+                                 tooltip: 'Resume reading',
+                                 onPressed: () async {
+                                   await context.push('/reader/${ch.serverId}');
+                                   if (mounted) _loadHistory();
+                                 },
+                               ),
+                             ),
                           ),
                         ),
                       ),
