@@ -27,8 +27,11 @@ class SettingsSubpageScaffold extends StatelessWidget {
       );
     }
 
+    final isTablet = MediaQuery.of(context).size.width >= 720;
+
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: isTablet ? 64.0 : kToolbarHeight,
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
