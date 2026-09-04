@@ -359,6 +359,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Future<void> _loadChapterAndPages(int chapterId) async {
     _currentChapterId = chapterId;
     _progressDebounceTimer?.cancel();
+    _stopAutoScroll();
     _recoveredImageBytes.clear();
     _recoveringUrls.clear();
     if (_isZoomed) {
