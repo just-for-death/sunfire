@@ -10,6 +10,7 @@ import '../../core/engine/quickjs_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../main_shell.dart';
 
 class UpdatesScreen extends StatefulWidget {
   const UpdatesScreen({super.key});
@@ -31,6 +32,19 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   void initState() {
     super.initState();
     _loadUpdates();
+    MainShell.selectedTabNotifier.addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    if (MainShell.selectedTabNotifier.value == 0 && mounted) {
+      _loadUpdatesFromIsarCache();
+    }
+  }
+
+  @override
+  void dispose() {
+    MainShell.selectedTabNotifier.removeListener(_onTabChanged);
+    super.dispose();
   }
 
   String _formatDateHeader(int? fetchedAt) {
@@ -502,7 +516,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                                               IconButton(
                                                 icon: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 26),
                                                 tooltip: 'Read chapter',
-                                                onPressed: () => context.push('/reader/${ch.serverId}'),
+                                                onPressed: () async {
+                                                  await context.push('/reader/${ch.serverId}');
+                                                  if (mounted) _loadUpdatesFromIsarCache();
+                                                },
                                               ),
                                             ],
                                           ),

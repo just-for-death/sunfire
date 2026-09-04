@@ -418,8 +418,19 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
   }
 
-  void _openReader(int chapterServerId) {
-    context.push('/reader/$chapterServerId');
+  Future<void> _loadLocalDataOnly() async {
+    _manga = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
+    _chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _openReader(int chapterServerId) async {
+    await context.push('/reader/$chapterServerId');
+    if (mounted) {
+      _loadLocalDataOnly();
+    }
   }
 
   void _continueReading() {

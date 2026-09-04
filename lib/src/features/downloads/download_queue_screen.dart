@@ -62,6 +62,33 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
           onPressed: () => context.pop(),
         ),
         actions: [
+          ListenableBuilder(
+            listenable: _downloadService,
+            builder: (context, _) {
+              final isPaused = _downloadService.isQueuePaused;
+              final hasActive = _downloadService.localTasks.any(
+                (t) => t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued || t.status == LocalDownloadStatus.paused,
+              );
+              if (!hasActive) return const SizedBox.shrink();
+              return IconButton(
+                icon: Icon(isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded),
+                tooltip: isPaused ? 'Resume queue' : 'Pause queue',
+                onPressed: () {
+                  if (isPaused) {
+                    _downloadService.resumeLocalQueue();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Resumed download queue'), duration: Duration(seconds: 2)),
+                    );
+                  } else {
+                    _downloadService.pauseLocalQueue();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Paused download queue'), duration: Duration(seconds: 2)),
+                    );
+                  }
+                },
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.clear_all_rounded),
             tooltip: 'Clear completed',
@@ -150,12 +177,14 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                         const Text('Completed', style: TextStyle(fontSize: 11, color: Colors.greenAccent, fontWeight: FontWeight.bold)),
                       ] else if (task.status == LocalDownloadStatus.queued) ...[
                         const Text('Queued', style: TextStyle(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold)),
+                      ] else if (task.status == LocalDownloadStatus.paused) ...[
+                        const Text('Paused', style: TextStyle(fontSize: 11, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
                       ] else ...[
                         Text('Failed: ${task.error ?? "Unknown error"}', style: const TextStyle(fontSize: 11, color: Colors.redAccent)),
                       ],
                     ],
                   ),
-                  trailing: task.status == LocalDownloadStatus.downloading || task.status == LocalDownloadStatus.queued
+                  trailing: task.status == LocalDownloadStatus.downloading || task.status == LocalDownloadStatus.queued || task.status == LocalDownloadStatus.paused
                       ? IconButton(
                           icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
                           tooltip: 'Cancel download',
