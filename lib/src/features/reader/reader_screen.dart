@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
@@ -1055,33 +1056,54 @@ class _ReaderScreenState extends State<ReaderScreen> {
       // 2. Standard HTTP fetch fallback with multi-pass self-healing
       final initialHeaders = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
       final client = MClient.init(showCloudFlareError: false);
-      var res = await client.get(Uri.parse(url), headers: initialHeaders).timeout(const Duration(seconds: 15));
+      http.Response? res;
 
-      // Pass 2: If failed and had Referer, retry with NO Referer (anti-hotlink bypass)
-      if ((res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) && initialHeaders.containsKey('Referer')) {
-        final noReferer = Map<String, String>.from(initialHeaders)..remove('Referer');
+      try {
+        final uri = Uri.tryParse(url) ?? Uri.tryParse(Uri.encodeFull(url));
+        if (uri == null) return;
+
+        // Pass 1: Standard fetch
         try {
-          res = await client.get(Uri.parse(url), headers: noReferer).timeout(const Duration(seconds: 15));
+          res = await client.get(uri, headers: initialHeaders).timeout(const Duration(seconds: 15));
         } catch (_) {}
-      }
 
-      // Pass 3: If still failed, retry with Origin Referer (same-origin requirement bypass)
-      if (res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) {
-        try {
-          final uri = Uri.parse(url);
-          final originReferer = Map<String, String>.from(initialHeaders)..['Referer'] = '${uri.origin}/';
-          res = await client.get(Uri.parse(url), headers: originReferer).timeout(const Duration(seconds: 15));
-        } catch (_) {}
-      }
-
-      if (res.statusCode == 200 && res.bodyBytes.isNotEmpty && _isMagicImage(res.bodyBytes)) {
-        if (mounted) {
-          setState(() {
-            _recoveredImageBytes[url] = res.bodyBytes;
-          });
+        // Pass 2: If failed and had Referer, retry with NO Referer (anti-hotlink bypass)
+        if ((res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) && initialHeaders.containsKey('Referer')) {
+          final noReferer = Map<String, String>.from(initialHeaders)..remove('Referer');
+          try {
+            res = await client.get(uri, headers: noReferer).timeout(const Duration(seconds: 15));
+          } catch (_) {}
         }
-      } else {
-        debugPrint('[Reader] ❌ Image still failed $url -> ${res.statusCode}');
+
+        // Pass 3: If still failed, retry with Origin Referer (same-origin requirement bypass)
+        if (res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) {
+          try {
+            final originReferer = Map<String, String>.from(initialHeaders)..['Referer'] = '${uri.origin}/';
+            res = await client.get(uri, headers: originReferer).timeout(const Duration(seconds: 15));
+          } catch (_) {}
+        }
+
+        // Pass 4: Clean Browser User-Agent and Accept headers
+        if (res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) {
+          try {
+            final browserHeaders = Map<String, String>.from(initialHeaders)
+              ..['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+              ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
+            res = await client.get(uri, headers: browserHeaders).timeout(const Duration(seconds: 15));
+          } catch (_) {}
+        }
+
+        if (res != null && res.statusCode == 200 && res.bodyBytes.isNotEmpty && _isMagicImage(res.bodyBytes)) {
+          if (mounted) {
+            setState(() {
+              _recoveredImageBytes[url] = res!.bodyBytes;
+            });
+          }
+        } else {
+          debugPrint('[Reader] ❌ Image still failed $url -> ${res?.statusCode}');
+        }
+      } finally {
+        client.close();
       }
     } catch (e) {
       debugPrint('[Reader] Image fetch error for $url: $e');
