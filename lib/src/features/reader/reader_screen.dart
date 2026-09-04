@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:volume_controller/volume_controller.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/db/isar_service.dart';
@@ -24,7 +26,7 @@ import '../settings/advanced_settings_screen.dart';
 
 enum ReadingMode { longStrip, longStripGaps, pagedLtr, pagedRtl }
 enum ReaderThemeMode { black, darkGray, white }
-enum ReaderColorFilter { none, invert, grayscale, nightAmber }
+enum ReaderColorFilter { none, invert, grayscale, nightAmber, sepia }
 enum ImageScaleType { fitWidth, fitHeight, fitScreen, original }
 
 class ReaderScreen extends StatefulWidget {
@@ -74,6 +76,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Timer? _progressDebounceTimer;
   late int _currentChapterId;
 
+  // iOS Hardware Volume Rocker Turn
+  double? _lastIosVolume;
+  DateTime _lastIosVolumeTurnTime = DateTime.now();
+
+  // Hands-free Webtoon Auto-Scroll
+  bool _isAutoScrolling = false;
+  double _autoScrollSpeed = 35.0; // px/sec
+  Timer? _autoScrollTimer;
+
   @override
   void initState() {
     super.initState();
@@ -84,7 +95,72 @@ class _ReaderScreenState extends State<ReaderScreen> {
       _safeSetWakelock(true);
     }
     _scrollController.addListener(_onVerticalScroll);
+    if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
+      _initIosVolumeListener();
+    }
     _loadChapterAndPages(widget.chapterServerId);
+  }
+
+  void _initIosVolumeListener() {
+    try {
+      VolumeController.instance.showSystemUI = false;
+      VolumeController.instance.getVolume().then((v) => _lastIosVolume = v);
+      VolumeController.instance.addListener((volume) {
+        if (!_settings.volumeKeyTurn || !mounted) return;
+        final now = DateTime.now();
+        if (now.difference(_lastIosVolumeTurnTime).inMilliseconds < 280) return;
+        if (_lastIosVolume != null) {
+          if (volume > _lastIosVolume!) {
+            _lastIosVolumeTurnTime = now;
+            _goToPrevPage();
+          } else if (volume < _lastIosVolume!) {
+            _lastIosVolumeTurnTime = now;
+            _goToNextPage();
+          }
+        }
+        _lastIosVolume = volume;
+      });
+    } catch (_) {}
+  }
+
+  void _toggleAutoScroll() {
+    setState(() {
+      _isAutoScrolling = !_isAutoScrolling;
+      if (_isAutoScrolling) {
+        _startAutoScroll();
+      } else {
+        _stopAutoScroll();
+      }
+    });
+  }
+
+  void _startAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 25), (_) {
+      if (!_isAutoScrolling || !mounted || !_scrollController.hasClients) {
+        _stopAutoScroll();
+        return;
+      }
+      final max = _scrollController.position.maxScrollExtent;
+      final cur = _scrollController.offset;
+      if (cur >= max - 10) {
+        _stopAutoScroll();
+        if (_nextChapter != null) {
+          _loadChapterAndPages(_nextChapter!.serverId);
+        }
+        return;
+      }
+      final step = _autoScrollSpeed * 0.025;
+      _scrollController.jumpTo((cur + step).clamp(0.0, max));
+    });
+  }
+
+  void _stopAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+    if (_isAutoScrolling && mounted) {
+      setState(() => _isAutoScrolling = false);
+    }
   }
 
   void _safeSetWakelock(bool enable) {
@@ -161,6 +237,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
       case 'amber tint':
       case 'night amber':
         return ReaderColorFilter.nightAmber;
+      case 'sepia':
+        return ReaderColorFilter.sepia;
       default:
         return ReaderColorFilter.none;
     }
@@ -254,6 +332,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   void dispose() {
+    _autoScrollTimer?.cancel();
+    if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
+      try {
+        VolumeController.instance.removeListener();
+        VolumeController.instance.showSystemUI = true;
+      } catch (_) {}
+    }
     _progressDebounceTimer?.cancel();
     _scrollIndicatorTimer?.cancel();
     _transformationController.dispose();
@@ -683,6 +768,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   void _handleTapZone(TapUpDetails details, BoxConstraints constraints) {
+    if (_isAutoScrolling) {
+      _stopAutoScroll();
+      return;
+    }
     if (!_settings.tapZonesEnabled || _isZoomed) {
       _toggleControls();
       return;
@@ -722,9 +811,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
       // In Webtoon / Vertical mode, center tap toggles controls
       if (!isLeft && !isRight) {
         _toggleControls();
-      } else if (isRight) {
+      } else if (isNext) {
         _scrollVerticalBy(400);
-      } else if (isLeft) {
+      } else if (isPrev) {
         _scrollVerticalBy(-400);
       }
     }
@@ -840,6 +929,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
         ]);
       case ReaderColorFilter.nightAmber:
         return ColorFilter.mode(Colors.amber.withAlpha(50), BlendMode.colorBurn);
+      case ReaderColorFilter.sepia:
+        return const ColorFilter.matrix([
+          0.393, 0.769, 0.189, 0, 0,
+          0.349, 0.686, 0.168, 0, 0,
+          0.272, 0.534, 0.131, 0, 0,
+          0, 0, 0, 1, 0,
+        ]);
       case ReaderColorFilter.none:
         return null;
     }
@@ -1006,6 +1102,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         _buildFilterChip('Amber Night', _colorFilter == ReaderColorFilter.nightAmber, () {
                           setState(() => _colorFilter = ReaderColorFilter.nightAmber);
                           _settings.colorFilter = 'Amber Tint';
+                          setSheetState(() {});
+                        }, primaryColor),
+                        _buildFilterChip('Sepia', _colorFilter == ReaderColorFilter.sepia, () {
+                          setState(() => _colorFilter = ReaderColorFilter.sepia);
+                          _settings.colorFilter = 'Sepia';
                           setSheetState(() {});
                         }, primaryColor),
                       ],
@@ -1657,9 +1758,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
         onKeyEvent: _handleKeyEvent,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            return GestureDetector(
-              onTapUp: (details) => _handleTapZone(details, constraints),
-              child: Stack(
+            return Listener(
+              onPointerSignal: (pointerSignal) {
+                if (pointerSignal is PointerScrollEvent) {
+                  final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
+                  if (isPaged) {
+                    if (pointerSignal.scrollDelta.dx > 25 || pointerSignal.scrollDelta.dy > 25) {
+                      _goToNextPage();
+                    } else if (pointerSignal.scrollDelta.dx < -25 || pointerSignal.scrollDelta.dy < -25) {
+                      _goToPrevPage();
+                    }
+                  }
+                }
+              },
+              child: GestureDetector(
+                onTapUp: (details) => _handleTapZone(details, constraints),
+                child: Stack(
                 children: [
                   // ── 1. READER CANVAS ──────────────────────────────
                   if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps)
@@ -1896,9 +2010,46 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
-                                          IconButton(
-                                            icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
+                                           if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) ...[
+                                             const SizedBox(width: 6),
+                                             GestureDetector(
+                                               onTap: _toggleAutoScroll,
+                                               child: Container(
+                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                 decoration: BoxDecoration(
+                                                   color: _isAutoScrolling ? primaryColor.withValues(alpha: 0.3) : const Color(0x22FFFFFF),
+                                                   borderRadius: BorderRadius.circular(12),
+                                                   border: Border.all(
+                                                     color: _isAutoScrolling ? primaryColor : Colors.white24,
+                                                     width: 0.8,
+                                                   ),
+                                                 ),
+                                                 child: Row(
+                                                   mainAxisSize: MainAxisSize.min,
+                                                   children: [
+                                                     Icon(
+                                                       _isAutoScrolling ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                                       size: 13,
+                                                       color: _isAutoScrolling ? primaryColor : Colors.white,
+                                                     ),
+                                                     const SizedBox(width: 3),
+                                                     Text(
+                                                       'AUTO',
+                                                       style: TextStyle(
+                                                         color: _isAutoScrolling ? primaryColor : Colors.white,
+                                                         fontSize: 10,
+                                                         fontWeight: FontWeight.bold,
+                                                         letterSpacing: 0.5,
+                                                       ),
+                                                     ),
+                                                   ],
+                                                 ),
+                                               ),
+                                             ),
+                                           ],
+                                           const SizedBox(width: 8),
+                                           IconButton(
+                                             icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
                                             tooltip: 'Next Chapter',
                                             onPressed: _nextChapter != null ? () => _loadChapterAndPages(_nextChapter!.serverId) : null,
                                           ),
@@ -1984,10 +2135,71 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         ),
                       ),
                     ),
+
+                  // ── 4. FLOATING AUTO-SCROLL CONTROLS CAPSULE (Webtoon Mode) ──
+                  if ((_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) && _isAutoScrolling && !_showControls)
+                    Positioned(
+                      bottom: 24 + MediaQuery.of(context).padding.bottom,
+                      left: 20,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xCC14141A),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: primaryColor.withValues(alpha: 0.6), width: 0.8),
+                          boxShadow: const [
+                            BoxShadow(color: Color(0x40000000), blurRadius: 8, offset: Offset(0, 2)),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: _toggleAutoScroll,
+                              child: Icon(Icons.pause_rounded, size: 16, color: primaryColor),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${_autoScrollSpeed.round()} px/s',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _autoScrollSpeed = (_autoScrollSpeed - 10).clamp(10.0, 200.0);
+                                });
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 4),
+                                child: Icon(Icons.remove_rounded, size: 14, color: Colors.white70),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _autoScrollSpeed = (_autoScrollSpeed + 10).clamp(10.0, 200.0);
+                                });
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 4),
+                                child: Icon(Icons.add_rounded, size: 14, color: Colors.white70),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
             ],
           ),
-        );
-          },
+        ),
+      );
+    },
         ),
       ),
     ),

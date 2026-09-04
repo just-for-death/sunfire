@@ -59,6 +59,7 @@ dependencies:
   http2: ^2.3.1
   cronet_http: ^1.9.0
   cupertino_http: ^2.4.0
+  volume_controller: ^3.6.1
 
 dev_dependencies:
   build_runner: ^2.4.13

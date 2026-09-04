@@ -112,6 +112,7 @@ if (typeof extention === "undefined") {
     try {
       _jsDomSelector.dispose();
       _httpClient.dispose();
+      runtime.dispose();
     } catch (_) {}
     _isInitialized = false;
   }
