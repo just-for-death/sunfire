@@ -63,6 +63,18 @@ class ImageCacheHelper {
     return null;
   }
 
+  static String? getLocalCoverPathForUrl(String url) {
+    if (url.isEmpty) return null;
+    final hash = url.hashCode.abs().toString();
+    for (final basePath in _candidateCoverPaths) {
+      final f = File('$basePath/url_$hash.jpg');
+      if (f.existsSync() && f.lengthSync() > 100) {
+        return f.path;
+      }
+    }
+    return null;
+  }
+
   static Uint8List? getMemoryCover(String url) {
     return _memoryCache[url];
   }
@@ -90,8 +102,8 @@ class ImageCacheHelper {
     if (url.isEmpty) return null;
     if (_memoryCache.containsKey(url)) return _memoryCache[url];
 
-    // Check disk cache first across all candidate directories
-    final localPath = getLocalCoverPath(mangaServerId);
+    // Check disk cache first across all candidate directories (by ID or URL hash)
+    final localPath = getLocalCoverPath(mangaServerId) ?? getLocalCoverPathForUrl(url);
     if (localPath != null) {
       try {
         final bytes = await File(localPath).readAsBytes();
@@ -133,10 +145,15 @@ class ImageCacheHelper {
   }
 
   static Future<Uint8List?> _attemptHttpFetch(String url, Map<String, String> headers) async {
+    HttpClient? client;
     try {
-      final client = HttpClient();
+      final uri = Uri.tryParse(url) ?? Uri.tryParse(Uri.encodeFull(url));
+      if (uri == null) return null;
+
+      client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 10);
-      final req = await client.getUrl(Uri.parse(url));
+      client.badCertificateCallback = (_, __, ___) => true;
+      final req = await client.getUrl(uri);
       headers.forEach((k, v) => req.headers.set(k, v));
       final resp = await req.close();
       if (resp.statusCode == 200) {
@@ -145,7 +162,10 @@ class ImageCacheHelper {
           return Uint8List.fromList(b);
         }
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      client?.close(force: true);
+    }
     return null;
   }
 
@@ -208,11 +228,16 @@ class ImageCacheHelper {
       if (bytes != null && bytes.length > 200) {
         _memoryCache[url] = bytes;
         if (_memoryCache.length > 200) _memoryCache.remove(_memoryCache.keys.first);
-        if (mangaServerId > 0 && _candidateCoverPaths.isNotEmpty) {
+        if (_candidateCoverPaths.isNotEmpty) {
+          final basePath = _candidateCoverPaths.first;
           try {
-            final file = File('${_candidateCoverPaths.first}/$mangaServerId.jpg');
-            await file.writeAsBytes(bytes);
-            _resolvedPaths[mangaServerId] = file.path;
+            if (mangaServerId > 0) {
+              final file = File('$basePath/$mangaServerId.jpg');
+              await file.writeAsBytes(bytes);
+              _resolvedPaths[mangaServerId] = file.path;
+            }
+            final urlFile = File('$basePath/url_${url.hashCode.abs()}.jpg');
+            await urlFile.writeAsBytes(bytes);
           } catch (_) {}
         }
         return bytes;
@@ -276,7 +301,8 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
       return;
     }
 
-    final localPath = ImageCacheHelper.getLocalCoverPath(widget.mangaServerId);
+    final localPath = ImageCacheHelper.getLocalCoverPath(widget.mangaServerId) ??
+        ImageCacheHelper.getLocalCoverPathForUrl(url);
     if (localPath != null) return;
 
     // Start background fetch to disk/memory
@@ -311,8 +337,10 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
       );
     }
 
-    // 2. Render from local file if cached
-    final localPath = ImageCacheHelper.getLocalCoverPath(widget.mangaServerId);
+    // 2. Render from local file if cached (by ID or URL hash)
+    final url = widget.thumbnailUrl;
+    final localPath = ImageCacheHelper.getLocalCoverPath(widget.mangaServerId) ??
+        (url != null ? ImageCacheHelper.getLocalCoverPathForUrl(url) : null);
     if (localPath != null) {
       return Image.file(
         File(localPath),
@@ -336,7 +364,6 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
     }
 
     // 3. Render from Network with headers
-    final url = widget.thumbnailUrl;
     if (url != null && url.isNotEmpty) {
       final effectiveSource = widget.sourceName ?? '';
       final headers = QuickJsService.getImageHeaders(effectiveSource, url);
