@@ -493,9 +493,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     super.build(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final isTablet = MediaQuery.of(context).size.width >= 720;
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: isTablet ? 64.0 : kToolbarHeight,
         title: const Text('Browse', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
         actions: [
           IconButton(
