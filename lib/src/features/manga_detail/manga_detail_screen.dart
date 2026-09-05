@@ -199,11 +199,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
           final rawThumb = mMap['thumbnailUrl'] as String?;
           if (rawThumb != null && rawThumb.isNotEmpty) {
-            var thumb = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
-            if (thumb.contains('readcomicsonline.ru/uploads/')) {
-              thumb = thumb.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
-            }
-            _manga!.thumbnailUrl = thumb;
+            _manga!.thumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
           } else if (serverUrl.isNotEmpty && _manga!.serverId > 0 && (_manga!.thumbnailUrl == null || _manga!.thumbnailUrl!.isEmpty)) {
             _manga!.thumbnailUrl = '$serverUrl/api/v1/manga/${_manga!.serverId}/thumbnail';
           }
@@ -280,11 +276,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             _manga!.author = localData['author'].toString();
           }
           if (localData['imageUrl'] != null && (_manga!.thumbnailUrl == null || _manga!.thumbnailUrl!.isEmpty)) {
-            var img = localData['imageUrl'].toString();
-            if (img.contains('readcomicsonline.ru/uploads/')) {
-              img = img.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
-            }
-            _manga!.thumbnailUrl = img;
+            _manga!.thumbnailUrl = localData['imageUrl'].toString();
           }
           await IsarService.instance.saveManga(_manga!);
 
