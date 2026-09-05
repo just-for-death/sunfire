@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_interceptor/http_interceptor.dart';
 import '../../logging/logger_service.dart';
+import '../../services/settings_service.dart';
 
 CronetEngine? _sharedCronetEngine;
 
@@ -178,7 +179,7 @@ class MClient {
           'session': session,
           'maxTimeout': 60000,
         }),
-      ).timeout(const Duration(seconds: 25));
+      ).timeout(Duration(seconds: SettingsService.instance.networkTimeoutSeconds));
 
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -340,7 +341,7 @@ Future<bool> _solveWithCfProxy(String proxyUrl, String targetUrl, [Map<String, S
       Uri.parse(proxyUrl),
       headers: {HttpHeaders.contentTypeHeader: 'application/json'},
       body: jsonEncode(payload),
-    ).timeout(const Duration(seconds: 25));
+    ).timeout(Duration(seconds: SettingsService.instance.networkTimeoutSeconds));
 
     debugPrint('[MClient] CF proxy response: ${res.statusCode}');
     if (res.statusCode != 200) return false;

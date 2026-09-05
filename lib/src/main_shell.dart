@@ -46,6 +46,21 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    final startScreen = SettingsService.instance.startScreen.toLowerCase();
+    switch (startScreen) {
+      case 'updates':
+        _currentIndex = 1;
+        break;
+      case 'history':
+        _currentIndex = 2;
+        break;
+      case 'browse':
+        _currentIndex = 3;
+        break;
+      default:
+        _currentIndex = 0;
+    }
+    MainShell.selectedTabNotifier.value = _currentIndex;
     _isSidebarExpanded = SettingsService.instance.tabletSidebarExpanded;
     _pageController = PageController(initialPage: _currentIndex);
     MainShell.selectedTabNotifier.addListener(_onExternalTabChange);
@@ -215,10 +230,47 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           );
 
     return PopScope(
-      canPop: _currentIndex == 0,
-      onPopInvokedWithResult: (didPop, _) {
+      canPop: !SettingsService.instance.confirmExit && _currentIndex == 0,
+      onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        _handleTabSelect(0);
+        if (_currentIndex != 0) {
+          _handleTabSelect(0);
+          return;
+        }
+        if (SettingsService.instance.confirmExit) {
+          final shouldExit = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: const Color(0xFF1F1F26),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.exit_to_app_rounded, color: Colors.amberAccent),
+                  SizedBox(width: 8),
+                  Text('Exit Sunfire', style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: const Text('Are you sure you want to exit the application?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF5722),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('Exit'),
+                ),
+              ],
+            ),
+          );
+          if (shouldExit == true) {
+            SystemNavigator.pop();
+          }
+        }
       },
       child: scaffold,
     );

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_interceptor/http_interceptor.dart';
+import '../../services/settings_service.dart';
 import 'm_client.dart';
 
 class JsHttpClient {
@@ -127,7 +128,8 @@ class Client {
       final uri = Uri.parse(urlStr);
       http.Response response;
 
-      const requestTimeout = Duration(seconds: 25);
+      final timeoutSecs = SettingsService.instance.networkTimeoutSeconds;
+      final requestTimeout = Duration(seconds: timeoutSecs > 0 ? timeoutSecs : 30);
       switch (method.toUpperCase()) {
         case 'GET':
           response = await client.get(uri, headers: headers).timeout(requestTimeout);
