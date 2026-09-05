@@ -1,0 +1,10 @@
+Sunfire v7.0.0 Beta:
+• Comprehensive system audit & full settings wiring.
+• Launch screen preference: choose Library, Updates, History, or Browse.
+• Optional Exit Confirmation dialog on root back navigation.
+• Dedicated General Settings subpage separated from Advanced Diagnostics.
+• Hands-free auto-scroll speed controls up to 1000 px/s with one-tap preset jumping.
+• Dynamic scraper network timeout configuration.
+• Authentic published chapter dates preserved across all extensions.
+• Self-healing direct CDN cover resolution for broken proxy thumbnails.
+• Smart NSFW content filtering across all extension repos.
