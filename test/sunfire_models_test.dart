@@ -140,5 +140,32 @@ void main() {
       ch.isRead = true;
       expect(ch.isRead, isTrue);
     });
+
+    test('Auto-scroll speed stepping, clamping, and faster turbo jump', () {
+      double speed = 50.0;
+      expect(speed, equals(50.0));
+
+      // Stepping when < 100
+      double step = speed >= 300 ? 50.0 : (speed >= 100 ? 25.0 : 10.0);
+      speed = (speed + step).clamp(10.0, 1000.0);
+      expect(speed, equals(60.0));
+
+      // Faster preset jump (when < 180 -> 250)
+      if (speed < 180.0) {
+        speed = 250.0;
+      }
+      expect(speed, equals(250.0));
+
+      // Turbo preset jump (when >= 180 and < 450 -> 500)
+      if (speed >= 180.0 && speed < 450.0) {
+        speed = 500.0;
+      }
+      expect(speed, equals(500.0));
+
+      // Stepping when >= 300
+      step = speed >= 300 ? 50.0 : (speed >= 100 ? 25.0 : 10.0);
+      speed = (speed + step).clamp(10.0, 1000.0);
+      expect(speed, equals(550.0));
+    });
   });
 }

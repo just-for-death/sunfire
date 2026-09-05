@@ -199,6 +199,79 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                 boolValue: _settings.keepScreenAwake,
                 onBoolChanged: (val) => _settings.keepScreenAwake = val,
               ),
+
+              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+
+              // ── 3. AUTO-SCROLL (WEBTOON / LONG STRIP) ──
+              const SectionTitle(title: 'Auto-Scroll (Webtoon & Long Strip)'),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                leading: const Icon(Icons.speed_rounded),
+                title: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    const Text('Default Auto-Scroll Speed', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    SunfireBadge.local(),
+                  ],
+                ),
+                subtitle: Text(
+                  '${_settings.defaultAutoScrollSpeed.round()} px/s',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                onTap: () {
+                  _showRadioDialog(
+                    title: 'Default Auto-Scroll Speed',
+                    options: const [
+                      'Slow (25 px/s)',
+                      'Normal (50 px/s)',
+                      'Fast (120 px/s)',
+                      'Faster (250 px/s)',
+                      'Turbo (450 px/s)',
+                      'Hyper (750 px/s)',
+                    ],
+                    currentValue: _settings.defaultAutoScrollSpeed <= 30
+                        ? 'Slow (25 px/s)'
+                        : _settings.defaultAutoScrollSpeed <= 80
+                            ? 'Normal (50 px/s)'
+                            : _settings.defaultAutoScrollSpeed <= 180
+                                ? 'Fast (120 px/s)'
+                                : _settings.defaultAutoScrollSpeed <= 350
+                                    ? 'Faster (250 px/s)'
+                                    : _settings.defaultAutoScrollSpeed <= 600
+                                        ? 'Turbo (450 px/s)'
+                                        : 'Hyper (750 px/s)',
+                    onSelected: (val) {
+                      if (val.contains('25')) _settings.defaultAutoScrollSpeed = 25.0;
+                      if (val.contains('50')) _settings.defaultAutoScrollSpeed = 50.0;
+                      if (val.contains('120')) _settings.defaultAutoScrollSpeed = 120.0;
+                      if (val.contains('250')) _settings.defaultAutoScrollSpeed = 250.0;
+                      if (val.contains('450')) _settings.defaultAutoScrollSpeed = 450.0;
+                      if (val.contains('750')) _settings.defaultAutoScrollSpeed = 750.0;
+                    },
+                  );
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Row(
+                  children: [
+                    const Text('10 px/s', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    Expanded(
+                      child: Slider(
+                        value: _settings.defaultAutoScrollSpeed.clamp(10.0, 1000.0),
+                        min: 10.0,
+                        max: 1000.0,
+                        divisions: 99,
+                        label: '${_settings.defaultAutoScrollSpeed.round()} px/s',
+                        onChanged: (val) => _settings.defaultAutoScrollSpeed = val,
+                      ),
+                    ),
+                    const Text('1000 px/s', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  ],
+                ),
+              ),
             ],
           ),
         );
