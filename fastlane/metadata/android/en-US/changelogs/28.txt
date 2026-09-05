@@ -1,7 +1,8 @@
 Sunfire v8.0.0 Beta:
-• Deep system audit & complete stability hardening across extensions & UI.
-• Synchronized all extension versions to eliminate false update badges.
-• Hardened navigation pop boundaries across all screens to prevent GoError crashes.
-• Authentic published dates for single-issue galleries in nHentai and NineHentai.
-• Preserved full settings configuration across General, Appearance, Reader, and Browse.
-• Enhanced auto-scroll and reading progress clamping.
+• Automated library updates & chapter delta detection with OS notifications (Mihon parity).
+• Ultra-smooth 60/90/120Hz Vsync Webtoon auto-scrolling with 400ms ease-in ramp.
+• Responsive touch coordination: auto-pause on finger hold and seamless resume on lift.
+• Modern frosted-glass floating auto-scroll HUD with collapsible mini-pill and TURBO.
+• Interactive reader settings live speed preview, fine steppers, and quick presets.
+• Dynamic Android WorkManager background scheduler and Tailscale VPN compatibility.
+• Complete system audit & stability hardening across navigation, extensions, and reader.
