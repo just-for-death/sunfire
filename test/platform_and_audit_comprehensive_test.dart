@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/db/models/chapter.dart';
 import 'package:sunfire/src/core/engine/quickjs_service.dart';
+import 'package:sunfire/src/core/engine/javascript/js_extension_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -369,6 +370,43 @@ void main() {
       toggleSelection(200);
       expect(selectedIds.isEmpty, isTrue);
       expect(isBatchMode, isFalse);
+    });
+
+    test('16. Read Comics Online CDN Referer Sanitization prevents HTTP 403', () {
+      final cdnUrl = 'https://cdn.readcomicsonline.ru/uploads/manga/absolute-superman-2024/chapters/17/02.jpg';
+      final headers = QuickJsService.getImageHeaders('Read Comics Online', cdnUrl);
+      
+      expect(headers.containsKey('Referer'), isFalse, reason: 'Cloudflare CDN rejects requests carrying Referer with HTTP 403');
+      expect(headers.containsKey('referer'), isFalse);
+      expect(headers.containsKey('Cookie'), isFalse);
+      expect(headers.containsKey('cookie'), isFalse);
+      expect(headers['User-Agent'], isNotEmpty);
+    });
+
+    test('17. JsExtensionService disposal and lifecycle guarding', () {
+      final service = JsExtensionService(
+        sourceMeta: {'name': 'Test', 'baseUrl': 'https://example.com'},
+        sourceCode: 'class DefaultExtension {}',
+      );
+      expect(service.isDisposed, isFalse);
+      service.dispose();
+      expect(service.isDisposed, isTrue);
+      // Calls after disposal return empty/safe defaults without crashing
+      expect(service.getHeaders(), isEmpty);
+    });
+
+    test('18. Library batch mode bottom padding accommodates floating dock', () {
+      double computeBottomPadding({required bool isBatchMode, required bool isTablet}) {
+        return isBatchMode ? (isTablet ? 96.0 : 130.0) : (isTablet ? 36.0 : 120.0);
+      }
+
+      // Normal mode
+      expect(computeBottomPadding(isBatchMode: false, isTablet: true), equals(36.0));
+      expect(computeBottomPadding(isBatchMode: false, isTablet: false), equals(120.0));
+
+      // Batch selection mode: extra padding prevents floating dock from obscuring cards
+      expect(computeBottomPadding(isBatchMode: true, isTablet: true), equals(96.0));
+      expect(computeBottomPadding(isBatchMode: true, isTablet: false), equals(130.0));
     });
   });
 }

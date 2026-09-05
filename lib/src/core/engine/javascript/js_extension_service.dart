@@ -24,7 +24,7 @@ class JsExtensionService {
   });
 
   void _init() {
-    if (_isInitialized) return;
+    if (_isInitialized || _isDisposed) return;
     runtime = QuickJsRuntime2(stackSize: 1024 * 1024 * 4);
     runtime.enableHandlePromises();
 
@@ -108,7 +108,12 @@ if (typeof extention === "undefined") {
     _isInitialized = true;
   }
 
+  bool _isDisposed = false;
+  bool get isDisposed => _isDisposed;
+
   void dispose() {
+    if (_isDisposed) return;
+    _isDisposed = true;
     if (!_isInitialized) return;
     try {
       _jsDomSelector.dispose();
@@ -132,11 +137,32 @@ if (typeof extention === "undefined") {
   }
 
   Map<String, String> getHeaders([String? url]) {
+    if (_isDisposed) return {};
     final targetUrl = (url != null && url.isNotEmpty) ? url : (sourceMeta['baseUrl'] ?? '');
-    return _extensionCall<Map>(
-      'typeof extention.getHeaders === "function" ? extention.getHeaders(${jsonEncode(targetUrl)}) : (extention.headers || {})',
-      {},
-    ).map((k, v) => MapEntry(k.toString(), v.toString()));
+    _init();
+    try {
+      final res = runtime.evaluate('''
+(function() {
+  try {
+    if (typeof extention !== "undefined" && typeof extention.getHeaders === "function") {
+      return JSON.stringify(extention.getHeaders(${jsonEncode(targetUrl)}) || {});
+    }
+    if (typeof extention !== "undefined" && extention.headers) {
+      return JSON.stringify(extention.headers);
+    }
+    return JSON.stringify({});
+  } catch(e) {
+    return JSON.stringify({});
+  }
+})()
+''');
+      if (res.isError) return {};
+      final decoded = jsonDecode(res.stringResult);
+      if (decoded is Map) {
+        return decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
+      }
+    } catch (_) {}
+    return {};
   }
 
   String? getCoverUrl(String url) {
@@ -222,17 +248,6 @@ if (typeof extention === "undefined") {
     return [];
   }
 
-  T _extensionCall<T>(String call, T def) {
-    _init();
-    try {
-      final res = runtime.evaluate('jsonStringifySync(() => extention.$call)');
-      final decoded = jsonDecode(res.stringResult);
-      if (decoded is Map && decoded.containsKey('__error__')) return def;
-      return decoded as T;
-    } catch (_) {
-      return def;
-    }
-  }
 
   Future<T> extensionCallAsync<T>(String call) async {
     _init();
