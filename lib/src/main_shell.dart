@@ -182,43 +182,50 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               },
               children: _screens,
             ),
-            bottomNavigationBar: SafeArea(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 460),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(32),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          blurRadius: 28,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(32),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xCC181820),
-                            borderRadius: BorderRadius.circular(32),
-                            border: Border.all(color: const Color(0x22FFFFFF), width: 0.8),
+            bottomNavigationBar: ValueListenableBuilder<bool>(
+              valueListenable: LibraryScreen.isBatchModeNotifier,
+              builder: (context, isBatch, child) {
+                if (isBatch) return const SizedBox.shrink();
+                return child!;
+              },
+              child: SafeArea(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 460),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(32),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            blurRadius: 28,
+                            offset: const Offset(0, 10),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              _buildMobileNavItem(0, Icons.auto_stories_rounded, Icons.auto_stories_outlined, 'Library'),
-                              _buildMobileNavItem(1, Icons.notifications_rounded, Icons.notifications_outlined, 'Updates'),
-                              _buildMobileNavItem(2, Icons.history_rounded, Icons.history_outlined, 'History'),
-                              _buildMobileNavItem(3, Icons.explore_rounded, Icons.explore_outlined, 'Browse'),
-                              _buildMobileNavItem(4, Icons.settings_rounded, Icons.settings_outlined, 'Settings'),
-                            ],
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(32),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xCC181820),
+                              borderRadius: BorderRadius.circular(32),
+                              border: Border.all(color: const Color(0x22FFFFFF), width: 0.8),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                _buildMobileNavItem(0, Icons.auto_stories_rounded, Icons.auto_stories_outlined, 'Library'),
+                                _buildMobileNavItem(1, Icons.notifications_rounded, Icons.notifications_outlined, 'Updates'),
+                                _buildMobileNavItem(2, Icons.history_rounded, Icons.history_outlined, 'History'),
+                                _buildMobileNavItem(3, Icons.explore_rounded, Icons.explore_outlined, 'Browse'),
+                                _buildMobileNavItem(4, Icons.settings_rounded, Icons.settings_outlined, 'Settings'),
+                              ],
+                            ),
                           ),
                         ),
                       ),
