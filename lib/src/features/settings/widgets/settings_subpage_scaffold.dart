@@ -36,10 +36,12 @@ class SettingsSubpageScaffold extends StatelessWidget {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () {
-            if (Navigator.canPop(context)) {
+            if (context.canPop()) {
+              context.pop();
+            } else if (Navigator.canPop(context)) {
               Navigator.pop(context);
             } else {
-              context.pop();
+              context.go('/more');
             }
           },
         ),

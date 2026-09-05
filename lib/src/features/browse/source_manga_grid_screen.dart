@@ -379,7 +379,13 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
               });
               _fetchSourceManga();
             } else {
-              context.pop();
+              if (context.canPop()) {
+                context.pop();
+              } else if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              } else {
+                context.go('/browse');
+              }
             }
           },
         ),
