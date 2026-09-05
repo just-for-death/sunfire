@@ -244,7 +244,13 @@ class SyncEngine {
 
           final rawThumb = nodeMap['thumbnailUrl'] as String?;
           if (rawThumb != null && rawThumb.isNotEmpty) {
-            manga.thumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
+            var thumb = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
+            if (thumb.contains('readcomicsonline.ru/uploads/')) {
+              thumb = thumb.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
+            }
+            manga.thumbnailUrl = thumb;
+          } else if (serverUrl.isNotEmpty && serverId > 0) {
+            manga.thumbnailUrl = '$serverUrl/api/v1/manga/$serverId/thumbnail';
           }
 
           if (nodeMap.containsKey('categories') && nodeMap['categories'] != null) {
@@ -401,9 +407,25 @@ class SyncEngine {
                 chapter.lastReadAt = serverLastReadAt;
               }
 
+              final rawUpload = chMap['uploadDate'] ?? chMap['dateUpload'];
+              if (rawUpload != null) {
+                final upVal = int.tryParse(rawUpload.toString());
+                if (upVal != null && upVal > 0) {
+                  chapter.uploadDate = upVal > 1000000000000 ? upVal ~/ 1000 : upVal;
+                }
+              }
+
               final rawFetchedAt = chMap['fetchedAt'];
               if (rawFetchedAt != null) {
-                chapter.fetchedAt = int.tryParse(rawFetchedAt.toString());
+                final ftVal = int.tryParse(rawFetchedAt.toString());
+                if (ftVal != null && ftVal > 0) {
+                  chapter.fetchedAt = ftVal > 1000000000000 ? ftVal ~/ 1000 : ftVal;
+                }
+              }
+
+              final rawScanlator = chMap['scanlator'] as String?;
+              if (rawScanlator != null && rawScanlator.isNotEmpty) {
+                chapter.scanlator = rawScanlator;
               }
 
               // Save remote chapter URLs for on-device QuickJS scraping
@@ -529,10 +551,25 @@ class SyncEngine {
         chapter.lastPageRead = parseIntSafe(map['lastPageRead'], chapter.lastPageRead);
         chapter.isDownloadedOnServer = parseBoolSafe(map['isDownloaded']) || chapter.isDownloadedOnServer;
 
+        final rawUpload = map['uploadDate'] ?? map['dateUpload'];
+        if (rawUpload != null) {
+          final upVal = int.tryParse(rawUpload.toString());
+          if (upVal != null && upVal > 0) {
+            chapter.uploadDate = upVal > 1000000000000 ? upVal ~/ 1000 : upVal;
+          }
+        }
+
         final rawFetchedAt = map['fetchedAt'];
         if (rawFetchedAt != null) {
-          final parsed = int.tryParse(rawFetchedAt.toString());
-          if (parsed != null) chapter.fetchedAt = parsed;
+          final ftVal = int.tryParse(rawFetchedAt.toString());
+          if (ftVal != null && ftVal > 0) {
+            chapter.fetchedAt = ftVal > 1000000000000 ? ftVal ~/ 1000 : ftVal;
+          }
+        }
+
+        final rawScanlator = map['scanlator'] as String?;
+        if (rawScanlator != null && rawScanlator.isNotEmpty) {
+          chapter.scanlator = rawScanlator;
         }
 
         // Denormalize manga metadata so Updates tab renders offline
@@ -541,7 +578,11 @@ class SyncEngine {
           chapter.mangaTitle = mangaMap['title'] as String? ?? chapter.mangaTitle;
           final rawThumb = mangaMap['thumbnailUrl'] as String?;
           if (rawThumb != null && rawThumb.isNotEmpty) {
-            chapter.mangaThumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
+            var thumb = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
+            if (thumb.contains('readcomicsonline.ru/uploads/')) {
+              thumb = thumb.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
+            }
+            chapter.mangaThumbnailUrl = thumb;
           }
         }
 
