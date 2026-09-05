@@ -290,9 +290,18 @@ class DefaultExtension extends MProvider {
             const link = c.attr("href");
             const name = c.text;
             if (link && name) {
+                let dateUpload = "";
+                const row = c.closest ? c.closest("tr") : null;
+                if (row) {
+                    const tds = row.querySelectorAll ? row.querySelectorAll("td") : [];
+                    if (tds && tds.length > 1) {
+                        dateUpload = (tds[1].text || "").trim();
+                    }
+                }
                 chapters.push({
                     name: name.trim(),
-                    url: link.startsWith('http') ? link : `${this.source.baseUrl}${link}`
+                    url: link.startsWith('http') ? link : `${this.source.baseUrl}${link}`,
+                    dateUpload: dateUpload
                 });
             }
         }

@@ -55,15 +55,18 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   String _formatChapterSubtitle(Chapter ch) {
     final parts = <String>[];
 
-    // 1. Reading progress or page count
-    if (ch.pageCount > 0) {
-      if (ch.lastPageRead > 0) {
-        parts.add('Page ${ch.lastPageRead}/${ch.pageCount}');
-      } else {
-        parts.add('${ch.pageCount} pages');
+    // 1. Reading progress or page count (only displayed for unread chapters)
+    if (!ch.isRead) {
+      if (ch.pageCount > 0) {
+        if (ch.lastPageRead > 0) {
+          final displayPage = ch.lastPageRead.clamp(1, ch.pageCount);
+          parts.add('Page $displayPage/${ch.pageCount}');
+        } else {
+          parts.add('${ch.pageCount} pages');
+        }
+      } else if (ch.lastPageRead > 0) {
+        parts.add('Page ${ch.lastPageRead}');
       }
-    } else if (ch.lastPageRead > 0) {
-      parts.add('Page ${ch.lastPageRead}');
     }
 
     // 2. Scanlator group
@@ -118,36 +121,44 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     return null;
   }
 
-  String? _formatChapterDate(int? rawTimestamp) {
-    if (rawTimestamp == null || rawTimestamp <= 0) return null;
-    final ms = rawTimestamp > 1000000000000 ? rawTimestamp : rawTimestamp * 1000;
-    final date = DateTime.fromMillisecondsSinceEpoch(ms);
-    if (date.year < 1975 || date.isAfter(DateTime.now().add(const Duration(days: 2)))) {
-      return null;
-    }
-    return _formatRelativeTime(date);
-  }
-
-  String _formatRelativeTime(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
-    if (diff.isNegative) return 'Today';
-    if (diff.inDays == 0) {
-      if (diff.inHours == 0) {
-        if (diff.inMinutes <= 1) return 'Just now';
-        return '${diff.inMinutes}m ago';
+  String? _formatChapterDisplayDate(Chapter ch) {
+    // 1. If extension site provided its authentic published date, use it directly!
+    final raw = ch.dateUpload?.trim();
+    if (raw != null && raw.isNotEmpty && raw != '0' && raw != 'null') {
+      // If the extension returned an ISO-8601 string with timestamp (e.g. 2026-05-26T20:56:45.293Z),
+      // extract the clean date component: 2026-05-26
+      if (raw.contains('T') && raw.length >= 10 && RegExp(r'^\d{4}-\d{2}-\d{2}T').hasMatch(raw)) {
+        return raw.split('T')[0];
       }
-      return '${diff.inHours}h ago';
-    } else if (diff.inDays == 1) {
-      return 'Yesterday';
-    } else if (diff.inDays < 30) {
-      return '${diff.inDays}d ago';
-    } else if (diff.inDays < 365) {
-      final months = (diff.inDays / 30).floor();
-      return '${months}mo ago';
-    } else {
-      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      // If it's pure digits (unix timestamp string in ms or s, e.g. 1778025600000), format nicely
+      final numericVal = int.tryParse(raw);
+      if (numericVal != null && numericVal > 0) {
+        final ms = numericVal > 1000000000000 ? numericVal : numericVal * 1000;
+        final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+        if (dt.year >= 1975) {
+          return DateFormat.yMMMd().format(dt);
+        }
+      }
+      // Return the extension site's authentic published date as-is (e.g. "May 6, 2026", "26 Aug 2026", "Nov 14, 2024", "2025-07-19")
+      return raw;
     }
+
+    // 2. Fallback to uploadDate timestamp (e.g. from Suwayomi sync)
+    if (ch.uploadDate != null && ch.uploadDate! > 0) {
+      final ms = ch.uploadDate! > 1000000000000 ? ch.uploadDate! : ch.uploadDate! * 1000;
+      final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+      if (dt.year >= 1975 && !dt.isAfter(DateTime.now().add(const Duration(days: 2)))) {
+        final now = DateTime.now();
+        final diff = now.difference(dt);
+        if (diff.inDays == 0 && !diff.isNegative) {
+          return 'Today';
+        } else if (diff.inDays == 1) {
+          return 'Yesterday';
+        }
+        return DateFormat.yMMMd().format(dt);
+      }
+    }
+    return null;
   }
 
   @override
@@ -223,7 +234,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               final fetched = <Chapter>[];
               for (final n in chNodes) {
                 final chMap = n as Map<String, dynamic>;
-                final uploadTimestamp = parseDateToUnix(chMap['uploadDate'] ?? chMap['dateUpload']);
+                final rawDateUpload = (chMap['dateUpload'] ?? chMap['uploadDate'])?.toString();
+                final uploadTimestamp = parseDateToUnix(rawDateUpload);
                 final fetchedTimestamp = parseDateToUnix(chMap['fetchedAt']);
 
                 final rawChUrl = (chMap['url'] ?? chMap['realUrl'] ?? '').toString();
@@ -244,6 +256,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   ..mangaTitle = _manga!.title
                   ..mangaThumbnailUrl = _manga!.thumbnailUrl
                   ..uploadDate = uploadTimestamp
+                  ..dateUpload = (rawDateUpload != null && rawDateUpload.isNotEmpty && rawDateUpload != '0' && rawDateUpload != 'null') ? rawDateUpload : null
                   ..fetchedAt = fetchedTimestamp;
                 fetched.add(ch);
               }
@@ -295,6 +308,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   : (((widget.mangaServerId.hashCode & 0x0007FFFF) * 1000) + (i + 1));
 
               final rawDate = cMap['dateUpload'] ?? cMap['uploadDate'] ?? cMap['date'] ?? cMap['releaseDate'];
+              final rawDateStr = rawDate?.toString().trim();
               final parsedDate = parseDateToUnix(rawDate);
 
               final ch = Chapter()
@@ -307,6 +321,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 ..mangaTitle = _manga!.title
                 ..mangaThumbnailUrl = _manga!.thumbnailUrl
                 ..uploadDate = parsedDate
+                ..dateUpload = (rawDateStr != null && rawDateStr.isNotEmpty && rawDateStr != '0' && rawDateStr != 'null') ? rawDateStr : null
                 ..fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
               fetched.add(ch);
             }
@@ -335,6 +350,12 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   ch.lastReadAt = match.lastReadAt;
                   ch.isDownloaded = match.isDownloaded;
                   ch.pageCount = match.pageCount;
+                  if ((ch.dateUpload == null || ch.dateUpload!.isEmpty) && match.dateUpload != null && match.dateUpload!.isNotEmpty) {
+                    ch.dateUpload = match.dateUpload;
+                  }
+                  if (ch.uploadDate == null && match.uploadDate != null) {
+                    ch.uploadDate = match.uploadDate;
+                  }
                   match.url = ch.url;
                   match.realUrl = ch.realUrl;
                 }
@@ -1747,7 +1768,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             ),
             subtitle: Builder(
               builder: (context) {
-                final dateStr = _formatChapterDate(ch.uploadDate);
+                final dateStr = _formatChapterDisplayDate(ch);
                 final sub = _formatChapterSubtitle(ch);
                 final metaText = [
                   if (sub.isNotEmpty) sub,
