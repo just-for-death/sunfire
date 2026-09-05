@@ -1,0 +1,7 @@
+Sunfire v8.0.0 Beta:
+• Deep system audit & complete stability hardening across extensions & UI.
+• Synchronized all extension versions to eliminate false update badges.
+• Hardened navigation pop boundaries across all screens to prevent GoError crashes.
+• Authentic published dates for single-issue galleries in nHentai and NineHentai.
+• Preserved full settings configuration across General, Appearance, Reader, and Browse.
+• Enhanced auto-scroll and reading progress clamping.
