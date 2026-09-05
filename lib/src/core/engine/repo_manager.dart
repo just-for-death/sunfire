@@ -228,7 +228,7 @@ class RepoManager {
         }
       }
     }
-    // Deduplicate multiple extensions pointing to the same site domain (e.g. nHentai vs nHentai.com)
+    // Deduplicate multiple extensions pointing to the same site domain
     final Map<String, RepoSourceItem> siteDedupMap = {};
     for (final item in bestVersionMap.values) {
       String siteKey = '';
@@ -277,8 +277,8 @@ class RepoManager {
 
   /// Finds and downloads JS scrapers for EVERY source installed on the user's server.
   /// Fixes:
-  /// 1. Dedup uses raw server name (not normalized) so nHentai and nHentai.com both install.
-  /// 2. Domain-aware matching: "nHentai.com" prefers "nhentai_com.js" over "nhentai.js".
+  /// 1. Dedup uses raw server name (not normalized) so sources with distinct TLDs both install.
+  /// 2. Domain-aware matching: "Source.com" prefers "source_com.js" over "source.js".
   /// 3. Full filename scoring: pkg basename match weighted highest.
   Future<List<String>> downloadAndInstallMatchingSources({
     required List<String> serverSourceNames,
@@ -296,8 +296,8 @@ class RepoManager {
     }
 
     final installed = <String>[];
-    // Use raw server name (not normalized) as dedup key so "nHentai" and "nHentai.com"
-    // are treated as two distinct install targets.
+    // Use raw server name (not normalized) as dedup key so distinct domain variants
+    // are treated as distinct install targets.
     final installedServerNames = <String>{};
 
     for (final serverName in serverSourceNames) {
@@ -307,7 +307,7 @@ class RepoManager {
       if (cleanServerName.isEmpty) continue;
 
       // Build a domain-aware key — preserves ".com", ".net" etc for pkg matching
-      // e.g. "nHentai.com" → domain hint "com" → look for "nhentai_com.js" first
+      // e.g. "Source.com" → domain hint "com" → look for "source_com.js" first
       final serverDomainHint = _extractDomainHint(serverName); // e.g. 'com', 'net', ''
 
       // 1. Gather all candidates matching this server source name
@@ -444,7 +444,7 @@ class RepoManager {
   }
 
   /// Extracts domain extension hint from a source name.
-  /// e.g. "nHentai.com" → "com", "MangaFreak" → ""
+  /// e.g. "source.com" → "com", "sourcename" → ""
   static String _extractDomainHint(String name) {
     final match = RegExp(r'\.(com|net|org|me|cc|to|ru|io|tv)$', caseSensitive: false).firstMatch(name.trim());
     return match?.group(1)?.toLowerCase() ?? '';

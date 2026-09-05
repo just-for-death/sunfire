@@ -156,7 +156,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                     SettingsPropTile(
                       title: 'Local FlareSolverr URL',
                       subtitle: _settings.cfProxyUrl.isNotEmpty ? _settings.cfProxyUrl : 'Disabled (direct connection)',
-                      description: 'Proxy endpoint used by this device to solve Cloudflare Turnstile challenges for local extensions (ReadComicOnline, Mangago, etc.)',
+                      description: 'Proxy endpoint used by this device to solve Cloudflare Turnstile challenges for local extensions and protected sources.',
                       scope: SettingScope.local,
                       kind: SettingsPropKind.textField,
                       stringValue: _settings.cfProxyUrl,
