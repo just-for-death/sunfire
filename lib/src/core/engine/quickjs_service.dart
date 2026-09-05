@@ -451,6 +451,15 @@ class QuickJsService {
       headers.remove('Referer');
     }
 
+    // 5. Explicitly sanitize known CDNs that enforce anti-hotlinking / Bot Fight Mode on Referers or incompatible cookies
+    final lowerTarget = targetUrl.toLowerCase();
+    if (lowerTarget.contains('cdn.readcomicsonline.ru') || lowerTarget.contains('readcomicsonline.ru/uploads/')) {
+      headers.remove('Referer');
+      headers.remove('referer');
+      headers.remove('Cookie');
+      headers.remove('cookie');
+    }
+
     if (cacheKey.isNotEmpty) {
       _headersCache[cacheKey] = Map<String, String>.from(headers);
     }
