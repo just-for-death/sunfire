@@ -530,6 +530,19 @@ class GraphQLClientService {
     return await query(mutStr, label: 'triggerServerLibraryUpdate');
   }
 
+  Future<Map<String, dynamic>?> fetchServerUpdateStatus() async {
+    const queryStr = r'''
+      {
+        updateStatus {
+          runningJobs { mangas { nodes { id title } } }
+          pendingJobs { mangas { nodes { id title } } }
+          completeJobs { mangas { nodes { id title } } }
+        }
+      }
+    ''';
+    return await query(queryStr, label: 'fetchServerUpdateStatus');
+  }
+
   Future<Map<String, dynamic>?> enqueueChapterDownload(int chapterId) async {
     const mutStr = r'''
       mutation($chapterId: Int!) {

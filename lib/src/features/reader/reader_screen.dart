@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -37,7 +38,7 @@ class ReaderScreen extends StatefulWidget {
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-class _ReaderScreenState extends State<ReaderScreen> {
+class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMixin {
   final SettingsService _settings = SettingsService.instance;
   String? _sourceName;
   Chapter? _chapter;
@@ -80,10 +81,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
   double? _lastIosVolume;
   DateTime _lastIosVolumeTurnTime = DateTime.now();
 
-  // Hands-free Webtoon Auto-Scroll
+  // Hands-free Webtoon Auto-Scroll (Vsync Synchronized)
   bool _isAutoScrolling = false;
-  double _autoScrollSpeed = 35.0; // px/sec
-  Timer? _autoScrollTimer;
+  double _autoScrollSpeed = 50.0; // px/sec
+  Ticker? _autoScrollTicker;
+  Duration? _lastAutoScrollElapsed;
+  DateTime? _autoScrollStartTime;
+  bool _isUserTouching = false;
+  bool _isAutoScrollHudCollapsed = false;
 
   @override
   void initState() {
@@ -135,29 +140,73 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   void _startAutoScroll() {
-    _autoScrollTimer?.cancel();
-    _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 25), (_) {
+    _autoScrollTicker?.stop();
+    _autoScrollTicker?.dispose();
+    _lastAutoScrollElapsed = null;
+    _isUserTouching = false;
+    _autoScrollStartTime = DateTime.now();
+
+    _autoScrollTicker = createTicker((Duration elapsed) {
       if (!_isAutoScrolling || !mounted || !_scrollController.hasClients) {
         _stopAutoScroll();
         return;
       }
+
+      // Check if user is touching/holding or dragging the screen
+      if (_isUserTouching && _settings.autoScrollPauseOnTouch) {
+        // Keep elapsed benchmark updated while holding so release doesn't jump
+        _lastAutoScrollElapsed = elapsed;
+        return;
+      }
+
+      if (_lastAutoScrollElapsed == null) {
+        _lastAutoScrollElapsed = elapsed;
+        return;
+      }
+
+      final dt = (elapsed - _lastAutoScrollElapsed!).inMicroseconds / 1000000.0;
+      _lastAutoScrollElapsed = elapsed;
+
+      // Clamp delta time to 50ms (20fps minimum) to prevent sudden jumps if frame drops
+      final safeDt = dt.clamp(0.0, 0.05);
+      if (safeDt <= 0.0) return;
+
       final max = _scrollController.position.maxScrollExtent;
       final cur = _scrollController.offset;
-      if (max > 50 && cur >= max - 10) {
+
+      // Check bottom of chapter
+      if (max > 50 && cur >= max - 8) {
         _stopAutoScroll();
-        if (_nextChapter != null) {
+        if (_settings.autoScrollAutoNextChapter && _nextChapter != null) {
           _loadChapterAndPages(_nextChapter!.serverId);
         }
         return;
       }
-      final step = _autoScrollSpeed * 0.025;
-      _scrollController.jumpTo((cur + step).clamp(0.0, max));
+
+      // Smooth ease-in multiplier (from 0.15 to 1.0 over first 400ms)
+      double easeMultiplier = 1.0;
+      if (_settings.autoScrollSmoothEaseIn && _autoScrollStartTime != null) {
+        final elapsedMs = DateTime.now().difference(_autoScrollStartTime!).inMilliseconds;
+        if (elapsedMs < 400) {
+          easeMultiplier = 0.15 + (elapsedMs / 400.0) * 0.85;
+        }
+      }
+
+      final step = _autoScrollSpeed * safeDt * easeMultiplier;
+      final target = (cur + step).clamp(0.0, max);
+      _scrollController.jumpTo(target);
     });
+
+    _autoScrollTicker?.start();
   }
 
   void _stopAutoScroll() {
-    _autoScrollTimer?.cancel();
-    _autoScrollTimer = null;
+    _autoScrollTicker?.stop();
+    _autoScrollTicker?.dispose();
+    _autoScrollTicker = null;
+    _lastAutoScrollElapsed = null;
+    _autoScrollStartTime = null;
+    _isUserTouching = false;
     if (_isAutoScrolling && mounted) {
       setState(() => _isAutoScrolling = false);
     }
@@ -186,7 +235,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('${_autoScrollSpeed.round()} px/s', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: primaryColor)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: primaryColor.withValues(alpha: 0.4)),
+                              ),
+                              child: Text(
+                                '${_autoScrollSpeed.round()} px/s',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: primaryColor),
+                              ),
+                            ),
                             const SizedBox(width: 8),
                             TextButton.icon(
                               style: TextButton.styleFrom(
@@ -211,18 +271,50 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    Slider(
-                      value: _autoScrollSpeed.clamp(10.0, 1000.0),
-                      min: 10.0,
-                      max: 1000.0,
-                      divisions: 99,
-                      activeColor: primaryColor,
-                      label: '${_autoScrollSpeed.round()} px/s',
-                      onChanged: (val) {
-                        setState(() => _autoScrollSpeed = val);
-                        setSheetState(() {});
-                      },
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        IconButton.filledTonal(
+                          style: IconButton.styleFrom(
+                            backgroundColor: const Color(0x22FFFFFF),
+                            minimumSize: const Size(36, 36),
+                            padding: EdgeInsets.zero,
+                          ),
+                          icon: const Icon(Icons.remove_rounded, size: 18),
+                          onPressed: () {
+                            HapticFeedback.selectionClick();
+                            setState(() => _autoScrollSpeed = (_autoScrollSpeed - 10.0).clamp(10.0, 1000.0));
+                            setSheetState(() {});
+                          },
+                        ),
+                        Expanded(
+                          child: Slider(
+                            value: _autoScrollSpeed.clamp(10.0, 1000.0),
+                            min: 10.0,
+                            max: 1000.0,
+                            divisions: 99,
+                            activeColor: primaryColor,
+                            label: '${_autoScrollSpeed.round()} px/s',
+                            onChanged: (val) {
+                              setState(() => _autoScrollSpeed = val);
+                              setSheetState(() {});
+                            },
+                          ),
+                        ),
+                        IconButton.filledTonal(
+                          style: IconButton.styleFrom(
+                            backgroundColor: const Color(0x22FFFFFF),
+                            minimumSize: const Size(36, 36),
+                            padding: EdgeInsets.zero,
+                          ),
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          onPressed: () {
+                            HapticFeedback.selectionClick();
+                            setState(() => _autoScrollSpeed = (_autoScrollSpeed + 10.0).clamp(10.0, 1000.0));
+                            setSheetState(() {});
+                          },
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     const Text('Quick Presets', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
@@ -429,6 +521,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
     } else if (key == LogicalKeyboardKey.audioVolumeUp && _settings.volumeKeyTurn) {
       _goToPrevPage();
       return KeyEventResult.handled;
+    } else if (key == LogicalKeyboardKey.keyS) {
+      if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) {
+        _toggleAutoScroll();
+        return KeyEventResult.handled;
+      }
+    } else if (key == LogicalKeyboardKey.equal || key == LogicalKeyboardKey.numpadAdd) {
+      if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) {
+        setState(() => _autoScrollSpeed = (_autoScrollSpeed + 10.0).clamp(10.0, 1000.0));
+        return KeyEventResult.handled;
+      }
+    } else if (key == LogicalKeyboardKey.minus || key == LogicalKeyboardKey.numpadSubtract) {
+      if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) {
+        setState(() => _autoScrollSpeed = (_autoScrollSpeed - 10.0).clamp(10.0, 1000.0));
+        return KeyEventResult.handled;
+      }
     }
 
     return KeyEventResult.ignored;
@@ -448,7 +555,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   void dispose() {
-    _autoScrollTimer?.cancel();
+    _autoScrollTicker?.stop();
+    _autoScrollTicker?.dispose();
+    _autoScrollTicker = null;
     if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
       try {
         VolumeController.instance.removeListener();
@@ -1103,6 +1212,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   void _cycleReadingMode() {
+    _stopAutoScroll();
     setState(() {
       if (_readingMode == ReadingMode.longStrip) {
         _readingMode = ReadingMode.pagedRtl;
@@ -1190,11 +1300,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
                           setSheetState(() {});
                         }, primaryColor),
                         _buildFilterChip('Paged LTR', _readingMode == ReadingMode.pagedLtr, () {
+                          _stopAutoScroll();
                           setState(() => _readingMode = ReadingMode.pagedLtr);
                           _settings.readingMode = 'Paged LTR';
                           setSheetState(() {});
                         }, primaryColor),
                         _buildFilterChip('Paged RTL (Manga)', _readingMode == ReadingMode.pagedRtl, () {
+                          _stopAutoScroll();
                           setState(() => _readingMode = ReadingMode.pagedRtl);
                           _settings.readingMode = 'Paged RTL (Manga)';
                           setSheetState(() {});
@@ -1909,6 +2021,23 @@ class _ReaderScreenState extends State<ReaderScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             return Listener(
+              onPointerDown: (_) {
+                if (_isAutoScrolling && !_isUserTouching) {
+                  if (mounted) setState(() => _isUserTouching = true);
+                }
+              },
+              onPointerUp: (_) {
+                if (_isUserTouching) {
+                  _autoScrollStartTime = DateTime.now();
+                  if (mounted) setState(() => _isUserTouching = false);
+                }
+              },
+              onPointerCancel: (_) {
+                if (_isUserTouching) {
+                  _autoScrollStartTime = DateTime.now();
+                  if (mounted) setState(() => _isUserTouching = false);
+                }
+              },
               onPointerSignal: (pointerSignal) {
                 if (pointerSignal is PointerScrollEvent) {
                   final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
@@ -2288,122 +2417,203 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     ),
 
                   // ── 4. FLOATING AUTO-SCROLL CONTROLS CAPSULE (Webtoon Mode) ──
-                  if ((_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) && _isAutoScrolling && !_showControls)
+                  if ((_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) &&
+                      _isAutoScrolling &&
+                      !_showControls &&
+                      _settings.autoScrollShowFloatingHud)
                     Positioned(
                       bottom: 24 + MediaQuery.of(context).padding.bottom,
                       left: 20,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xCC14141A),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: primaryColor.withValues(alpha: 0.6), width: 0.8),
-                          boxShadow: const [
-                            BoxShadow(color: Color(0x40000000), blurRadius: 8, offset: Offset(0, 2)),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            GestureDetector(
-                              onTap: _toggleAutoScroll,
-                              child: Icon(Icons.pause_rounded, size: 16, color: primaryColor),
-                            ),
-                            const SizedBox(width: 6),
-                            GestureDetector(
-                              onTap: _showAutoScrollSpeedDialog,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '${_autoScrollSpeed.round()} px/s',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOutCubic,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xCC141419),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: _isUserTouching
+                                    ? Colors.amberAccent.withValues(alpha: 0.8)
+                                    : primaryColor.withValues(alpha: 0.6),
+                                width: 1.0,
                               ),
+                              boxShadow: const [
+                                BoxShadow(color: Color(0x55000000), blurRadius: 12, offset: Offset(0, 3)),
+                              ],
                             ),
-                            const SizedBox(width: 4),
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  final step = _autoScrollSpeed >= 300 ? 50.0 : (_autoScrollSpeed >= 100 ? 25.0 : 10.0);
-                                  _autoScrollSpeed = (_autoScrollSpeed - step).clamp(10.0, 1000.0);
-                                });
-                              },
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 4),
-                                child: Icon(Icons.remove_rounded, size: 14, color: Colors.white70),
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  final step = _autoScrollSpeed >= 300 ? 50.0 : (_autoScrollSpeed >= 100 ? 25.0 : 10.0);
-                                  _autoScrollSpeed = (_autoScrollSpeed + step).clamp(10.0, 1000.0);
-                                });
-                              },
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 4),
-                                child: Icon(Icons.add_rounded, size: 14, color: Colors.white70),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            // Dedicated "FASTER" Button
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  if (_autoScrollSpeed < 180.0) {
-                                    _autoScrollSpeed = 250.0;
-                                  } else if (_autoScrollSpeed < 450.0) {
-                                    _autoScrollSpeed = 500.0;
-                                  } else {
-                                    _autoScrollSpeed = _settings.defaultAutoScrollSpeed;
-                                  }
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: _autoScrollSpeed >= 180.0
-                                      ? primaryColor.withValues(alpha: 0.35)
-                                      : Colors.white.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.white24,
-                                    width: 0.6,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.fast_forward_rounded,
-                                      size: 13,
-                                      color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.amberAccent,
+                            child: _isAutoScrollHudCollapsed
+                                ? GestureDetector(
+                                    onTap: () {
+                                      HapticFeedback.lightImpact();
+                                      setState(() => _isAutoScrollHudCollapsed = false);
+                                    },
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          _isUserTouching ? Icons.touch_app_rounded : Icons.speed_rounded,
+                                          size: 15,
+                                          color: _isUserTouching ? Colors.amberAccent : primaryColor,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${_autoScrollSpeed.round()}',
+                                          style: TextStyle(
+                                            color: _isUserTouching ? Colors.amberAccent : Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        const Icon(Icons.chevron_right_rounded, size: 14, color: Colors.white38),
+                                      ],
                                     ),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      _autoScrollSpeed >= 450.0
-                                          ? 'TURBO'
-                                          : (_autoScrollSpeed >= 180.0 ? 'FASTER' : 'FAST'),
-                                      style: TextStyle(
-                                        color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold,
+                                  )
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Play / Pause button
+                                      GestureDetector(
+                                        onTap: () {
+                                          HapticFeedback.selectionClick();
+                                          _toggleAutoScroll();
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: primaryColor.withValues(alpha: 0.2),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            _isUserTouching ? Icons.touch_app_rounded : Icons.pause_rounded,
+                                            size: 15,
+                                            color: _isUserTouching ? Colors.amberAccent : primaryColor,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                                      const SizedBox(width: 6),
+                                      // Speed indicator chip (tap to open full speed modal)
+                                      GestureDetector(
+                                        onTap: () {
+                                          HapticFeedback.lightImpact();
+                                          _showAutoScrollSpeedDialog();
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.08),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: Colors.white12, width: 0.6),
+                                          ),
+                                          child: Text(
+                                            _isUserTouching ? 'PAUSED' : '${_autoScrollSpeed.round()} px/s',
+                                            style: TextStyle(
+                                              color: _isUserTouching ? Colors.amberAccent : Colors.white,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 0.3,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      // Decrement button
+                                      GestureDetector(
+                                        onTap: () {
+                                          HapticFeedback.selectionClick();
+                                          setState(() {
+                                            final step = _autoScrollSpeed >= 300 ? 50.0 : (_autoScrollSpeed >= 100 ? 25.0 : 10.0);
+                                            _autoScrollSpeed = (_autoScrollSpeed - step).clamp(10.0, 1000.0);
+                                          });
+                                        },
+                                        child: const Padding(
+                                          padding: EdgeInsets.symmetric(horizontal: 4),
+                                          child: Icon(Icons.remove_rounded, size: 15, color: Colors.white70),
+                                        ),
+                                      ),
+                                      // Increment button
+                                      GestureDetector(
+                                        onTap: () {
+                                          HapticFeedback.selectionClick();
+                                          setState(() {
+                                            final step = _autoScrollSpeed >= 300 ? 50.0 : (_autoScrollSpeed >= 100 ? 25.0 : 10.0);
+                                            _autoScrollSpeed = (_autoScrollSpeed + step).clamp(10.0, 1000.0);
+                                          });
+                                        },
+                                        child: const Padding(
+                                          padding: EdgeInsets.symmetric(horizontal: 4),
+                                          child: Icon(Icons.add_rounded, size: 15, color: Colors.white70),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      // Quick Turbo / Fast cycle
+                                      GestureDetector(
+                                        onTap: () {
+                                          HapticFeedback.selectionClick();
+                                          setState(() {
+                                            if (_autoScrollSpeed < 180.0) {
+                                              _autoScrollSpeed = 250.0;
+                                            } else if (_autoScrollSpeed < 450.0) {
+                                              _autoScrollSpeed = 500.0;
+                                            } else {
+                                              _autoScrollSpeed = _settings.defaultAutoScrollSpeed;
+                                            }
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: _autoScrollSpeed >= 180.0
+                                                ? primaryColor.withValues(alpha: 0.35)
+                                                : Colors.white.withValues(alpha: 0.08),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.white24,
+                                              width: 0.8,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.bolt_rounded,
+                                                size: 13,
+                                                color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.amberAccent,
+                                              ),
+                                              const SizedBox(width: 2),
+                                              Text(
+                                                _autoScrollSpeed >= 450.0
+                                                    ? 'TURBO'
+                                                    : (_autoScrollSpeed >= 180.0 ? 'FAST' : 'NORM'),
+                                                style: TextStyle(
+                                                  color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.white,
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      // Collapse HUD chevron
+                                      GestureDetector(
+                                        onTap: () {
+                                          HapticFeedback.lightImpact();
+                                          setState(() => _isAutoScrollHudCollapsed = true);
+                                        },
+                                        child: const Padding(
+                                          padding: EdgeInsets.symmetric(horizontal: 2),
+                                          child: Icon(Icons.chevron_left_rounded, size: 16, color: Colors.white38),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
                         ),
                       ),
                     ),

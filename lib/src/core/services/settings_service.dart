@@ -346,6 +346,37 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── LIBRARY AUTO-UPDATE & NOTIFICATIONS (MIHON PARITY) ──
+  int get libraryUpdateFrequencyHours => _prefs?.getInt('library_update_frequency_hours') ?? 12;
+  set libraryUpdateFrequencyHours(int value) {
+    _prefs?.setInt('library_update_frequency_hours', value);
+    notifyListeners();
+  }
+
+  bool get libraryUpdateOnlyOnWifi => _prefs?.getBool('library_update_only_on_wifi') ?? true;
+  set libraryUpdateOnlyOnWifi(bool value) {
+    _prefs?.setBool('library_update_only_on_wifi', value);
+    notifyListeners();
+  }
+
+  bool get libraryUpdateOnlyCharging => _prefs?.getBool('library_update_only_charging') ?? false;
+  set libraryUpdateOnlyCharging(bool value) {
+    _prefs?.setBool('library_update_only_charging', value);
+    notifyListeners();
+  }
+
+  bool get newChapterNotificationsEnabled => _prefs?.getBool('new_chapter_notifications_enabled') ?? true;
+  set newChapterNotificationsEnabled(bool value) {
+    _prefs?.setBool('new_chapter_notifications_enabled', value);
+    notifyListeners();
+  }
+
+  int get lastLibraryUpdateTimestamp => _prefs?.getInt('last_library_update_timestamp') ?? 0;
+  set lastLibraryUpdateTimestamp(int value) {
+    _prefs?.setInt('last_library_update_timestamp', value);
+    notifyListeners();
+  }
+
   // ── EXTENSIONS & REPOS ───────────────────────────────────
   bool get autoUpdateJsSources => _prefs?.getBool('auto_update_js_sources') ?? true;
   set autoUpdateJsSources(bool value) {
@@ -400,6 +431,30 @@ class SettingsService extends ChangeNotifier {
   double get defaultAutoScrollSpeed => _prefs?.getDouble('default_auto_scroll_speed') ?? 50.0;
   set defaultAutoScrollSpeed(double value) {
     _prefs?.setDouble('default_auto_scroll_speed', value);
+    notifyListeners();
+  }
+
+  bool get autoScrollPauseOnTouch => _prefs?.getBool('auto_scroll_pause_on_touch') ?? true;
+  set autoScrollPauseOnTouch(bool value) {
+    _prefs?.setBool('auto_scroll_pause_on_touch', value);
+    notifyListeners();
+  }
+
+  bool get autoScrollAutoNextChapter => _prefs?.getBool('auto_scroll_auto_next_chapter') ?? true;
+  set autoScrollAutoNextChapter(bool value) {
+    _prefs?.setBool('auto_scroll_auto_next_chapter', value);
+    notifyListeners();
+  }
+
+  bool get autoScrollShowFloatingHud => _prefs?.getBool('auto_scroll_show_floating_hud') ?? true;
+  set autoScrollShowFloatingHud(bool value) {
+    _prefs?.setBool('auto_scroll_show_floating_hud', value);
+    notifyListeners();
+  }
+
+  bool get autoScrollSmoothEaseIn => _prefs?.getBool('auto_scroll_smooth_ease_in') ?? true;
+  set autoScrollSmoothEaseIn(bool value) {
+    _prefs?.setBool('auto_scroll_smooth_ease_in', value);
     notifyListeners();
   }
 }
