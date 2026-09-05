@@ -139,25 +139,11 @@ class DefaultExtension extends MProvider {
             if (timeEl) {
                 var dt = timeEl.attr("datetime") || (timeEl.text || "").trim();
                 if (dt) {
-                    var parsed = Date.parse(dt);
-                    if (!isNaN(parsed) && parsed > 0) {
-                        dateUpload = parsed.toString();
+                    if (dt.includes("T")) {
+                        // Extract authentic YYYY-MM-DD from ISO datetime attribute
+                        dateUpload = dt.split("T")[0];
                     } else {
-                        var now = Date.now();
-                        var numMatch = dt.match(/(\d+)\s+(second|minute|hour|day|week|month|year)/i);
-                        if (numMatch) {
-                            var n = parseInt(numMatch[1]);
-                            var unit = numMatch[2].toLowerCase();
-                            var mult = 1000;
-                            if (unit.startsWith("second")) mult = 1000;
-                            else if (unit.startsWith("minute")) mult = 60 * 1000;
-                            else if (unit.startsWith("hour")) mult = 3600 * 1000;
-                            else if (unit.startsWith("day")) mult = 86400 * 1000;
-                            else if (unit.startsWith("week")) mult = 7 * 86400 * 1000;
-                            else if (unit.startsWith("month")) mult = 30 * 86400 * 1000;
-                            else if (unit.startsWith("year")) mult = 365 * 86400 * 1000;
-                            dateUpload = (now - (n * mult)).toString();
-                        }
+                        dateUpload = (timeEl.text || dt).trim();
                     }
                 }
             }
