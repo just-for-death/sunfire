@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://ww3.mangafreak.me",
     "typeSource": "single",
     "itemType": 0,
-    "version": "1.0.1",
+    "version": "1.0.3",
     "pkgPath": "javascript/manga/src/en/mangafreak.js"
 }];
 

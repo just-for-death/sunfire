@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://www.mangahere.cc",
     "typeSource": "single",
     "itemType": 0,
-    "version": "1.1.1",
+    "version": "1.2.2",
     "pkgPath": "javascript/manga/src/en/mangahere.js"
 }];
 
