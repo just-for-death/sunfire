@@ -20,8 +20,10 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
   Widget build(BuildContext context) {
     final name = widget.extensionData['name'] as String? ?? 'Extension';
     final lang = (widget.extensionData['lang'] as String? ?? 'en').toUpperCase();
-    final version = widget.extensionData['version'] as String? ?? '1.4.44';
-    final pkgName = widget.extensionData['id'] as String? ?? 'en.readcomiconline';
+    final version = widget.extensionData['version'] as String? ?? '1.0.0';
+    final pkgName = widget.extensionData['id']?.toString() ??
+        widget.extensionData['pkgPath']?.toString() ??
+        name.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
 
     return Scaffold(
       appBar: AppBar(

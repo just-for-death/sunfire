@@ -131,9 +131,10 @@ if (typeof extention === "undefined") {
     _isInitialized = false;
   }
 
-  Map<String, String> getHeaders() {
+  Map<String, String> getHeaders([String? url]) {
+    final targetUrl = (url != null && url.isNotEmpty) ? url : (sourceMeta['baseUrl'] ?? '');
     return _extensionCall<Map>(
-      'typeof extention.getHeaders === "function" ? extention.getHeaders(${jsonEncode(sourceMeta['baseUrl'] ?? '')}) : (extention.headers || {})',
+      'typeof extention.getHeaders === "function" ? extention.getHeaders(${jsonEncode(targetUrl)}) : (extention.headers || {})',
       {},
     ).map((k, v) => MapEntry(k.toString(), v.toString()));
   }
