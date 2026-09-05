@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../db/isar_service.dart';
 import '../db/models/category.dart';
@@ -68,6 +69,106 @@ class SyncEngine {
     }
   }
 
+  Future<void> syncChapterProgress(
+    int chapterServerId, {
+    required bool isRead,
+    required int lastPageRead,
+  }) async {
+    if (chapterServerId <= 0) return;
+
+    if (GraphQLClientService.instance.isConfigured) {
+      final isOnline = await GraphQLClientService.instance.checkServerReachable();
+      if (isOnline) {
+        try {
+          final res = await GraphQLClientService.instance.updateChapterReadStatus(
+            chapterServerId,
+            isRead,
+            lastPageRead,
+          );
+          if (res != null) return;
+        } catch (e) {
+          await LoggerService.instance.logWarning('Direct chapter read status sync failed ($chapterServerId): $e, queuing for replay', 'SyncEngine');
+        }
+      }
+    }
+
+    // Queue offline SyncRecord for replay when online
+    final record = SyncRecord()
+      ..recordId = const Uuid().v4()
+      ..entityType = SyncEntityType.chapter
+      ..entityId = chapterServerId.toString()
+      ..action = SyncAction.update
+      ..payloadJson = jsonEncode({
+        'chapterId': chapterServerId,
+        'isRead': isRead,
+        'lastPageRead': lastPageRead,
+      })
+      ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000
+      ..deviceId = _deviceId ?? 'default_device'
+      ..state = SyncRecordState.pending;
+    await IsarService.instance.saveSyncRecord(record);
+  }
+
+  Future<void> syncChapterBookmark(int chapterServerId, bool isBookmarked) async {
+    if (chapterServerId <= 0) return;
+
+    if (GraphQLClientService.instance.isConfigured) {
+      final isOnline = await GraphQLClientService.instance.checkServerReachable();
+      if (isOnline) {
+        try {
+          final res = await GraphQLClientService.instance.updateChapterBookmark(chapterServerId, isBookmarked);
+          if (res != null) return;
+        } catch (e) {
+          await LoggerService.instance.logWarning('Direct bookmark sync failed ($chapterServerId): $e, queuing for replay', 'SyncEngine');
+        }
+      }
+    }
+
+    final record = SyncRecord()
+      ..recordId = const Uuid().v4()
+      ..entityType = SyncEntityType.chapter
+      ..entityId = chapterServerId.toString()
+      ..action = SyncAction.update
+      ..payloadJson = jsonEncode({
+        'chapterId': chapterServerId,
+        'isBookmarked': isBookmarked,
+      })
+      ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000
+      ..deviceId = _deviceId ?? 'default_device'
+      ..state = SyncRecordState.pending;
+    await IsarService.instance.saveSyncRecord(record);
+  }
+
+  Future<void> syncMangaLibraryState(int mangaServerId, bool inLibrary) async {
+    if (mangaServerId <= 0) return;
+
+    if (GraphQLClientService.instance.isConfigured) {
+      final isOnline = await GraphQLClientService.instance.checkServerReachable();
+      if (isOnline) {
+        try {
+          final res = await GraphQLClientService.instance.updateMangaLibraryState(mangaServerId, inLibrary);
+          if (res != null) return;
+        } catch (e) {
+          await LoggerService.instance.logWarning('Direct manga library state sync failed ($mangaServerId): $e, queuing for replay', 'SyncEngine');
+        }
+      }
+    }
+
+    final record = SyncRecord()
+      ..recordId = const Uuid().v4()
+      ..entityType = SyncEntityType.manga
+      ..entityId = mangaServerId.toString()
+      ..action = inLibrary ? SyncAction.update : SyncAction.delete
+      ..payloadJson = jsonEncode({
+        'mangaId': mangaServerId,
+        'inLibrary': inLibrary,
+      })
+      ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000
+      ..deviceId = _deviceId ?? 'default_device'
+      ..state = SyncRecordState.pending;
+    await IsarService.instance.saveSyncRecord(record);
+  }
+
   Future<void> _flushPendingMutations() async {
     final pendingRecords = await IsarService.instance.getPendingSyncRecords();
     if (pendingRecords.isEmpty) return;
@@ -87,16 +188,19 @@ class SyncEngine {
           case SyncEntityType.chapter:
             if (record.action == SyncAction.update) {
               final chapterId = parseIntSafe(payload['chapterId']);
-              final ch = await IsarService.instance.getChapterByServerId(chapterId);
-              final manga = ch != null ? await IsarService.instance.getMangaByServerId(ch.mangaId) : null;
-              final isLocal = QuickJsService.instance.hasExtension(manga?.sourceName ?? '');
-              if (isLocal) {
-                success = true;
+              if (chapterId > 0) {
+                if (payload.containsKey('isBookmarked')) {
+                  final isBookmarked = parseBoolSafe(payload['isBookmarked']);
+                  final res = await GraphQLClientService.instance.updateChapterBookmark(chapterId, isBookmarked);
+                  success = res != null;
+                } else {
+                  final isRead = parseBoolSafe(payload['isRead']);
+                  final lastPageRead = parseIntSafe(payload['lastPageRead']);
+                  final res = await GraphQLClientService.instance.updateChapterReadStatus(chapterId, isRead, lastPageRead);
+                  success = res != null;
+                }
               } else {
-                final isRead = parseBoolSafe(payload['isRead']);
-                final lastPageRead = parseIntSafe(payload['lastPageRead']);
-                final res = await GraphQLClientService.instance.updateChapterReadStatus(chapterId, isRead, lastPageRead);
-                success = res != null;
+                success = true;
               }
             }
             break;
