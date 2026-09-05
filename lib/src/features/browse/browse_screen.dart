@@ -121,6 +121,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               final m = n as Map<String, dynamic>;
               final id = m['id'].toString();
               final name = m['displayName'] as String? ?? m['name'] as String? ?? 'Source';
+              final isNsfw = m['isNsfw'] == true || m['nsfw'] == true || (m['isNsfw'] == 1) || (m['nsfw'] == 1) || name.toLowerCase().contains('18+') || name.toLowerCase().contains('hentai');
+              if (!SettingsService.instance.showNsfwSources && isNsfw) continue;
               final rawIcon = m['iconUrl'] as String?;
               final iconUrl = (rawIcon != null && rawIcon.isNotEmpty)
                   ? (rawIcon.startsWith('http') ? rawIcon : '$serverUrl$rawIcon')
@@ -187,6 +189,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 final name = map['name'] as String? ?? 'Extension';
                 final lang = (map['lang'] as String? ?? 'en').toLowerCase();
                 final pkgName = (map['pkgName'] ?? map['name']).toString();
+                final isNsfw = map['isNsfw'] == true || map['nsfw'] == true || (map['isNsfw'] == 1) || (map['nsfw'] == 1) || name.toLowerCase().contains('18+') || name.toLowerCase().contains('hentai');
+                if (!SettingsService.instance.showNsfwSources && isNsfw) continue;
                 final key = 'apk_$pkgName'.toLowerCase();
                 if (!seenKeys.add(key)) continue;
 
@@ -224,6 +228,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       }
 
       for (final js in jsList) {
+        if (!SettingsService.instance.showNsfwSources && js.isNsfw) continue;
         final key = 'js_${js.name}_${js.lang}'.toLowerCase();
         if (!seenKeys.add(key)) continue;
 

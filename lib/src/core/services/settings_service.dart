@@ -175,6 +175,23 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  String formatDate(DateTime date) {
+    final y = date.year.toString().padLeft(4, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    switch (dateFormat) {
+      case 'MM/DD/YYYY':
+        return '$m/$d/$y';
+      case 'DD/MM/YYYY':
+        return '$d/$m/$y';
+      case 'DD.MM.YYYY':
+        return '$d.$m.$y';
+      case 'YYYY-MM-DD':
+      default:
+        return '$y-$m-$d';
+    }
+  }
+
   // ── LIBRARY & CATEGORIES (MIHON PARITY) ───────────────────
   String get libraryDisplayMode => _prefs?.getString('library_display_mode') ?? 'Comfortable Grid';
   set libraryDisplayMode(String value) {
