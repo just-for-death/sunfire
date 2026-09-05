@@ -523,7 +523,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         _pageController.jumpToPage(_currentPage - 1);
       } else if (!isPaged && _scrollController.hasClients) {
         if (_currentPage > 1) {
-           // Estimate the scroll position for vertical Webtoons based on average screen height
+           // Estimate the scroll position for vertical long strip based on average screen height
            final screenHeight = MediaQuery.of(context).size.height;
            final estimatedOffset = (_currentPage - 1) * screenHeight;
            final maxScroll = _scrollController.position.maxScrollExtent;
