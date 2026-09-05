@@ -714,12 +714,12 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     );
 
     return SafeArea(
-      child: Align(
-        alignment: Alignment.bottomCenter,
+      top: false,
+      child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            margin: const EdgeInsets.symmetric(horizontal: 16.0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(32),
               boxShadow: [
@@ -1107,7 +1107,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final isList = displayMode == 'List';
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 720;
-    final bottomPadding = isTablet ? 36.0 : 120.0;
+    final bottomPadding = _isBatchMode ? (isTablet ? 96.0 : 130.0) : (isTablet ? 36.0 : 120.0);
     final horizontalPadding = isTablet ? 24.0 : 16.0;
     
     final columnsSetting = _settings.gridColumnCount;
@@ -1261,7 +1261,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           ),
         ),
       ),
-      body: RefreshIndicator(
+      body: Stack(
+        children: [
+          RefreshIndicator(
         color: primaryColor,
         onRefresh: _handleRefresh,
         child: _isLoading
@@ -1392,8 +1394,16 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     ),
                 ],
               ),
+          ),
+          if (_isBatchMode)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: isTablet ? 24.0 : 16.0,
+              child: _buildBatchActionDock(context),
+            ),
+        ],
       ),
-      bottomNavigationBar: _isBatchMode ? _buildBatchActionDock(context) : null,
       ),
     );
   }
