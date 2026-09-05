@@ -37,6 +37,9 @@ class DefaultExtension extends MProvider {
       if (img) {
         imageUrl = img.attr("src") || img.attr("data-src") || "";
       }
+      if (imageUrl.includes("readcomicsonline.ru/uploads/")) {
+        imageUrl = imageUrl.replace("readcomicsonline.ru/uploads/", "cdn.readcomicsonline.ru/uploads/");
+      }
       if (!imageUrl || imageUrl.includes("loading") || !imageUrl.startsWith("http")) {
         imageUrl = `https://cdn.readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
       }
@@ -88,6 +91,9 @@ class DefaultExtension extends MProvider {
       const img = (grandParent ? grandParent.querySelector("img") : null) || (parent ? parent.querySelector("img") : null);
       if (img) {
         imageUrl = img.attr("src") || img.attr("data-src") || "";
+      }
+      if (imageUrl.includes("readcomicsonline.ru/uploads/")) {
+        imageUrl = imageUrl.replace("readcomicsonline.ru/uploads/", "cdn.readcomicsonline.ru/uploads/");
       }
       if (!imageUrl || imageUrl.includes("loading") || !imageUrl.startsWith("http")) {
         imageUrl = `https://cdn.readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
@@ -265,6 +271,9 @@ class DefaultExtension extends MProvider {
             if (img) {
                 imageUrl = img.attr("src") || img.attr("data-src") || "";
             }
+            if (imageUrl.includes("readcomicsonline.ru/uploads/")) {
+                imageUrl = imageUrl.replace("readcomicsonline.ru/uploads/", "cdn.readcomicsonline.ru/uploads/");
+            }
             if (!imageUrl || imageUrl.includes("loading") || !imageUrl.startsWith("http")) {
                 imageUrl = `https://cdn.readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
             }
@@ -293,6 +302,9 @@ class DefaultExtension extends MProvider {
 
     const imgEl = doc.querySelector(".boxed img") || doc.querySelector("img[src*='cover']");
     let imageUrl = imgEl ? (imgEl.attr("src") || imgEl.attr("data-src") || "") : "";
+    if (imageUrl.includes("readcomicsonline.ru/uploads/")) {
+      imageUrl = imageUrl.replace("readcomicsonline.ru/uploads/", "cdn.readcomicsonline.ru/uploads/");
+    }
     if (!imageUrl || !imageUrl.startsWith("http")) {
       const slug = fullUrl.replace("https://readcomicsonline.ru/comic/", "").split("/")[0].split("?")[0];
       imageUrl = `https://cdn.readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
@@ -302,7 +314,7 @@ class DefaultExtension extends MProvider {
     const description = descEl ? descEl.text.trim() : "";
 
     const chapters = [];
-    const chapterLinks = doc.querySelectorAll("ul.chapters li a, a[href*='/comic/']");
+    const chapterLinks = doc.querySelectorAll("section div a[href*='/comic/'], ul.chapters li a, a[href*='/comic/']");
     const seen = new Set();
 
     for (const a of chapterLinks) {
@@ -313,10 +325,39 @@ class DefaultExtension extends MProvider {
       if (seen.has(href)) continue;
       seen.add(href);
 
-      const chName = a.text.trim() || `Chapter ${parts[2]}`;
+      // Extract date if present in child or parent
+      let dateUpload = "";
+      const dateSpan = a.querySelector("span.text-xs, span.text-slate-500, span.date, .date-chapter-title-rtl");
+      if (dateSpan) {
+        dateUpload = dateSpan.text.trim();
+      } else {
+        const parent = a.parentElement;
+        const parentDate = parent ? parent.querySelector(".date-chapter-title-rtl, .date, span.text-xs") : null;
+        if (parentDate) {
+          dateUpload = parentDate.text.trim();
+        }
+      }
+
+      // Extract chapter title cleanly without the date
+      let chName = "";
+      const titleSpan = a.querySelector("span.font-medium, span.text-slate-100, span.text-brand-400, .chapter-title-rtl");
+      if (titleSpan) {
+        chName = titleSpan.text.trim();
+      } else {
+        chName = a.text.trim();
+        if (dateUpload && chName.includes(dateUpload)) {
+          chName = chName.replace(dateUpload, "").trim();
+        }
+      }
+
+      if (!chName) {
+        chName = `Chapter ${parts[2]}`;
+      }
+
       chapters.push({
         name: chName,
-        url: href.startsWith("http") ? href : `https://readcomicsonline.ru${href}`
+        url: href.startsWith("http") ? href : `https://readcomicsonline.ru${href}`,
+        dateUpload: dateUpload
       });
     }
 
