@@ -36,7 +36,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   }
 
   void _onTabChanged() {
-    if (MainShell.selectedTabNotifier.value == 0 && mounted) {
+    if (MainShell.selectedTabNotifier.value == 1 && mounted) {
       _loadUpdatesFromIsarCache();
     }
   }
