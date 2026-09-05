@@ -107,7 +107,7 @@ workflows:
   # WORKFLOW 3: ALL PLATFORMS (Unified CI — Triggered on Tags and Main)
   # ────────────────────────────────────────────────────────────────────────────
   all-release:
-    name: Multi-Platform Release (APK & IPA) - v7.0.0-beta
+    name: Multi-Platform Release (APK & IPA) - v8.0.0-beta
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:

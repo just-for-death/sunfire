@@ -9,6 +9,7 @@ import 'src/core/engine/quickjs_service.dart';
 import 'src/core/logging/logger_service.dart';
 import 'src/core/services/download_manager_service.dart';
 import 'src/core/services/image_cache_helper.dart';
+import 'src/core/services/notification_service.dart';
 import 'src/core/services/settings_service.dart';
 import 'src/core/sync/background_service.dart';
 import 'src/core/sync/graphql_client_service.dart';
@@ -38,6 +39,7 @@ void main() async {
   await ImageCacheHelper.initialize();
   await QuickJsService.instance.initialize();
   ImageTransportService.instance.initialize();
+  await NotificationService.instance.initialize();
 
   // Configure Suwayomi GraphQL client and SyncEngine only after onboarding
   if (SettingsService.instance.onboardingCompleted) {

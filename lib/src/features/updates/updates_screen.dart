@@ -6,10 +6,9 @@ import 'package:intl/intl.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
-import '../../core/engine/quickjs_service.dart';
 import '../../core/services/image_cache_helper.dart';
+import '../../core/services/library_update_service.dart';
 import '../../core/sync/graphql_client_service.dart';
-import '../../core/sync/sync_engine.dart';
 import '../../main_shell.dart';
 
 class UpdatesScreen extends StatefulWidget {
@@ -203,79 +202,39 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   // Legacy compat — kept for pull-to-refresh and server check button
   Future<void> _loadUpdatesFromServer() => _loadUpdates();
 
-  Future<int> _checkStandaloneUpdates() async {
-    int newFound = 0;
-    try {
-      final libraryManga = await IsarService.instance.getLibraryManga();
-      for (final manga in libraryManga) {
-        if (manga.sourceName.isEmpty || manga.url.isEmpty) continue;
-        try {
-          final detail = await QuickJsService.instance.fetchMangaDetailsLocal(
-            manga.sourceName,
-            manga.url,
-          );
-          if (detail.containsKey('chapters')) {
-            final rawChapters = detail['chapters'] as List<dynamic>?;
-            if (rawChapters != null && rawChapters.isNotEmpty) {
-              final existingChapters = await IsarService.instance.getChaptersForManga(manga.serverId);
-              final existingUrls = existingChapters.map((c) => c.url).toSet();
-              final newChapters = <Chapter>[];
-              for (int i = 0; i < rawChapters.length; i++) {
-                final chMap = rawChapters[i] as Map<String, dynamic>;
-                final chUrl = chMap['url']?.toString() ?? '';
-                if (chUrl.isNotEmpty && !existingUrls.contains(chUrl)) {
-                  final ch = Chapter()
-                    ..serverId = manga.serverId * 10000 + i + 1
-                    ..mangaId = manga.serverId
-                    ..name = chMap['name']?.toString() ?? 'Chapter ${i + 1}'
-                    ..chapterNumber = (chMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble()
-                    ..url = chUrl
-                    ..realUrl = chUrl
-                    ..fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000
-                    ..isRead = false
-                    ..lastPageRead = 0;
-                  newChapters.add(ch);
-                }
-              }
-              if (newChapters.isNotEmpty) {
-                await IsarService.instance.saveChapters(newChapters);
-                manga.unreadCount = (manga.unreadCount ?? 0) + newChapters.length;
-                await IsarService.instance.saveManga(manga);
-                newFound += newChapters.length;
-              }
-            }
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
-    return newFound;
-  }
-
   Future<void> _checkServerForUpdates() async {
     setState(() => _isCheckingServer = true);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    int newFound = 0;
-    if (GraphQLClientService.instance.isConfigured) {
-      await GraphQLClientService.instance.triggerServerLibraryUpdate();
-      await SyncEngine.instance.triggerSync();
-    } else {
-      newFound = await _checkStandaloneUpdates();
-    }
-    await _loadUpdates();
+    try {
+      final newFound = await LibraryUpdateService.instance.checkForNewChapters(isManual: true);
+      await _loadUpdates();
 
-    if (mounted) {
-      setState(() => _isCheckingServer = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            GraphQLClientService.instance.isConfigured
-                ? 'Server library update completed'
-                : (newFound > 0 ? 'Library updated ($newFound new chapters)' : 'Library is up to date'),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              newFound > 0 ? 'Found $newFound new chapters!' : 'Library is up to date',
+            ),
+            backgroundColor: primaryColor,
+            behavior: SnackBarBehavior.floating,
           ),
-          backgroundColor: primaryColor,
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Update check failed: $e'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCheckingServer = false);
+      }
     }
   }
 
@@ -376,12 +335,18 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           ],
         ),
         actions: [
-          IconButton(
-            icon: _isCheckingServer
-                ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2.5))
-                : Icon(Icons.refresh_rounded, color: primaryColor),
-            tooltip: GraphQLClientService.instance.isConfigured ? 'Check Server Updates' : 'Check for Updates',
-            onPressed: _isCheckingServer ? null : _checkServerForUpdates,
+          ListenableBuilder(
+            listenable: LibraryUpdateService.instance,
+            builder: (context, _) {
+              final isBusy = LibraryUpdateService.instance.isUpdating || _isCheckingServer;
+              return IconButton(
+                icon: isBusy
+                    ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2.2))
+                    : Icon(Icons.refresh_rounded, color: primaryColor),
+                tooltip: GraphQLClientService.instance.isConfigured ? 'Check Server Updates' : 'Check for Updates',
+                onPressed: isBusy ? null : _checkServerForUpdates,
+              );
+            },
           ),
         ],
       ),
@@ -397,17 +362,70 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                 : CustomScrollView(
                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     scrollCacheExtent: ScrollCacheExtent.pixels(800),
-              slivers: [
-                        if (_lastUpdateText != null)
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
-                              child: Text(
-                                _lastUpdateText!,
-                                style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                    slivers: [
+                      ListenableBuilder(
+                        listenable: LibraryUpdateService.instance,
+                        builder: (context, _) {
+                          final updater = LibraryUpdateService.instance;
+                          if (!updater.isUpdating) return const SliverToBoxAdapter(child: SizedBox.shrink());
+                          return SliverToBoxAdapter(
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E1E26),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          updater.statusMessage,
+                                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: updater.progress > 0 ? updater.progress : null,
+                                      minHeight: 4,
+                                      backgroundColor: const Color(0x22FFFFFF),
+                                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
+                          );
+                        },
+                      ),
+                      if (_lastUpdateText != null)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
+                            child: Text(
+                              _lastUpdateText!,
+                              style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                            ),
                           ),
+                        ),
                         if (_updatesList.isEmpty)
                           SliverToBoxAdapter(
                             child: Container(

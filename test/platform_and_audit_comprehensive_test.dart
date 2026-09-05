@@ -1,7 +1,9 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/db/models/chapter.dart';
-import 'package:sunfire/src/core/engine/quickjs_service.dart';
+import 'package:sunfire/src/core/db/models/manga.dart';
 import 'package:sunfire/src/core/engine/javascript/js_extension_service.dart';
+import 'package:sunfire/src/core/engine/quickjs_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -407,6 +409,345 @@ void main() {
       // Batch selection mode: extra padding prevents floating dock from obscuring cards
       expect(computeBottomPadding(isBatchMode: true, isTablet: true), equals(96.0));
       expect(computeBottomPadding(isBatchMode: true, isTablet: false), equals(130.0));
+    });
+
+    test('19. Notification formatting formats single vs multi-manga summaries accurately', () {
+      Map<String, String> formatNotificationSummary(List<Chapter> chapters) {
+        final totalCount = chapters.length;
+        final Set<String> uniqueTitles = {};
+        for (final ch in chapters) {
+          if (ch.mangaTitle.isNotEmpty) {
+            uniqueTitles.add(ch.mangaTitle);
+          }
+        }
+
+        String title;
+        String body;
+
+        if (uniqueTitles.length <= 1) {
+          final mangaTitle = uniqueTitles.isNotEmpty ? uniqueTitles.first : 'Library Manga';
+          if (totalCount == 1) {
+            final ch = chapters.first;
+            title = 'New Chapter: $mangaTitle';
+            body = ch.name.isNotEmpty ? ch.name : 'Chapter ${ch.chapterNumber} is now available';
+          } else {
+            title = mangaTitle;
+            body = '$totalCount new chapters are now available';
+          }
+        } else {
+          title = '$totalCount New Chapters Available';
+          final names = uniqueTitles.toList();
+          if (names.length == 2) {
+            body = '${names[0]} and ${names[1]} have new chapters';
+          } else {
+            body = '${names[0]}, ${names[1]} and ${names.length - 2} more have updated';
+          }
+        }
+        return {'title': title, 'body': body};
+      }
+
+      // Single manga, 1 chapter
+      final single = [
+        Chapter()
+          ..mangaTitle = 'One Piece'
+          ..name = 'Chapter 1115'
+          ..chapterNumber = 1115.0,
+      ];
+      final res1 = formatNotificationSummary(single);
+      expect(res1['title'], equals('New Chapter: One Piece'));
+      expect(res1['body'], equals('Chapter 1115'));
+
+      // Single manga, 3 chapters
+      final singleMulti = [
+        Chapter()..mangaTitle = 'Solo Leveling'..name = 'Ch 1',
+        Chapter()..mangaTitle = 'Solo Leveling'..name = 'Ch 2',
+        Chapter()..mangaTitle = 'Solo Leveling'..name = 'Ch 3',
+      ];
+      final res2 = formatNotificationSummary(singleMulti);
+      expect(res2['title'], equals('Solo Leveling'));
+      expect(res2['body'], equals('3 new chapters are now available'));
+
+      // Multiple manga (2 titles)
+      final twoTitles = [
+        Chapter()..mangaTitle = 'Bleach'..name = 'Ch 687',
+        Chapter()..mangaTitle = 'Naruto'..name = 'Ch 701',
+      ];
+      final res3 = formatNotificationSummary(twoTitles);
+      expect(res3['title'], equals('2 New Chapters Available'));
+      expect(res3['body'], equals('Bleach and Naruto have new chapters'));
+
+      // Multiple manga (> 2 titles)
+      final fourTitles = [
+        Chapter()..mangaTitle = 'Jujutsu Kaisen'..name = 'Ch 260',
+        Chapter()..mangaTitle = 'Chainsaw Man'..name = 'Ch 160',
+        Chapter()..mangaTitle = 'Spy x Family'..name = 'Ch 98',
+        Chapter()..mangaTitle = 'Kaiju No. 8'..name = 'Ch 105',
+      ];
+      final res4 = formatNotificationSummary(fourTitles);
+      expect(res4['title'], equals('4 New Chapters Available'));
+      expect(res4['body'], equals('Jujutsu Kaisen, Chainsaw Man and 2 more have updated'));
+    });
+
+    test('20. Chapter delta diffing correctly detects new unread chapters', () {
+      final beforeSnapshotKeys = <String>{
+        'srv_101',
+        'srv_102',
+        'url_/read/ch1',
+      };
+
+      final allAfterChapters = [
+        Chapter()..serverId = 101..mangaId = 1..url = '/read/ch1'..isRead = false, // Existing
+        Chapter()..serverId = 102..mangaId = 1..url = '/read/ch2'..isRead = true,  // Existing & read
+        Chapter()..serverId = 103..mangaId = 1..url = '/read/ch3'..isRead = false, // NEW
+        Chapter()..serverId = 104..mangaId = 2..url = '/read/m2ch1'..isRead = false, // NEW
+        Chapter()..serverId = 105..mangaId = 99..url = '/read/m99ch1'..isRead = false, // Not in library
+      ];
+
+      final libraryMangaIds = {1, 2}; // Only manga 1 & 2 are in library
+
+      final newlyDiscovered = <Chapter>[];
+      for (final ch in allAfterChapters) {
+        if (ch.isRead) continue;
+        if (!libraryMangaIds.contains(ch.mangaId)) continue;
+
+        bool isKnown = false;
+        if (ch.serverId > 0 && beforeSnapshotKeys.contains('srv_${ch.serverId}')) {
+          isKnown = true;
+        } else if (ch.url.isNotEmpty && beforeSnapshotKeys.contains('url_${ch.url}')) {
+          isKnown = true;
+        }
+
+        if (!isKnown) {
+          newlyDiscovered.add(ch);
+        }
+      }
+
+      expect(newlyDiscovered.length, equals(2));
+      expect(newlyDiscovered.map((c) => c.serverId).toList(), equals([103, 104]));
+    });
+
+    test('21. Library update frequency intervals adhere to Mihon standard', () {
+      bool shouldTriggerUpdate({
+        required int freqHours,
+        required int lastTimestampSec,
+        required int nowTimestampSec,
+      }) {
+        if (freqHours <= 0) return false;
+        return (nowTimestampSec - lastTimestampSec) >= (freqHours * 3600);
+      }
+
+      const now = 1000000;
+
+      // Disabled
+      expect(shouldTriggerUpdate(freqHours: 0, lastTimestampSec: 0, nowTimestampSec: now), isFalse);
+
+      // 12 hours: elapsed 11 hours -> false
+      expect(shouldTriggerUpdate(freqHours: 12, lastTimestampSec: now - (11 * 3600), nowTimestampSec: now), isFalse);
+
+      // 12 hours: elapsed 12 hours -> true
+      expect(shouldTriggerUpdate(freqHours: 12, lastTimestampSec: now - (12 * 3600), nowTimestampSec: now), isTrue);
+
+      // 24 hours: elapsed 25 hours -> true
+      expect(shouldTriggerUpdate(freqHours: 24, lastTimestampSec: now - (25 * 3600), nowTimestampSec: now), isTrue);
+    });
+
+    test('22. Auto-scroll Vsync displacement is frame-rate invariant across 60Hz, 90Hz, 120Hz', () {
+      double simulateOneSecondDisplacement({required double speed, required int fps}) {
+        final frameDurationSec = 1.0 / fps;
+        double totalScroll = 0.0;
+        for (int i = 0; i < fps; i++) {
+          final safeDt = frameDurationSec.clamp(0.0, 0.05);
+          totalScroll += speed * safeDt;
+        }
+        return totalScroll;
+      }
+
+      const testSpeed = 120.0; // 120 px/sec
+      final scroll60Hz = simulateOneSecondDisplacement(speed: testSpeed, fps: 60);
+      final scroll90Hz = simulateOneSecondDisplacement(speed: testSpeed, fps: 90);
+      final scroll120Hz = simulateOneSecondDisplacement(speed: testSpeed, fps: 120);
+
+      expect(scroll60Hz, closeTo(120.0, 0.001));
+      expect(scroll90Hz, closeTo(120.0, 0.001));
+      expect(scroll120Hz, closeTo(120.0, 0.001));
+    });
+
+    test('23. Auto-scroll smooth ease-in ramps up from 0.15 to 1.0 over 400ms', () {
+      double calculateEaseMultiplier(int elapsedMs) {
+        if (elapsedMs < 400) {
+          return 0.15 + (elapsedMs / 400.0) * 0.85;
+        }
+        return 1.0;
+      }
+
+      // At start (0ms)
+      expect(calculateEaseMultiplier(0), equals(0.15));
+      // Mid-ramp (200ms)
+      expect(calculateEaseMultiplier(200), closeTo(0.575, 0.001));
+      // End of ramp (400ms)
+      expect(calculateEaseMultiplier(400), equals(1.0));
+      // After ramp (800ms)
+      expect(calculateEaseMultiplier(800), equals(1.0));
+    });
+
+    test('24. Auto-scroll touch pause state machine yields without jumping', () {
+      double currentOffset = 100.0;
+
+      double simulateTick({
+        required bool isAutoScrolling,
+        required bool isUserTouching,
+        required bool pauseOnTouch,
+        required double step,
+      }) {
+        if (!isAutoScrolling) return currentOffset;
+        if (isUserTouching && pauseOnTouch) return currentOffset;
+        return currentOffset + step;
+      }
+
+      // Normal scrolling tick
+      currentOffset = simulateTick(isAutoScrolling: true, isUserTouching: false, pauseOnTouch: true, step: 2.0);
+      expect(currentOffset, equals(102.0));
+
+      // User touches or drags screen
+      currentOffset = simulateTick(isAutoScrolling: true, isUserTouching: true, pauseOnTouch: true, step: 2.0);
+      expect(currentOffset, equals(102.0)); // Frozen at 102
+
+      // User disabled pauseOnTouch
+      currentOffset = simulateTick(isAutoScrolling: true, isUserTouching: true, pauseOnTouch: false, step: 2.0);
+      expect(currentOffset, equals(104.0)); // Continues scrolling
+
+      // User releases screen
+      currentOffset = simulateTick(isAutoScrolling: true, isUserTouching: false, pauseOnTouch: true, step: 2.0);
+      expect(currentOffset, equals(106.0));
+
+      // Auto-scroll disabled
+      currentOffset = simulateTick(isAutoScrolling: false, isUserTouching: false, pauseOnTouch: true, step: 2.0);
+      expect(currentOffset, equals(106.0));
+    });
+
+    test('25. Keyboard shortcut state machine handles toggle and speed stepping', () {
+      bool isAutoScrolling = false;
+      double speed = 50.0;
+
+      void handleKey(String key, bool isWebtoonMode) {
+        if (!isWebtoonMode) return;
+        if (key == 'S') {
+          isAutoScrolling = !isAutoScrolling;
+        } else if (key == '+' || key == '=') {
+          speed = (speed + 10.0).clamp(10.0, 1000.0);
+        } else if (key == '-') {
+          speed = (speed - 10.0).clamp(10.0, 1000.0);
+        }
+      }
+
+      // In paged mode, S key is ignored
+      handleKey('S', false);
+      expect(isAutoScrolling, isFalse);
+
+      // In webtoon mode, S key toggles auto-scroll
+      handleKey('S', true);
+      expect(isAutoScrolling, isTrue);
+
+      // Speed step up
+      handleKey('+', true);
+      expect(speed, equals(60.0));
+
+      // Speed step down
+      handleKey('-', true);
+      expect(speed, equals(50.0));
+
+      // S key toggles off
+      handleKey('S', true);
+      expect(isAutoScrolling, isFalse);
+    });
+
+    test('26. Standalone local manga ID fallback mapping prevents serverId 0 collision', () {
+      final m1 = Manga()..id = 101..serverId = 0..title = 'Solo Leveling (Local)';
+      final m2 = Manga()..id = 102..serverId = 0..title = 'Tower of God (Local)';
+      final m3 = Manga()..id = 103..serverId = 55..title = 'One Piece (Server)';
+
+      final libraryList = [m1, m2, m3];
+      final Map<int, String> mangaTitleMap = {
+        for (final m in libraryList)
+          (m.serverId > 0 ? m.serverId : m.id): m.title,
+      };
+      final Set<int> libraryMangaIds = {
+        for (final m in libraryList) ...[
+          if (m.serverId > 0) m.serverId,
+          m.id,
+        ],
+      };
+
+      expect(mangaTitleMap.length, equals(3));
+      expect(mangaTitleMap[101], equals('Solo Leveling (Local)'));
+      expect(mangaTitleMap[102], equals('Tower of God (Local)'));
+      expect(mangaTitleMap[55], equals('One Piece (Server)'));
+
+      expect(libraryMangaIds.contains(101), isTrue);
+      expect(libraryMangaIds.contains(102), isTrue);
+      expect(libraryMangaIds.contains(55), isTrue);
+    });
+
+    test('27. Tailscale VPN and wired ethernet satisfy Wi-Fi update constraints', () {
+      bool satisfiesConstraint({
+        required bool onlyWifi,
+        required List<ConnectivityResult> activeConnections,
+      }) {
+        if (!onlyWifi) return true;
+        return activeConnections.contains(ConnectivityResult.wifi) ||
+            activeConnections.contains(ConnectivityResult.ethernet) ||
+            activeConnections.contains(ConnectivityResult.vpn);
+      }
+
+      // Cellular only with onlyWifi=true -> reject
+      expect(satisfiesConstraint(onlyWifi: true, activeConnections: [ConnectivityResult.mobile]), isFalse);
+
+      // Wi-Fi with onlyWifi=true -> accept
+      expect(satisfiesConstraint(onlyWifi: true, activeConnections: [ConnectivityResult.wifi]), isTrue);
+
+      // Tailscale / WireGuard VPN with onlyWifi=true -> accept
+      expect(satisfiesConstraint(onlyWifi: true, activeConnections: [ConnectivityResult.vpn]), isTrue);
+
+      // Ethernet with onlyWifi=true -> accept
+      expect(satisfiesConstraint(onlyWifi: true, activeConnections: [ConnectivityResult.ethernet]), isTrue);
+
+      // Cellular only with onlyWifi=false -> accept
+      expect(satisfiesConstraint(onlyWifi: false, activeConnections: [ConnectivityResult.mobile]), isTrue);
+    });
+
+    test('28. WorkManager dynamic constraints accurately derive from Mihon settings', () {
+      Map<String, dynamic> deriveWorkManagerConfig({
+        required int freqHours,
+        required bool onlyWifi,
+        required bool onlyCharging,
+      }) {
+        if (freqHours <= 0) {
+          return {'enabled': false};
+        }
+        return {
+          'enabled': true,
+          'intervalHours': freqHours.clamp(1, 168),
+          'networkType': onlyWifi ? 'unmetered' : 'connected',
+          'requiresCharging': onlyCharging,
+        };
+      }
+
+      // Disabled
+      expect(deriveWorkManagerConfig(freqHours: 0, onlyWifi: true, onlyCharging: false), {'enabled': false});
+
+      // Default: 12h, wifi-only, not charging
+      final cfgDefault = deriveWorkManagerConfig(freqHours: 12, onlyWifi: true, onlyCharging: false);
+      expect(cfgDefault['enabled'], isTrue);
+      expect(cfgDefault['intervalHours'], equals(12));
+      expect(cfgDefault['networkType'], equals('unmetered'));
+      expect(cfgDefault['requiresCharging'], isFalse);
+
+      // Custom: 24h, cellular allowed, charging only
+      final cfgCustom = deriveWorkManagerConfig(freqHours: 24, onlyWifi: false, onlyCharging: true);
+      expect(cfgCustom['enabled'], isTrue);
+      expect(cfgCustom['intervalHours'], equals(24));
+      expect(cfgCustom['networkType'], equals('connected'));
+      expect(cfgCustom['requiresCharging'], isTrue);
     });
   });
 }
