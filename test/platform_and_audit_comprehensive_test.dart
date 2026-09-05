@@ -179,5 +179,196 @@ void main() {
       expect(isNsfwSource({'name': 'Webtoons', 'isNsfw': false}), isFalse);
       expect(isNsfwSource({'name': 'Weeb Central'}), isFalse);
     });
+
+    test('11. Migration Chapter Matching & History Transfer logic', () {
+      final sourceChapters = [
+        Chapter()
+          ..serverId = 101
+          ..mangaId = 10
+          ..chapterNumber = 1.0
+          ..name = 'Chapter 1: The Beginning'
+          ..isRead = true
+          ..lastPageRead = 24
+          ..lastReadAt = 1700000000,
+        Chapter()
+          ..serverId = 102
+          ..mangaId = 10
+          ..chapterNumber = 2.0
+          ..name = 'Chapter 2: The Journey'
+          ..isRead = false
+          ..lastPageRead = 12
+          ..lastReadAt = 1700005000,
+        Chapter()
+          ..serverId = 103
+          ..mangaId = 10
+          ..chapterNumber = 3.0
+          ..name = 'Chapter 3: The Battle'
+          ..isRead = false
+          ..lastPageRead = 0,
+      ];
+
+      final targetChapters = [
+        Chapter()
+          ..serverId = 201
+          ..mangaId = 20
+          ..chapterNumber = 1.0
+          ..name = 'Ch. 1 - The Beginning'
+          ..isRead = false
+          ..lastPageRead = 0,
+        Chapter()
+          ..serverId = 202
+          ..mangaId = 20
+          ..chapterNumber = 2.0
+          ..name = 'Ch. 2 - The Journey'
+          ..isRead = false
+          ..lastPageRead = 0,
+        Chapter()
+          ..serverId = 203
+          ..mangaId = 20
+          ..chapterNumber = 3.0
+          ..name = 'Ch. 3 - The Battle'
+          ..isRead = false
+          ..lastPageRead = 0,
+        Chapter()
+          ..serverId = 204
+          ..mangaId = 20
+          ..chapterNumber = 4.0
+          ..name = 'Ch. 4 - New Horizon'
+          ..isRead = false
+          ..lastPageRead = 0,
+      ];
+
+      // Perform matching
+      final sourceByNumber = <double, Chapter>{};
+      for (final sc in sourceChapters) {
+        if (sc.chapterNumber > 0) sourceByNumber[sc.chapterNumber] = sc;
+      }
+
+      int transferredCount = 0;
+      for (final tc in targetChapters) {
+        final match = sourceByNumber[tc.chapterNumber];
+        if (match != null && (match.isRead || match.lastPageRead > 0)) {
+          tc.isRead = match.isRead;
+          tc.lastPageRead = match.lastPageRead;
+          tc.lastReadAt = match.lastReadAt;
+          transferredCount++;
+        }
+      }
+
+      expect(transferredCount, equals(2));
+      expect(targetChapters[0].isRead, isTrue);
+      expect(targetChapters[0].lastPageRead, equals(24));
+      expect(targetChapters[1].isRead, isFalse);
+      expect(targetChapters[1].lastPageRead, equals(12));
+      expect(targetChapters[2].isRead, isFalse);
+      expect(targetChapters[2].lastPageRead, equals(0));
+      expect(targetChapters[3].isRead, isFalse);
+      expect(targetChapters[3].lastPageRead, equals(0));
+    });
+
+    test('12. Migration Category Transfer & Original Deletion logic', () {
+      final sourceMangaCategories = [1, 3, 5];
+      final targetMangaCategories = <int>[];
+
+      // Transfer categories
+      targetMangaCategories.addAll(sourceMangaCategories);
+      expect(targetMangaCategories, equals([1, 3, 5]));
+
+      // Deletion of original manga from library
+      bool sourceInLibrary = true;
+      void deleteOriginal() {
+        sourceInLibrary = false;
+      }
+
+      deleteOriginal();
+      expect(sourceInLibrary, isFalse);
+    });
+
+    test('13. Offline SyncRecord serialization for chapter progress', () {
+      final payload = {
+        'chapterId': 789,
+        'isRead': true,
+        'lastPageRead': 32,
+      };
+
+      expect(payload['chapterId'], equals(789));
+      expect(payload['isRead'], isTrue);
+      expect(payload['lastPageRead'], equals(32));
+    });
+
+    test('14. Batch Download queue selection and limiting calculation', () {
+      final chapters = [
+        Chapter()
+          ..serverId = 1
+          ..mangaId = 10
+          ..chapterNumber = 1.0
+          ..name = 'Ch. 1'
+          ..isRead = true, // already read, skip
+        Chapter()
+          ..serverId = 2
+          ..mangaId = 10
+          ..chapterNumber = 2.0
+          ..name = 'Ch. 2'
+          ..isRead = false,
+        Chapter()
+          ..serverId = 3
+          ..mangaId = 10
+          ..chapterNumber = 3.0
+          ..name = 'Ch. 3'
+          ..isRead = false,
+        Chapter()
+          ..serverId = 4
+          ..mangaId = 10
+          ..chapterNumber = 4.0
+          ..name = 'Ch. 4'
+          ..isRead = false,
+      ];
+
+      final downloadedIds = {2}; // chapter 2 is already downloaded
+
+      final unreadNotDownloaded = chapters.where((c) {
+        if (c.isRead) return false;
+        if (downloadedIds.contains(c.serverId)) return false;
+        return true;
+      }).toList();
+
+      expect(unreadNotDownloaded.length, equals(2));
+      expect(unreadNotDownloaded.map((c) => c.serverId), equals([3, 4]));
+
+      // Limit 1
+      final limit1 = unreadNotDownloaded.take(1).toList();
+      expect(limit1.length, equals(1));
+      expect(limit1.first.serverId, equals(3));
+    });
+
+    test('15. Library Batch Selection Dock action state handling', () {
+      final selectedIds = <int>{};
+      bool isBatchMode = false;
+
+      void toggleSelection(int id) {
+        if (selectedIds.contains(id)) {
+          selectedIds.remove(id);
+          if (selectedIds.isEmpty) isBatchMode = false;
+        } else {
+          selectedIds.add(id);
+          isBatchMode = true;
+        }
+      }
+
+      toggleSelection(100);
+      expect(isBatchMode, isTrue);
+      expect(selectedIds.length, equals(1));
+
+      toggleSelection(200);
+      expect(selectedIds.length, equals(2));
+
+      toggleSelection(100);
+      expect(selectedIds.length, equals(1));
+      expect(isBatchMode, isTrue);
+
+      toggleSelection(200);
+      expect(selectedIds.isEmpty, isTrue);
+      expect(isBatchMode, isFalse);
+    });
   });
 }

@@ -1,5 +1,7 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
@@ -17,6 +19,8 @@ import '../../main_shell.dart';
 
 
 class LibraryScreen extends StatefulWidget {
+  static final ValueNotifier<bool> isBatchModeNotifier = ValueNotifier<bool>(false);
+
   const LibraryScreen({super.key});
 
   @override
@@ -320,31 +324,73 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   void _toggleBatchSelection(int mangaServerId) {
     setState(() {
       if (_selectedMangaIds.contains(mangaServerId)) {
+        HapticFeedback.selectionClick();
         _selectedMangaIds.remove(mangaServerId);
-        if (_selectedMangaIds.isEmpty) _isBatchMode = false;
+        if (_selectedMangaIds.isEmpty) {
+          _isBatchMode = false;
+          LibraryScreen.isBatchModeNotifier.value = false;
+        }
       } else {
+        if (!_isBatchMode) {
+          HapticFeedback.mediumImpact();
+        } else {
+          HapticFeedback.selectionClick();
+        }
         _selectedMangaIds.add(mangaServerId);
         _isBatchMode = true;
+        LibraryScreen.isBatchModeNotifier.value = true;
       }
     });
   }
 
   void _selectAll() {
+    HapticFeedback.selectionClick();
     final currentList = _filteredManga;
     setState(() {
       if (_selectedMangaIds.length == currentList.length) {
         _selectedMangaIds.clear();
         _isBatchMode = false;
+        LibraryScreen.isBatchModeNotifier.value = false;
       } else {
         _selectedMangaIds.addAll(currentList.map((m) => m.serverId));
         _isBatchMode = true;
+        LibraryScreen.isBatchModeNotifier.value = true;
       }
+    });
+  }
+
+  void _exitBatchMode() {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _selectedMangaIds.clear();
+      _isBatchMode = false;
+      LibraryScreen.isBatchModeNotifier.value = false;
     });
   }
 
   Future<void> _batchMoveToCategory() async {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    int? selectedCatId;
+    final Set<int> selectedCatIds = {};
+
+    if (_selectedMangaIds.length == 1) {
+      final m = await IsarService.instance.getMangaByServerId(_selectedMangaIds.first);
+      if (m != null) {
+        selectedCatIds.addAll(m.categoryIds);
+      }
+    } else {
+      final allSelectedManga = await Future.wait(
+        _selectedMangaIds.map((id) => IsarService.instance.getMangaByServerId(id)),
+      );
+      final validManga = allSelectedManga.whereType<Manga>().toList();
+      if (validManga.isNotEmpty) {
+        final common = validManga.first.categoryIds.toSet();
+        for (final m in validManga.skip(1)) {
+          common.retainAll(m.categoryIds);
+        }
+        selectedCatIds.addAll(common);
+      }
+    }
+    if (!mounted) return;
 
     await showModalBottomSheet(
       context: context,
@@ -353,68 +399,89 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (sheetBuilderContext, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Move to Category', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  if (_categories.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Text('No categories created yet. Tap "Edit Categories" to create one.', style: TextStyle(color: Colors.grey)),
-                    )
-                  else
-                    ..._categories.map((cat) {
-                      final isSel = selectedCatId == cat.serverId;
-                      return ListTile(
-                        title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        trailing: isSel ? Icon(Icons.check_circle_rounded, color: primaryColor) : const Icon(Icons.radio_button_unchecked_rounded, color: Colors.grey),
-                        onTap: () {
-                          setSheetState(() => selectedCatId = cat.serverId);
-                        },
-                      );
-                    }),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      minimumSize: const Size.fromHeight(50),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.folder_open_rounded, color: primaryColor, size: 24),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Categories (${_selectedMangaIds.length} selected)',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
-                    onPressed: selectedCatId == null
-                        ? null
-                        : () async {
-                            for (final id in _selectedMangaIds) {
-                              final m = await IsarService.instance.getMangaByServerId(id);
-                              if (m != null) {
-                                m.categoryIds = [selectedCatId!];
-                                await IsarService.instance.saveManga(m);
-                                if (GraphQLClientService.instance.isConfigured) {
-                                  await GraphQLClientService.instance.updateMangaCategories(id, [selectedCatId!]);
-                                }
-                              }
+                    const SizedBox(height: 12),
+                    if (_categories.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Text('No categories created yet. Tap "Edit Categories" to create one.', style: TextStyle(color: Colors.grey)),
+                      )
+                    else
+                      Flexible(
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: _categories.map((cat) {
+                            final isChecked = selectedCatIds.contains(cat.serverId);
+                            return CheckboxListTile(
+                              activeColor: primaryColor,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              value: isChecked,
+                              onChanged: (val) {
+                                setSheetState(() {
+                                  if (val == true) {
+                                    selectedCatIds.add(cat.serverId);
+                                  } else {
+                                    selectedCatIds.remove(cat.serverId);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        minimumSize: const Size.fromHeight(50),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: () async {
+                        final catList = selectedCatIds.toList();
+                        for (final id in _selectedMangaIds) {
+                          final m = await IsarService.instance.getMangaByServerId(id);
+                          if (m != null) {
+                            m.categoryIds = catList;
+                            await IsarService.instance.saveManga(m);
+                            if (GraphQLClientService.instance.isConfigured && id > 0) {
+                              try {
+                                await GraphQLClientService.instance.updateMangaCategories(id, catList);
+                              } catch (_) {}
                             }
-                            if (sheetContext.mounted) {
-                              Navigator.pop(sheetContext);
-                            }
-                            if (!mounted) return;
-                            setState(() {
-                              _selectedMangaIds.clear();
-                              _isBatchMode = false;
-                            });
-                            await _loadFromIsarOnly();
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Category updated for selected titles')),
-                              );
-                            }
-                          },
-                    child: const Text('Move', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                  ),
-                ],
+                          }
+                        }
+                        if (sheetContext.mounted) {
+                          Navigator.pop(sheetContext);
+                        }
+                        _exitBatchMode();
+                        await _loadFromIsarOnly();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Categories updated for selected titles')),
+                          );
+                        }
+                      },
+                      child: const Text('Apply Categories', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -428,6 +495,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       final chapters = await IsarService.instance.getChaptersForManga(id);
       for (final ch in chapters) {
         ch.isRead = isRead;
+        if (!isRead) ch.lastPageRead = 0;
+        if (ch.serverId > 0) {
+          SyncEngine.instance.syncChapterProgress(
+            ch.serverId,
+            isRead: isRead,
+            lastPageRead: ch.lastPageRead,
+          );
+        }
       }
       await IsarService.instance.saveChapters(chapters);
       final m = await IsarService.instance.getMangaByServerId(id);
@@ -436,10 +511,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         await IsarService.instance.saveManga(m);
       }
     }
-    setState(() {
-      _selectedMangaIds.clear();
-      _isBatchMode = false;
-    });
+    _exitBatchMode();
     await _loadFromIsarOnly();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -448,28 +520,282 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     }
   }
 
+  Future<void> _batchDownloadMenu() async {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final selectedCount = _selectedMangaIds.length;
+    if (selectedCount == 0) return;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1F1F24),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.download_rounded, color: primaryColor, size: 24),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Download ($selectedCount selected)',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _buildDownloadOptionTile(sheetCtx, 'Next 1 Chapter', 1),
+                _buildDownloadOptionTile(sheetCtx, 'Next 5 Chapters', 5),
+                _buildDownloadOptionTile(sheetCtx, 'Next 10 Chapters', 10),
+                _buildDownloadOptionTile(sheetCtx, 'All Unread Chapters', -1),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDownloadOptionTile(BuildContext sheetCtx, String title, int count) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.download_for_offline_outlined, color: Colors.white70),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      onTap: () {
+        Navigator.pop(sheetCtx);
+        _executeBatchDownload(count);
+      },
+    );
+  }
+
+  Future<void> _executeBatchDownload(int maxPerManga) async {
+    int totalQueued = 0;
+    final mangaList = List<int>.from(_selectedMangaIds);
+
+    for (final mangaId in mangaList) {
+      final m = await IsarService.instance.getMangaByServerId(mangaId);
+      final chapters = await IsarService.instance.getChaptersForManga(mangaId);
+      chapters.sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
+
+      final unreadNotDownloaded = chapters.where((c) {
+        if (c.isRead) return false;
+        if (c.isDownloaded) return false;
+        if (DownloadManagerService.instance.isChapterDownloadedLocally(c.serverId)) return false;
+        return true;
+      }).toList();
+
+      final toQueue = maxPerManga == -1
+          ? unreadNotDownloaded
+          : unreadNotDownloaded.take(maxPerManga).toList();
+
+      for (final ch in toQueue) {
+        await DownloadManagerService.instance.enqueueLocalDownload(
+          chapterId: ch.serverId,
+          mangaId: mangaId,
+          chapterName: ch.name,
+          mangaTitle: m?.title ?? 'Manga',
+        );
+        totalQueued++;
+      }
+    }
+
+    _exitBatchMode();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            totalQueued > 0
+                ? 'Queued $totalQueued chapters for download across ${mangaList.length} titles'
+                : 'No unread chapters eligible for download',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _batchRemoveFromLibrary() async {
     final count = _selectedMangaIds.length;
+    if (count == 0) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F26),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 24),
+            SizedBox(width: 8),
+            Text('Remove from Library', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          'Remove $count selected ${count == 1 ? "title" : "titles"} from your library? This will not delete downloaded chapters.',
+          style: const TextStyle(fontSize: 14, color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     for (final id in _selectedMangaIds) {
       final m = await IsarService.instance.getMangaByServerId(id);
       if (m != null) {
         m.inLibrary = false;
         await IsarService.instance.saveManga(m);
-        if (GraphQLClientService.instance.isConfigured) {
-          GraphQLClientService.instance.updateMangaLibraryState(id, false);
-        }
+        await SyncEngine.instance.syncMangaLibraryState(id, false);
       }
     }
-    setState(() {
-      _selectedMangaIds.clear();
-      _isBatchMode = false;
-    });
+    _exitBatchMode();
     await _handleRefresh();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Removed $count titles from library')),
       );
     }
+  }
+
+  Widget _buildBatchActionDock(BuildContext context) {
+    final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
+    final dockRow = Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _buildBatchActionItem(
+          icon: Icons.drive_file_move_outlined,
+          label: 'Category',
+          color: Colors.white70,
+          onTap: _batchMoveToCategory,
+        ),
+        _buildBatchActionItem(
+          icon: Icons.done_all_rounded,
+          label: 'Read',
+          color: const Color(0xFF10B981),
+          onTap: () => _batchMarkRead(true),
+        ),
+        _buildBatchActionItem(
+          icon: Icons.remove_done_rounded,
+          label: 'Unread',
+          color: Colors.amberAccent,
+          onTap: () => _batchMarkRead(false),
+        ),
+        _buildBatchActionItem(
+          icon: Icons.download_rounded,
+          label: 'Download',
+          color: Colors.lightBlueAccent,
+          onTap: _batchDownloadMenu,
+        ),
+        _buildBatchActionItem(
+          icon: Icons.delete_outline_rounded,
+          label: 'Remove',
+          color: Colors.redAccent,
+          onTap: _batchRemoveFromLibrary,
+        ),
+      ],
+    );
+
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: isIOS
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(32),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xCC181820),
+                          borderRadius: BorderRadius.circular(32),
+                          border: Border.all(color: const Color(0x22FFFFFF), width: 0.8),
+                        ),
+                        child: dockRow,
+                      ),
+                    ),
+                  )
+                : Material(
+                    elevation: 8,
+                    borderRadius: BorderRadius.circular(32),
+                    color: const Color(0xFF23232A),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(32),
+                        border: Border.all(color: const Color(0x1FFFFFFF), width: 0.8),
+                      ),
+                      child: dockRow,
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBatchActionItem({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                color: color.withValues(alpha: 0.9),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showCategoryManagementDialog() {
@@ -795,10 +1121,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (_isBatchMode) {
-          setState(() {
-            _selectedMangaIds.clear();
-            _isBatchMode = false;
-          });
+          _exitBatchMode();
         } else if (_isSearching) {
           setState(() {
             _isSearching = false;
@@ -814,10 +1137,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                 children: [
                   IconButton(
                     icon: const Icon(Icons.close_rounded),
-                    onPressed: () => setState(() {
-                      _selectedMangaIds.clear();
-                      _isBatchMode = false;
-                    }),
+                    onPressed: _exitBatchMode,
                   ),
                   Text('${_selectedMangaIds.length} Selected', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const Spacer(),
@@ -1073,42 +1393,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                 ],
               ),
       ),
-      bottomNavigationBar: _isBatchMode
-          ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: const BoxDecoration(
-                color: Color(0xFF1F1F24),
-                border: Border(top: BorderSide(color: Color(0x2BFFFFFF))),
-              ),
-              child: SafeArea(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.drive_file_move_outlined, color: Colors.white70),
-                      tooltip: 'Move Category',
-                      onPressed: _batchMoveToCategory,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.done_all_rounded, color: Colors.greenAccent),
-                      tooltip: 'Mark Read',
-                      onPressed: () => _batchMarkRead(true),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.remove_done_rounded, color: Colors.amberAccent),
-                      tooltip: 'Mark Unread',
-                      onPressed: () => _batchMarkRead(false),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                      tooltip: 'Remove',
-                      onPressed: _batchRemoveFromLibrary,
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : null,
+      bottomNavigationBar: _isBatchMode ? _buildBatchActionDock(context) : null,
       ),
     );
   }
