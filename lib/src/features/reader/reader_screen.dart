@@ -725,7 +725,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
               precacheImage(
                 NetworkImage(pUrl, headers: headers),
                 context,
-              );
+              ).catchError((_) {});
             } catch (_) {}
           }
         }
