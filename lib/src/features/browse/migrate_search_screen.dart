@@ -2,11 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/db/isar_service.dart';
+import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
+import '../../core/services/image_cache_helper.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/sync_engine.dart';
 
 class MigrateSearchScreen extends StatefulWidget {
   final Manga manga;
@@ -132,30 +135,83 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                 child: ListView(
                   shrinkWrap: true,
                   children: [
-                    Text('Migrate from: ${widget.manga.sourceName}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                    const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: primaryColor.withAlpha(25),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: primaryColor.withAlpha(80)),
+                        color: const Color(0xFF26262E),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white10),
                       ),
                       child: Row(
                         children: [
-                          if (targetManga['thumbnailUrl'] != null && (targetManga['thumbnailUrl'] as String).isNotEmpty)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(targetManga['thumbnailUrl'] as String, width: 42, height: 56, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded)),
-                            ),
-                          const SizedBox(width: 12),
+                          // Source Manga Preview
                           Expanded(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(targetTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                const SizedBox(height: 2),
-                                Text('Target: $targetSourceName', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: MangaCoverImage(
+                                    mangaServerId: widget.manga.serverId,
+                                    thumbnailUrl: widget.manga.thumbnailUrl,
+                                    sourceName: widget.manga.sourceName,
+                                    width: 48,
+                                    height: 68,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  widget.manga.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  textAlign: TextAlign.center,
+                                ),
+                                Text(
+                                  widget.manga.sourceName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.grey, fontSize: 10),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: Icon(Icons.arrow_forward_rounded, color: primaryColor, size: 22),
+                          ),
+                          // Target Manga Preview
+                          Expanded(
+                            child: Column(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: targetManga['thumbnailUrl'] != null && (targetManga['thumbnailUrl'] as String).isNotEmpty
+                                      ? Image.network(
+                                          targetManga['thumbnailUrl'] as String,
+                                          width: 48,
+                                          height: 68,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded, size: 48),
+                                        )
+                                      : const Icon(Icons.book_rounded, size: 48),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  targetTitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  textAlign: TextAlign.center,
+                                ),
+                                Text(
+                                  targetSourceName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.grey, fontSize: 10),
+                                  textAlign: TextAlign.center,
+                                ),
                               ],
                             ),
                           ),
@@ -243,14 +299,141 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
     final targetSourceName = targetSource['displayName'] as String? ?? targetSource['name'] as String;
     final targetMangaId = parseIntSafe(targetManga['id']);
 
-    // 1. Fetch Target Manga into Suwayomi Library
-    if (GraphQLClientService.instance.isConfigured && targetMangaId > 0) {
-      try {
+    // Show loading progress overlay
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF1F1F24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          content: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            child: Row(
+              children: [
+                CircularProgressIndicator(color: primaryColor),
+                const SizedBox(width: 20),
+                const Expanded(
+                  child: Text(
+                    'Migrating manga & chapters...',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      Manga? targetMangaEntity;
+
+      // 1. Fetch Target Manga into Suwayomi Library if server-backed
+      if (GraphQLClientService.instance.isConfigured && targetMangaId > 0) {
         await GraphQLClientService.instance.fetchMangaAndChapters(targetMangaId);
         await GraphQLClientService.instance.updateMangaLibraryState(targetMangaId, true);
+        targetMangaEntity = await IsarService.instance.getMangaByServerId(targetMangaId);
+      }
 
-        // Copy Tracking Records
-        if (copyTracking && widget.manga.serverId > 0) {
+      // 2. If target entity is local or not in Isar yet, ensure it is created and saved
+      if (targetMangaEntity == null) {
+        targetMangaEntity = Manga()
+          ..serverId = targetMangaId
+          ..title = targetManga['title'] as String? ?? widget.manga.title
+          ..url = targetManga['url'] as String? ?? ''
+          ..thumbnailUrl = targetManga['thumbnailUrl'] as String? ?? ''
+          ..sourceName = targetSourceName
+          ..inLibrary = true
+          ..inLibraryAt = DateTime.now().millisecondsSinceEpoch ~/ 1000
+          ..status = targetManga['status'] as String? ?? 'UNKNOWN'
+          ..artist = targetManga['artist'] as String?
+          ..author = targetManga['author'] as String?
+          ..description = targetManga['description'] as String?
+          ..genres = (targetManga['genre'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? []
+          ..categoryIds = [];
+        await IsarService.instance.saveManga(targetMangaEntity);
+      } else {
+        targetMangaEntity.inLibrary = true;
+      }
+
+      // 3. Transfer Category assignments
+      if (copyCategories && widget.manga.categoryIds.isNotEmpty) {
+        targetMangaEntity.categoryIds = List<int>.from(widget.manga.categoryIds);
+        await IsarService.instance.saveManga(targetMangaEntity);
+        if (GraphQLClientService.instance.isConfigured && targetMangaId > 0) {
+          try {
+            await GraphQLClientService.instance.updateMangaCategories(
+              targetMangaId,
+              targetMangaEntity.categoryIds,
+            );
+          } catch (e) {
+            await LoggerService.instance.logWarning('Failed to sync migrated categories: $e', 'Migrate');
+          }
+        }
+      }
+
+      // 4. Transfer Chapter Reading Progress & History
+      if (copyHistory) {
+        final sourceChapters = await IsarService.instance.getChaptersForManga(widget.manga.serverId);
+        final targetChapters = await IsarService.instance.getChaptersForManga(targetMangaEntity.serverId);
+
+        if (sourceChapters.isNotEmpty && targetChapters.isNotEmpty) {
+          final sourceByNumber = <double, Chapter>{};
+          final sourceByTitle = <String, Chapter>{};
+
+          for (final sc in sourceChapters) {
+            if (sc.chapterNumber > 0) {
+              sourceByNumber[sc.chapterNumber] = sc;
+            }
+            final normTitle = sc.name.trim().toLowerCase();
+            if (normTitle.isNotEmpty) {
+              sourceByTitle[normTitle] = sc;
+            }
+          }
+
+          final updatedTargetChapters = <Chapter>[];
+
+          for (final tc in targetChapters) {
+            Chapter? match;
+            if (tc.chapterNumber > 0 && sourceByNumber.containsKey(tc.chapterNumber)) {
+              match = sourceByNumber[tc.chapterNumber];
+            } else {
+              final normTitle = tc.name.trim().toLowerCase();
+              if (sourceByTitle.containsKey(normTitle)) {
+                match = sourceByTitle[normTitle];
+              }
+            }
+
+            if (match != null && (match.isRead || match.lastPageRead > 0)) {
+              tc.isRead = match.isRead;
+              tc.lastPageRead = match.lastPageRead;
+              tc.lastReadAt = match.lastReadAt;
+              updatedTargetChapters.add(tc);
+
+              if (tc.serverId > 0) {
+                await SyncEngine.instance.syncChapterProgress(
+                  tc.serverId,
+                  isRead: tc.isRead,
+                  lastPageRead: tc.lastPageRead,
+                );
+              }
+            }
+          }
+
+          if (updatedTargetChapters.isNotEmpty) {
+            await IsarService.instance.saveChapters(updatedTargetChapters);
+            final allTargetChapters = await IsarService.instance.getChaptersForManga(targetMangaEntity.serverId);
+            targetMangaEntity.unreadCount = allTargetChapters.where((c) => !c.isRead).length;
+            await IsarService.instance.saveManga(targetMangaEntity);
+          }
+        }
+      }
+
+      // 5. Transfer Manga Tracking records
+      if (copyTracking && widget.manga.serverId > 0 && targetMangaId > 0 && GraphQLClientService.instance.isConfigured) {
+        try {
           final existingTracks = await GraphQLClientService.instance.fetchTrackRecords(widget.manga.serverId);
           final nodes = existingTracks?['trackRecords']?['nodes'] as List<dynamic>? ?? [];
           for (final tr in nodes) {
@@ -260,23 +443,26 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
               await GraphQLClientService.instance.bindTrack(targetMangaId, trackerId, remoteId);
             }
           }
+        } catch (e) {
+          await LoggerService.instance.logWarning('Failed to copy track records: $e', 'Migrate');
         }
+      }
 
-        // Delete Original if requested
-        if (deleteOriginal && widget.manga.serverId > 0) {
-          await GraphQLClientService.instance.updateMangaLibraryState(widget.manga.serverId, false);
+      // 6. Delete Original Manga from Library if requested
+      if (deleteOriginal) {
+        widget.manga.inLibrary = false;
+        await IsarService.instance.saveManga(widget.manga);
+        if (widget.manga.serverId > 0) {
+          await SyncEngine.instance.syncMangaLibraryState(widget.manga.serverId, false);
         }
-      } catch (e) {
-        await LoggerService.instance.logError('Migration sync error: $e', exception: e, category: 'Migrate');
+      }
+    } catch (e, stack) {
+      await LoggerService.instance.logError('Migration error: $e', exception: e, stackTrace: stack, category: 'Migrate');
+    } finally {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
       }
     }
-
-    // 2. Update local Isar record
-    widget.manga.sourceName = targetSourceName;
-    if (targetManga['thumbnailUrl'] != null && (targetManga['thumbnailUrl'] as String).isNotEmpty) {
-      widget.manga.thumbnailUrl = targetManga['thumbnailUrl'] as String;
-    }
-    await IsarService.instance.saveManga(widget.manga);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
