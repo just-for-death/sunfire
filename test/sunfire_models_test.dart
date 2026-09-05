@@ -72,10 +72,17 @@ void main() {
       expect(ch.scanlator, equals('DC Comics'));
     });
 
-    test('ReadComicsOnline cover URL normalization (Bot Fight Mode bypass)', () {
-      const blockedUrl = 'https://readcomicsonline.ru/uploads/manga/superman-2023/cover/cover_250x350.jpg';
-      final rewritten = blockedUrl.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
-      expect(rewritten, equals('https://cdn.readcomicsonline.ru/uploads/manga/superman-2023/cover/cover_250x350.jpg'));
+    test('Server proxy thumbnail URL fallback resolution for synced manga', () {
+      const baseUrl = 'http://127.0.0.1:4567';
+      const mangaServerId = 42;
+      String? thumbnailUrl = '';
+
+      // When direct URL is empty, app constructs generic server proxy endpoint
+      if (thumbnailUrl.isEmpty && mangaServerId > 0) {
+        thumbnailUrl = '$baseUrl/api/v1/manga/$mangaServerId/thumbnail';
+      }
+
+      expect(thumbnailUrl, equals('http://127.0.0.1:4567/api/v1/manga/42/thumbnail'));
     });
   });
 }
