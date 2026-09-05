@@ -56,5 +56,26 @@ void main() {
       expect(record.action, equals(SyncAction.update));
       expect(record.state, equals(SyncRecordState.pending));
     });
+
+    test('Chapter model uploadDate and scanlator storage', () {
+      final ch = Chapter()
+        ..serverId = 8801
+        ..mangaId = 12
+        ..name = 'Superman (2023-) #41'
+        ..chapterNumber = 41.0
+        ..scanlator = 'DC Comics'
+        ..uploadDate = 1787616000 // Real published timestamp
+        ..fetchedAt = 1788582000; // Recent sync timestamp
+
+      expect(ch.uploadDate, equals(1787616000));
+      expect(ch.fetchedAt, equals(1788582000));
+      expect(ch.scanlator, equals('DC Comics'));
+    });
+
+    test('ReadComicsOnline cover URL normalization (Bot Fight Mode bypass)', () {
+      const blockedUrl = 'https://readcomicsonline.ru/uploads/manga/superman-2023/cover/cover_250x350.jpg';
+      final rewritten = blockedUrl.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
+      expect(rewritten, equals('https://cdn.readcomicsonline.ru/uploads/manga/superman-2023/cover/cover_250x350.jpg'));
+    });
   });
 }
