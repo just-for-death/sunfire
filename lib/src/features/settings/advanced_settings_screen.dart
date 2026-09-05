@@ -27,7 +27,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
   int _chapterCount = 0;
   int _categoryCount = 0;
   bool _isLoadingStats = true;
-  String _versionStr = 'v7.0.0-beta';
+  String _versionStr = 'v8.0.0-beta';
 
   @override
   void initState() {
@@ -41,7 +41,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
       final manga = await IsarService.instance.getAllManga();
       final chapters = await IsarService.instance.getAllChapters();
       final cats = await IsarService.instance.getCategories();
-      String versionDisplay = 'v7.0.0-beta';
+      String versionDisplay = 'v8.0.0-beta';
       try {
         final info = await PackageInfo.fromPlatform();
         if (info.version.isNotEmpty) {

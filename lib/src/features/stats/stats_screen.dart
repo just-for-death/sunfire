@@ -115,7 +115,15 @@ class _StatsScreenState extends State<StatsScreen> {
         title: const Text('Statistics', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              context.go('/more');
+            }
+          },
         ),
       ),
       body: _isLoading
