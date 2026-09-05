@@ -676,7 +676,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Bypasses Cloudflare Turnstile for protected sources (ReadComicOnline, Mangago).',
+                  'Bypasses Cloudflare Turnstile challenges for protected sources and extensions.',
                   style: TextStyle(fontSize: 11.5, color: Colors.grey),
                 ),
                 const SizedBox(height: 10),
@@ -916,7 +916,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  const Text('For Cloudflare protected sources (ReadComicOnline, Mangago)', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  const Text('For Cloudflare protected sources and extensions', style: TextStyle(fontSize: 11, color: Colors.grey)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _flareSolverrController,
