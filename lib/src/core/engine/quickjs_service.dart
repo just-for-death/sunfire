@@ -102,6 +102,39 @@ class QuickJsService {
           }
         } catch (_) {}
       }
+      if (assetPaths.isEmpty) {
+        _loadBundledExtensionsFromDiskFallback();
+      }
+    } catch (_) {
+      _loadBundledExtensionsFromDiskFallback();
+    }
+  }
+
+  void _loadBundledExtensionsFromDiskFallback() {
+    try {
+      final extDir = Directory('assets/extensions');
+      if (extDir.existsSync()) {
+        for (final entity in extDir.listSync()) {
+          if (entity is File && entity.path.endsWith('.js')) {
+            final fileName = entity.uri.pathSegments.last.replaceAll('.js', '');
+            final cleanKey = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
+            if (_installedJsSources.containsKey(cleanKey)) continue;
+            final code = entity.readAsStringSync();
+            final meta = extractSourceMetadata(code);
+            final displayName = (meta['name'] != null && meta['name'].toString().isNotEmpty)
+                ? meta['name'].toString()
+                : fileName.replaceAll('_', ' ').trim();
+            _installedJsSources[cleanKey] = code;
+            _canonicalDisplayNames[cleanKey] = displayName;
+            if (meta['version'] != null) {
+              _installedVersions[cleanKey] = meta['version'].toString();
+            }
+            if (meta['iconUrl'] != null && meta['iconUrl'].toString().isNotEmpty) {
+              _installedIcons[cleanKey] = meta['iconUrl'].toString();
+            }
+          }
+        }
+      }
     } catch (_) {}
   }
 
@@ -448,6 +481,9 @@ class QuickJsService {
 
   String? getExtensionCode(String sourceName) {
     if (sourceName.isEmpty) return null;
+    if (_installedJsSources.isEmpty) {
+      _loadBundledExtensionsFromDiskFallback();
+    }
     final cleanName = sourceName
         .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
         .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
