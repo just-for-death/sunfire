@@ -32,6 +32,10 @@ class Chapter {
   /// Unix timestamp (seconds) when the chapter was published / uploaded by source.
   int? uploadDate;
 
+  /// The authentic published date string provided directly by the extension or source site
+  /// (e.g. "May 6, 2026", "2026-05-26", "26 Aug 2026", "Nov 14, 2024").
+  String? dateUpload;
+
   /// Unix timestamp (seconds) when Suwayomi discovered this chapter.
   /// Indexed for fast Updates tab ordering (ORDER BY fetchedAt DESC).
   @Index()
