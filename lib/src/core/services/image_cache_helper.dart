@@ -102,10 +102,7 @@ class ImageCacheHelper {
     int mangaServerId = 0,
   }) async {
     var effectiveUrl = url;
-    if (effectiveUrl.contains('readcomicsonline.ru/uploads/')) {
-      effectiveUrl = effectiveUrl.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
-    }
-    if ((effectiveUrl.isEmpty) && mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
+    if (effectiveUrl.isEmpty && mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
       effectiveUrl = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/$mangaServerId/thumbnail';
     }
     if (effectiveUrl.isEmpty) return null;
@@ -188,32 +185,28 @@ class ImageCacheHelper {
 
   static Future<Uint8List?> _doFetch(String url, String sourceName, int mangaServerId) async {
     try {
-      var effectiveUrl = url;
-      if (effectiveUrl.contains('readcomicsonline.ru/uploads/')) {
-        effectiveUrl = effectiveUrl.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
-      }
-      final headers = QuickJsService.getImageHeaders(sourceName, effectiveUrl);
+      final headers = QuickJsService.getImageHeaders(sourceName, url);
       Uint8List? bytes;
 
       // PASS 1: Standard fetch with configured headers
-      bytes = await _attemptHttpFetch(effectiveUrl, headers);
+      bytes = await _attemptHttpFetch(url, headers);
 
       // PASS 2 (Self-Healing Anti-Hotlink): If failed and Referer was present, retry with NO Referer!
       // Fixes any CDN enforcing anti-hotlink protection (ReadComicOnline, ImageKit, CloudFront, etc.)
       if (bytes == null && headers.containsKey('Referer')) {
         final noRefererHeaders = Map<String, String>.from(headers)..remove('Referer');
-        bytes = await _attemptHttpFetch(effectiveUrl, noRefererHeaders);
+        bytes = await _attemptHttpFetch(url, noRefererHeaders);
       }
 
       // PASS 3 (Self-Healing Origin Referer): If failed and had no Referer, retry with Origin Referer!
       // Fixes CDNs requiring same-origin domain Referer (Webtoons, Naver, Pixiv, MangaDex)
       if (bytes == null) {
         try {
-          final uri = Uri.parse(effectiveUrl);
+          final uri = Uri.parse(url);
           final originReferer = '${uri.origin}/';
           if (headers['Referer'] != originReferer) {
             final originHeaders = Map<String, String>.from(headers)..['Referer'] = originReferer;
-            bytes = await _attemptHttpFetch(effectiveUrl, originHeaders);
+            bytes = await _attemptHttpFetch(url, originHeaders);
           }
         } catch (_) {}
       }
@@ -223,7 +216,7 @@ class ImageCacheHelper {
         final browserHeaders = Map<String, String>.from(headers)
           ..['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
           ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
-        bytes = await _attemptHttpFetch(effectiveUrl, browserHeaders);
+        bytes = await _attemptHttpFetch(url, browserHeaders);
       }
 
       // PASS 5: Fallback on desktop with curl-impersonate / curl binaries to bypass TLS fingerprint blocks
@@ -233,7 +226,7 @@ class ImageCacheHelper {
           try {
             final args = <String>['-s', '-L', '--max-time', '15'];
             headers.forEach((k, v) => args.addAll(['-H', '$k: $v']));
-            args.add(effectiveUrl);
+            args.add(url);
             final res = await Process.run(exe, args, stdoutEncoding: null);
             if (res.exitCode == 0) {
               final b = res.stdout as List<int>;
@@ -324,9 +317,6 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
 
   void _checkAndFetch() {
     var url = widget.thumbnailUrl;
-    if (url != null && url.contains('readcomicsonline.ru/uploads/')) {
-      url = url.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
-    }
     if ((url == null || url.isEmpty) && widget.mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
       url = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/${widget.mangaServerId}/thumbnail';
     }
@@ -357,9 +347,6 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
   @override
   Widget build(BuildContext context) {
     var url = widget.thumbnailUrl;
-    if (url != null && url.contains('readcomicsonline.ru/uploads/')) {
-      url = url.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
-    }
     if ((url == null || url.isEmpty) && widget.mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
       url = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/${widget.mangaServerId}/thumbnail';
     }

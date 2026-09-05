@@ -244,11 +244,7 @@ class SyncEngine {
 
           final rawThumb = nodeMap['thumbnailUrl'] as String?;
           if (rawThumb != null && rawThumb.isNotEmpty) {
-            var thumb = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
-            if (thumb.contains('readcomicsonline.ru/uploads/')) {
-              thumb = thumb.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
-            }
-            manga.thumbnailUrl = thumb;
+            manga.thumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
           } else if (serverUrl.isNotEmpty && serverId > 0) {
             manga.thumbnailUrl = '$serverUrl/api/v1/manga/$serverId/thumbnail';
           }
@@ -578,11 +574,7 @@ class SyncEngine {
           chapter.mangaTitle = mangaMap['title'] as String? ?? chapter.mangaTitle;
           final rawThumb = mangaMap['thumbnailUrl'] as String?;
           if (rawThumb != null && rawThumb.isNotEmpty) {
-            var thumb = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
-            if (thumb.contains('readcomicsonline.ru/uploads/')) {
-              thumb = thumb.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
-            }
-            chapter.mangaThumbnailUrl = thumb;
+            chapter.mangaThumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
           }
         }
 
