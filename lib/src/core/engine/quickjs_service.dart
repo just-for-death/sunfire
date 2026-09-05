@@ -351,24 +351,20 @@ class QuickJsService {
       'User-Agent': MClient.userAgent,
     };
 
-    // 0. Check if this exact image URL has specific headers registered by the extension
-    if (targetUrl.isNotEmpty && _headersCache.containsKey(targetUrl)) {
-      headers.addAll(_headersCache[targetUrl]!);
+    final cacheKey = '$sourceOrUrl|$targetUrl';
+    if (_headersCache.containsKey(cacheKey)) {
+      headers.addAll(_headersCache[cacheKey]!);
       return headers;
     }
 
     // 1. Dynamically resolve the corresponding JS extension:
     String? jsCode;
     if (sourceOrUrl.isNotEmpty) {
-      if (_headersCache.containsKey(sourceOrUrl)) {
-        headers.addAll(_headersCache[sourceOrUrl]!);
-      } else {
-        jsCode = instance.getExtensionCode(sourceOrUrl);
-      }
+      jsCode = instance.getExtensionCode(sourceOrUrl);
     }
 
     // If not matched by source name, lookup by domain host matching installed extensions' baseUrl
-    if (jsCode == null && !headers.containsKey('Referer') && targetUrl.isNotEmpty) {
+    if (jsCode == null && targetUrl.isNotEmpty) {
       final targetUri = Uri.tryParse(targetUrl);
       if (targetUri != null && targetUri.host.isNotEmpty) {
         final hostLower = targetUri.host.toLowerCase();
@@ -393,9 +389,6 @@ class QuickJsService {
       try {
         final extHeaders = instance.getSourceHeaders(jsCode, targetUrl);
         if (extHeaders.isNotEmpty) {
-          if (sourceOrUrl.isNotEmpty) {
-            _headersCache[sourceOrUrl] = extHeaders;
-          }
           headers.addAll(extHeaders);
         }
         // If Referer wasn't in extHeaders, extract baseUrl dynamically and set it
@@ -419,6 +412,10 @@ class QuickJsService {
     // 4. If the extension explicitly provided an empty Referer (""), respect it and remove it
     if (headers.containsKey('Referer') && headers['Referer']!.isEmpty) {
       headers.remove('Referer');
+    }
+
+    if (cacheKey.isNotEmpty) {
+      _headersCache[cacheKey] = Map<String, String>.from(headers);
     }
 
     return headers;
@@ -635,6 +632,20 @@ class QuickJsService {
       service.dispose();
     }
     return [];
+  }
+
+  /// ── RESOLVE EXTENSION DIRECT COVER URL IF SUPPORTED ──
+  String? getExtensionCoverUrl(String sourceName, String mangaUrl) {
+    final jsCode = getExtensionCode(sourceName);
+    if (jsCode == null || jsCode.isEmpty || mangaUrl.isEmpty) {
+      return null;
+    }
+    try {
+      final service = _getOrCreateRuntime(sourceName, jsCode);
+      return service.getCoverUrl(mangaUrl);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// ── SCRAPE MANGA DETAILS & CHAPTER LIST VIA MANGAYOMI RUNTIME ──
