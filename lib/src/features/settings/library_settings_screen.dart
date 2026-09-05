@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/category.dart';
+import '../../core/services/library_update_service.dart';
 import '../../core/services/settings_service.dart';
+import '../../core/sync/background_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import 'widgets/section_title.dart';
@@ -313,6 +315,16 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
     );
   }
 
+  String _formatLastUpdated(int timestampSec) {
+    if (timestampSec <= 0) return 'Never checked';
+    final dt = DateTime.fromMillisecondsSinceEpoch(timestampSec * 1000);
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -389,6 +401,152 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       subtitle: const Text('Configure rules to skip specific manga from global updates', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                       onTap: _showSkipUpdatingDialog,
+                    ),
+                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const SectionTitle(title: 'Automated Updates & Notifications (Mihon Parity)'),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          const Text('Library Update Frequency', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: Text(
+                        _settings.libraryUpdateFrequencyHours == 0
+                            ? 'Disabled'
+                            : _settings.libraryUpdateFrequencyHours < 24
+                                ? 'Every ${_settings.libraryUpdateFrequencyHours} hour${_settings.libraryUpdateFrequencyHours > 1 ? "s" : ""}'
+                                : 'Every ${_settings.libraryUpdateFrequencyHours ~/ 24} day${(_settings.libraryUpdateFrequencyHours ~/ 24) > 1 ? "s" : ""}',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      trailing: DropdownButton<int>(
+                        value: _settings.libraryUpdateFrequencyHours,
+                        dropdownColor: const Color(0xFF22222A),
+                        underline: const SizedBox(),
+                        items: const [
+                          DropdownMenuItem(value: 0, child: Text('Disabled')),
+                          DropdownMenuItem(value: 1, child: Text('Every 1h')),
+                          DropdownMenuItem(value: 6, child: Text('Every 6h')),
+                          DropdownMenuItem(value: 12, child: Text('Every 12h')),
+                          DropdownMenuItem(value: 24, child: Text('Daily (24h)')),
+                          DropdownMenuItem(value: 48, child: Text('Every 2 days')),
+                          DropdownMenuItem(value: 72, child: Text('Every 3 days')),
+                          DropdownMenuItem(value: 168, child: Text('Weekly')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _settings.libraryUpdateFrequencyHours = val);
+                            BackgroundService.instance.rescheduleTask();
+                          }
+                        },
+                      ),
+                    ),
+                    SettingsPropTile(
+                      title: 'Only on Wi-Fi',
+                      subtitle: 'Avoid updating library and checking chapters over cellular data',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.switchTile,
+                      boolValue: _settings.libraryUpdateOnlyOnWifi,
+                      onBoolChanged: (v) {
+                        _settings.libraryUpdateOnlyOnWifi = v;
+                        BackgroundService.instance.rescheduleTask();
+                      },
+                    ),
+                    SettingsPropTile(
+                      title: 'Only While Charging',
+                      subtitle: 'Defer automated background refreshes until device is plugged in',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.switchTile,
+                      boolValue: _settings.libraryUpdateOnlyCharging,
+                      onBoolChanged: (v) {
+                        _settings.libraryUpdateOnlyCharging = v;
+                        BackgroundService.instance.rescheduleTask();
+                      },
+                    ),
+                    SettingsPropTile(
+                      title: 'New Chapter Notifications',
+                      subtitle: 'Show system notifications when new chapters are found',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.switchTile,
+                      boolValue: _settings.newChapterNotificationsEnabled,
+                      onBoolChanged: (v) => _settings.newChapterNotificationsEnabled = v,
+                    ),
+                    ListenableBuilder(
+                      listenable: LibraryUpdateService.instance,
+                      builder: (context, _) {
+                        final updater = LibraryUpdateService.instance;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF191920),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0x1AFFFFFF)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      updater.isUpdating ? Icons.sync : Icons.update_rounded,
+                                      size: 18,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        updater.isUpdating
+                                            ? updater.statusMessage
+                                            : 'Last checked: ${_formatLastUpdated(_settings.lastLibraryUpdateTimestamp)}',
+                                        style: const TextStyle(fontSize: 13, color: Colors.grey),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (updater.isUpdating) ...[
+                                  const SizedBox(height: 8),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: updater.progress > 0 ? updater.progress : null,
+                                      minHeight: 4,
+                                      backgroundColor: const Color(0x22FFFFFF),
+                                      valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.primary),
+                                    ),
+                                  ),
+                                ] else ...[
+                                  const SizedBox(height: 10),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton.tonalIcon(
+                                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                                      label: const Text('Check for New Chapters Now'),
+                                      onPressed: () async {
+                                        final count = await LibraryUpdateService.instance.checkForNewChapters(isManual: true);
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(count > 0 ? 'Found $count new chapters!' : 'Library is up to date'),
+                                              behavior: SnackBarBehavior.floating,
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
                     const SectionTitle(title: 'Display & Badges (Local)'),

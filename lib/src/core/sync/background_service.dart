@@ -9,6 +9,8 @@ import '../engine/quickjs_service.dart';
 import '../engine/repo_manager.dart';
 import '../logging/logger_service.dart';
 import '../services/image_cache_helper.dart';
+import '../services/library_update_service.dart';
+import '../services/notification_service.dart';
 import '../services/settings_service.dart';
 import 'graphql_client_service.dart';
 import 'server_auth_helper.dart';
@@ -31,6 +33,7 @@ void callbackDispatcher() {
       await SettingsService.instance.initialize();
       await QuickJsService.instance.initialize();
       await ImageCacheHelper.initialize();
+      await NotificationService.instance.initialize();
 
       if (!SettingsService.instance.onboardingCompleted) return true;
 
@@ -39,6 +42,9 @@ void callbackDispatcher() {
         SettingsService.instance.serverUrl,
         authToken: authToken,
       );
+
+      // Check for new chapters and dispatch notification if discovered
+      await LibraryUpdateService.instance.checkForNewChapters(isManual: false);
 
       await SyncEngine.instance.triggerSync();
 
@@ -80,31 +86,69 @@ class BackgroundService {
         callbackDispatcher,
       );
 
-      // Register periodic sync — Android minimum interval is 15 minutes.
-      await Workmanager().registerPeriodicTask(
-        _kSyncTaskName,
-        _kSyncTaskName,
-        tag: _kSyncTaskTag,
-        frequency: const Duration(minutes: 15),
-        constraints: Constraints(
-          networkType: NetworkType.connected,
-          requiresBatteryNotLow: false,
-          requiresCharging: false,
-        ),
-        existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
-        backoffPolicy: BackoffPolicy.exponential,
-        backoffPolicyDelay: const Duration(minutes: 2),
-      );
+      // Register periodic sync according to user settings
+      final onlyWifi = SettingsService.instance.libraryUpdateOnlyOnWifi;
+      final onlyCharging = SettingsService.instance.libraryUpdateOnlyCharging;
+      final freqHours = SettingsService.instance.libraryUpdateFrequencyHours;
 
-      await LoggerService.instance.logInfo(
-        'BackgroundService: periodic sync registered (every 15 min)',
-        'BackgroundService',
-      );
+      if (freqHours > 0) {
+        await Workmanager().registerPeriodicTask(
+          _kSyncTaskName,
+          _kSyncTaskName,
+          tag: _kSyncTaskTag,
+          frequency: Duration(hours: freqHours.clamp(1, 168)),
+          constraints: Constraints(
+            networkType: onlyWifi ? NetworkType.unmetered : NetworkType.connected,
+            requiresBatteryNotLow: false,
+            requiresCharging: onlyCharging,
+          ),
+          existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+          backoffPolicy: BackoffPolicy.exponential,
+          backoffPolicyDelay: const Duration(minutes: 2),
+        );
+
+        await LoggerService.instance.logInfo(
+          'BackgroundService: periodic sync registered (every ${freqHours}h, unmetered: $onlyWifi, charging: $onlyCharging)',
+          'BackgroundService',
+        );
+      }
     } catch (e) {
       await LoggerService.instance.logWarning(
         'BackgroundService init failed (non-critical): $e',
         'BackgroundService',
       );
+    }
+  }
+
+  /// Reconfigures periodic background task constraints according to user's Mihon settings.
+  Future<void> rescheduleTask() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    try {
+      final freqHours = SettingsService.instance.libraryUpdateFrequencyHours;
+      if (freqHours <= 0) {
+        await cancelAll();
+        return;
+      }
+
+      final onlyWifi = SettingsService.instance.libraryUpdateOnlyOnWifi;
+      final onlyCharging = SettingsService.instance.libraryUpdateOnlyCharging;
+
+      await Workmanager().registerPeriodicTask(
+        _kSyncTaskName,
+        _kSyncTaskName,
+        tag: _kSyncTaskTag,
+        frequency: Duration(hours: freqHours.clamp(1, 168)),
+        constraints: Constraints(
+          networkType: onlyWifi ? NetworkType.unmetered : NetworkType.connected,
+          requiresBatteryNotLow: false,
+          requiresCharging: onlyCharging,
+        ),
+        existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
+        backoffPolicy: BackoffPolicy.exponential,
+        backoffPolicyDelay: const Duration(minutes: 2),
+      );
+    } catch (e) {
+      debugPrint('[BackgroundService] rescheduleTask error: $e');
     }
   }
 
