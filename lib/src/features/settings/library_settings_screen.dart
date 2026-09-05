@@ -282,6 +282,37 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
     );
   }
 
+  void _showRadioDialog({
+    required String title,
+    required List<String> options,
+    required String currentValue,
+    required ValueChanged<String> onSelected,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1F1F24),
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options.map((opt) {
+              final isSelected = opt == currentValue;
+              return ListTile(
+                title: Text(opt),
+                trailing: isSelected ? const Icon(Icons.check_rounded, color: Colors.greenAccent) : null,
+                onTap: () {
+                  onSelected(opt);
+                  Navigator.pop(context);
+                },
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -368,6 +399,43 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       kind: SettingsPropKind.switchTile,
                       boolValue: _settings.showUnreadBadges,
                       onBoolChanged: (v) => _settings.showUnreadBadges = v,
+                    ),
+                    SettingsPropTile(
+                      title: 'Show Downloaded Badges',
+                      subtitle: 'Display download indicator badges on saved manga',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.switchTile,
+                      boolValue: _settings.showDownloadedBadges,
+                      onBoolChanged: (v) => _settings.showDownloadedBadges = v,
+                    ),
+                    SettingsPropTile(
+                      title: 'Show Category Tabs',
+                      subtitle: 'Display horizontal category filter pills at the top of library',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.switchTile,
+                      boolValue: _settings.showCategoryTabs,
+                      onBoolChanged: (v) => _settings.showCategoryTabs = v,
+                    ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          const Text('Default Display Mode', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: Text(_settings.libraryDisplayMode, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      onTap: () {
+                        _showRadioDialog(
+                          title: 'Library Display Mode',
+                          options: const ['Comfortable Grid', 'Compact Grid', 'List'],
+                          currentValue: _settings.libraryDisplayMode,
+                          onSelected: (val) => setState(() => _settings.libraryDisplayMode = val),
+                        );
+                      },
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
                     const SectionTitle(title: 'Categories (Server Synced)'),

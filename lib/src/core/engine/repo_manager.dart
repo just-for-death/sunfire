@@ -14,6 +14,7 @@ class RepoSourceItem {
   final String version;
   final bool isJs;
   final String baseUrl;
+  final bool isNsfw;
 
   const RepoSourceItem({
     required this.name,
@@ -23,6 +24,7 @@ class RepoSourceItem {
     required this.version,
     required this.isJs,
     this.baseUrl = '',
+    this.isNsfw = false,
   });
 
   factory RepoSourceItem.fromJson(Map<String, dynamic> json, [String repoIndexUrl = '']) {
@@ -59,14 +61,23 @@ class RepoSourceItem {
       }
     }
 
+    final nameStr = json['name'] as String? ?? 'Unknown';
+    final isNsfw = json['isNsfw'] == true ||
+        json['isNsfw'] == 1 ||
+        json['nsfw'] == true ||
+        json['nsfw'] == 1 ||
+        nameStr.toLowerCase().contains('18+') ||
+        nameStr.toLowerCase().contains('hentai');
+
     return RepoSourceItem(
-      name: json['name'] as String? ?? 'Unknown',
+      name: nameStr,
       lang: json['lang'] as String? ?? 'all',
       sourceCodeUrl: url,
       iconUrl: icon,
       version: json['version'] as String? ?? '1.0.0',
       isJs: isJs,
       baseUrl: baseUrl,
+      isNsfw: isNsfw,
     );
   }
 }

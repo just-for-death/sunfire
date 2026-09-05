@@ -31,7 +31,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
   }
 
   void _onTabChanged() {
-    if (MainShell.selectedTabNotifier.value == 1 && mounted) {
+    if (MainShell.selectedTabNotifier.value == 2 && mounted) {
       _loadHistory();
     }
   }

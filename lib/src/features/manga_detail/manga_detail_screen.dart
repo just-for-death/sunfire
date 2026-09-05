@@ -164,6 +164,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _sortAscending = _settings.chapterSortAscending;
     _loadMangaDetails();
   }
 

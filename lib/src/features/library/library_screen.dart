@@ -49,6 +49,19 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   void initState() {
     super.initState();
     _loadFromIsarThenSync();
+    MainShell.selectedTabNotifier.addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    if (MainShell.selectedTabNotifier.value == 0 && mounted) {
+      _loadFromIsarOnly();
+    }
+  }
+
+  @override
+  void dispose() {
+    MainShell.selectedTabNotifier.removeListener(_onTabChanged);
+    super.dispose();
   }
 
   /// Load Isar immediately (never blocks on network). Then attempt a background
@@ -231,7 +244,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     }
 
     // 1. Category Filter
-    if (_selectedCategoryIndex > 0 && _selectedCategoryIndex <= _categories.length) {
+    if (_settings.showCategoryTabs && _selectedCategoryIndex > 0 && _selectedCategoryIndex <= _categories.length) {
       final selectedCatId = _categories[_selectedCategoryIndex - 1].serverId;
       list = list.where((m) => m.categoryIds.contains(selectedCatId)).toList();
     }
@@ -880,15 +893,17 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                   ),
                 ],
               ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(52),
-          child: Container(
-            height: 44,
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _categories.length + 1,
+        bottom: !_settings.showCategoryTabs || _categories.isEmpty
+            ? null
+            : PreferredSize(
+                preferredSize: const Size.fromHeight(52),
+                child: Container(
+                  height: 44,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _categories.length + 1,
               itemBuilder: (context, index) {
                 final isSelected = _selectedCategoryIndex == index;
                 final count = index == 0 ? _allManga.length : _getCategoryMangaCount(_categories[index - 1].serverId);

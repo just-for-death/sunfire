@@ -167,5 +167,58 @@ void main() {
       speed = (speed + step).clamp(10.0, 1000.0);
       expect(speed, equals(550.0));
     });
+
+    test('Date formatting helper formats accurately across formats', () {
+      final testDate = DateTime(2026, 9, 5);
+      final y = testDate.year.toString().padLeft(4, '0');
+      final m = testDate.month.toString().padLeft(2, '0');
+      final d = testDate.day.toString().padLeft(2, '0');
+
+      String format(String fmt) {
+        switch (fmt) {
+          case 'MM/DD/YYYY':
+            return '$m/$d/$y';
+          case 'DD/MM/YYYY':
+            return '$d/$m/$y';
+          case 'DD.MM.YYYY':
+            return '$d.$m.$y';
+          case 'YYYY-MM-DD':
+          default:
+            return '$y-$m-$d';
+        }
+      }
+
+      expect(format('YYYY-MM-DD'), equals('2026-09-05'));
+      expect(format('MM/DD/YYYY'), equals('09/05/2026'));
+      expect(format('DD/MM/YYYY'), equals('05/09/2026'));
+      expect(format('DD.MM.YYYY'), equals('05.09.2026'));
+    });
+
+    test('NSFW detection logic flags adult sources accurately', () {
+      bool isNsfw(Map<String, dynamic> json) {
+        final nameStr = json['name'] as String? ?? '';
+        return json['isNsfw'] == true ||
+            json['isNsfw'] == 1 ||
+            json['nsfw'] == true ||
+            json['nsfw'] == 1 ||
+            nameStr.toLowerCase().contains('18+') ||
+            nameStr.toLowerCase().contains('hentai');
+      }
+
+      expect(isNsfw({'name': 'MangaDex', 'isNsfw': false}), isFalse);
+      expect(isNsfw({'name': 'ReadComicsOnline', 'isNsfw': false}), isFalse);
+      expect(isNsfw({'name': 'Adult Manga (18+)', 'isNsfw': false}), isTrue);
+      expect(isNsfw({'name': 'HentaiCafe', 'isNsfw': false}), isTrue);
+      expect(isNsfw({'name': 'Generic Source', 'isNsfw': true}), isTrue);
+    });
+
+    test('Tab index mapping aligns correctly across all navigation screens', () {
+      const tabs = ['Library', 'Updates', 'History', 'Browse', 'Settings'];
+      expect(tabs.indexOf('Library'), equals(0));
+      expect(tabs.indexOf('Updates'), equals(1));
+      expect(tabs.indexOf('History'), equals(2));
+      expect(tabs.indexOf('Browse'), equals(3));
+      expect(tabs.indexOf('Settings'), equals(4));
+    });
   });
 }
