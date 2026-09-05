@@ -1285,37 +1285,39 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       itemBuilder: (context, index) {
                         final ch = _siblingChapters[index];
                         final isCurrent = ch.serverId == _chapter?.serverId;
-                        return Container(
-                          margin: const EdgeInsets.symmetric(vertical: 3),
-                          decoration: BoxDecoration(
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Material(
                             color: isCurrent ? primaryColor.withValues(alpha: 0.15) : const Color(0x1F2A2A32),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isCurrent ? primaryColor.withValues(alpha: 0.6) : const Color(0x2BFFFFFF),
-                              width: 0.8,
-                            ),
-                          ),
-                          child: ListTile(
-                            dense: true,
-                            title: Text(
-                              ch.name.isNotEmpty ? ch.name : 'Chapter ${ch.chapterNumber}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: isCurrent ? primaryColor : (ch.isRead ? Colors.grey : Colors.white),
-                                fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                                fontSize: 13,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: isCurrent ? primaryColor.withValues(alpha: 0.6) : const Color(0x2BFFFFFF),
+                                width: 0.8,
                               ),
                             ),
-                            trailing: isCurrent
-                                ? Icon(Icons.check_circle_rounded, color: primaryColor, size: 18)
-                                : (ch.isRead ? const Icon(Icons.done_rounded, color: Colors.grey, size: 16) : null),
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              if (!isCurrent) {
-                                _loadChapterAndPages(ch.serverId);
-                              }
-                            },
+                            child: ListTile(
+                              dense: true,
+                              title: Text(
+                                ch.name.isNotEmpty ? ch.name : 'Chapter ${ch.chapterNumber}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isCurrent ? primaryColor : (ch.isRead ? Colors.grey : Colors.white),
+                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              trailing: isCurrent
+                                  ? Icon(Icons.check_circle_rounded, color: primaryColor, size: 18)
+                                  : (ch.isRead ? const Icon(Icons.done_rounded, color: Colors.grey, size: 16) : null),
+                              onTap: () {
+                                Navigator.pop(sheetContext);
+                                if (!isCurrent) {
+                                  _loadChapterAndPages(ch.serverId);
+                                }
+                              },
+                            ),
                           ),
                         );
                       },

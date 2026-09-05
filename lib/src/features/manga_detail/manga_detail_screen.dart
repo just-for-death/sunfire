@@ -208,20 +208,35 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             _manga!.url = rawMangaUrl;
           }
 
+          final sourceMap = mMap['source'] as Map<String, dynamic>?;
+          if (sourceMap != null) {
+            _manga!.sourceName = sourceMap['displayName'] as String? ?? sourceMap['name'] as String? ?? _manga!.sourceName;
+          }
+
           final rawThumb = mMap['thumbnailUrl'] as String?;
-          if (rawThumb != null && rawThumb.isNotEmpty) {
-            _manga!.thumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
-          } else if (serverUrl.isNotEmpty && _manga!.serverId > 0 && (_manga!.thumbnailUrl == null || _manga!.thumbnailUrl!.isEmpty)) {
-            _manga!.thumbnailUrl = '$serverUrl/api/v1/manga/${_manga!.serverId}/thumbnail';
+          final isServerProxy = rawThumb == null || rawThumb.isEmpty || rawThumb.contains('/api/v1/manga/');
+          final currentThumb = _manga!.thumbnailUrl;
+          final hasDirectThumb = currentThumb != null &&
+              currentThumb.isNotEmpty &&
+              !currentThumb.contains('/api/v1/manga/') &&
+              currentThumb.startsWith('http');
+
+          if (!hasDirectThumb) {
+            String? directThumb;
+            if (_manga!.sourceName.isNotEmpty && _manga!.url.isNotEmpty) {
+              directThumb = QuickJsService.instance.getExtensionCoverUrl(_manga!.sourceName, _manga!.url);
+            }
+            if (directThumb != null && directThumb.isNotEmpty) {
+              _manga!.thumbnailUrl = directThumb;
+            } else if (!isServerProxy) {
+              _manga!.thumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
+            } else if (serverUrl.isNotEmpty && _manga!.serverId > 0 && (_manga!.thumbnailUrl == null || _manga!.thumbnailUrl!.isEmpty)) {
+              _manga!.thumbnailUrl = '$serverUrl/api/v1/manga/${_manga!.serverId}/thumbnail';
+            }
           }
 
           if (mMap.containsKey('genre') && mMap['genre'] != null) {
             _manga!.genres = (mMap['genre'] as List<dynamic>).map((g) => g.toString()).toList();
-          }
-
-          final sourceMap = mMap['source'] as Map<String, dynamic>?;
-          if (sourceMap != null) {
-            _manga!.sourceName = sourceMap['displayName'] as String? ?? sourceMap['name'] as String? ?? _manga!.sourceName;
           }
 
           await IsarService.instance.saveManga(_manga!);
@@ -288,8 +303,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           if (localData['author'] != null && (_manga!.author == null || _manga!.author!.isEmpty)) {
             _manga!.author = localData['author'].toString();
           }
-          if (localData['imageUrl'] != null && (_manga!.thumbnailUrl == null || _manga!.thumbnailUrl!.isEmpty)) {
-            _manga!.thumbnailUrl = localData['imageUrl'].toString();
+          if (localData['imageUrl'] != null && localData['imageUrl'].toString().isNotEmpty) {
+            final directImg = localData['imageUrl'].toString();
+            if (_manga!.thumbnailUrl == null || _manga!.thumbnailUrl!.isEmpty || _manga!.thumbnailUrl!.contains('/api/v1/manga/')) {
+              _manga!.thumbnailUrl = directImg;
+            }
           }
           await IsarService.instance.saveManga(_manga!);
 

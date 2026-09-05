@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../db/isar_service.dart';
 import '../db/models/category.dart';
@@ -46,10 +48,10 @@ class SyncEngine {
     _isSyncing = true;
     try {
       try {
-        await WakelockPlus.enable();
-      } catch (e, stack) {
-        await LoggerService.instance.logError('Failed to enable wakelock: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
-      }
+        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+          await WakelockPlus.enable();
+        }
+      } catch (_) {}
       await LoggerService.instance.logInfo('Starting sync cycle with server...', 'SyncEngine');
       await _flushPendingMutations();
       await _pullServerState();
@@ -58,10 +60,10 @@ class SyncEngine {
       await LoggerService.instance.logError('Sync cycle error: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
     } finally {
       try {
-        await WakelockPlus.disable();
-      } catch (e, stack) {
-        await LoggerService.instance.logError('Failed to disable wakelock: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
-      }
+        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+          await WakelockPlus.disable();
+        }
+      } catch (_) {}
       _isSyncing = false;
     }
   }
@@ -242,13 +244,6 @@ class SyncEngine {
           manga.unreadCount = parseIntSafe(nodeMap['unreadCount']);
           manga.lastFetchedAt = nowUnix;
 
-          final rawThumb = nodeMap['thumbnailUrl'] as String?;
-          if (rawThumb != null && rawThumb.isNotEmpty) {
-            manga.thumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
-          } else if (serverUrl.isNotEmpty && serverId > 0) {
-            manga.thumbnailUrl = '$serverUrl/api/v1/manga/$serverId/thumbnail';
-          }
-
           if (nodeMap.containsKey('categories') && nodeMap['categories'] != null) {
             final catNodes = nodeMap['categories']['nodes'] as List<dynamic>?;
             if (catNodes != null) {
@@ -264,6 +259,29 @@ class SyncEngine {
           // to scrape chapters directly when the server is offline.
           if (nodeMap['url'] != null && (nodeMap['url'] as String).isNotEmpty) {
             manga.url = nodeMap['url'] as String;
+          }
+
+          final rawThumb = nodeMap['thumbnailUrl'] as String?;
+          final isServerProxy = rawThumb == null || rawThumb.isEmpty || rawThumb.contains('/api/v1/manga/');
+          final currentThumb = manga.thumbnailUrl;
+          final hasDirectThumb = currentThumb != null &&
+              currentThumb.isNotEmpty &&
+              !currentThumb.contains('/api/v1/manga/') &&
+              currentThumb.startsWith('http');
+
+          if (!hasDirectThumb) {
+            // Check if local extension can resolve direct CDN cover URL (zero network, instantaneous)
+            String? extCover;
+            if (manga.sourceName.isNotEmpty && manga.url.isNotEmpty) {
+              extCover = QuickJsService.instance.getExtensionCoverUrl(manga.sourceName, manga.url);
+            }
+            if (extCover != null && extCover.isNotEmpty) {
+              manga.thumbnailUrl = extCover;
+            } else if (!isServerProxy) {
+              manga.thumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
+            } else if (serverUrl.isNotEmpty && serverId > 0 && (manga.thumbnailUrl == null || manga.thumbnailUrl!.isEmpty)) {
+              manga.thumbnailUrl = '$serverUrl/api/v1/manga/$serverId/thumbnail';
+            }
           }
 
           serverMangas.add(manga);
@@ -508,8 +526,21 @@ class SyncEngine {
               parentManga.title = mangaMap['title'] as String? ?? 'Manga';
             }
             final mThumbFull = mangaMap['thumbnailUrl'] as String?;
-            if (mThumbFull != null && mThumbFull.isNotEmpty && parentManga.thumbnailUrl == null) {
-              parentManga.thumbnailUrl = mThumbFull.startsWith('http') ? mThumbFull : '$serverUrl$mThumbFull';
+            final isProxy = mThumbFull == null || mThumbFull.isEmpty || mThumbFull.contains('/api/v1/manga/');
+            final hasDirect = parentManga.thumbnailUrl != null &&
+                parentManga.thumbnailUrl!.isNotEmpty &&
+                !parentManga.thumbnailUrl!.contains('/api/v1/manga/') &&
+                parentManga.thumbnailUrl!.startsWith('http');
+            if (!hasDirect) {
+              String? extCover;
+              if (parentManga.sourceName.isNotEmpty && parentManga.url.isNotEmpty) {
+                extCover = QuickJsService.instance.getExtensionCoverUrl(parentManga.sourceName, parentManga.url);
+              }
+              if (extCover != null && extCover.isNotEmpty) {
+                parentManga.thumbnailUrl = extCover;
+              } else if (mThumbFull != null && mThumbFull.isNotEmpty && !isProxy) {
+                parentManga.thumbnailUrl = mThumbFull.startsWith('http') ? mThumbFull : '$serverUrl$mThumbFull';
+              }
             }
             await IsarService.instance.saveManga(parentManga);
           }

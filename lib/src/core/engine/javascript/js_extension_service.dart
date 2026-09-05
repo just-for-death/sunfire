@@ -139,6 +139,17 @@ if (typeof extention === "undefined") {
     ).map((k, v) => MapEntry(k.toString(), v.toString()));
   }
 
+  String? getCoverUrl(String url) {
+    if (!_isInitialized) _init();
+    try {
+      final res = runtime.evaluate('typeof extention.getCoverUrl === "function" ? extention.getCoverUrl(${jsonEncode(url)}) : ""');
+      if (!res.isError && res.stringResult.isNotEmpty) {
+        return res.stringResult;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<Map<String, dynamic>> getPopular(int page) async {
     return await extensionCallAsync<Map<String, dynamic>>('getPopular($page)');
   }
