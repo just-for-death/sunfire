@@ -10,7 +10,7 @@ const mangayomiSources = [
     "isManga": true,
     "isNsfw": true,
     "itemType": 0,
-    "version": "1.1.0",
+    "version": "1.1.1",
     "pkgPath": "javascript/manga/src/en/nhentai.js"
   }
 ];
@@ -124,7 +124,11 @@ class DefaultExtension extends MProvider {
       status: 1,
       author: artists,
       genre: tags,
-      chapters: [{ name: "Read Online", url: url }]
+      chapters: [{
+        name: "Read Online",
+        url: url,
+        dateUpload: g.upload_date ? new Date(g.upload_date * 1000).toISOString().split('T')[0] : ""
+      }]
     };
   }
 

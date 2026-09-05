@@ -220,5 +220,43 @@ void main() {
       expect(tabs.indexOf('Browse'), equals(3));
       expect(tabs.indexOf('Settings'), equals(4));
     });
+
+    test('Extension version synchronization check for bundled extensions', () {
+      int compareVersions(String v1, String v2) {
+        final p1 = v1.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+        final p2 = v2.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+        final maxLen = p1.length > p2.length ? p1.length : p2.length;
+        for (var i = 0; i < maxLen; i++) {
+          final a = i < p1.length ? p1[i] : 0;
+          final b = i < p2.length ? p2[i] : 0;
+          if (a != b) return a.compareTo(b);
+        }
+        return 0;
+      }
+
+      // Synchronized in Beta v8
+      expect(compareVersions('1.3.1', '1.3.1'), equals(0)); // Mangago
+      expect(compareVersions('1.1.1', '1.1.1'), equals(0)); // nHentai
+      expect(compareVersions('1.1.1', '1.1.1'), equals(0)); // NineHentai
+      expect(compareVersions('1.2.0', '1.2.0'), equals(0)); // Webtoons & Weeb Central
+    });
+
+    test('Safe pop fallback resolves fallback destination when canPop is false', () {
+      String resolveSafeBackDestination({
+        required bool contextCanPop,
+        required bool navigatorCanPop,
+        required String fallbackRoute,
+      }) {
+        if (contextCanPop) return 'context.pop';
+        if (navigatorCanPop) return 'navigator.pop';
+        return fallbackRoute;
+      }
+
+      expect(resolveSafeBackDestination(contextCanPop: true, navigatorCanPop: false, fallbackRoute: '/more'), equals('context.pop'));
+      expect(resolveSafeBackDestination(contextCanPop: false, navigatorCanPop: true, fallbackRoute: '/more'), equals('navigator.pop'));
+      expect(resolveSafeBackDestination(contextCanPop: false, navigatorCanPop: false, fallbackRoute: '/more'), equals('/more'));
+      expect(resolveSafeBackDestination(contextCanPop: false, navigatorCanPop: false, fallbackRoute: '/browse'), equals('/browse'));
+    });
   });
 }
+

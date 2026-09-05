@@ -10,7 +10,7 @@ const mangayomiSources = [
     "isManga": true,
     "isNsfw": true,
     "itemType": 0,
-    "version": "1.1.0",
+    "version": "1.1.1",
     "pkgPath": "javascript/manga/src/en/ninehentai.js"
   }
 ];
@@ -197,7 +197,8 @@ class DefaultExtension extends MProvider {
         chapters: [
           {
             name: "Read Online",
-            url: `https://9hentai.so/g/${b.id}/`
+            url: `https://9hentai.so/g/${b.id}/`,
+            dateUpload: b.created_at ? new Date(b.created_at * 1000).toISOString().split('T')[0] : ""
           }
         ]
       };

@@ -421,7 +421,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       }
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.escape) {
-      context.pop();
+      _safeExitReader();
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.audioVolumeDown && _settings.volumeKeyTurn) {
       _goToNextPage();
@@ -432,6 +432,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
 
     return KeyEventResult.ignored;
+  }
+
+  void _safeExitReader() {
+    if (context.canPop()) {
+      context.pop();
+    } else if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else if (_chapter?.mangaId != null) {
+      context.go('/manga/${_chapter!.mangaId}');
+    } else {
+      context.go('/library');
+    }
   }
 
   @override
@@ -2001,7 +2013,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                               children: [
                                 IconButton(
                                   icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                                  onPressed: () => context.pop(),
+                                  onPressed: _safeExitReader,
                                 ),
                                 Expanded(
                                   child: Column(
