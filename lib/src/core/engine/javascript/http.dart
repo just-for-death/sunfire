@@ -20,24 +20,40 @@ class JsHttpClient {
     );
   }
 
+  bool _isDisposed = false;
+
+  Future<String> _safeHandle(Future<String> Function() action) async {
+    if (_isDisposed) return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}});
+    try {
+      final res = await action();
+      if (_isDisposed) return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}});
+      return res;
+    } catch (e) {
+      if (_isDisposed || e.toString().contains('JSValue released')) {
+        return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}});
+      }
+      rethrow;
+    }
+  }
+
   void init() {
     runtime.onMessage('http_head', (dynamic args) async {
-      return await _toHttpResponse(_getClient(args[1]), "HEAD", args);
+      return await _safeHandle(() => _toHttpResponse(_getClient(args[1]), "HEAD", args));
     });
     runtime.onMessage('http_get', (dynamic args) async {
-      return await _toHttpResponse(_getClient(args[1]), "GET", args);
+      return await _safeHandle(() => _toHttpResponse(_getClient(args[1]), "GET", args));
     });
     runtime.onMessage('http_post', (dynamic args) async {
-      return await _toHttpResponse(_getClient(args[1]), "POST", args);
+      return await _safeHandle(() => _toHttpResponse(_getClient(args[1]), "POST", args));
     });
     runtime.onMessage('http_put', (dynamic args) async {
-      return await _toHttpResponse(_getClient(args[1]), "PUT", args);
+      return await _safeHandle(() => _toHttpResponse(_getClient(args[1]), "PUT", args));
     });
     runtime.onMessage('http_delete', (dynamic args) async {
-      return await _toHttpResponse(_getClient(args[1]), "DELETE", args);
+      return await _safeHandle(() => _toHttpResponse(_getClient(args[1]), "DELETE", args));
     });
     runtime.onMessage('http_patch', (dynamic args) async {
-      return await _toHttpResponse(_getClient(args[1]), "PATCH", args);
+      return await _safeHandle(() => _toHttpResponse(_getClient(args[1]), "PATCH", args));
     });
 
     runtime.evaluate('''
@@ -190,6 +206,7 @@ class Client {
   }
 
   void dispose() {
+    _isDisposed = true;
     for (final client in _clientCache.values) {
       client.close();
     }
