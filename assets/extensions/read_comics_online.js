@@ -10,7 +10,7 @@ const mangayomiSources = [
     "typeSource": "single",
     "isManga": true,
     "itemType": 0,
-    "version": "1.2.1",
+    "version": "1.2.2",
     "pkgPath": "javascript/manga/src/en/read_comics_online.js",
   },
 ];
@@ -58,12 +58,23 @@ class DefaultExtension extends MProvider {
     this.client = new Client();
   }
 
-  getHeaders() {
+  getHeaders(url) {
+    const isCdn = url && (url.includes("cdn.readcomicsonline.ru") || url.includes("/uploads/"));
     return {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6832.64 Safari/537.36",
-      "Referer": "https://readcomicsonline.ru/"
+      "Referer": isCdn ? "" : "https://readcomicsonline.ru/"
     };
+  }
+
+  getCoverUrl(url) {
+    let slug = "";
+    if (url.includes("/comic/")) {
+      slug = url.split("/comic/")[1].split("/")[0].split("?")[0];
+    } else {
+      slug = url.replace("https://readcomicsonline.ru", "").replace(/^\/+/, "").split("?")[0];
+    }
+    return slug ? `https://cdn.readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg` : "";
   }
 
   async getPopular(page) {
@@ -293,89 +304,110 @@ class DefaultExtension extends MProvider {
 
   async getDetail(url) {
     let fullUrl = url.startsWith("http") ? url : `https://readcomicsonline.ru${url}`;
-    
-    const res = await this.client.get(fullUrl, this.getHeaders());
-    const doc = new Document(res.body);
-
-    const titleEl = doc.querySelector("h2.listmanga-header") || doc.querySelector("h1") || doc.querySelector("h2");
-    const name = titleEl ? titleEl.text.trim() : "";
-
-    const imgEl = doc.querySelector(".boxed img") || doc.querySelector("img[src*='cover']");
-    let imageUrl = imgEl ? (imgEl.attr("src") || imgEl.attr("data-src") || "") : "";
-    if (imageUrl.includes("readcomicsonline.ru/uploads/")) {
-      imageUrl = imageUrl.replace("readcomicsonline.ru/uploads/", "cdn.readcomicsonline.ru/uploads/");
+    let slug = "";
+    if (fullUrl.includes("/comic/")) {
+      slug = fullUrl.split("/comic/")[1].split("/")[0].split("?")[0];
+    } else {
+      slug = fullUrl.replace("https://readcomicsonline.ru", "").replace(/^\/+/, "").split("?")[0];
     }
-    if (!imageUrl || !imageUrl.startsWith("http")) {
-      const slug = fullUrl.replace("https://readcomicsonline.ru/comic/", "").split("/")[0].split("?")[0];
-      imageUrl = `https://cdn.readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg`;
-    }
+    const defaultCover = slug ? `https://cdn.readcomicsonline.ru/uploads/manga/${slug}/cover/cover_250x350.jpg` : "";
 
-    const descEl = doc.querySelector(".manga-details .p-desc") || doc.querySelector(".panel-body p");
-    const description = descEl ? descEl.text.trim() : "";
+    try {
+      const res = await this.client.get(fullUrl, this.getHeaders(fullUrl));
+      const doc = new Document(res.body);
 
-    const chapters = [];
-    const chapterLinks = doc.querySelectorAll("section div a[href*='/comic/'], ul.chapters li a, a[href*='/comic/']");
-    const seen = new Set();
+      const titleEl = doc.querySelector("h2.listmanga-header") || doc.querySelector("h1") || doc.querySelector("h2");
+      const name = titleEl ? titleEl.text.trim() : (slug ? slug.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "");
 
-    for (const a of chapterLinks) {
-      const href = a.attr("href");
-      if (!href) continue;
-      const parts = href.replace("https://readcomicsonline.ru", "").split("/").filter(Boolean);
-      if (parts.length < 3) continue; // Must be ['comic', 'slug', 'chapter_num']
-      if (seen.has(href)) continue;
-      seen.add(href);
+      const imgEl = doc.querySelector(".boxed img") || doc.querySelector("img[src*='cover']");
+      let imageUrl = imgEl ? (imgEl.attr("src") || imgEl.attr("data-src") || "") : "";
+      if (imageUrl.includes("readcomicsonline.ru/uploads/")) {
+        imageUrl = imageUrl.replace("readcomicsonline.ru/uploads/", "cdn.readcomicsonline.ru/uploads/");
+      }
+      if (!imageUrl || !imageUrl.startsWith("http")) {
+        imageUrl = defaultCover;
+      }
 
-      // Extract date if present in child or parent
-      let dateUpload = "";
-      const dateSpan = a.querySelector("span.text-xs, span.text-slate-500, span.date, .date-chapter-title-rtl");
-      if (dateSpan) {
-        dateUpload = dateSpan.text.trim();
-      } else {
-        const parent = a.parentElement;
-        const parentDate = parent ? parent.querySelector(".date-chapter-title-rtl, .date, span.text-xs") : null;
-        if (parentDate) {
-          dateUpload = parentDate.text.trim();
+      const descEl = doc.querySelector(".manga-details .p-desc") || doc.querySelector(".panel-body p");
+      const description = descEl ? descEl.text.trim() : "";
+
+      const chapters = [];
+      const chapterLinks = doc.querySelectorAll("section div a[href*='/comic/'], ul.chapters li a, a[href*='/comic/']");
+      const seen = new Set();
+
+      for (const a of chapterLinks) {
+        const href = a.attr("href");
+        if (!href) continue;
+        const parts = href.replace("https://readcomicsonline.ru", "").split("/").filter(Boolean);
+        if (parts.length < 3) continue; // Must be ['comic', 'slug', 'chapter_num']
+        if (seen.has(href)) continue;
+        seen.add(href);
+
+        // Extract date if present in child or parent
+        let dateUpload = "";
+        const dateSpan = a.querySelector("span.text-xs, span.text-slate-500, span.date, .date-chapter-title-rtl");
+        if (dateSpan) {
+          dateUpload = dateSpan.text.trim();
+        } else {
+          const parent = a.parentElement;
+          const parentDate = parent ? parent.querySelector(".date-chapter-title-rtl, .date, span.text-xs") : null;
+          if (parentDate) {
+            dateUpload = parentDate.text.trim();
+          }
         }
-      }
 
-      // Extract chapter title cleanly without the date
-      let chName = "";
-      const titleSpan = a.querySelector("span.font-medium, span.text-slate-100, span.text-brand-400, .chapter-title-rtl");
-      if (titleSpan) {
-        chName = titleSpan.text.trim();
-      } else {
-        chName = a.text.trim();
-        if (dateUpload && chName.includes(dateUpload)) {
-          chName = chName.replace(dateUpload, "").trim();
+        // Extract chapter title cleanly without the date
+        let chName = "";
+        const titleSpan = a.querySelector("span.font-medium, span.text-slate-100, span.text-brand-400, .chapter-title-rtl");
+        if (titleSpan) {
+          chName = titleSpan.text.trim();
+        } else {
+          chName = a.text.trim();
+          if (dateUpload && chName.includes(dateUpload)) {
+            chName = chName.replace(dateUpload, "").trim();
+          }
         }
+
+        if (!chName) {
+          chName = `Chapter ${parts[2]}`;
+        }
+
+        chapters.push({
+          name: chName,
+          url: href.startsWith("http") ? href : `https://readcomicsonline.ru${href}`,
+          dateUpload: dateUpload
+        });
       }
 
-      if (!chName) {
-        chName = `Chapter ${parts[2]}`;
+      return {
+        name: name,
+        imageUrl: imageUrl,
+        description: description,
+        status: 0,
+        author: "Various",
+        genre: ["Comics"],
+        chapters: chapters
+      };
+    } catch (e) {
+      if (defaultCover) {
+        return {
+          name: slug ? slug.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Comic",
+          imageUrl: defaultCover,
+          description: "",
+          status: 0,
+          author: "Various",
+          genre: ["Comics"],
+          chapters: []
+        };
       }
-
-      chapters.push({
-        name: chName,
-        url: href.startsWith("http") ? href : `https://readcomicsonline.ru${href}`,
-        dateUpload: dateUpload
-      });
+      throw e;
     }
-
-    return {
-      name: name,
-      imageUrl: imageUrl,
-      description: description,
-      status: 0,
-      author: "Various",
-      genre: ["Comics"],
-      chapters: chapters
-    };
   }
 
   async getPageList(url) {
     let fullUrl = url.startsWith("http") ? url : `https://readcomicsonline.ru${url}`;
     
-    const res = await this.client.get(fullUrl, this.getHeaders());
+    const res = await this.client.get(fullUrl, this.getHeaders(fullUrl));
     const html = res.body || "";
     const doc = new Document(html);
 
@@ -391,7 +423,7 @@ class DefaultExtension extends MProvider {
           seen.add(cleanSrc);
           pages.push({
             url: cleanSrc,
-            headers: { "Referer": "https://readcomicsonline.ru/" }
+            headers: { "Referer": "" }
           });
         }
       }
@@ -407,7 +439,7 @@ class DefaultExtension extends MProvider {
             seen.add(m);
             pages.push({
               url: m,
-              headers: { "Referer": "https://readcomicsonline.ru/" }
+              headers: { "Referer": "" }
             });
           }
         }

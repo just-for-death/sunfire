@@ -4,8 +4,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../db/isar_service.dart';
+import '../db/models/manga.dart';
 import '../engine/quickjs_service.dart';
 import '../sync/graphql_client_service.dart';
 
@@ -185,11 +188,51 @@ class ImageCacheHelper {
 
   static Future<Uint8List?> _doFetch(String url, String sourceName, int mangaServerId) async {
     try {
-      final headers = QuickJsService.getImageHeaders(sourceName, url);
       Uint8List? bytes;
 
+      // PASS 0: Proactive Extension Direct Cover Resolution
+      // If URL is empty or points to the Suwayomi server proxy (/api/v1/manga/),
+      // immediately query the local JS extension for the direct CDN URL.
+      // This prevents hitting the server proxy (which returns HTTP 500 when Cloudflare-blocked upstream).
+      if ((url.isEmpty || url.contains('/api/v1/manga/')) && mangaServerId > 0 && IsarService.instance.isInitialized) {
+        try {
+          final isar = IsarService.instance.isar;
+          final m = isar.mangas.filter().serverIdEqualTo(mangaServerId).findFirstSync();
+          final effectiveSource = (m != null && m.sourceName.isNotEmpty) ? m.sourceName : sourceName;
+          if (m != null && effectiveSource.isNotEmpty && QuickJsService.instance.hasExtension(effectiveSource)) {
+            String? directCover;
+            if (m.url.isNotEmpty) {
+              directCover = QuickJsService.instance.getExtensionCoverUrl(effectiveSource, m.url);
+            }
+            if (directCover == null || directCover.isEmpty) {
+              final targetQuery = m.url.isNotEmpty ? m.url : m.title;
+              final details = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSource, targetQuery);
+              directCover = details['imageUrl'] as String?;
+            }
+            if (directCover != null && directCover.isNotEmpty && directCover.startsWith('http')) {
+              final extHeaders = QuickJsService.getImageHeaders(effectiveSource, directCover);
+              bytes = await _attemptHttpFetch(directCover, extHeaders);
+              if (bytes == null && extHeaders.containsKey('Referer')) {
+                final noRef = Map<String, String>.from(extHeaders)..remove('Referer');
+                bytes = await _attemptHttpFetch(directCover, noRef);
+              }
+              if (bytes != null && bytes.length > 200) {
+                try {
+                  await isar.writeTxn(() async {
+                    m.thumbnailUrl = directCover;
+                    await isar.mangas.put(m);
+                  });
+                } catch (_) {}
+                url = directCover;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       // PASS 1: Standard fetch with configured headers
-      bytes = await _attemptHttpFetch(url, headers);
+      final headers = QuickJsService.getImageHeaders(sourceName, url);
+      bytes ??= await _attemptHttpFetch(url, headers);
 
       // PASS 2 (Self-Healing Anti-Hotlink): If failed and Referer was present, retry with NO Referer!
       // Fixes any CDN enforcing strict anti-hotlink protection
@@ -242,11 +285,50 @@ class ImageCacheHelper {
       // PASS 6: Suwayomi server proxy fallback (for server-synced manga whose remote CDN is blocked or 403)
       if (bytes == null && mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
         final serverUrl = GraphQLClientService.instance.baseUrl;
-        if (serverUrl != null && serverUrl.isNotEmpty) {
+        if (serverUrl != null && serverUrl.isNotEmpty && !url.startsWith(serverUrl)) {
           final serverThumbUrl = '$serverUrl/api/v1/manga/$mangaServerId/thumbnail';
           final serverHeaders = Map<String, String>.from(GraphQLClientService.instance.authHeaders);
           bytes = await _attemptHttpFetch(serverThumbUrl, serverHeaders);
         }
+      }
+
+      // PASS 7: Extension-Driven Cover Resolution
+      // When server proxy returns empty/500 (e.g. Suwayomi blocked upstream by Cloudflare)
+      // or remote URL fails, query the local extension for this source to resolve the authentic direct CDN cover URL.
+      if (bytes == null && mangaServerId > 0 && IsarService.instance.isInitialized) {
+        try {
+          final isar = IsarService.instance.isar;
+          final m = isar.mangas.filter().serverIdEqualTo(mangaServerId).findFirstSync();
+          final effectiveSource = (m != null && m.sourceName.isNotEmpty) ? m.sourceName : sourceName;
+          if (m != null && effectiveSource.isNotEmpty && QuickJsService.instance.hasExtension(effectiveSource)) {
+            String? realCoverUrl;
+            if (m.url.isNotEmpty) {
+              realCoverUrl = QuickJsService.instance.getExtensionCoverUrl(effectiveSource, m.url);
+            }
+            if (realCoverUrl == null || realCoverUrl.isEmpty) {
+              final targetQuery = m.url.isNotEmpty ? m.url : m.title;
+              final details = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSource, targetQuery);
+              realCoverUrl = details['imageUrl'] as String?;
+            }
+            if (realCoverUrl != null && realCoverUrl.isNotEmpty && realCoverUrl.startsWith('http')) {
+              final extHeaders = QuickJsService.getImageHeaders(effectiveSource, realCoverUrl);
+              bytes = await _attemptHttpFetch(realCoverUrl, extHeaders);
+              if (bytes == null && extHeaders.containsKey('Referer')) {
+                final noRef = Map<String, String>.from(extHeaders)..remove('Referer');
+                bytes = await _attemptHttpFetch(realCoverUrl, noRef);
+              }
+              if (bytes != null && bytes.length > 200) {
+                try {
+                  await isar.writeTxn(() async {
+                    m.thumbnailUrl = realCoverUrl;
+                    await isar.mangas.put(m);
+                  });
+                } catch (_) {}
+                _memoryCache[realCoverUrl] = bytes;
+              }
+            }
+          }
+        } catch (_) {}
       }
 
       if (bytes != null && bytes.length > 200) {
@@ -317,6 +399,25 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
 
   void _checkAndFetch() {
     var url = widget.thumbnailUrl;
+    if (widget.mangaServerId > 0 && IsarService.instance.isInitialized) {
+      try {
+        final m = IsarService.instance.isar.mangas.filter().serverIdEqualTo(widget.mangaServerId).findFirstSync();
+        if (m != null) {
+          if (m.thumbnailUrl != null && m.thumbnailUrl!.isNotEmpty && !m.thumbnailUrl!.contains('/api/v1/manga/')) {
+            url = m.thumbnailUrl;
+          } else if (m.sourceName.isNotEmpty && m.url.isNotEmpty) {
+            final extCover = QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
+            if (extCover != null && extCover.isNotEmpty) {
+              url = extCover;
+              IsarService.instance.isar.writeTxn(() async {
+                m.thumbnailUrl = extCover;
+                await IsarService.instance.isar.mangas.put(m);
+              });
+            }
+          }
+        }
+      } catch (_) {}
+    }
     if ((url == null || url.isEmpty) && widget.mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
       url = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/${widget.mangaServerId}/thumbnail';
     }
@@ -347,6 +448,21 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
   @override
   Widget build(BuildContext context) {
     var url = widget.thumbnailUrl;
+    if (widget.mangaServerId > 0 && IsarService.instance.isInitialized) {
+      try {
+        final m = IsarService.instance.isar.mangas.filter().serverIdEqualTo(widget.mangaServerId).findFirstSync();
+        if (m != null) {
+          if (m.thumbnailUrl != null && m.thumbnailUrl!.isNotEmpty && !m.thumbnailUrl!.contains('/api/v1/manga/')) {
+            url = m.thumbnailUrl;
+          } else if (m.sourceName.isNotEmpty && m.url.isNotEmpty) {
+            final extCover = QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
+            if (extCover != null && extCover.isNotEmpty) {
+              url = extCover;
+            }
+          }
+        }
+      } catch (_) {}
+    }
     if ((url == null || url.isEmpty) && widget.mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
       url = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/${widget.mangaServerId}/thumbnail';
     }
