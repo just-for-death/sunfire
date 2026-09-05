@@ -8,6 +8,7 @@ import 'backup_settings_screen.dart';
 import 'browse_settings_screen.dart';
 import 'downloads_settings_screen.dart';
 import 'extension_repos_screen.dart';
+import 'general_settings_screen.dart';
 import 'library_settings_screen.dart';
 import 'reader_settings_screen.dart';
 import 'server_settings_screen.dart';
@@ -317,6 +318,38 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
       keywords: ['version', 'build', 'about', 'platform', 'os', 'info'],
       destination: (context) => const AdvancedSettingsScreen(),
     ),
+    _SettingSearchItem(
+      title: 'App Language & Locale',
+      subtitle: 'Change interface language and date display formatting',
+      category: 'General',
+      icon: Icons.language_rounded,
+      keywords: ['language', 'locale', 'date format', 'english', 'translate', 'general'],
+      destination: (context) => const GeneralSettingsScreen(),
+    ),
+    _SettingSearchItem(
+      title: 'Start Screen & Navigation',
+      subtitle: 'Configure default opening screen and exit confirmation',
+      category: 'General',
+      icon: Icons.home_outlined,
+      keywords: ['start', 'screen', 'launch', 'default', 'exit', 'confirm', 'general'],
+      destination: (context) => const GeneralSettingsScreen(),
+    ),
+    _SettingSearchItem(
+      title: 'Incognito Mode',
+      subtitle: 'Pause reading history recording and progress tracking',
+      category: 'General',
+      icon: Icons.visibility_off_outlined,
+      keywords: ['incognito', 'private', 'history', 'tracking', 'privacy', 'general'],
+      destination: (context) => const GeneralSettingsScreen(),
+    ),
+    _SettingSearchItem(
+      title: 'Network Timeouts',
+      subtitle: 'Adjust HTTP connection request timeout duration',
+      category: 'General',
+      icon: Icons.timer_outlined,
+      keywords: ['timeout', 'network', 'connection', 'http', 'retry', 'general'],
+      destination: (context) => const GeneralSettingsScreen(),
+    ),
   ];
 
   List<_SettingSearchItem> get _filteredSettings {
@@ -532,7 +565,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       },
                     ),
 
-                    // 8. GENERAL & ADVANCED
+                    // 8. GENERAL
                     _buildTile(
                       icon: Icons.tune_rounded,
                       title: 'General',
@@ -541,7 +574,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const AdvancedSettingsScreen()),
+                          MaterialPageRoute(builder: (context) => const GeneralSettingsScreen()),
                         );
                       },
                     ),

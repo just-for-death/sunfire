@@ -163,6 +163,83 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
+  void _showAutoScrollSpeedDialog() {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF141419),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Auto-Scroll Speed', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+                        Text('${_autoScrollSpeed.round()} px/s', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: primaryColor)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Slider(
+                      value: _autoScrollSpeed.clamp(10.0, 1000.0),
+                      min: 10.0,
+                      max: 1000.0,
+                      divisions: 99,
+                      activeColor: primaryColor,
+                      label: '${_autoScrollSpeed.round()} px/s',
+                      onChanged: (val) {
+                        setState(() => _autoScrollSpeed = val);
+                        setSheetState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('Quick Presets', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildSpeedChip('Slow (25 px/s)', 25.0, primaryColor, setSheetState),
+                        _buildSpeedChip('Normal (50 px/s)', 50.0, primaryColor, setSheetState),
+                        _buildSpeedChip('Fast (120 px/s)', 120.0, primaryColor, setSheetState),
+                        _buildSpeedChip('⚡ Faster (250 px/s)', 250.0, primaryColor, setSheetState),
+                        _buildSpeedChip('🚀 Turbo (500 px/s)', 500.0, primaryColor, setSheetState),
+                        _buildSpeedChip('💨 Hyper (800 px/s)', 800.0, primaryColor, setSheetState),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSpeedChip(String label, double speed, Color primaryColor, StateSetter setSheetState) {
+    final isSelected = (_autoScrollSpeed - speed).abs() < 5.0;
+    return ChoiceChip(
+      label: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : Colors.white70)),
+      selected: isSelected,
+      selectedColor: primaryColor.withValues(alpha: 0.35),
+      backgroundColor: const Color(0x1FFFFFFF),
+      side: BorderSide(color: isSelected ? primaryColor : Colors.white24, width: 0.8),
+      onSelected: (_) {
+        setState(() => _autoScrollSpeed = speed);
+        setSheetState(() {});
+      },
+    );
+  }
+
   void _safeSetWakelock(bool enable) {
     try {
       if (enable) {
@@ -194,6 +271,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _scaleType = _parseScaleType(_settings.scaleType);
     _cropBorders = _settings.cropBorders;
     _invertTaps = _settings.invertTapZones;
+    _autoScrollSpeed = _settings.defaultAutoScrollSpeed;
   }
 
   ReadingMode _parseReadingMode(String str) {
@@ -2045,6 +2123,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                              const SizedBox(width: 6),
                                              GestureDetector(
                                                onTap: _toggleAutoScroll,
+                                               onLongPress: _showAutoScrollSpeedDialog,
                                                child: Container(
                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                  decoration: BoxDecoration(
@@ -2190,20 +2269,31 @@ class _ReaderScreenState extends State<ReaderScreen> {
                               child: Icon(Icons.pause_rounded, size: 16, color: primaryColor),
                             ),
                             const SizedBox(width: 6),
-                            Text(
-                              '${_autoScrollSpeed.round()} px/s',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.3,
+                            GestureDetector(
+                              onTap: _showAutoScrollSpeedDialog,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '${_autoScrollSpeed.round()} px/s',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 4),
                             GestureDetector(
                               onTap: () {
                                 setState(() {
-                                  _autoScrollSpeed = (_autoScrollSpeed - 10).clamp(10.0, 200.0);
+                                  final step = _autoScrollSpeed >= 300 ? 50.0 : (_autoScrollSpeed >= 100 ? 25.0 : 10.0);
+                                  _autoScrollSpeed = (_autoScrollSpeed - step).clamp(10.0, 1000.0);
                                 });
                               },
                               child: const Padding(
@@ -2214,12 +2304,62 @@ class _ReaderScreenState extends State<ReaderScreen> {
                             GestureDetector(
                               onTap: () {
                                 setState(() {
-                                  _autoScrollSpeed = (_autoScrollSpeed + 10).clamp(10.0, 200.0);
+                                  final step = _autoScrollSpeed >= 300 ? 50.0 : (_autoScrollSpeed >= 100 ? 25.0 : 10.0);
+                                  _autoScrollSpeed = (_autoScrollSpeed + step).clamp(10.0, 1000.0);
                                 });
                               },
                               child: const Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 4),
                                 child: Icon(Icons.add_rounded, size: 14, color: Colors.white70),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            // Dedicated "FASTER" Button
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  if (_autoScrollSpeed < 180.0) {
+                                    _autoScrollSpeed = 250.0;
+                                  } else if (_autoScrollSpeed < 450.0) {
+                                    _autoScrollSpeed = 500.0;
+                                  } else {
+                                    _autoScrollSpeed = _settings.defaultAutoScrollSpeed;
+                                  }
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: _autoScrollSpeed >= 180.0
+                                      ? primaryColor.withValues(alpha: 0.35)
+                                      : Colors.white.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.white24,
+                                    width: 0.6,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.fast_forward_rounded,
+                                      size: 13,
+                                      color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.amberAccent,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      _autoScrollSpeed >= 450.0
+                                          ? 'TURBO'
+                                          : (_autoScrollSpeed >= 180.0 ? 'FASTER' : 'FAST'),
+                                      style: TextStyle(
+                                        color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
