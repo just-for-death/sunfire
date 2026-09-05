@@ -192,14 +192,14 @@ class ImageCacheHelper {
       bytes = await _attemptHttpFetch(url, headers);
 
       // PASS 2 (Self-Healing Anti-Hotlink): If failed and Referer was present, retry with NO Referer!
-      // Fixes any CDN enforcing anti-hotlink protection (ReadComicOnline, ImageKit, CloudFront, etc.)
+      // Fixes any CDN enforcing strict anti-hotlink protection
       if (bytes == null && headers.containsKey('Referer')) {
         final noRefererHeaders = Map<String, String>.from(headers)..remove('Referer');
         bytes = await _attemptHttpFetch(url, noRefererHeaders);
       }
 
       // PASS 3 (Self-Healing Origin Referer): If failed and had no Referer, retry with Origin Referer!
-      // Fixes CDNs requiring same-origin domain Referer (Webtoons, Naver, Pixiv, MangaDex)
+      // Fixes CDNs requiring same-origin domain Referer
       if (bytes == null) {
         try {
           final uri = Uri.parse(url);

@@ -752,7 +752,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 const SectionTitle(title: 'Cloudflare Bypass - FlareSolverr (Local App)'),
                 SettingsPropTile(
                   title: 'Local FlareSolverr URL',
-                  description: 'Proxy endpoint used by this device to bypass Cloudflare Turnstile challenges on local extensions (ReadComicOnline, Mangago, etc.). Independent from server FlareSolverr.',
+                  description: 'Proxy endpoint used by this device to bypass Cloudflare Turnstile challenges on local extensions and protected sources. Independent from server FlareSolverr.',
                   scope: SettingScope.local,
                   kind: SettingsPropKind.textField,
                   stringValue: _settings.cfProxyUrl,

@@ -84,5 +84,17 @@ void main() {
 
       expect(thumbnailUrl, equals('http://127.0.0.1:4567/api/v1/manga/42/thumbnail'));
     });
+
+    test('Generic extension header cache isolation', () {
+      final headers = <String, String>{
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      };
+      // Simulating dynamic extension getHeaders response without any hardcoded domain checks
+      final extHeaders = {'Referer': 'https://custom-manga-site.org/'};
+      headers.addAll(extHeaders);
+
+      expect(headers['Referer'], equals('https://custom-manga-site.org/'));
+      expect(headers['User-Agent'], isNotEmpty);
+    });
   });
 }

@@ -384,7 +384,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     for (final ch in list) {
       var cleanName = ch.name.trim();
 
-      // Strip redundant leading manga title prefix if present (e.g. Mangahere)
+      // Strip redundant leading manga title prefix if present in chapter title
       if (mangaTitleLower.isNotEmpty && cleanName.toLowerCase().startsWith(mangaTitleLower)) {
         final stripped = cleanName.substring(mangaTitleLower.length).replaceAll(RegExp(r'^[\s\-–—:]+'), '').trim();
         if (stripped.isNotEmpty) cleanName = stripped;

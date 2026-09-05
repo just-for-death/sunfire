@@ -95,7 +95,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Bypasses Cloudflare Turnstile challenges for ReadComicOnline and protected extensions.',
+                'Bypasses Cloudflare Turnstile challenges for protected sources and extensions.',
                 style: TextStyle(fontSize: 13, color: Colors.grey),
               ),
               const SizedBox(height: 16),

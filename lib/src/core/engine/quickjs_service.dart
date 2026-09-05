@@ -357,41 +357,55 @@ class QuickJsService {
       return headers;
     }
 
-    // 1. Query extension headers dynamically from the installed JS source (with memory caching)
+    // 1. Dynamically resolve the corresponding JS extension:
+    String? jsCode;
     if (sourceOrUrl.isNotEmpty) {
       if (_headersCache.containsKey(sourceOrUrl)) {
         headers.addAll(_headersCache[sourceOrUrl]!);
       } else {
-        try {
-          final jsCode = instance.getExtensionCode(sourceOrUrl);
-          if (jsCode != null && jsCode.isNotEmpty) {
-            final extHeaders = instance.getSourceHeaders(jsCode);
-            if (extHeaders.isNotEmpty) {
-              _headersCache[sourceOrUrl] = extHeaders;
-              headers.addAll(extHeaders);
-            }
-            // If Referer wasn't in extHeaders, extract baseUrl and set it
-            if (!headers.containsKey('Referer')) {
-              final baseUrl = instance.extractBaseUrl(jsCode);
-              if (baseUrl != null && baseUrl.isNotEmpty) {
-                headers['Referer'] = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
-              }
-            }
-          }
-        } catch (_) {}
+        jsCode = instance.getExtensionCode(sourceOrUrl);
       }
     }
 
-    // 2. Fallback for Webtoons and Mangapill images
-    final normSource = sourceOrUrl.replaceAll(RegExp(r'[\s_\-]'), '').toLowerCase();
-    final normTarget = targetUrl.toLowerCase();
+    // If not matched by source name, lookup by domain host matching installed extensions' baseUrl
+    if (jsCode == null && !headers.containsKey('Referer') && targetUrl.isNotEmpty) {
+      final targetUri = Uri.tryParse(targetUrl);
+      if (targetUri != null && targetUri.host.isNotEmpty) {
+        final hostLower = targetUri.host.toLowerCase();
+        for (final code in instance._installedJsSources.values) {
+          final bUrl = instance.extractBaseUrl(code);
+          if (bUrl != null && bUrl.isNotEmpty) {
+            final bUri = Uri.tryParse(bUrl);
+            if (bUri != null && bUri.host.isNotEmpty) {
+              final bHost = bUri.host.toLowerCase();
+              if (hostLower == bHost || hostLower.endsWith('.$bHost') || bHost.endsWith('.$hostLower')) {
+                jsCode = code;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
 
-    if ((normTarget.contains('webtoon') || normTarget.contains('pstatic.net') || normSource.contains('webtoon')) &&
-        (!headers.containsKey('Referer') || headers['Referer']!.isEmpty)) {
-      headers['Referer'] = 'https://www.webtoons.com/';
-    } else if ((normTarget.contains('readdetectiveconan') || normTarget.contains('mangapill') || normSource.contains('mangapill')) &&
-        (!headers.containsKey('Referer') || headers['Referer']!.isEmpty)) {
-      headers['Referer'] = 'https://mangapill.com/';
+    // 2. Query dynamic extension headers from the resolved JS source
+    if (jsCode != null && jsCode.isNotEmpty) {
+      try {
+        final extHeaders = instance.getSourceHeaders(jsCode, targetUrl);
+        if (extHeaders.isNotEmpty) {
+          if (sourceOrUrl.isNotEmpty) {
+            _headersCache[sourceOrUrl] = extHeaders;
+          }
+          headers.addAll(extHeaders);
+        }
+        // If Referer wasn't in extHeaders, extract baseUrl dynamically and set it
+        if (!headers.containsKey('Referer')) {
+          final baseUrl = instance.extractBaseUrl(jsCode);
+          if (baseUrl != null && baseUrl.isNotEmpty) {
+            headers['Referer'] = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
+          }
+        }
+      } catch (_) {}
     }
 
     // 3. Attach domain / Cloudflare cookies from MClient
@@ -410,8 +424,8 @@ class QuickJsService {
     return headers;
   }
 
-  Map<String, String> getSourceHeaders(String jsCode) {
-    final cacheKey = jsCode.hashCode.toString();
+  Map<String, String> getSourceHeaders(String jsCode, [String? targetUrl]) {
+    final cacheKey = '${jsCode.hashCode}_${targetUrl ?? ''}';
     if (_headersCache.containsKey(cacheKey)) {
       return _headersCache[cacheKey]!;
     }
@@ -420,7 +434,7 @@ class QuickJsService {
       sourceCode: jsCode,
     );
     try {
-      final h = service.getHeaders();
+      final h = service.getHeaders(targetUrl);
       _headersCache[cacheKey] = h;
       return h;
     } catch (e, stack) {
