@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/services/settings_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
@@ -47,8 +49,25 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
     );
   }
 
+  Widget _buildPresetChip(String label, double speed) {
+    final isSelected = (_settings.defaultAutoScrollSpeed - speed).abs() < 5.0;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    return ChoiceChip(
+      label: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : Colors.white70)),
+      selected: isSelected,
+      selectedColor: primaryColor.withValues(alpha: 0.35),
+      backgroundColor: const Color(0x1AFFFFFF),
+      side: BorderSide(color: isSelected ? primaryColor : Colors.white24, width: 0.8),
+      onSelected: (_) {
+        HapticFeedback.selectionClick();
+        _settings.defaultAutoScrollSpeed = speed;
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return ListenableBuilder(
       listenable: _settings,
       builder: (context, _) {
@@ -204,78 +223,279 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
 
               // ── 3. AUTO-SCROLL (WEBTOON / LONG STRIP) ──
               const SectionTitle(title: 'Auto-Scroll (Webtoon & Long Strip)'),
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                leading: const Icon(Icons.speed_rounded),
-                title: Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 6,
-                  runSpacing: 4,
+
+              // Live Speed Simulator Viewport
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: _AutoScrollLivePreview(speed: _settings.defaultAutoScrollSpeed),
+              ),
+
+              // Speed Presets Chips
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Default Auto-Scroll Speed', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                    SunfireBadge.local(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Quick Presets', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white70)),
+                        Text(
+                          '${_settings.defaultAutoScrollSpeed.round()} px/s',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildPresetChip('Slow (25 px/s)', 25.0),
+                        _buildPresetChip('Normal (50 px/s)', 50.0),
+                        _buildPresetChip('Fast (120 px/s)', 120.0),
+                        _buildPresetChip('⚡ Faster (250 px/s)', 250.0),
+                        _buildPresetChip('🚀 Turbo (500 px/s)', 500.0),
+                        _buildPresetChip('💨 Hyper (800 px/s)', 800.0),
+                      ],
+                    ),
                   ],
                 ),
-                subtitle: Text(
-                  '${_settings.defaultAutoScrollSpeed.round()} px/s',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                onTap: () {
-                  _showRadioDialog(
-                    title: 'Default Auto-Scroll Speed',
-                    options: const [
-                      'Slow (25 px/s)',
-                      'Normal (50 px/s)',
-                      'Fast (120 px/s)',
-                      'Faster (250 px/s)',
-                      'Turbo (450 px/s)',
-                      'Hyper (750 px/s)',
-                    ],
-                    currentValue: _settings.defaultAutoScrollSpeed <= 30
-                        ? 'Slow (25 px/s)'
-                        : _settings.defaultAutoScrollSpeed <= 80
-                            ? 'Normal (50 px/s)'
-                            : _settings.defaultAutoScrollSpeed <= 180
-                                ? 'Fast (120 px/s)'
-                                : _settings.defaultAutoScrollSpeed <= 350
-                                    ? 'Faster (250 px/s)'
-                                    : _settings.defaultAutoScrollSpeed <= 600
-                                        ? 'Turbo (450 px/s)'
-                                        : 'Hyper (750 px/s)',
-                    onSelected: (val) {
-                      if (val.contains('25')) _settings.defaultAutoScrollSpeed = 25.0;
-                      if (val.contains('50')) _settings.defaultAutoScrollSpeed = 50.0;
-                      if (val.contains('120')) _settings.defaultAutoScrollSpeed = 120.0;
-                      if (val.contains('250')) _settings.defaultAutoScrollSpeed = 250.0;
-                      if (val.contains('450')) _settings.defaultAutoScrollSpeed = 450.0;
-                      if (val.contains('750')) _settings.defaultAutoScrollSpeed = 750.0;
-                    },
-                  );
-                },
               ),
+
+              // Stepper + Slider Row
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Row(
                   children: [
-                    const Text('10 px/s', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    IconButton.filledTonal(
+                      style: IconButton.styleFrom(
+                        backgroundColor: const Color(0x22FFFFFF),
+                        minimumSize: const Size(36, 36),
+                        padding: EdgeInsets.zero,
+                      ),
+                      icon: const Icon(Icons.remove_rounded, size: 18),
+                      tooltip: '-10 px/s',
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        _settings.defaultAutoScrollSpeed = (_settings.defaultAutoScrollSpeed - 10.0).clamp(10.0, 1000.0);
+                      },
+                    ),
                     Expanded(
                       child: Slider(
                         value: _settings.defaultAutoScrollSpeed.clamp(10.0, 1000.0),
                         min: 10.0,
                         max: 1000.0,
                         divisions: 99,
+                        activeColor: primaryColor,
                         label: '${_settings.defaultAutoScrollSpeed.round()} px/s',
                         onChanged: (val) => _settings.defaultAutoScrollSpeed = val,
                       ),
                     ),
-                    const Text('1000 px/s', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    IconButton.filledTonal(
+                      style: IconButton.styleFrom(
+                        backgroundColor: const Color(0x22FFFFFF),
+                        minimumSize: const Size(36, 36),
+                        padding: EdgeInsets.zero,
+                      ),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      tooltip: '+10 px/s',
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        _settings.defaultAutoScrollSpeed = (_settings.defaultAutoScrollSpeed + 10.0).clamp(10.0, 1000.0);
+                      },
+                    ),
                   ],
                 ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // Behavioral Switches
+              SettingsPropTile(
+                title: 'Pause on Touch / Drag',
+                subtitle: 'Temporarily pause scrolling while touching or inspecting panels',
+                scope: SettingScope.local,
+                kind: SettingsPropKind.switchTile,
+                boolValue: _settings.autoScrollPauseOnTouch,
+                onBoolChanged: (val) => _settings.autoScrollPauseOnTouch = val,
+              ),
+              SettingsPropTile(
+                title: 'Smooth Ease-In Acceleration',
+                subtitle: 'Gradually ramp up scroll velocity over 400ms instead of an abrupt start',
+                scope: SettingScope.local,
+                kind: SettingsPropKind.switchTile,
+                boolValue: _settings.autoScrollSmoothEaseIn,
+                onBoolChanged: (val) => _settings.autoScrollSmoothEaseIn = val,
+              ),
+              SettingsPropTile(
+                title: 'Auto-Advance to Next Chapter',
+                subtitle: 'Seamlessly continue auto-scrolling into the next chapter at bottom',
+                scope: SettingScope.local,
+                kind: SettingsPropKind.switchTile,
+                boolValue: _settings.autoScrollAutoNextChapter,
+                onBoolChanged: (val) => _settings.autoScrollAutoNextChapter = val,
+              ),
+              SettingsPropTile(
+                title: 'Show Floating HUD Controller',
+                subtitle: 'Display the floating speed and pause pill during reading',
+                scope: SettingScope.local,
+                kind: SettingsPropKind.switchTile,
+                boolValue: _settings.autoScrollShowFloatingHud,
+                onBoolChanged: (val) => _settings.autoScrollShowFloatingHud = val,
               ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _AutoScrollLivePreview extends StatefulWidget {
+  final double speed;
+  const _AutoScrollLivePreview({required this.speed});
+
+  @override
+  State<_AutoScrollLivePreview> createState() => _AutoScrollLivePreviewState();
+}
+
+class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with SingleTickerProviderStateMixin {
+  late final ScrollController _controller;
+  Ticker? _ticker;
+  Duration? _lastElapsed;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ScrollController();
+    _startPreviewTicker();
+  }
+
+  void _startPreviewTicker() {
+    _ticker = createTicker((elapsed) {
+      if (!mounted || !_controller.hasClients) return;
+      if (_lastElapsed == null) {
+        _lastElapsed = elapsed;
+        return;
+      }
+      final dt = (elapsed - _lastElapsed!).inMicroseconds / 1000000.0;
+      _lastElapsed = elapsed;
+      final safeDt = dt.clamp(0.0, 0.05);
+
+      final max = _controller.position.maxScrollExtent;
+      final cur = _controller.offset;
+      if (max > 0 && cur >= max) {
+        _controller.jumpTo(0);
+        return;
+      }
+      final step = widget.speed * safeDt;
+      _controller.jumpTo((cur + step).clamp(0.0, max));
+    });
+    _ticker?.start();
+  }
+
+  @override
+  void dispose() {
+    _ticker?.stop();
+    _ticker?.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    return Container(
+      height: 120,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: const Color(0xFF131318),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
+      ),
+      child: Stack(
+        children: [
+          ListView.builder(
+            controller: _controller,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: 40,
+            itemBuilder: (context, index) {
+              final isCard = index % 3 == 0;
+              if (isCard) {
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  height: 54,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        primaryColor.withValues(alpha: 0.15),
+                        const Color(0x22FFFFFF),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.auto_stories_rounded, size: 16, color: primaryColor),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Webtoon Panel ${(index ~/ 3) + 1}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                child: Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              );
+            },
+          ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xDD0F0F14),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: primaryColor.withValues(alpha: 0.6)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.play_circle_fill_rounded, size: 12, color: primaryColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    'LIVE PREVIEW: ${widget.speed.round()} px/s',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
