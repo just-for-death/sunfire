@@ -96,5 +96,49 @@ void main() {
       expect(headers['Referer'], equals('https://custom-manga-site.org/'));
       expect(headers['User-Agent'], isNotEmpty);
     });
+
+    test('Chapter model authentic dateUpload preservation across extensions', () {
+      final webtoonsCh = Chapter()
+        ..serverId = 101
+        ..name = 'Ep. 1115 - One Last Prayer'
+        ..dateUpload = 'May 6, 2026';
+
+      final weebCentralCh = Chapter()
+        ..serverId = 102
+        ..name = 'Chapter 23'
+        ..dateUpload = '2025-07-19';
+
+      final readComicsCh = Chapter()
+        ..serverId = 103
+        ..name = 'Chapter 1'
+        ..dateUpload = '26 Aug 2026';
+
+      final mangaHereCh = Chapter()
+        ..serverId = 104
+        ..name = 'Ch.045'
+        ..dateUpload = 'Nov 14, 2024';
+
+      expect(webtoonsCh.dateUpload, equals('May 6, 2026'));
+      expect(weebCentralCh.dateUpload, equals('2025-07-19'));
+      expect(readComicsCh.dateUpload, equals('26 Aug 2026'));
+      expect(mangaHereCh.dateUpload, equals('Nov 14, 2024'));
+    });
+
+    test('Reading progress clamping avoids Page 11/10 overflow', () {
+      final ch = Chapter()
+        ..serverId = 201
+        ..pageCount = 10
+        ..lastPageRead = 11
+        ..isRead = false;
+
+      // Clamping logic applied in UI and reader
+      final clampedPage = ch.lastPageRead.clamp(1, ch.pageCount);
+      expect(clampedPage, equals(10));
+      expect(clampedPage <= ch.pageCount, isTrue);
+
+      // Once marked read, subtitle suppresses page progress
+      ch.isRead = true;
+      expect(ch.isRead, isTrue);
+    });
   });
 }

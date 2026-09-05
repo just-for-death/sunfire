@@ -499,6 +499,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     _sourceName = resolved.effectiveSourceName ?? sourceName;
     _pageUrls = resolved.pageUrls;
+    if (_chapter != null && _pageUrls.isNotEmpty && _chapter!.pageCount != _pageUrls.length) {
+      _chapter!.pageCount = _pageUrls.length;
+      IsarService.instance.saveChapter(_chapter!);
+    }
     debugPrint('[Reader] Resolved ${_pageUrls.length} pages for source=$_sourceName: ${_pageUrls.take(3).toList()}');
 
     // Proactively pre-fetch first 5 pages on desktop to bypass Cloudflare image CDN blocking immediately
@@ -684,8 +688,16 @@ class _ReaderScreenState extends State<ReaderScreen> {
     // Privacy & Security: If Incognito Mode is enabled, do not persist reading progress or sync to server
     if (_settings.incognitoMode) return;
 
-    final isComplete = page >= _pageUrls.length;
-    _chapter!.lastPageRead = page;
+    final totalPages = _pageUrls.isNotEmpty
+        ? _pageUrls.length
+        : (_chapter!.pageCount > 0 ? _chapter!.pageCount : page);
+    final clampedPage = totalPages > 0 ? page.clamp(1, totalPages) : page;
+    final isComplete = page >= totalPages;
+
+    _chapter!.lastPageRead = clampedPage;
+    if (_pageUrls.isNotEmpty && _chapter!.pageCount != _pageUrls.length) {
+      _chapter!.pageCount = _pageUrls.length;
+    }
     if (isComplete) {
       _chapter!.isRead = true;
       if (_settings.deleteFinishedChaptersWhileReading == 'Immediately') {
@@ -699,7 +711,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     final isLocal = QuickJsService.instance.hasExtension(_sourceName ?? '');
     if (GraphQLClientService.instance.isConfigured && !isLocal) {
-      GraphQLClientService.instance.updateChapterReadStatus(_chapter!.serverId, _chapter!.isRead, page);
+      GraphQLClientService.instance.updateChapterReadStatus(_chapter!.serverId, _chapter!.isRead, clampedPage);
     }
   }
 

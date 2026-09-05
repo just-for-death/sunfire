@@ -193,13 +193,7 @@ class DefaultExtension extends MProvider {
         seenCh.add(chUrl);
         var dateUpload = "";
         if (dateEl && dateEl.text) {
-          const t = dateEl.text.trim();
-          const parsed = this.formatDateString(t, this.source.lang || (this.source.langs && this.source.langs[0]) || "en") || Date.parse(t) || 0;
-          if (!isNaN(parsed) && parsed > 0) {
-            dateUpload = parsed.toString();
-          } else {
-            dateUpload = t;
-          }
+          dateUpload = dateEl.text.trim();
         }
         chapters.push({
           name: name || "Episode",
@@ -211,24 +205,55 @@ class DefaultExtension extends MProvider {
 
     parsePageEpisodes(doc);
 
-    // Fetch remaining episode pages only if pagination links exist (cap at 3 pages to avoid network storms)
-    const hasNextOnFirst = doc.selectFirst("a.pg_next, div.paginate a, .paginate a");
-    if (hasNextOnFirst) {
-      let p = 2;
-      while (p <= 3) {
-        try {
-          const pUrl = `${url}${url.includes('?') ? '&' : '?'}page=${p}`;
-          const pRes = await new Client().get(pUrl, this.getHeaders(pUrl));
-          const pDoc = new Document(pRes.body);
-          const countBefore = chapters.length;
-          parsePageEpisodes(pDoc);
-          if (chapters.length === countBefore || !pDoc.selectFirst("a.pg_next, a.pg_page, .paginate a")) {
-            // No more episodes or reached end of pagination
+    // Detect total episodes from the first episode's data-episode-no attribute (10 episodes per page)
+    const firstEp = doc.selectFirst("li[data-episode-no], ._episodeItem");
+    let totalEpisodes = 0;
+    if (firstEp) {
+      totalEpisodes = parseInt(firstEp.attr("data-episode-no") || "0", 10);
+    }
+
+    if (totalEpisodes > 10) {
+      const totalPages = Math.ceil(totalEpisodes / 10);
+      const batchSize = 10;
+      for (let p = 2; p <= totalPages; p += batchSize) {
+        const batch = [];
+        for (let i = p; i < p + batchSize && i <= totalPages; i++) {
+          batch.push(i);
+        }
+        const pagesDocs = await Promise.all(batch.map(async (pageNo) => {
+          try {
+            const pUrl = `${url}${url.includes('?') ? '&' : '?'}page=${pageNo}`;
+            const pRes = await new Client().get(pUrl, this.getHeaders(pUrl));
+            return new Document(pRes.body);
+          } catch (_) {
+            return null;
+          }
+        }));
+        for (const pDoc of pagesDocs) {
+          if (pDoc) {
+            parsePageEpisodes(pDoc);
+          }
+        }
+      }
+    } else {
+      // Fallback if data-episode-no is absent: follow pagination links until end
+      const hasNextOnFirst = doc.selectFirst("a.pg_next, div.paginate a, .paginate a");
+      if (hasNextOnFirst) {
+        let p = 2;
+        while (true) {
+          try {
+            const pUrl = `${url}${url.includes('?') ? '&' : '?'}page=${p}`;
+            const pRes = await new Client().get(pUrl, this.getHeaders(pUrl));
+            const pDoc = new Document(pRes.body);
+            const countBefore = chapters.length;
+            parsePageEpisodes(pDoc);
+            if (chapters.length === countBefore || !pDoc.selectFirst("a.pg_next, a.pg_page, .paginate a")) {
+              break;
+            }
+            p++;
+          } catch (_) {
             break;
           }
-          p++;
-        } catch (_) {
-          break;
         }
       }
     }

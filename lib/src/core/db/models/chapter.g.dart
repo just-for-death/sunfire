@@ -22,98 +22,103 @@ const ChapterSchema = CollectionSchema(
       name: r'chapterNumber',
       type: IsarType.double,
     ),
-    r'fetchedAt': PropertySchema(
+    r'dateUpload': PropertySchema(
       id: 1,
+      name: r'dateUpload',
+      type: IsarType.string,
+    ),
+    r'fetchedAt': PropertySchema(
+      id: 2,
       name: r'fetchedAt',
       type: IsarType.long,
     ),
     r'isBookmarked': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'isBookmarked',
       type: IsarType.bool,
     ),
     r'isDownloaded': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'isDownloaded',
       type: IsarType.bool,
     ),
     r'isDownloadedLocally': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'isDownloadedLocally',
       type: IsarType.bool,
     ),
     r'isDownloadedOnServer': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'isDownloadedOnServer',
       type: IsarType.bool,
     ),
     r'isRead': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'isRead',
       type: IsarType.bool,
     ),
     r'lastPageRead': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'lastPageRead',
       type: IsarType.long,
     ),
     r'lastReadAt': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'lastReadAt',
       type: IsarType.long,
     ),
     r'localPath': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'localPath',
       type: IsarType.string,
     ),
     r'mangaId': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'mangaId',
       type: IsarType.long,
     ),
     r'mangaThumbnailUrl': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'mangaThumbnailUrl',
       type: IsarType.string,
     ),
     r'mangaTitle': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'mangaTitle',
       type: IsarType.string,
     ),
     r'name': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'name',
       type: IsarType.string,
     ),
     r'pageCount': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'pageCount',
       type: IsarType.long,
     ),
     r'realUrl': PropertySchema(
-      id: 15,
+      id: 16,
       name: r'realUrl',
       type: IsarType.string,
     ),
     r'scanlator': PropertySchema(
-      id: 16,
+      id: 17,
       name: r'scanlator',
       type: IsarType.string,
     ),
     r'serverId': PropertySchema(
-      id: 17,
+      id: 18,
       name: r'serverId',
       type: IsarType.long,
     ),
     r'uploadDate': PropertySchema(
-      id: 18,
+      id: 19,
       name: r'uploadDate',
       type: IsarType.long,
     ),
     r'url': PropertySchema(
-      id: 19,
+      id: 20,
       name: r'url',
       type: IsarType.string,
     )
@@ -192,6 +197,12 @@ int _chapterEstimateSize(
 ) {
   var bytesCount = offsets.last;
   {
+    final value = object.dateUpload;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
     final value = object.localPath;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -223,25 +234,26 @@ void _chapterSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeDouble(offsets[0], object.chapterNumber);
-  writer.writeLong(offsets[1], object.fetchedAt);
-  writer.writeBool(offsets[2], object.isBookmarked);
-  writer.writeBool(offsets[3], object.isDownloaded);
-  writer.writeBool(offsets[4], object.isDownloadedLocally);
-  writer.writeBool(offsets[5], object.isDownloadedOnServer);
-  writer.writeBool(offsets[6], object.isRead);
-  writer.writeLong(offsets[7], object.lastPageRead);
-  writer.writeLong(offsets[8], object.lastReadAt);
-  writer.writeString(offsets[9], object.localPath);
-  writer.writeLong(offsets[10], object.mangaId);
-  writer.writeString(offsets[11], object.mangaThumbnailUrl);
-  writer.writeString(offsets[12], object.mangaTitle);
-  writer.writeString(offsets[13], object.name);
-  writer.writeLong(offsets[14], object.pageCount);
-  writer.writeString(offsets[15], object.realUrl);
-  writer.writeString(offsets[16], object.scanlator);
-  writer.writeLong(offsets[17], object.serverId);
-  writer.writeLong(offsets[18], object.uploadDate);
-  writer.writeString(offsets[19], object.url);
+  writer.writeString(offsets[1], object.dateUpload);
+  writer.writeLong(offsets[2], object.fetchedAt);
+  writer.writeBool(offsets[3], object.isBookmarked);
+  writer.writeBool(offsets[4], object.isDownloaded);
+  writer.writeBool(offsets[5], object.isDownloadedLocally);
+  writer.writeBool(offsets[6], object.isDownloadedOnServer);
+  writer.writeBool(offsets[7], object.isRead);
+  writer.writeLong(offsets[8], object.lastPageRead);
+  writer.writeLong(offsets[9], object.lastReadAt);
+  writer.writeString(offsets[10], object.localPath);
+  writer.writeLong(offsets[11], object.mangaId);
+  writer.writeString(offsets[12], object.mangaThumbnailUrl);
+  writer.writeString(offsets[13], object.mangaTitle);
+  writer.writeString(offsets[14], object.name);
+  writer.writeLong(offsets[15], object.pageCount);
+  writer.writeString(offsets[16], object.realUrl);
+  writer.writeString(offsets[17], object.scanlator);
+  writer.writeLong(offsets[18], object.serverId);
+  writer.writeLong(offsets[19], object.uploadDate);
+  writer.writeString(offsets[20], object.url);
 }
 
 Chapter _chapterDeserialize(
@@ -252,26 +264,27 @@ Chapter _chapterDeserialize(
 ) {
   final object = Chapter();
   object.chapterNumber = reader.readDouble(offsets[0]);
-  object.fetchedAt = reader.readLongOrNull(offsets[1]);
+  object.dateUpload = reader.readStringOrNull(offsets[1]);
+  object.fetchedAt = reader.readLongOrNull(offsets[2]);
   object.id = id;
-  object.isBookmarked = reader.readBool(offsets[2]);
-  object.isDownloaded = reader.readBool(offsets[3]);
-  object.isDownloadedLocally = reader.readBool(offsets[4]);
-  object.isDownloadedOnServer = reader.readBool(offsets[5]);
-  object.isRead = reader.readBool(offsets[6]);
-  object.lastPageRead = reader.readLong(offsets[7]);
-  object.lastReadAt = reader.readLongOrNull(offsets[8]);
-  object.localPath = reader.readStringOrNull(offsets[9]);
-  object.mangaId = reader.readLong(offsets[10]);
-  object.mangaThumbnailUrl = reader.readStringOrNull(offsets[11]);
-  object.mangaTitle = reader.readString(offsets[12]);
-  object.name = reader.readString(offsets[13]);
-  object.pageCount = reader.readLong(offsets[14]);
-  object.realUrl = reader.readString(offsets[15]);
-  object.scanlator = reader.readStringOrNull(offsets[16]);
-  object.serverId = reader.readLong(offsets[17]);
-  object.uploadDate = reader.readLongOrNull(offsets[18]);
-  object.url = reader.readString(offsets[19]);
+  object.isBookmarked = reader.readBool(offsets[3]);
+  object.isDownloaded = reader.readBool(offsets[4]);
+  object.isDownloadedLocally = reader.readBool(offsets[5]);
+  object.isDownloadedOnServer = reader.readBool(offsets[6]);
+  object.isRead = reader.readBool(offsets[7]);
+  object.lastPageRead = reader.readLong(offsets[8]);
+  object.lastReadAt = reader.readLongOrNull(offsets[9]);
+  object.localPath = reader.readStringOrNull(offsets[10]);
+  object.mangaId = reader.readLong(offsets[11]);
+  object.mangaThumbnailUrl = reader.readStringOrNull(offsets[12]);
+  object.mangaTitle = reader.readString(offsets[13]);
+  object.name = reader.readString(offsets[14]);
+  object.pageCount = reader.readLong(offsets[15]);
+  object.realUrl = reader.readString(offsets[16]);
+  object.scanlator = reader.readStringOrNull(offsets[17]);
+  object.serverId = reader.readLong(offsets[18]);
+  object.uploadDate = reader.readLongOrNull(offsets[19]);
+  object.url = reader.readString(offsets[20]);
   return object;
 }
 
@@ -285,9 +298,9 @@ P _chapterDeserializeProp<P>(
     case 0:
       return (reader.readDouble(offset)) as P;
     case 1:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 2:
-      return (reader.readBool(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 3:
       return (reader.readBool(offset)) as P;
     case 4:
@@ -297,30 +310,32 @@ P _chapterDeserializeProp<P>(
     case 6:
       return (reader.readBool(offset)) as P;
     case 7:
-      return (reader.readLong(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 8:
-      return (reader.readLongOrNull(offset)) as P;
-    case 9:
-      return (reader.readStringOrNull(offset)) as P;
-    case 10:
       return (reader.readLong(offset)) as P;
-    case 11:
+    case 9:
+      return (reader.readLongOrNull(offset)) as P;
+    case 10:
       return (reader.readStringOrNull(offset)) as P;
+    case 11:
+      return (reader.readLong(offset)) as P;
     case 12:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 13:
       return (reader.readString(offset)) as P;
     case 14:
-      return (reader.readLong(offset)) as P;
-    case 15:
       return (reader.readString(offset)) as P;
-    case 16:
-      return (reader.readStringOrNull(offset)) as P;
-    case 17:
+    case 15:
       return (reader.readLong(offset)) as P;
+    case 16:
+      return (reader.readString(offset)) as P;
+    case 17:
+      return (reader.readStringOrNull(offset)) as P;
     case 18:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 19:
+      return (reader.readLongOrNull(offset)) as P;
+    case 20:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -962,6 +977,152 @@ extension ChapterQueryFilter
         upper: upper,
         includeUpper: includeUpper,
         epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'dateUpload',
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'dateUpload',
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'dateUpload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'dateUpload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'dateUpload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'dateUpload',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'dateUpload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'dateUpload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'dateUpload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'dateUpload',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'dateUpload',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> dateUploadIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'dateUpload',
+        value: '',
       ));
     });
   }
@@ -2473,6 +2634,18 @@ extension ChapterQuerySortBy on QueryBuilder<Chapter, Chapter, QSortBy> {
     });
   }
 
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> sortByDateUpload() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'dateUpload', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> sortByDateUploadDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'dateUpload', Sort.desc);
+    });
+  }
+
   QueryBuilder<Chapter, Chapter, QAfterSortBy> sortByFetchedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'fetchedAt', Sort.asc);
@@ -2714,6 +2887,18 @@ extension ChapterQuerySortThenBy
   QueryBuilder<Chapter, Chapter, QAfterSortBy> thenByChapterNumberDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'chapterNumber', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> thenByDateUpload() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'dateUpload', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> thenByDateUploadDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'dateUpload', Sort.desc);
     });
   }
 
@@ -2967,6 +3152,13 @@ extension ChapterQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Chapter, Chapter, QDistinct> distinctByDateUpload(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'dateUpload', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<Chapter, Chapter, QDistinct> distinctByFetchedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'fetchedAt');
@@ -3101,6 +3293,12 @@ extension ChapterQueryProperty
   QueryBuilder<Chapter, double, QQueryOperations> chapterNumberProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'chapterNumber');
+    });
+  }
+
+  QueryBuilder<Chapter, String?, QQueryOperations> dateUploadProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'dateUpload');
     });
   }
 

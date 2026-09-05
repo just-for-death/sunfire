@@ -237,13 +237,7 @@ class DefaultExtension extends MProvider {
             var name = (title3El ? title3El.text.trim() : null) || a.attr("title") || a.text.trim();
             var dateUpload = "";
             if (title2El) {
-                var dt = title2El.text.trim();
-                var parsed = Date.parse(dt);
-                if (!isNaN(parsed) && parsed > 0) {
-                    dateUpload = parsed.toString();
-                } else {
-                    dateUpload = dt;
-                }
+                dateUpload = title2El.text.trim();
             }
             const link = a.attr("href");
             if (name && link && (link.includes('/c') || link.includes('/manga/')) && !link.includes('/directory/') && !link.includes('/comichistory/') && !link.includes('/author/')) {

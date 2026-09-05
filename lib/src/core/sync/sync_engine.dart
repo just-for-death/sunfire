@@ -405,7 +405,11 @@ class SyncEngine {
 
               final rawUpload = chMap['uploadDate'] ?? chMap['dateUpload'];
               if (rawUpload != null) {
-                final upVal = int.tryParse(rawUpload.toString());
+                final rawStr = rawUpload.toString().trim();
+                if (rawStr.isNotEmpty && rawStr != '0' && rawStr != 'null') {
+                  chapter.dateUpload = rawStr;
+                }
+                final upVal = int.tryParse(rawStr);
                 if (upVal != null && upVal > 0) {
                   chapter.uploadDate = upVal > 1000000000000 ? upVal ~/ 1000 : upVal;
                 }
@@ -549,7 +553,11 @@ class SyncEngine {
 
         final rawUpload = map['uploadDate'] ?? map['dateUpload'];
         if (rawUpload != null) {
-          final upVal = int.tryParse(rawUpload.toString());
+          final rawStr = rawUpload.toString().trim();
+          if (rawStr.isNotEmpty && rawStr != '0' && rawStr != 'null') {
+            chapter.dateUpload = rawStr;
+          }
+          final upVal = int.tryParse(rawStr);
           if (upVal != null && upVal > 0) {
             chapter.uploadDate = upVal > 1000000000000 ? upVal ~/ 1000 : upVal;
           }
