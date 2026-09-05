@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/db/isar_service.dart';
@@ -73,11 +74,55 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     return parts.join(' • ');
   }
 
+  static int? parseDateToUnix(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is num) {
+      final val = raw.toInt();
+      if (val <= 0) return null;
+      return val > 1000000000000 ? val ~/ 1000 : val;
+    }
+    final str = raw.toString().trim();
+    if (str.isEmpty || str == '0' || str == 'null') return null;
+
+    final parsedInt = int.tryParse(str);
+    if (parsedInt != null) {
+      if (parsedInt <= 0) return null;
+      return parsedInt > 1000000000000 ? parsedInt ~/ 1000 : parsedInt;
+    }
+
+    final parsedDt = DateTime.tryParse(str);
+    if (parsedDt != null) {
+      return parsedDt.millisecondsSinceEpoch ~/ 1000;
+    }
+
+    final commonFormats = [
+      'd MMM yyyy',
+      'dd MMM yyyy',
+      'd MMMM yyyy',
+      'dd MMMM yyyy',
+      'MMM d, yyyy',
+      'MMMM d, yyyy',
+      'yyyy-MM-dd',
+      'dd/MM/yyyy',
+      'MM/dd/yyyy',
+    ];
+    for (final fmt in commonFormats) {
+      try {
+        final dt = DateFormat(fmt, 'en_US').parseLoose(str);
+        if (dt.year >= 1975) {
+          return dt.millisecondsSinceEpoch ~/ 1000;
+        }
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
   String? _formatChapterDate(int? rawTimestamp) {
     if (rawTimestamp == null || rawTimestamp <= 0) return null;
     final ms = rawTimestamp > 1000000000000 ? rawTimestamp : rawTimestamp * 1000;
     final date = DateTime.fromMillisecondsSinceEpoch(ms);
-    if (date.year < 2005 || date.isAfter(DateTime.now().add(const Duration(days: 2)))) {
+    if (date.year < 1975 || date.isAfter(DateTime.now().add(const Duration(days: 2)))) {
       return null;
     }
     return _formatRelativeTime(date);
@@ -154,7 +199,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
           final rawThumb = mMap['thumbnailUrl'] as String?;
           if (rawThumb != null && rawThumb.isNotEmpty) {
-            _manga!.thumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
+            var thumb = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
+            if (thumb.contains('readcomicsonline.ru/uploads/')) {
+              thumb = thumb.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
+            }
+            _manga!.thumbnailUrl = thumb;
+          } else if (serverUrl.isNotEmpty && _manga!.serverId > 0 && (_manga!.thumbnailUrl == null || _manga!.thumbnailUrl!.isEmpty)) {
+            _manga!.thumbnailUrl = '$serverUrl/api/v1/manga/${_manga!.serverId}/thumbnail';
           }
 
           if (mMap.containsKey('genre') && mMap['genre'] != null) {
@@ -176,13 +227,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               final fetched = <Chapter>[];
               for (final n in chNodes) {
                 final chMap = n as Map<String, dynamic>;
-                final rawFetched = chMap['fetchedAt'] ?? chMap['uploadDate'] ?? chMap['dateUpload'];
-                int? fetchedTimestamp;
-                if (rawFetched is num) {
-                  fetchedTimestamp = rawFetched.toInt();
-                } else if (rawFetched is String && rawFetched.isNotEmpty) {
-                  fetchedTimestamp = int.tryParse(rawFetched) ?? (DateTime.tryParse(rawFetched)?.millisecondsSinceEpoch != null ? DateTime.tryParse(rawFetched)!.millisecondsSinceEpoch ~/ 1000 : null);
-                }
+                final uploadTimestamp = parseDateToUnix(chMap['uploadDate'] ?? chMap['dateUpload']);
+                final fetchedTimestamp = parseDateToUnix(chMap['fetchedAt']);
 
                 final rawChUrl = (chMap['url'] ?? chMap['realUrl'] ?? '').toString();
                 final rawChRealUrl = (chMap['realUrl'] ?? chMap['url'] ?? '').toString();
@@ -198,8 +244,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   ..lastPageRead = parseIntSafe(chMap['lastPageRead'])
                   ..lastReadAt = parseIntSafe(chMap['lastReadAt'])
                   ..pageCount = parseIntSafe(chMap['pageCount'])
+                  ..scanlator = chMap['scanlator']?.toString()
                   ..mangaTitle = _manga!.title
                   ..mangaThumbnailUrl = _manga!.thumbnailUrl
+                  ..uploadDate = uploadTimestamp
                   ..fetchedAt = fetchedTimestamp;
                 fetched.add(ch);
               }
@@ -232,7 +280,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             _manga!.author = localData['author'].toString();
           }
           if (localData['imageUrl'] != null && (_manga!.thumbnailUrl == null || _manga!.thumbnailUrl!.isEmpty)) {
-            _manga!.thumbnailUrl = localData['imageUrl'].toString();
+            var img = localData['imageUrl'].toString();
+            if (img.contains('readcomicsonline.ru/uploads/')) {
+              img = img.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
+            }
+            _manga!.thumbnailUrl = img;
           }
           await IsarService.instance.saveManga(_manga!);
 
@@ -251,12 +303,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   : (((widget.mangaServerId.hashCode & 0x0007FFFF) * 1000) + (i + 1));
 
               final rawDate = cMap['dateUpload'] ?? cMap['uploadDate'] ?? cMap['date'] ?? cMap['releaseDate'];
-              int? parsedDate;
-              if (rawDate is num) {
-                parsedDate = rawDate.toInt();
-              } else if (rawDate is String && rawDate.isNotEmpty) {
-                parsedDate = int.tryParse(rawDate) ?? (DateTime.tryParse(rawDate)?.millisecondsSinceEpoch != null ? DateTime.tryParse(rawDate)!.millisecondsSinceEpoch ~/ 1000 : null);
-              }
+              final parsedDate = parseDateToUnix(rawDate);
 
               final ch = Chapter()
                 ..serverId = chServerId
@@ -266,7 +313,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 ..url = chUrl
                 ..realUrl = chUrl
                 ..mangaTitle = _manga!.title
-                ..fetchedAt = parsedDate;
+                ..mangaThumbnailUrl = _manga!.thumbnailUrl
+                ..uploadDate = parsedDate
+                ..fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
               fetched.add(ch);
             }
             final existingChapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
@@ -1706,7 +1755,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             ),
             subtitle: Builder(
               builder: (context) {
-                final dateStr = _formatChapterDate(ch.fetchedAt);
+                final dateStr = _formatChapterDate(ch.uploadDate);
                 final sub = _formatChapterSubtitle(ch);
                 final metaText = [
                   if (sub.isNotEmpty) sub,

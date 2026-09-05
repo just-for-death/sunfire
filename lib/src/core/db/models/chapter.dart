@@ -29,6 +29,9 @@ class Chapter {
   bool isDownloadedLocally = false;
   bool isDownloadedOnServer = false;
 
+  /// Unix timestamp (seconds) when the chapter was published / uploaded by source.
+  int? uploadDate;
+
   /// Unix timestamp (seconds) when Suwayomi discovered this chapter.
   /// Indexed for fast Updates tab ordering (ORDER BY fetchedAt DESC).
   @Index()

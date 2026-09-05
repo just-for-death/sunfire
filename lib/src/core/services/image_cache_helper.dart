@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../engine/quickjs_service.dart';
+import '../sync/graphql_client_service.dart';
 
 class ImageCacheHelper {
   static final List<String> _candidateCoverPaths = [];
@@ -100,28 +101,35 @@ class ImageCacheHelper {
     String sourceName = '',
     int mangaServerId = 0,
   }) async {
-    if (url.isEmpty) return null;
-    if (_memoryCache.containsKey(url)) return _memoryCache[url];
+    var effectiveUrl = url;
+    if (effectiveUrl.contains('readcomicsonline.ru/uploads/')) {
+      effectiveUrl = effectiveUrl.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
+    }
+    if ((effectiveUrl.isEmpty) && mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
+      effectiveUrl = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/$mangaServerId/thumbnail';
+    }
+    if (effectiveUrl.isEmpty) return null;
+    if (_memoryCache.containsKey(effectiveUrl)) return _memoryCache[effectiveUrl];
 
     // Check disk cache first across all candidate directories (by ID or URL hash)
-    final localPath = getLocalCoverPath(mangaServerId) ?? getLocalCoverPathForUrl(url);
+    final localPath = getLocalCoverPath(mangaServerId) ?? getLocalCoverPathForUrl(effectiveUrl);
     if (localPath != null) {
       try {
         final bytes = await File(localPath).readAsBytes();
-        _memoryCache[url] = bytes;
+        _memoryCache[effectiveUrl] = bytes;
         if (_memoryCache.length > 200) _memoryCache.remove(_memoryCache.keys.first);
         return bytes;
       } catch (_) {}
     }
 
-    if (_inFlightFetches.containsKey(url)) return _inFlightFetches[url];
+    if (_inFlightFetches.containsKey(effectiveUrl)) return _inFlightFetches[effectiveUrl];
     
-    final completer = _inFlightFetches[url] = _doFetch(url, sourceName, mangaServerId);
+    final completer = _inFlightFetches[effectiveUrl] = _doFetch(effectiveUrl, sourceName, mangaServerId);
     try {
       final res = await completer;
       return res;
     } finally {
-      _inFlightFetches.remove(url);
+      _inFlightFetches.remove(effectiveUrl);
     }
   }
 
@@ -155,7 +163,15 @@ class ImageCacheHelper {
       client.connectionTimeout = const Duration(seconds: 10);
       client.badCertificateCallback = (_, __, ___) => true;
       final req = await client.getUrl(uri);
-      headers.forEach((k, v) => req.headers.set(k, v));
+      
+      final reqHeaders = Map<String, String>.from(headers);
+      if (GraphQLClientService.instance.isConfigured &&
+          GraphQLClientService.instance.baseUrl != null &&
+          url.startsWith(GraphQLClientService.instance.baseUrl!)) {
+        reqHeaders.addAll(GraphQLClientService.instance.authHeaders);
+      }
+
+      reqHeaders.forEach((k, v) => req.headers.set(k, v));
       final resp = await req.close();
       if (resp.statusCode == 200) {
         final b = await resp.fold<List<int>>([], (p, c) => p..addAll(c));
@@ -172,28 +188,32 @@ class ImageCacheHelper {
 
   static Future<Uint8List?> _doFetch(String url, String sourceName, int mangaServerId) async {
     try {
-      final headers = QuickJsService.getImageHeaders(sourceName, url);
+      var effectiveUrl = url;
+      if (effectiveUrl.contains('readcomicsonline.ru/uploads/')) {
+        effectiveUrl = effectiveUrl.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
+      }
+      final headers = QuickJsService.getImageHeaders(sourceName, effectiveUrl);
       Uint8List? bytes;
 
       // PASS 1: Standard fetch with configured headers
-      bytes = await _attemptHttpFetch(url, headers);
+      bytes = await _attemptHttpFetch(effectiveUrl, headers);
 
       // PASS 2 (Self-Healing Anti-Hotlink): If failed and Referer was present, retry with NO Referer!
       // Fixes any CDN enforcing anti-hotlink protection (ReadComicOnline, ImageKit, CloudFront, etc.)
       if (bytes == null && headers.containsKey('Referer')) {
         final noRefererHeaders = Map<String, String>.from(headers)..remove('Referer');
-        bytes = await _attemptHttpFetch(url, noRefererHeaders);
+        bytes = await _attemptHttpFetch(effectiveUrl, noRefererHeaders);
       }
 
       // PASS 3 (Self-Healing Origin Referer): If failed and had no Referer, retry with Origin Referer!
       // Fixes CDNs requiring same-origin domain Referer (Webtoons, Naver, Pixiv, MangaDex)
       if (bytes == null) {
         try {
-          final uri = Uri.parse(url);
+          final uri = Uri.parse(effectiveUrl);
           final originReferer = '${uri.origin}/';
           if (headers['Referer'] != originReferer) {
             final originHeaders = Map<String, String>.from(headers)..['Referer'] = originReferer;
-            bytes = await _attemptHttpFetch(url, originHeaders);
+            bytes = await _attemptHttpFetch(effectiveUrl, originHeaders);
           }
         } catch (_) {}
       }
@@ -203,7 +223,7 @@ class ImageCacheHelper {
         final browserHeaders = Map<String, String>.from(headers)
           ..['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
           ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
-        bytes = await _attemptHttpFetch(url, browserHeaders);
+        bytes = await _attemptHttpFetch(effectiveUrl, browserHeaders);
       }
 
       // PASS 5: Fallback on desktop with curl-impersonate / curl binaries to bypass TLS fingerprint blocks
@@ -213,7 +233,7 @@ class ImageCacheHelper {
           try {
             final args = <String>['-s', '-L', '--max-time', '15'];
             headers.forEach((k, v) => args.addAll(['-H', '$k: $v']));
-            args.add(url);
+            args.add(effectiveUrl);
             final res = await Process.run(exe, args, stdoutEncoding: null);
             if (res.exitCode == 0) {
               final b = res.stdout as List<int>;
@@ -223,6 +243,16 @@ class ImageCacheHelper {
               }
             }
           } catch (_) {}
+        }
+      }
+
+      // PASS 6: Suwayomi server proxy fallback (for server-synced manga whose remote CDN is blocked or 403)
+      if (bytes == null && mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
+        final serverUrl = GraphQLClientService.instance.baseUrl;
+        if (serverUrl != null && serverUrl.isNotEmpty) {
+          final serverThumbUrl = '$serverUrl/api/v1/manga/$mangaServerId/thumbnail';
+          final serverHeaders = Map<String, String>.from(GraphQLClientService.instance.authHeaders);
+          bytes = await _attemptHttpFetch(serverThumbUrl, serverHeaders);
         }
       }
 
@@ -293,7 +323,13 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
   }
 
   void _checkAndFetch() {
-    final url = widget.thumbnailUrl;
+    var url = widget.thumbnailUrl;
+    if (url != null && url.contains('readcomicsonline.ru/uploads/')) {
+      url = url.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
+    }
+    if ((url == null || url.isEmpty) && widget.mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
+      url = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/${widget.mangaServerId}/thumbnail';
+    }
     if (url == null || url.isEmpty) return;
 
     final mem = ImageCacheHelper.getMemoryCover(url);
@@ -320,6 +356,14 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
 
   @override
   Widget build(BuildContext context) {
+    var url = widget.thumbnailUrl;
+    if (url != null && url.contains('readcomicsonline.ru/uploads/')) {
+      url = url.replaceFirst('readcomicsonline.ru/uploads/', 'cdn.readcomicsonline.ru/uploads/');
+    }
+    if ((url == null || url.isEmpty) && widget.mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
+      url = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/${widget.mangaServerId}/thumbnail';
+    }
+
     final dpr = MediaQuery.of(context).devicePixelRatio;
     final int targetCacheWidth = widget.width != null && widget.width!.isFinite ? (widget.width! * dpr).clamp(100.0, 600.0).round() : 360;
     final int targetCacheHeight = widget.height != null && widget.height!.isFinite ? (widget.height! * dpr).clamp(150.0, 900.0).round() : 520;
@@ -339,7 +383,6 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
     }
 
     // 2. Render from local file if cached (by ID or URL hash)
-    final url = widget.thumbnailUrl;
     final localPath = ImageCacheHelper.getLocalCoverPath(widget.mangaServerId) ??
         (url != null ? ImageCacheHelper.getLocalCoverPathForUrl(url) : null);
     if (localPath != null) {
@@ -368,10 +411,16 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
     if (url != null && url.isNotEmpty) {
       final effectiveSource = widget.sourceName ?? '';
       final headers = QuickJsService.getImageHeaders(effectiveSource, url);
+      final effectiveHeaders = Map<String, String>.from(headers);
+      if (GraphQLClientService.instance.isConfigured &&
+          GraphQLClientService.instance.baseUrl != null &&
+          url.startsWith(GraphQLClientService.instance.baseUrl!)) {
+        effectiveHeaders.addAll(GraphQLClientService.instance.authHeaders);
+      }
 
       return Image.network(
         url,
-        headers: headers,
+        headers: effectiveHeaders,
         width: widget.width,
         height: widget.height,
         fit: widget.fit,
@@ -390,7 +439,7 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
         errorBuilder: (context, error, stackTrace) {
           // On network error (e.g. 403 CDN), trigger robust fallback fetch
           ImageCacheHelper.fetchImageBytes(
-            url,
+            url!,
             sourceName: effectiveSource,
             mangaServerId: widget.mangaServerId,
           ).then((bytes) {
