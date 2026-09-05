@@ -42,15 +42,31 @@ class GraphQLClientService {
     return _instance!;
   }
 
+  String? _authToken;
+
+  Map<String, String> get authHeaders {
+    if (_authToken != null && _authToken!.trim().isNotEmpty) {
+      final token = _authToken!.trim();
+      if (token.startsWith('Basic ') || token.startsWith('Bearer ')) {
+        return {'Authorization': token};
+      } else {
+        return {'Authorization': 'Bearer $token'};
+      }
+    }
+    return const {};
+  }
+
   void initialize(String baseUrl, {String? authToken}) {
     final clean = baseUrl.trim();
     if (clean.isEmpty) {
       _baseUrl = null;
+      _authToken = null;
       _lastReachableCheck = null;
       _lastReachableStatus = false;
       return;
     }
     _baseUrl = clean.endsWith('/') ? clean.substring(0, clean.length - 1) : clean;
+    _authToken = authToken;
     _lastReachableCheck = null;
     _lastReachableStatus = true;
     final headers = <String, dynamic>{'Content-Type': 'application/json'};
@@ -374,6 +390,8 @@ class GraphQLClientService {
               lastReadAt
               pageCount
               fetchedAt
+              uploadDate
+              scanlator
             }
           }
         }
@@ -466,6 +484,8 @@ class GraphQLClientService {
             lastPageRead
             isDownloaded
             fetchedAt
+            uploadDate
+            scanlator
             mangaId
             manga {
               id
