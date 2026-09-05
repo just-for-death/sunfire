@@ -58,6 +58,24 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     try {
       final list = await IsarService.instance.getLibraryManga();
       final cats = await IsarService.instance.getCategories();
+
+      // Proactive self-healing: resolve direct CDN covers for any manga pointing to server proxy
+      bool hasHealed = false;
+      for (final m in list) {
+        if (m.thumbnailUrl == null || m.thumbnailUrl!.isEmpty || m.thumbnailUrl!.contains('/api/v1/manga/')) {
+          if (m.sourceName.isNotEmpty && m.url.isNotEmpty) {
+            final direct = QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
+            if (direct != null && direct.isNotEmpty) {
+              m.thumbnailUrl = direct;
+              hasHealed = true;
+            }
+          }
+        }
+      }
+      if (hasHealed) {
+        await IsarService.instance.saveMangas(list);
+      }
+
       if (mounted) {
         setState(() {
           _allManga = list;
@@ -81,6 +99,23 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     try {
       final list = await IsarService.instance.getLibraryManga();
       final cats = await IsarService.instance.getCategories();
+
+      bool hasHealed = false;
+      for (final m in list) {
+        if (m.thumbnailUrl == null || m.thumbnailUrl!.isEmpty || m.thumbnailUrl!.contains('/api/v1/manga/')) {
+          if (m.sourceName.isNotEmpty && m.url.isNotEmpty) {
+            final direct = QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
+            if (direct != null && direct.isNotEmpty) {
+              m.thumbnailUrl = direct;
+              hasHealed = true;
+            }
+          }
+        }
+      }
+      if (hasHealed) {
+        await IsarService.instance.saveMangas(list);
+      }
+
       if (mounted) {
         setState(() {
           _allManga = list;
