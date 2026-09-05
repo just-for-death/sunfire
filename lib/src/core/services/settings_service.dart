@@ -353,4 +353,36 @@ class SettingsService extends ChangeNotifier {
     await _prefs?.setStringList('custom_repos', list);
     notifyListeners();
   }
+
+  // ── GENERAL SETTINGS ──────────────────────────────────────
+  String get appLocale => _prefs?.getString('app_locale') ?? 'en';
+  set appLocale(String value) {
+    _prefs?.setString('app_locale', value);
+    notifyListeners();
+  }
+
+  String get startScreen => _prefs?.getString('start_screen') ?? 'Library';
+  set startScreen(String value) {
+    _prefs?.setString('start_screen', value);
+    notifyListeners();
+  }
+
+  bool get confirmExit => _prefs?.getBool('confirm_exit') ?? false;
+  set confirmExit(bool value) {
+    _prefs?.setBool('confirm_exit', value);
+    notifyListeners();
+  }
+
+  int get networkTimeoutSeconds => _prefs?.getInt('network_timeout_seconds') ?? 30;
+  set networkTimeoutSeconds(int value) {
+    _prefs?.setInt('network_timeout_seconds', value);
+    notifyListeners();
+  }
+
+  // ── AUTO-SCROLL SETTINGS ──────────────────────────────────
+  double get defaultAutoScrollSpeed => _prefs?.getDouble('default_auto_scroll_speed') ?? 50.0;
+  set defaultAutoScrollSpeed(double value) {
+    _prefs?.setDouble('default_auto_scroll_speed', value);
+    notifyListeners();
+  }
 }

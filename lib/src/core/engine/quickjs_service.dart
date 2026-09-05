@@ -345,6 +345,10 @@ class QuickJsService {
     }
   }
 
+  static void clearHeadersCache() {
+    _headersCache.clear();
+  }
+
   static Map<String, String> getImageHeaders(String sourceOrUrl, [String? imageUrl]) {
     final targetUrl = (imageUrl != null && imageUrl.isNotEmpty) ? imageUrl : sourceOrUrl;
     final headers = <String, String>{
