@@ -183,7 +183,32 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Auto-Scroll Speed', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
-                        Text('${_autoScrollSpeed.round()} px/s', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: primaryColor)),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('${_autoScrollSpeed.round()} px/s', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: primaryColor)),
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              icon: const Icon(Icons.bookmark_border_rounded, size: 14, color: Colors.amberAccent),
+                              label: const Text('Save Default', style: TextStyle(fontSize: 11, color: Colors.amberAccent)),
+                              onPressed: () {
+                                _settings.defaultAutoScrollSpeed = _autoScrollSpeed;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Default auto-scroll speed set to ${_autoScrollSpeed.round()} px/s'),
+                                    duration: const Duration(seconds: 1),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -309,6 +334,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   ReaderColorFilter _parseColorFilter(String str) {
     switch (str.toLowerCase()) {
       case 'invert':
+      case 'invert colors':
         return ReaderColorFilter.invert;
       case 'grayscale':
         return ReaderColorFilter.grayscale;

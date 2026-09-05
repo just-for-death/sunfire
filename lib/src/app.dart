@@ -147,6 +147,7 @@ class _SunfireAppState extends State<SunfireApp> {
             return MaterialApp.router(
               title: 'Sunfire',
               debugShowCheckedModeBanner: false,
+              locale: Locale(SettingsService.instance.appLocale),
               themeMode: effectiveMode,
               theme: effectiveLightTheme,
               darkTheme: themeData,
