@@ -14,6 +14,7 @@ import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import 'tracking_bottom_sheet.dart';
 
@@ -473,16 +474,14 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     await IsarService.instance.saveManga(_manga!);
 
     try {
-      if (GraphQLClientService.instance.isConfigured) {
-        await GraphQLClientService.instance.updateMangaLibraryState(widget.mangaServerId, newState);
+      await SyncEngine.instance.syncMangaLibraryState(widget.mangaServerId, newState);
 
-        // If newly added to library and a default category is set, assign it!
-        if (newState && SettingsService.instance.defaultCategoryId != null) {
-          await GraphQLClientService.instance.updateMangaCategories(
-            widget.mangaServerId,
-            [SettingsService.instance.defaultCategoryId!],
-          );
-        }
+      // If newly added to library and a default category is set, assign it!
+      if (newState && SettingsService.instance.defaultCategoryId != null && GraphQLClientService.instance.isConfigured) {
+        await GraphQLClientService.instance.updateMangaCategories(
+          widget.mangaServerId,
+          [SettingsService.instance.defaultCategoryId!],
+        );
       }
     } catch (_) {}
 
@@ -543,9 +542,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
     }
 
-    final isLocal = QuickJsService.instance.hasExtension(_manga?.sourceName ?? '');
-    if (GraphQLClientService.instance.isConfigured && !isLocal) {
-      GraphQLClientService.instance.updateChapterReadStatus(ch.serverId, newState, ch.lastPageRead);
+    if (ch.serverId > 0) {
+      SyncEngine.instance.syncChapterProgress(ch.serverId, isRead: newState, lastPageRead: ch.lastPageRead);
     }
   }
 
@@ -554,9 +552,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     setState(() => ch.isBookmarked = newState);
     await IsarService.instance.saveChapter(ch);
 
-    final isLocal = QuickJsService.instance.hasExtension(_manga?.sourceName ?? '');
-    if (GraphQLClientService.instance.isConfigured && !isLocal) {
-      GraphQLClientService.instance.updateChapterBookmark(ch.serverId, newState);
+    if (ch.serverId > 0) {
+      SyncEngine.instance.syncChapterBookmark(ch.serverId, newState);
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -567,7 +564,6 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   void _markPreviousChaptersRead(Chapter ch) async {
     final prevs = _chapters.where((c) => c.chapterNumber < ch.chapterNumber && !c.isRead).toList();
-    final isLocal = QuickJsService.instance.hasExtension(_manga?.sourceName ?? '');
     for (final p in prevs) {
       p.isRead = true;
       if (_settings.deleteChapterAfterMarkedRead && p.isDownloaded) {
@@ -575,8 +571,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           DownloadManagerService.instance.deleteLocalDownload(p.serverId);
         }
       }
-      if (GraphQLClientService.instance.isConfigured && !isLocal) {
-        GraphQLClientService.instance.updateChapterReadStatus(p.serverId, true, p.lastPageRead);
+      if (p.serverId > 0) {
+        SyncEngine.instance.syncChapterProgress(p.serverId, isRead: true, lastPageRead: p.lastPageRead);
       }
     }
     await IsarService.instance.saveChapters(prevs);
@@ -607,7 +603,6 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   void _markSelectedRead(bool read) async {
     final targets = _chapters.where((c) => _selectedChapterIds.contains(c.serverId)).toList();
-    final isLocal = QuickJsService.instance.hasExtension(_manga?.sourceName ?? '');
     for (final c in targets) {
       c.isRead = read;
       if (!read) c.lastPageRead = 0;
@@ -616,8 +611,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           DownloadManagerService.instance.deleteLocalDownload(c.serverId);
         }
       }
-      if (GraphQLClientService.instance.isConfigured && !isLocal) {
-        GraphQLClientService.instance.updateChapterReadStatus(c.serverId, read, c.lastPageRead);
+      if (c.serverId > 0) {
+        SyncEngine.instance.syncChapterProgress(c.serverId, isRead: read, lastPageRead: c.lastPageRead);
       }
     }
     await IsarService.instance.saveChapters(targets);

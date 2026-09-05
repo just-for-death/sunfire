@@ -21,7 +21,7 @@ import '../../core/engine/javascript/m_client.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/settings_service.dart';
-import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/sync_engine.dart';
 import '../settings/advanced_settings_screen.dart';
 
 enum ReadingMode { longStrip, longStripGaps, pagedLtr, pagedRtl }
@@ -825,9 +825,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _chapter!.lastReadAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     IsarService.instance.saveChapter(_chapter!);
 
-    final isLocal = QuickJsService.instance.hasExtension(_sourceName ?? '');
-    if (GraphQLClientService.instance.isConfigured && !isLocal) {
-      GraphQLClientService.instance.updateChapterReadStatus(_chapter!.serverId, _chapter!.isRead, clampedPage);
+    if (_chapter!.serverId > 0) {
+      SyncEngine.instance.syncChapterProgress(
+        _chapter!.serverId,
+        isRead: _chapter!.isRead,
+        lastPageRead: clampedPage,
+      );
     }
   }
 
