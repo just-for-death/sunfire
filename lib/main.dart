@@ -49,7 +49,7 @@ void main() async {
   }
 
   // Load saved FlareSolverr / Byparr URL into MClient so Cloudflare-protected
-  // sources (Mangago, ReadComicOnline, etc.) work immediately on startup.
+  // sources work immediately on startup.
   final savedCfProxy = SettingsService.instance.cfProxyUrl;
   if (savedCfProxy.isNotEmpty) {
     MClient.cfProxyUrl = savedCfProxy;

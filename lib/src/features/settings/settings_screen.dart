@@ -279,10 +279,10 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
     // ── ADVANCED ──
     _SettingSearchItem(
       title: 'Local FlareSolverr (App Cloudflare Bypass)',
-      subtitle: 'Bypass Cloudflare Turnstile for ReadComicOnline & local extensions',
+      subtitle: 'Bypass Cloudflare Turnstile for protected sources & extensions',
       category: 'Advanced',
       icon: Icons.shield_outlined,
-      keywords: ['cloudflare', 'flaresolverr', 'proxy', 'turnstile', 'challenge', 'bypass', 'local', 'readcomiconline', 'mangago'],
+      keywords: ['cloudflare', 'flaresolverr', 'proxy', 'turnstile', 'challenge', 'bypass', 'local', 'protection'],
       destination: (context) => const AdvancedSettingsScreen(),
     ),
     _SettingSearchItem(
