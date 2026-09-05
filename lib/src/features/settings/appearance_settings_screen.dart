@@ -131,7 +131,7 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                 onTap: () {
                   _showRadioDialog(
                     title: 'Date Format',
-                    options: const ['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY'],
+                    options: const ['YYYY-MM-DD', 'MM/DD/YYYY', 'DD/MM/YYYY', 'DD.MM.YYYY'],
                     currentValue: _settings.dateFormat,
                     onSelected: (val) => _settings.dateFormat = val,
                   );

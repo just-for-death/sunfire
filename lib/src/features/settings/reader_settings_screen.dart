@@ -118,7 +118,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                 onTap: () {
                   _showRadioDialog(
                     title: 'Color Filter',
-                    options: const ['None', 'Invert Colors', 'Grayscale', 'Amber Tint'],
+                    options: const ['None', 'Invert Colors', 'Grayscale', 'Amber Tint', 'Sepia'],
                     currentValue: _settings.colorFilter,
                     onSelected: (val) => _settings.colorFilter = val,
                   );
