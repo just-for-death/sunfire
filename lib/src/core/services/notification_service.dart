@@ -28,6 +28,13 @@ class NotificationService {
   final StreamController<String?> _selectNotificationStream = StreamController<String?>.broadcast();
   Stream<String?> get onNotificationTapped => _selectNotificationStream.stream;
 
+  String? _initialPayload;
+  String? consumeInitialPayload() {
+    final payload = _initialPayload;
+    _initialPayload = null;
+    return payload;
+  }
+
   Future<void> initialize() async {
     if (_isInitialized) return;
 
@@ -57,6 +64,12 @@ class NotificationService {
         },
         onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
       );
+
+      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+      if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
+        _initialPayload = launchDetails.notificationResponse?.payload ?? '/updates';
+        debugPrint('[NotificationService] App launched from notification: $_initialPayload');
+      }
 
       // Create high-priority notification channel for Android
       if (!kIsWeb && Platform.isAndroid) {
