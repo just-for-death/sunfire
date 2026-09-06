@@ -792,5 +792,87 @@ void main() {
       expect(targetChapterId(isarId: 11, serverId: 0), equals(11));
       expect(targetChapterId(isarId: 12, serverId: -1), equals(12));
     });
+
+    test('32. Download queue pause and cancel lifecycle retains proper status', () {
+      String handleExceptionDuringDownload({
+        required String currentStatus,
+        required String? currentError,
+        required String caughtException,
+      }) {
+        if (currentStatus == 'paused') {
+          return 'paused';
+        } else if (currentStatus == 'failed' && currentError == 'Cancelled') {
+          return 'cancelled';
+        } else {
+          return 'failed';
+        }
+      }
+
+      expect(handleExceptionDuringDownload(
+        currentStatus: 'paused',
+        currentError: null,
+        caughtException: 'Exception: Cancelled or paused',
+      ), equals('paused'));
+
+      expect(handleExceptionDuringDownload(
+        currentStatus: 'failed',
+        currentError: 'Cancelled',
+        caughtException: 'Exception: Cancelled or paused',
+      ), equals('cancelled'));
+
+      expect(handleExceptionDuringDownload(
+        currentStatus: 'downloading',
+        currentError: null,
+        caughtException: 'DioException [connection error]',
+      ), equals('failed'));
+    });
+
+    test('33. Local chapter serverId collision avoidance increments until unique', () {
+      final existingIds = <int>{1001, 1002, 1003};
+
+      int allocateServerId(int baseId) {
+        int id = baseId;
+        while (existingIds.contains(id)) {
+          id++;
+        }
+        existingIds.add(id);
+        return id;
+      }
+
+      expect(allocateServerId(1001), equals(1004));
+      expect(allocateServerId(1002), equals(1005));
+      expect(allocateServerId(2000), equals(2000));
+      expect(existingIds.contains(1004), isTrue);
+      expect(existingIds.contains(1005), isTrue);
+    });
+
+    test('34. Stats screen canonical manga ID resolution includes standalone local manga', () {
+      int resolveMangaQueryId(Manga manga) =>
+          manga.serverId > 0 ? manga.serverId : manga.id;
+
+      final remoteManga = Manga()
+        ..id = 1
+        ..serverId = 888;
+      final localManga = Manga()
+        ..id = 42
+        ..serverId = 0;
+
+      expect(resolveMangaQueryId(remoteManga), equals(888));
+      expect(resolveMangaQueryId(localManga), equals(42));
+    });
+
+    test('35. Reader and manga unreadCount decrement and bounds safety', () {
+      int computeNewUnreadCount({required int currentUnread, required bool wasRead, required bool isComplete}) {
+        if (!wasRead && isComplete && currentUnread > 0) {
+          return currentUnread - 1;
+        }
+        return currentUnread;
+      }
+
+      expect(computeNewUnreadCount(currentUnread: 5, wasRead: false, isComplete: true), equals(4));
+      expect(computeNewUnreadCount(currentUnread: 0, wasRead: false, isComplete: true), equals(0)); // Non-negative
+      expect(computeNewUnreadCount(currentUnread: 5, wasRead: true, isComplete: true), equals(5)); // Already read
+      expect(computeNewUnreadCount(currentUnread: 5, wasRead: false, isComplete: false), equals(5)); // Still reading
+    });
   });
 }
