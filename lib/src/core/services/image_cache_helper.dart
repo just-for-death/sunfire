@@ -401,7 +401,8 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
     var url = widget.thumbnailUrl;
     if (widget.mangaServerId > 0 && IsarService.instance.isInitialized) {
       try {
-        final m = IsarService.instance.isar.mangas.filter().serverIdEqualTo(widget.mangaServerId).findFirstSync();
+        final m = IsarService.instance.isar.mangas.filter().serverIdEqualTo(widget.mangaServerId).findFirstSync() ??
+            IsarService.instance.isar.mangas.getSync(widget.mangaServerId);
         if (m != null) {
           if (m.thumbnailUrl != null && m.thumbnailUrl!.isNotEmpty && !m.thumbnailUrl!.contains('/api/v1/manga/')) {
             url = m.thumbnailUrl;

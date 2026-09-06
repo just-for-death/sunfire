@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
+import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/library_update_service.dart';
 import '../../core/sync/graphql_client_service.dart';
@@ -303,8 +304,15 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                 leading: Icon(Icons.phone_android_rounded, color: primaryColor),
                 title: const Text('Download to Local Device (Offline)', style: TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: const Text('Save chapter pages locally for offline reading'),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(sheetContext);
+                  final chId = ch.serverId > 0 ? ch.serverId : ch.id;
+                  await DownloadManagerService.instance.enqueueLocalDownload(
+                    chapterId: chId,
+                    mangaId: ch.mangaId,
+                    chapterName: ch.name,
+                    mangaTitle: (item['mangaTitle'] as String?) ?? 'Manga',
+                  );
                   messenger.showSnackBar(
                     SnackBar(content: Text('Downloading ${ch.name} to local device...')),
                   );
@@ -563,7 +571,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                                                 icon: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 26),
                                                 tooltip: 'Read chapter',
                                                 onPressed: () async {
-                                                  await context.push('/reader/${ch.serverId}');
+                                                  await context.push('/reader/${ch.serverId > 0 ? ch.serverId : ch.id}');
                                                   if (mounted) _loadUpdatesFromIsarCache();
                                                 },
                                               ),

@@ -151,7 +151,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: MangaCoverImage(
-                                    mangaServerId: widget.manga.serverId,
+                                    mangaServerId: widget.manga.serverId > 0 ? widget.manga.serverId : widget.manga.id,
                                     thumbnailUrl: widget.manga.thumbnailUrl,
                                     sourceName: widget.manga.sourceName,
                                     width: 48,
@@ -376,8 +376,10 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
 
       // 4. Transfer Chapter Reading Progress & History
       if (copyHistory) {
-        final sourceChapters = await IsarService.instance.getChaptersForManga(widget.manga.serverId);
-        final targetChapters = await IsarService.instance.getChaptersForManga(targetMangaEntity.serverId);
+        final srcMangaId = widget.manga.serverId > 0 ? widget.manga.serverId : widget.manga.id;
+        final tgtMangaId = targetMangaEntity.serverId > 0 ? targetMangaEntity.serverId : targetMangaEntity.id;
+        final sourceChapters = await IsarService.instance.getChaptersForManga(srcMangaId);
+        final targetChapters = await IsarService.instance.getChaptersForManga(tgtMangaId);
 
         if (sourceChapters.isNotEmpty && targetChapters.isNotEmpty) {
           final sourceByNumber = <double, Chapter>{};
@@ -424,7 +426,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
 
           if (updatedTargetChapters.isNotEmpty) {
             await IsarService.instance.saveChapters(updatedTargetChapters);
-            final allTargetChapters = await IsarService.instance.getChaptersForManga(targetMangaEntity.serverId);
+            final allTargetChapters = await IsarService.instance.getChaptersForManga(tgtMangaId);
             targetMangaEntity.unreadCount = allTargetChapters.where((c) => !c.isRead).length;
             await IsarService.instance.saveManga(targetMangaEntity);
           }

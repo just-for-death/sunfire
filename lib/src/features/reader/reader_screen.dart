@@ -780,7 +780,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     if (_settings.deleteFinishedChaptersWhileReading == 'When next chapter opens' && _prevChapter != null) {
       if (_prevChapter!.isRead) {
         if (!_prevChapter!.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-          DownloadManagerService.instance.deleteLocalDownload(_prevChapter!.serverId);
+          DownloadManagerService.instance.deleteLocalDownload(_chapterTargetId(_prevChapter!));
         }
       }
     }
@@ -789,12 +789,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   void _triggerDownloadAhead() async {
     final count = _settings.downloadAheadChapterCount;
     if (count <= 0 || _chapter == null) return;
-    final currentIdx = _siblingChapters.indexWhere((c) => c.serverId == _chapter!.serverId);
+    final currentIdx = _siblingChapters.indexWhere((c) => (c.id == _chapter!.id) || (c.serverId != 0 && c.serverId == _chapter!.serverId));
     if (currentIdx == -1) return;
 
     final upcoming = _siblingChapters
         .skip(currentIdx + 1)
-        .where((c) => !c.isRead && !DownloadManagerService.instance.isChapterDownloadedLocally(c.serverId))
+        .where((c) => !c.isRead && !DownloadManagerService.instance.isChapterDownloadedLocally(_chapterTargetId(c)))
         .take(count)
         .toList();
 
@@ -803,7 +803,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
     for (final ch in upcoming) {
       DownloadManagerService.instance.enqueueLocalDownload(
-        chapterId: ch.serverId,
+        chapterId: _chapterTargetId(ch),
         mangaId: ch.mangaId,
         chapterName: ch.name,
         mangaTitle: mangaTitle,
@@ -929,7 +929,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _chapter!.isRead = true;
       if (_settings.deleteFinishedChaptersWhileReading == 'Immediately') {
         if (!_chapter!.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-          DownloadManagerService.instance.deleteLocalDownload(_chapter!.serverId);
+          DownloadManagerService.instance.deleteLocalDownload(_chapterTargetId(_chapter!));
         }
       }
     }

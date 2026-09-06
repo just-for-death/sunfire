@@ -771,9 +771,12 @@ class QuickJsService {
           sourceMeta: extractSourceMetadata(jsCode),
           sourceCode: jsCode,
         );
-        final pages = await freshService.getPageList(targetUrl);
-        freshService.dispose();
-        if (pages.isNotEmpty) return pages;
+        try {
+          final pages = await freshService.getPageList(targetUrl);
+          if (pages.isNotEmpty) return pages;
+        } finally {
+          freshService.dispose();
+        }
       } catch (retryError) {
         await LoggerService.instance.logError('Local chapter page scraping failed for $sourceName ($targetUrl): $retryError', exception: retryError, stackTrace: StackTrace.current, category: 'QuickJS');
       }
