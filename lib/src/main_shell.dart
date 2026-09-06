@@ -338,14 +338,22 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             ),
             child: SafeArea(
               right: false,
-              child: Column(
-                crossAxisAlignment: isExpanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 14),
+              child: OverflowBox(
+                minWidth: 0,
+                maxWidth: sidebarWidth,
+                minHeight: 0,
+                maxHeight: double.infinity,
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: sidebarWidth,
+                  child: Column(
+                    crossAxisAlignment: isExpanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 14),
 
-                  // ── 1. SIDEBAR HEADER ──────────────────────────────────────
-                  _buildSidebarHeader(primaryColor, isExpanded),
-                  const SizedBox(height: 18),
+                      // ── 1. SIDEBAR HEADER ──────────────────────────────────────
+                      _buildSidebarHeader(primaryColor, isExpanded),
+                      const SizedBox(height: 18),
 
                   // ── 2. NAVIGATION ITEMS ────────────────────────────────────
                   Expanded(
@@ -449,8 +457,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 
   Widget _buildSidebarHeader(Color primaryColor, bool isExpanded) {
     if (isExpanded) {
