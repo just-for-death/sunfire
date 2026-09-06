@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:app_links/app_links.dart';
 import 'package:dynamic_color/dynamic_color.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -157,7 +159,7 @@ class _SunfireAppState extends State<SunfireApp> {
       builder: (context, child) {
         return DynamicColorBuilder(
           builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-            final useMaterialYou = SettingsService.instance.materialYouEnabled;
+            final useMaterialYou = (!kIsWeb && Platform.isAndroid) && SettingsService.instance.materialYouEnabled;
             final modeStr = SettingsService.instance.themeMode;
             final isOled = modeStr == 'OLED Black';
 
