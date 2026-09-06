@@ -91,7 +91,10 @@ class IsarService {
 
   Future<Manga?> getMangaByServerId(int serverId) async {
     if (!_isInitialized) return null;
-    return await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
+    final byServer = await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
+    if (byServer != null) return byServer;
+    // Fallback to Isar local auto-increment ID for local standalone manga
+    return await _isar.mangas.get(serverId);
   }
 
   /// Returns the count of manga currently marked as inLibrary in Isar.
@@ -123,12 +126,26 @@ class IsarService {
 
   Future<List<Chapter>> getChaptersForManga(int mangaId) async {
     if (!_isInitialized) return [];
-    return await _isar.chapters.filter().mangaIdEqualTo(mangaId).sortByChapterNumberDesc().findAll();
+    final chapters = await _isar.chapters.filter().mangaIdEqualTo(mangaId).sortByChapterNumberDesc().findAll();
+    if (chapters.isNotEmpty) return chapters;
+    // Fallback: if mangaId was an Isar local ID, check its serverId, or vice versa
+    final manga = await _isar.mangas.get(mangaId);
+    if (manga != null && manga.serverId > 0 && manga.serverId != mangaId) {
+      return await _isar.chapters.filter().mangaIdEqualTo(manga.serverId).sortByChapterNumberDesc().findAll();
+    }
+    final byServerManga = await _isar.mangas.filter().serverIdEqualTo(mangaId).findFirst();
+    if (byServerManga != null && byServerManga.id != mangaId) {
+      return await _isar.chapters.filter().mangaIdEqualTo(byServerManga.id).sortByChapterNumberDesc().findAll();
+    }
+    return [];
   }
 
   Future<Chapter?> getChapterByServerId(int serverId) async {
     if (!_isInitialized) return null;
-    return await _isar.chapters.filter().serverIdEqualTo(serverId).findFirst();
+    final byServer = await _isar.chapters.filter().serverIdEqualTo(serverId).findFirst();
+    if (byServer != null) return byServer;
+    // Fallback to Isar auto-increment ID
+    return await _isar.chapters.get(serverId);
   }
 
   Future<List<Chapter>> getReadingHistory() async {

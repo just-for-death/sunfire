@@ -284,7 +284,8 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                leading: GestureDetector(
                                  onTap: () async {
                                    if (manga != null) {
-                                     await context.push('/manga/${manga.serverId}');
+                                     final targetId = manga.serverId > 0 ? manga.serverId : manga.id;
+                                     await context.push('/manga/$targetId');
                                      if (mounted) _loadHistory();
                                    }
                                  },
