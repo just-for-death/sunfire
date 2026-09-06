@@ -167,8 +167,11 @@ class LibraryUpdateService extends ChangeNotifier {
                   final chMap = rawChapters[cIdx] as Map<String, dynamic>;
                   final chUrl = chMap['url']?.toString() ?? '';
                   if (chUrl.isNotEmpty && !existingUrls.contains(chUrl)) {
+                    final chServerId = (mId > 0 && mId < 200000)
+                        ? (mId * 10000 + cIdx + 1)
+                        : (((mId.hashCode & 0x0007FFFF) * 1000) + (cIdx + 1));
                     final ch = Chapter()
-                      ..serverId = manga.serverId > 0 ? (manga.serverId * 10000 + cIdx + 1) : 0
+                      ..serverId = chServerId
                       ..mangaId = mId
                       ..name = chMap['name']?.toString() ?? 'Chapter ${cIdx + 1}'
                       ..chapterNumber = (chMap['chapterNumber'] as num?)?.toDouble() ?? (cIdx + 1).toDouble()

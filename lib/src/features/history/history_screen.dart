@@ -49,13 +49,13 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
       final now = DateTime.now();
 
       for (final ch in chapters) {
-        final manga = await IsarService.instance.getMangaByServerId(ch.mangaId);
         final lastRead = ch.lastReadAt ?? 0;
-        final readDate = lastRead > 0
-            ? (lastRead > 1000000000000
-                ? DateTime.fromMillisecondsSinceEpoch(lastRead)
-                : DateTime.fromMillisecondsSinceEpoch(lastRead * 1000))
-            : now;
+        if (lastRead <= 0) continue; // Only show chapters with genuine read timestamps in History
+
+        final manga = await IsarService.instance.getMangaByServerId(ch.mangaId);
+        final readDate = lastRead > 1000000000000
+            ? DateTime.fromMillisecondsSinceEpoch(lastRead)
+            : DateTime.fromMillisecondsSinceEpoch(lastRead * 1000);
 
         final diff = now.difference(readDate);
         String dateHeader;

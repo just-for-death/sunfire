@@ -1,0 +1,7 @@
+Sunfire v9.0.0 Beta:
+• Updates Feed Hardening: Prevents back-chapters from flooding Updates feed on read or refresh; limits bulk server/scraper dumps.
+• Reading History Timeline Purity: Strictly orders by authentic reading timestamps, eliminating server-imported chapters falsely showing under Today.
+• In-Place Chapter Updates: Preserves chapter IDs, offline downloaded files, local paths, and bookmarks during sync and refresh.
+• Collision-Free Local Chapters: Generates unique collision-safe chapter IDs, fixing unique index replacement on serverId 0.
+• iPad & Tablet Download Monitoring: Accessible from both expanded and collapsed sidebars with real-time badges, plus Downloads Settings link.
+• FlareSolverr Endpoint Customization: User-configurable FlareSolverr URL without hardcoded values.

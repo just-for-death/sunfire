@@ -391,6 +391,32 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                             label: 'Reading Stats',
                             onTap: () => context.push('/stats'),
                           ),
+                        ] else ...[
+                          const SizedBox(height: 12),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                            child: Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+                          ),
+                          const SizedBox(height: 8),
+                          ListenableBuilder(
+                            listenable: DownloadManagerService.instance,
+                            builder: (context, _) {
+                              final activeCount = DownloadManagerService.instance.localTasks
+                                  .where((t) => t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued)
+                                  .length;
+                              return _buildCompactActionIcon(
+                                icon: Icons.download_rounded,
+                                label: 'Downloads Queue',
+                                badgeCount: activeCount > 0 ? activeCount : null,
+                                onTap: () => context.push('/downloads'),
+                              );
+                            },
+                          ),
+                          _buildCompactActionIcon(
+                            icon: Icons.insights_rounded,
+                            label: 'Reading Stats',
+                            onTap: () => context.push('/stats'),
+                          ),
                         ],
                       ],
                     ),
@@ -460,7 +486,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                           border: Border.all(color: primaryColor.withValues(alpha: 0.4), width: 0.6),
                         ),
                         child: Text(
-                          'v8.0 BETA',
+                          'v9.0 BETA',
                           style: TextStyle(
                             color: primaryColor,
                             fontSize: 9,
@@ -688,6 +714,64 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               else
                 const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 18),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactActionIcon({
+    required IconData icon,
+    required String label,
+    int? badgeCount,
+    required VoidCallback onTap,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4.0),
+        child: Tooltip(
+          message: label,
+          preferBelow: false,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: onTap,
+              child: SizedBox(
+                width: 46,
+                height: 46,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(icon, color: Colors.white60, size: 21),
+                    if (badgeCount != null && badgeCount > 0)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          padding: const EdgeInsets.all(3.5),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                          child: Center(
+                            child: Text(
+                              '$badgeCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
