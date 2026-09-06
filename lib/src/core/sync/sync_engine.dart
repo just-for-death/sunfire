@@ -697,7 +697,7 @@ class SyncEngine {
         }
 
         final rawFetchedAt = map['fetchedAt'];
-        if (rawFetchedAt != null && (chapter.fetchedAt == null || chapter.fetchedAt! > 0)) {
+        if (rawFetchedAt != null) {
           final ftVal = int.tryParse(rawFetchedAt.toString());
           if (ftVal != null && ftVal > 0) {
             chapter.fetchedAt = ftVal > 1000000000000 ? ftVal ~/ 1000 : ftVal;
