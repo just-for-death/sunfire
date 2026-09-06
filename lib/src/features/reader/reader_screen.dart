@@ -178,7 +178,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       if (max > 50 && cur >= max - 8) {
         _stopAutoScroll();
         if (_settings.autoScrollAutoNextChapter && _nextChapter != null) {
-          _loadChapterAndPages(_nextChapter!.serverId);
+          _loadChapterAndPages(_chapterTargetId(_nextChapter!));
         }
         return;
       }
@@ -580,6 +580,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _pageController.dispose();
     super.dispose();
   }
+
+  int _chapterTargetId(Chapter ch) => ch.serverId > 0 ? ch.serverId : ch.id;
 
   Future<void> _loadChapterAndPages(int chapterId) async {
     _currentChapterId = chapterId;
@@ -1057,7 +1059,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
             _scrollController.position.maxScrollExtent > 50 &&
             _scrollController.offset >= _scrollController.position.maxScrollExtent - 20) {
           if (_nextChapter != null) {
-            _loadChapterAndPages(_nextChapter!.serverId);
+            _loadChapterAndPages(_chapterTargetId(_nextChapter!));
           }
         } else {
           _scrollVerticalBy(400);
@@ -1067,7 +1069,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
             _scrollController.position.maxScrollExtent > 50 &&
             _scrollController.offset <= 20) {
           if (_prevChapter != null) {
-            _loadChapterAndPages(_prevChapter!.serverId);
+            _loadChapterAndPages(_chapterTargetId(_prevChapter!));
           }
         } else {
           _scrollVerticalBy(-400);
@@ -1104,7 +1106,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         HapticFeedback.lightImpact();
         _pageController.nextPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
       } else if (_nextChapter != null) {
-        _loadChapterAndPages(_nextChapter!.serverId);
+        _loadChapterAndPages(_chapterTargetId(_nextChapter!));
       }
     } else {
       if (_scrollController.hasClients) {
@@ -1113,7 +1115,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         final currentOffset = _scrollController.offset;
         if (maxScroll > 50 && currentOffset >= maxScroll - 20) {
           if (_nextChapter != null) {
-            _loadChapterAndPages(_nextChapter!.serverId);
+            _loadChapterAndPages(_chapterTargetId(_nextChapter!));
           }
         } else {
           final targetOffset = (currentOffset + screenHeight * 0.85).clamp(0.0, maxScroll);
@@ -1134,7 +1136,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         HapticFeedback.lightImpact();
         _pageController.previousPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
       } else if (_prevChapter != null) {
-        _loadChapterAndPages(_prevChapter!.serverId);
+        _loadChapterAndPages(_chapterTargetId(_prevChapter!));
       }
     } else {
       if (_scrollController.hasClients) {
@@ -1143,7 +1145,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         final currentOffset = _scrollController.offset;
         if (currentOffset <= 20) {
           if (_prevChapter != null) {
-            _loadChapterAndPages(_prevChapter!.serverId);
+            _loadChapterAndPages(_chapterTargetId(_prevChapter!));
           }
         } else {
           final targetOffset = (currentOffset - screenHeight * 0.85).clamp(0.0, maxScroll);
@@ -1515,7 +1517,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                       itemCount: _siblingChapters.length,
                       itemBuilder: (context, index) {
                         final ch = _siblingChapters[index];
-                        final isCurrent = ch.serverId == _chapter?.serverId;
+                        final isCurrent = (ch.id == _chapter?.id) || (ch.serverId != 0 && ch.serverId == _chapter?.serverId);
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 3),
                           child: Material(
@@ -1545,7 +1547,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                               onTap: () {
                                 Navigator.pop(sheetContext);
                                 if (!isCurrent) {
-                                  _loadChapterAndPages(ch.serverId);
+                                  _loadChapterAndPages(_chapterTargetId(ch));
                                 }
                               },
                             ),
@@ -1884,7 +1886,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                 minimumSize: const Size.fromHeight(48),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              onPressed: () => _loadChapterAndPages(_nextChapter!.serverId),
+              onPressed: () => _loadChapterAndPages(_chapterTargetId(_nextChapter!)),
               child: const Text('Read Next Chapter', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
             ),
           ] else ...[
@@ -2245,7 +2247,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                                           IconButton(
                                             icon: const Icon(Icons.skip_previous_rounded, color: Colors.white),
                                             tooltip: 'Previous Chapter',
-                                            onPressed: _prevChapter != null ? () => _loadChapterAndPages(_prevChapter!.serverId) : null,
+                                            onPressed: _prevChapter != null ? () => _loadChapterAndPages(_chapterTargetId(_prevChapter!)) : null,
                                           ),
                                           const SizedBox(width: 8),
                                           Text(
@@ -2331,7 +2333,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                                            IconButton(
                                              icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
                                             tooltip: 'Next Chapter',
-                                            onPressed: _nextChapter != null ? () => _loadChapterAndPages(_nextChapter!.serverId) : null,
+                                            onPressed: _nextChapter != null ? () => _loadChapterAndPages(_chapterTargetId(_nextChapter!)) : null,
                                           ),
                                         ],
                                       ),

@@ -174,7 +174,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
           ],
         ),
       ),
-    );
+    ).then((_) => controller.dispose());
   }
 
   @override
