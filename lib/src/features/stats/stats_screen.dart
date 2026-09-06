@@ -40,7 +40,8 @@ class _StatsScreenState extends State<StatsScreen> {
       final sources = <String, int>{};
 
       for (final m in mangas) {
-        final chs = await IsarService.instance.getChaptersForManga(m.serverId);
+        final mId = m.serverId > 0 ? m.serverId : m.id;
+        final chs = await IsarService.instance.getChaptersForManga(mId);
         allChCount += chs.length;
         readChCount += chs.where((c) => c.isRead).length;
 
