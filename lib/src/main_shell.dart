@@ -159,23 +159,45 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
     final scaffold = isTablet
         ? Scaffold(
+            backgroundColor: const Color(0xFF0E0E14),
             body: Row(
               children: [
                 // ── IPADOS HYBRID EXPANDABLE GLASSMORPHIC SIDEBAR ────────────
                 _buildTabletSidebar(context, primaryColor),
 
-                // ── TABLET CONTENT CANVAS (Smooth PageView) ──────────────────
+                // ── IPADOS FLOATING ELEVATED CONTENT CANVAS ──────────────────
                 Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    physics: const NeverScrollableScrollPhysics(),
-                    onPageChanged: (index) {
-                      if (_currentIndex != index) {
-                        setState(() => _currentIndex = index);
-                        MainShell.selectedTabNotifier.value = index;
-                      }
-                    },
-                    children: _screens,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8.0, bottom: 8.0, right: 8.0, left: 3.0),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF15151E),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0x1AFFFFFF),
+                          width: 1.0,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.40),
+                            blurRadius: 24,
+                            offset: const Offset(-3, 0),
+                          ),
+                        ],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: PageView(
+                        controller: _pageController,
+                        physics: const NeverScrollableScrollPhysics(),
+                        onPageChanged: (index) {
+                          if (_currentIndex != index) {
+                            setState(() => _currentIndex = index);
+                            MainShell.selectedTabNotifier.value = index;
+                          }
+                        },
+                        children: _screens,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -312,10 +334,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
           child: Container(
             decoration: const BoxDecoration(
-              color: Color(0xF213131A),
-              border: Border(
-                right: BorderSide(color: Color(0x1EFFFFFF), width: 0.8),
-              ),
+              color: Colors.transparent,
             ),
             child: SafeArea(
               right: false,

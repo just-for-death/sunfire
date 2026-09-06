@@ -981,5 +981,101 @@ void main() {
       expect(manga.inLibrary, isFalse);
       expect(manga.inLibraryAt, isNull);
     });
+
+    test('40. Updates date header normalization correctly formats seconds and milliseconds timestamps', () {
+      String formatDateHeader(int? fetchedAt) {
+        if (fetchedAt == null || fetchedAt <= 0) return 'Recent';
+        final int millis = fetchedAt > 100000000000 ? fetchedAt : fetchedAt * 1000;
+        final date = DateTime.fromMillisecondsSinceEpoch(millis);
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final itemDate = DateTime(date.year, date.month, date.day);
+
+        final diffDays = today.difference(itemDate).inDays;
+        if (diffDays <= 0) {
+          return 'Today';
+        } else if (diffDays == 1) {
+          return 'Yesterday';
+        } else if (diffDays < 7) {
+          return 'This Week';
+        } else {
+          return 'Earlier';
+        }
+      }
+
+      // Null and zero
+      expect(formatDateHeader(null), equals('Recent'));
+      expect(formatDateHeader(0), equals('Recent'));
+
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final nowSec = nowMs ~/ 1000;
+
+      // Both millisecond (13 digit) and second (10 digit) formats return 'Today'
+      expect(formatDateHeader(nowMs), equals('Today'));
+      expect(formatDateHeader(nowSec), equals('Today'));
+
+      // 1 day ago
+      final yesterdayMs = DateTime.now().subtract(const Duration(days: 1)).millisecondsSinceEpoch;
+      final yesterdaySec = yesterdayMs ~/ 1000;
+      expect(formatDateHeader(yesterdayMs), equals('Yesterday'));
+      expect(formatDateHeader(yesterdaySec), equals('Yesterday'));
+
+      // 3 days ago
+      final threeDaysAgoSec = (DateTime.now().subtract(const Duration(days: 3)).millisecondsSinceEpoch) ~/ 1000;
+      expect(formatDateHeader(threeDaysAgoSec), equals('This Week'));
+
+      // 30 days ago
+      final monthAgoSec = (DateTime.now().subtract(const Duration(days: 30)).millisecondsSinceEpoch) ~/ 1000;
+      expect(formatDateHeader(monthAgoSec), equals('Earlier'));
+    });
+
+    test('41. Updates list sorting keeps newest chapters on top and groups by dateHeader', () {
+      final items = [
+        {'id': 1, 'fetchedAt': 1700000000, 'dateHeader': 'Earlier'},
+        {'id': 2, 'fetchedAt': 1741000000, 'dateHeader': 'Today'},
+        {'id': 3, 'fetchedAt': 1740900000, 'dateHeader': 'Yesterday'},
+      ];
+
+      items.sort((a, b) {
+        final fa = a['fetchedAt'] as int? ?? 0;
+        final fb = b['fetchedAt'] as int? ?? 0;
+        return fb.compareTo(fa);
+      });
+
+      expect(items.first['id'], equals(2));
+      expect(items[1]['id'], equals(3));
+      expect(items.last['id'], equals(1));
+
+      final Map<String, List<Map<String, dynamic>>> grouped = {};
+      for (final it in items) {
+        final h = it['dateHeader'] as String;
+        grouped.putIfAbsent(h, () => []).add(it);
+      }
+
+      expect(grouped.keys.toList(), equals(['Today', 'Yesterday', 'Earlier']));
+      expect(grouped['Today']!.length, equals(1));
+    });
+
+    test('42. iPad tablet layout mode activation and grid delegate constraints', () {
+      bool isTabletMode(double width) => width >= 720;
+
+      expect(isTabletMode(390), isFalse); // iPhone 14
+      expect(isTabletMode(412), isFalse); // Pixel 7
+      expect(isTabletMode(720), isTrue);  // Small tablet threshold
+      expect(isTabletMode(834), isTrue);  // iPad 11" portrait
+      expect(isTabletMode(1024), isTrue); // iPad landscape
+      expect(isTabletMode(1366), isTrue); // iPad Pro 12.9" landscape
+
+      // Max cross axis extent ensures 2 or 3 columns on tablet screens
+      const maxExtent = 480.0;
+      int calculateColumns(double screenWidth, double padding) {
+        final available = screenWidth - padding;
+        return (available / maxExtent).ceil();
+      }
+
+      expect(calculateColumns(834, 32), equals(2));
+      expect(calculateColumns(1024, 32), equals(3));
+      expect(calculateColumns(1366, 32), equals(3));
+    });
   });
 }
