@@ -66,6 +66,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   }
 
   Future<void> _loadUpdates() async {
+    // 0. Clean up any legacy bulk-stamped chapters from previous app versions
+    await IsarService.instance.cleanupBulkScrapedUpdates();
+
     // 1. Show local cache immediately (0ms instant render)
     await _loadUpdatesFromIsarCache();
 
