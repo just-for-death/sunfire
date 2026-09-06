@@ -170,8 +170,6 @@ class IsarService {
     if (!_isInitialized) return [];
     try {
       final libraryManga = await getLibraryManga();
-      if (libraryManga.isEmpty) return [];
-
       final libraryIds = <int>{
         for (final m in libraryManga) ...[
           if (m.serverId > 0) m.serverId,
@@ -188,7 +186,7 @@ class IsarService {
       final mangaCounts = <int, int>{};
       final result = <Chapter>[];
       for (final ch in chapters) {
-        if (!libraryIds.contains(ch.mangaId)) continue;
+        if (libraryIds.isNotEmpty && !libraryIds.contains(ch.mangaId)) continue;
         final count = mangaCounts[ch.mangaId] ?? 0;
         if (count >= 3) continue; // cap at 3 chapters per manga
         mangaCounts[ch.mangaId] = count + 1;
@@ -225,7 +223,9 @@ class IsarService {
         // Group by 60-second time windows to catch bulk scraping/importing batches
         final Map<int, List<Chapter>> timeBuckets = {};
         for (final ch in list) {
-          final bucket = (ch.fetchedAt ?? 0) ~/ 60;
+          final rawFt = ch.fetchedAt ?? 0;
+          final ftSec = rawFt > 100000000000 ? (rawFt ~/ 1000) : rawFt;
+          final bucket = ftSec ~/ 60;
           timeBuckets.putIfAbsent(bucket, () => []).add(ch);
         }
 
