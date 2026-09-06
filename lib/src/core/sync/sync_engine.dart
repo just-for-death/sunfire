@@ -231,12 +231,12 @@ class SyncEngine {
           await IsarService.instance.deleteSyncRecord(record.id);
         } else {
           record.retryCount += 1;
-          record.state = SyncRecordState.failed;
+          record.state = record.retryCount >= 5 ? SyncRecordState.abandoned : SyncRecordState.failed;
           await IsarService.instance.saveSyncRecord(record);
         }
       } catch (e, stack) {
         record.retryCount += 1;
-        record.state = SyncRecordState.failed;
+        record.state = record.retryCount >= 5 ? SyncRecordState.abandoned : SyncRecordState.failed;
         await IsarService.instance.saveSyncRecord(record);
         await LoggerService.instance.logError('Failed to dispatch SyncRecord #${record.id}: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
       }
