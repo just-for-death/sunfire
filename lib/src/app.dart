@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:app_links/app_links.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/logging/logger_service.dart';
+import 'core/services/notification_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/downloads/download_queue_screen.dart';
@@ -23,6 +26,9 @@ class SunfireApp extends StatefulWidget {
 
 class _SunfireAppState extends State<SunfireApp> {
   late final GoRouter _router;
+  AppLinks? _appLinks;
+  StreamSubscription<Uri>? _linkSubscription;
+  StreamSubscription<String?>? _notificationSubscription;
 
   CustomTransitionPage<void> _buildTransitionPage({
     required GoRouterState state,
@@ -112,6 +118,36 @@ class _SunfireAppState extends State<SunfireApp> {
         ),
       ],
     );
+    _initIncomingLinks();
+  }
+
+  void _initIncomingLinks() {
+    _notificationSubscription = NotificationService.instance.onNotificationTapped.listen((route) {
+      if (route != null && route.isNotEmpty) {
+        _router.push(route);
+      }
+    });
+
+    try {
+      _appLinks = AppLinks();
+      _linkSubscription = _appLinks!.uriLinkStream.listen((uri) {
+        if (uri.scheme == 'sunfire') {
+          if (uri.host == 'manga' && uri.pathSegments.isNotEmpty) {
+            final id = uri.pathSegments.first;
+            _router.push('/manga/$id');
+          } else if (uri.host == 'library') {
+            _router.go('/library');
+          }
+        }
+      });
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _linkSubscription?.cancel();
+    _notificationSubscription?.cancel();
+    super.dispose();
   }
 
   @override
