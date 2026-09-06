@@ -254,10 +254,10 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                   child: ListTile(
                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                               onTap: () async {
-                                 await context.push('/reader/${ch.serverId}');
-                                 if (mounted) _loadHistory();
-                               },
+                                onTap: () async {
+                                  await context.push('/reader/${ch.serverId > 0 ? ch.serverId : ch.id}');
+                                  if (mounted) _loadHistory();
+                                },
                                onLongPress: () async {
                                  final remove = await showDialog<bool>(
                                    context: context,
@@ -332,7 +332,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                  icon: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 32),
                                  tooltip: 'Resume reading',
                                  onPressed: () async {
-                                   await context.push('/reader/${ch.serverId}');
+                                   await context.push('/reader/${ch.serverId > 0 ? ch.serverId : ch.id}');
                                    if (mounted) _loadHistory();
                                  },
                                ),

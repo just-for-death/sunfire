@@ -196,6 +196,11 @@ class DownloadManagerService extends ChangeNotifier {
                 final ch = await IsarService.instance.getChapterByServerId(id);
                 if (ch != null && ch.mangaId > 0) {
                   _downloadedLocalMangaIds.add(ch.mangaId);
+                  final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
+                  if (m != null) {
+                    if (m.serverId > 0) _downloadedLocalMangaIds.add(m.serverId);
+                    _downloadedLocalMangaIds.add(m.id);
+                  }
                 }
               }
             }
@@ -277,6 +282,11 @@ class DownloadManagerService extends ChangeNotifier {
         task.progress = 1.0;
         _downloadedLocalChapterIds.add(task.chapterId);
         _downloadedLocalMangaIds.add(task.mangaId);
+        final m = await IsarService.instance.getMangaByServerId(task.mangaId);
+        if (m != null) {
+          if (m.serverId > 0) _downloadedLocalMangaIds.add(m.serverId);
+          _downloadedLocalMangaIds.add(m.id);
+        }
 
         // Update Isar DB
         final ch = await IsarService.instance.getChapterByServerId(task.chapterId);
@@ -498,9 +508,14 @@ class DownloadManagerService extends ChangeNotifier {
       }
       if (mId != null && mId > 0) {
         final remaining = await IsarService.instance.getChaptersForManga(mId);
-        final hasOther = remaining.any((c) => _downloadedLocalChapterIds.contains(c.serverId));
+        final hasOther = remaining.any((c) => _downloadedLocalChapterIds.contains(c.serverId > 0 ? c.serverId : c.id));
         if (!hasOther) {
           _downloadedLocalMangaIds.remove(mId);
+          final m = await IsarService.instance.getMangaByServerId(mId);
+          if (m != null) {
+            _downloadedLocalMangaIds.remove(m.serverId);
+            _downloadedLocalMangaIds.remove(m.id);
+          }
         }
       }
       notifyListeners();
