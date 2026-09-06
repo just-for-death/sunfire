@@ -816,7 +816,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          constraints: isTablet ? const BoxConstraints() : const BoxConstraints(maxWidth: 880),
+          constraints: const BoxConstraints(maxWidth: 960),
           child: RefreshIndicator(
             color: primaryColor,
             onRefresh: _checkServerForUpdates,
