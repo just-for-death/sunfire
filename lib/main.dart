@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -35,6 +37,9 @@ void main() async {
 
   await LoggerService.instance.initialize();
   await IsarService.instance.initialize();
+  // One-time startup cleanup: removes excess bulk-scraped standalone chapters.
+  // This MUST NOT be called on every screen load — only here at startup.
+  unawaited(IsarService.instance.cleanupBulkScrapedUpdates());
   await SettingsService.instance.initialize();
   await ImageCacheHelper.initialize();
   await QuickJsService.instance.initialize();
