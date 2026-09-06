@@ -1127,10 +1127,6 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final horizontalPadding = isTablet ? 24.0 : 16.0;
     
     final columnsSetting = _settings.gridColumnCount;
-    final int crossAxisCount = columnsSetting > 0
-        ? columnsSetting
-        : (isTablet ? (screenWidth ~/ 160).clamp(3, 7) : (screenWidth ~/ 120).clamp(2, 4));
-    final childAspectRatio = isCoverOnly ? 0.70 : (isCompact ? 0.70 : 0.65);
 
     return PopScope(
       canPop: !_isBatchMode && !_isSearching,
@@ -1181,7 +1177,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     ),
                     onChanged: (val) => setState(() => _searchQuery = val),
                   )
-                : const Text('Sunfire', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+                : Text(isTablet ? 'Library' : 'Sunfire', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
         actions: _isBatchMode
             ? null
             : [
@@ -1255,7 +1251,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                     itemCount: _categories.length + 1,
               itemBuilder: (context, index) {
                 final isSelected = _selectedCategoryIndex == index;
@@ -1294,154 +1290,169 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           ),
         ),
       ),
-      body: Stack(
-        children: [
-          RefreshIndicator(
-        color: primaryColor,
-        onRefresh: _handleRefresh,
-        child: _isLoading
-            ? Center(child: CircularProgressIndicator(color: primaryColor))
-            : CustomScrollView(
-                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                scrollCacheExtent: ScrollCacheExtent.pixels(800),
-                slivers: [
-                  if (_isOffline && GraphQLClientService.instance.isConfigured)
-                    SliverToBoxAdapter(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withAlpha(30),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.orange.withAlpha(80), width: 0.8),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.wifi_off_rounded, color: Colors.orange, size: 16),
-                            SizedBox(width: 8),
-                            Text(
-                              'Offline — Showing cached library',
-                              style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w600),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final canvasWidth = constraints.maxWidth;
+          final int crossAxisCount = columnsSetting > 0
+              ? columnsSetting
+              : (isTablet
+                  ? (canvasWidth / 175.0).floor().clamp(3, 6)
+                  : (canvasWidth / 120.0).floor().clamp(2, 4));
+          final childAspectRatio = isCoverOnly
+              ? 0.70
+              : (isCompact ? 0.70 : (isTablet ? 0.61 : 0.65));
+
+          return Stack(
+            children: [
+              RefreshIndicator(
+            color: primaryColor,
+            onRefresh: _handleRefresh,
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator(color: primaryColor))
+                : CustomScrollView(
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                    scrollCacheExtent: ScrollCacheExtent.pixels(800),
+                    slivers: [
+                      if (_isOffline && GraphQLClientService.instance.isConfigured)
+                        SliverToBoxAdapter(
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withAlpha(30),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.orange.withAlpha(80), width: 0.8),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: ['All', 'Unread', 'Downloaded', 'Completed'].map((filter) {
-                            final isSel = _statusFilter == filter;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 6.0),
-                              child: FilterChip(
-                                label: Text(filter),
-                                selected: isSel,
-                                showCheckmark: false,
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                                visualDensity: VisualDensity.compact,
-                                selectedColor: primaryColor.withValues(alpha: 0.25),
-                                backgroundColor: const Color(0x1F2A2A32),
-                                labelStyle: TextStyle(
-                                  color: isSel ? primaryColor : Colors.grey[400],
-                                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                                  fontSize: 12,
+                            child: const Row(
+                              children: [
+                                Icon(Icons.wifi_off_rounded, color: Colors.orange, size: 16),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Offline — Showing cached library',
+                                  style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w600),
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  side: BorderSide(
-                                    color: isSel ? primaryColor.withValues(alpha: 0.6) : const Color(0x2BFFFFFF),
-                                    width: 0.8,
-                                  ),
-                                ),
-                                onSelected: (_) {
-                                  setState(() => _statusFilter = filter);
-                                },
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (displayManga.isEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: EmptyStateWidget(
-                        icon: Icons.auto_stories_rounded,
-                        title: _searchQuery.isNotEmpty ? 'No Results Found' : 'Your Library is Empty',
-                        subtitle: _searchQuery.isNotEmpty 
-                            ? 'Try adjusting your search query.'
-                            : 'Browse extensions to find and add manga to your library.',
-                        actionLabel: _searchQuery.isNotEmpty ? 'Clear Search' : 'Browse Sources',
-                        onAction: () {
-                          if (_searchQuery.isNotEmpty) {
-                            setState(() {
-                              _searchQuery = '';
-                              _isSearching = false;
-                            });
-                          } else {
-                            MainShell.switchToTab(3);
-                          }
-                        },
-                      ),
-                    )
-                  else if (isList)
-                    SliverPadding(
-                      padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 8, bottom: bottomPadding),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) => _buildMangaListItem(displayManga[index]),
-                          childCount: displayManga.length,
-                          addAutomaticKeepAlives: true,
-                          addRepaintBoundaries: true,
-                          addSemanticIndexes: false,
-                        ),
-                      ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 8, bottom: bottomPadding),
-                      sliver: SliverGrid(
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount,
-                          childAspectRatio: childAspectRatio,
-                          crossAxisSpacing: isTablet ? 16 : 12,
-                          mainAxisSpacing: isTablet ? 20 : 16,
-                        ),
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) => _buildMangaCard(
-                            displayManga[index],
-                            isCompact: isCompact,
-                            isCoverOnly: isCoverOnly,
+                              ],
+                            ),
                           ),
-                          childCount: displayManga.length,
-                          addAutomaticKeepAlives: true,
-                          addRepaintBoundaries: true,
-                          addSemanticIndexes: false,
+                        ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 6),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: ['All', 'Unread', 'Downloaded', 'Completed'].map((filter) {
+                                final isSel = _statusFilter == filter;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 6.0),
+                                  child: FilterChip(
+                                    label: Text(filter),
+                                    selected: isSel,
+                                    showCheckmark: false,
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                    visualDensity: VisualDensity.compact,
+                                    selectedColor: primaryColor.withValues(alpha: 0.25),
+                                    backgroundColor: const Color(0x1F2A2A32),
+                                    labelStyle: TextStyle(
+                                      color: isSel ? primaryColor : Colors.grey[400],
+                                      fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                      fontSize: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: BorderSide(
+                                        color: isSel ? primaryColor.withValues(alpha: 0.6) : const Color(0x2BFFFFFF),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    onSelected: (_) {
+                                      setState(() => _statusFilter = filter);
+                                    },
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                      if (displayManga.isEmpty)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: EmptyStateWidget(
+                            icon: Icons.auto_stories_rounded,
+                            title: _searchQuery.isNotEmpty ? 'No Results Found' : 'Your Library is Empty',
+                            subtitle: _searchQuery.isNotEmpty 
+                                ? 'Try adjusting your search query.'
+                                : 'Browse extensions to find and add manga to your library.',
+                            actionLabel: _searchQuery.isNotEmpty ? 'Clear Search' : 'Browse Sources',
+                            onAction: () {
+                              if (_searchQuery.isNotEmpty) {
+                                setState(() {
+                                  _searchQuery = '';
+                                  _isSearching = false;
+                                });
+                              } else {
+                                MainShell.switchToTab(3);
+                              }
+                            },
+                          ),
+                        )
+                      else if (isList)
+                        SliverPadding(
+                          padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 8, bottom: bottomPadding),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) => _buildMangaListItem(displayManga[index]),
+                              childCount: displayManga.length,
+                              addAutomaticKeepAlives: true,
+                              addRepaintBoundaries: true,
+                              addSemanticIndexes: false,
+                            ),
+                          ),
+                        )
+                      else
+                        SliverPadding(
+                          padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 8, bottom: bottomPadding),
+                          sliver: SliverGrid(
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              childAspectRatio: childAspectRatio,
+                              crossAxisSpacing: isTablet ? 16 : 12,
+                              mainAxisSpacing: isTablet ? 20 : 16,
+                            ),
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) => _buildMangaCard(
+                                displayManga[index],
+                                isCompact: isCompact,
+                                isCoverOnly: isCoverOnly,
+                                isTablet: isTablet,
+                              ),
+                              childCount: displayManga.length,
+                              addAutomaticKeepAlives: true,
+                              addRepaintBoundaries: true,
+                              addSemanticIndexes: false,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
               ),
-          ),
-          if (_isBatchMode)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: isTablet ? 24.0 : 16.0,
-              child: _buildBatchActionDock(context),
-            ),
-        ],
+              if (_isBatchMode)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: isTablet ? 24.0 : 16.0,
+                  child: _buildBatchActionDock(context),
+                ),
+            ],
+          );
+        },
       ),
       ),
     );
   }
 
-  Widget _buildMangaCard(Manga manga, {bool isCompact = false, bool isCoverOnly = false}) {
+  Widget _buildMangaCard(Manga manga, {bool isCompact = false, bool isCoverOnly = false, bool isTablet = false}) {
     final mId = manga.serverId > 0 ? manga.serverId : manga.id;
     final isSelected = _selectedMangaIds.contains(mId);
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -1607,7 +1618,11 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                   manga.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, height: 1.25),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: isTablet ? 13.5 : 12.5,
+                    height: 1.25,
+                  ),
                 ),
               ],
             ],
