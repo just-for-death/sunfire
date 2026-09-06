@@ -1215,6 +1215,23 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     tooltip: 'Categories',
                     onPressed: _showCategoryManagementDialog,
                   ),
+                  ListenableBuilder(
+                    listenable: DownloadManagerService.instance,
+                    builder: (context, _) {
+                      final activeCount = DownloadManagerService.instance.localTasks
+                          .where((t) => t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued)
+                          .length;
+                      return IconButton(
+                        icon: Badge(
+                          isLabelVisible: activeCount > 0,
+                          label: Text('$activeCount', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                          child: const Icon(Icons.download_rounded, size: 26),
+                        ),
+                        tooltip: 'Downloads Queue',
+                        onPressed: () => context.push('/downloads'),
+                      );
+                    },
+                  ),
                 ],
               ],
         bottom: !_settings.showCategoryTabs || _categories.isEmpty
