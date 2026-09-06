@@ -38,7 +38,7 @@ class ReaderScreen extends StatefulWidget {
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMixin {
+class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
   final SettingsService _settings = SettingsService.instance;
   String? _sourceName;
   Chapter? _chapter;
@@ -93,6 +93,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentChapterId = widget.chapterServerId;
     _pageController = PageController();
     _initPreferences();
@@ -104,6 +105,27 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _initIosVolumeListener();
     }
     _loadChapterAndPages(widget.chapterServerId);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (_isAutoScrolling) {
+        _stopAutoScroll();
+        if (mounted) setState(() => _isAutoScrolling = false);
+      }
+      if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
+        try {
+          VolumeController.instance.showSystemUI = true;
+        } catch (_) {}
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (!kIsWeb && (Platform.isIOS || Platform.isMacOS) && _settings.volumeKeyTurn) {
+        try {
+          VolumeController.instance.showSystemUI = false;
+        } catch (_) {}
+      }
+    }
   }
 
   void _initIosVolumeListener() {
@@ -555,6 +577,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _autoScrollTicker?.stop();
     _autoScrollTicker?.dispose();
     _autoScrollTicker = null;
@@ -589,7 +612,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _stopAutoScroll();
     _recoveredImageBytes.clear();
     _recoveringUrls.clear();
-    if (_isZoomed) {
+    if (_isZoomed || !_transformationController.value.isIdentity()) {
       _transformationController.value = Matrix4.identity();
       _isZoomed = false;
     }
@@ -885,7 +908,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   void _onPageChanged(int index) {
-    if (_isZoomed) {
+    if (_isZoomed || !_transformationController.value.isIdentity()) {
       _transformationController.value = Matrix4.identity();
       _isZoomed = false;
     }
@@ -920,6 +943,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         : (_chapter!.pageCount > 0 ? _chapter!.pageCount : page);
     final clampedPage = totalPages > 0 ? page.clamp(1, totalPages) : page;
     final isComplete = page >= totalPages;
+    final wasRead = _chapter!.isRead;
 
     _chapter!.lastPageRead = clampedPage;
     if (_pageUrls.isNotEmpty && _chapter!.pageCount != _pageUrls.length) {
@@ -935,6 +959,16 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
     _chapter!.lastReadAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     IsarService.instance.saveChapter(_chapter!);
+
+    // If chapter just became read, update parent manga unread count immediately
+    if (!wasRead && _chapter!.isRead && _chapter!.mangaId > 0) {
+      IsarService.instance.getMangaByServerId(_chapter!.mangaId).then((manga) {
+        if (manga != null && (manga.unreadCount ?? 0) > 0) {
+          manga.unreadCount = manga.unreadCount! - 1;
+          IsarService.instance.saveManga(manga);
+        }
+      });
+    }
 
     if (_chapter!.serverId > 0) {
       SyncEngine.instance.syncChapterProgress(

@@ -23,6 +23,9 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _fetchServerDownloadStatus();
   }
 
@@ -52,6 +55,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final isTablet = MediaQuery.of(context).size.width >= 720;
+    final isServerTab = _tabController.index == 1;
 
     return Scaffold(
       appBar: AppBar(
@@ -69,50 +73,86 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
             }
           },
         ),
-        actions: [
-          ListenableBuilder(
-            listenable: _downloadService,
-            builder: (context, _) {
-              final isPaused = _downloadService.isQueuePaused;
-              final hasActive = _downloadService.localTasks.any(
-                (t) => t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued || t.status == LocalDownloadStatus.paused,
-              );
-              if (!hasActive) return const SizedBox.shrink();
-              return IconButton(
-                icon: Icon(isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded),
-                tooltip: isPaused ? 'Resume queue' : 'Pause queue',
-                onPressed: () {
-                  if (isPaused) {
-                    _downloadService.resumeLocalQueue();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Resumed download queue'), duration: Duration(seconds: 2)),
+        actions: isServerTab
+            ? [
+                if (GraphQLClientService.instance.isConfigured) ...[
+                  IconButton(
+                    icon: Icon(
+                      (_serverStatus?['state'] as String? ?? 'STOPPED') == 'RUNNING'
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                    ),
+                    tooltip: (_serverStatus?['state'] as String? ?? 'STOPPED') == 'RUNNING'
+                        ? 'Pause server downloader'
+                        : 'Start server downloader',
+                    onPressed: () async {
+                      if ((_serverStatus?['state'] as String? ?? 'STOPPED') == 'RUNNING') {
+                        await GraphQLClientService.instance.stopDownloader();
+                      } else {
+                        await GraphQLClientService.instance.startDownloader();
+                      }
+                      await _fetchServerDownloadStatus();
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.clear_all_rounded),
+                    tooltip: 'Clear server queue',
+                    onPressed: () async {
+                      await GraphQLClientService.instance.clearDownloader();
+                      await _fetchServerDownloadStatus();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Cleared server download queue')),
+                        );
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded),
+                    tooltip: 'Refresh server queue',
+                    onPressed: _fetchServerDownloadStatus,
+                  ),
+                ],
+              ]
+            : [
+                ListenableBuilder(
+                  listenable: _downloadService,
+                  builder: (context, _) {
+                    final isPaused = _downloadService.isQueuePaused;
+                    final hasActive = _downloadService.localTasks.any(
+                      (t) => t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued || t.status == LocalDownloadStatus.paused,
                     );
-                  } else {
-                    _downloadService.pauseLocalQueue();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Paused download queue'), duration: Duration(seconds: 2)),
+                    if (!hasActive) return const SizedBox.shrink();
+                    return IconButton(
+                      icon: Icon(isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded),
+                      tooltip: isPaused ? 'Resume queue' : 'Pause queue',
+                      onPressed: () {
+                        if (isPaused) {
+                          _downloadService.resumeLocalQueue();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Resumed download queue'), duration: Duration(seconds: 2)),
+                          );
+                        } else {
+                          _downloadService.pauseLocalQueue();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Paused download queue'), duration: Duration(seconds: 2)),
+                          );
+                        }
+                      },
                     );
-                  }
-                },
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.clear_all_rounded),
-            tooltip: 'Clear completed',
-            onPressed: () {
-              _downloadService.clearCompletedDownloads();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Cleared completed downloads')),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh server queue',
-            onPressed: _fetchServerDownloadStatus,
-          ),
-        ],
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.clear_all_rounded),
+                  tooltip: 'Clear completed',
+                  onPressed: () {
+                    _downloadService.clearCompletedDownloads();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Cleared completed downloads')),
+                    );
+                  },
+                ),
+              ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: primaryColor,

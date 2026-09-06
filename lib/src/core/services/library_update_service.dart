@@ -161,15 +161,20 @@ class LibraryUpdateService extends ChangeNotifier {
                 final mId = manga.serverId > 0 ? manga.serverId : manga.id;
                 final existing = await IsarService.instance.getChaptersForManga(mId);
                 final existingUrls = existing.map((c) => c.url).toSet();
+                final existingServerIds = existing.map((c) => c.serverId).toSet();
                 final newChaptersToSave = <Chapter>[];
 
                 for (int cIdx = 0; cIdx < rawChapters.length; cIdx++) {
                   final chMap = rawChapters[cIdx] as Map<String, dynamic>;
                   final chUrl = chMap['url']?.toString() ?? '';
                   if (chUrl.isNotEmpty && !existingUrls.contains(chUrl)) {
-                    final chServerId = (mId > 0 && mId < 200000)
+                    int chServerId = (mId > 0 && mId < 200000)
                         ? (mId * 10000 + cIdx + 1)
                         : (((mId.hashCode & 0x0007FFFF) * 1000) + (cIdx + 1));
+                    while (existingServerIds.contains(chServerId)) {
+                      chServerId++;
+                    }
+                    existingServerIds.add(chServerId);
                     final ch = Chapter()
                       ..serverId = chServerId
                       ..mangaId = mId

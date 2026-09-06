@@ -232,7 +232,7 @@ class DownloadManagerService extends ChangeNotifier {
     required String chapterName,
     required String mangaTitle,
   }) async {
-    if (_localTasks.any((t) => t.chapterId == chapterId && t.status != LocalDownloadStatus.failed)) {
+    if (_localTasks.any((t) => t.chapterId == chapterId && (t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued))) {
       return;
     }
 
@@ -242,7 +242,7 @@ class DownloadManagerService extends ChangeNotifier {
       chapterName: chapterName,
       mangaTitle: mangaTitle,
     );
-    _localTasks.removeWhere((t) => t.chapterId == chapterId && t.status == LocalDownloadStatus.failed);
+    _localTasks.removeWhere((t) => t.chapterId == chapterId);
     _localTasks.add(task);
     await _saveQueueState();
     notifyListeners();
@@ -251,15 +251,10 @@ class DownloadManagerService extends ChangeNotifier {
   }
 
   Future<void> _processLocalQueue() async {
-    if (_isProcessingLocalQueue) return;
+    if (_isProcessingLocalQueue || _isQueuePaused) return;
     _isProcessingLocalQueue = true;
 
-    while (_localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
-      if (_isQueuePaused) {
-        _isProcessingLocalQueue = false;
-        notifyListeners();
-        return;
-      }
+    while (_localTasks.any((t) => t.status == LocalDownloadStatus.queued) && !_isQueuePaused) {
       // Check network constraints (Wi-Fi only)
       if (SettingsService.instance.downloadOnlyOnWifi) {
         final onWifi = await _isWifiConnected();
@@ -278,26 +273,36 @@ class DownloadManagerService extends ChangeNotifier {
 
       try {
         await _downloadChapterLocally(task);
-        task.status = LocalDownloadStatus.completed;
-        task.progress = 1.0;
-        _downloadedLocalChapterIds.add(task.chapterId);
-        _downloadedLocalMangaIds.add(task.mangaId);
-        final m = await IsarService.instance.getMangaByServerId(task.mangaId);
-        if (m != null) {
-          if (m.serverId > 0) _downloadedLocalMangaIds.add(m.serverId);
-          _downloadedLocalMangaIds.add(m.id);
-        }
+        if (task.status == LocalDownloadStatus.paused || task.status == LocalDownloadStatus.failed) {
+          // Task was paused or cancelled during execution; preserve its state
+        } else {
+          task.status = LocalDownloadStatus.completed;
+          task.progress = 1.0;
+          _downloadedLocalChapterIds.add(task.chapterId);
+          _downloadedLocalMangaIds.add(task.mangaId);
+          final m = await IsarService.instance.getMangaByServerId(task.mangaId);
+          if (m != null) {
+            if (m.serverId > 0) _downloadedLocalMangaIds.add(m.serverId);
+            _downloadedLocalMangaIds.add(m.id);
+          }
 
-        // Update Isar DB
-        final ch = await IsarService.instance.getChapterByServerId(task.chapterId);
-        if (ch != null) {
-          ch.isDownloaded = true;
-          await IsarService.instance.saveChapter(ch);
+          // Update Isar DB
+          final ch = await IsarService.instance.getChapterByServerId(task.chapterId);
+          if (ch != null) {
+            ch.isDownloaded = true;
+            await IsarService.instance.saveChapter(ch);
+          }
         }
       } catch (e, stack) {
-        task.status = LocalDownloadStatus.failed;
-        task.error = e.toString();
-        await LoggerService.instance.logError('Failed to download chapter ${task.chapterId}: $e', exception: e, stackTrace: stack, category: 'DownloadManager');
+        if (task.status == LocalDownloadStatus.paused) {
+          // Retain paused state; do not overwrite with failed
+        } else if (task.status == LocalDownloadStatus.failed && task.error == 'Cancelled') {
+          // Retain cancelled state
+        } else {
+          task.status = LocalDownloadStatus.failed;
+          task.error = e.toString();
+          await LoggerService.instance.logError('Failed to download chapter ${task.chapterId}: $e', exception: e, stackTrace: stack, category: 'DownloadManager');
+        }
       }
       await _saveQueueState();
       notifyListeners();
@@ -346,8 +351,10 @@ class DownloadManagerService extends ChangeNotifier {
         throw Exception('Cancelled or paused');
       }
       await Future.wait(List.generate(end - start, (offset) async {
+        if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused) return;
         final i = start + offset;
         await _downloadSinglePage(chapterDir, effectiveSource, rawPages[i], i);
+        if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused) return;
         completed++;
         task.progress = completed / totalPages;
         notifyListeners();
@@ -491,6 +498,12 @@ class DownloadManagerService extends ChangeNotifier {
 
   Future<void> deleteLocalDownload(int chapterId) async {
     try {
+      final task = _localTasks.where((t) => t.chapterId == chapterId).firstOrNull;
+      if (task != null) {
+        task.status = LocalDownloadStatus.failed;
+        task.error = 'Cancelled';
+      }
+
       final appDir = await getApplicationDocumentsDirectory();
       final chapterDir = Directory('${appDir.path}/downloads/$chapterId');
       if (await chapterDir.exists()) {
@@ -525,13 +538,24 @@ class DownloadManagerService extends ChangeNotifier {
   }
 
   void cancelLocalDownload(int chapterId) {
-    final task = _localTasks.firstWhere((t) => t.chapterId == chapterId, orElse: () => LocalDownloadTask(chapterId: 0, mangaId: 0, chapterName: '', mangaTitle: ''));
-    if (task.chapterId != 0) {
+    final task = _localTasks.where((t) => t.chapterId == chapterId).firstOrNull;
+    if (task != null) {
       task.status = LocalDownloadStatus.failed;
       task.error = 'Cancelled';
       _saveQueueState();
       notifyListeners();
+      _cleanupIncompleteDownload(chapterId);
     }
+  }
+
+  Future<void> _cleanupIncompleteDownload(int chapterId) async {
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final chapterDir = Directory('${appDir.path}/downloads/$chapterId');
+      if (await chapterDir.exists()) {
+        await chapterDir.delete(recursive: true);
+      }
+    } catch (_) {}
   }
 
   Future<void> dismissLocalTask(int chapterId) async {

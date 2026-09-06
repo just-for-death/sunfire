@@ -272,6 +272,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     final messenger = ScaffoldMessenger.of(context);
     final ch = item['chapter'] as Chapter;
     final isDownloaded = item['isDownloaded'] as bool? ?? false;
+    final chId = ch.serverId > 0 ? ch.serverId : ch.id;
+    final isLocalDownloaded = DownloadManagerService.instance.isChapterDownloadedLocally(chId);
+    final resolvedMangaTitle = (item['title'] as String?) ?? (item['mangaTitle'] as String?) ?? 'Manga';
 
     showModalBottomSheet(
       context: context,
@@ -306,12 +309,11 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                 subtitle: const Text('Save chapter pages locally for offline reading'),
                 onTap: () async {
                   Navigator.pop(sheetContext);
-                  final chId = ch.serverId > 0 ? ch.serverId : ch.id;
                   await DownloadManagerService.instance.enqueueLocalDownload(
                     chapterId: chId,
                     mangaId: ch.mangaId,
                     chapterName: ch.name,
-                    mangaTitle: (item['mangaTitle'] as String?) ?? 'Manga',
+                    mangaTitle: resolvedMangaTitle,
                   );
                   messenger.showSnackBar(
                     SnackBar(content: Text('Downloading ${ch.name} to local device...')),
@@ -328,6 +330,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                       await GraphQLClientService.instance.deleteDownloadedChapter(ch.serverId);
                     }
                     _loadUpdatesFromServer();
+                  },
+                ),
+              if (isLocalDownloaded)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                  title: const Text('Delete Download from Local Device', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Free up offline storage space on this device'),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    await DownloadManagerService.instance.deleteLocalDownload(chId);
+                    if (mounted) _loadUpdatesFromIsarCache();
                   },
                 ),
             ],
@@ -503,7 +516,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                               final mangaId = item['mangaId'] as int;
                               final title = item['title'] as String;
                               final thumb = item['thumbnailUrl'] as String;
-                              final isDownloaded = item['isDownloaded'] as bool? ?? false;
+                              final chId = ch.serverId > 0 ? ch.serverId : ch.id;
+                              final isDownloaded = (item['isDownloaded'] as bool? ?? false) || DownloadManagerService.instance.isChapterDownloadedLocally(chId);
                               final dateHeader = item['dateHeader'] as String;
 
                               // Show header if first item or if previous item had different date

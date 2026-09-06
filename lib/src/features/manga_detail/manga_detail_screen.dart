@@ -391,6 +391,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               fetched.add(ch);
             }
             final existingChapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+            final existingServerIds = existingChapters.map((c) => c.serverId).toSet();
 
             // Transfer read progress from existing chapters to freshly scraped ones
             // so we don't wipe reading history when the chapter list refreshes
@@ -428,6 +429,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   match.url = ch.url;
                   match.realUrl = ch.realUrl;
                 } else {
+                  // Ensure newly minted chapter serverId does not collide with existing ones
+                  while (existingServerIds.contains(ch.serverId)) {
+                    ch.serverId++;
+                  }
+                  existingServerIds.add(ch.serverId);
                   // Genuinely NEW chapter added to an existing library manga (manga already had chapters)
                   if (existingChapters.isNotEmpty && _manga != null && _manga!.inLibrary) {
                     ch.fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -581,6 +587,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     _openReader(_targetChapterId(unread));
   }
 
+  Future<void> _refreshUnreadCount() async {
+    if (_manga == null) return;
+    final mId = _manga!.serverId > 0 ? _manga!.serverId : _manga!.id;
+    final chs = await IsarService.instance.getChaptersForManga(mId);
+    final unread = chs.where((c) => !c.isRead).length;
+    _manga!.unreadCount = unread;
+    await IsarService.instance.saveManga(_manga!);
+  }
+
   void _toggleChapterRead(Chapter ch) async {
     final newState = !ch.isRead;
     setState(() {
@@ -588,6 +603,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       if (!newState) ch.lastPageRead = 0;
     });
     await IsarService.instance.saveChapter(ch);
+    await _refreshUnreadCount();
 
     if (newState && _settings.deleteChapterAfterMarkedRead && ch.isDownloaded) {
       if (!ch.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
@@ -629,6 +645,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
     }
     await IsarService.instance.saveChapters(prevs);
+    await _refreshUnreadCount();
     setState(() {});
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -669,6 +686,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
     }
     await IsarService.instance.saveChapters(targets);
+    await _refreshUnreadCount();
     setState(() => _selectedChapterIds.clear());
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
