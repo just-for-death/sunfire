@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
-
 import 'package:intl/intl.dart';
 
 import '../../core/db/isar_service.dart';
@@ -10,6 +9,7 @@ import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/library_update_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/sync_engine.dart';
 import '../../main_shell.dart';
 
 class UpdatesScreen extends StatefulWidget {
@@ -22,6 +22,7 @@ class UpdatesScreen extends StatefulWidget {
 class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
+
   List<Map<String, dynamic>> _updatesList = [];
   bool _isLoading = false;
   bool _isCheckingServer = false;
@@ -48,14 +49,15 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   }
 
   String _formatDateHeader(int? fetchedAt) {
-    if (fetchedAt == null || fetchedAt == 0) return 'Recent';
-    final date = DateTime.fromMillisecondsSinceEpoch(fetchedAt * 1000);
+    if (fetchedAt == null || fetchedAt <= 0) return 'Recent';
+    final int millis = fetchedAt > 100000000000 ? fetchedAt : fetchedAt * 1000;
+    final date = DateTime.fromMillisecondsSinceEpoch(millis);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final itemDate = DateTime(date.year, date.month, date.day);
 
     final diffDays = today.difference(itemDate).inDays;
-    if (diffDays == 0) {
+    if (diffDays <= 0) {
       return 'Today';
     } else if (diffDays == 1) {
       return 'Yesterday';
@@ -83,6 +85,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     try {
       final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
       final items = <Map<String, dynamic>>[];
+      final chaptersToSave = <Chapter>[];
 
       // Fetch last update timestamp
       final tsStr = await GraphQLClientService.instance
@@ -91,7 +94,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       if (tsStr != null) {
         final ts = int.tryParse(tsStr);
         if (ts != null && mounted) {
-          final dt = DateTime.fromMillisecondsSinceEpoch(ts);
+          final dt = DateTime.fromMillisecondsSinceEpoch(ts > 100000000000 ? ts : ts * 1000);
           setState(() {
             _lastUpdateText = 'Last update: ${DateFormat('MM/dd/yyyy, hh:mm a').format(dt)}';
           });
@@ -129,13 +132,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
             }
             mangaAddedCount[mId] = (mangaAddedCount[mId] ?? 0) + 1;
 
-            final ch = Chapter()
-              ..serverId = chServerId
-              ..mangaId = mId
-              ..name = map['name'] as String? ?? 'Chapter'
-              ..chapterNumber = parseDoubleSafe(map['chapterNumber'])
-              ..isRead = parseBoolSafe(map['isRead'])
-              ..lastPageRead = parseIntSafe(map['lastPageRead']);
+            final isDownloaded = parseBoolSafe(map['isDownloaded']);
+            final rawFetchedAt = map['fetchedAt'] != null ? int.tryParse(map['fetchedAt'].toString()) : null;
+            final fetchedAt = rawFetchedAt != null && rawFetchedAt > 100000000000 ? (rawFetchedAt ~/ 1000) : rawFetchedAt;
 
             String title = 'Manga';
             String thumb = '';
@@ -153,13 +152,19 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
               sourceName = srcMap?['displayName'] as String? ?? '';
             }
 
-            final isDownloaded = parseBoolSafe(map['isDownloaded']);
-            final fetchedAt = map['fetchedAt'] != null ? int.tryParse(map['fetchedAt'].toString()) : null;
+            final ch = Chapter()
+              ..serverId = chServerId
+              ..mangaId = resolvedMId
+              ..name = map['name'] as String? ?? 'Chapter'
+              ..chapterNumber = parseDoubleSafe(map['chapterNumber'])
+              ..isRead = parseBoolSafe(map['isRead'])
+              ..lastPageRead = parseIntSafe(map['lastPageRead'])
+              ..mangaTitle = title
+              ..mangaThumbnailUrl = thumb
+              ..fetchedAt = fetchedAt
+              ..isDownloadedOnServer = isDownloaded;
 
-            ch.mangaTitle = title;
-            ch.mangaThumbnailUrl = thumb;
-            ch.fetchedAt = fetchedAt;
-            ch.isDownloadedOnServer = isDownloaded;
+            chaptersToSave.add(ch);
 
             items.add({
               'chapter': ch,
@@ -175,7 +180,29 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         }
       }
 
+      // Persist fetched chapters into Isar so cache stays synchronized with server
+      if (chaptersToSave.isNotEmpty) {
+        for (final ch in chaptersToSave) {
+          final existing = await IsarService.instance.getChapterByServerId(ch.serverId);
+          if (existing != null) {
+            ch.id = existing.id;
+            ch.isRead = ch.isRead || existing.isRead;
+            ch.lastPageRead = ch.lastPageRead > existing.lastPageRead ? ch.lastPageRead : existing.lastPageRead;
+            if (existing.url.isNotEmpty && ch.url.isEmpty) ch.url = existing.url;
+            if (existing.isBookmarked) ch.isBookmarked = true;
+            if (existing.isDownloaded) ch.isDownloaded = true;
+          }
+        }
+        await IsarService.instance.saveChapters(chaptersToSave);
+      }
+
       if (items.isNotEmpty && mounted) {
+        items.sort((a, b) {
+          final fa = a['fetchedAt'] as int? ?? 0;
+          final fb = b['fetchedAt'] as int? ?? 0;
+          return fb.compareTo(fa);
+        });
+
         setState(() {
           _updatesList = items;
           _isLoading = false;
@@ -190,10 +217,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   Future<void> _loadUpdatesFromIsarCache() async {
     try {
       final chapters = await IsarService.instance.getRecentChapters(limit: 100);
+      if (chapters.isEmpty && _updatesList.isNotEmpty) {
+        // Retain current in-memory feed if cache temporarily returns empty
+        return;
+      }
+
       final items = <Map<String, dynamic>>[];
 
       for (final ch in chapters) {
-        // Use denormalized fields when available, else fall back to Isar join
         String title = ch.mangaTitle.isNotEmpty ? ch.mangaTitle : 'Manga #${ch.mangaId}';
         String thumb = ch.mangaThumbnailUrl ?? '';
 
@@ -211,11 +242,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           'title': title,
           'thumbnailUrl': thumb,
           'sourceName': '',
-          'isDownloaded': ch.isDownloaded,
+          'isDownloaded': ch.isDownloaded || ch.isDownloadedOnServer,
           'fetchedAt': ch.fetchedAt,
           'dateHeader': _formatDateHeader(ch.fetchedAt),
         });
       }
+
+      items.sort((a, b) {
+        final fa = a['fetchedAt'] as int? ?? 0;
+        final fb = b['fetchedAt'] as int? ?? 0;
+        return fb.compareTo(fa);
+      });
 
       if (mounted) {
         setState(() {
@@ -227,9 +264,6 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
-  // Legacy compat — kept for pull-to-refresh and server check button
-  Future<void> _loadUpdatesFromServer() => _loadUpdates();
 
   Future<void> _checkServerForUpdates() async {
     setState(() => _isCheckingServer = true);
@@ -267,6 +301,152 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     }
   }
 
+  Future<void> _toggleChapterRead(Map<String, dynamic> item) async {
+    final ch = item['chapter'] as Chapter;
+    final newState = !ch.isRead;
+    setState(() {
+      ch.isRead = newState;
+      if (!newState) ch.lastPageRead = 0;
+    });
+
+    await IsarService.instance.saveChapter(ch);
+
+    if (ch.serverId > 0) {
+      SyncEngine.instance.syncChapterProgress(ch.serverId, isRead: newState, lastPageRead: ch.lastPageRead);
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(newState ? 'Marked "${ch.name}" as read' : 'Marked "${ch.name}" as unread'),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _markAllAsRead() async {
+    if (_updatesList.isEmpty) return;
+
+    final unreadItems = _updatesList.where((it) => !(it['chapter'] as Chapter).isRead).toList();
+    if (unreadItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('All update chapters are already marked as read'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F26),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Mark All as Read', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('Mark all ${unreadItems.length} update chapters as read?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Mark as Read'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final chaptersToUpdate = <Chapter>[];
+    setState(() {
+      for (final it in unreadItems) {
+        final ch = it['chapter'] as Chapter;
+        ch.isRead = true;
+        chaptersToUpdate.add(ch);
+      }
+    });
+
+    await IsarService.instance.saveChapters(chaptersToUpdate);
+
+    for (final ch in chaptersToUpdate) {
+      if (ch.serverId > 0) {
+        SyncEngine.instance.syncChapterProgress(ch.serverId, isRead: true, lastPageRead: ch.lastPageRead);
+      }
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Marked ${chaptersToUpdate.length} chapters as read'),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _clearUpdatesHistory() async {
+    if (_updatesList.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F26),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Clear Updates Feed', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Remove current chapters from the Updates feed? This will not delete any chapters or reading history.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final chaptersToReset = <Chapter>[];
+    for (final it in _updatesList) {
+      final ch = it['chapter'] as Chapter;
+      ch.fetchedAt = 0;
+      chaptersToReset.add(ch);
+    }
+
+    await IsarService.instance.saveChapters(chaptersToReset);
+
+    setState(() {
+      _updatesList.clear();
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Updates feed cleared'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   void _showDownloadOptions(Map<String, dynamic> item) {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final messenger = ScaffoldMessenger.of(context);
@@ -274,7 +454,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     final isDownloaded = item['isDownloaded'] as bool? ?? false;
     final chId = ch.serverId > 0 ? ch.serverId : ch.id;
     final isLocalDownloaded = DownloadManagerService.instance.isChapterDownloadedLocally(chId);
-    final resolvedMangaTitle = (item['title'] as String?) ?? (item['mangaTitle'] as String?) ?? 'Manga';
+    final resolvedMangaTitle = (item['title'] as String?) ?? 'Manga';
 
     showModalBottomSheet(
       context: context,
@@ -329,7 +509,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                     if (GraphQLClientService.instance.isConfigured) {
                       await GraphQLClientService.instance.deleteDownloadedChapter(ch.serverId);
                     }
-                    _loadUpdatesFromServer();
+                    _loadUpdates();
                   },
                 ),
               if (isLocalDownloaded)
@@ -350,10 +530,210 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     );
   }
 
+  Widget _buildUpdateCard(BuildContext context, Map<String, dynamic> item, {required bool isTablet}) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final ch = item['chapter'] as Chapter;
+    final mangaId = item['mangaId'] as int;
+    final title = item['title'] as String;
+    final thumb = item['thumbnailUrl'] as String;
+    final chId = ch.serverId > 0 ? ch.serverId : ch.id;
+
+    final isLocalDownloaded = DownloadManagerService.instance.isChapterDownloadedLocally(chId);
+    final isDownloading = DownloadManagerService.instance.localTasks
+        .any((t) => t.chapterId == chId && (t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued));
+    final isDownloaded = (item['isDownloaded'] as bool? ?? false) || isLocalDownloaded || ch.isDownloaded || ch.isDownloadedOnServer;
+    final isRead = ch.isRead;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: isTablet ? 0.0 : 16.0,
+        vertical: 4.0,
+      ),
+      child: Material(
+        color: const Color(0x1F22222E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: isRead ? const Color(0x15FFFFFF) : const Color(0x28FFFFFF),
+            width: 0.8,
+          ),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => context.push('/manga/$mangaId'),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: isTablet ? 10 : 8),
+            child: Row(
+              children: [
+                // Manga cover thumbnail
+                Hero(
+                  tag: 'update_cover_${chId}_$mangaId',
+                  child: Container(
+                    width: isTablet ? 50 : 44,
+                    height: isTablet ? 72 : 62,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.grey[900],
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: MangaCoverImage(
+                        mangaServerId: mangaId,
+                        thumbnailUrl: thumb,
+                        sourceName: item['sourceName'] as String?,
+                        width: isTablet ? 50 : 44,
+                        height: isTablet ? 72 : 62,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Manga title and chapter info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: isTablet ? 14.5 : 13.5,
+                          color: isRead ? Colors.white60 : Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          if (!isRead)
+                            Container(
+                              width: 7,
+                              height: 7,
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: primaryColor,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primaryColor.withValues(alpha: 0.6),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          Expanded(
+                            child: Text(
+                              ch.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: isTablet ? 12.5 : 12,
+                                color: isRead ? Colors.white38 : primaryColor,
+                                fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (isTablet && (item['sourceName'] as String? ?? '').isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          item['sourceName'] as String,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.white38,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // Quick Actions Row
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Mark as read/unread button
+                    IconButton(
+                      icon: Icon(
+                        isRead ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded,
+                        color: isRead ? primaryColor : Colors.white38,
+                        size: isTablet ? 22 : 20,
+                      ),
+                      tooltip: isRead ? 'Mark as unread' : 'Mark as read',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _toggleChapterRead(item),
+                    ),
+                    // Download button
+                    IconButton(
+                      icon: isDownloading
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                color: primaryColor,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Icon(
+                              isDownloaded ? Icons.cloud_done_rounded : Icons.download_rounded,
+                              color: isDownloaded ? Colors.greenAccent : Colors.grey,
+                              size: isTablet ? 22 : 20,
+                            ),
+                      tooltip: 'Download options',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _showDownloadOptions(item),
+                    ),
+                    // Read chapter button
+                    IconButton(
+                      icon: Icon(
+                        Icons.play_circle_fill_rounded,
+                        color: primaryColor,
+                        size: isTablet ? 28 : 24,
+                      ),
+                      tooltip: 'Read chapter',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () async {
+                        await context.push('/reader/${ch.serverId > 0 ? ch.serverId : ch.id}');
+                        if (mounted) _loadUpdatesFromIsarCache();
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth >= 720;
+
+    // Group updates by dateHeader
+    final Map<String, List<Map<String, dynamic>>> groupedUpdates = {};
+    for (final item in _updatesList) {
+      final header = item['dateHeader'] as String? ?? 'Recent';
+      groupedUpdates.putIfAbsent(header, () => []).add(item);
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -397,213 +777,241 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
               );
             },
           ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded),
+            tooltip: 'More options',
+            color: const Color(0xFF22222C),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            onSelected: (val) {
+              if (val == 'mark_all_read') {
+                _markAllAsRead();
+              } else if (val == 'clear_feed') {
+                _clearUpdatesHistory();
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'mark_all_read',
+                child: Row(
+                  children: [
+                    Icon(Icons.done_all_rounded, size: 20, color: Colors.white70),
+                    SizedBox(width: 10),
+                    Text('Mark all as read'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'clear_feed',
+                child: Row(
+                  children: [
+                    Icon(Icons.clear_all_rounded, size: 20, color: Colors.redAccent),
+                    SizedBox(width: 10),
+                    Text('Clear feed', style: TextStyle(color: Colors.redAccent)),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 880),
+          constraints: isTablet ? const BoxConstraints() : const BoxConstraints(maxWidth: 880),
           child: RefreshIndicator(
             color: primaryColor,
             onRefresh: _checkServerForUpdates,
             child: _isLoading
                 ? Center(child: CircularProgressIndicator(color: primaryColor))
-                : CustomScrollView(
-                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                    scrollCacheExtent: ScrollCacheExtent.pixels(800),
-                    slivers: [
-                      ListenableBuilder(
-                        listenable: LibraryUpdateService.instance,
-                        builder: (context, _) {
-                          final updater = LibraryUpdateService.instance;
-                          if (!updater.isUpdating) return const SliverToBoxAdapter(child: SizedBox.shrink());
-                          return SliverToBoxAdapter(
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1E1E26),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
+                : ListenableBuilder(
+                    listenable: DownloadManagerService.instance,
+                    builder: (context, _) {
+                      return CustomScrollView(
+                        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                        scrollCacheExtent: ScrollCacheExtent.pixels(800),
+                        slivers: [
+                          ListenableBuilder(
+                            listenable: LibraryUpdateService.instance,
+                            builder: (context, _) {
+                              final updater = LibraryUpdateService.instance;
+                              if (!updater.isUpdating) return const SliverToBoxAdapter(child: SizedBox.shrink());
+                              return SliverToBoxAdapter(
+                                child: Container(
+                                  margin: EdgeInsets.symmetric(
+                                    horizontal: isTablet ? 24 : 16,
+                                    vertical: 8,
+                                  ),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1E1E26),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
+                                      Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              updater.statusMessage,
+                                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(4),
+                                        child: LinearProgressIndicator(
+                                          value: updater.progress > 0 ? updater.progress : null,
+                                          minHeight: 4,
+                                          backgroundColor: const Color(0x22FFFFFF),
                                           valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                                         ),
                                       ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          updater.statusMessage,
-                                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: LinearProgressIndicator(
-                                      value: updater.progress > 0 ? updater.progress : null,
-                                      minHeight: 4,
-                                      backgroundColor: const Color(0x22FFFFFF),
-                                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      if (_lastUpdateText != null)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
-                            child: Text(
-                              _lastUpdateText!,
-                              style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
-                            ),
-                          ),
-                        ),
-                        if (_updatesList.isEmpty)
-                          SliverToBoxAdapter(
-                            child: Container(
-                              alignment: Alignment.center,
-                              padding: const EdgeInsets.only(top: 80.0, left: 24.0, right: 24.0),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.notifications_none_rounded, size: 64, color: primaryColor.withAlpha(120)),
-                                  const SizedBox(height: 16),
-                                  const Text('No Recent Updates', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Pull down to check for updates or\nadd more manga to your library.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(color: Colors.grey, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 20),
-                                  ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: primaryColor,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                                    ),
-                                    icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                                    label: const Text('Check Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                    onPressed: _checkServerForUpdates,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        else ...[
-                          SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final item = _updatesList[index];
-                              final ch = item['chapter'] as Chapter;
-                              final mangaId = item['mangaId'] as int;
-                              final title = item['title'] as String;
-                              final thumb = item['thumbnailUrl'] as String;
-                              final chId = ch.serverId > 0 ? ch.serverId : ch.id;
-                              final isDownloaded = (item['isDownloaded'] as bool? ?? false) || DownloadManagerService.instance.isChapterDownloadedLocally(chId);
-                              final dateHeader = item['dateHeader'] as String;
-
-                              // Show header if first item or if previous item had different date
-                              final bool showHeader = index == 0 || _updatesList[index - 1]['dateHeader'] != dateHeader;
-
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (showHeader) ...[
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 14.0, bottom: 8.0, left: 4.0),
-                                        child: Text(
-                                          dateHeader,
-                                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                    ],
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                      child: Material(
-                                        color: const Color(0x1F2A2A32),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
-                                        ),
-                                        child: ListTile(
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                          onTap: () => context.push('/manga/$mangaId'),
-                                          leading: Container(
-                                            width: 44,
-                                            height: 60,
-                                            decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(8),
-                                              color: Colors.grey[900],
-                                            ),
-                                            child: ClipRRect(
-                                              borderRadius: BorderRadius.circular(8),
-                                              child: MangaCoverImage(
-                                                mangaServerId: mangaId,
-                                                thumbnailUrl: thumb,
-                                                sourceName: item['sourceName'] as String?,
-                                                width: 44,
-                                                height: 60,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            ),
-                                          ),
-                                          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                          subtitle: Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w600)),
-                                          trailing: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              IconButton(
-                                                icon: Icon(
-                                                  isDownloaded ? Icons.cloud_done_rounded : Icons.download_rounded,
-                                                  color: isDownloaded ? Colors.greenAccent : Colors.grey,
-                                                  size: 22,
-                                                ),
-                                                tooltip: 'Download options',
-                                                onPressed: () => _showDownloadOptions(item),
-                                              ),
-                                              IconButton(
-                                                icon: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 26),
-                                                tooltip: 'Read chapter',
-                                                onPressed: () async {
-                                                  await context.push('/reader/${ch.serverId > 0 ? ch.serverId : ch.id}');
-                                                  if (mounted) _loadUpdatesFromIsarCache();
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
                                 ),
                               );
                             },
-                            childCount: _updatesList.length,
                           ),
-                        ),
-                        SliverToBoxAdapter(child: SizedBox(height: MediaQuery.of(context).size.width >= 720 ? 36 : 120)),
-                      ],
-                    ],
+                          if (_lastUpdateText != null)
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isTablet ? 24.0 : 20.0,
+                                  vertical: 6.0,
+                                ),
+                                child: Text(
+                                  _lastUpdateText!,
+                                  style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                            ),
+                          if (_updatesList.isEmpty)
+                            SliverToBoxAdapter(
+                              child: Container(
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.only(top: 80.0, left: 24.0, right: 24.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.notifications_none_rounded, size: 64, color: primaryColor.withAlpha(120)),
+                                    const SizedBox(height: 16),
+                                    const Text('No Recent Updates', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Pull down to check for updates or\nadd more manga to your library.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: primaryColor,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                      ),
+                                      icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                                      label: const Text('Check Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      onPressed: _checkServerForUpdates,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else ...[
+                            for (final entry in groupedUpdates.entries) ...[
+                              // Date Section Header
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                    top: 18.0,
+                                    bottom: 8.0,
+                                    left: isTablet ? 20.0 : 20.0,
+                                    right: 20.0,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        entry.key,
+                                        style: TextStyle(
+                                          fontSize: isTablet ? 18.5 : 16.5,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: -0.3,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          '${entry.value.length}',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white70,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // Section Content: Grid on Tablet, List on Phone
+                              if (isTablet)
+                                SliverPadding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                  sliver: SliverGrid(
+                                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                                      maxCrossAxisExtent: 480,
+                                      mainAxisExtent: 96,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 10,
+                                    ),
+                                    delegate: SliverChildBuilderDelegate(
+                                      (context, index) => _buildUpdateCard(
+                                        context,
+                                        entry.value[index],
+                                        isTablet: true,
+                                      ),
+                                      childCount: entry.value.length,
+                                    ),
+                                  ),
+                                )
+                              else
+                                SliverList(
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, index) => _buildUpdateCard(
+                                      context,
+                                      entry.value[index],
+                                      isTablet: false,
+                                    ),
+                                    childCount: entry.value.length,
+                                  ),
+                                ),
+                            ],
+                            SliverToBoxAdapter(
+                              child: SizedBox(height: isTablet ? 40 : 120),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
                   ),
           ),
         ),
