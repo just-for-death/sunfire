@@ -725,6 +725,18 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                 title: const Text('Add to Library (Default Category)', style: TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () async {
                   Navigator.pop(sheetContext);
+                  final localManga = await IsarService.instance.getMangaByServerId(mangaId);
+                  if (localManga != null) {
+                    localManga.inLibrary = true;
+                    localManga.inLibraryAt = DateTime.now().millisecondsSinceEpoch;
+                    if (SettingsService.instance.defaultCategoryId != null) {
+                      final defId = SettingsService.instance.defaultCategoryId!;
+                      if (!localManga.categoryIds.contains(defId)) {
+                        localManga.categoryIds = [...localManga.categoryIds, defId];
+                      }
+                    }
+                    await IsarService.instance.saveManga(localManga);
+                  }
                   if (GraphQLClientService.instance.isConfigured) {
                     await GraphQLClientService.instance.updateMangaLibraryState(mangaId, true);
                     if (SettingsService.instance.defaultCategoryId != null) {

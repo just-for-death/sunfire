@@ -874,5 +874,112 @@ void main() {
       expect(computeNewUnreadCount(currentUnread: 5, wasRead: true, isComplete: true), equals(5)); // Already read
       expect(computeNewUnreadCount(currentUnread: 5, wasRead: false, isComplete: false), equals(5)); // Still reading
     });
+
+    test('36. Library sort comparator behaves uniformly across all sort options with isSortAscending', () {
+      final m1 = Manga()..title = 'Alpha'..unreadCount = 10..inLibraryAt = 100..chapterCount = 5;
+      final m2 = Manga()..title = 'Beta'..unreadCount = 2..inLibraryAt = 200..chapterCount = 25;
+
+      int sortManga(Manga a, Manga b, String sortBy, bool isSortAscending) {
+        int cmp = 0;
+        if (sortBy == 'Title') {
+          cmp = a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        } else if (sortBy == 'Unread') {
+          cmp = (a.unreadCount ?? 0).compareTo(b.unreadCount ?? 0);
+        } else if (sortBy == 'Recent') {
+          cmp = (a.inLibraryAt ?? 0).compareTo(b.inLibraryAt ?? 0);
+        } else if (sortBy == 'Chapters') {
+          cmp = a.chapterCount.compareTo(b.chapterCount);
+        }
+        return isSortAscending ? cmp : -cmp;
+      }
+
+      // Title: Ascending -> Alpha < Beta (-1)
+      expect(sortManga(m1, m2, 'Title', true), isNegative);
+      // Title: Descending -> Beta > Alpha (1)
+      expect(sortManga(m1, m2, 'Title', false), isPositive);
+
+      // Unread: Ascending -> 2 before 10 (m2 < m1)
+      expect(sortManga(m1, m2, 'Unread', true), isPositive);
+      // Unread: Descending -> 10 before 2 (m1 > m2)
+      expect(sortManga(m1, m2, 'Unread', false), isNegative);
+
+      // Recent: Descending (newest first) -> 200 before 100 (m2 > m1)
+      expect(sortManga(m1, m2, 'Recent', false), isPositive);
+
+      // Chapters: Descending (most first) -> 25 before 5 (m2 > m1)
+      expect(sortManga(m1, m2, 'Chapters', false), isPositive);
+    });
+
+    test('37. Chapter sorting deterministic tie-breaker maintains stable ordering for duplicate chapter numbers', () {
+      final chA = Chapter()..id = 10..chapterNumber = 0.0..name = 'Prologue A';
+      final chB = Chapter()..id = 20..chapterNumber = 0.0..name = 'Prologue B';
+
+      int sortChapters(Chapter a, Chapter b, bool ascending) {
+        if (ascending) {
+          final cmp = a.chapterNumber.compareTo(b.chapterNumber);
+          return cmp != 0 ? cmp : a.id.compareTo(b.id);
+        } else {
+          final cmp = b.chapterNumber.compareTo(a.chapterNumber);
+          return cmp != 0 ? cmp : b.id.compareTo(a.id);
+        }
+      }
+
+      expect(sortChapters(chA, chB, true), isNegative); // chA (id 10) before chB (id 20)
+      expect(sortChapters(chA, chB, false), isPositive); // chB (id 20) before chA (id 10) in descending
+    });
+
+    test('38. Web browser URL scheme fallback prepends https to domain strings without scheme', () {
+      String? resolveUrl(String? raw) {
+        if (raw == null || raw.trim().isEmpty) return null;
+        final trimmed = raw.trim();
+        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+          return trimmed;
+        }
+        if (trimmed.contains('.') && !trimmed.contains(' ')) {
+          return 'https://$trimmed';
+        }
+        return null;
+      }
+
+      expect(resolveUrl('https://example.com/manga/1'), equals('https://example.com/manga/1'));
+      expect(resolveUrl('http://example.com/manga/1'), equals('http://example.com/manga/1'));
+      expect(resolveUrl('mangadex.org/title/123'), equals('https://mangadex.org/title/123'));
+      expect(resolveUrl('invalid url with spaces'), isNull);
+      expect(resolveUrl(''), isNull);
+      expect(resolveUrl(null), isNull);
+    });
+
+    test('39. InLibrary toggle updates inLibraryAt timestamp and assigns default category', () {
+      final manga = Manga()
+        ..id = 1
+        ..inLibrary = false
+        ..categoryIds = [];
+
+      const defaultCatId = 77;
+
+      void toggleInLibrary(Manga m, int? defaultCat) {
+        final newState = !m.inLibrary;
+        m.inLibrary = newState;
+        if (newState) {
+          m.inLibraryAt = 123456789;
+          if (defaultCat != null && !m.categoryIds.contains(defaultCat)) {
+            m.categoryIds = [...m.categoryIds, defaultCat];
+          }
+        } else {
+          m.inLibraryAt = null;
+        }
+      }
+
+      // Add to library
+      toggleInLibrary(manga, defaultCatId);
+      expect(manga.inLibrary, isTrue);
+      expect(manga.inLibraryAt, equals(123456789));
+      expect(manga.categoryIds, contains(77));
+
+      // Remove from library
+      toggleInLibrary(manga, defaultCatId);
+      expect(manga.inLibrary, isFalse);
+      expect(manga.inLibraryAt, isNull);
+    });
   });
 }
