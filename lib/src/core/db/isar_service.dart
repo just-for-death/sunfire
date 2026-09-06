@@ -163,10 +163,10 @@ class IsarService {
   }
 
   /// Returns chapters sorted by fetchedAt DESC — the offline Updates feed.
-  /// Strictly filters to manga currently marked inLibrary == true, and
-  /// chapters with valid fetchedAt > 0, capped at 3 chapters per manga
-  /// to prevent any single title from flooding the feed.
-  Future<List<Chapter>> getRecentChapters({int limit = 100}) async {
+  /// Filters to manga currently marked inLibrary == true and chapters with
+  /// valid fetchedAt > 0. No per-manga cap here — the display layer groups
+  /// by date and the server already limits bulk imports to 3 per manga.
+  Future<List<Chapter>> getRecentChapters({int limit = 300}) async {
     if (!_isInitialized) return [];
     try {
       final libraryManga = await getLibraryManga();
@@ -183,13 +183,9 @@ class IsarService {
           .sortByFetchedAtDesc()
           .findAll();
 
-      final mangaCounts = <int, int>{};
       final result = <Chapter>[];
       for (final ch in chapters) {
         if (libraryIds.isNotEmpty && !libraryIds.contains(ch.mangaId)) continue;
-        final count = mangaCounts[ch.mangaId] ?? 0;
-        if (count >= 3) continue; // cap at 3 chapters per manga
-        mangaCounts[ch.mangaId] = count + 1;
         result.add(ch);
         if (result.length >= limit) break;
       }
@@ -200,12 +196,19 @@ class IsarService {
     }
   }
 
-  /// Automatically cleans up legacy bulk-scraped chapters from the Updates feed.
-  /// If chapters for the same manga were stamped in bulk (e.g. initial scrape/sync),
-  /// keeps at most the 3 latest chapters and resets the rest to fetchedAt = 0.
+  /// Cleans up ONLY synthetic standalone-scraped chapters that were bulk-stamped
+  /// (e.g. the initial Mangago local extension scrape that writes fake serverIds).
+  /// Real server chapters (serverId < 200000 or url empty) are NEVER touched.
+  ///
+  /// A chapter is "standalone-scraped" if its url is non-empty and its serverId
+  /// is in the synthetic range (> 200000 from the fake generation formula).
+  /// We only keep the 3 latest per manga per 60-second scrape bucket.
+  ///
+  /// This must only be called ONCE at app startup, not on every refresh.
   Future<void> cleanupBulkScrapedUpdates() async {
     if (!_isInitialized) return;
     try {
+      // Only target standalone-scraped chapters: url non-empty, serverId in fake range
       final chaptersWithFetchedAt = await _isar.chapters
           .filter()
           .fetchedAtGreaterThan(0)
@@ -213,14 +216,20 @@ class IsarService {
           .findAll();
       if (chaptersWithFetchedAt.isEmpty) return;
 
+      // Separate real server chapters (small serverId ≤ 200000) from synthetic ones
+      final standaloneChapters = chaptersWithFetchedAt
+          .where((ch) => ch.url.isNotEmpty && ch.serverId > 200000)
+          .toList();
+      if (standaloneChapters.isEmpty) return;
+
       final Map<int, List<Chapter>> mangaGroups = {};
-      for (final ch in chaptersWithFetchedAt) {
+      for (final ch in standaloneChapters) {
         mangaGroups.putIfAbsent(ch.mangaId, () => []).add(ch);
       }
 
       final List<Chapter> toReset = [];
       for (final list in mangaGroups.values) {
-        // Group by 60-second time windows to catch bulk scraping/importing batches
+        // Group by 60-second time windows to catch bulk scraping batches
         final Map<int, List<Chapter>> timeBuckets = {};
         for (final ch in list) {
           final rawFt = ch.fetchedAt ?? 0;
@@ -231,7 +240,7 @@ class IsarService {
 
         for (final bucketList in timeBuckets.values) {
           if (bucketList.length > 3) {
-            // Keep top 3 by chapterNumber (since list is already sorted Desc), reset older back-chapters
+            // Keep top 3 by chapterNumber (list already sorted Desc), reset older ones
             for (int i = 3; i < bucketList.length; i++) {
               bucketList[i].fetchedAt = 0;
               toReset.add(bucketList[i]);
@@ -245,7 +254,7 @@ class IsarService {
           await _isar.chapters.putAll(toReset);
         });
         await LoggerService.instance.logInfo(
-          'Cleaned up ${toReset.length} bulk-stamped chapters from Updates feed',
+          'Cleaned up ${toReset.length} bulk-stamped standalone chapters from Updates feed',
           'Database',
         );
       }
