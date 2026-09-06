@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' hide Category;
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../logging/logger_service.dart';
@@ -150,19 +150,75 @@ class IsarService {
   }
 
   /// Returns chapters sorted by fetchedAt DESC — the offline Updates feed.
-  /// Chapters with denormalized [mangaTitle] and [mangaThumbnailUrl] render
-  /// the Updates tab fully without any network or join.
+  /// Strictly filters to manga currently marked inLibrary == true, and
+  /// chapters with valid fetchedAt > 0, preventing back-chapters or non-library
+  /// manga from flooding the Updates screen.
   Future<List<Chapter>> getRecentChapters({int limit = 100}) async {
     if (!_isInitialized) return [];
     try {
-      return await _isar.chapters
-          .where()
+      final libraryManga = await getLibraryManga();
+      if (libraryManga.isEmpty) return [];
+
+      final libraryIds = <int>{
+        for (final m in libraryManga) ...[
+          if (m.serverId > 0) m.serverId,
+          m.id,
+        ],
+      };
+
+      final chapters = await _isar.chapters
+          .filter()
+          .fetchedAtGreaterThan(0)
           .sortByFetchedAtDesc()
-          .limit(limit)
           .findAll();
+
+      final filtered = chapters.where((ch) => libraryIds.contains(ch.mangaId)).take(limit).toList();
+      return filtered;
     } catch (e, stack) {
       LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'Database');
       return [];
+    }
+  }
+
+  /// Automatically cleans up legacy bulk-scraped chapters from the Updates feed.
+  /// If more than 3 chapters for the same manga were stamped with the exact same
+  /// fetchedAt timestamp, they were bulk imported/scraped, not real-time updates.
+  Future<void> cleanupBulkScrapedUpdates() async {
+    if (!_isInitialized) return;
+    try {
+      final chaptersWithFetchedAt = await _isar.chapters
+          .filter()
+          .fetchedAtGreaterThan(0)
+          .findAll();
+      if (chaptersWithFetchedAt.isEmpty) return;
+
+      final Map<String, List<Chapter>> groups = {};
+      for (final ch in chaptersWithFetchedAt) {
+        final key = '${ch.mangaId}_${ch.fetchedAt}';
+        groups.putIfAbsent(key, () => []).add(ch);
+      }
+
+      final List<Chapter> toReset = [];
+      for (final list in groups.values) {
+        if (list.length > 3) {
+          for (final ch in list) {
+            ch.fetchedAt = 0;
+            toReset.add(ch);
+          }
+        }
+      }
+
+      if (toReset.isNotEmpty) {
+        await _isar.writeTxn(() async {
+          await _isar.chapters.putAll(toReset);
+        });
+        await LoggerService.instance.logInfo(
+          'Cleaned up ${toReset.length} bulk-stamped chapters from Updates feed',
+          'Database',
+        );
+      }
+    } catch (e) {
+      debugPrint('[IsarService] cleanupBulkScrapedUpdates error: $e');
     }
   }
 
@@ -205,7 +261,7 @@ class IsarService {
           c.id = existingMap[c.serverId]!;
         }
       }
-      final newServerIds = categories.map((c) => c.serverId).whereType<int>().toSet();
+      final newServerIds = categories.map((c) => c.serverId).toSet();
       final toDelete = existing.where((e) => !newServerIds.contains(e.serverId)).map((e) => e.id).toList();
       await _isar.categorys.deleteAll(toDelete);
       await _isar.categorys.putAll(categories);
