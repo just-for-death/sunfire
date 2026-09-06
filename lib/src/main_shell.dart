@@ -338,22 +338,15 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             ),
             child: SafeArea(
               right: false,
-              child: OverflowBox(
-                minWidth: 0,
-                maxWidth: sidebarWidth,
-                minHeight: 0,
-                maxHeight: double.infinity,
-                alignment: Alignment.topLeft,
-                child: SizedBox(
-                  width: sidebarWidth,
-                  child: Column(
-                    crossAxisAlignment: isExpanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 14),
+              child: ClipRect(
+                child: Column(
+                  crossAxisAlignment: isExpanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 14),
 
-                      // ── 1. SIDEBAR HEADER ──────────────────────────────────────
-                      _buildSidebarHeader(primaryColor, isExpanded),
-                      const SizedBox(height: 18),
+                    // ── 1. SIDEBAR HEADER ──────────────────────────────────────
+                    _buildSidebarHeader(primaryColor, isExpanded),
+                    const SizedBox(height: 18),
 
                   // ── 2. NAVIGATION ITEMS ────────────────────────────────────
                   Expanded(
@@ -458,16 +451,16 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         ),
       ),
     ),
-  ),
-);
+  );
 }
 
   Widget _buildSidebarHeader(Color primaryColor, bool isExpanded) {
     if (isExpanded) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14.0),
-        child: Row(
-          children: [
+        child: ClipRect(
+          child: Row(
+            children: [
             // App Flame Emblem
             Container(
               width: 36,
@@ -538,7 +531,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             ),
           ],
         ),
-      );
+      ),
+    );
     } else {
       // Collapsed Rail Header (Tap to expand)
       return Column(
@@ -814,7 +808,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     if (isExpanded) {
       return Padding(
         padding: const EdgeInsets.all(12.0),
-        child: Container(
+        child: ClipRect(
+          child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
           decoration: BoxDecoration(
             color: const Color(0x14FFFFFF),
@@ -891,8 +886,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             ],
           ),
         ),
-      );
-    } else {
+      ),
+    );
+  } else {
       // Collapsed Rail Bottom Indicator
       return Padding(
         padding: const EdgeInsets.only(bottom: 12.0),
