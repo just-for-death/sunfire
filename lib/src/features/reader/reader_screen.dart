@@ -1004,6 +1004,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         final cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
         final cleanPath = effectiveUrl.startsWith('/') ? effectiveUrl : '/$effectiveUrl';
         effectiveUrl = '$cleanBase$cleanPath';
+      } else if (effectiveUrl.contains('.') && !effectiveUrl.contains(' ')) {
+        effectiveUrl = 'https://$effectiveUrl';
       }
     }
 
