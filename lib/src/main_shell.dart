@@ -108,7 +108,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       if (GraphQLClientService.instance.isConfigured) {
         SyncEngine.instance.triggerSync();
       }
-      // Check for new chapters according to user schedule & network constraints
       LibraryUpdateService.instance.checkForNewChapters(isManual: false);
     }
   }
@@ -162,21 +161,15 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             backgroundColor: const Color(0xFF0E0E14),
             body: Row(
               children: [
-                // ── IPADOS HYBRID EXPANDABLE GLASSMORPHIC SIDEBAR ────────────
                 _buildTabletSidebar(context, primaryColor),
-
-                // ── IPADOS FLOATING ELEVATED CONTENT CANVAS ──────────────────
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 8.0, bottom: 8.0, right: 8.0, left: 3.0),
+                    padding: const EdgeInsets.only(top: 8.0, bottom: 8.0, right: 8.0, left: 4.0),
                     child: Container(
                       decoration: BoxDecoration(
                         color: const Color(0xFF15151E),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: const Color(0x1AFFFFFF),
-                          width: 1.0,
-                        ),
+                        border: Border.all(color: const Color(0x1AFFFFFF), width: 1.0),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.40),
@@ -203,7 +196,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               ],
             ),
           )
-        // ── MOBILE PHONE LAYOUT WITH FLOATING GLASS CAPSULE ──────────────────
         : Scaffold(
             extendBody: true,
             body: PageView(
@@ -319,140 +311,166 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   // ════════════════════════════════════════════════════════════════════════════
-  // ── IPADOS EXPANDABLE / COLLAPSIBLE SIDEBAR ─────────────────────────────────
+  // ── IPADOS FLOATING FROSTED GLASS SIDEBAR ───────────────────────────────────
   // ════════════════════════════════════════════════════════════════════════════
   Widget _buildTabletSidebar(BuildContext context, Color primaryColor) {
     final isExpanded = _isSidebarExpanded;
-    final sidebarWidth = isExpanded ? 250.0 : 76.0;
+    final sidebarWidth = isExpanded ? 242.0 : 72.0;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeInOutCubic,
       width: sidebarWidth,
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: Container(
-            decoration: const BoxDecoration(
-              color: Colors.transparent,
-            ),
-            child: SafeArea(
-              right: false,
-              child: ClipRect(
-                child: Column(
-                  crossAxisAlignment: isExpanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 14),
-
-                    // ── 1. SIDEBAR HEADER ──────────────────────────────────────
-                    _buildSidebarHeader(primaryColor, isExpanded),
-                    const SizedBox(height: 18),
-
-                  // ── 2. NAVIGATION ITEMS ────────────────────────────────────
-                  Expanded(
-                    child: ListView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: EdgeInsets.symmetric(horizontal: isExpanded ? 12.0 : 8.0),
-                      children: [
-                        if (isExpanded) ...[
-                          Padding(
-                            padding: const EdgeInsets.only(left: 12.0, bottom: 8.0, top: 4.0),
-                            child: Text(
-                              'MENU',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white.withValues(alpha: 0.35),
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                          ),
-                        ],
-                        _buildSidebarItem(0, Icons.auto_stories_rounded, Icons.auto_stories_outlined, 'Library', isExpanded, primaryColor),
-                        const SizedBox(height: 4),
-                        _buildSidebarItem(1, Icons.notifications_rounded, Icons.notifications_outlined, 'Updates', isExpanded, primaryColor),
-                        const SizedBox(height: 4),
-                        _buildSidebarItem(2, Icons.history_rounded, Icons.history_outlined, 'History', isExpanded, primaryColor),
-                        const SizedBox(height: 4),
-                        _buildSidebarItem(3, Icons.explore_rounded, Icons.explore_outlined, 'Browse', isExpanded, primaryColor),
-                        const SizedBox(height: 4),
-                        _buildSidebarItem(4, Icons.settings_rounded, Icons.settings_outlined, 'Settings', isExpanded, primaryColor),
-
-                        if (isExpanded) ...[
-                          const SizedBox(height: 22),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 12.0, bottom: 8.0),
-                            child: Text(
-                              'ACTIVITY',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white.withValues(alpha: 0.35),
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                          ),
-                          ListenableBuilder(
-                            listenable: DownloadManagerService.instance,
-                            builder: (context, _) {
-                              final activeCount = DownloadManagerService.instance.localTasks
-                                  .where((t) => t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued)
-                                  .length;
-                              return _buildQuickActionRow(
-                                icon: Icons.download_rounded,
-                                label: 'Downloads Queue',
-                                badgeCount: activeCount > 0 ? activeCount : null,
-                                onTap: () => context.push('/downloads'),
-                              );
-                            },
-                          ),
-                          _buildQuickActionRow(
-                            icon: Icons.insights_rounded,
-                            label: 'Reading Stats',
-                            onTap: () => context.push('/stats'),
-                          ),
-                        ] else ...[
-                          const SizedBox(height: 12),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                            child: Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
-                          ),
-                          const SizedBox(height: 8),
-                          ListenableBuilder(
-                            listenable: DownloadManagerService.instance,
-                            builder: (context, _) {
-                              final activeCount = DownloadManagerService.instance.localTasks
-                                  .where((t) => t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued)
-                                  .length;
-                              return _buildCompactActionIcon(
-                                icon: Icons.download_rounded,
-                                label: 'Downloads Queue',
-                                badgeCount: activeCount > 0 ? activeCount : null,
-                                onTap: () => context.push('/downloads'),
-                              );
-                            },
-                          ),
-                          _buildCompactActionIcon(
-                            icon: Icons.insights_rounded,
-                            label: 'Reading Stats',
-                            onTap: () => context.push('/stats'),
-                          ),
-                        ],
-                      ],
-                    ),
+      child: Padding(
+        padding: EdgeInsets.only(top: 8, bottom: 8, left: 8, right: isExpanded ? 0 : 4),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xD0111119),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0x20FFFFFF), width: 1.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.50),
+                    blurRadius: 30,
+                    offset: const Offset(6, 0),
                   ),
-
-                  // ── 3. BOTTOM LIQUID GLASS SERVER STATUS CARD ──────────────
-                  _buildBottomServerCard(primaryColor, isExpanded),
+                  BoxShadow(
+                    color: primaryColor.withValues(alpha: 0.05),
+                    blurRadius: 40,
+                  ),
                 ],
+              ),
+              child: SafeArea(
+                right: false,
+                child: ClipRect(
+                  child: Column(
+                    crossAxisAlignment: isExpanded
+                        ? CrossAxisAlignment.start
+                        : CrossAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 16),
+                      _buildSidebarHeader(primaryColor, isExpanded),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: ListView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isExpanded ? 10.0 : 6.0,
+                          ),
+                          children: [
+                            if (isExpanded) ...[
+                              Padding(
+                                padding: const EdgeInsets.only(left: 10.0, bottom: 6.0, top: 2.0),
+                                child: Text(
+                                  'MENU',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white.withValues(alpha: 0.28),
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            _buildSidebarItem(0, Icons.auto_stories_rounded, Icons.auto_stories_outlined, 'Library', isExpanded, primaryColor),
+                            const SizedBox(height: 2),
+                            _buildSidebarItem(1, Icons.notifications_rounded, Icons.notifications_outlined, 'Updates', isExpanded, primaryColor),
+                            const SizedBox(height: 2),
+                            _buildSidebarItem(2, Icons.history_rounded, Icons.history_outlined, 'History', isExpanded, primaryColor),
+                            const SizedBox(height: 2),
+                            _buildSidebarItem(3, Icons.explore_rounded, Icons.explore_outlined, 'Browse', isExpanded, primaryColor),
+                            const SizedBox(height: 2),
+                            _buildSidebarItem(4, Icons.settings_rounded, Icons.settings_outlined, 'Settings', isExpanded, primaryColor),
+                            if (isExpanded) ...[
+                              const SizedBox(height: 16),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                                child: Divider(
+                                  color: Colors.white.withValues(alpha: 0.09),
+                                  height: 1,
+                                  thickness: 1,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 10.0, bottom: 6.0),
+                                child: Text(
+                                  'ACTIVITY',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white.withValues(alpha: 0.28),
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                              ),
+                              ListenableBuilder(
+                                listenable: DownloadManagerService.instance,
+                                builder: (context, _) {
+                                  final activeCount = DownloadManagerService.instance.localTasks
+                                      .where((t) => t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued)
+                                      .length;
+                                  return _buildQuickActionRow(
+                                    icon: Icons.download_rounded,
+                                    label: 'Downloads Queue',
+                                    badgeCount: activeCount > 0 ? activeCount : null,
+                                    onTap: () => context.push('/downloads'),
+                                  );
+                                },
+                              ),
+                              _buildQuickActionRow(
+                                icon: Icons.insights_rounded,
+                                label: 'Reading Stats',
+                                onTap: () => context.push('/stats'),
+                              ),
+                            ] else ...[
+                              const SizedBox(height: 10),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                                child: Divider(
+                                  color: Colors.white.withValues(alpha: 0.09),
+                                  height: 1,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              ListenableBuilder(
+                                listenable: DownloadManagerService.instance,
+                                builder: (context, _) {
+                                  final activeCount = DownloadManagerService.instance.localTasks
+                                      .where((t) => t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued)
+                                      .length;
+                                  return _buildCompactActionIcon(
+                                    icon: Icons.download_rounded,
+                                    label: 'Downloads Queue',
+                                    badgeCount: activeCount > 0 ? activeCount : null,
+                                    onTap: () => context.push('/downloads'),
+                                  );
+                                },
+                              ),
+                              _buildCompactActionIcon(
+                                icon: Icons.insights_rounded,
+                                label: 'Reading Stats',
+                                onTap: () => context.push('/stats'),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      _buildBottomServerCard(primaryColor, isExpanded),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildSidebarHeader(Color primaryColor, bool isExpanded) {
     if (isExpanded) {
@@ -461,80 +479,76 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         child: ClipRect(
           child: Row(
             children: [
-            // App Flame Emblem
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [primaryColor, primaryColor.withValues(alpha: 0.75)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(11),
-                boxShadow: [
-                  BoxShadow(
-                    color: primaryColor.withValues(alpha: 0.32),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [primaryColor, primaryColor.withValues(alpha: 0.75)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ],
-              ),
-              child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 22),
-            ),
-            const SizedBox(width: 10),
-            // Title & Version Badge
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Sunfire',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.4,
+                  borderRadius: BorderRadius.circular(11),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withValues(alpha: 0.32),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
-                  ),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                        decoration: BoxDecoration(
-                          color: primaryColor.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: primaryColor.withValues(alpha: 0.4), width: 0.6),
-                        ),
-                        child: Text(
-                          'v9.0 BETA',
-                          style: TextStyle(
-                            color: primaryColor,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.3,
+                  ],
+                ),
+                child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Sunfire',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: primaryColor.withValues(alpha: 0.4), width: 0.6),
+                          ),
+                          child: Text(
+                            'v9.0 BETA',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.3,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            // Collapse Button
-            IconButton(
-              icon: const Icon(Icons.view_sidebar_rounded, color: Colors.white60, size: 20),
-              tooltip: 'Collapse sidebar',
-              visualDensity: VisualDensity.compact,
-              onPressed: _toggleSidebar,
-            ),
-          ],
+              IconButton(
+                icon: const Icon(Icons.view_sidebar_rounded, color: Colors.white60, size: 20),
+                tooltip: 'Collapse sidebar',
+                visualDensity: VisualDensity.compact,
+                onPressed: _toggleSidebar,
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
     } else {
-      // Collapsed Rail Header (Tap to expand)
       return Column(
         children: [
           IconButton(
@@ -582,7 +596,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final isSelected = _currentIndex == index;
 
     if (isExpanded) {
-      // Horizontal Apple-style row
       return Material(
         color: Colors.transparent,
         child: InkWell(
@@ -594,25 +607,27 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: isSelected
                 ? BoxDecoration(
-                    color: primaryColor.withValues(alpha: 0.18),
+                    gradient: LinearGradient(
+                      colors: [
+                        primaryColor.withValues(alpha: 0.22),
+                        primaryColor.withValues(alpha: 0.07),
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: primaryColor.withValues(alpha: 0.45), width: 1.0),
-                    boxShadow: [
-                      BoxShadow(
-                        color: primaryColor.withValues(alpha: 0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+                    border: Border(
+                      left: BorderSide(color: primaryColor, width: 2.5),
+                    ),
                   )
-                : BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
+                : const BoxDecoration(
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
                   ),
             child: Row(
               children: [
                 Icon(
                   isSelected ? selectedIcon : unselectedIcon,
-                  color: isSelected ? primaryColor : Colors.white60,
+                  color: isSelected ? primaryColor : Colors.white.withValues(alpha: 0.55),
                   size: 20,
                 ),
                 const SizedBox(width: 12),
@@ -620,38 +635,22 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   child: Text(
                     label,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.white70,
+                      color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.65),
                       fontSize: 13.5,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                       letterSpacing: -0.2,
                     ),
                   ),
                 ),
-                if (isSelected)
-                  Container(
-                    width: 5,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: primaryColor,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.8),
-                          blurRadius: 6,
-                        ),
-                      ],
-                    ),
-                  ),
               ],
             ),
           ),
         ),
       );
     } else {
-      // Compact Rail Squircle (46x46)
       return Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4.0),
+          padding: const EdgeInsets.symmetric(vertical: 3.0),
           child: Tooltip(
             message: label,
             preferBelow: false,
@@ -667,13 +666,18 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   height: 46,
                   decoration: isSelected
                       ? BoxDecoration(
-                          color: primaryColor.withValues(alpha: 0.22),
+                          gradient: RadialGradient(
+                            colors: [
+                              primaryColor.withValues(alpha: 0.30),
+                              primaryColor.withValues(alpha: 0.12),
+                            ],
+                          ),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: primaryColor.withValues(alpha: 0.55), width: 1.2),
+                          border: Border.all(color: primaryColor.withValues(alpha: 0.50), width: 1.2),
                           boxShadow: [
                             BoxShadow(
-                              color: primaryColor.withValues(alpha: 0.2),
-                              blurRadius: 10,
+                              color: primaryColor.withValues(alpha: 0.18),
+                              blurRadius: 12,
                               offset: const Offset(0, 2),
                             ),
                           ],
@@ -682,7 +686,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   child: Center(
                     child: Icon(
                       isSelected ? selectedIcon : unselectedIcon,
-                      color: isSelected ? primaryColor : Colors.white60,
+                      color: isSelected ? primaryColor : Colors.white.withValues(alpha: 0.55),
                       size: 21,
                     ),
                   ),
@@ -804,121 +808,150 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   Widget _buildBottomServerCard(Color primaryColor, bool isExpanded) {
     final isConfigured = GraphQLClientService.instance.isConfigured;
     final serverUrl = SettingsService.instance.serverUrl;
+    final statusColor = isConfigured ? const Color(0xFF4ADE80) : Colors.tealAccent;
 
     if (isExpanded) {
-      return Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: ClipRect(
-          child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
-          decoration: BoxDecoration(
-            color: const Color(0x14FFFFFF),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0x1AFFFFFF), width: 0.8),
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: Divider(color: Colors.white.withValues(alpha: 0.07), height: 1, thickness: 1),
           ),
-          child: Row(
-            children: [
-              // Connection Indicator Dot
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: isConfigured ? Colors.greenAccent : Colors.tealAccent,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: (isConfigured ? Colors.greenAccent : Colors.tealAccent).withValues(alpha: 0.6),
-                      blurRadius: 6,
-                    ),
-                  ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ServerSettingsScreen()),
                 ),
-              ),
-              const SizedBox(width: 10),
-              // Server Details
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const ServerSettingsScreen()),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+                  decoration: BoxDecoration(
+                    color: const Color(0x18FFFFFF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0x16FFFFFF), width: 0.8),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                  child: Row(
                     children: [
-                      Text(
-                        isConfigured ? 'Suwayomi Server' : 'Standalone Mode',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                      Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(color: statusColor.withValues(alpha: 0.65), blurRadius: 8),
+                          ],
                         ),
                       ),
-                      Text(
-                        isConfigured
-                            ? (Uri.tryParse(serverUrl)?.host ?? 'Connected')
-                            : 'On-Device QuickJS',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
-                          fontSize: 10.5,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              isConfigured ? 'Suwayomi Server' : 'Standalone Mode',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              isConfigured
+                                  ? (Uri.tryParse(serverUrl)?.host ?? 'Connected')
+                                  : 'On-Device QuickJS',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.45),
+                                fontSize: 10.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: _handleQuickSync,
+                        child: Tooltip(
+                          message: 'Sync library',
+                          child: AnimatedRotation(
+                            turns: _isSyncing ? 1.0 : 0.0,
+                            duration: const Duration(seconds: 1),
+                            child: Icon(
+                              Icons.sync_rounded,
+                              color: _isSyncing ? primaryColor : Colors.white.withValues(alpha: 0.55),
+                              size: 19,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-              // Quick Sync Button
-              IconButton(
-                icon: AnimatedRotation(
-                  turns: _isSyncing ? 1.0 : 0.0,
-                  duration: const Duration(seconds: 1),
-                  child: Icon(
-                    Icons.sync_rounded,
-                    color: _isSyncing ? primaryColor : Colors.white70,
-                    size: 20,
-                  ),
-                ),
-                tooltip: 'Sync library',
-                visualDensity: VisualDensity.compact,
-                onPressed: _handleQuickSync,
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
-  } else {
-      // Collapsed Rail Bottom Indicator
+        ],
+      );
+    } else {
       return Padding(
-        padding: const EdgeInsets.only(bottom: 12.0),
+        padding: const EdgeInsets.only(bottom: 14.0),
         child: Column(
           children: [
-            IconButton(
-              icon: AnimatedRotation(
-                turns: _isSyncing ? 1.0 : 0.0,
-                duration: const Duration(seconds: 1),
-                child: Icon(
-                  Icons.sync_rounded,
-                  color: _isSyncing ? primaryColor : Colors.white60,
-                  size: 21,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10.0),
+              child: Divider(color: Colors.white.withValues(alpha: 0.07), height: 1),
+            ),
+            const SizedBox(height: 8),
+            Tooltip(
+              message: 'Sync library',
+              child: GestureDetector(
+                onTap: _handleQuickSync,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: _isSyncing
+                        ? primaryColor.withValues(alpha: 0.18)
+                        : const Color(0x12FFFFFF),
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(
+                      color: _isSyncing
+                          ? primaryColor.withValues(alpha: 0.4)
+                          : const Color(0x14FFFFFF),
+                      width: 1,
+                    ),
+                  ),
+                  child: Center(
+                    child: AnimatedRotation(
+                      turns: _isSyncing ? 1.0 : 0.0,
+                      duration: const Duration(seconds: 1),
+                      child: Icon(
+                        Icons.sync_rounded,
+                        color: _isSyncing ? primaryColor : Colors.white.withValues(alpha: 0.55),
+                        size: 20,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              tooltip: 'Sync library',
-              onPressed: _handleQuickSync,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Container(
               width: 7,
               height: 7,
               decoration: BoxDecoration(
-                color: isConfigured ? Colors.greenAccent : Colors.tealAccent,
+                color: statusColor,
                 shape: BoxShape.circle,
                 boxShadow: [
-                  BoxShadow(
-                    color: (isConfigured ? Colors.greenAccent : Colors.tealAccent).withValues(alpha: 0.6),
-                    blurRadius: 6,
-                  ),
+                  BoxShadow(color: statusColor.withValues(alpha: 0.65), blurRadius: 8),
                 ],
               ),
             ),
