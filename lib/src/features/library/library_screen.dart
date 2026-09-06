@@ -221,6 +221,8 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                   ..chapterNumber = (chMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble()
                   ..url = chUrl
                   ..realUrl = chUrl
+                  ..mangaTitle = manga.title
+                  ..mangaThumbnailUrl = manga.thumbnailUrl
                   ..fetchedAt = existingChapters.isNotEmpty ? (DateTime.now().millisecondsSinceEpoch ~/ 1000) : 0
                   ..isRead = false
                   ..lastPageRead = 0;
@@ -1430,9 +1432,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   }
 
   Widget _buildMangaCard(Manga manga, {bool isCompact = false, bool isCoverOnly = false}) {
-    final isSelected = _selectedMangaIds.contains(manga.serverId);
+    final mId = manga.serverId > 0 ? manga.serverId : manga.id;
+    final isSelected = _selectedMangaIds.contains(mId);
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final isDownloaded = DownloadManagerService.instance.downloadedLocalChapterIds.contains(manga.serverId);
+    final isDownloaded = DownloadManagerService.instance.downloadedLocalChapterIds.contains(mId);
 
     return RepaintBoundary(
       child: Material(
@@ -1441,15 +1444,15 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           borderRadius: BorderRadius.circular(16),
           onTap: () async {
             if (_isBatchMode) {
-              _toggleBatchSelection(manga.serverId);
+              _toggleBatchSelection(mId);
             } else {
-              await context.push('/manga/${manga.serverId}');
+              await context.push('/manga/$mId');
               if (mounted) {
                 await _loadFromIsarOnly();
               }
             }
           },
-          onLongPress: () => _toggleBatchSelection(manga.serverId),
+          onLongPress: () => _toggleBatchSelection(mId),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1605,9 +1608,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   }
 
   Widget _buildMangaListItem(Manga manga) {
-    final isSelected = _selectedMangaIds.contains(manga.serverId);
+    final mId = manga.serverId > 0 ? manga.serverId : manga.id;
+    final isSelected = _selectedMangaIds.contains(mId);
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final isDownloaded = DownloadManagerService.instance.downloadedLocalChapterIds.contains(manga.serverId);
+    final isDownloaded = DownloadManagerService.instance.downloadedLocalChapterIds.contains(mId);
 
     return RepaintBoundary(
       child: Padding(
@@ -1621,19 +1625,19 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           child: ListTile(
             onTap: () async {
               if (_isBatchMode) {
-                _toggleBatchSelection(manga.serverId);
+                _toggleBatchSelection(mId);
               } else {
-                await context.push('/manga/${manga.serverId}');
+                await context.push('/manga/$mId');
                 if (mounted) {
                   await _loadFromIsarOnly();
                 }
               }
             },
-            onLongPress: () => _toggleBatchSelection(manga.serverId),
+            onLongPress: () => _toggleBatchSelection(mId),
             leading: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: MangaCoverImage(
-                mangaServerId: manga.serverId,
+                mangaServerId: mId,
                 thumbnailUrl: manga.thumbnailUrl,
                 sourceName: manga.sourceName,
                 width: 40,

@@ -606,7 +606,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     if (_chapter != null) {
       _siblingChapters = await IsarService.instance.getChaptersForManga(_chapter!.mangaId);
       _siblingChapters.sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
-      final idx = _siblingChapters.indexWhere((c) => c.serverId == _chapter!.serverId);
+      final idx = _siblingChapters.indexWhere((c) => (c.id == _chapter!.id) || (c.serverId != 0 && c.serverId == _chapter!.serverId));
       if (idx != -1) {
         if (idx + 1 < _siblingChapters.length) _nextChapter = _siblingChapters[idx + 1];
         if (idx - 1 >= 0) _prevChapter = _siblingChapters[idx - 1];
