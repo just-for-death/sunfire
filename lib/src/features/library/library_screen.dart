@@ -203,21 +203,25 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         if (detail.containsKey('chapters')) {
           final rawChapters = detail['chapters'] as List<dynamic>?;
           if (rawChapters != null && rawChapters.isNotEmpty) {
-            final existingChapters = await IsarService.instance.getChaptersForManga(manga.serverId);
+            final mId = manga.serverId > 0 ? manga.serverId : manga.id;
+            final existingChapters = await IsarService.instance.getChaptersForManga(mId);
             final existingUrls = existingChapters.map((c) => c.url).toSet();
             final newChapters = <Chapter>[];
             for (int i = 0; i < rawChapters.length; i++) {
               final chMap = rawChapters[i] as Map<String, dynamic>;
               final chUrl = chMap['url']?.toString() ?? '';
               if (chUrl.isNotEmpty && !existingUrls.contains(chUrl)) {
+                final chServerId = (mId > 0 && mId < 200000)
+                    ? (mId * 10000 + i + 1)
+                    : (((mId.hashCode & 0x0007FFFF) * 1000) + (i + 1));
                 final ch = Chapter()
-                  ..serverId = manga.serverId * 10000 + i + 1
-                  ..mangaId = manga.serverId
+                  ..serverId = chServerId
+                  ..mangaId = mId
                   ..name = chMap['name']?.toString() ?? 'Chapter ${i + 1}'
                   ..chapterNumber = (chMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble()
                   ..url = chUrl
                   ..realUrl = chUrl
-                  ..fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000
+                  ..fetchedAt = existingChapters.isNotEmpty ? (DateTime.now().millisecondsSinceEpoch ~/ 1000) : 0
                   ..isRead = false
                   ..lastPageRead = 0;
                 newChapters.add(ch);

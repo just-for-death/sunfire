@@ -136,10 +136,6 @@ class IsarService {
     try {
       return await _isar.chapters
           .filter()
-          .isReadEqualTo(true)
-          .or()
-          .lastPageReadGreaterThan(0)
-          .or()
           .lastReadAtGreaterThan(0)
           .sortByLastReadAtDesc()
           .findAll();
@@ -151,8 +147,8 @@ class IsarService {
 
   /// Returns chapters sorted by fetchedAt DESC — the offline Updates feed.
   /// Strictly filters to manga currently marked inLibrary == true, and
-  /// chapters with valid fetchedAt > 0, preventing back-chapters or non-library
-  /// manga from flooding the Updates screen.
+  /// chapters with valid fetchedAt > 0, capped at 3 chapters per manga
+  /// to prevent any single title from flooding the feed.
   Future<List<Chapter>> getRecentChapters({int limit = 100}) async {
     if (!_isInitialized) return [];
     try {
@@ -172,8 +168,17 @@ class IsarService {
           .sortByFetchedAtDesc()
           .findAll();
 
-      final filtered = chapters.where((ch) => libraryIds.contains(ch.mangaId)).take(limit).toList();
-      return filtered;
+      final mangaCounts = <int, int>{};
+      final result = <Chapter>[];
+      for (final ch in chapters) {
+        if (!libraryIds.contains(ch.mangaId)) continue;
+        final count = mangaCounts[ch.mangaId] ?? 0;
+        if (count >= 3) continue; // cap at 3 chapters per manga
+        mangaCounts[ch.mangaId] = count + 1;
+        result.add(ch);
+        if (result.length >= limit) break;
+      }
+      return result;
     } catch (e, stack) {
       LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'Database');
       return [];
@@ -181,29 +186,39 @@ class IsarService {
   }
 
   /// Automatically cleans up legacy bulk-scraped chapters from the Updates feed.
-  /// If more than 3 chapters for the same manga were stamped with the exact same
-  /// fetchedAt timestamp, they were bulk imported/scraped, not real-time updates.
+  /// If chapters for the same manga were stamped in bulk (e.g. initial scrape/sync),
+  /// keeps at most the 3 latest chapters and resets the rest to fetchedAt = 0.
   Future<void> cleanupBulkScrapedUpdates() async {
     if (!_isInitialized) return;
     try {
       final chaptersWithFetchedAt = await _isar.chapters
           .filter()
           .fetchedAtGreaterThan(0)
+          .sortByChapterNumberDesc()
           .findAll();
       if (chaptersWithFetchedAt.isEmpty) return;
 
-      final Map<String, List<Chapter>> groups = {};
+      final Map<int, List<Chapter>> mangaGroups = {};
       for (final ch in chaptersWithFetchedAt) {
-        final key = '${ch.mangaId}_${ch.fetchedAt}';
-        groups.putIfAbsent(key, () => []).add(ch);
+        mangaGroups.putIfAbsent(ch.mangaId, () => []).add(ch);
       }
 
       final List<Chapter> toReset = [];
-      for (final list in groups.values) {
-        if (list.length > 3) {
-          for (final ch in list) {
-            ch.fetchedAt = 0;
-            toReset.add(ch);
+      for (final list in mangaGroups.values) {
+        // Group by 60-second time windows to catch bulk scraping/importing batches
+        final Map<int, List<Chapter>> timeBuckets = {};
+        for (final ch in list) {
+          final bucket = (ch.fetchedAt ?? 0) ~/ 60;
+          timeBuckets.putIfAbsent(bucket, () => []).add(ch);
+        }
+
+        for (final bucketList in timeBuckets.values) {
+          if (bucketList.length > 3) {
+            // Keep top 3 by chapterNumber (since list is already sorted Desc), reset older back-chapters
+            for (int i = 3; i < bucketList.length; i++) {
+              bucketList[i].fetchedAt = 0;
+              toReset.add(bucketList[i]);
+            }
           }
         }
       }
