@@ -155,6 +155,11 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
             final isDownloaded = parseBoolSafe(map['isDownloaded']);
             final fetchedAt = map['fetchedAt'] != null ? int.tryParse(map['fetchedAt'].toString()) : null;
 
+            ch.mangaTitle = title;
+            ch.mangaThumbnailUrl = thumb;
+            ch.fetchedAt = fetchedAt;
+            ch.isDownloadedOnServer = isDownloaded;
+
             items.add({
               'chapter': ch,
               'mangaId': resolvedMId,
