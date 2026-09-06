@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -248,33 +249,77 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           if (chaptersMap != null && chaptersMap.containsKey('nodes')) {
             final chNodes = chaptersMap['nodes'] as List<dynamic>?;
             if (chNodes != null && chNodes.isNotEmpty) {
+              final existingChapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+              final existingByServerId = <int, Chapter>{
+                for (final c in existingChapters)
+                  if (c.serverId > 0) c.serverId: c,
+              };
+              final existingByUrl = <String, Chapter>{
+                for (final c in existingChapters)
+                  if (c.url.isNotEmpty) c.url: c,
+              };
+              final existingByNum = <double, Chapter>{
+                for (final c in existingChapters)
+                  if (c.chapterNumber > 0) c.chapterNumber: c,
+              };
+
               final fetched = <Chapter>[];
               for (final n in chNodes) {
                 final chMap = n as Map<String, dynamic>;
                 final rawDateUpload = (chMap['dateUpload'] ?? chMap['uploadDate'])?.toString();
                 final uploadTimestamp = parseDateToUnix(rawDateUpload);
-                final fetchedTimestamp = parseDateToUnix(chMap['fetchedAt']);
 
                 final rawChUrl = (chMap['url'] ?? chMap['realUrl'] ?? '').toString();
                 final rawChRealUrl = (chMap['realUrl'] ?? chMap['url'] ?? '').toString();
+                final chServerId = parseIntSafe(chMap['id']);
+                final chNum = parseDoubleSafe(chMap['chapterNumber']);
+
+                final match = existingByServerId[chServerId] ??
+                    (rawChUrl.isNotEmpty ? existingByUrl[rawChUrl] : null) ??
+                    (chNum > 0 ? existingByNum[chNum] : null);
+
+                final isReadServer = parseBoolSafe(chMap['isRead']);
+                final lastPageReadServer = parseIntSafe(chMap['lastPageRead']);
+                final lastReadAtServer = parseIntSafe(chMap['lastReadAt']);
 
                 final ch = Chapter()
-                  ..serverId = parseIntSafe(chMap['id'])
+                  ..serverId = chServerId
                   ..mangaId = widget.mangaServerId
                   ..name = chMap['name']?.toString() ?? 'Chapter ${chMap['chapterNumber'] ?? ""}'
-                  ..chapterNumber = parseDoubleSafe(chMap['chapterNumber'])
+                  ..chapterNumber = chNum
                   ..url = rawChUrl
                   ..realUrl = rawChRealUrl
-                  ..isRead = parseBoolSafe(chMap['isRead'])
-                  ..lastPageRead = parseIntSafe(chMap['lastPageRead'])
-                  ..lastReadAt = parseIntSafe(chMap['lastReadAt'])
                   ..pageCount = parseIntSafe(chMap['pageCount'])
                   ..scanlator = chMap['scanlator']?.toString()
                   ..mangaTitle = _manga!.title
                   ..mangaThumbnailUrl = _manga!.thumbnailUrl
                   ..uploadDate = uploadTimestamp
-                  ..dateUpload = (rawDateUpload != null && rawDateUpload.isNotEmpty && rawDateUpload != '0' && rawDateUpload != 'null') ? rawDateUpload : null
-                  ..fetchedAt = fetchedTimestamp;
+                  ..dateUpload = (rawDateUpload != null && rawDateUpload.isNotEmpty && rawDateUpload != '0' && rawDateUpload != 'null') ? rawDateUpload : null;
+
+                if (match != null) {
+                  ch.id = match.id;
+                  ch.fetchedAt = match.fetchedAt; // PRESERVE authentic fetchedAt (never overwrite with bulk server timestamp)
+                  ch.isRead = match.isRead || isReadServer;
+                  ch.lastPageRead = math.max(match.lastPageRead, lastPageReadServer);
+                  ch.lastReadAt = (lastReadAtServer > 0)
+                      ? lastReadAtServer
+                      : match.lastReadAt;
+                  ch.isDownloadedLocally = match.isDownloadedLocally;
+                  ch.localPath = match.localPath;
+                  ch.isBookmarked = match.isBookmarked;
+                  if (ch.url.isEmpty && match.url.isNotEmpty) ch.url = match.url;
+                  if (ch.realUrl.isEmpty && match.realUrl.isNotEmpty) ch.realUrl = match.realUrl;
+                } else {
+                  ch.isRead = isReadServer;
+                  ch.lastPageRead = lastPageReadServer;
+                  ch.lastReadAt = lastReadAtServer;
+                  // Genuinely NEW chapter added to an existing library manga
+                  if (existingChapters.isNotEmpty && _manga != null && _manga!.inLibrary) {
+                    ch.fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+                  } else {
+                    ch.fetchedAt = 0;
+                  }
+                }
                 fetched.add(ch);
               }
               await IsarService.instance.saveChapters(fetched);
@@ -364,12 +409,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     (ch.chapterNumber > 0 ? progressByNum[ch.chapterNumber] : null) ??
                     progressByName[ch.name.trim().toLowerCase()];
                 if (match != null) {
+                  ch.id = match.id; // PRESERVE existing Isar ID for in-place update
                   ch.serverId = match.serverId; // Preserve canonical server ID
                   ch.fetchedAt = match.fetchedAt; // PRESERVE authentic fetchedAt (never overwrite with now!)
                   ch.isRead = match.isRead;
                   ch.lastPageRead = match.lastPageRead;
                   ch.lastReadAt = match.lastReadAt;
-                  ch.isDownloaded = match.isDownloaded;
+                  ch.isDownloadedLocally = match.isDownloadedLocally;
+                  ch.localPath = match.localPath;
+                  ch.isBookmarked = match.isBookmarked;
                   ch.pageCount = match.pageCount;
                   if ((ch.dateUpload == null || ch.dateUpload!.isEmpty) && match.dateUpload != null && match.dateUpload!.isNotEmpty) {
                     ch.dateUpload = match.dateUpload;
@@ -380,20 +428,14 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   match.url = ch.url;
                   match.realUrl = ch.realUrl;
                 } else {
-                  // Genuinely NEW chapter added to an existing library manga
-                  if (_manga != null && _manga!.inLibrary) {
+                  // Genuinely NEW chapter added to an existing library manga (manga already had chapters)
+                  if (existingChapters.isNotEmpty && _manga != null && _manga!.inLibrary) {
                     ch.fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
                   } else {
                     ch.fetchedAt = 0;
                   }
                 }
               }
-              await IsarService.instance.saveChapters(existingChapters);
-
-              final isar = IsarService.instance.isar;
-              await isar.writeTxn(() async {
-                await isar.chapters.deleteAll(existingChapters.map((c) => c.id).toList());
-              });
             }
             await IsarService.instance.saveChapters(fetched);
             _chapters = fetched;

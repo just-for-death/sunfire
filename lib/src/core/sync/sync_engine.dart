@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:isar/isar.dart';
 import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../db/isar_service.dart';
@@ -537,12 +538,9 @@ class SyncEngine {
                 }
               }
 
-              final rawFetchedAt = chMap['fetchedAt'];
-              if (rawFetchedAt != null) {
-                final ftVal = int.tryParse(rawFetchedAt.toString());
-                if (ftVal != null && ftVal > 0) {
-                  chapter.fetchedAt = ftVal > 1000000000000 ? ftVal ~/ 1000 : ftVal;
-                }
+              // Do not stamp full historical chapter backlog as updates during snapshot
+              if (chapter.id == Isar.autoIncrement) {
+                chapter.fetchedAt = 0;
               }
 
               final rawScanlator = chMap['scanlator'] as String?;
@@ -699,7 +697,7 @@ class SyncEngine {
         }
 
         final rawFetchedAt = map['fetchedAt'];
-        if (rawFetchedAt != null) {
+        if (rawFetchedAt != null && (chapter.fetchedAt == null || chapter.fetchedAt! > 0)) {
           final ftVal = int.tryParse(rawFetchedAt.toString());
           if (ftVal != null && ftVal > 0) {
             chapter.fetchedAt = ftVal > 1000000000000 ? ftVal ~/ 1000 : ftVal;
