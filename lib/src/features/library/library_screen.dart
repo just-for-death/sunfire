@@ -248,7 +248,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       list = list.where((m) => (m.unreadCount ?? 0) > 0).toList();
     } else if (_statusFilter == 'Downloaded') {
       final downloadedMangaIds = DownloadManagerService.instance.downloadedMangaIds;
-      list = list.where((m) => downloadedMangaIds.contains(m.serverId)).toList();
+      list = list.where((m) => downloadedMangaIds.contains(m.serverId > 0 ? m.serverId : m.id)).toList();
     } else if (_statusFilter == 'Completed') {
       list = list.where((m) => (m.status ?? '').toLowerCase() == 'completed').toList();
     }
@@ -271,7 +271,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         final artist = (m.artist ?? '').toLowerCase();
         final genres = m.genres.map((g) => g.toLowerCase()).toList();
         final status = (m.status ?? '').toLowerCase();
-        final isDownloaded = downloadedMangaIds.contains(m.serverId);
+        final isDownloaded = downloadedMangaIds.contains(m.serverId > 0 ? m.serverId : m.id);
 
         for (final token in tokens) {
           if (token.isEmpty) continue;
@@ -358,7 +358,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         _isBatchMode = false;
         LibraryScreen.isBatchModeNotifier.value = false;
       } else {
-        _selectedMangaIds.addAll(currentList.map((m) => m.serverId));
+        _selectedMangaIds.addAll(currentList.map((m) => m.serverId > 0 ? m.serverId : m.id));
         _isBatchMode = true;
         LibraryScreen.isBatchModeNotifier.value = true;
       }
@@ -590,7 +590,8 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       final unreadNotDownloaded = chapters.where((c) {
         if (c.isRead) return false;
         if (c.isDownloaded) return false;
-        if (DownloadManagerService.instance.isChapterDownloadedLocally(c.serverId)) return false;
+        final cId = c.serverId > 0 ? c.serverId : c.id;
+        if (DownloadManagerService.instance.isChapterDownloadedLocally(cId)) return false;
         return true;
       }).toList();
 
@@ -599,8 +600,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           : unreadNotDownloaded.take(maxPerManga).toList();
 
       for (final ch in toQueue) {
+        final cId = ch.serverId > 0 ? ch.serverId : ch.id;
         await DownloadManagerService.instance.enqueueLocalDownload(
-          chapterId: ch.serverId,
+          chapterId: cId,
           mangaId: mangaId,
           chapterName: ch.name,
           mangaTitle: m?.title ?? 'Manga',
@@ -1435,7 +1437,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final mId = manga.serverId > 0 ? manga.serverId : manga.id;
     final isSelected = _selectedMangaIds.contains(mId);
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final isDownloaded = DownloadManagerService.instance.downloadedLocalChapterIds.contains(mId);
+    final isDownloaded = DownloadManagerService.instance.downloadedMangaIds.contains(mId);
 
     return RepaintBoundary(
       child: Material(
@@ -1479,7 +1481,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(14),
                         child: MangaCoverImage(
-                          mangaServerId: manga.serverId,
+                          mangaServerId: mId,
                           thumbnailUrl: manga.thumbnailUrl,
                           sourceName: manga.sourceName,
                           width: double.infinity,
@@ -1611,7 +1613,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final mId = manga.serverId > 0 ? manga.serverId : manga.id;
     final isSelected = _selectedMangaIds.contains(mId);
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final isDownloaded = DownloadManagerService.instance.downloadedLocalChapterIds.contains(mId);
+    final isDownloaded = DownloadManagerService.instance.downloadedMangaIds.contains(mId);
 
     return RepaintBoundary(
       child: Padding(

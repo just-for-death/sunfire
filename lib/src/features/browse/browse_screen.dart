@@ -1553,7 +1553,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         if (allSelected) {
                           selectedMangaIds.clear();
                         } else {
-                          selectedMangaIds.addAll(mangas.map((m) => m.serverId));
+                          selectedMangaIds.addAll(mangas.map((m) => m.serverId > 0 ? m.serverId : m.id));
                         }
                       });
                     },
@@ -1568,7 +1568,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   itemCount: mangas.length,
                   itemBuilder: (context, index) {
                     final manga = mangas[index];
-                    final isSelected = selectedMangaIds.contains(manga.serverId);
+                    final mTargetId = manga.serverId > 0 ? manga.serverId : manga.id;
+                    final isSelected = selectedMangaIds.contains(mTargetId);
 
                     return CheckboxListTile(
                       value: isSelected,
@@ -1576,9 +1577,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       onChanged: (val) {
                         setDialogState(() {
                           if (val == true) {
-                            selectedMangaIds.add(manga.serverId);
+                            selectedMangaIds.add(mTargetId);
                           } else {
-                            selectedMangaIds.remove(manga.serverId);
+                            selectedMangaIds.remove(mTargetId);
                           }
                         });
                       },
@@ -1607,7 +1608,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     ),
                     onPressed: () async {
                       Navigator.pop(dialogCtx);
-                      final selectedList = mangas.where((m) => selectedMangaIds.contains(m.serverId)).toList();
+                      final selectedList = mangas.where((m) => selectedMangaIds.contains(m.serverId > 0 ? m.serverId : m.id)).toList();
                       for (final manga in selectedList) {
                         if (!mounted) break;
                         final migrated = await Navigator.push<bool>(

@@ -556,6 +556,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
   }
 
+  int _targetChapterId(Chapter ch) => ch.serverId > 0 ? ch.serverId : ch.id;
+  int _targetMangaId() => (_manga?.serverId != null && _manga!.serverId > 0) ? _manga!.serverId : (_manga?.id ?? widget.mangaServerId);
+
   void _openReader(int chapterServerId) async {
     await context.push('/reader/$chapterServerId');
     if (mounted) {
@@ -569,13 +572,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final inProgress = _chapters.where((c) => !c.isRead && c.lastPageRead > 0).toList();
     if (inProgress.isNotEmpty) {
       inProgress.sort((a, b) => (b.lastReadAt ?? 0).compareTo(a.lastReadAt ?? 0));
-      _openReader(inProgress.first.serverId);
+      _openReader(_targetChapterId(inProgress.first));
       return;
     }
     // 2. Find next unread chapter in reading order (lowest chapter number)
     final sortedByNum = List<Chapter>.from(_chapters)..sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
     final unread = sortedByNum.firstWhere((c) => !c.isRead, orElse: () => sortedByNum.first);
-    _openReader(unread.serverId);
+    _openReader(_targetChapterId(unread));
   }
 
   void _toggleChapterRead(Chapter ch) async {
@@ -588,7 +591,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
     if (newState && _settings.deleteChapterAfterMarkedRead && ch.isDownloaded) {
       if (!ch.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-        DownloadManagerService.instance.deleteLocalDownload(ch.serverId);
+        DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(ch));
       }
     }
 
@@ -618,7 +621,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       p.isRead = true;
       if (_settings.deleteChapterAfterMarkedRead && p.isDownloaded) {
         if (!p.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-          DownloadManagerService.instance.deleteLocalDownload(p.serverId);
+          DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(p));
         }
       }
       if (p.serverId > 0) {
@@ -637,7 +640,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   // ── MULTI-CHAPTER SELECTION ACTIONS ────────────────────────
   void _enterSelectionMode(Chapter ch) {
     setState(() {
-      _selectedChapterIds.add(ch.serverId);
+      _selectedChapterIds.add(_targetChapterId(ch));
     });
   }
 
@@ -646,19 +649,19 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       if (_selectedChapterIds.length == _chapters.length) {
         _selectedChapterIds.clear();
       } else {
-        _selectedChapterIds.addAll(_chapters.map((c) => c.serverId));
+        _selectedChapterIds.addAll(_chapters.map(_targetChapterId));
       }
     });
   }
 
   void _markSelectedRead(bool read) async {
-    final targets = _chapters.where((c) => _selectedChapterIds.contains(c.serverId)).toList();
+    final targets = _chapters.where((c) => _selectedChapterIds.contains(_targetChapterId(c))).toList();
     for (final c in targets) {
       c.isRead = read;
       if (!read) c.lastPageRead = 0;
       if (read && _settings.deleteChapterAfterMarkedRead && c.isDownloaded) {
         if (!c.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-          DownloadManagerService.instance.deleteLocalDownload(c.serverId);
+          DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(c));
         }
       }
       if (c.serverId > 0) {
@@ -675,19 +678,21 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   }
 
   void _downloadSelected(bool local) async {
-    final targets = _chapters.where((c) => _selectedChapterIds.contains(c.serverId)).toList();
+    final targets = _chapters.where((c) => _selectedChapterIds.contains(_targetChapterId(c))).toList();
     if (local) {
       for (final c in targets) {
         await DownloadManagerService.instance.enqueueLocalDownload(
-          chapterId: c.serverId,
-          mangaId: widget.mangaServerId,
+          chapterId: _targetChapterId(c),
+          mangaId: _targetMangaId(),
           chapterName: c.name,
           mangaTitle: _manga?.title ?? 'Manga',
         );
       }
     } else {
-      final ids = targets.map((c) => c.serverId).toList();
-      await DownloadManagerService.instance.enqueueServerDownloads(ids);
+      final ids = targets.where((c) => c.serverId > 0).map((c) => c.serverId).toList();
+      if (ids.isNotEmpty) {
+        await DownloadManagerService.instance.enqueueServerDownloads(ids);
+      }
     }
     setState(() => _selectedChapterIds.clear());
     if (mounted) {
@@ -698,10 +703,12 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   }
 
   void _deleteSelectedDownloads() async {
-    final targets = _chapters.where((c) => _selectedChapterIds.contains(c.serverId)).toList();
+    final targets = _chapters.where((c) => _selectedChapterIds.contains(_targetChapterId(c))).toList();
     for (final c in targets) {
-      await DownloadManagerService.instance.deleteLocalDownload(c.serverId);
-      await DownloadManagerService.instance.deleteServerDownload(c.serverId);
+      await DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(c));
+      if (c.serverId > 0) {
+        await DownloadManagerService.instance.deleteServerDownload(c.serverId);
+      }
     }
     setState(() => _selectedChapterIds.clear());
     if (mounted) {
@@ -779,15 +786,17 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         if (downloadToLocal) {
           for (final c in targets) {
             await DownloadManagerService.instance.enqueueLocalDownload(
-              chapterId: c.serverId,
-              mangaId: widget.mangaServerId,
+              chapterId: _targetChapterId(c),
+              mangaId: _targetMangaId(),
               chapterName: c.name,
               mangaTitle: _manga?.title ?? 'Manga',
             );
           }
         } else {
-          final ids = targets.map((c) => c.serverId).toList();
-          await DownloadManagerService.instance.enqueueServerDownloads(ids);
+          final ids = targets.where((c) => c.serverId > 0).map((c) => c.serverId).toList();
+          if (ids.isNotEmpty) {
+            await DownloadManagerService.instance.enqueueServerDownloads(ids);
+          }
         }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -852,8 +861,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   void _showSingleChapterOptions(Chapter ch) {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final messenger = ScaffoldMessenger.of(context);
-    final isDownloadedLocally = DownloadManagerService.instance.isChapterDownloadedLocally(ch.serverId);
-    final isDownloadedOnServer = DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId) || ch.isDownloaded;
+    final targetChId = _targetChapterId(ch);
+    final isDownloadedLocally = DownloadManagerService.instance.isChapterDownloadedLocally(targetChId);
+    final isDownloadedOnServer = (ch.serverId > 0 && DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId)) || ch.isDownloaded;
 
     showModalBottomSheet(
       context: context,
@@ -925,8 +935,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   onTap: () async {
                     Navigator.pop(sheetContext);
                     await DownloadManagerService.instance.enqueueLocalDownload(
-                      chapterId: ch.serverId,
-                      mangaId: widget.mangaServerId,
+                      chapterId: targetChId,
+                      mangaId: _targetMangaId(),
                       chapterName: ch.name,
                       mangaTitle: _manga?.title ?? 'Manga',
                     );
@@ -941,39 +951,41 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   title: const Text('Delete from Local Device', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
                   onTap: () async {
                     Navigator.pop(sheetContext);
-                    await DownloadManagerService.instance.deleteLocalDownload(ch.serverId);
+                    await DownloadManagerService.instance.deleteLocalDownload(targetChId);
                     messenger.showSnackBar(
                       SnackBar(content: Text('Deleted ${ch.name} from local storage')),
                     );
                   },
                 ),
 
-              // Server Download option: Only show Download if not downloaded; show Delete if downloaded!
-              if (!isDownloadedOnServer)
-                ListTile(
-                  leading: Icon(Icons.cloud_download_rounded, color: primaryColor),
-                  title: const Text('Download to Server', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Queue download on Suwayomi server storage'),
-                  onTap: () async {
-                    Navigator.pop(sheetContext);
-                    await DownloadManagerService.instance.enqueueServerDownload(ch.serverId);
-                    messenger.showSnackBar(
-                      SnackBar(content: Text('Enqueued ${ch.name} on server')),
-                    );
-                  },
-                )
-              else
-                ListTile(
-                  leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                  title: const Text('Delete Download from Server', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                  onTap: () async {
-                    Navigator.pop(sheetContext);
-                    await DownloadManagerService.instance.deleteServerDownload(ch.serverId);
-                    messenger.showSnackBar(
-                      SnackBar(content: Text('Deleted ${ch.name} from server')),
-                    );
-                  },
-                ),
+              // Server Download option: Only show if chapter is associated with remote server
+              if (ch.serverId > 0) ...[
+                if (!isDownloadedOnServer)
+                  ListTile(
+                    leading: Icon(Icons.cloud_download_rounded, color: primaryColor),
+                    title: const Text('Download to Server', style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text('Queue download on Suwayomi server storage'),
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      await DownloadManagerService.instance.enqueueServerDownload(ch.serverId);
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Enqueued ${ch.name} on server')),
+                      );
+                    },
+                  )
+                else
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                    title: const Text('Delete Download from Server', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      await DownloadManagerService.instance.deleteServerDownload(ch.serverId);
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Deleted ${ch.name} from server')),
+                      );
+                    },
+                  ),
+              ],
             ],
           ),
         );
@@ -1000,8 +1012,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       sortedChapters = sortedChapters.where((c) => !c.isRead).toList();
     } else if (_chapterFilter == 'Downloaded') {
       sortedChapters = sortedChapters.where((c) =>
-        DownloadManagerService.instance.isChapterDownloadedLocally(c.serverId) ||
-        DownloadManagerService.instance.isChapterDownloadedOnServer(c.serverId) ||
+        DownloadManagerService.instance.isChapterDownloadedLocally(_targetChapterId(c)) ||
+        (c.serverId > 0 && DownloadManagerService.instance.isChapterDownloadedOnServer(c.serverId)) ||
         c.isDownloaded
       ).toList();
     } else if (_chapterFilter == 'Bookmarked') {
@@ -1323,7 +1335,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         itemCount: sortedChapters.length,
                         itemBuilder: (context, index) {
                           final ch = sortedChapters[index];
-                          final isSelected = _selectedChapterIds.contains(ch.serverId);
+                          final isSelected = _selectedChapterIds.contains(_targetChapterId(ch));
                           return _buildChapterListTile(ch, isSelected, isSelecting, primaryColor);
                         },
                       ),
@@ -1755,7 +1767,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
                   final ch = sortedChapters[index];
-                  final isSelected = _selectedChapterIds.contains(ch.serverId);
+                  final isSelected = _selectedChapterIds.contains(_targetChapterId(ch));
                   return _buildChapterListTile(ch, isSelected, isSelecting, primaryColor);
                 },
                 childCount: sortedChapters.length,
@@ -1772,6 +1784,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     bool isSelecting,
     Color primaryColor,
   ) {
+    final targetChId = _targetChapterId(ch);
     return RepaintBoundary(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -1791,13 +1804,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               if (isSelecting) {
                 setState(() {
                   if (isSelected) {
-                    _selectedChapterIds.remove(ch.serverId);
+                    _selectedChapterIds.remove(targetChId);
                   } else {
-                    _selectedChapterIds.add(ch.serverId);
+                    _selectedChapterIds.add(targetChId);
                   }
                 });
               } else {
-                _openReader(ch.serverId);
+                _openReader(targetChId);
               }
             },
             onLongPress: () => _enterSelectionMode(ch),
@@ -1808,9 +1821,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     onChanged: (val) {
                       setState(() {
                         if (val == true) {
-                          _selectedChapterIds.add(ch.serverId);
+                          _selectedChapterIds.add(targetChId);
                         } else {
-                          _selectedChapterIds.remove(ch.serverId);
+                          _selectedChapterIds.remove(targetChId);
                         }
                       });
                     },
@@ -1868,7 +1881,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (DownloadManagerService.instance.isChapterDownloadedLocally(ch.serverId))
+                if (DownloadManagerService.instance.isChapterDownloadedLocally(targetChId))
                   const Padding(
                     padding: EdgeInsets.only(right: 2.0),
                     child: Icon(Icons.phone_android_rounded, color: Colors.greenAccent, size: 16),
@@ -1880,12 +1893,17 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     visualDensity: VisualDensity.compact,
                     onPressed: () {
-                      DownloadManagerService.instance.enqueueLocalDownload(chapterId: ch.serverId, mangaId: _manga!.serverId, chapterName: ch.name, mangaTitle: _manga!.title);
+                      DownloadManagerService.instance.enqueueLocalDownload(
+                        chapterId: targetChId,
+                        mangaId: _targetMangaId(),
+                        chapterName: ch.name,
+                        mangaTitle: _manga?.title ?? 'Manga',
+                      );
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Queued ${ch.name} for local download')));
                       setState(() {});
                     },
                   ),
-                if (DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId) || ch.isDownloaded)
+                if ((ch.serverId > 0 && DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId)) || ch.isDownloaded)
                   const Padding(
                     padding: EdgeInsets.only(right: 2.0),
                     child: Icon(Icons.cloud_done_rounded, color: Colors.cyanAccent, size: 16),
