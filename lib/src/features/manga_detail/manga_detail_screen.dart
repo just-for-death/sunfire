@@ -342,7 +342,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 ..mangaThumbnailUrl = _manga!.thumbnailUrl
                 ..uploadDate = parsedDate
                 ..dateUpload = (rawDateStr != null && rawDateStr.isNotEmpty && rawDateStr != '0' && rawDateStr != 'null') ? rawDateStr : null
-                ..fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+                ..fetchedAt = 0;
               fetched.add(ch);
             }
             final existingChapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
@@ -365,6 +365,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     progressByName[ch.name.trim().toLowerCase()];
                 if (match != null) {
                   ch.serverId = match.serverId; // Preserve canonical server ID
+                  ch.fetchedAt = match.fetchedAt; // PRESERVE authentic fetchedAt (never overwrite with now!)
                   ch.isRead = match.isRead;
                   ch.lastPageRead = match.lastPageRead;
                   ch.lastReadAt = match.lastReadAt;
@@ -378,6 +379,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   }
                   match.url = ch.url;
                   match.realUrl = ch.realUrl;
+                } else {
+                  // Genuinely NEW chapter added to an existing library manga
+                  if (_manga != null && _manga!.inLibrary) {
+                    ch.fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+                  } else {
+                    ch.fetchedAt = 0;
+                  }
                 }
               }
               await IsarService.instance.saveChapters(existingChapters);
