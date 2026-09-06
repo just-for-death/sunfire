@@ -69,9 +69,6 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   }
 
   Future<void> _loadUpdates() async {
-    // 0. Clean up any legacy bulk-stamped chapters from previous app versions
-    await IsarService.instance.cleanupBulkScrapedUpdates();
-
     // 1. Show local cache immediately (0ms instant render)
     await _loadUpdatesFromIsarCache();
 
@@ -271,7 +268,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
     try {
       final newFound = await LibraryUpdateService.instance.checkForNewChapters(isManual: true);
-      await _loadUpdates();
+      // Reload directly from cache — the sync above already wrote to Isar.
+      // Do NOT call _loadUpdates() here; that would re-trigger server fetch and old cleanup.
+      await _loadUpdatesFromIsarCache();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
