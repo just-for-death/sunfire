@@ -72,6 +72,15 @@ class SettingsService extends ChangeNotifier {
     'Amethyst Purple': Color(0xFF8B5CF6),
     'Teal Cyan': Color(0xFF06B6D4),
     'Sakura Pink': Color(0xFFEC4899),
+    'Amber Gold': Color(0xFFF59E0B),
+    'Nord Frost': Color(0xFF88C0D0),
+    'Rose Pine': Color(0xFFEB6F92),
+    'Lavender Mist': Color(0xFFA78BFA),
+    'Cyber Lime': Color(0xFF84CC16),
+    'Sunset Coral': Color(0xFFFF6B6B),
+    'Midnight Indigo': Color(0xFF6366F1),
+    'Mocha Brown': Color(0xFFB45309),
+    'Electric Violet': Color(0xFFC084FC),
   };
 
   String get accentColorName => _prefs?.getString('accent_color_name') ?? 'Sunfire Orange';

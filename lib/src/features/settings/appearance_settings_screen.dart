@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/settings_service.dart';
@@ -79,34 +82,66 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                   );
                 },
               ),
-              SettingsPropTile(
-                title: 'Material You Dynamic Color',
-                subtitle: 'Extract theme accent colors from OS wallpaper (Android)',
-                scope: SettingScope.local,
-                kind: SettingsPropKind.switchTile,
-                boolValue: _settings.materialYouEnabled,
-                onBoolChanged: (val) => _settings.materialYouEnabled = val,
-              ),
+              if (!kIsWeb && Platform.isAndroid) ...[
+                SettingsPropTile(
+                  title: 'Material You Dynamic Color',
+                  subtitle: 'Extract theme accent colors from OS wallpaper (Android 12+)',
+                  scope: SettingScope.local,
+                  kind: SettingsPropKind.switchTile,
+                  boolValue: _settings.materialYouEnabled,
+                  onBoolChanged: (val) => _settings.materialYouEnabled = val,
+                ),
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              ],
 
-              const Divider(height: 1, color: Color(0x1AFFFFFF)),
               const SectionTitle(title: 'Accent Color Palette'),
               Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Text(
+                  'Current: ${_settings.accentColorName}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _settings.accentColor,
+                  ),
+                ),
+              ),
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
                   children: SettingsService.accentColors.entries.map((entry) {
                     final isSelected = entry.key == _settings.accentColorName;
-                    return GestureDetector(
-                      onTap: () => _settings.accentColorName = entry.key,
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: entry.value,
-                          shape: BoxShape.circle,
-                          border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
+                    return Tooltip(
+                      message: entry.key,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: () => _settings.accentColorName = entry.key,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: entry.value,
+                            shape: BoxShape.circle,
+                            border: isSelected
+                                ? Border.all(color: Colors.white, width: 3)
+                                : Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: entry.value.withValues(alpha: 0.55),
+                                      blurRadius: 10,
+                                      spreadRadius: 2,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: isSelected
+                              ? const Icon(Icons.check_rounded, color: Colors.white, size: 24)
+                              : null,
                         ),
-                        child: isSelected ? const Icon(Icons.check_rounded, color: Colors.white, size: 22) : null,
                       ),
                     );
                   }).toList(),
