@@ -310,18 +310,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       int cmp = 0;
       if (_sortBy == 'Title') {
         cmp = a.title.toLowerCase().compareTo(b.title.toLowerCase());
-        return _isSortAscending ? cmp : -cmp;
       } else if (_sortBy == 'Unread') {
-        cmp = (b.unreadCount ?? 0).compareTo(a.unreadCount ?? 0);
-        return _isSortAscending ? cmp : -cmp;
+        cmp = (a.unreadCount ?? 0).compareTo(b.unreadCount ?? 0);
       } else if (_sortBy == 'Recent') {
-        cmp = (b.inLibraryAt ?? 0).compareTo(a.inLibraryAt ?? 0);
-        return _isSortAscending ? cmp : -cmp;
+        cmp = (a.inLibraryAt ?? 0).compareTo(b.inLibraryAt ?? 0);
       } else if (_sortBy == 'Chapters') {
-        cmp = b.chapterCount.compareTo(a.chapterCount);
-        return _isSortAscending ? cmp : -cmp;
+        cmp = a.chapterCount.compareTo(b.chapterCount);
       }
-      return cmp;
+      return _isSortAscending ? cmp : -cmp;
     });
 
     return list;
@@ -468,7 +464,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                             await IsarService.instance.saveManga(m);
                             if (GraphQLClientService.instance.isConfigured && id > 0) {
                               try {
-                                await GraphQLClientService.instance.updateMangaCategories(id, catList);
+                                await GraphQLClientService.instance.setMangaCategories(id, catList);
                               } catch (_) {}
                             }
                           }
@@ -862,7 +858,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                               ..serverId = DateTime.now().millisecondsSinceEpoch
                               ..name = name
                               ..order = _categories.length;
-                            await IsarService.instance.saveCategories([newCat]);
+                            await IsarService.instance.saveCategory(newCat);
                             if (GraphQLClientService.instance.isConfigured) {
                               await GraphQLClientService.instance.createCategory(name);
                             }
@@ -1066,7 +1062,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       title: const Text('Title (Alphabetical)'),
                       trailing: _sortBy == 'Title' ? Icon(Icons.check_rounded, color: primaryColor) : null,
                       onTap: () {
-                        setState(() => _sortBy = 'Title');
+                        setState(() {
+                          _sortBy = 'Title';
+                          _isSortAscending = true;
+                        });
                         Navigator.pop(context);
                       },
                     ),
@@ -1074,7 +1073,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       title: const Text('Unread Count'),
                       trailing: _sortBy == 'Unread' ? Icon(Icons.check_rounded, color: primaryColor) : null,
                       onTap: () {
-                        setState(() => _sortBy = 'Unread');
+                        setState(() {
+                          _sortBy = 'Unread';
+                          _isSortAscending = false;
+                        });
                         Navigator.pop(context);
                       },
                     ),
@@ -1082,7 +1084,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       title: const Text('Recently Added'),
                       trailing: _sortBy == 'Recent' ? Icon(Icons.check_rounded, color: primaryColor) : null,
                       onTap: () {
-                        setState(() => _sortBy = 'Recent');
+                        setState(() {
+                          _sortBy = 'Recent';
+                          _isSortAscending = false;
+                        });
                         Navigator.pop(context);
                       },
                     ),
@@ -1090,7 +1095,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       title: const Text('Total Chapters'),
                       trailing: _sortBy == 'Chapters' ? Icon(Icons.check_rounded, color: primaryColor) : null,
                       onTap: () {
-                        setState(() => _sortBy = 'Chapters');
+                        setState(() {
+                          _sortBy = 'Chapters';
+                          _isSortAscending = false;
+                        });
                         Navigator.pop(context);
                       },
                     ),

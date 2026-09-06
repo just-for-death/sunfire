@@ -526,17 +526,30 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   void _toggleInLibrary() async {
     if (_manga == null) return;
     final newState = !_manga!.inLibrary;
-    setState(() => _manga!.inLibrary = newState);
+    setState(() {
+      _manga!.inLibrary = newState;
+      if (newState) {
+        _manga!.inLibraryAt = DateTime.now().millisecondsSinceEpoch;
+        if (SettingsService.instance.defaultCategoryId != null) {
+          final defId = SettingsService.instance.defaultCategoryId!;
+          if (!_manga!.categoryIds.contains(defId)) {
+            _manga!.categoryIds = [..._manga!.categoryIds, defId];
+          }
+        }
+      } else {
+        _manga!.inLibraryAt = null;
+      }
+    });
     await IsarService.instance.saveManga(_manga!);
 
     try {
       await SyncEngine.instance.syncMangaLibraryState(widget.mangaServerId, newState);
 
-      // If newly added to library and a default category is set, assign it!
-      if (newState && SettingsService.instance.defaultCategoryId != null && GraphQLClientService.instance.isConfigured) {
-        await GraphQLClientService.instance.updateMangaCategories(
+      // If newly added to library and a default category is set, assign it on server!
+      if (newState && SettingsService.instance.defaultCategoryId != null && GraphQLClientService.instance.isConfigured && widget.mangaServerId > 0) {
+        await GraphQLClientService.instance.setMangaCategories(
           widget.mangaServerId,
-          [SettingsService.instance.defaultCategoryId!],
+          _manga!.categoryIds,
         );
       }
     } catch (_) {}
@@ -552,6 +565,106 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _showCategoryPickerDialog() async {
+    if (_manga == null) return;
+    final categories = await IsarService.instance.getCategories();
+    if (!mounted) return;
+    if (categories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No categories created yet. Create one in Settings > Library.')),
+      );
+      return;
+    }
+
+    final selectedCatIds = Set<int>.from(_manga!.categoryIds);
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1F1F24),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Edit Categories', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(sheetContext),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(_manga!.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                  const SizedBox(height: 16),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 280),
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: categories.map((cat) {
+                        final isChecked = selectedCatIds.contains(cat.serverId);
+                        return CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          value: isChecked,
+                          activeColor: Theme.of(context).colorScheme.primary,
+                          onChanged: (val) {
+                            setSheetState(() {
+                              if (val == true) {
+                                selectedCatIds.add(cat.serverId);
+                              } else {
+                                selectedCatIds.remove(cat.serverId);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () async {
+                      final catList = selectedCatIds.toList();
+                      setState(() {
+                        _manga!.categoryIds = catList;
+                      });
+                      await IsarService.instance.saveManga(_manga!);
+                      if (GraphQLClientService.instance.isConfigured && widget.mangaServerId > 0) {
+                        try {
+                          await GraphQLClientService.instance.setMangaCategories(widget.mangaServerId, catList);
+                        } catch (_) {}
+                      }
+                      if (sheetContext.mounted) {
+                        Navigator.pop(sheetContext);
+                      }
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Categories updated')),
+                        );
+                      }
+                    },
+                    child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _loadLocalDataOnly() async {
@@ -838,6 +951,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       final cleanPath = trimmed.startsWith('/') ? trimmed : '/$trimmed';
       return '$cleanBase$cleanPath';
     }
+    if (trimmed.contains('.') && !trimmed.contains(' ')) {
+      return 'https://$trimmed';
+    }
     return null;
   }
 
@@ -1048,9 +1164,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
 
     if (_sortAscending) {
-      sortedChapters.sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
+      sortedChapters.sort((a, b) {
+        final cmp = a.chapterNumber.compareTo(b.chapterNumber);
+        return cmp != 0 ? cmp : a.id.compareTo(b.id);
+      });
     } else {
-      sortedChapters.sort((a, b) => b.chapterNumber.compareTo(a.chapterNumber));
+      sortedChapters.sort((a, b) {
+        final cmp = b.chapterNumber.compareTo(a.chapterNumber);
+        return cmp != 0 ? cmp : b.id.compareTo(a.id);
+      });
     }
 
     final isSelecting = _selectedChapterIds.isNotEmpty;
@@ -1156,8 +1278,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                         color: manga.inLibrary ? Colors.redAccent : Colors.white,
                       ),
+                      tooltip: manga.inLibrary ? 'In Library (Tap to remove)' : 'Add to Library',
                       onPressed: _toggleInLibrary,
                     ),
+                    if (manga.inLibrary)
+                      IconButton(
+                        icon: const Icon(Icons.label_outline_rounded),
+                        tooltip: 'Edit Categories',
+                        onPressed: _showCategoryPickerDialog,
+                      ),
                     IconButton(
                       icon: const Icon(Icons.download_rounded),
                       tooltip: 'Download Chapters',
@@ -1234,6 +1363,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         onPressed: _toggleInLibrary,
+                        onLongPress: manga.inLibrary ? _showCategoryPickerDialog : null,
                         icon: Icon(manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: 18),
                         label: Text(
                           manga.inLibrary ? 'IN LIBRARY' : 'ADD TO LIBRARY',
@@ -1392,8 +1522,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                   color: manga.inLibrary ? Colors.redAccent : Colors.white,
                 ),
+                tooltip: manga.inLibrary ? 'In Library (Tap to remove)' : 'Add to Library',
                 onPressed: _toggleInLibrary,
               ),
+              if (manga.inLibrary)
+                IconButton(
+                  icon: const Icon(Icons.label_outline_rounded, color: Colors.white),
+                  tooltip: 'Edit Categories',
+                  onPressed: _showCategoryPickerDialog,
+                ),
               IconButton(
                 icon: const Icon(Icons.download_rounded, color: Colors.white),
                 tooltip: 'Download Chapters',
@@ -1553,6 +1690,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         onPressed: _toggleInLibrary,
+                        onLongPress: manga.inLibrary ? _showCategoryPickerDialog : null,
                         icon: Icon(manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: 20),
                         label: Text(
                           manga.inLibrary ? 'IN LIBRARY' : 'ADD TO LIBRARY',

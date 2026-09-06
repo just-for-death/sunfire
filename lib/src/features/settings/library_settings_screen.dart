@@ -105,31 +105,50 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
 
   Future<void> _addCategory(String name) async {
     if (name.trim().isEmpty) return;
-    try {
-      if (GraphQLClientService.instance.isConfigured) {
-        await GraphQLClientService.instance.createCategory(name.trim());
-      }
-    } catch (_) {}
+    final trimmed = name.trim();
+    if (GraphQLClientService.instance.isConfigured) {
+      try {
+        await GraphQLClientService.instance.createCategory(trimmed);
+      } catch (_) {}
+    }
+    final existing = await IsarService.instance.getCategories();
+    if (!existing.any((c) => c.name.toLowerCase() == trimmed.toLowerCase())) {
+      final localCat = Category()
+        ..serverId = DateTime.now().millisecondsSinceEpoch
+        ..name = trimmed
+        ..order = existing.length;
+      await IsarService.instance.saveCategory(localCat);
+    }
     await _loadData();
   }
 
   Future<void> _renameCategory(Category cat, String newName) async {
     if (newName.trim().isEmpty) return;
-    try {
-      if (GraphQLClientService.instance.isConfigured) {
-        await GraphQLClientService.instance.updateCategoryName(cat.serverId, newName.trim());
-      }
-    } catch (_) {}
+    final trimmed = newName.trim();
+    if (GraphQLClientService.instance.isConfigured) {
+      try {
+        await GraphQLClientService.instance.updateCategoryName(cat.serverId, trimmed);
+      } catch (_) {}
+    }
+    cat.name = trimmed;
+    await IsarService.instance.saveCategory(cat);
+    if (_settings.defaultCategoryId == cat.serverId) {
+      _settings.defaultCategoryName = trimmed;
+    }
     await _loadData();
   }
 
   Future<void> _deleteCategory(Category cat) async {
     await IsarService.instance.deleteCategory(cat.serverId);
-    try {
-      if (GraphQLClientService.instance.isConfigured) {
+    if (GraphQLClientService.instance.isConfigured) {
+      try {
         await GraphQLClientService.instance.deleteCategory(cat.serverId);
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
+    if (_settings.defaultCategoryId == cat.serverId) {
+      _settings.defaultCategoryId = null;
+      _settings.defaultCategoryName = 'Default';
+    }
     await _loadData();
   }
 
@@ -220,6 +239,30 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
             ),
           ],
         );
+      },
+    );
+  }
+
+  void _showDefaultCategoryDialog() {
+    final options = ['None (Uncategorized)', ..._categories.map((c) => c.name)];
+    final currentVal = _settings.defaultCategoryId == null ? 'None (Uncategorized)' : _settings.defaultCategoryName;
+    _showRadioDialog(
+      title: 'Default Category',
+      options: options,
+      currentValue: currentVal,
+      onSelected: (val) {
+        if (val == 'None (Uncategorized)') {
+          setState(() {
+            _settings.defaultCategoryId = null;
+            _settings.defaultCategoryName = 'Default';
+          });
+        } else {
+          final cat = _categories.firstWhere((c) => c.name == val, orElse: () => _categories.first);
+          setState(() {
+            _settings.defaultCategoryId = cat.serverId;
+            _settings.defaultCategoryName = cat.name;
+          });
+        }
       },
     );
   }
@@ -595,8 +638,26 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                         );
                       },
                     ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      leading: const Icon(Icons.category_outlined),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          const Text('Default Category', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: Text(
+                        _settings.defaultCategoryId == null ? 'None (Uncategorized)' : _settings.defaultCategoryName,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      onTap: _showDefaultCategoryDialog,
+                    ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
-                    const SectionTitle(title: 'Categories (Server Synced)'),
+                    SectionTitle(title: _isConnected ? 'Categories (Server Synced)' : 'Categories (Local)'),
                     if (_categories.isEmpty)
                       const ListTile(
                         leading: Icon(Icons.info_outline_rounded, color: Colors.grey),
@@ -614,7 +675,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                             runSpacing: 4,
                             children: [
                               Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                              SunfireBadge.server(),
+                              _isConnected ? SunfireBadge.server() : SunfireBadge.local(),
                             ],
                           ),
                           trailing: Row(

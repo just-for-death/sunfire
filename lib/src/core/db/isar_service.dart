@@ -283,7 +283,18 @@ class IsarService {
   }
 
   // ── CATEGORY CRUD ───────────────────────────────────────
-  Future<void> saveCategories(List<Category> categories) async {
+  Future<void> saveCategory(Category category) async {
+    if (!_isInitialized) return;
+    await _isar.writeTxn(() async {
+      final existing = await _isar.categorys.filter().serverIdEqualTo(category.serverId).findFirst();
+      if (existing != null) {
+        category.id = existing.id;
+      }
+      await _isar.categorys.put(category);
+    });
+  }
+
+  Future<void> saveCategories(List<Category> categories, {bool replaceAll = true}) async {
     if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       final existing = await _isar.categorys.where().findAll();
@@ -293,9 +304,11 @@ class IsarService {
           c.id = existingMap[c.serverId]!;
         }
       }
-      final newServerIds = categories.map((c) => c.serverId).toSet();
-      final toDelete = existing.where((e) => !newServerIds.contains(e.serverId)).map((e) => e.id).toList();
-      await _isar.categorys.deleteAll(toDelete);
+      if (replaceAll) {
+        final newServerIds = categories.map((c) => c.serverId).toSet();
+        final toDelete = existing.where((e) => !newServerIds.contains(e.serverId)).map((e) => e.id).toList();
+        await _isar.categorys.deleteAll(toDelete);
+      }
       await _isar.categorys.putAll(categories);
     });
   }
@@ -306,6 +319,8 @@ class IsarService {
       final cat = await _isar.categorys.filter().serverIdEqualTo(serverId).findFirst();
       if (cat != null) {
         await _isar.categorys.delete(cat.id);
+      } else {
+        await _isar.categorys.delete(serverId);
       }
     });
   }
