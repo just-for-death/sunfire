@@ -104,13 +104,33 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       if (data != null && data.containsKey('chapters')) {
         final nodes = data['chapters']['nodes'] as List<dynamic>?;
         if (nodes != null) {
+          // Count chapters per manga in this incoming batch to detect bulk imports/refreshes
+          final mangaCounts = <int, int>{};
+          for (final n in nodes) {
+            final map = n as Map<String, dynamic>;
+            final mId = parseIntSafe(map['mangaId']);
+            mangaCounts[mId] = (mangaCounts[mId] ?? 0) + 1;
+          }
+
+          final mangaAddedCount = <int, int>{};
           for (final n in nodes) {
             final map = n as Map<String, dynamic>;
             final mangaMap = map['manga'] as Map<String, dynamic>?;
             final chServerId = parseIntSafe(map['id']);
+            final mId = parseIntSafe(map['mangaId']);
+
+            // If a manga was bulk imported or bulk refreshed on server (> 4 chapters in this batch),
+            // show at most the 3 latest chapters in the updates feed to prevent flooding
+            final totalForManga = mangaCounts[mId] ?? 0;
+            if (totalForManga > 4) {
+              final added = mangaAddedCount[mId] ?? 0;
+              if (added >= 3) continue;
+            }
+            mangaAddedCount[mId] = (mangaAddedCount[mId] ?? 0) + 1;
+
             final ch = Chapter()
               ..serverId = chServerId
-              ..mangaId = parseIntSafe(map['mangaId'])
+              ..mangaId = mId
               ..name = map['name'] as String? ?? 'Chapter'
               ..chapterNumber = parseDoubleSafe(map['chapterNumber'])
               ..isRead = parseBoolSafe(map['isRead'])
@@ -118,12 +138,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
             String title = 'Manga';
             String thumb = '';
-            int mId = ch.mangaId;
+            int resolvedMId = mId;
             String sourceName = '';
 
             if (mangaMap != null) {
               title = mangaMap['title'] as String? ?? 'Manga';
-              mId = parseIntSafe(mangaMap['id'], mId);
+              resolvedMId = parseIntSafe(mangaMap['id'], resolvedMId);
               final rawThumb = mangaMap['thumbnailUrl'] as String?;
               if (rawThumb != null && rawThumb.isNotEmpty) {
                 thumb = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
@@ -137,7 +157,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
             items.add({
               'chapter': ch,
-              'mangaId': mId,
+              'mangaId': resolvedMId,
               'title': title,
               'thumbnailUrl': thumb,
               'sourceName': sourceName,

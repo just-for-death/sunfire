@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/category.dart';
@@ -191,6 +192,37 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
               ? const Center(child: CircularProgressIndicator())
               : ListView(
                   children: [
+                    // ── 0. LIVE DOWNLOAD QUEUE SHORTCUT ──
+                    Container(
+                      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35),
+                          width: 1,
+                        ),
+                      ),
+                      child: ListTile(
+                        leading: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.download_rounded, color: Theme.of(context).colorScheme.primary, size: 22),
+                        ),
+                        title: const Text('View Active Download Queue', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                        subtitle: const Text(
+                          'Monitor real-time progress for both Local Device and Suwayomi Server',
+                          style: TextStyle(fontSize: 12, color: Colors.white60),
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+                        onTap: () => context.push('/downloads'),
+                      ),
+                    ),
+
                     // ── 1. IMAGE DOWNLOAD PROCESSING ──
                     const SectionTitle(title: 'Image download processing'),
                     SettingsPropTile(
