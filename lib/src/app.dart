@@ -16,6 +16,7 @@ import 'features/downloads/download_queue_screen.dart';
 import 'features/manga_detail/manga_detail_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/reader/reader_screen.dart';
+import 'features/settings/server_settings_screen.dart';
 import 'features/stats/stats_screen.dart';
 import 'main_shell.dart';
 
@@ -77,9 +78,69 @@ class _SunfireAppState extends State<SunfireApp> {
         ),
         GoRoute(
           path: '/library',
+          pageBuilder: (context, state) {
+            MainShell.switchToTab(0);
+            return _buildTransitionPage(
+              state: state,
+              child: const MainShell(),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/updates',
+          pageBuilder: (context, state) {
+            MainShell.switchToTab(1);
+            return _buildTransitionPage(
+              state: state,
+              child: const MainShell(),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/history',
+          pageBuilder: (context, state) {
+            MainShell.switchToTab(2);
+            return _buildTransitionPage(
+              state: state,
+              child: const MainShell(),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/browse',
+          pageBuilder: (context, state) {
+            MainShell.switchToTab(3);
+            return _buildTransitionPage(
+              state: state,
+              child: const MainShell(),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/more',
+          pageBuilder: (context, state) {
+            MainShell.switchToTab(4);
+            return _buildTransitionPage(
+              state: state,
+              child: const MainShell(),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/settings',
+          pageBuilder: (context, state) {
+            MainShell.switchToTab(4);
+            return _buildTransitionPage(
+              state: state,
+              child: const MainShell(),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/settings/server',
           pageBuilder: (context, state) => _buildTransitionPage(
             state: state,
-            child: const MainShell(),
+            child: const ServerSettingsScreen(),
           ),
         ),
         GoRoute(
@@ -124,25 +185,60 @@ class _SunfireAppState extends State<SunfireApp> {
   }
 
   void _initIncomingLinks() {
+    // Check cold-start notification tap
+    final initialPayload = NotificationService.instance.consumeInitialPayload();
+    if (initialPayload != null && initialPayload.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (initialPayload == '/updates') {
+          _router.go('/updates');
+        } else {
+          _router.push(initialPayload);
+        }
+      });
+    }
+
     _notificationSubscription = NotificationService.instance.onNotificationTapped.listen((route) {
       if (route != null && route.isNotEmpty) {
-        _router.push(route);
+        if (route == '/updates') {
+          _router.go('/updates');
+        } else {
+          _router.push(route);
+        }
       }
     });
 
     try {
       _appLinks = AppLinks();
-      _linkSubscription = _appLinks!.uriLinkStream.listen((uri) {
-        if (uri.scheme == 'sunfire') {
-          if (uri.host == 'manga' && uri.pathSegments.isNotEmpty) {
-            final id = uri.pathSegments.first;
-            _router.push('/manga/$id');
-          } else if (uri.host == 'library') {
-            _router.go('/library');
-          }
+      _linkSubscription = _appLinks!.uriLinkStream.listen(_handleUri);
+      _appLinks!.getInitialLink().then((uri) {
+        if (uri != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _handleUri(uri));
         }
-      });
+      }).catchError((_) {});
     } catch (_) {}
+  }
+
+  void _handleUri(Uri uri) {
+    if (uri.scheme == 'sunfire') {
+      if (uri.host == 'manga' && uri.pathSegments.isNotEmpty) {
+        final id = uri.pathSegments.first;
+        _router.push('/manga/$id');
+      } else if (uri.host == 'library') {
+        _router.go('/library');
+      } else if (uri.host == 'updates') {
+        _router.go('/updates');
+      } else if (uri.host == 'history') {
+        _router.go('/history');
+      } else if (uri.host == 'browse') {
+        _router.go('/browse');
+      } else if (uri.host == 'more' || uri.host == 'settings') {
+        _router.go('/settings');
+      } else if (uri.host == 'downloads') {
+        _router.push('/downloads');
+      } else if (uri.host == 'stats') {
+        _router.push('/stats');
+      }
+    }
   }
 
   @override
