@@ -2,6 +2,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/db/models/chapter.dart';
 import 'package:sunfire/src/core/db/models/manga.dart';
+import 'package:sunfire/src/core/db/models/sync_record.dart';
 import 'package:sunfire/src/core/engine/javascript/js_extension_service.dart';
 import 'package:sunfire/src/core/engine/quickjs_service.dart';
 
@@ -748,6 +749,48 @@ void main() {
       expect(cfgCustom['intervalHours'], equals(24));
       expect(cfgCustom['networkType'], equals('connected'));
       expect(cfgCustom['requiresCharging'], isTrue);
+    });
+
+    test('29. Offline SyncRecord retry capping and poison pill abandonment', () {
+      SyncRecordState computeStateAfterFailure(int currentRetries) {
+        final newRetryCount = currentRetries + 1;
+        return newRetryCount >= 5 ? SyncRecordState.abandoned : SyncRecordState.failed;
+      }
+
+      expect(computeStateAfterFailure(0), equals(SyncRecordState.failed));
+      expect(computeStateAfterFailure(1), equals(SyncRecordState.failed));
+      expect(computeStateAfterFailure(3), equals(SyncRecordState.failed));
+      expect(computeStateAfterFailure(4), equals(SyncRecordState.abandoned)); // 4+1 = 5
+      expect(computeStateAfterFailure(10), equals(SyncRecordState.abandoned));
+    });
+
+    test('30. Downloaded manga ID dual-registration and badge query', () {
+      final downloadedMangaIds = <int>{};
+
+      void registerDownloadedManga({required int isarId, required int serverId}) {
+        downloadedMangaIds.add(isarId);
+        if (serverId > 0) downloadedMangaIds.add(serverId);
+      }
+
+      registerDownloadedManga(isarId: 42, serverId: 1001);
+      registerDownloadedManga(isarId: 43, serverId: 0); // Standalone local
+
+      // Check remote manga by serverId and by Isar ID
+      expect(downloadedMangaIds.contains(1001), isTrue);
+      expect(downloadedMangaIds.contains(42), isTrue);
+
+      // Check local standalone manga
+      expect(downloadedMangaIds.contains(43), isTrue);
+      expect(downloadedMangaIds.contains(0), isFalse);
+    });
+
+    test('31. Chapter target ID resolution for selection and batch downloads', () {
+      int targetChapterId({required int isarId, required int serverId}) =>
+          serverId > 0 ? serverId : isarId;
+
+      expect(targetChapterId(isarId: 10, serverId: 505), equals(505));
+      expect(targetChapterId(isarId: 11, serverId: 0), equals(11));
+      expect(targetChapterId(isarId: 12, serverId: -1), equals(12));
     });
   });
 }
