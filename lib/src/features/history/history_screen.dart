@@ -47,23 +47,33 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
       final chapters = await IsarService.instance.getReadingHistory();
       final items = <Map<String, dynamic>>[];
       final now = DateTime.now();
+      final nowCalendar = DateTime(now.year, now.month, now.day);
+
+      // Cache manga lookups to eliminate N+1 queries
+      final mangaIds = chapters.map((c) => c.mangaId).where((id) => id > 0).toSet();
+      final mangaMap = <int, Manga?>{};
+      for (final mId in mangaIds) {
+        mangaMap[mId] = await IsarService.instance.getMangaByServerId(mId);
+      }
 
       for (final ch in chapters) {
         final lastRead = ch.lastReadAt ?? 0;
         if (lastRead <= 0) continue; // Only show chapters with genuine read timestamps in History
 
-        final manga = await IsarService.instance.getMangaByServerId(ch.mangaId);
+        final manga = mangaMap[ch.mangaId];
         final readDate = lastRead > 1000000000000
             ? DateTime.fromMillisecondsSinceEpoch(lastRead)
             : DateTime.fromMillisecondsSinceEpoch(lastRead * 1000);
 
-        final diff = now.difference(readDate);
+        final readCalendar = DateTime(readDate.year, readDate.month, readDate.day);
+        final dayDiff = nowCalendar.difference(readCalendar).inDays;
+
         String dateHeader;
-        if (diff.inDays == 0 && now.day == readDate.day) {
+        if (dayDiff == 0) {
           dateHeader = 'Today';
-        } else if (diff.inDays <= 1 || (diff.inDays == 0 && now.day != readDate.day)) {
+        } else if (dayDiff == 1) {
           dateHeader = 'Yesterday';
-        } else if (diff.inDays < 7) {
+        } else if (dayDiff < 7) {
           dateHeader = 'Past Week';
         } else {
           dateHeader = '${readDate.year}-${readDate.month.toString().padLeft(2, '0')}-${readDate.day.toString().padLeft(2, '0')}';
@@ -95,7 +105,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
       builder: (dialogCtx) => AlertDialog(
         backgroundColor: const Color(0xFF1F1F24),
         title: const Text('Clear Reading History?'),
-        content: const Text('This will reset your reading progress and history timestamps locally.'),
+        content: const Text('This will clear all entries from your reading history feed.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, false),
@@ -113,9 +123,14 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
     if (confirmed == true) {
       final chapters = await IsarService.instance.getReadingHistory();
       for (final ch in chapters) {
-        ch.lastPageRead = 0;
         ch.lastReadAt = 0;
-        ch.isRead = false;
+        if (ch.serverId > 0) {
+          await SyncEngine.instance.syncChapterProgress(
+            ch.serverId,
+            isRead: ch.isRead,
+            lastPageRead: ch.lastPageRead,
+          );
+        }
       }
       await IsarService.instance.saveChapters(chapters);
       await _loadHistory();

@@ -35,9 +35,14 @@ class QuickJsService {
   /// Get or create a pooled JsExtensionService runtime for [sourceName].
   JsExtensionService _getOrCreateRuntime(String sourceName, String jsCode) {
     if (_runtimePool.containsKey(sourceName)) {
+      final existing = _runtimePool[sourceName]!;
+      if (!existing.isDisposed) {
+        _poolAccessOrder.remove(sourceName);
+        _poolAccessOrder.add(sourceName);
+        return existing;
+      }
+      _runtimePool.remove(sourceName);
       _poolAccessOrder.remove(sourceName);
-      _poolAccessOrder.add(sourceName);
-      return _runtimePool[sourceName]!;
     }
     if (_runtimePool.length >= _poolMaxSize && _poolAccessOrder.isNotEmpty) {
       final oldest = _poolAccessOrder.removeAt(0);
@@ -182,6 +187,9 @@ class QuickJsService {
                 try {
                   final metaJson = jsonDecode(await metaFile.readAsString());
                   if (metaJson is Map) {
+                    if (metaJson['name'] != null && metaJson['name'].toString().trim().isNotEmpty) {
+                      _canonicalDisplayNames[cleanKey] = metaJson['name'].toString().trim();
+                    }
                     if (metaJson['version'] != null) {
                       _installedVersions[cleanKey] = metaJson['version'].toString();
                     }
@@ -269,8 +277,13 @@ class QuickJsService {
 
     for (final key in _installedJsSources.keys) {
       final canonKey = _canonicalizeKey(key);
-      if (cleanName == key || canonQuery == canonKey || canonQuery.contains(canonKey) || canonKey.contains(canonQuery)) {
+      if (cleanName == key || canonQuery == canonKey) {
         return true;
+      }
+      if (canonQuery.length >= 5 && canonKey.length >= 5) {
+        if (canonQuery.startsWith(canonKey) || canonKey.startsWith(canonQuery)) {
+          return true;
+        }
       }
     }
     return false;
@@ -282,7 +295,7 @@ class QuickJsService {
     final canonQuery = _canonicalizeKey(sourceName);
     final toDelete = <String>[];
     for (final key in _installedJsSources.keys) {
-      if (key == sourceName || _canonicalizeKey(key) == canonQuery || key.contains(canonQuery) || canonQuery.contains(key)) {
+      if (key == sourceName || _canonicalizeKey(key) == canonQuery) {
         toDelete.add(key);
       }
     }
@@ -294,15 +307,23 @@ class QuickJsService {
       _invalidateRuntime(k);
     }
     try {
+      final candidateDirs = <Directory>[];
       final appDir = await getApplicationDocumentsDirectory();
-      final extDir = Directory('${appDir.path}/extensions');
-      if (await extDir.exists()) {
-        final files = await extDir.list().toList();
-        for (final f in files) {
-          if (f is File && (f.path.endsWith('.js') || f.path.endsWith('.json'))) {
-            final base = f.uri.pathSegments.last.replaceAll('.js', '').replaceAll('.json', '');
-            if (_canonicalizeKey(base) == canonQuery || toDelete.contains(base)) {
-              await f.delete();
+      candidateDirs.add(Directory('${appDir.path}/extensions'));
+      try {
+        final appSupportDir = await getApplicationSupportDirectory();
+        candidateDirs.add(Directory('${appSupportDir.path}/extensions'));
+      } catch (_) {}
+
+      for (final extDir in candidateDirs) {
+        if (await extDir.exists()) {
+          final files = await extDir.list().toList();
+          for (final f in files) {
+            if (f is File && (f.path.endsWith('.js') || f.path.endsWith('.json'))) {
+              final base = f.uri.pathSegments.last.replaceAll('.js', '').replaceAll('.json', '');
+              if (_canonicalizeKey(base) == canonQuery || toDelete.contains(base)) {
+                await f.delete();
+              }
             }
           }
         }
@@ -370,11 +391,19 @@ class QuickJsService {
     return null;
   }
 
+  static const int _maxHeadersCacheEntries = 500;
   static final Map<String, Map<String, String>> _headersCache = {};
+
+  static void _setCacheEntry(String key, Map<String, String> value) {
+    if (_headersCache.length >= _maxHeadersCacheEntries) {
+      _headersCache.remove(_headersCache.keys.first);
+    }
+    _headersCache[key] = value;
+  }
 
   static void cacheImageHeaders(String url, Map<String, String> headers) {
     if (url.isNotEmpty && headers.isNotEmpty) {
-      _headersCache[url] = headers;
+      _setCacheEntry(url, headers);
     }
   }
 
@@ -391,6 +420,16 @@ class QuickJsService {
     final cacheKey = '$sourceOrUrl|$targetUrl';
     if (_headersCache.containsKey(cacheKey)) {
       headers.addAll(_headersCache[cacheKey]!);
+      if (targetUrl.isNotEmpty) {
+        headers.addAll(MClient.getCookiesPref(targetUrl));
+      }
+      return headers;
+    }
+    if (_headersCache.containsKey(targetUrl)) {
+      headers.addAll(_headersCache[targetUrl]!);
+      if (targetUrl.isNotEmpty) {
+        headers.addAll(MClient.getCookiesPref(targetUrl));
+      }
       return headers;
     }
 
@@ -461,7 +500,7 @@ class QuickJsService {
     }
 
     if (cacheKey.isNotEmpty) {
-      _headersCache[cacheKey] = Map<String, String>.from(headers);
+      _setCacheEntry(cacheKey, Map<String, String>.from(headers));
     }
 
     return headers;
@@ -478,7 +517,7 @@ class QuickJsService {
     );
     try {
       final h = service.getHeaders(targetUrl);
-      _headersCache[cacheKey] = h;
+      _setCacheEntry(cacheKey, h);
       return h;
     } catch (e, stack) {
       LoggerService.instance.logError('Failed to fetch headers: $e', exception: e, stackTrace: stack, category: 'QuickJS');
@@ -504,8 +543,13 @@ class QuickJsService {
     }
     for (final entry in _installedJsSources.entries) {
       final keyAlpha = entry.key.replaceAll('_', '');
-      if (cleanName == entry.key || alphaOnly == keyAlpha || cleanName.contains(entry.key) || entry.key.contains(cleanName) || alphaOnly.contains(keyAlpha) || keyAlpha.contains(alphaOnly)) {
+      if (cleanName == entry.key || alphaOnly == keyAlpha) {
         return entry.value;
+      }
+      if (alphaOnly.length >= 5 && keyAlpha.length >= 5) {
+        if (alphaOnly.startsWith(keyAlpha) || keyAlpha.startsWith(alphaOnly)) {
+          return entry.value;
+        }
       }
     }
     return null;
@@ -755,6 +799,8 @@ class QuickJsService {
       final service = _getOrCreateRuntime(sourceName, jsCode);
       final pages = await service.getPageList(targetUrl);
       if (pages.isNotEmpty) return pages;
+      // If empty, invalidate pooled runtime to clear any corrupted state
+      _invalidateRuntime(sourceName);
     } catch (e) {
       _invalidateRuntime(sourceName);
       // In unit test runner if C symbol lookup fails
@@ -765,21 +811,22 @@ class QuickJsService {
           if (matchedUrls.isNotEmpty) return matchedUrls;
         }
       }
-      // 2. Retry with a dedicated fresh runtime on failure
+    }
+
+    // 2. Retry with a dedicated fresh runtime on failure or empty results
+    try {
+      final freshService = JsExtensionService(
+        sourceMeta: extractSourceMetadata(jsCode),
+        sourceCode: jsCode,
+      );
       try {
-        final freshService = JsExtensionService(
-          sourceMeta: extractSourceMetadata(jsCode),
-          sourceCode: jsCode,
-        );
-        try {
-          final pages = await freshService.getPageList(targetUrl);
-          if (pages.isNotEmpty) return pages;
-        } finally {
-          freshService.dispose();
-        }
-      } catch (retryError) {
-        await LoggerService.instance.logError('Local chapter page scraping failed for $sourceName ($targetUrl): $retryError', exception: retryError, stackTrace: StackTrace.current, category: 'QuickJS');
+        final pages = await freshService.getPageList(targetUrl);
+        if (pages.isNotEmpty) return pages;
+      } finally {
+        freshService.dispose();
       }
+    } catch (retryError) {
+      await LoggerService.instance.logError('Local chapter page scraping failed for $sourceName ($targetUrl): $retryError', exception: retryError, stackTrace: StackTrace.current, category: 'QuickJS');
     }
     return [];
   }

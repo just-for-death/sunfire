@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../db/isar_service.dart';
 import '../db/models/manga.dart';
 import '../logging/logger_service.dart';
 import '../sync/server_auth_helper.dart';
@@ -276,12 +277,12 @@ class SourceMigrationService {
   /// Continuously syncs installed server sources against available Mangayomi repositories.
   /// Automatically installs matching .js scrapers locally and re-maps attached manga items
   /// so that any new source added on the server in future is immediately replicated locally.
-  ReplicationReport syncAndReplicateServerSources({
+  Future<ReplicationReport> syncAndReplicateServerSources({
     required List<ServerSourceItem> currentServerInstalledSources,
     required List<String> currentlyInstalledLocalJs,
     required List<String> availableMangayomiRepoExtensions,
     List<Manga>? currentLibraryManga,
-  }) {
+  }) async {
     final newlyInstalled = <String>[];
     final newlyAddedFallbacks = <String>[];
     var remappedMangaCount = 0;
@@ -304,13 +305,18 @@ class SourceMigrationService {
         newlyInstalled.add(matchedJs);
         installedLocalNormalized.add(srvNorm);
 
-        // Re-map attached library manga to the newly installed local JS extension
+        // Re-map attached library manga to the newly installed local JS extension and persist to DB
         if (currentLibraryManga != null) {
+          final modifiedManga = <Manga>[];
           for (final manga in currentLibraryManga) {
             if (normalizeSourceName(manga.sourceName) == srvNorm) {
               manga.sourceName = 'local_js_${matchedJs.replaceAll('.js', '')}';
               remappedMangaCount++;
+              modifiedManga.add(manga);
             }
+          }
+          if (modifiedManga.isNotEmpty) {
+            await IsarService.instance.saveMangas(modifiedManga);
           }
         }
       } else {

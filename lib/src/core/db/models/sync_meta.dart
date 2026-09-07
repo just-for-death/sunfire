@@ -7,9 +7,9 @@ class SyncMeta {
   Id id = Isar.autoIncrement;
 
   @Index(unique: true, replace: true)
-  late String key;
+  String key = '';
 
-  late String value;
+  String value = '';
 
   SyncMeta();
 }

@@ -328,7 +328,11 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
       padding: const EdgeInsets.all(16.0),
       itemCount: queue.length,
       itemBuilder: (context, index) {
-        final item = queue[index] as Map<String, dynamic>;
+        final rawItem = queue[index];
+        if (rawItem is! Map<String, dynamic>) {
+          return const SizedBox.shrink();
+        }
+        final item = rawItem;
         final chMap = item['chapter'] as Map<String, dynamic>?;
         final chName = chMap?['name'] as String? ?? 'Chapter';
         final chId = parseIntSafe(chMap?['id']);

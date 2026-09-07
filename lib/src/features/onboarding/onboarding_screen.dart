@@ -150,7 +150,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
 
     try {
-      final url = rawUrl.replaceAll(RegExp(r'/+$'), '');
+      var url = rawUrl.replaceAll(RegExp(r'/+$'), '');
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'http://$url';
+      }
       final auth = _buildAuthHeader();
 
       GraphQLClientService.instance.initialize(url, authToken: auth);
@@ -284,7 +287,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         // ── STEP 2: HYDRATE LIBRARY & CHAPTERS ──
         if (GraphQLClientService.instance.isConfigured) {
           try {
-            await SyncEngine.instance.triggerSync().timeout(const Duration(seconds: 5));
+            await SyncEngine.instance.triggerSync().timeout(const Duration(seconds: 45));
           } catch (_) {}
           final libraryItems = await IsarService.instance.getLibraryManga();
           _totalHydratedManga = libraryItems.length;
@@ -952,27 +955,48 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
           ],
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              minimumSize: const Size.fromHeight(54),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-            onPressed: () {
-              _pageController.nextPage(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-              );
-              _runInitialHydration();
-            },
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('Start Setup & Hydration', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                SizedBox(width: 8),
-                Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
-              ],
-            ),
+          Row(
+            children: [
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(54, 54),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  side: const BorderSide(color: Color(0x2BFFFFFF)),
+                ),
+                onPressed: () {
+                  _pageController.previousPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                },
+                child: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    minimumSize: const Size.fromHeight(54),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () {
+                    _pageController.nextPage(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                    _runInitialHydration();
+                  },
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('Start Setup & Hydration', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                      SizedBox(width: 8),
+                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

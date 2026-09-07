@@ -24,7 +24,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   bool get wantKeepAlive => true;
 
   List<Map<String, dynamic>> _updatesList = [];
-  bool _isLoading = false;
+  bool _isLoading = true;
   bool _isCheckingServer = false;
   bool _isOffline = false;
   String? _lastUpdateText;
@@ -123,11 +123,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
             // If a manga was bulk imported or bulk refreshed on server (> 4 chapters in this batch),
             // show at most the 3 latest chapters in the updates feed to prevent flooding
             final totalForManga = mangaCounts[mId] ?? 0;
-            if (totalForManga > 4) {
-              final added = mangaAddedCount[mId] ?? 0;
-              if (added >= 3) continue;
+            final isFlooded = totalForManga > 4;
+            final added = mangaAddedCount[mId] ?? 0;
+            final shouldAddToFeed = !isFlooded || (added < 3);
+            if (shouldAddToFeed) {
+              mangaAddedCount[mId] = added + 1;
             }
-            mangaAddedCount[mId] = (mangaAddedCount[mId] ?? 0) + 1;
 
             final isDownloaded = parseBoolSafe(map['isDownloaded']);
             final rawFetchedAt = map['fetchedAt'] != null ? int.tryParse(map['fetchedAt'].toString()) : null;
@@ -163,16 +164,18 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
             chaptersToSave.add(ch);
 
-            items.add({
-              'chapter': ch,
-              'mangaId': resolvedMId,
-              'title': title,
-              'thumbnailUrl': thumb,
-              'sourceName': sourceName,
-              'isDownloaded': isDownloaded,
-              'fetchedAt': fetchedAt,
-              'dateHeader': _formatDateHeader(fetchedAt),
-            });
+            if (shouldAddToFeed) {
+              items.add({
+                'chapter': ch,
+                'mangaId': resolvedMId,
+                'title': title,
+                'thumbnailUrl': thumb,
+                'sourceName': sourceName,
+                'isDownloaded': isDownloaded,
+                'fetchedAt': fetchedAt,
+                'dateHeader': _formatDateHeader(fetchedAt),
+              });
+            }
           }
         }
       }
@@ -219,9 +222,24 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         return;
       }
 
+      // Count chapters per manga to detect bulk imports/refreshes (same logic as server feed)
+      final mangaCounts = <int, int>{};
+      for (final ch in chapters) {
+        mangaCounts[ch.mangaId] = (mangaCounts[ch.mangaId] ?? 0) + 1;
+      }
+
       final items = <Map<String, dynamic>>[];
+      final mangaAddedCount = <int, int>{};
 
       for (final ch in chapters) {
+        // If a manga was bulk imported or refreshed (> 4 chapters in feed),
+        // show at most the 3 latest chapters to prevent flooding
+        final totalForManga = mangaCounts[ch.mangaId] ?? 0;
+        final isFlooded = totalForManga > 4;
+        final added = mangaAddedCount[ch.mangaId] ?? 0;
+        if (isFlooded && added >= 3) continue;
+        mangaAddedCount[ch.mangaId] = added + 1;
+
         String title = ch.mangaTitle.isNotEmpty ? ch.mangaTitle : 'Manga #${ch.mangaId}';
         String thumb = ch.mangaThumbnailUrl ?? '';
 
@@ -508,7 +526,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                     if (GraphQLClientService.instance.isConfigured) {
                       await GraphQLClientService.instance.deleteDownloadedChapter(ch.serverId);
                     }
-                    _loadUpdates();
+                    if (mounted) {
+                      await _loadUpdatesFromIsarCache();
+                    }
                   },
                 ),
               if (isLocalDownloaded)

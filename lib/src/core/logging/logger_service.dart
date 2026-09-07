@@ -84,7 +84,11 @@ class LoggerService {
 
     PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
       final msg = error.toString();
-      if (msg.contains('raw_keyboard.dart') || msg.contains('keysPressed.isNotEmpty')) {
+      if (msg.contains('raw_keyboard.dart') ||
+          msg.contains('keysPressed.isNotEmpty') ||
+          msg.contains('JSValue released') ||
+          msg.contains('WebSocketChannelException') ||
+          msg.contains('SocketException')) {
         return true;
       }
       logError(
@@ -159,12 +163,17 @@ class LoggerService {
     await _recordLog(entry);
   }
 
-  Future<void> _writeToLogFile(String text) async {
-    try {
-      if (_logFile != null) {
-        await _logFile!.writeAsString(text, mode: FileMode.append);
-      }
-    } catch (_) {}
+  Future<void> _writeFuture = Future.value();
+
+  Future<void> _writeToLogFile(String text) {
+    _writeFuture = _writeFuture.then((_) async {
+      try {
+        if (_logFile != null) {
+          await _logFile!.writeAsString(text, mode: FileMode.append, flush: true);
+        }
+      } catch (_) {}
+    });
+    return _writeFuture;
   }
 
   Future<String> getDiagnosticLogs() async {
