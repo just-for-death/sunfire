@@ -16,6 +16,15 @@ import 'features/downloads/download_queue_screen.dart';
 import 'features/manga_detail/manga_detail_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/reader/reader_screen.dart';
+import 'features/settings/advanced_settings_screen.dart';
+import 'features/settings/appearance_settings_screen.dart';
+import 'features/settings/backup_settings_screen.dart';
+import 'features/settings/browse_settings_screen.dart';
+import 'features/settings/downloads_settings_screen.dart';
+import 'features/settings/extension_repos_screen.dart';
+import 'features/settings/general_settings_screen.dart';
+import 'features/settings/library_settings_screen.dart';
+import 'features/settings/reader_settings_screen.dart';
 import 'features/settings/server_settings_screen.dart';
 import 'features/stats/stats_screen.dart';
 import 'main_shell.dart';
@@ -144,6 +153,69 @@ class _SunfireAppState extends State<SunfireApp> {
           ),
         ),
         GoRoute(
+          path: '/settings/library',
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const LibrarySettingsScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/downloads',
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const DownloadsSettingsScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/browse',
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const BrowseSettingsScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/backup',
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const BackupSettingsScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/reader',
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const ReaderSettingsScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/appearance',
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const AppearanceSettingsScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/general',
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const GeneralSettingsScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/advanced',
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const AdvancedSettingsScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/extension-repos',
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const ExtensionReposScreen(),
+          ),
+        ),
+        GoRoute(
           path: '/downloads',
           pageBuilder: (context, state) => _buildTransitionPage(
             state: state,
@@ -221,8 +293,11 @@ class _SunfireAppState extends State<SunfireApp> {
   void _handleUri(Uri uri) {
     if (uri.scheme == 'sunfire') {
       if (uri.host == 'manga' && uri.pathSegments.isNotEmpty) {
-        final id = uri.pathSegments.first;
-        _router.push('/manga/$id');
+        final idStr = uri.pathSegments.first;
+        final id = int.tryParse(idStr);
+        if (id != null && id > 0) {
+          _router.push('/manga/$id');
+        }
       } else if (uri.host == 'library') {
         _router.go('/library');
       } else if (uri.host == 'updates') {
@@ -281,7 +356,9 @@ class _SunfireAppState extends State<SunfireApp> {
             return MaterialApp.router(
               title: 'Sunfire',
               debugShowCheckedModeBanner: false,
-              locale: Locale(SettingsService.instance.appLocale),
+              locale: (SettingsService.instance.appLocale == 'system' || SettingsService.instance.appLocale.isEmpty)
+                  ? null
+                  : Locale(SettingsService.instance.appLocale),
               themeMode: effectiveMode,
               theme: effectiveLightTheme,
               darkTheme: themeData,

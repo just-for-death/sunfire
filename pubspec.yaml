@@ -2,7 +2,7 @@ name: sunfire
 description: Sunfire - A local-first, server-synced manga reader.
 
 publish_to: "none"
-version: 9.0.0-beta+29
+version: 10.0.0-beta+30
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

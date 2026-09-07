@@ -183,7 +183,7 @@ void main() {
   });
 
   group('CONTINUOUS SERVER SOURCE REPLICATION & MANGA RE-MAPPING', () {
-    test('8. Automatically detects newly installed server sources and installs local JS scrapers + remaps manga', () {
+    test('8. Automatically detects newly installed server sources and installs local JS scrapers + remaps manga', () async {
       final currentlyInstalledLocalJs = ['mangadex.js'];
 
       final currentServerSources = [
@@ -208,7 +208,7 @@ void main() {
           ..sourceName = 'local_js_mangadex',
       ];
 
-      final report = migrationService.syncAndReplicateServerSources(
+      final report = await migrationService.syncAndReplicateServerSources(
         currentServerInstalledSources: currentServerSources,
         currentlyInstalledLocalJs: currentlyInstalledLocalJs,
         availableMangayomiRepoExtensions: availableRepoExtensions,

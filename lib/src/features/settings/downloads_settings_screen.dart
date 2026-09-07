@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/category.dart';
+import '../../core/services/download_manager_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
@@ -382,7 +383,12 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       scope: SettingScope.local,
                       kind: SettingsPropKind.switchTile,
                       boolValue: _settings.downloadOnlyOnWifi,
-                      onBoolChanged: (v) => _settings.downloadOnlyOnWifi = v,
+                      onBoolChanged: (v) {
+                        _settings.downloadOnlyOnWifi = v;
+                        if (!v) {
+                          DownloadManagerService.instance.resumeLocalQueue();
+                        }
+                      },
                     ),
                     SettingsPropTile(
                       title: 'Download only while charging',

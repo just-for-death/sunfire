@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:cronet_http/cronet_http.dart';
 import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
@@ -70,7 +71,11 @@ class MClient {
 
   static String _extractRootDomain(String host) {
     final parts = host.split('.');
-    if (parts.length > 2) {
+    if (parts.length >= 3) {
+      final sld = parts[parts.length - 2].toLowerCase();
+      if (['co', 'com', 'org', 'net', 'edu', 'gov'].contains(sld) && parts.last.length == 2) {
+        return parts.sublist(parts.length - 3).join('.');
+      }
       return parts.sublist(parts.length - 2).join('.');
     }
     return host;
@@ -158,8 +163,12 @@ class MClient {
     } catch (_) {}
   }
 
-  /// Directly sends a request.get to FlareSolverr / Byparr and returns the solved response.
-  static Future<Map<String, dynamic>?> solveAndFetchWithProxy(String targetUrl) async {
+  /// Directly sends a request to FlareSolverr / Byparr and returns the solved response.
+  static Future<Map<String, dynamic>?> solveAndFetchWithProxy(
+    String targetUrl, {
+    String method = 'GET',
+    dynamic postData,
+  }) async {
     if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
       return null;
     }
@@ -169,17 +178,23 @@ class MClient {
       final root = _extractRootDomain(Uri.parse(targetUrl).host);
       final session = _sessionNameFor(root);
       _flareSolverrSessions.add(session);
-      debugPrint('[MClient] Solving challenge via FlareSolverr for $targetUrl (session=$session)');
+      debugPrint('[MClient] Solving challenge via FlareSolverr for $targetUrl (session=$session, method=$method)');
+      final isPost = method.toUpperCase() == 'POST';
+      final payload = <String, dynamic>{
+        'cmd': isPost ? 'request.post' : 'request.get',
+        'url': targetUrl,
+        'session': session,
+        'maxTimeout': 60000,
+      };
+      if (isPost && postData != null) {
+        payload['postData'] = postData is String ? postData : jsonEncode(postData);
+      }
+      final timeoutSecs = math.max(SettingsService.instance.networkTimeoutSeconds, 65);
       final res = await http.post(
         Uri.parse(proxyUrl),
         headers: {HttpHeaders.contentTypeHeader: 'application/json'},
-        body: jsonEncode({
-          'cmd': 'request.get',
-          'url': targetUrl,
-          'session': session,
-          'maxTimeout': 60000,
-        }),
-      ).timeout(Duration(seconds: SettingsService.instance.networkTimeoutSeconds));
+        body: jsonEncode(payload),
+      ).timeout(Duration(seconds: timeoutSecs));
 
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -304,7 +319,8 @@ class ResolveCloudFlareChallenge extends RetryPolicy {
   Future<bool> shouldAttemptRetryOnResponse(BaseResponse response) async {
     if (!showCloudFlareError) return false;
     if (!isCloudflare(response)) return false;
-    final url = response.request!.url.toString();
+    final url = response.request?.url.toString();
+    if (url == null || url.isEmpty) return false;
     debugPrint('[MClient] Cloudflare detected for $url — attempting bypass');
 
     final proxyUrl = MClient.normalizeProxyUrl(MClient.cfProxyUrl.trim());

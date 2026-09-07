@@ -7,10 +7,10 @@ class Category {
   Id id = Isar.autoIncrement;
 
   @Index(unique: true, replace: true)
-  late int serverId;
+  int serverId = 0;
 
-  late String name;
-  late int order;
+  String name = '';
+  int order = 0;
   bool isDefault = false;
 
   Category();

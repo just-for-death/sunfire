@@ -41,14 +41,13 @@ class SyncEngine {
       return;
     }
 
-    final isServerOnline = await GraphQLClientService.instance.checkServerReachable();
-    if (!isServerOnline) {
-      // Server is offline — silently keep local authoritative state without firing network queries
-      return;
-    }
-
     _isSyncing = true;
     try {
+      final isServerOnline = await GraphQLClientService.instance.checkServerReachable();
+      if (!isServerOnline) {
+        // Server is offline — silently keep local authoritative state without firing network queries
+        return;
+      }
       try {
         if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
           await WakelockPlus.enable();
@@ -174,11 +173,9 @@ class SyncEngine {
     final pendingRecords = await IsarService.instance.getPendingSyncRecords();
     if (pendingRecords.isEmpty) return;
 
-    // Prioritize Deletion Tombstones first
-    final deleteRecords = pendingRecords.where((r) => r.action == SyncAction.delete).toList();
-    final otherRecords = pendingRecords.where((r) => r.action != SyncAction.delete).toList();
-
-    final executionList = [...deleteRecords, ...otherRecords];
+    // Replay mutations strictly in chronological order
+    final executionList = List<SyncRecord>.from(pendingRecords)
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
     for (final record in executionList) {
       try {
@@ -278,7 +275,7 @@ class SyncEngine {
           final allRepoSources = await RepoManager.instance.fetchCombinedRepoSources(userRepos);
           final availableRepoNames = allRepoSources.map((r) => r.name).toList();
 
-          final report = SourceMigrationService.instance.syncAndReplicateServerSources(
+          final report = await SourceMigrationService.instance.syncAndReplicateServerSources(
             currentServerInstalledSources: serverSources,
             currentlyInstalledLocalJs: installedLocalJs,
             availableMangayomiRepoExtensions: availableRepoNames,
@@ -411,11 +408,17 @@ class SyncEngine {
           // Only soft-delete local entries that the server genuinely removed
           final serverIds = serverMangas.map((m) => m.serverId).toSet();
           final localLib = await IsarService.instance.getLibraryManga();
+          final toRemove = <Manga>[];
           for (final local in localLib) {
-            if (!serverIds.contains(local.serverId)) {
+            // Only soft-delete server-linked manga that the server genuinely removed.
+            // Local standalone/extension manga (serverId <= 0) must never be removed by server sync.
+            if (local.serverId > 0 && !serverIds.contains(local.serverId)) {
               local.inLibrary = false;
-              await IsarService.instance.saveManga(local);
+              toRemove.add(local);
             }
+          }
+          if (toRemove.isNotEmpty) {
+            await IsarService.instance.saveMangas(toRemove);
           }
         } else if (serverCount == 0 && localCountBefore > 0) {
           await LoggerService.instance.logWarning(
@@ -462,7 +465,8 @@ class SyncEngine {
   // After this, chapters exist locally and are accessible without any server.
   Future<void> _syncAllChaptersForLibrary({required String serverUrl}) async {
     try {
-      final library = await IsarService.instance.getLibraryManga();
+      final allLibrary = await IsarService.instance.getLibraryManga();
+      final library = allLibrary.where((m) => m.serverId > 0).toList();
       if (library.isEmpty) return;
 
       await LoggerService.instance.logInfo('Full chapter snapshot: syncing ${library.length} manga', 'SyncEngine');
@@ -519,11 +523,14 @@ class SyncEngine {
                   ? chapter.lastPageRead
                   : serverLastPageRead;
 
-              final serverLastReadAt = chMap['lastReadAt'] != null
+              final rawServerLastReadAt = chMap['lastReadAt'] != null
                   ? int.tryParse(chMap['lastReadAt'].toString())
                   : null;
-              if (serverLastReadAt != null && serverLastReadAt > (chapter.lastReadAt ?? 0)) {
-                chapter.lastReadAt = serverLastReadAt;
+              if (rawServerLastReadAt != null) {
+                final serverLastReadAt = rawServerLastReadAt > 100000000000 ? rawServerLastReadAt ~/ 1000 : rawServerLastReadAt;
+                if (serverLastReadAt > (chapter.lastReadAt ?? 0)) {
+                  chapter.lastReadAt = serverLastReadAt;
+                }
               }
 
               final rawUpload = chMap['uploadDate'] ?? chMap['dateUpload'];
@@ -587,6 +594,7 @@ class SyncEngine {
       if (historyData != null && historyData.containsKey('chapters')) {
         final chNodes = historyData['chapters']['nodes'] as List<dynamic>;
         final fetchedChapters = <Chapter>[];
+        final parentMangasToSave = <int, Manga>{};
 
         for (final c in chNodes) {
           final chMap = c as Map<String, dynamic>;
@@ -594,7 +602,10 @@ class SyncEngine {
           final mangaServerId = parseIntSafe(chMap['mangaId']);
           final serverIsRead = parseBoolSafe(chMap['isRead']);
           final serverLastPageRead = parseIntSafe(chMap['lastPageRead']);
-          final serverLastReadAt = chMap['lastReadAt'] != null ? int.tryParse(chMap['lastReadAt'].toString()) : null;
+          final rawServerLastReadAt = chMap['lastReadAt'] != null ? int.tryParse(chMap['lastReadAt'].toString()) : null;
+          final serverLastReadAt = rawServerLastReadAt != null
+              ? (rawServerLastReadAt > 100000000000 ? rawServerLastReadAt ~/ 1000 : rawServerLastReadAt)
+              : null;
 
           var chapter = await IsarService.instance.getChapterByServerId(chServerId);
           chapter ??= Chapter()..serverId = chServerId;
@@ -622,7 +633,7 @@ class SyncEngine {
 
             // Also upsert parent manga into Isar if not already there
             final mServerId = parseIntSafe(mangaMap['id'], mangaServerId);
-            var parentManga = await IsarService.instance.getMangaByServerId(mServerId);
+            var parentManga = parentMangasToSave[mServerId] ?? await IsarService.instance.getMangaByServerId(mServerId);
             parentManga ??= Manga()..serverId = mServerId;
             if (parentManga.title.isEmpty || parentManga.title == 'Untitled') {
               parentManga.title = mangaMap['title'] as String? ?? 'Manga';
@@ -644,12 +655,15 @@ class SyncEngine {
                 parentManga.thumbnailUrl = mThumbFull.startsWith('http') ? mThumbFull : '$serverUrl$mThumbFull';
               }
             }
-            await IsarService.instance.saveManga(parentManga);
+            parentMangasToSave[mServerId] = parentManga;
           }
 
           fetchedChapters.add(chapter);
         }
 
+        if (parentMangasToSave.isNotEmpty) {
+          await IsarService.instance.saveMangas(parentMangasToSave.values.toList());
+        }
         await IsarService.instance.saveChapters(fetchedChapters);
       }
     } catch (e) {
