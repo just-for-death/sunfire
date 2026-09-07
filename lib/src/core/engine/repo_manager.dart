@@ -168,8 +168,12 @@ class RepoManager {
   }
 
   /// Returns a cache-friendly key for a given repo URL
-  String _cacheKeyFor(String url) =>
-      url.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_').substring(0, url.length.clamp(0, 60));
+  String _cacheKeyFor(String url) {
+    final clean = url.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+    final prefix = clean.substring(0, clean.length.clamp(0, 40));
+    final hash = url.hashCode.abs();
+    return '${prefix}_$hash';
+  }
 
   Future<File> _cacheFileFor(String indexUrl) async {
     final dir = await getApplicationDocumentsDirectory();
@@ -181,14 +185,20 @@ class RepoManager {
   /// Compares two semver strings (e.g. "0.1.5" vs "0.1.2").
   /// Returns > 0 if v1 is newer than v2, < 0 if v2 is newer, 0 if equal.
   static int compareVersions(String v1, String v2) {
-    final p1 = v1.replaceAll(RegExp(r'[^0-9\.]'), '').split('.').map((e) => int.tryParse(e) ?? 0).toList();
-    final p2 = v2.replaceAll(RegExp(r'[^0-9\.]'), '').split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final base1 = v1.split(RegExp(r'[-+]')).first;
+    final base2 = v2.split(RegExp(r'[-+]')).first;
+    final p1 = base1.replaceAll(RegExp(r'[^0-9\.]'), '').split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final p2 = base2.replaceAll(RegExp(r'[^0-9\.]'), '').split('.').map((e) => int.tryParse(e) ?? 0).toList();
     final maxLen = p1.length > p2.length ? p1.length : p2.length;
     for (var i = 0; i < maxLen; i++) {
       final n1 = i < p1.length ? p1[i] : 0;
       final n2 = i < p2.length ? p2[i] : 0;
       if (n1 != n2) return n1.compareTo(n2);
     }
+    final hasPre1 = v1.contains('-');
+    final hasPre2 = v2.contains('-');
+    if (hasPre1 && !hasPre2) return -1;
+    if (!hasPre1 && hasPre2) return 1;
     return 0;
   }
 
@@ -205,14 +215,34 @@ class RepoManager {
           ? response.data as String
           : jsonEncode(response.data);
       await cacheFile.writeAsString(raw);
-      final list = jsonDecode(raw) as List;
-      return list.map((item) => RepoSourceItem.fromJson(item as Map<String, dynamic>, normalizedUrl)).toList();
+      final decoded = jsonDecode(raw);
+      final List<dynamic> list;
+      if (decoded is List) {
+        list = decoded;
+      } else if (decoded is Map && decoded['sources'] is List) {
+        list = decoded['sources'] as List;
+      } else if (decoded is Map && decoded['data'] is List) {
+        list = decoded['data'] as List;
+      } else {
+        list = [];
+      }
+      return list.whereType<Map<String, dynamic>>().map((item) => RepoSourceItem.fromJson(item, normalizedUrl)).toList();
     } catch (_) {
       if (await cacheFile.exists()) {
         try {
           final cached = await cacheFile.readAsString();
-          final list = jsonDecode(cached) as List;
-          return list.map((item) => RepoSourceItem.fromJson(item as Map<String, dynamic>, normalizedUrl)).toList();
+          final decoded = jsonDecode(cached);
+          final List<dynamic> list;
+          if (decoded is List) {
+            list = decoded;
+          } else if (decoded is Map && decoded['sources'] is List) {
+            list = decoded['sources'] as List;
+          } else if (decoded is Map && decoded['data'] is List) {
+            list = decoded['data'] as List;
+          } else {
+            list = [];
+          }
+          return list.whereType<Map<String, dynamic>>().map((item) => RepoSourceItem.fromJson(item, normalizedUrl)).toList();
         } catch (_) {}
       }
       return [];
@@ -225,8 +255,8 @@ class RepoManager {
   Future<List<RepoSourceItem>> fetchCombinedRepoSources(List<String> repoUrls) async {
     final Map<String, RepoSourceItem> bestVersionMap = {};
 
-    for (final url in repoUrls) {
-      final items = await fetchRepoSources(url);
+    final repoResults = await Future.wait(repoUrls.map(fetchRepoSources));
+    for (final items in repoResults) {
       for (final item in items) {
         final key = '${item.name}_${item.lang}'.toLowerCase();
         if (!bestVersionMap.containsKey(key)) {
@@ -239,33 +269,23 @@ class RepoManager {
         }
       }
     }
-    // Deduplicate multiple extensions pointing to the same site domain
-    final Map<String, RepoSourceItem> siteDedupMap = {};
+    // Deduplicate extensions by canonical source name and lang to prevent host collisions on multi-tenant sites
+    final Map<String, RepoSourceItem> dedupMap = {};
     for (final item in bestVersionMap.values) {
-      String siteKey = '';
-      if (item.baseUrl.isNotEmpty) {
-        final uri = Uri.tryParse(item.baseUrl);
-        if (uri != null && uri.host.isNotEmpty) {
-          siteKey = uri.host.replaceAll('www.', '').toLowerCase();
-        }
-      }
-      if (siteKey.isEmpty) {
-        siteKey = item.name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
-      }
-      final fullKey = '${siteKey}_${item.lang}'.toLowerCase();
-      if (!siteDedupMap.containsKey(fullKey)) {
-        siteDedupMap[fullKey] = item;
+      final normName = SourceMigrationService.instance.normalizeSourceName(item.name);
+      final fullKey = '${normName}_${item.lang}'.toLowerCase();
+      if (!dedupMap.containsKey(fullKey)) {
+        dedupMap[fullKey] = item;
       } else {
-        final existing = siteDedupMap[fullKey]!;
-        // Keep the one with higher version, or cleaner/canonical name
+        final existing = dedupMap[fullKey]!;
         if (compareVersions(item.version, existing.version) > 0 ||
             (compareVersions(item.version, existing.version) == 0 && item.name.length < existing.name.length)) {
-          siteDedupMap[fullKey] = item;
+          dedupMap[fullKey] = item;
         }
       }
     }
 
-    return siteDedupMap.values.toList();
+    return dedupMap.values.toList();
   }
 
   Future<String?> downloadJsSourceCode(String jsUrl) async {
@@ -301,8 +321,8 @@ class RepoManager {
       return <String>[];
     }
     final allRepoSources = <RepoSourceItem>[];
-    for (final url in effectiveRepoUrls) {
-      final items = await fetchRepoSources(url);
+    final repoResults = await Future.wait(effectiveRepoUrls.map(fetchRepoSources));
+    for (final items in repoResults) {
       allRepoSources.addAll(items);
     }
 
@@ -311,139 +331,159 @@ class RepoManager {
     // are treated as distinct install targets.
     final installedServerNames = <String>{};
 
-    for (final serverName in serverSourceNames) {
-      if (installedServerNames.contains(serverName)) continue;
+    // Filter unique server source names to prevent redundant download tasks
+    final uniqueServerNames = <String>[];
+    final seen = <String>{};
+    for (final name in serverSourceNames) {
+      if (seen.add(name)) {
+        uniqueServerNames.add(name);
+      }
+    }
 
-      final cleanServerName = SourceMigrationService.instance.normalizeSourceName(serverName);
-      if (cleanServerName.isEmpty) continue;
+    // Process in batches of 4 concurrent downloads to prevent sequential download bottlenecks
+    const int concurrency = 4;
+    for (int i = 0; i < uniqueServerNames.length; i += concurrency) {
+      final batch = uniqueServerNames.sublist(
+        i,
+        (i + concurrency > uniqueServerNames.length) ? uniqueServerNames.length : i + concurrency,
+      );
 
-      // Build a domain-aware key — preserves ".com", ".net" etc for pkg matching
-      // e.g. "Source.com" → domain hint "com" → look for "source_com.js" first
-      final serverDomainHint = _extractDomainHint(serverName); // e.g. 'com', 'net', ''
+      final batchResults = await Future.wait(batch.map((serverName) async {
+        if (installedServerNames.contains(serverName)) return null;
 
-      // 1. Gather all candidates matching this server source name
-      final candidates = <_ScoredCandidate>[];
-      for (final item in allRepoSources) {
-        final cleanRepoName = SourceMigrationService.instance.normalizeSourceName(item.name);
-        final pkgBase = item.sourceCodeUrl.split('/').last.replaceAll('.js', '');
-        final cleanPkg = pkgBase.replaceAll('_', ' ').toLowerCase().trim();
-        final alphaRepo = cleanRepoName.replaceAll(' ', '');
-        final alphaServer = cleanServerName.replaceAll(' ', '');
-        final alphaPkg = cleanPkg.replaceAll(' ', '');
+        final cleanServerName = SourceMigrationService.instance.normalizeSourceName(serverName);
+        if (cleanServerName.isEmpty) return null;
 
-        if (!item.sourceCodeUrl.toLowerCase().endsWith('.js')) continue;
+        // If already installed (e.g. from bundled assets), preserve patched local version
+        if (QuickJsService.instance.isSourceInstalledLocally(serverName)) {
+          return (installedName: serverName, serverName: serverName);
+        }
 
-        int score = 0;
+        // Build a domain-aware key — preserves ".com", ".net" etc for pkg matching
+        // e.g. "Source.com" → domain hint "com" → look for "source_com.js" first
+        final serverDomainHint = _extractDomainHint(serverName); // e.g. 'com', 'net', ''
 
-        // Exact name match (highest priority)
-        if (cleanRepoName == cleanServerName) {
-          score += 100;
-        } else if (alphaRepo == alphaServer) {
-          score += 90;
-        } else if (alphaPkg == alphaServer) {
-          // Pkg filename exact match
-          score += 85;
-        } else if (serverDomainHint.isNotEmpty && pkgBase.endsWith('_$serverDomainHint') && alphaRepo.startsWith(alphaServer.replaceAll(serverDomainHint, ''))) {
-          // Domain-aware: if server name ends with ".com" and pkg has "_com"
-          score += 80;
-        } else {
-          // Stemmed match (comics→comic, scans→scan)
-          final stemServer = _stemName(alphaServer);
-          final stemRepo = _stemName(alphaRepo);
-          final stemPkg = _stemName(alphaPkg);
-          if (stemRepo == stemServer || stemPkg == stemServer) {
-            score += 70;
-          } else if (alphaServer.length > 4 && alphaRepo.startsWith(alphaServer)) {
-            // Prefix match
-            score += 50;
-          } else if (alphaRepo.length > 4 && alphaServer.startsWith(alphaRepo)) {
-            score += 40;
-          } else if (alphaServer.length >= 4 && alphaRepo.contains(alphaServer)) {
-            // Contains match
-            score += 30;
-          } else if (alphaRepo.length >= 4 && alphaServer.contains(alphaRepo)) {
-            score += 20;
+        // 1. Gather all candidates matching this server source name
+        final candidates = <_ScoredCandidate>[];
+        for (final item in allRepoSources) {
+          final cleanRepoName = SourceMigrationService.instance.normalizeSourceName(item.name);
+          final pkgBase = item.sourceCodeUrl.split('/').last.replaceAll('.js', '');
+          final cleanPkg = pkgBase.replaceAll('_', ' ').toLowerCase().trim();
+          final alphaRepo = cleanRepoName.replaceAll(' ', '');
+          final alphaServer = cleanServerName.replaceAll(' ', '');
+          final alphaPkg = cleanPkg.replaceAll(' ', '');
+
+          if (!item.sourceCodeUrl.toLowerCase().endsWith('.js')) continue;
+
+          int score = 0;
+
+          // Exact name match (highest priority)
+          if (cleanRepoName == cleanServerName) {
+            score += 100;
+          } else if (alphaRepo == alphaServer) {
+            score += 90;
+          } else if (alphaPkg == alphaServer) {
+            // Pkg filename exact match
+            score += 85;
+          } else if (serverDomainHint.isNotEmpty && pkgBase.endsWith('_$serverDomainHint') && alphaRepo.startsWith(alphaServer.replaceAll(serverDomainHint, ''))) {
+            // Domain-aware: if server name ends with ".com" and pkg has "_com"
+            score += 80;
+          } else {
+            // Stemmed match (comics→comic, scans→scan)
+            final stemServer = _stemName(alphaServer);
+            final stemRepo = _stemName(alphaRepo);
+            final stemPkg = _stemName(alphaPkg);
+            if (stemRepo == stemServer || stemPkg == stemServer) {
+              score += 70;
+            } else if (alphaServer.length > 4 && alphaRepo.startsWith(alphaServer)) {
+              // Prefix match
+              score += 50;
+            } else if (alphaRepo.length > 4 && alphaServer.startsWith(alphaRepo)) {
+              score += 40;
+            } else if (alphaServer.length >= 4 && alphaRepo.contains(alphaServer)) {
+              // Contains match
+              score += 30;
+            } else if (alphaRepo.length >= 4 && alphaServer.contains(alphaRepo)) {
+              score += 20;
+            }
+          }
+
+          if (score <= 0) continue;
+
+          // Language bonus: prefer en/all over non-English
+          final lang = item.lang.toLowerCase();
+          if (lang == 'en' || lang == 'all') score += 10;
+
+          candidates.add(_ScoredCandidate(item: item, score: score));
+        }
+
+        if (candidates.isEmpty) {
+          await LoggerService.instance.logWarning(
+            '✗ No repo match found for server source: $serverName (normalized: $cleanServerName)',
+            'RepoManager',
+          );
+          return null;
+        }
+
+        // 2. Sort by score desc, then by version desc
+        candidates.sort((a, b) {
+          final scoreDiff = b.score.compareTo(a.score);
+          if (scoreDiff != 0) return scoreDiff;
+          return compareVersions(b.item.version, a.item.version);
+        });
+
+        // 3. Filter out non-English unless server source explicitly targets non-English
+        final serverLower = serverName.toLowerCase();
+        final expectsNonEnglish = serverLower.contains('(fr)') ||
+            serverLower.contains('(es)') ||
+            serverLower.contains('(ja)') ||
+            serverLower.contains('(ar)') ||
+            serverLower.contains('(id)') ||
+            serverLower.contains('(ko)') ||
+            serverLower.contains('(ru)') ||
+            serverLower.contains('(pt)') ||
+            serverLower.contains('(zh)');
+
+        final prioritized = expectsNonEnglish
+            ? candidates
+            : candidates.where((c) {
+                final lang = c.item.lang.toLowerCase();
+                return lang == 'en' || lang == 'all';
+              }).toList();
+
+        final listToTry = prioritized.isNotEmpty ? prioritized : candidates;
+
+        // 4. Try candidates sequentially until one downloads successfully
+        for (final scored in listToTry) {
+          final item = scored.item;
+          final jsCode = await downloadJsSourceCode(item.sourceCodeUrl);
+          if (jsCode != null && jsCode.trim().isNotEmpty) {
+            await QuickJsService.instance.saveLocalExtension(
+              item.name,
+              jsCode,
+              version: item.version,
+              iconUrl: item.iconUrl,
+            );
+            await LoggerService.instance.logInfo(
+              '✓ Installed local JS scraper: ${item.name} (${item.lang}) v${item.version} [score=${scored.score}] for server source "$serverName"',
+              'RepoManager',
+            );
+            return (installedName: item.name, serverName: serverName);
           }
         }
 
-        if (score <= 0) continue;
-
-        // Language bonus: prefer en/all over non-English
-        final lang = item.lang.toLowerCase();
-        if (lang == 'en' || lang == 'all') score += 10;
-
-        candidates.add(_ScoredCandidate(item: item, score: score));
-      }
-
-      if (candidates.isEmpty) {
-        await LoggerService.instance.logWarning(
-          '✗ No repo match found for server source: $serverName (normalized: $cleanServerName)',
-          'RepoManager',
-        );
-        continue;
-      }
-
-      // 2. Sort by score desc, then by version desc
-      candidates.sort((a, b) {
-        final scoreDiff = b.score.compareTo(a.score);
-        if (scoreDiff != 0) return scoreDiff;
-        return compareVersions(b.item.version, a.item.version);
-      });
-
-      // 3. Filter out non-English unless server source explicitly targets non-English
-      final serverLower = serverName.toLowerCase();
-      final expectsNonEnglish = serverLower.contains('(fr)') ||
-          serverLower.contains('(es)') ||
-          serverLower.contains('(ja)') ||
-          serverLower.contains('(ar)') ||
-          serverLower.contains('(id)') ||
-          serverLower.contains('(ko)') ||
-          serverLower.contains('(ru)') ||
-          serverLower.contains('(pt)') ||
-          serverLower.contains('(zh)');
-
-      final prioritized = expectsNonEnglish
-          ? candidates
-          : candidates.where((c) {
-              final lang = c.item.lang.toLowerCase();
-              return lang == 'en' || lang == 'all';
-            }).toList();
-
-      final listToTry = prioritized.isNotEmpty ? prioritized : candidates;
-
-      // If already installed (e.g. from bundled assets), preserve patched local version
-      if (QuickJsService.instance.isSourceInstalledLocally(serverName)) {
-        installed.add(serverName);
-        installedServerNames.add(serverName);
-        continue;
-      }
-
-      // 4. Try candidates sequentially until one downloads successfully
-      for (final scored in listToTry) {
-        final item = scored.item;
-        final jsCode = await downloadJsSourceCode(item.sourceCodeUrl);
-        if (jsCode != null && jsCode.trim().isNotEmpty) {
-          await QuickJsService.instance.saveLocalExtension(
-            item.name,
-            jsCode,
-            version: item.version,
-            iconUrl: item.iconUrl,
-          );
-          installed.add(item.name);
-          installedServerNames.add(serverName);
-          await LoggerService.instance.logInfo(
-            '✓ Installed local JS scraper: ${item.name} (${item.lang}) v${item.version} [score=${scored.score}] for server source "$serverName"',
-            'RepoManager',
-          );
-          break;
-        }
-      }
-
-      if (!installedServerNames.contains(serverName)) {
         await LoggerService.instance.logWarning(
           '✗ Download failed for all candidates of: $serverName',
           'RepoManager',
         );
+        return null;
+      }));
+
+      for (final res in batchResults) {
+        if (res != null) {
+          installed.add(res.installedName);
+          installedServerNames.add(res.serverName);
+        }
       }
     }
 
@@ -551,10 +591,12 @@ class RepoManager {
         final currentVer = QuickJsService.instance.getInstalledVersion(name);
         final cleanName = name.replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '').trim().toLowerCase();
 
+        final normName = SourceMigrationService.instance.normalizeSourceName(name);
+
         final match = availableSources.firstWhere(
           (s) => s.name.trim().toLowerCase() == cleanName && (s.lang.toLowerCase() == 'en' || s.lang.toLowerCase() == 'all'),
           orElse: () => availableSources.firstWhere(
-            (s) => s.name.trim().toLowerCase() == cleanName,
+            (s) => s.name.trim().toLowerCase() == cleanName || SourceMigrationService.instance.normalizeSourceName(s.name) == normName,
             orElse: () => const RepoSourceItem(name: '', version: '', sourceCodeUrl: '', iconUrl: '', lang: '', isJs: true),
           ),
         );

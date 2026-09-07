@@ -21,18 +21,30 @@ class JsHttpClient {
   }
 
   bool _isDisposed = false;
+  bool get isDisposed => _isDisposed;
+  int _activeHttpRequests = 0;
+  int get activeHttpRequests => _activeHttpRequests;
+  void Function()? onAllRequestsFinished;
 
   Future<String> _safeHandle(Future<String> Function() action) async {
-    if (_isDisposed) return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}});
+    if (_isDisposed) return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}, 'error': 'disposed'});
+    _activeHttpRequests++;
     try {
       final res = await action();
-      if (_isDisposed) return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}});
+      if (_isDisposed) return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}, 'error': 'disposed'});
       return res;
     } catch (e) {
       if (_isDisposed || e.toString().contains('JSValue released')) {
-        return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}});
+        return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}, 'error': 'disposed'});
       }
       rethrow;
+    } finally {
+      _activeHttpRequests--;
+      if (_isDisposed && _activeHttpRequests <= 0 && onAllRequestsFinished != null) {
+        final cb = onAllRequestsFinished;
+        onAllRequestsFinished = null;
+        cb?.call();
+      }
     }
   }
 
@@ -109,11 +121,13 @@ class Client {
 
   Future<String> _toHttpResponse(http.Client client, String method, dynamic args) async {
     String urlStr = '';
+    dynamic reqBody;
     try {
       final List<dynamic> params = args is String ? jsonDecode(args) : args;
       urlStr = params[2].toString().trim();
       final Map<String, dynamic> rawHeaders = params[3] is Map ? Map<String, dynamic>.from(params[3]) : {};
-      final dynamic body = params.length > 4 ? params[4] : null;
+      reqBody = params.length > 4 ? params[4] : null;
+      final dynamic body = reqBody;
 
       if (urlStr.startsWith('//')) {
         urlStr = 'https:$urlStr';
@@ -161,13 +175,25 @@ class Client {
           response = await client.head(uri, headers: headers).timeout(requestTimeout);
           break;
         case 'PUT':
-          response = await client.put(uri, headers: headers, body: body).timeout(requestTimeout);
+          response = await client.put(
+            uri,
+            headers: headers,
+            body: body is Map ? jsonEncode(body) : body,
+          ).timeout(requestTimeout);
           break;
         case 'DELETE':
-          response = await client.delete(uri, headers: headers, body: body).timeout(requestTimeout);
+          response = await client.delete(
+            uri,
+            headers: headers,
+            body: body is Map ? jsonEncode(body) : body,
+          ).timeout(requestTimeout);
           break;
         case 'PATCH':
-          response = await client.patch(uri, headers: headers, body: body).timeout(requestTimeout);
+          response = await client.patch(
+            uri,
+            headers: headers,
+            body: body is Map ? jsonEncode(body) : body,
+          ).timeout(requestTimeout);
           break;
         default:
           response = await client.get(uri, headers: headers).timeout(requestTimeout);
@@ -176,22 +202,45 @@ class Client {
       // If Cloudflare block was received (403/503 with Cloudflare headers), attempt direct FlareSolverr fetch
       if (isCloudflare(response) && urlStr.startsWith('http')) {
         if (MClient.cfProxyUrl.isNotEmpty) {
-          final solved = await MClient.solveAndFetchWithProxy(urlStr);
+          final solved = await MClient.solveAndFetchWithProxy(urlStr, method: method, postData: body);
           if (solved != null) {
             return jsonEncode(solved);
           }
         }
       }
 
+      String bodyText;
+      try {
+        bodyText = utf8.decode(response.bodyBytes, allowMalformed: true);
+      } catch (_) {
+        bodyText = response.body;
+      }
+
       return jsonEncode({
-        'body': response.body,
+        'body': bodyText,
         'statusCode': response.statusCode,
         'headers': response.headers,
         'request': {'url': response.request?.url.toString() ?? urlStr}
       });
     } catch (e) {
+      if (_isDisposed) {
+        return jsonEncode({
+          'body': '',
+          'statusCode': 500,
+          'headers': {},
+          'error': 'disposed'
+        });
+      }
       if (urlStr.startsWith('http') && MClient.cfProxyUrl.isNotEmpty) {
-        final solved = await MClient.solveAndFetchWithProxy(urlStr);
+        final solved = await MClient.solveAndFetchWithProxy(urlStr, method: method, postData: reqBody);
+        if (_isDisposed) {
+          return jsonEncode({
+            'body': '',
+            'statusCode': 500,
+            'headers': {},
+            'error': 'disposed'
+          });
+        }
         if (solved != null) {
           return jsonEncode(solved);
         }

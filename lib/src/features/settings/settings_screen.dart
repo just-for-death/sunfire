@@ -462,8 +462,22 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 800),
-          child: _isSearching && _searchQuery.trim().isNotEmpty
-              ? _buildSearchResults(primaryColor)
+          child: _isSearching
+              ? (_searchQuery.trim().isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 24.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.search_rounded, size: 48, color: primaryColor.withValues(alpha: 0.5)),
+                            const SizedBox(height: 16),
+                            Text('Type to search settings...', style: TextStyle(color: Colors.grey.shade400, fontSize: 16)),
+                          ],
+                        ),
+                      ),
+                    )
+                  : _buildSearchResults(primaryColor))
               : ListView(
                   padding: const EdgeInsets.only(bottom: 120),
                   children: [

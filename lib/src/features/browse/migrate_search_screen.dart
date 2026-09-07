@@ -379,14 +379,46 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
         final srcMangaId = widget.manga.serverId > 0 ? widget.manga.serverId : widget.manga.id;
         final tgtMangaId = targetMangaEntity.serverId > 0 ? targetMangaEntity.serverId : targetMangaEntity.id;
         final sourceChapters = await IsarService.instance.getChaptersForManga(srcMangaId);
-        final targetChapters = await IsarService.instance.getChaptersForManga(tgtMangaId);
+        var targetChapters = await IsarService.instance.getChaptersForManga(tgtMangaId);
+
+        if (targetChapters.isEmpty && targetSourceName.isNotEmpty && QuickJsService.instance.hasExtension(targetSourceName)) {
+          try {
+            final targetUrl = targetMangaEntity.url.isNotEmpty ? targetMangaEntity.url : targetMangaEntity.title;
+            final details = await QuickJsService.instance.fetchMangaDetailsLocal(targetSourceName, targetUrl);
+            final chList = details['chapters'] as List<dynamic>? ?? [];
+            final toSave = <Chapter>[];
+            for (var i = 0; i < chList.length; i++) {
+              final cMap = chList[i] as Map<String, dynamic>;
+              final cUrl = cMap['url']?.toString() ?? '';
+              final ch = Chapter()
+                ..serverId = -(tgtMangaId.abs() * 10000 + i + 1)
+                ..mangaId = tgtMangaId
+                ..name = cMap['name']?.toString() ?? 'Chapter ${i + 1}'
+                ..chapterNumber = (cMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble()
+                ..url = cUrl
+                ..realUrl = cUrl
+                ..mangaTitle = targetMangaEntity.title
+                ..mangaThumbnailUrl = targetMangaEntity.thumbnailUrl
+                ..fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000
+                ..isRead = false
+                ..lastPageRead = 0;
+              toSave.add(ch);
+            }
+            if (toSave.isNotEmpty) {
+              await IsarService.instance.saveChapters(toSave);
+              targetChapters = await IsarService.instance.getChaptersForManga(tgtMangaId);
+            }
+          } catch (e) {
+            await LoggerService.instance.logWarning('Failed to fetch target chapters during migration: $e', 'Migrate');
+          }
+        }
 
         if (sourceChapters.isNotEmpty && targetChapters.isNotEmpty) {
           final sourceByNumber = <double, Chapter>{};
           final sourceByTitle = <String, Chapter>{};
 
           for (final sc in sourceChapters) {
-            if (sc.chapterNumber > 0) {
+            if (sc.chapterNumber >= 0) {
               sourceByNumber[sc.chapterNumber] = sc;
             }
             final normTitle = sc.name.trim().toLowerCase();
@@ -399,7 +431,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
 
           for (final tc in targetChapters) {
             Chapter? match;
-            if (tc.chapterNumber > 0 && sourceByNumber.containsKey(tc.chapterNumber)) {
+            if (tc.chapterNumber >= 0 && sourceByNumber.containsKey(tc.chapterNumber)) {
               match = sourceByNumber[tc.chapterNumber];
             } else {
               final normTitle = tc.name.trim().toLowerCase();

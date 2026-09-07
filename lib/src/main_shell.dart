@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 
 import 'core/services/download_manager_service.dart';
 import 'core/services/library_update_service.dart';
-import 'core/services/notification_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/sync/graphql_client_service.dart';
 import 'core/sync/sync_engine.dart';
@@ -37,7 +36,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   late final PageController _pageController;
   bool _isSyncing = false;
   late bool _isSidebarExpanded;
-  StreamSubscription<String?>? _notificationSub;
 
   final List<Widget> _screens = const [
     LibraryScreen(),
@@ -69,12 +67,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _pageController = PageController(initialPage: _currentIndex);
     MainShell.selectedTabNotifier.addListener(_onExternalTabChange);
     WidgetsBinding.instance.addObserver(this);
-
-    _notificationSub = NotificationService.instance.onNotificationTapped.listen((payload) {
-      if (payload == '/updates') {
-        MainShell.switchToTab(1);
-      }
-    });
   }
 
   void _onExternalTabChange() {
@@ -93,7 +85,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    _notificationSub?.cancel();
     MainShell.selectedTabNotifier.removeListener(_onExternalTabChange);
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
@@ -105,10 +96,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       DownloadManagerService.instance.resumeLocalQueue();
       WebSocketService.instance.connect();
-      if (GraphQLClientService.instance.isConfigured) {
+      if (GraphQLClientService.instance.isConfigured && !_isSyncing) {
         SyncEngine.instance.triggerSync();
       }
-      LibraryUpdateService.instance.checkForNewChapters(isManual: false);
+      if (!LibraryUpdateService.instance.isUpdating) {
+        LibraryUpdateService.instance.checkForNewChapters(isManual: false);
+      }
     }
   }
 

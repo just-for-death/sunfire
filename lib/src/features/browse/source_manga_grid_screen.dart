@@ -725,8 +725,20 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                 title: const Text('Add to Library (Default Category)', style: TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () async {
                   Navigator.pop(sheetContext);
-                  final localManga = await IsarService.instance.getMangaByServerId(mangaId);
-                  if (localManga != null) {
+                  var localManga = await IsarService.instance.getMangaByServerId(mangaId);
+                  if (localManga == null) {
+                    localManga = Manga()
+                      ..serverId = mangaId
+                      ..title = title
+                      ..thumbnailUrl = thumb
+                      ..sourceName = widget.sourceName
+                      ..inLibrary = true
+                      ..inLibraryAt = DateTime.now().millisecondsSinceEpoch;
+                    if (SettingsService.instance.defaultCategoryId != null) {
+                      localManga.categoryIds = [SettingsService.instance.defaultCategoryId!];
+                    }
+                    await IsarService.instance.saveManga(localManga);
+                  } else {
                     localManga.inLibrary = true;
                     localManga.inLibraryAt = DateTime.now().millisecondsSinceEpoch;
                     if (SettingsService.instance.defaultCategoryId != null) {
