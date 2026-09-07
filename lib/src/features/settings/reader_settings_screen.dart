@@ -400,6 +400,26 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final bool muted = !TickerMode.valuesOf(context).enabled;
+    if (_ticker != null) {
+      _ticker!.muted = muted;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _AutoScrollLivePreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.speed <= 0) {
+      _ticker?.stop();
+    } else if (_ticker != null && !_ticker!.isActive) {
+      _lastElapsed = null;
+      _ticker?.start();
+    }
+  }
+
+  @override
   void dispose() {
     _ticker?.stop();
     _ticker?.dispose();

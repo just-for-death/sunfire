@@ -35,34 +35,78 @@ void main() async {
     ),
   );
 
-  await LoggerService.instance.initialize();
-  await IsarService.instance.initialize();
-  // One-time startup cleanup: removes excess bulk-scraped standalone chapters.
-  // This MUST NOT be called on every screen load — only here at startup.
-  unawaited(IsarService.instance.cleanupBulkScrapedUpdates());
-  await SettingsService.instance.initialize();
-  await ImageCacheHelper.initialize();
-  await QuickJsService.instance.initialize();
-  ImageTransportService.instance.initialize();
-  await NotificationService.instance.initialize();
+  try {
+    await LoggerService.instance.initialize();
+  } catch (e) {
+    debugPrint('LoggerService init error: $e');
+  }
+
+  try {
+    await IsarService.instance.initialize();
+    // One-time startup cleanup: removes excess bulk-scraped standalone chapters.
+    // This MUST NOT be called on every screen load — only here at startup.
+    unawaited(IsarService.instance.cleanupBulkScrapedUpdates());
+  } catch (e) {
+    debugPrint('IsarService init error: $e');
+  }
+
+  try {
+    await SettingsService.instance.initialize();
+  } catch (e) {
+    debugPrint('SettingsService init error: $e');
+  }
+
+  try {
+    await ImageCacheHelper.initialize();
+  } catch (e) {
+    debugPrint('ImageCacheHelper init error: $e');
+  }
+
+  try {
+    await QuickJsService.instance.initialize();
+  } catch (e) {
+    debugPrint('QuickJsService init error: $e');
+  }
+
+  try {
+    ImageTransportService.instance.initialize();
+  } catch (e) {
+    debugPrint('ImageTransportService init error: $e');
+  }
+
+  try {
+    await NotificationService.instance.initialize();
+  } catch (e) {
+    debugPrint('NotificationService init error: $e');
+  }
 
   // Configure Suwayomi GraphQL client and SyncEngine only after onboarding
   if (SettingsService.instance.onboardingCompleted) {
-    final authToken = await ServerAuthHelper.getRawAuthHeader();
-    GraphQLClientService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
-    WebSocketService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
-    SyncEngine.instance.initialize();
-    await BackgroundService.instance.initialize();
+    try {
+      final authToken = await ServerAuthHelper.getRawAuthHeader();
+      GraphQLClientService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
+      WebSocketService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
+      SyncEngine.instance.initialize();
+      await BackgroundService.instance.initialize();
+    } catch (e) {
+      debugPrint('SyncEngine/Network init error: $e');
+    }
   }
 
   // Load saved FlareSolverr / Byparr URL into MClient so Cloudflare-protected
   // sources work immediately on startup.
-  final savedCfProxy = SettingsService.instance.cfProxyUrl;
-  if (savedCfProxy.isNotEmpty) {
-    MClient.cfProxyUrl = savedCfProxy;
-  }
+  try {
+    final savedCfProxy = SettingsService.instance.cfProxyUrl;
+    if (savedCfProxy.isNotEmpty) {
+      MClient.cfProxyUrl = savedCfProxy;
+    }
+  } catch (_) {}
 
-  await DownloadManagerService.instance.initialize();
+  try {
+    await DownloadManagerService.instance.initialize();
+  } catch (e) {
+    debugPrint('DownloadManagerService init error: $e');
+  }
 
   runApp(const SunfireApp());
 }

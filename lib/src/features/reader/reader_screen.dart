@@ -60,6 +60,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   // Floating scroll indicator for Webtoon mode
   Timer? _scrollIndicatorTimer;
   bool _showScrollIndicator = false;
+  final Map<int, GlobalKey> _webtoonPageKeys = {};
 
   // Prefetch cache: chapterServerId → resolved page URLs
   final Map<int, List<String>> _prefetchedChapters = {};
@@ -500,22 +501,14 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.pageDown) {
       if (isPaged) {
-        if (isRtl) {
-          _goToPrevPage();
-        } else {
-          _goToNextPage();
-        }
+        _goToNextPage();
       } else {
         _scrollVerticalBy(500);
       }
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.pageUp) {
       if (isPaged) {
-        if (isRtl) {
-          _goToNextPage();
-        } else {
-          _goToPrevPage();
-        }
+        _goToPrevPage();
       } else {
         _scrollVerticalBy(-500);
       }
@@ -598,10 +591,21 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _focusNode.dispose();
+    _recoveredImageBytes.clear();
+    _recoveringUrls.clear();
+    _prefetchedChapters.clear();
     _scrollController.removeListener(_onVerticalScroll);
     _scrollController.dispose();
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _storeRecoveredImage(String url, Uint8List bytes) {
+    if (_recoveredImageBytes.length >= 25) {
+      final oldestKey = _recoveredImageBytes.keys.first;
+      _recoveredImageBytes.remove(oldestKey);
+    }
+    _recoveredImageBytes[url] = bytes;
   }
 
   int _chapterTargetId(Chapter ch) => ch.serverId > 0 ? ch.serverId : ch.id;
@@ -623,6 +627,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _currentPage = 1;
       _nextChapter = null;
       _prevChapter = null;
+      _webtoonPageKeys.clear();
     });
 
     _chapter = await IsarService.instance.getChapterByServerId(chapterId) ??
@@ -773,8 +778,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
-      if (isPaged && _pageController.hasClients && _currentPage > 1) {
-        _pageController.jumpToPage(_currentPage - 1);
+      if (isPaged && _pageController.hasClients) {
+        final targetPage = (_currentPage - 1).clamp(0, _pageUrls.isEmpty ? 0 : _pageUrls.length - 1);
+        _pageController.jumpToPage(targetPage);
       } else if (!isPaged && _scrollController.hasClients) {
         if (_currentPage > 1) {
            // Estimate the scroll position for vertical long strip based on average screen height
@@ -890,8 +896,24 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       });
     }
 
+    int? detectedPage;
+    for (int i = 0; i < _pageUrls.length; i++) {
+      final key = _webtoonPageKeys[i];
+      final ctx = key?.currentContext;
+      if (ctx != null) {
+        final box = ctx.findRenderObject() as RenderBox?;
+        if (box != null && box.hasSize) {
+          final pos = box.localToGlobal(Offset.zero);
+          if (pos.dy <= 350 && (pos.dy + box.size.height) >= 50) {
+            detectedPage = i + 1;
+            break;
+          }
+        }
+      }
+    }
+
     final pageRatio = (currentScroll / maxScroll).clamp(0.0, 1.0);
-    final computedPage = ((pageRatio * (_pageUrls.length - 1)) + 1).round();
+    final computedPage = detectedPage ?? (((pageRatio * (_pageUrls.length - 1)) + 1).round().clamp(1, _pageUrls.length));
 
     // Trigger prefetch early when reaching 65% of chapter
     if (pageRatio >= 0.65 && _nextChapter != null) {
@@ -1267,8 +1289,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
-      if (isPaged && _pageController.hasClients && _currentPage > 1) {
-        _pageController.jumpToPage(_currentPage - 1);
+      if (isPaged && _pageController.hasClients) {
+        final targetPage = (_currentPage - 1).clamp(0, _pageUrls.isEmpty ? 0 : _pageUrls.length - 1);
+        _pageController.jumpToPage(targetPage);
       } else if (!isPaged && _scrollController.hasClients && _pageUrls.isNotEmpty) {
         if (_currentPage > 1 && _pageUrls.length > 1) {
           final targetOffset = ((_currentPage - 1) / (_pageUrls.length - 1)) * _scrollController.position.maxScrollExtent;
@@ -1668,7 +1691,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
               if (bytes.length > 200 && _isMagicImage(bytes)) {
                 if (mounted) {
                   setState(() {
-                    _recoveredImageBytes[url] = Uint8List.fromList(bytes);
+                    _storeRecoveredImage(url, Uint8List.fromList(bytes));
                   });
                 }
                 return;
@@ -1721,7 +1744,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         if (res != null && res.statusCode == 200 && res.bodyBytes.isNotEmpty && _isMagicImage(res.bodyBytes)) {
           if (mounted) {
             setState(() {
-              _recoveredImageBytes[url] = res!.bodyBytes;
+              _storeRecoveredImage(url, res!.bodyBytes);
             });
           }
         } else {
@@ -2080,9 +2103,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                 if (pointerSignal is PointerScrollEvent) {
                   final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
                   if (isPaged) {
-                    if (pointerSignal.scrollDelta.dx > 25 || pointerSignal.scrollDelta.dy > 25) {
+                    final isRtl = _readingMode == ReadingMode.pagedRtl;
+                    final effectiveDx = isRtl ? -pointerSignal.scrollDelta.dx : pointerSignal.scrollDelta.dx;
+                    if (effectiveDx > 25 || pointerSignal.scrollDelta.dy > 25) {
                       _goToNextPage();
-                    } else if (pointerSignal.scrollDelta.dx < -25 || pointerSignal.scrollDelta.dy < -25) {
+                    } else if (effectiveDx < -25 || pointerSignal.scrollDelta.dy < -25) {
                       _goToPrevPage();
                     }
                   }
@@ -2107,31 +2132,38 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                         final pageWidget = _buildPageWidget(_pageUrls[index], index, constraints: constraints, isPaged: false);
                         final isWideScreen = constraints.maxWidth > 800;
                         final contentWidth = isWideScreen ? 780.0 : constraints.maxWidth;
+                        final itemKey = _webtoonPageKeys.putIfAbsent(index, () => GlobalKey());
 
                         if (_readingMode == ReadingMode.longStrip) {
                           // Long Strip: continuous zero gap
-                          return RepaintBoundary(
-                            child: Center(
-                              child: SizedBox(
-                                width: contentWidth,
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(minHeight: (constraints.maxHeight * 0.75).clamp(300.0, 900.0)),
-                                  child: pageWidget,
+                          return KeyedSubtree(
+                            key: itemKey,
+                            child: RepaintBoundary(
+                              child: Center(
+                                child: SizedBox(
+                                  width: contentWidth,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(minHeight: (constraints.maxHeight * 0.75).clamp(300.0, 900.0)),
+                                    child: pageWidget,
+                                  ),
                                 ),
                               ),
                             ),
                           );
                         }
                         // Long Strip (Gaps): continuous vertical with 12px gap between pages
-                        return RepaintBoundary(
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 12.0),
-                            child: Center(
-                              child: SizedBox(
-                                width: contentWidth,
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(minHeight: (constraints.maxHeight * 0.75).clamp(300.0, 900.0)),
-                                  child: pageWidget,
+                        return KeyedSubtree(
+                          key: itemKey,
+                          child: RepaintBoundary(
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 12.0),
+                              child: Center(
+                                child: SizedBox(
+                                  width: contentWidth,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(minHeight: (constraints.maxHeight * 0.75).clamp(300.0, 900.0)),
+                                    child: pageWidget,
+                                  ),
                                 ),
                               ),
                             ),

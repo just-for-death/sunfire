@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../core/logging/logger_service.dart';
 import '../../core/sync/graphql_client_service.dart';
@@ -421,6 +422,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               ..._trackers.map((t) {
                 final trackerId = parseIntSafe(t['id']);
                 final trackerName = t['name'] as String? ?? 'Tracker';
+                final isLoggedIn = t['isLoggedIn'] == true;
+                final authUrl = t['authUrl'] as String?;
                 final bound = _boundRecords.firstWhere(
                   (r) => parseIntSafe(r['trackerId']) == trackerId,
                   orElse: () => <String, dynamic>{},
@@ -508,25 +511,44 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                 ],
                               ),
                             ] else ...[
-                              const Text('Not linked with this tracker.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryColor.withAlpha(40),
-                                    foregroundColor: primaryColor,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                  icon: const Icon(Icons.search_rounded, size: 18),
-                                  label: const Text('Search & Bind'),
-                                  onPressed: () {
-                                    _searchQuery = widget.mangaTitle;
-                                    _trackerSearchController.text = widget.mangaTitle;
-                                    _searchTracker(trackerId);
-                                  },
+                              if (!isLoggedIn) ...[
+                                Row(
+                                  children: [
+                                    const Text('Not logged in on server.', style: TextStyle(color: Colors.amberAccent, fontSize: 12)),
+                                    const Spacer(),
+                                    if (authUrl != null && authUrl.isNotEmpty)
+                                      TextButton.icon(
+                                        icon: const Icon(Icons.open_in_browser_rounded, size: 16),
+                                        label: const Text('Log In'),
+                                        onPressed: () async {
+                                          if (await canLaunchUrlString(authUrl)) {
+                                            await launchUrlString(authUrl, mode: LaunchMode.externalApplication);
+                                          }
+                                        },
+                                      ),
+                                  ],
                                 ),
-                              ),
+                              ] else ...[
+                                const Text('Not linked with this tracker.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: primaryColor.withAlpha(40),
+                                      foregroundColor: primaryColor,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    icon: const Icon(Icons.search_rounded, size: 18),
+                                    label: const Text('Search & Bind'),
+                                    onPressed: () {
+                                      _searchQuery = widget.mangaTitle;
+                                      _trackerSearchController.text = widget.mangaTitle;
+                                      _searchTracker(trackerId);
+                                    },
+                                  ),
+                                ),
+                              ],
                             ],
                           ],
                         ),

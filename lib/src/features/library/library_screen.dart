@@ -9,6 +9,7 @@ import '../../core/db/models/category.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/quickjs_service.dart';
+import '../../core/logging/logger_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
@@ -100,7 +101,8 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           _isLoading = false;
         });
       }
-    } catch (_) {
+    } catch (e, stack) {
+      LoggerService.instance.logError('Library load from Isar failed: $e', exception: e, stackTrace: stack, category: 'Library');
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -139,7 +141,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           _categories = cats;
         });
       }
-    } catch (_) {}
+    } catch (e, stack) {
+      LoggerService.instance.logError('Failed to load library from Isar: $e', exception: e, stackTrace: stack, category: 'Library');
+    }
   }
 
   Future<void> _backgroundSync() async {
@@ -236,7 +240,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
             }
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        LoggerService.instance.logWarning('Standalone update check failed for ${manga.title}: $e', 'Library');
+      }
     }
   }
 
@@ -370,18 +376,26 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     });
   }
 
+  Future<Manga?> _resolveManga(int id) async {
+    if (id > 0) {
+      final m = await IsarService.instance.getMangaByServerId(id);
+      if (m != null) return m;
+    }
+    return await IsarService.instance.getManga(id) ?? await IsarService.instance.getMangaByServerId(id);
+  }
+
   Future<void> _batchMoveToCategory() async {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final Set<int> selectedCatIds = {};
 
     if (_selectedMangaIds.length == 1) {
-      final m = await IsarService.instance.getMangaByServerId(_selectedMangaIds.first);
+      final m = await _resolveManga(_selectedMangaIds.first);
       if (m != null) {
         selectedCatIds.addAll(m.categoryIds);
       }
     } else {
       final allSelectedManga = await Future.wait(
-        _selectedMangaIds.map((id) => IsarService.instance.getMangaByServerId(id)),
+        _selectedMangaIds.map((id) => _resolveManga(id)),
       );
       final validManga = allSelectedManga.whereType<Manga>().toList();
       if (validManga.isNotEmpty) {
@@ -392,6 +406,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         selectedCatIds.addAll(common);
       }
     }
+    final Set<int> initialCommonCatIds = Set<int>.from(selectedCatIds);
     if (!mounted) return;
 
     await showModalBottomSheet(
@@ -456,28 +471,51 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                       onPressed: () async {
-                        final catList = selectedCatIds.toList();
-                        for (final id in _selectedMangaIds) {
-                          final m = await IsarService.instance.getMangaByServerId(id);
-                          if (m != null) {
-                            m.categoryIds = catList;
-                            await IsarService.instance.saveManga(m);
-                            if (GraphQLClientService.instance.isConfigured && id > 0) {
-                              try {
-                                await GraphQLClientService.instance.setMangaCategories(id, catList);
-                              } catch (_) {}
+                        try {
+                          final isSingle = _selectedMangaIds.length == 1;
+                          final addedCats = selectedCatIds.difference(initialCommonCatIds);
+                          final removedCats = initialCommonCatIds.difference(selectedCatIds);
+                          final updatedManga = <Manga>[];
+                          for (final id in _selectedMangaIds) {
+                            final m = await _resolveManga(id);
+                            if (m != null) {
+                              if (isSingle) {
+                                m.categoryIds = selectedCatIds.toList();
+                              } else {
+                                final curSet = m.categoryIds.toSet();
+                                curSet.addAll(addedCats);
+                                curSet.removeAll(removedCats);
+                                m.categoryIds = curSet.toList();
+                              }
+                              updatedManga.add(m);
+                              if (GraphQLClientService.instance.isConfigured && m.serverId > 0) {
+                                try {
+                                  await GraphQLClientService.instance.setMangaCategories(m.serverId, m.categoryIds);
+                                } catch (e) {
+                                  LoggerService.instance.logWarning('Failed to sync categories for manga ${m.serverId}: $e', 'Library');
+                                }
+                              }
                             }
                           }
-                        }
-                        if (sheetContext.mounted) {
-                          Navigator.pop(sheetContext);
-                        }
-                        _exitBatchMode();
-                        await _loadFromIsarOnly();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Categories updated for selected titles')),
-                          );
+                          if (updatedManga.isNotEmpty) {
+                            await IsarService.instance.saveMangas(updatedManga);
+                          }
+                          if (sheetContext.mounted) {
+                            Navigator.pop(sheetContext);
+                          }
+                          _exitBatchMode();
+                          await _loadFromIsarOnly();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Categories updated for selected titles')),
+                            );
+                          }
+                        } catch (e, stack) {
+                          LoggerService.instance.logError('Batch category move failed: $e', exception: e, stackTrace: stack, category: 'Library');
+                          if (sheetContext.mounted) {
+                            Navigator.pop(sheetContext);
+                          }
+                          _exitBatchMode();
                         }
                       },
                       child: const Text('Apply Categories', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
@@ -507,7 +545,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         }
       }
       await IsarService.instance.saveChapters(chapters);
-      final m = await IsarService.instance.getMangaByServerId(id);
+      final m = await _resolveManga(id);
       if (m != null) {
         m.unreadCount = isRead ? 0 : chapters.length;
         await IsarService.instance.saveManga(m);
@@ -579,7 +617,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final mangaList = List<int>.from(_selectedMangaIds);
 
     for (final mangaId in mangaList) {
-      final m = await IsarService.instance.getMangaByServerId(mangaId);
+      final m = await _resolveManga(mangaId);
       final chapters = await IsarService.instance.getChaptersForManga(mangaId);
       chapters.sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
 
@@ -663,11 +701,13 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     if (confirmed != true) return;
 
     for (final id in _selectedMangaIds) {
-      final m = await IsarService.instance.getMangaByServerId(id);
+      final m = await _resolveManga(id);
       if (m != null) {
         m.inLibrary = false;
         await IsarService.instance.saveManga(m);
-        await SyncEngine.instance.syncMangaLibraryState(id, false);
+        if (m.serverId > 0) {
+          await SyncEngine.instance.syncMangaLibraryState(m.serverId, false);
+        }
       }
     }
     _exitBatchMode();
@@ -902,7 +942,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           },
         );
       },
-    );
+    ).whenComplete(() => textController.dispose());
   }
 
   int _getCategoryMangaCount(int catServerId) {

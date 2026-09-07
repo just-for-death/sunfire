@@ -108,17 +108,15 @@ void _initPseudoSelector() {
   }
 
   bool has(Element element, String? args) {
-    if (args == null) return false;
-    final parent = element.parent;
-    final res = parent == null ? false : pseudom.parse(args).selectFirst(parent) == element;
-    return res ? res : pseudom.parse(args).selectFirst(element) != null;
+    if (args == null || args.trim().isEmpty) return false;
+    return pseudom.parse(_fixSelector(args)).selectFirst(element) != null;
   }
 
   bool inot(Element element, String? args) {
-    if (args == null) return false;
-    final parent = element.parent;
-    final res = parent == null ? false : pseudom.parse(args).selectFirst(parent) != element;
-    return res ? res : pseudom.parse(args).selectFirst(element) == null;
+    if (args == null || args.trim().isEmpty) return false;
+    final parent = element.parent ?? element;
+    final matches = pseudom.parse(_fixSelector(args)).select(parent);
+    return !matches.contains(element);
   }
 
   bool contains(Element element, String? args) {
@@ -349,8 +347,8 @@ extension DocumentExtension on Document? {
     if (dom == null) return [];
     final htmlXPath = HtmlXPath.node(dom);
     final query = htmlXPath.query(xpath);
-    if (query.nodes.length > 1) {
-      return query.attrs.map((e) => e!.trim()).toList();
+    if (query.nodes.isNotEmpty) {
+      return query.attrs.whereType<String>().map((e) => e.trim()).toList();
     }
     return [];
   }
@@ -430,8 +428,8 @@ extension ElementExtension on Element {
   List<String> xpath(String xpath) {
     final htmlXPath = HtmlXPath.node(this);
     final query = htmlXPath.query(xpath);
-    if (query.nodes.length > 1) {
-      return query.attrs.map((e) => e!.trim()).toList();
+    if (query.nodes.isNotEmpty) {
+      return query.attrs.whereType<String>().map((e) => e.trim()).toList();
     }
     return [];
   }
@@ -445,8 +443,10 @@ extension ElementExtension on Element {
           return entry.value;
         }
       }
+      final openTagEnd = outerHtml.indexOf('>');
+      final openTag = openTagEnd != -1 ? outerHtml.substring(0, openTagEnd + 1) : outerHtml;
       final exp = RegExp('''(?:^|\\s)${RegExp.escape(attribute)}\\s*=\\s*["']([^"']+)["']''', caseSensitive: false);
-      final m = exp.firstMatch(outerHtml);
+      final m = exp.firstMatch(openTag);
       if (m != null) return m.group(1)?.trim();
       return null;
     } catch (_) {

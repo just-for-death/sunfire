@@ -13,6 +13,9 @@ class WebSocketService {
   bool _isConnected = false;
   int _reconnectDelaySeconds = 5;
   Timer? _reconnectTimer;
+  Timer? _pingTimer;
+  bool _isConnecting = false;
+  bool _isDisposed = false;
 
   final _updateStatusController = StreamController<Map<String, dynamic>>.broadcast();
   final _downloadStatusController = StreamController<Map<String, dynamic>>.broadcast();
@@ -31,6 +34,11 @@ class WebSocketService {
   void initialize(String httpUrl, {String? authToken}) {
     final trimmed = httpUrl.trim();
     if (trimmed.isEmpty) {
+      _isDisposed = true;
+      _pingTimer?.cancel();
+      _reconnectTimer?.cancel();
+      _handshakeTimer?.cancel();
+      _subscription?.cancel();
       if (_channel != null) {
         _channel!.sink.close();
         _channel = null;
@@ -38,19 +46,23 @@ class WebSocketService {
       _wsUrl = null;
       _authToken = null;
       _isConnected = false;
+      _isConnecting = false;
       return;
     }
+    _isDisposed = false;
     final cleanUrl = trimmed.endsWith('/') ? trimmed.substring(0, trimmed.length - 1) : trimmed;
     final wsScheme = cleanUrl.startsWith('https') ? 'wss' : 'ws';
     final hostAndPort = cleanUrl.replaceAll(RegExp(r'https?://'), '');
     final newWsUrl = '$wsScheme://$hostAndPort/api/graphql';
     
     if (_wsUrl != newWsUrl || authToken != _authToken) {
+      _subscription?.cancel();
       if (_channel != null) {
         _channel!.sink.close();
         _channel = null;
       }
       _isConnected = false;
+      _isConnecting = false;
     }
     
     _wsUrl = newWsUrl;
@@ -59,13 +71,17 @@ class WebSocketService {
   }
 
   void connect() {
-    if (_wsUrl == null || _isConnected) return;
+    if (_wsUrl == null || _isConnected || _isConnecting || _isDisposed) return;
+    _isConnecting = true;
 
     try {
       _channel = WebSocketChannel.connect(
         Uri.parse(_wsUrl!),
         protocols: ['graphql-transport-ws'],
       );
+      _channel!.ready.catchError((e) {
+        _handleDisconnect('WebSocket connect error: $e');
+      });
 
       final payload = <String, dynamic>{};
       if (_authToken != null && _authToken!.isNotEmpty) {
@@ -95,6 +111,17 @@ class WebSocketService {
     }
   }
 
+  void _startPingTimer() {
+    _pingTimer?.cancel();
+    _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+      if (_isConnected && _channel != null) {
+        try {
+          _channel?.sink.add(jsonEncode({'type': 'ping'}));
+        } catch (_) {}
+      }
+    });
+  }
+
   void _handleMessage(dynamic rawMessage) {
     try {
       final data = jsonDecode(rawMessage.toString()) as Map<String, dynamic>;
@@ -102,19 +129,25 @@ class WebSocketService {
 
       if (type == 'connection_ack') {
         _isConnected = true;
+        _isConnecting = false;
         _reconnectDelaySeconds = 5;
         _handshakeTimer?.cancel();
+        _startPingTimer();
         LoggerService.instance.logInfo('WebSocket connection_ack received', 'WebSocket');
         _subscribeEvents();
+      } else if (type == 'ping') {
+        _channel?.sink.add(jsonEncode({'type': 'pong'}));
+      } else if (type == 'pong') {
+        // Heartbeat pong received from server
       } else if (type == 'next' || type == 'data') {
         final payload = data['payload'] as Map<String, dynamic>?;
         if (payload != null && payload.containsKey('data')) {
           final innerData = payload['data'] as Map<String, dynamic>?;
           if (innerData != null) {
-            if (innerData.containsKey('updateStatusChanged')) {
-              _updateStatusController.add(innerData['updateStatusChanged']);
-            } else if (innerData.containsKey('downloadStatusChanged')) {
-              _downloadStatusController.add(innerData['downloadStatusChanged']);
+            if (innerData.containsKey('updateStatusChanged') && innerData['updateStatusChanged'] is Map<String, dynamic>) {
+              _updateStatusController.add(innerData['updateStatusChanged'] as Map<String, dynamic>);
+            } else if (innerData.containsKey('downloadStatusChanged') && innerData['downloadStatusChanged'] is Map<String, dynamic>) {
+              _downloadStatusController.add(innerData['downloadStatusChanged'] as Map<String, dynamic>);
             }
           }
         }
@@ -146,8 +179,15 @@ class WebSocketService {
 
   void _handleDisconnect(String reason) {
     _isConnected = false;
+    _isConnecting = false;
+    _pingTimer?.cancel();
     _subscription?.cancel();
-    _channel?.sink.close();
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
+
+    if (_isDisposed) return;
+
     LoggerService.instance.logWarning('$reason. Reconnecting in ${_reconnectDelaySeconds}s...', 'WebSocket');
 
     _reconnectTimer?.cancel();
@@ -159,11 +199,13 @@ class WebSocketService {
   }
 
   void dispose() {
+    _isDisposed = true;
+    _pingTimer?.cancel();
     _reconnectTimer?.cancel();
     _handshakeTimer?.cancel();
     _subscription?.cancel();
-    _channel?.sink.close();
-    _updateStatusController.close();
-    _downloadStatusController.close();
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
   }
 }

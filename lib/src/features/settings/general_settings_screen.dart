@@ -18,6 +18,24 @@ class GeneralSettingsScreen extends StatefulWidget {
 class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
   final SettingsService _settings = SettingsService.instance;
 
+  static const Map<String, String> _languageCodeMap = {
+    'System Default': 'system',
+    'English': 'en',
+    'Spanish': 'es',
+    'French': 'fr',
+    'German': 'de',
+    'Japanese': 'ja',
+  };
+
+  static const Map<String, String> _codeToLanguageMap = {
+    'system': 'System Default',
+    'en': 'English',
+    'es': 'Spanish',
+    'fr': 'French',
+    'de': 'German',
+    'ja': 'Japanese',
+  };
+
   void _showRadioDialog({
     required String title,
     required List<String> options,
@@ -73,16 +91,16 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
                   ],
                 ),
                 subtitle: Text(
-                  _settings.appLocale == 'en' ? 'English' : _settings.appLocale,
+                  _codeToLanguageMap[_settings.appLocale] ?? _settings.appLocale,
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 onTap: () {
                   _showRadioDialog(
                     title: 'App Language',
                     options: const ['System Default', 'English', 'Spanish', 'French', 'German', 'Japanese'],
-                    currentValue: _settings.appLocale == 'en' ? 'English' : _settings.appLocale,
+                    currentValue: _codeToLanguageMap[_settings.appLocale] ?? 'System Default',
                     onSelected: (val) {
-                      _settings.appLocale = val == 'System Default' ? 'en' : val.toLowerCase().substring(0, 2);
+                      _settings.appLocale = _languageCodeMap[val] ?? 'system';
                     },
                   );
                 },

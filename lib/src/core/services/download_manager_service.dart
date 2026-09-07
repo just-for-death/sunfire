@@ -68,12 +68,15 @@ class DownloadManagerService extends ChangeNotifier {
   static final DownloadManagerService instance = DownloadManagerService._();
   DownloadManagerService._() {
     _configureDio();
+    _initConnectivityListener();
   }
 
   final List<LocalDownloadTask> _localTasks = [];
   final Set<int> _downloadedLocalChapterIds = {};
   final Set<int> _downloadedServerChapterIds = {};
   final Set<int> _downloadedLocalMangaIds = {};
+  final Map<int, CancelToken> _cancelTokens = {};
+  StreamSubscription? _connectivitySubscription;
 
   bool _isProcessingLocalQueue = false;
   final Dio _dio = Dio(BaseOptions(
@@ -83,12 +86,33 @@ class DownloadManagerService extends ChangeNotifier {
     maxRedirects: 5,
   ));
 
+  void _initConnectivityListener() {
+    try {
+      _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+        final allowed = isNetworkAllowed(results);
+        if (allowed && !_isQueuePaused && !_isProcessingLocalQueue && _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
+          _processLocalQueue();
+        }
+      });
+    } catch (_) {}
+  }
+
   void _configureDio() {
     try {
       if (_dio.httpClientAdapter is IOHttpClientAdapter) {
         (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
           final client = HttpClient();
-          client.badCertificateCallback = (cert, host, port) => true;
+          client.badCertificateCallback = (cert, host, port) {
+            final serverUrl = SettingsService.instance.serverUrl;
+            if (serverUrl.isNotEmpty) {
+              final serverHost = Uri.tryParse(serverUrl)?.host;
+              if (serverHost != null && host == serverHost) return true;
+            }
+            if (host == 'localhost' || host == '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('100.')) {
+              return true;
+            }
+            return false;
+          };
           return client;
         };
       }
@@ -102,11 +126,24 @@ class DownloadManagerService extends ChangeNotifier {
   Set<int> get downloadedServerChapterIds => _downloadedServerChapterIds;
   Set<int> get downloadedMangaIds => _downloadedLocalMangaIds;
 
-  Future<bool> _isWifiConnected() async {
+  bool isNetworkAllowed(List<ConnectivityResult> results) {
+    final hasConnection = results.any((r) => r != ConnectivityResult.none);
+    if (!hasConnection) return false;
+
+    if (SettingsService.instance.downloadOnlyOnWifi) {
+      // When restricted to Wi-Fi, allow Wi-Fi, Ethernet, or VPN
+      return results.contains(ConnectivityResult.wifi) ||
+          results.contains(ConnectivityResult.ethernet) ||
+          results.contains(ConnectivityResult.vpn);
+    }
+    // Full mobile data support: cellular, Wi-Fi, ethernet, and vpn are all allowed
+    return true;
+  }
+
+  Future<bool> _checkNetworkAllowed() async {
     try {
       final results = await Connectivity().checkConnectivity();
-      return results.contains(ConnectivityResult.wifi) ||
-          results.contains(ConnectivityResult.ethernet);
+      return isNetworkAllowed(results);
     } catch (_) {
       return true;
     }
@@ -151,6 +188,12 @@ class DownloadManagerService extends ChangeNotifier {
 
   void pauseLocalQueue() {
     _isQueuePaused = true;
+    for (final token in _cancelTokens.values) {
+      try {
+        token.cancel('Queue paused');
+      } catch (_) {}
+    }
+    _cancelTokens.clear();
     for (final task in _localTasks) {
       if (task.status == LocalDownloadStatus.downloading || task.status == LocalDownloadStatus.queued) {
         task.status = LocalDownloadStatus.paused;
@@ -254,61 +297,67 @@ class DownloadManagerService extends ChangeNotifier {
     if (_isProcessingLocalQueue || _isQueuePaused) return;
     _isProcessingLocalQueue = true;
 
-    while (_localTasks.any((t) => t.status == LocalDownloadStatus.queued) && !_isQueuePaused) {
-      // Check network constraints (Wi-Fi only)
-      if (SettingsService.instance.downloadOnlyOnWifi) {
-        final onWifi = await _isWifiConnected();
-        if (!onWifi) {
-          debugPrint('[DownloadManager] ⏸️ Pausing queue: Download only on Wi-Fi is enabled');
-          _isProcessingLocalQueue = false;
-          notifyListeners();
-          return;
+    try {
+      while (!_isQueuePaused) {
+        // Check network constraints (Wi-Fi only vs Mobile Data support)
+        final networkAllowed = await _checkNetworkAllowed();
+        if (!networkAllowed) {
+          debugPrint('[DownloadManager] ⏸️ Pausing queue: Network condition not met (Wi-Fi only: ${SettingsService.instance.downloadOnlyOnWifi})');
+          break;
         }
-      }
 
-      final task = _localTasks.firstWhere((t) => t.status == LocalDownloadStatus.queued);
-      task.status = LocalDownloadStatus.downloading;
-      await _saveQueueState();
-      notifyListeners();
+        LocalDownloadTask? task;
+        try {
+          task = _localTasks.firstWhere((t) => t.status == LocalDownloadStatus.queued);
+        } catch (_) {
+          task = null;
+        }
+        if (task == null) break;
 
-      try {
-        await _downloadChapterLocally(task);
-        if (task.status == LocalDownloadStatus.paused || task.status == LocalDownloadStatus.failed) {
-          // Task was paused or cancelled during execution; preserve its state
-        } else {
-          task.status = LocalDownloadStatus.completed;
-          task.progress = 1.0;
-          _downloadedLocalChapterIds.add(task.chapterId);
-          _downloadedLocalMangaIds.add(task.mangaId);
-          final m = await IsarService.instance.getMangaByServerId(task.mangaId);
-          if (m != null) {
-            if (m.serverId > 0) _downloadedLocalMangaIds.add(m.serverId);
-            _downloadedLocalMangaIds.add(m.id);
+        task.status = LocalDownloadStatus.downloading;
+        await _saveQueueState();
+        notifyListeners();
+
+        try {
+          await _downloadChapterLocally(task);
+          if (task.status == LocalDownloadStatus.paused || task.status == LocalDownloadStatus.failed) {
+            // Task was paused or cancelled during execution; preserve its state
+          } else {
+            task.status = LocalDownloadStatus.completed;
+            task.progress = 1.0;
+            _downloadedLocalChapterIds.add(task.chapterId);
+            _downloadedLocalMangaIds.add(task.mangaId);
+            final m = await IsarService.instance.getMangaByServerId(task.mangaId);
+            if (m != null) {
+              if (m.serverId > 0) _downloadedLocalMangaIds.add(m.serverId);
+              _downloadedLocalMangaIds.add(m.id);
+            }
+
+            // Update Isar DB
+            final ch = await IsarService.instance.getChapterByServerId(task.chapterId);
+            if (ch != null) {
+              ch.isDownloaded = true;
+              await IsarService.instance.saveChapter(ch);
+            }
           }
-
-          // Update Isar DB
-          final ch = await IsarService.instance.getChapterByServerId(task.chapterId);
-          if (ch != null) {
-            ch.isDownloaded = true;
-            await IsarService.instance.saveChapter(ch);
+        } catch (e, stack) {
+          if (task.status == LocalDownloadStatus.paused) {
+            // Retain paused state; do not overwrite with failed
+          } else if (task.status == LocalDownloadStatus.failed && task.error == 'Cancelled') {
+            // Retain cancelled state
+          } else {
+            task.status = LocalDownloadStatus.failed;
+            task.error = e.toString();
+            await LoggerService.instance.logError('Failed to download chapter ${task.chapterId}: $e', exception: e, stackTrace: stack, category: 'DownloadManager');
           }
         }
-      } catch (e, stack) {
-        if (task.status == LocalDownloadStatus.paused) {
-          // Retain paused state; do not overwrite with failed
-        } else if (task.status == LocalDownloadStatus.failed && task.error == 'Cancelled') {
-          // Retain cancelled state
-        } else {
-          task.status = LocalDownloadStatus.failed;
-          task.error = e.toString();
-          await LoggerService.instance.logError('Failed to download chapter ${task.chapterId}: $e', exception: e, stackTrace: stack, category: 'DownloadManager');
-        }
+        await _saveQueueState();
+        notifyListeners();
       }
-      await _saveQueueState();
+    } finally {
+      _isProcessingLocalQueue = false;
       notifyListeners();
     }
-
-    _isProcessingLocalQueue = false;
   }
 
   Future<void> _downloadChapterLocally(LocalDownloadTask task) async {
@@ -335,46 +384,53 @@ class DownloadManagerService extends ChangeNotifier {
       await chapterDir.create(recursive: true);
     }
 
-    final totalPages = rawPages.length;
-    final effectiveSource = resolved.effectiveSourceName ?? sourceName ?? '';
+    final cancelToken = CancelToken();
+    _cancelTokens[task.chapterId] = cancelToken;
 
-    // Download pages with bounded concurrency instead of one-at-a-time.
-    // Each page fetch is dominated by network round-trip latency, not CPU,
-    // so running several in parallel cuts total chapter time roughly by the
-    // concurrency factor (e.g. a 50-page chapter at ~1s/page sequentially
-    // takes ~50s; at 5-way concurrency it takes closer to ~10s).
-    const concurrency = 5;
-    var completed = 0;
-    for (var start = 0; start < totalPages; start += concurrency) {
-      final end = (start + concurrency < totalPages) ? start + concurrency : totalPages;
-      if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused) {
-        throw Exception('Cancelled or paused');
+    try {
+      final totalPages = rawPages.length;
+      final effectiveSource = resolved.effectiveSourceName ?? sourceName ?? '';
+
+      // Download pages with bounded concurrency instead of one-at-a-time.
+      // Each page fetch is dominated by network round-trip latency, not CPU,
+      // so running several in parallel cuts total chapter time roughly by the
+      // concurrency factor (e.g. a 50-page chapter at ~1s/page sequentially
+      // takes ~50s; at 5-way concurrency it takes closer to ~10s).
+      const concurrency = 5;
+      var completed = 0;
+      for (var start = 0; start < totalPages; start += concurrency) {
+        final end = (start + concurrency < totalPages) ? start + concurrency : totalPages;
+        if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused || _isQueuePaused || cancelToken.isCancelled) {
+          throw Exception('Cancelled or paused');
+        }
+        await Future.wait(List.generate(end - start, (offset) async {
+          if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused || _isQueuePaused || cancelToken.isCancelled) return;
+          final i = start + offset;
+          await _downloadSinglePage(chapterDir, effectiveSource, rawPages[i], i, cancelToken: cancelToken);
+          if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused || cancelToken.isCancelled) return;
+          completed++;
+          task.progress = completed / totalPages;
+          notifyListeners();
+        }));
       }
-      await Future.wait(List.generate(end - start, (offset) async {
-        if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused) return;
-        final i = start + offset;
-        await _downloadSinglePage(chapterDir, effectiveSource, rawPages[i], i);
-        if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused) return;
-        completed++;
-        task.progress = completed / totalPages;
-        notifyListeners();
-      }));
-    }
-    final existingFiles = chapterDir
-        .listSync()
-        .whereType<File>()
-        .where((f) {
-          final name = f.path.toLowerCase();
-          return name.endsWith('.jpg') ||
-              name.endsWith('.jpeg') ||
-              name.endsWith('.png') ||
-              name.endsWith('.webp') ||
-              name.endsWith('.gif') ||
-              name.endsWith('.bmp');
-        })
-        .toList();
-    if (existingFiles.length < totalPages) {
-      throw Exception('Incomplete download: only ${existingFiles.length}/$totalPages pages saved');
+      final existingFiles = chapterDir
+          .listSync()
+          .whereType<File>()
+          .where((f) {
+            final name = f.path.toLowerCase();
+            return name.endsWith('.jpg') ||
+                name.endsWith('.jpeg') ||
+                name.endsWith('.png') ||
+                name.endsWith('.webp') ||
+                name.endsWith('.gif') ||
+                name.endsWith('.bmp');
+          })
+          .toList();
+      if (existingFiles.length < totalPages) {
+        throw Exception('Incomplete download: only ${existingFiles.length}/$totalPages pages saved');
+      }
+    } finally {
+      _cancelTokens.remove(task.chapterId);
     }
   }
 
@@ -398,7 +454,14 @@ class DownloadManagerService extends ChangeNotifier {
     return b.length > 500;
   }
 
-  Future<void> _downloadSinglePage(Directory chapterDir, String effectiveSource, String pageUrl, int index) async {
+  Future<void> _downloadSinglePage(
+    Directory chapterDir,
+    String effectiveSource,
+    String pageUrl,
+    int index, {
+    CancelToken? cancelToken,
+  }) async {
+    if (cancelToken?.isCancelled == true) return;
     final file = File('${chapterDir.path}/page_${(index + 1).toString().padLeft(3, '0')}.jpg');
     if (await file.exists() && await file.length() > 500) {
       return;
@@ -416,6 +479,7 @@ class DownloadManagerService extends ChangeNotifier {
     try {
       final response = await _dio.get<List<int>>(
         pageUrl,
+        cancelToken: cancelToken,
         options: Options(
           headers: headers,
           responseType: ResponseType.bytes,
@@ -427,11 +491,12 @@ class DownloadManagerService extends ChangeNotifier {
     } catch (_) {}
 
     // Pass 2: Retry with Referer stripped (anti-hotlink bypass)
-    if (pageBytes == null && headers.containsKey('Referer')) {
+    if (pageBytes == null && headers.containsKey('Referer') && cancelToken?.isCancelled != true) {
       try {
         final noRef = Map<String, dynamic>.from(headers)..remove('Referer');
         final r2 = await _dio.get<List<int>>(
           pageUrl,
+          cancelToken: cancelToken,
           options: Options(headers: noRef, responseType: ResponseType.bytes),
         );
         if (_isValidImageBytes(r2.data)) {
@@ -441,12 +506,13 @@ class DownloadManagerService extends ChangeNotifier {
     }
 
     // Pass 3: Retry with Origin Referer
-    if (pageBytes == null) {
+    if (pageBytes == null && cancelToken?.isCancelled != true) {
       try {
         final uri = Uri.parse(pageUrl);
         final originRef = Map<String, dynamic>.from(headers)..['Referer'] = '${uri.origin}/';
         final r3 = await _dio.get<List<int>>(
           pageUrl,
+          cancelToken: cancelToken,
           options: Options(headers: originRef, responseType: ResponseType.bytes),
         );
         if (_isValidImageBytes(r3.data)) {
@@ -456,13 +522,14 @@ class DownloadManagerService extends ChangeNotifier {
     }
 
     // Pass 4: Clean Desktop Chrome User-Agent and Image Accept headers
-    if (pageBytes == null) {
+    if (pageBytes == null && cancelToken?.isCancelled != true) {
       try {
         final browserHeaders = Map<String, dynamic>.from(headers)
           ..['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
           ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
         final r4 = await _dio.get<List<int>>(
           pageUrl,
+          cancelToken: cancelToken,
           options: Options(headers: browserHeaders, responseType: ResponseType.bytes),
         );
         if (_isValidImageBytes(r4.data)) {
@@ -471,10 +538,13 @@ class DownloadManagerService extends ChangeNotifier {
       } catch (_) {}
     }
 
+    if (cancelToken?.isCancelled == true) return;
+
     // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl-impersonate
     if ((pageBytes == null || pageBytes.isEmpty) && !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
       final candidates = ['/usr/bin/curl-impersonate', 'curl-impersonate', 'curl-impersonate-chrome', '/usr/bin/curl', 'curl'];
       for (final exe in candidates) {
+        if (cancelToken?.isCancelled == true) return;
         try {
           final args = <String>['-s', '-L', '--max-time', '25'];
           headers.forEach((k, v) => args.addAll(['-H', '$k: $v']));
@@ -491,6 +561,8 @@ class DownloadManagerService extends ChangeNotifier {
       }
     }
 
+    if (cancelToken?.isCancelled == true) return;
+
     if (pageBytes != null && pageBytes.isNotEmpty && _isValidImageBytes(pageBytes)) {
       await file.writeAsBytes(pageBytes);
     }
@@ -498,6 +570,7 @@ class DownloadManagerService extends ChangeNotifier {
 
   Future<void> deleteLocalDownload(int chapterId) async {
     try {
+      _cancelTokens.remove(chapterId)?.cancel('Cancelled');
       final task = _localTasks.where((t) => t.chapterId == chapterId).firstOrNull;
       if (task != null) {
         task.status = LocalDownloadStatus.failed;
@@ -538,6 +611,7 @@ class DownloadManagerService extends ChangeNotifier {
   }
 
   void cancelLocalDownload(int chapterId) {
+    _cancelTokens.remove(chapterId)?.cancel('Cancelled');
     final task = _localTasks.where((t) => t.chapterId == chapterId).firstOrNull;
     if (task != null) {
       task.status = LocalDownloadStatus.failed;
@@ -559,6 +633,12 @@ class DownloadManagerService extends ChangeNotifier {
   }
 
   Future<void> dismissLocalTask(int chapterId) async {
+    final token = _cancelTokens.remove(chapterId);
+    if (token != null) {
+      try {
+        token.cancel('Task dismissed');
+      } catch (_) {}
+    }
     _localTasks.removeWhere((t) => t.chapterId == chapterId);
     await _saveQueueState();
     notifyListeners();
@@ -573,17 +653,21 @@ class DownloadManagerService extends ChangeNotifier {
   // ── SERVER DOWNLOAD PROXY ──────────────────────────────────
   Future<void> enqueueServerDownload(int chapterId) async {
     if (GraphQLClientService.instance.isConfigured) {
-      await GraphQLClientService.instance.enqueueChapterDownload(chapterId);
-      _downloadedServerChapterIds.add(chapterId);
-      notifyListeners();
+      final res = await GraphQLClientService.instance.enqueueChapterDownload(chapterId);
+      if (res != null) {
+        _downloadedServerChapterIds.add(chapterId);
+        notifyListeners();
+      }
     }
   }
 
   Future<void> enqueueServerDownloads(List<int> chapterIds) async {
     if (GraphQLClientService.instance.isConfigured) {
-      await GraphQLClientService.instance.enqueueChapterDownloads(chapterIds);
-      _downloadedServerChapterIds.addAll(chapterIds);
-      notifyListeners();
+      final res = await GraphQLClientService.instance.enqueueChapterDownloads(chapterIds);
+      if (res != null) {
+        _downloadedServerChapterIds.addAll(chapterIds);
+        notifyListeners();
+      }
     }
   }
 
@@ -593,5 +677,17 @@ class DownloadManagerService extends ChangeNotifier {
       _downloadedServerChapterIds.remove(chapterId);
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    for (final token in _cancelTokens.values) {
+      try {
+        token.cancel('Service disposed');
+      } catch (_) {}
+    }
+    _cancelTokens.clear();
+    super.dispose();
   }
 }

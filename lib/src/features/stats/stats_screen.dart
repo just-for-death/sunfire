@@ -33,18 +33,19 @@ class _StatsScreenState extends State<StatsScreen> {
       final mangas = await IsarService.instance.getLibraryManga();
       final historyChapters = await IsarService.instance.getReadingHistory();
 
+      final allChapters = await IsarService.instance.getAllChapters();
+
       _totalManga = mangas.length;
-      int allChCount = 0;
-      int readChCount = 0;
       final genres = <String, int>{};
       final sources = <String, int>{};
 
-      for (final m in mangas) {
-        final mId = m.serverId > 0 ? m.serverId : m.id;
-        final chs = await IsarService.instance.getChaptersForManga(mId);
-        allChCount += chs.length;
-        readChCount += chs.where((c) => c.isRead).length;
+      final libraryMangaIds = mangas.expand((m) => [m.serverId, m.id]).where((id) => id > 0).toSet();
+      final libChapters = allChapters.where((c) => libraryMangaIds.contains(c.mangaId)).toList();
 
+      final allChCount = libChapters.length;
+      final readChCount = libChapters.where((c) => c.isRead).length;
+
+      for (final m in mangas) {
         for (final g in m.genres) {
           genres[g] = (genres[g] ?? 0) + 1;
         }
@@ -69,11 +70,11 @@ class _StatsScreenState extends State<StatsScreen> {
       int streak = 0;
       var checkDate = today;
       if (!uniqueDays.contains(checkDate)) {
-        checkDate = DateTime(checkDate.year, checkDate.month, checkDate.day - 1);
+        checkDate = checkDate.subtract(const Duration(days: 1));
       }
       while (uniqueDays.contains(checkDate)) {
         streak++;
-        checkDate = DateTime(checkDate.year, checkDate.month, checkDate.day - 1);
+        checkDate = checkDate.subtract(const Duration(days: 1));
       }
 
       // Estimate reading time: 4 minutes per read chapter
@@ -205,7 +206,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
-                        children: _genreCounts.entries.take(6).map((entry) {
+                        children: (_genreCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(6).map((entry) {
                           final ratio = _totalManga > 0 ? (entry.value / _totalManga).clamp(0.0, 1.0) : 0.0;
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 6.0),
@@ -246,7 +247,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
                     ),
                     child: Column(
-                      children: _sourceCounts.entries.map((e) {
+                      children: (_sourceCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).map((e) {
                         return ListTile(
                           dense: true,
                           leading: Icon(Icons.source_rounded, color: primaryColor, size: 20),

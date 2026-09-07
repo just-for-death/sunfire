@@ -78,6 +78,9 @@ class GraphQLClientService {
         headers['Authorization'] = 'Bearer $token';
       }
     }
+    try {
+      _dio.close(force: true);
+    } catch (_) {}
     _dio = Dio(BaseOptions(
       baseUrl: '$_baseUrl/api/graphql',
       connectTimeout: const Duration(seconds: 45),
@@ -132,8 +135,8 @@ class GraphQLClientService {
           'variables': variables ?? {},
         }),
         options: Options(
-          sendTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 5),
+          sendTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 30),
         ),
       );
 
@@ -146,7 +149,10 @@ class GraphQLClientService {
       }
       if (data is Map<String, dynamic>) {
         if (data.containsKey('errors')) {
-          final errorMsg = data['errors'][0]['message'];
+          final errors = data['errors'];
+          final errorMsg = (errors is List && errors.isNotEmpty && errors[0] is Map)
+              ? errors[0]['message']
+              : errors.toString();
           await LoggerService.instance.logWarning('GraphQL Error [$label]: $errorMsg', 'GraphQL');
           return null;
         }
@@ -326,8 +332,9 @@ class GraphQLClientService {
   }
 
   Future<Map<String, dynamic>?> fetchLibrary() async {
-    const queryStr = '''
-      { mangas(condition: { inLibrary: true }, first: 500) {
+    const pageQuery = r'''
+      query($first: Int!, $offset: Int!) {
+        mangas(condition: { inLibrary: true }, first: $first, offset: $offset) {
           totalCount
           nodes {
             id
@@ -355,7 +362,43 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(queryStr, label: 'fetchLibrary');
+
+    const pageSize = 200;
+    int offset = 0;
+    int? totalCount;
+    final List<dynamic> allNodes = [];
+
+    while (true) {
+      final res = await query(pageQuery, variables: {'first': pageSize, 'offset': offset}, label: 'fetchLibrary');
+      if (res == null || !res.containsKey('mangas')) {
+        if (allNodes.isNotEmpty) {
+          return {
+            'mangas': {
+              'totalCount': totalCount ?? allNodes.length,
+              'nodes': allNodes,
+            }
+          };
+        }
+        return null;
+      }
+
+      final mangasMap = res['mangas'] as Map<String, dynamic>;
+      totalCount = parseIntSafe(mangasMap['totalCount']);
+      final nodes = mangasMap['nodes'] as List<dynamic>? ?? [];
+      allNodes.addAll(nodes);
+
+      if (nodes.length < pageSize || allNodes.length >= totalCount) {
+        break;
+      }
+      offset += nodes.length;
+    }
+
+    return {
+      'mangas': {
+        'totalCount': totalCount,
+        'nodes': allNodes,
+      }
+    };
   }
 
   Future<Map<String, dynamic>?> fetchMangaDetails(int mangaServerId) async {
@@ -386,6 +429,7 @@ class GraphQLClientService {
               url
               realUrl
               isRead
+              isBookmarked
               lastPageRead
               lastReadAt
               pageCount
@@ -452,6 +496,7 @@ class GraphQLClientService {
             name
             chapterNumber
             isRead
+            isBookmarked
             lastPageRead
             lastReadAt
             mangaId
@@ -481,6 +526,7 @@ class GraphQLClientService {
             name
             chapterNumber
             isRead
+            isBookmarked
             lastPageRead
             isDownloaded
             fetchedAt
@@ -855,7 +901,24 @@ class GraphQLClientService {
     return await query(mutStr, variables: {'categoryId': categoryId}, label: 'deleteCategory');
   }
 
-  Future<Map<String, dynamic>?> setMangaCategories(int mangaId, List<int> categoryIds) async {
+  Future<Map<String, dynamic>?> setMangaCategories(
+    int mangaId,
+    List<int> categoryIds, {
+    List<int>? existingCategoryIds,
+  }) async {
+    if (existingCategoryIds != null) {
+      final toAdd = categoryIds.where((c) => !existingCategoryIds.contains(c)).toList();
+      final toRemove = existingCategoryIds.where((c) => !categoryIds.contains(c)).toList();
+      const patchMut = r'''
+        mutation($id: Int!, $add: [Int!], $remove: [Int!]) {
+          updateMangaCategories(input: { id: $id, patch: { addToCategories: $add, removeFromCategories: $remove } }) {
+            clientMutationId
+          }
+        }
+      ''';
+      final res = await query(patchMut, variables: {'id': mangaId, 'add': toAdd, 'remove': toRemove}, label: 'updateMangaCategories');
+      if (res != null) return res;
+    }
     const mutStr = r'''
       mutation($id: Int!, $categories: [Int!]!) {
         updateMangaCategories(input: { id: $id, patch: { categories: $categories } }) {

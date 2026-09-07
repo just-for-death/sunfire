@@ -8,6 +8,18 @@ class JsDomSelector {
   final JavascriptRuntime runtime;
   final Map<int, Element?> _elements = {};
   int _elementKey = 0;
+  String? _lastHtml;
+  Document? _lastDoc;
+
+  Document _getCachedDoc(dynamic input) {
+    final str = input?.toString() ?? '';
+    if (str == _lastHtml && _lastDoc != null) {
+      return _lastDoc!;
+    }
+    _lastHtml = str;
+    _lastDoc = parse(str);
+    return _lastDoc!;
+  }
 
   JsDomSelector(this.runtime);
 
@@ -28,7 +40,7 @@ class JsDomSelector {
     runtime.onMessage('get_doc_element', (dynamic args) {
       final input = args[0];
       final type = args[1];
-      final doc = parse(input);
+      final doc = _getCachedDoc(input);
       final element = switch (type) {
         'body' => doc.body,
         'documentElement' => doc.documentElement,
@@ -41,7 +53,7 @@ class JsDomSelector {
     runtime.onMessage('get_doc_string', (dynamic args) {
       final input = args[0];
       final type = args[1];
-      final doc = parse(input);
+      final doc = _getCachedDoc(input);
       final res = switch (type) {
         'text' => doc.text,
         _ => doc.outerHtml,
@@ -71,7 +83,7 @@ class JsDomSelector {
     runtime.onMessage('doc_select_first', (dynamic args) {
       final input = args[0];
       final selector = args[1];
-      final doc = parse(input);
+      final doc = _getCachedDoc(input);
       var element = doc.selectFirst(selector);
       if (element == null) {
         try {
@@ -114,7 +126,7 @@ class JsDomSelector {
     runtime.onMessage('doc_attr', (dynamic args) {
       final input = args[0];
       final attr = args[1];
-      return parse(input).attr(attr) ?? "";
+      return _getCachedDoc(input).attr(attr) ?? "";
     });
 
     runtime.onMessage('ele_has_attr', (dynamic args) {
@@ -126,13 +138,13 @@ class JsDomSelector {
     runtime.onMessage('doc_has_attr', (dynamic args) {
       final input = args[0];
       final attr = args[1];
-      return parse(input).hasAtr(attr);
+      return _getCachedDoc(input).hasAtr(attr);
     });
 
     runtime.onMessage('doc_xpath_first', (dynamic args) {
       final input = args[0];
       final xpath = args[1];
-      return parse(input).xpathFirst(xpath) ?? "";
+      return _getCachedDoc(input).xpathFirst(xpath) ?? "";
     });
 
     runtime.onMessage('xpathFirst', (dynamic args) {
@@ -144,7 +156,7 @@ class JsDomSelector {
     runtime.onMessage('doc_xpath', (dynamic args) {
       final input = args[0];
       final xpath = args[1];
-      return jsonEncode(parse(input).xpath(xpath));
+      return jsonEncode(_getCachedDoc(input).xpath(xpath));
     });
 
     runtime.onMessage('xpath', (dynamic args) {
@@ -157,7 +169,7 @@ class JsDomSelector {
       final input = args[0];
       final type = args[1];
       final name = args[2];
-      final doc = parse(input);
+      final doc = _getCachedDoc(input);
       final elements = switch (type) {
         'children' => doc.children,
         'getElementsByTagName' => doc.getElementsByTagName(name),
@@ -192,13 +204,13 @@ class JsDomSelector {
     runtime.onMessage('doc_get_element_by_id', (dynamic args) {
       final input = args[0];
       final id = args[1];
-      return _storeElement(parse(input).getElementById(id));
+      return _storeElement(_getCachedDoc(input).getElementById(id));
     });
 
     runtime.onMessage('doc_select', (dynamic args) {
       final input = args[0];
       final selector = args[1];
-      final doc = parse(input);
+      final doc = _getCachedDoc(input);
       var elements = doc.select(selector);
       if (elements == null || elements.isEmpty) {
         try {
@@ -468,7 +480,11 @@ class Element {
 ''');
   }
 
+  void clearElements() => dispose();
+
   void dispose() {
+    _lastHtml = null;
+    _lastDoc = null;
     if (_elements.isEmpty) return;
     _elements.clear();
     _elementKey = 0;

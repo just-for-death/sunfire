@@ -22,24 +22,19 @@ class JsUtils {
     });
 
     runtime.evaluate('''
-console.log = function (message) {
-    if (typeof message === "object") {
-         message = JSON.stringify(message);
-    }
-    sendMessage("log", JSON.stringify([message.toString()]));
+console.log = function (...args) {
+    const formatted = args.map(a => {
+        if (a === undefined) return "undefined";
+        if (a === null) return "null";
+        if (typeof a === "object") {
+            try { return JSON.stringify(a); } catch(_) { return String(a); }
+        }
+        return String(a);
+    });
+    sendMessage("log", JSON.stringify(formatted));
 };
-console.warn = function (message) {
-    if (typeof message === "object") {
-         message = JSON.stringify(message);
-    }
-    sendMessage("log", JSON.stringify([message.toString()]));
-};
-console.error = function (message) {
-    if (typeof message === "object") {
-         message = JSON.stringify(message);
-    }
-    sendMessage("log", JSON.stringify([message.toString()]));
-};
+console.warn = console.log;
+console.error = console.log;
 String.prototype.substringAfter = function(pattern) {
     const startIndex = this.indexOf(pattern);
     if (startIndex === -1) return this.substring(0);

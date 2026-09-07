@@ -13,6 +13,13 @@ class IsarService {
   static IsarService? _instance;
   late Isar _isar;
   bool _isInitialized = false;
+  Future<void>? _initFuture;
+  static int _syntheticIdCounter = 0;
+
+  static int _generateSyntheticServerId() {
+    _syntheticIdCounter = (_syntheticIdCounter + 1) % 10000;
+    return -(DateTime.now().microsecondsSinceEpoch % 1000000000 * 10000 + _syntheticIdCounter);
+  }
 
   IsarService._();
 
@@ -21,10 +28,18 @@ class IsarService {
     return _instance!;
   }
 
-  Isar get isar => _isar;
+  Isar get isar {
+    if (!_isInitialized) {
+      throw StateError('IsarService has not been initialized. Await initialize() first.');
+    }
+    return _isar;
+  }
+
   bool get isInitialized => _isInitialized;
 
-  Future<void> initialize() async {
+  Future<void> initialize() => _initFuture ??= _doInitialize();
+
+  Future<void> _doInitialize() async {
     if (_isInitialized) return;
     final existing = Isar.getInstance();
     if (existing != null) {
@@ -67,13 +82,21 @@ class IsarService {
   // ── MANGA CRUD ──────────────────────────────────────────
   Future<void> saveManga(Manga manga) async {
     if (!_isInitialized) return;
+    if (manga.serverId == 0) {
+      manga.serverId = _generateSyntheticServerId();
+    }
     await _isar.writeTxn(() async {
       await _isar.mangas.put(manga);
     });
   }
 
   Future<void> saveMangas(List<Manga> mangas) async {
-    if (!_isInitialized) return;
+    if (!_isInitialized || mangas.isEmpty) return;
+    for (int i = 0; i < mangas.length; i++) {
+      if (mangas[i].serverId == 0) {
+        mangas[i].serverId = _generateSyntheticServerId();
+      }
+    }
     await _isar.writeTxn(() async {
       await _isar.mangas.putAll(mangas);
     });
@@ -87,6 +110,11 @@ class IsarService {
   Future<List<Manga>> getLibraryManga() async {
     if (!_isInitialized) return [];
     return await _isar.mangas.filter().inLibraryEqualTo(true).findAll();
+  }
+
+  Future<Manga?> getManga(int id) async {
+    if (!_isInitialized) return null;
+    return await _isar.mangas.get(id);
   }
 
   Future<Manga?> getMangaByServerId(int serverId) async {
@@ -107,13 +135,21 @@ class IsarService {
   // ── CHAPTER CRUD ────────────────────────────────────────
   Future<void> saveChapter(Chapter chapter) async {
     if (!_isInitialized) return;
+    if (chapter.serverId == 0) {
+      chapter.serverId = _generateSyntheticServerId();
+    }
     await _isar.writeTxn(() async {
       await _isar.chapters.put(chapter);
     });
   }
 
   Future<void> saveChapters(List<Chapter> chapters) async {
-    if (!_isInitialized) return;
+    if (!_isInitialized || chapters.isEmpty) return;
+    for (int i = 0; i < chapters.length; i++) {
+      if (chapters[i].serverId == 0) {
+        chapters[i].serverId = _generateSyntheticServerId();
+      }
+    }
     await _isar.writeTxn(() async {
       await _isar.chapters.putAll(chapters);
     });
@@ -130,7 +166,7 @@ class IsarService {
     if (chapters.isNotEmpty) return chapters;
     // Fallback: if mangaId was an Isar local ID, check its serverId, or vice versa
     final manga = await _isar.mangas.get(mangaId);
-    if (manga != null && manga.serverId > 0 && manga.serverId != mangaId) {
+    if (manga != null && manga.serverId != 0 && manga.serverId != mangaId) {
       return await _isar.chapters.filter().mangaIdEqualTo(manga.serverId).sortByChapterNumberDesc().findAll();
     }
     final byServerManga = await _isar.mangas.filter().serverIdEqualTo(mangaId).findFirst();
@@ -172,20 +208,23 @@ class IsarService {
       final libraryManga = await getLibraryManga();
       final libraryIds = <int>{
         for (final m in libraryManga) ...[
-          if (m.serverId > 0) m.serverId,
+          if (m.serverId != 0) m.serverId,
           m.id,
         ],
       };
+
+      if (libraryIds.isEmpty) return [];
 
       final chapters = await _isar.chapters
           .filter()
           .fetchedAtGreaterThan(0)
           .sortByFetchedAtDesc()
+          .limit(limit * 3)
           .findAll();
 
       final result = <Chapter>[];
       for (final ch in chapters) {
-        if (libraryIds.isNotEmpty && !libraryIds.contains(ch.mangaId)) continue;
+        if (!libraryIds.contains(ch.mangaId)) continue;
         result.add(ch);
         if (result.length >= limit) break;
       }
@@ -198,17 +237,10 @@ class IsarService {
 
   /// Cleans up ONLY synthetic standalone-scraped chapters that were bulk-stamped
   /// (e.g. the initial Mangago local extension scrape that writes fake serverIds).
-  /// Real server chapters (serverId < 200000 or url empty) are NEVER touched.
-  ///
-  /// A chapter is "standalone-scraped" if its url is non-empty and its serverId
-  /// is in the synthetic range (> 200000 from the fake generation formula).
-  /// We only keep the 3 latest per manga per 60-second scrape bucket.
-  ///
-  /// This must only be called ONCE at app startup, not on every refresh.
+  /// Real server chapters (serverId in normal positive range and without bulk stamps) are preserved.
   Future<void> cleanupBulkScrapedUpdates() async {
     if (!_isInitialized) return;
     try {
-      // Only target standalone-scraped chapters: url non-empty, serverId in fake range
       final chaptersWithFetchedAt = await _isar.chapters
           .filter()
           .fetchedAtGreaterThan(0)
@@ -216,9 +248,9 @@ class IsarService {
           .findAll();
       if (chaptersWithFetchedAt.isEmpty) return;
 
-      // Separate real server chapters (small serverId ≤ 200000) from synthetic ones
+      // Identify standalone-scraped chapters: url non-empty, serverId in synthetic range
       final standaloneChapters = chaptersWithFetchedAt
-          .where((ch) => ch.url.isNotEmpty && ch.serverId > 200000)
+          .where((ch) => ch.url.isNotEmpty && (ch.serverId > 200000 || ch.serverId < 0))
           .toList();
       if (standaloneChapters.isEmpty) return;
 
@@ -281,12 +313,23 @@ class IsarService {
     if (!_isInitialized) return;
     await _isar.writeTxn(() async {
       final manga = await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
-      if (manga != null) {
-        await _isar.mangas.delete(manga.id);
-      }
-      final chapters = await _isar.chapters.filter().mangaIdEqualTo(serverId).findAll();
-      if (chapters.isNotEmpty) {
-        await _isar.chapters.deleteAll(chapters.map((c) => c.id).toList());
+      final localManga = manga ?? await _isar.mangas.get(serverId);
+      if (localManga != null) {
+        await _isar.mangas.delete(localManga.id);
+        final chapters = await _isar.chapters
+            .filter()
+            .mangaIdEqualTo(localManga.serverId)
+            .or()
+            .mangaIdEqualTo(localManga.id)
+            .findAll();
+        if (chapters.isNotEmpty) {
+          await _isar.chapters.deleteAll(chapters.map((c) => c.id).toList());
+        }
+      } else {
+        final chapters = await _isar.chapters.filter().mangaIdEqualTo(serverId).findAll();
+        if (chapters.isNotEmpty) {
+          await _isar.chapters.deleteAll(chapters.map((c) => c.id).toList());
+        }
       }
     });
   }
@@ -313,7 +356,7 @@ class IsarService {
           c.id = existingMap[c.serverId]!;
         }
       }
-      if (replaceAll) {
+      if (replaceAll && categories.isNotEmpty) {
         final newServerIds = categories.map((c) => c.serverId).toSet();
         final toDelete = existing.where((e) => !newServerIds.contains(e.serverId)).map((e) => e.id).toList();
         await _isar.categorys.deleteAll(toDelete);

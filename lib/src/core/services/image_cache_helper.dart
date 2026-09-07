@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../db/isar_service.dart';
@@ -68,9 +67,18 @@ class ImageCacheHelper {
     return null;
   }
 
+  static String _hashUrl(String url) {
+    var hash = 0xcbf29ce484222325;
+    for (var i = 0; i < url.length; i++) {
+      hash ^= url.codeUnitAt(i);
+      hash = (hash * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF;
+    }
+    return hash.toRadixString(16);
+  }
+
   static String? getLocalCoverPathForUrl(String url) {
     if (url.isEmpty) return null;
-    final hash = url.hashCode.abs().toString();
+    final hash = _hashUrl(url);
     for (final basePath in _candidateCoverPaths) {
       final f = File('$basePath/url_$hash.jpg');
       if (f.existsSync() && f.lengthSync() > 100) {
@@ -161,7 +169,19 @@ class ImageCacheHelper {
 
       client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 10);
-      client.badCertificateCallback = (_, __, ___) => true;
+      client.badCertificateCallback = (cert, host, port) {
+        if (GraphQLClientService.instance.isConfigured &&
+            GraphQLClientService.instance.baseUrl != null) {
+          final serverUri = Uri.tryParse(GraphQLClientService.instance.baseUrl!);
+          if (serverUri != null && serverUri.host == host) {
+            return true;
+          }
+        }
+        if (host == 'localhost' || host == '127.0.0.1') {
+          return true;
+        }
+        return false;
+      };
       final req = await client.getUrl(uri);
       
       final reqHeaders = Map<String, String>.from(headers);
@@ -196,8 +216,7 @@ class ImageCacheHelper {
       // This prevents hitting the server proxy (which returns HTTP 500 when Cloudflare-blocked upstream).
       if ((url.isEmpty || url.contains('/api/v1/manga/')) && mangaServerId > 0 && IsarService.instance.isInitialized) {
         try {
-          final isar = IsarService.instance.isar;
-          final m = isar.mangas.filter().serverIdEqualTo(mangaServerId).findFirstSync();
+          final m = await IsarService.instance.getMangaByServerId(mangaServerId);
           final effectiveSource = (m != null && m.sourceName.isNotEmpty) ? m.sourceName : sourceName;
           if (m != null && effectiveSource.isNotEmpty && QuickJsService.instance.hasExtension(effectiveSource)) {
             String? directCover;
@@ -218,10 +237,8 @@ class ImageCacheHelper {
               }
               if (bytes != null && bytes.length > 200) {
                 try {
-                  await isar.writeTxn(() async {
-                    m.thumbnailUrl = directCover;
-                    await isar.mangas.put(m);
-                  });
+                  m.thumbnailUrl = directCover;
+                  await IsarService.instance.saveManga(m);
                 } catch (_) {}
                 url = directCover;
               }
@@ -297,8 +314,7 @@ class ImageCacheHelper {
       // or remote URL fails, query the local extension for this source to resolve the authentic direct CDN cover URL.
       if (bytes == null && mangaServerId > 0 && IsarService.instance.isInitialized) {
         try {
-          final isar = IsarService.instance.isar;
-          final m = isar.mangas.filter().serverIdEqualTo(mangaServerId).findFirstSync();
+          final m = await IsarService.instance.getMangaByServerId(mangaServerId);
           final effectiveSource = (m != null && m.sourceName.isNotEmpty) ? m.sourceName : sourceName;
           if (m != null && effectiveSource.isNotEmpty && QuickJsService.instance.hasExtension(effectiveSource)) {
             String? realCoverUrl;
@@ -319,10 +335,8 @@ class ImageCacheHelper {
               }
               if (bytes != null && bytes.length > 200) {
                 try {
-                  await isar.writeTxn(() async {
-                    m.thumbnailUrl = realCoverUrl;
-                    await isar.mangas.put(m);
-                  });
+                  m.thumbnailUrl = realCoverUrl;
+                  await IsarService.instance.saveManga(m);
                 } catch (_) {}
                 _memoryCache[realCoverUrl] = bytes;
               }
@@ -381,10 +395,12 @@ class MangaCoverImage extends StatefulWidget {
 
 class _MangaCoverImageState extends State<MangaCoverImage> {
   Uint8List? _recoveredBytes;
+  String? _resolvedUrl;
 
   @override
   void initState() {
     super.initState();
+    _resolvedUrl = widget.thumbnailUrl;
     _checkAndFetch();
   }
 
@@ -393,16 +409,16 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.thumbnailUrl != widget.thumbnailUrl || oldWidget.mangaServerId != widget.mangaServerId) {
       _recoveredBytes = null;
+      _resolvedUrl = widget.thumbnailUrl;
       _checkAndFetch();
     }
   }
 
-  void _checkAndFetch() {
+  Future<void> _checkAndFetch() async {
     var url = widget.thumbnailUrl;
     if (widget.mangaServerId > 0 && IsarService.instance.isInitialized) {
       try {
-        final m = IsarService.instance.isar.mangas.filter().serverIdEqualTo(widget.mangaServerId).findFirstSync() ??
-            IsarService.instance.isar.mangas.getSync(widget.mangaServerId);
+        final m = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
         if (m != null) {
           if (m.thumbnailUrl != null && m.thumbnailUrl!.isNotEmpty && !m.thumbnailUrl!.contains('/api/v1/manga/')) {
             url = m.thumbnailUrl;
@@ -422,11 +438,14 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
     if ((url == null || url.isEmpty) && widget.mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
       url = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/${widget.mangaServerId}/thumbnail';
     }
+    if (mounted && url != _resolvedUrl) {
+      setState(() => _resolvedUrl = url);
+    }
     if (url == null || url.isEmpty) return;
 
     final mem = ImageCacheHelper.getMemoryCover(url);
     if (mem != null) {
-      _recoveredBytes = mem;
+      if (mounted) setState(() => _recoveredBytes = mem);
       return;
     }
 
@@ -448,22 +467,7 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
 
   @override
   Widget build(BuildContext context) {
-    var url = widget.thumbnailUrl;
-    if (widget.mangaServerId > 0 && IsarService.instance.isInitialized) {
-      try {
-        final m = IsarService.instance.isar.mangas.filter().serverIdEqualTo(widget.mangaServerId).findFirstSync();
-        if (m != null) {
-          if (m.thumbnailUrl != null && m.thumbnailUrl!.isNotEmpty && !m.thumbnailUrl!.contains('/api/v1/manga/')) {
-            url = m.thumbnailUrl;
-          } else if (m.sourceName.isNotEmpty && m.url.isNotEmpty) {
-            final extCover = QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
-            if (extCover != null && extCover.isNotEmpty) {
-              url = extCover;
-            }
-          }
-        }
-      } catch (_) {}
-    }
+    var url = _resolvedUrl ?? widget.thumbnailUrl;
     if ((url == null || url.isEmpty) && widget.mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
       url = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/${widget.mangaServerId}/thumbnail';
     }

@@ -11,22 +11,22 @@ class SyncRecord {
   Id id = Isar.autoIncrement;
 
   @Index(unique: true, replace: true)
-  late String recordId;
+  String recordId = '';
 
   @Enumerated(EnumType.name)
-  late SyncEntityType entityType;
+  SyncEntityType entityType = SyncEntityType.manga;
 
-  late String entityId;
-
-  @Enumerated(EnumType.name)
-  late SyncAction action;
-
-  late String payloadJson;
-  late int timestamp;
-  late String deviceId;
+  String entityId = '';
 
   @Enumerated(EnumType.name)
-  late SyncRecordState state;
+  SyncAction action = SyncAction.update;
+
+  String payloadJson = '{}';
+  int timestamp = 0;
+  String deviceId = '';
+
+  @Enumerated(EnumType.name)
+  SyncRecordState state = SyncRecordState.pending;
 
   int retryCount = 0;
 

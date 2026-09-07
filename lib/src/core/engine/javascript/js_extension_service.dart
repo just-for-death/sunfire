@@ -15,8 +15,8 @@ class JsExtensionService {
   final Map<String, dynamic> sourceMeta;
   final String sourceCode;
   bool _isInitialized = false;
-  late JsDomSelector _jsDomSelector;
-  late JsHttpClient _httpClient;
+  JsDomSelector? _jsDomSelector;
+  JsHttpClient? _httpClient;
 
   JsExtensionService({
     required this.sourceMeta,
@@ -108,16 +108,32 @@ if (typeof extention === "undefined") {
     _isInitialized = true;
   }
 
+  int _activeRequests = 0;
   bool _isDisposed = false;
   bool get isDisposed => _isDisposed;
 
   void dispose() {
     if (_isDisposed) return;
     _isDisposed = true;
+    if (_activeRequests > 0) {
+      // Defer native C-FFI runtime disposal until active requests complete
+      return;
+    }
+    _performDispose();
+  }
+
+  void _performDispose() {
     if (!_isInitialized) return;
+    _isDisposed = true;
+    _httpClient?.dispose();
+    if ((_httpClient?.activeHttpRequests ?? 0) > 0) {
+      _httpClient?.onAllRequestsFinished = () {
+        _performDispose();
+      };
+      return;
+    }
     try {
-      _jsDomSelector.dispose();
-      _httpClient.dispose();
+      _jsDomSelector?.dispose();
       runZoned(
         () {
           runtime.dispose();
@@ -232,7 +248,11 @@ if (typeof extention === "undefined") {
         String finalUrl = raw;
         if (finalUrl.startsWith('//')) {
           finalUrl = 'https:$finalUrl';
-        } else if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://') && cleanBase.isNotEmpty) {
+        } else if (!finalUrl.startsWith('http://') &&
+            !finalUrl.startsWith('https://') &&
+            !finalUrl.startsWith('data:') &&
+            !finalUrl.startsWith('blob:') &&
+            cleanBase.isNotEmpty) {
           final cleanPath = finalUrl.startsWith('/') ? finalUrl : '/$finalUrl';
           finalUrl = '$cleanBase$cleanPath';
         }
@@ -249,11 +269,17 @@ if (typeof extention === "undefined") {
   }
 
 
-  Future<T> extensionCallAsync<T>(String call) async {
+  Future<T> extensionCallAsync<T>(String call, {Duration? timeout}) async {
+    if (_isDisposed) {
+      throw StateError('Extension runtime has been disposed');
+    }
+    _activeRequests++;
     _init();
     try {
+      final effectiveTimeout = timeout ?? const Duration(seconds: 180);
       final promised = await runtime.handlePromise(
         await runtime.evaluateAsync('jsonStringify(() => extention.$call)'),
+        timeout: effectiveTimeout,
       );
       final rawStr = promised.stringResult;
       final decoded = jsonDecode(rawStr);
@@ -267,6 +293,14 @@ if (typeof extention === "undefined") {
       return decoded as T;
     } catch (e) {
       rethrow;
+    } finally {
+      _activeRequests--;
+      if (_activeRequests <= 0) {
+        _jsDomSelector?.clearElements();
+        if (_isDisposed) {
+          _performDispose();
+        }
+      }
     }
   }
 }

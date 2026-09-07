@@ -26,13 +26,8 @@ class ChapterPagesResult {
 }
 
 class ContentResolverService {
-  static ContentResolverService? _instance;
+  static final ContentResolverService instance = ContentResolverService._();
   ContentResolverService._();
-
-  static ContentResolverService get instance {
-    _instance ??= ContentResolverService._();
-    return _instance!;
-  }
 
   /// ── CHAPTER PAGES RESOLVER (1. Local Download -> 2. Local Extension -> 3. Server) ──
   Future<ChapterPagesResult> resolveChapterPages({
@@ -62,7 +57,20 @@ class ContentResolverService {
                     name.endsWith('.bmp');
               })
               .toList();
-          localImages.sort((a, b) => a.path.compareTo(b.path));
+          localImages.sort((a, b) {
+            final fileNameA = a.uri.pathSegments.isNotEmpty ? a.uri.pathSegments.last : a.path;
+            final fileNameB = b.uri.pathSegments.isNotEmpty ? b.uri.pathSegments.last : b.path;
+            final matchA = RegExp(r'(\d+)').firstMatch(fileNameA);
+            final matchB = RegExp(r'(\d+)').firstMatch(fileNameB);
+            if (matchA != null && matchB != null) {
+              final numA = int.tryParse(matchA.group(1)!);
+              final numB = int.tryParse(matchB.group(1)!);
+              if (numA != null && numB != null && numA != numB) {
+                return numA.compareTo(numB);
+              }
+            }
+            return a.path.compareTo(b.path);
+          });
           if (localImages.isNotEmpty) {
             final paths = localImages.map((f) => f.path).toList();
             await LoggerService.instance.logInfo('Resolved ${paths.length} pages from Local Storage (Offline Download)', 'ContentResolver');
@@ -91,8 +99,7 @@ class ContentResolverService {
     // Retrieve from local DB if missing
     if (effectiveChapterUrl == null || effectiveChapterUrl.isEmpty || effectiveSourceName == null) {
       try {
-        final ch = await IsarService.instance.getChapterByServerId(chapterServerId) ??
-            (await IsarService.instance.getAllChapters()).where((c) => c.serverId == chapterServerId || c.id == chapterServerId).firstOrNull;
+        final ch = await IsarService.instance.getChapterByServerId(chapterServerId);
         if (ch != null) {
           if (effectiveChapterUrl == null || effectiveChapterUrl.isEmpty) {
             effectiveChapterUrl = ch.url.isNotEmpty ? ch.url : ch.realUrl;
@@ -182,8 +189,9 @@ class ContentResolverService {
     if (GraphQLClientService.instance.isConfigured && chapterServerId > 0 && chapterServerId < 2147483647) {
       try {
         final data = await GraphQLClientService.instance.fetchChapterPages(chapterServerId);
-        if (data != null && data.containsKey('fetchChapterPages')) {
-          final rawPages = data['fetchChapterPages']['pages'] as List<dynamic>?;
+        if (data != null && data.containsKey('fetchChapterPages') && data['fetchChapterPages'] != null) {
+          final fetchMap = data['fetchChapterPages'] as Map<String, dynamic>?;
+          final rawPages = fetchMap?['pages'] as List<dynamic>?;
           if (rawPages != null && rawPages.isNotEmpty) {
             final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
             final urls = rawPages.map((p) {
