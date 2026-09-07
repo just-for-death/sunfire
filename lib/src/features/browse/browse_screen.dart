@@ -423,7 +423,15 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           customStatusMessage = 'Installed $name on server';
         }
       }
-    } catch (_) {}
+    } catch (e, stack) {
+      LoggerService.instance.logError('Failed to toggle extension $name: $e', exception: e, stackTrace: stack, category: 'Browse');
+      if (!isUpdate && mounted) {
+        setState(() {
+          ext['isInstalled'] = isInstalled;
+        });
+      }
+      customStatusMessage = 'Failed to ${isUpdate ? 'update' : (isInstalled ? 'uninstall' : 'install')} $name';
+    }
 
     await _fetchServerSources();
 
@@ -492,7 +500,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           ),
         ],
       ),
-    );
+    ).then((_) => controller.dispose());
   }
 
   @override
@@ -1442,7 +1450,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             Row(
               children: [
                 IconButton(
-                  tooltip: _migrateSortByCount ? 'Sort by count' : 'Sort alphabetical',
+                  tooltip: _migrateSortByCount ? 'Sort alphabetically' : 'Sort by count',
                   icon: Icon(_migrateSortByCount ? Icons.sort_rounded : Icons.sort_by_alpha_rounded, color: primaryColor, size: 20),
                   onPressed: () => setState(() => _migrateSortByCount = !_migrateSortByCount),
                 ),

@@ -45,11 +45,14 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   final Set<int> _selectedChapterIds = {};
 
   double _extractChapterNumber(String name, int index, int totalCount) {
+    if (RegExp(r'\bprologue\b', caseSensitive: false).hasMatch(name)) {
+      return 0.0;
+    }
     final match = RegExp(r'(?:ch(?:apter)?\.?|ep(?:isode)?\.?|#)\s*(\d+(?:\.\d+)?)', caseSensitive: false).firstMatch(name)
         ?? RegExp(r'(\d+(?:\.\d+)?)').firstMatch(name);
     if (match != null) {
       final parsed = double.tryParse(match.group(1)!);
-      if (parsed != null && parsed > 0) return parsed;
+      if (parsed != null && parsed >= 0) return parsed;
     }
     return (index + 1).toDouble();
   }
@@ -426,8 +429,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   if (ch.uploadDate == null && match.uploadDate != null) {
                     ch.uploadDate = match.uploadDate;
                   }
-                  match.url = ch.url;
-                  match.realUrl = ch.realUrl;
+                  if (ch.url.isEmpty && match.url.isNotEmpty) ch.url = match.url;
+                  if (ch.realUrl.isEmpty && match.realUrl.isNotEmpty) ch.realUrl = match.realUrl;
                 } else {
                   // Ensure newly minted chapter serverId does not collide with existing ones
                   while (existingServerIds.contains(ch.serverId)) {
@@ -493,13 +496,18 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       ch.name = cleanName;
 
       final extractedNum = _extractChapterNumber(cleanName, 0, list.length);
-      if (extractedNum > 0) {
+      if (extractedNum >= 0) {
         ch.chapterNumber = extractedNum;
       }
 
-      final numKey = ch.chapterNumber > 0 ? 'num_${ch.chapterNumber.toStringAsFixed(2)}' : null;
+      final scanlatorPart = (ch.scanlator != null && ch.scanlator!.trim().isNotEmpty)
+          ? ch.scanlator!.trim().toLowerCase()
+          : '';
+      final numKey = ch.chapterNumber >= 0
+          ? 'num_${ch.chapterNumber.toStringAsFixed(2)}${scanlatorPart.isNotEmpty ? '_$scanlatorPart' : ''}'
+          : null;
       final urlKey = ch.url.isNotEmpty ? 'url_${ch.url.toLowerCase().trim()}' : null;
-      final nameKey = 'name_${cleanName.toLowerCase()}';
+      final nameKey = 'name_${cleanName.toLowerCase()}${scanlatorPart.isNotEmpty ? '_$scanlatorPart' : ''}';
 
       final key = numKey ?? urlKey ?? nameKey;
 
@@ -1446,6 +1454,14 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     Row(
                       children: [
                         IconButton(
+                          icon: Icon(_isSearchingChapters ? Icons.search_off_rounded : Icons.search_rounded),
+                          tooltip: 'Search Chapters',
+                          onPressed: () => setState(() {
+                            _isSearchingChapters = !_isSearchingChapters;
+                            if (!_isSearchingChapters) _chapterSearch = '';
+                          }),
+                        ),
+                        IconButton(
                           icon: const Icon(Icons.checklist_rounded),
                           tooltip: 'Select Chapters',
                           onPressed: () {
@@ -1471,6 +1487,64 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       ],
                     ),
                   ],
+                ),
+              ),
+              if (_isSearchingChapters) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 4.0),
+                  child: TextField(
+                    autofocus: true,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Search chapters (e.g. 10 or Prologue)...',
+                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                      prefixIcon: Icon(Icons.search_rounded, color: primaryColor, size: 20),
+                      suffixIcon: _chapterSearch.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 18),
+                              onPressed: () => setState(() => _chapterSearch = ''),
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: const Color(0xFF1F1F24),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
+                    onChanged: (val) => setState(() => _chapterSearch = val),
+                  ),
+                ),
+              ],
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 4.0),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: ['All', 'Unread', 'Downloaded', 'Bookmarked'].map((filter) {
+                      final isSel = _chapterFilter == filter;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: FilterChip(
+                          label: Text(filter),
+                          selected: isSel,
+                          selectedColor: primaryColor.withValues(alpha: 0.25),
+                          backgroundColor: const Color(0x1F2A2A32),
+                          labelStyle: TextStyle(
+                            color: isSel ? primaryColor : Colors.white70,
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: isSel ? primaryColor : const Color(0x2BFFFFFF),
+                              width: 0.8,
+                            ),
+                          ),
+                          onSelected: (_) => setState(() => _chapterFilter = filter),
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
               const Divider(height: 1, color: Color(0x1AFFFFFF)),

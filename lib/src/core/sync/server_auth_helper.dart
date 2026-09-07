@@ -108,21 +108,17 @@ class ServerAuthHelper {
       }
     } catch (_) {}
 
-    // Mirror to SharedPreferences as resilient fallback
+    // Clean up any legacy plaintext credentials in SharedPreferences
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (header.isEmpty) {
-        await prefs.remove(storageKey);
-      } else {
-        await prefs.setString(storageKey, header);
-      }
+      await prefs.remove(storageKey);
     } catch (_) {}
   }
 
   static Future<String> getRawAuthHeader() async {
     try {
       final val = await _storage.read(key: storageKey);
-      if (val != null && val.isNotEmpty) return val;
+      if (val != null) return val;
     } catch (_) {}
 
     try {

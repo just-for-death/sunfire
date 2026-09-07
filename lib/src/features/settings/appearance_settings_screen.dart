@@ -76,7 +76,7 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                 onTap: () {
                   _showRadioDialog(
                     title: 'Theme Mode',
-                    options: const ['OLED Black', 'Dark Theme', 'System Default'],
+                    options: const ['OLED Black', 'Dark Theme', 'Light', 'System Default'],
                     currentValue: _settings.themeMode,
                     onSelected: (val) => _settings.themeMode = val,
                   );

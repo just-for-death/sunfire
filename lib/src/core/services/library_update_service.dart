@@ -50,12 +50,14 @@ class LibraryUpdateService extends ChangeNotifier {
       debugPrint('[LibraryUpdateService] Update already in progress, skipping.');
       return 0;
     }
+    _isUpdating = true;
 
     // Constraint enforcement for background or automated triggers
     if (!isManual) {
       final freqHours = SettingsService.instance.libraryUpdateFrequencyHours;
       if (freqHours <= 0) {
         debugPrint('[LibraryUpdateService] Automated updates disabled in settings.');
+        _isUpdating = false;
         return 0;
       }
 
@@ -63,17 +65,18 @@ class LibraryUpdateService extends ChangeNotifier {
       final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       if (nowSec - lastTime < freqHours * 3600) {
         debugPrint('[LibraryUpdateService] Update frequency interval ($freqHours h) has not elapsed yet.');
+        _isUpdating = false;
         return 0;
       }
 
       final satisfiesNetwork = await _satisfiesNetworkConstraint();
       if (!satisfiesNetwork) {
         debugPrint('[LibraryUpdateService] Skipping update: not connected to Wi-Fi / Ethernet.');
+        _isUpdating = false;
         return 0;
       }
     }
 
-    _isUpdating = true;
     _progress = 0.05;
     _statusMessage = 'Taking library snapshot...';
     _lastFoundCount = 0;
@@ -101,11 +104,14 @@ class LibraryUpdateService extends ChangeNotifier {
       }
 
       // ── STEP 2: Update Server or Local Extensions ─────────────────────────
-      final isConfigured = GraphQLClientService.instance.isConfigured;
-      bool serverAvailable = false;
-      if (isConfigured) {
-        serverAvailable = await GraphQLClientService.instance.checkServerReachable();
+      final libraryMangas = await IsarService.instance.getLibraryManga();
+      if (libraryMangas.isEmpty) {
+        debugPrint('[LibraryUpdateService] Library is empty, nothing to update.');
+        return 0;
       }
+
+      final serverAvailable = GraphQLClientService.instance.isConfigured &&
+          await GraphQLClientService.instance.checkServerReachable();
 
       if (serverAvailable && triggerServer) {
         _statusMessage = 'Triggering server library update...';
@@ -118,8 +124,25 @@ class LibraryUpdateService extends ChangeNotifier {
         for (int i = 0; i < 30; i++) {
           await Future.delayed(const Duration(milliseconds: 1500));
           final status = await GraphQLClientService.instance.fetchServerUpdateStatus();
-          final running = status?['runningJobs'] as int? ?? 0;
-          final pending = status?['pendingJobs'] as int? ?? 0;
+          final updateStatus = status?['updateStatus'] as Map<String, dynamic>?;
+
+          int extractCount(dynamic jobObj) {
+            if (jobObj is int) return jobObj;
+            if (jobObj is num) return jobObj.toInt();
+            if (jobObj is Map) {
+              final mangas = jobObj['mangas'];
+              if (mangas is Map) {
+                final nodes = mangas['nodes'];
+                if (nodes is List) return nodes.length;
+              }
+              if (jobObj['nodes'] is List) return (jobObj['nodes'] as List).length;
+            }
+            if (jobObj is List) return jobObj.length;
+            return 0;
+          }
+
+          final running = extractCount(updateStatus?['runningJobs'] ?? status?['runningJobs']);
+          final pending = extractCount(updateStatus?['pendingJobs'] ?? status?['pendingJobs']);
 
           _progress = 0.15 + (i / 30.0) * 0.45;
           _statusMessage = running > 0 || pending > 0
@@ -193,8 +216,9 @@ class LibraryUpdateService extends ChangeNotifier {
 
                 if (newChaptersToSave.isNotEmpty) {
                   await IsarService.instance.saveChapters(newChaptersToSave);
-                  manga.unreadCount = (manga.unreadCount ?? 0) + newChaptersToSave.length;
-                  await IsarService.instance.saveManga(manga);
+                  final freshManga = await IsarService.instance.getMangaByServerId(mId) ?? manga;
+                  freshManga.unreadCount = (freshManga.unreadCount ?? 0) + newChaptersToSave.length;
+                  await IsarService.instance.saveManga(freshManga);
                 }
               }
             }

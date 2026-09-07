@@ -14,7 +14,6 @@ import '../services/notification_service.dart';
 import '../services/settings_service.dart';
 import 'graphql_client_service.dart';
 import 'server_auth_helper.dart';
-import 'sync_engine.dart';
 
 const _kSyncTaskName = 'sunfire_background_sync';
 const _kSyncTaskTag = 'sunfire_sync';
@@ -27,13 +26,15 @@ void callbackDispatcher() {
     try {
       WidgetsFlutterBinding.ensureInitialized();
 
-      // Minimal bootstrap — only what is needed for sync.
-      await LoggerService.instance.initialize();
-      await IsarService.instance.initialize();
-      await SettingsService.instance.initialize();
-      await QuickJsService.instance.initialize();
-      await ImageCacheHelper.initialize();
-      await NotificationService.instance.initialize();
+      // Minimal bootstrap — only what is needed for sync with timeout guard
+      await Future.wait([
+        LoggerService.instance.initialize(),
+        IsarService.instance.initialize(),
+        SettingsService.instance.initialize(),
+        QuickJsService.instance.initialize(),
+        ImageCacheHelper.initialize(),
+        NotificationService.instance.initialize(),
+      ]).timeout(const Duration(seconds: 20));
 
       if (!SettingsService.instance.onboardingCompleted) return true;
 
@@ -44,9 +45,8 @@ void callbackDispatcher() {
       );
 
       // Check for new chapters and dispatch notification if discovered
+      // Note: checkForNewChapters automatically invokes SyncEngine.triggerSync()
       await LibraryUpdateService.instance.checkForNewChapters(isManual: false);
-
-      await SyncEngine.instance.triggerSync();
 
       // Update extensions if repos are configured.
       final repos = SettingsService.instance.customRepos;
@@ -65,6 +65,7 @@ void callbackDispatcher() {
         stackTrace: st,
         category: 'BackgroundService',
       );
+      return false;
     }
     return true;
   });
