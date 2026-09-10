@@ -69,7 +69,9 @@ workflows:
         - $HOME/Library/Caches/CocoaPods
     scripts:
       - name: Get Flutter packages
-        script: flutter pub get
+        script: |
+          flutter config --no-enable-swift-package-manager
+          flutter pub get
       - name: Build iOS xcarchive (No code signing required)
         script: |
           set -e
@@ -140,7 +142,9 @@ workflows:
         script: |
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
       - name: Get Flutter packages
-        script: flutter pub get
+        script: |
+          flutter config --no-enable-swift-package-manager
+          flutter pub get
       - name: Build Android Universal & Split APKs
         script: |
           set -e
