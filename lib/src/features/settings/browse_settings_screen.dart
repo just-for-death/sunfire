@@ -142,7 +142,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                           SunfireBadge.local(),
                         ],
                       ),
-                      subtitle: const Text('Add community MangaYomi index.json repositories', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      subtitle: const Text('Add the official Sunfire index or community MangaYomi repositories', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                       onTap: () {
                         Navigator.push(

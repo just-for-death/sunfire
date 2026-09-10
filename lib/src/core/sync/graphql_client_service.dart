@@ -30,6 +30,12 @@ bool parseBoolSafe(dynamic value, [bool fallback = false]) {
   return fallback;
 }
 
+bool chapterMutationNeedsBookmark(Map<String, dynamic> payload) =>
+    payload.containsKey('isBookmarked');
+
+bool chapterMutationNeedsReadProgress(Map<String, dynamic> payload) =>
+    payload.containsKey('isRead') || payload.containsKey('lastPageRead');
+
 class GraphQLClientService {
   static GraphQLClientService? _instance;
   late Dio _dio;
@@ -68,7 +74,7 @@ class GraphQLClientService {
     _baseUrl = clean.endsWith('/') ? clean.substring(0, clean.length - 1) : clean;
     _authToken = authToken;
     _lastReachableCheck = null;
-    _lastReachableStatus = true;
+    _lastReachableStatus = false;
     final headers = <String, dynamic>{'Content-Type': 'application/json'};
     if (authToken != null && authToken.trim().isNotEmpty) {
       final token = authToken.trim();
@@ -160,8 +166,10 @@ class GraphQLClientService {
       }
       return null;
     } on DioException catch (e) {
-      _lastReachableStatus = false;
-      _lastReachableCheck = DateTime.now();
+      if (_isTransportFailure(e)) {
+        _lastReachableStatus = false;
+        _lastReachableCheck = DateTime.now();
+      }
       // Suppress spammy connection refused errors during offline operation
       if (e.message != null && !e.message!.contains('Connection refused')) {
         await LoggerService.instance.logWarning('GraphQL request failed [$label]: ${e.message}', 'GraphQL');
@@ -171,6 +179,23 @@ class GraphQLClientService {
       _lastReachableStatus = false;
       _lastReachableCheck = DateTime.now();
       return null;
+    }
+  }
+
+  /// 4xx GraphQL validation errors mean the server is up; only transport
+  /// failures should poison the reachability cache.
+  static bool _isTransportFailure(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.connectionError:
+        return true;
+      case DioExceptionType.badResponse:
+        final code = e.response?.statusCode ?? 0;
+        return code == 0 || code >= 500;
+      default:
+        return e.response == null;
     }
   }
 
@@ -186,6 +211,7 @@ class GraphQLClientService {
             supportsLatest
             iconUrl
             isConfigurable
+            isNsfw
           }
         }
       }

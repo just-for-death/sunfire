@@ -163,14 +163,17 @@ void main() {
     });
 
     testWidgets('10. UpdatesScreen renders header title', (WidgetTester tester) async {
+      // Isolate from other files' GraphQL/WebSocket singletons so no Dio timers leak.
+      GraphQLClientService.instance.initialize('');
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(body: UpdatesScreen()),
         ),
       );
-      await tester.pump(const Duration(seconds: 1));
-
+      await tester.pump();
       expect(find.text('Updates'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     });
 
     test('11. Library Status Filtering and Sorting logic', () {

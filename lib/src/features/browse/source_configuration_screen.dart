@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/engine/quickjs_service.dart';
+import '../../core/engine/source_preferences.dart';
 import '../../core/services/image_cache_helper.dart';
 
 class SourceConfigurationScreen extends StatefulWidget {
@@ -47,6 +48,11 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
   }
 
   Future<void> _savePreference(String keySuffix, String value) async {
+    if (keySuffix == 'base_url') {
+      await SourcePreferences.setCustomBaseUrl(widget.sourceName, value);
+      QuickJsService.instance.invalidateSourceRuntime(widget.sourceName);
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     final sourceKey = widget.sourceName.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
     await prefs.setString('pref_source_${sourceKey}_$keySuffix', value);
@@ -222,10 +228,17 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
             trailing: const Icon(Icons.edit_outlined, size: 20, color: Colors.grey),
             onTap: _showEditBaseUrlDialog,
           ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Applied to local QuickJS scrapers for this source (mirror / region unblock).',
+              style: TextStyle(fontSize: 11.5, color: Colors.white54),
+            ),
+          ),
           const Divider(color: Colors.white10),
           ListTile(
             title: const Text('Image Quality', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            subtitle: Text(_imageQuality, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+            subtitle: Text('$_imageQuality · preference stored; sources may ignore', style: const TextStyle(color: Colors.grey, fontSize: 13)),
             trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
             onTap: () {
               _showSelectionDialog(
@@ -242,7 +255,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
           const Divider(color: Colors.white10),
           ListTile(
             title: const Text('Network Bypass Mode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            subtitle: Text(_networkMode, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+            subtitle: Text('$_networkMode · use FlareSolverr in Settings for Cloudflare', style: const TextStyle(color: Colors.grey, fontSize: 13)),
             trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
             onTap: () {
               _showSelectionDialog(

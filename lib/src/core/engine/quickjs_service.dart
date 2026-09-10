@@ -8,6 +8,8 @@ import '../logging/logger_service.dart';
 import 'javascript/js_extension_service.dart';
 import 'javascript/m_client.dart';
 import 'repo_manager.dart';
+import 'source_icon_helper.dart';
+import 'source_preferences.dart';
 
 class QuickJsService {
   static QuickJsService? _instance;
@@ -49,7 +51,7 @@ class QuickJsService {
       _runtimePool.remove(oldest)?.dispose();
     }
     final runtime = JsExtensionService(
-      sourceMeta: extractSourceMetadata(jsCode),
+      sourceMeta: _sourceMetaFor(jsCode, sourceName),
       sourceCode: jsCode,
     );
     _runtimePool[sourceName] = runtime;
@@ -57,11 +59,22 @@ class QuickJsService {
     return runtime;
   }
 
+  Map<String, dynamic> _sourceMetaFor(String jsCode, [String? sourceName]) {
+    final meta = extractSourceMetadata(jsCode);
+    final name = (sourceName != null && sourceName.isNotEmpty)
+        ? sourceName
+        : (meta['name']?.toString() ?? '');
+    return SourcePreferences.applyToSourceMeta(name, meta);
+  }
+
   /// Invalidate a pooled runtime (e.g. when JS code is updated).
   void _invalidateRuntime(String sourceName) {
     _runtimePool.remove(sourceName)?.dispose();
     _poolAccessOrder.remove(sourceName);
   }
+
+  /// Public invalidate when source preferences (mirror URL) change.
+  void invalidateSourceRuntime(String sourceName) => _invalidateRuntime(sourceName);
 
 
   Future<void> initialize() async {
@@ -354,27 +367,19 @@ class QuickJsService {
   String getSourceIconUrl(String sourceName) {
     final canonQuery = _canonicalizeKey(sourceName);
     for (final entry in _installedIcons.entries) {
-      if ((entry.key == sourceName || _canonicalizeKey(entry.key) == canonQuery) &&
-          entry.value.isNotEmpty &&
-          !entry.value.contains('raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/')) {
-        return entry.value;
+      if (entry.key == sourceName || _canonicalizeKey(entry.key) == canonQuery) {
+        final sanitized = SourceIconHelper.sanitizeIconUrl(entry.value, sourceName: sourceName);
+        if (sanitized.isNotEmpty) return sanitized;
       }
     }
     final code = getExtensionCode(sourceName);
     if (code != null && code.isNotEmpty) {
       final meta = extractSourceMetadata(code);
       final icon = meta['iconUrl']?.toString() ?? '';
-      if (icon.isNotEmpty &&
-          (icon.startsWith('http://') || icon.startsWith('https://')) &&
-          !icon.contains('raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/')) {
-        return icon;
-      }
-      final baseUrl = meta['baseUrl']?.toString() ?? '';
-      if (baseUrl.isNotEmpty) {
-        return 'https://www.google.com/s2/favicons?domain=$baseUrl&sz=128';
-      }
+      final sanitized = SourceIconHelper.sanitizeIconUrl(icon, sourceName: sourceName);
+      if (sanitized.isNotEmpty) return sanitized;
     }
-    return '';
+    return SourceIconHelper.bundledAssetUriForName(sourceName) ?? '';
   }
 
   List<String> getInstalledExtensionNames() {
@@ -389,6 +394,19 @@ class QuickJsService {
       if (baseUrl.isNotEmpty) return baseUrl;
     }
     return null;
+  }
+
+  String getSourceLang(String sourceName) {
+    final code = getExtensionCode(sourceName);
+    if (code == null || code.isEmpty) return 'EN';
+    try {
+      final meta = extractSourceMetadata(code);
+      final lang = meta['lang']?.toString().trim() ?? '';
+      if (lang.isEmpty) return 'EN';
+      return lang.toUpperCase();
+    } catch (_) {
+      return 'EN';
+    }
   }
 
   static const int _maxHeadersCacheEntries = 500;
@@ -512,7 +530,7 @@ class QuickJsService {
       return _headersCache[cacheKey]!;
     }
     final service = JsExtensionService(
-      sourceMeta: extractSourceMetadata(jsCode),
+      sourceMeta: _sourceMetaFor(jsCode),
       sourceCode: jsCode,
     );
     try {
@@ -629,14 +647,8 @@ class QuickJsService {
       if (idMatch != null) id = int.tryParse(idMatch.group(1)!) ?? 0;
     }
 
-    // 3. Fallback to domain favicon if iconUrl is empty but baseUrl exists
-    if (iconUrl.isEmpty && baseUrl.isNotEmpty) {
-      final uri = Uri.tryParse(baseUrl);
-      final host = uri?.host.isNotEmpty == true ? uri!.host : baseUrl.replaceAll(RegExp(r'^https?:\/\/'), '').split('/').first;
-      if (host.isNotEmpty) {
-        iconUrl = 'https://www.google.com/s2/favicons?domain=$host&sz=128';
-      }
-    }
+    // FOSS: never invent Google Favicon CDN URLs; prefer bundled asset / empty.
+    iconUrl = SourceIconHelper.sanitizeIconUrl(iconUrl, sourceName: name);
 
     return {
       'name': name,
@@ -666,7 +678,7 @@ class QuickJsService {
     }
 
     final service = JsExtensionService(
-      sourceMeta: extractSourceMetadata(jsCode),
+      sourceMeta: _sourceMetaFor(jsCode),
       sourceCode: jsCode,
     );
 
@@ -763,7 +775,7 @@ class QuickJsService {
     }
 
     final service = JsExtensionService(
-      sourceMeta: extractSourceMetadata(jsCode),
+      sourceMeta: _sourceMetaFor(jsCode),
       sourceCode: jsCode,
     );
 
@@ -816,7 +828,7 @@ class QuickJsService {
     // 2. Retry with a dedicated fresh runtime on failure or empty results
     try {
       final freshService = JsExtensionService(
-        sourceMeta: extractSourceMetadata(jsCode),
+        sourceMeta: _sourceMetaFor(jsCode),
         sourceCode: jsCode,
       );
       try {

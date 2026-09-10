@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import '../logging/logger_service.dart';
 import 'quickjs_service.dart';
+import 'source_icon_helper.dart';
 import 'source_migration_service.dart';
 
 class RepoSourceItem {
@@ -46,22 +47,23 @@ class RepoSourceItem {
 
     var icon = json['iconUrl'] as String? ?? '';
     final baseUrl = json['baseUrl'] as String? ?? '';
+    final nameStr = json['name'] as String? ?? 'Unknown';
 
-    if (icon.isNotEmpty && !icon.startsWith('http://') && !icon.startsWith('https://') && repoIndexUrl.isNotEmpty) {
+    // Relative repo icons only — never rewrite FOSS asset: URIs or absolute http(s).
+    if (icon.isNotEmpty &&
+        !icon.startsWith('asset:') &&
+        !icon.startsWith('assets/') &&
+        !icon.startsWith('http://') &&
+        !icon.startsWith('https://') &&
+        repoIndexUrl.isNotEmpty) {
       final repoBase = repoIndexUrl.replaceAll(RegExp(r'/index\.json$'), '');
       final cleanIcon = icon.startsWith('/') ? icon.substring(1) : icon;
       icon = '$repoBase/$cleanIcon';
     }
 
-    if (icon.isEmpty && baseUrl.isNotEmpty) {
-      final uri = Uri.tryParse(baseUrl);
-      final host = uri?.host.isNotEmpty == true ? uri!.host : baseUrl.replaceAll(RegExp(r'^https?:\/\/'), '').split('/').first;
-      if (host.isNotEmpty) {
-        icon = 'https://www.google.com/s2/favicons?domain=$host&sz=128';
-      }
-    }
+    // Do not fall back to Google Favicons (FOSS / privacy). Prefer bundled asset when name known.
+    icon = SourceIconHelper.sanitizeIconUrl(icon, sourceName: nameStr);
 
-    final nameStr = json['name'] as String? ?? 'Unknown';
     final isNsfw = json['isNsfw'] == true ||
         json['isNsfw'] == 1 ||
         json['nsfw'] == true ||
@@ -92,6 +94,16 @@ class RepoManager {
   static RepoManager? _instance;
   final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 30)));
   final List<Map<String, String>> _userRepos = [];
+
+  /// First-party Sunfire companion catalog (same 9 sources bundled in the app).
+  static const officialIndexUrl =
+      'https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json';
+  static const officialRepoTitle = 'Sunfire Official';
+
+  /// Large third-party MangaYomi catalog (MangaDex, ComicK, etc.).
+  static const communityIndexUrl =
+      'https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/index.json';
+  static const communityRepoTitle = 'MangaYomi Community';
 
   RepoManager._();
 
@@ -130,6 +142,9 @@ class RepoManager {
 
   /// Automatically derives a clean, human-readable repository title from its URL.
   static String deriveRepoTitle(String url) {
+    final normalized = normalizeRepoUrl(url);
+    if (normalized == officialIndexUrl) return officialRepoTitle;
+    if (normalized == communityIndexUrl) return communityRepoTitle;
     final trimmed = url.trim();
     final uri = Uri.tryParse(trimmed);
     if (uri != null) {

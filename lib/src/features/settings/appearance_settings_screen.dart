@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/settings_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../main_shell.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -148,6 +149,16 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                 ),
               ),
 
+              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              const SectionTitle(title: 'Tablet Layout'),
+              SettingsPropTile(
+                title: 'Expanded Sidebar',
+                subtitle: 'Show labels on the iPad / tablet navigation rail (width ≥ ${sunfireTabletMinWidth.toInt()}px)',
+                scope: SettingScope.local,
+                kind: SettingsPropKind.switchTile,
+                boolValue: _settings.tabletSidebarExpanded,
+                onBoolChanged: (val) => _settings.tabletSidebarExpanded = val,
+              ),
               const Divider(height: 1, color: Color(0x1AFFFFFF)),
               const SectionTitle(title: 'Date & Time Formatting'),
               ListTile(

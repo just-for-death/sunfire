@@ -91,29 +91,38 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       _loadingSources.addAll(_sources.map((s) => s['name'] as String));
     });
 
-    for (final src in _sources) {
-      final sourceId = src['id'] as String;
-      final sourceName = src['name'] as String;
-
-      ContentResolverService.instance.resolveSourceManga(
-        sourceId: sourceId,
-        sourceName: sourceName,
-        searchQuery: trimmed,
-        page: 1,
-      ).then((list) {
-        if (!mounted) return;
-        setState(() {
-          _loadingSources.remove(sourceName);
-          if (list.isNotEmpty) {
-            _resultsBySource[sourceName] = list;
+    const maxParallel = 6;
+    var nextIndex = 0;
+    Future<void> worker() async {
+      while (true) {
+        final i = nextIndex++;
+        if (i >= _sources.length) return;
+        final src = _sources[i];
+        final sourceId = src['id'] as String;
+        final sourceName = src['name'] as String;
+        try {
+          final list = await ContentResolverService.instance.resolveSourceManga(
+            sourceId: sourceId,
+            sourceName: sourceName,
+            searchQuery: trimmed,
+            page: 1,
+          );
+          if (!mounted) return;
+          setState(() {
+            _loadingSources.remove(sourceName);
+            if (list.isNotEmpty) {
+              _resultsBySource[sourceName] = list;
+            }
+          });
+        } catch (_) {
+          if (mounted) {
+            setState(() => _loadingSources.remove(sourceName));
           }
-        });
-      }).catchError((_) {
-        if (mounted) {
-          setState(() => _loadingSources.remove(sourceName));
         }
-      });
+      }
     }
+
+    await Future.wait(List.generate(maxParallel.clamp(1, _sources.length), (_) => worker()));
   }
 
   Future<void> _onMangaTap(Map<String, dynamic> manga, String sourceName) async {

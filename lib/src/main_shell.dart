@@ -18,6 +18,14 @@ import 'features/settings/server_settings_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/updates/updates_screen.dart';
 
+/// Phone vs iPad/iPad-mini split. Widths at or above this use the sidebar rail.
+const double sunfireTabletMinWidth = 720.0;
+
+/// Manga detail two-pane (cover + chapter list). Wider than the shell rail breakpoint.
+const double sunfireDetailTwoPaneMinWidth = 840.0;
+
+bool usesTabletShell(double width) => width >= sunfireTabletMinWidth;
+
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
@@ -146,7 +154,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth >= 720;
+    final isTablet = usesTabletShell(screenWidth);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     final scaffold = isTablet
@@ -162,7 +170,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                       decoration: BoxDecoration(
                         color: const Color(0xFF15151E),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0x1AFFFFFF), width: 1.0),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.40),
@@ -324,7 +331,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               decoration: BoxDecoration(
                 color: const Color(0xD0111119),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0x20FFFFFF), width: 1.0),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.50),
@@ -381,15 +387,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                             if (isExpanded) ...[
                               const SizedBox(height: 16),
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10.0),
-                                child: Divider(
-                                  color: Colors.white.withValues(alpha: 0.09),
-                                  height: 1,
-                                  thickness: 1,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Padding(
                                 padding: const EdgeInsets.only(left: 10.0, bottom: 6.0),
                                 child: Text(
                                   'ACTIVITY',
@@ -422,14 +419,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                               ),
                             ] else ...[
                               const SizedBox(height: 10),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10.0),
-                                child: Divider(
-                                  color: Colors.white.withValues(alpha: 0.09),
-                                  height: 1,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
                               ListenableBuilder(
                                 listenable: DownloadManagerService.instance,
                                 builder: (context, _) {
@@ -808,10 +797,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0),
-            child: Divider(color: Colors.white.withValues(alpha: 0.07), height: 1, thickness: 1),
-          ),
-          Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
             child: Material(
               color: Colors.transparent,
@@ -897,11 +882,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         padding: const EdgeInsets.only(bottom: 14.0),
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10.0),
-              child: Divider(color: Colors.white.withValues(alpha: 0.07), height: 1),
-            ),
-            const SizedBox(height: 8),
             Tooltip(
               message: 'Sync library',
               child: GestureDetector(
@@ -961,7 +941,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final isSelected = _currentIndex == index;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    return Material(
+    return Expanded(
+      child: Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -969,7 +950,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: isSelected ? 10 : 6, vertical: 8),
           decoration: isSelected
               ? BoxDecoration(
                   color: primaryColor,
@@ -984,6 +965,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 )
               : null,
           child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 isSelected ? selectedIcon : unselectedIcon,
@@ -991,13 +974,17 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 size: 22,
               ),
               if (isSelected) ...[
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ],
@@ -1005,6 +992,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           ),
         ),
       ),
+    ),
     );
   }
 }
