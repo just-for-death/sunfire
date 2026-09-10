@@ -75,6 +75,10 @@ dependency_overrides:
 flutter:
   uses-material-design: true
   generate: true
+  # CocoaPods until isar / flutter_qjs / flutter_secure_storage / etc. ship Package.swift.
+  # Flutter 3.44+ defaults to SwiftPM and otherwise warns that those plugins will error later.
+  config:
+    enable-swift-package-manager: false
   assets:
     - assets/icons/
     - assets/icons/launcher/
