@@ -68,6 +68,8 @@ test_results/
 # FVM Version Cache
 .fvm/
 
+.github/instructions/
+
 # Release Artifacts
 *.apk
 *.ipa
