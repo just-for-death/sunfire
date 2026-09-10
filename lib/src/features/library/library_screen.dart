@@ -320,6 +320,8 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         cmp = (a.unreadCount ?? 0).compareTo(b.unreadCount ?? 0);
       } else if (_sortBy == 'Recent') {
         cmp = (a.inLibraryAt ?? 0).compareTo(b.inLibraryAt ?? 0);
+      } else if (_sortBy == 'Last Read') {
+        cmp = (a.lastReadAt ?? 0).compareTo(b.lastReadAt ?? 0);
       } else if (_sortBy == 'Chapters') {
         cmp = a.chapterCount.compareTo(b.chapterCount);
       }
@@ -488,12 +490,8 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                                 m.categoryIds = curSet.toList();
                               }
                               updatedManga.add(m);
-                              if (GraphQLClientService.instance.isConfigured && m.serverId > 0) {
-                                try {
-                                  await GraphQLClientService.instance.setMangaCategories(m.serverId, m.categoryIds);
-                                } catch (e) {
-                                  LoggerService.instance.logWarning('Failed to sync categories for manga ${m.serverId}: $e', 'Library');
-                                }
+                              if (m.serverId > 0) {
+                                await SyncEngine.instance.syncMangaCategories(m.serverId, m.categoryIds);
                               }
                             }
                           }
@@ -534,8 +532,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     for (final id in _selectedMangaIds) {
       final chapters = await IsarService.instance.getChaptersForManga(id);
       for (final ch in chapters) {
-        ch.isRead = isRead;
-        if (!isRead) ch.lastPageRead = 0;
+        ch.applyReadState(isRead);
         if (ch.serverId > 0) {
           SyncEngine.instance.syncChapterProgress(
             ch.serverId,
@@ -899,9 +896,11 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                               ..name = name
                               ..order = _categories.length;
                             await IsarService.instance.saveCategory(newCat);
-                            if (GraphQLClientService.instance.isConfigured) {
-                              await GraphQLClientService.instance.createCategory(name);
-                            }
+                            await SyncEngine.instance.syncCategoryCreate(
+                              name: name,
+                              localServerId: newCat.serverId,
+                              order: newCat.order,
+                            );
                             textController.clear();
                             await _handleRefresh();
                             setSheetState(() {});
@@ -925,9 +924,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
                             onPressed: () async {
                               await IsarService.instance.deleteCategory(cat.serverId);
-                              if (GraphQLClientService.instance.isConfigured) {
-                                await GraphQLClientService.instance.deleteCategory(cat.serverId);
-                              }
+                              await SyncEngine.instance.syncCategoryDelete(cat.serverId);
                               await _handleRefresh();
                               setSheetState(() {});
                             },
@@ -1132,6 +1129,17 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       },
                     ),
                     ListTile(
+                      title: const Text('Last Read'),
+                      trailing: _sortBy == 'Last Read' ? Icon(Icons.check_rounded, color: primaryColor) : null,
+                      onTap: () {
+                        setState(() {
+                          _sortBy = 'Last Read';
+                          _isSortAscending = false;
+                        });
+                        Navigator.pop(context);
+                      },
+                    ),
+                    ListTile(
                       title: const Text('Total Chapters'),
                       trailing: _sortBy == 'Chapters' ? Icon(Icons.check_rounded, color: primaryColor) : null,
                       onTap: () {
@@ -1217,7 +1225,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     ),
                     onChanged: (val) => setState(() => _searchQuery = val),
                   )
-                : Text(isTablet ? 'Library' : 'Sunfire', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+                : const Text('Library', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
         actions: _isBatchMode
             ? null
             : [
@@ -1419,17 +1427,29 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         SliverFillRemaining(
                           hasScrollBody: false,
                           child: EmptyStateWidget(
-                            icon: Icons.auto_stories_rounded,
-                            title: _searchQuery.isNotEmpty ? 'No Results Found' : 'Your Library is Empty',
-                            subtitle: _searchQuery.isNotEmpty 
+                            icon: _searchQuery.isNotEmpty || _statusFilter != 'All' || _selectedCategoryIndex > 0
+                                ? Icons.filter_alt_off_rounded
+                                : Icons.auto_stories_rounded,
+                            title: _searchQuery.isNotEmpty
+                                ? 'No Results Found'
+                                : (_statusFilter != 'All' || _selectedCategoryIndex > 0)
+                                    ? 'Nothing Matches This Filter'
+                                    : 'Your Library is Empty',
+                            subtitle: _searchQuery.isNotEmpty
                                 ? 'Try adjusting your search query.'
-                                : 'Browse extensions to find and add manga to your library.',
-                            actionLabel: _searchQuery.isNotEmpty ? 'Clear Search' : 'Browse Sources',
+                                : (_statusFilter != 'All' || _selectedCategoryIndex > 0)
+                                    ? 'Clear status or category filters to see more titles.'
+                                    : 'Browse extensions to find and add manga to your library.',
+                            actionLabel: (_searchQuery.isNotEmpty || _statusFilter != 'All' || _selectedCategoryIndex > 0)
+                                ? 'Clear Filters'
+                                : 'Browse Sources',
                             onAction: () {
-                              if (_searchQuery.isNotEmpty) {
+                              if (_searchQuery.isNotEmpty || _statusFilter != 'All' || _selectedCategoryIndex > 0) {
                                 setState(() {
                                   _searchQuery = '';
                                   _isSearching = false;
+                                  _statusFilter = 'All';
+                                  _selectedCategoryIndex = 0;
                                 });
                               } else {
                                 MainShell.switchToTab(3);

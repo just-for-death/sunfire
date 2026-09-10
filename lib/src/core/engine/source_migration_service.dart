@@ -356,6 +356,8 @@ class SourceMigrationService {
     }
     if (selectedRepos != null && selectedRepos.isNotEmpty) {
       await sp.setStringList(keySelectedRepos, selectedRepos);
+      // Browse, Settings, and RepoManager hydrate from `custom_repos`.
+      await sp.setStringList('custom_repos', selectedRepos);
     }
     await sp.setBool(keyOnboardingCompleted, true);
     await LoggerService.instance.logInfo('Onboarding marked complete. Server: $serverUrl', 'Onboarding');

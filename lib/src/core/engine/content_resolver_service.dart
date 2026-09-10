@@ -11,6 +11,22 @@ import 'source_migration_service.dart';
 
 enum ContentSourceType { localExtension, localDownload, suwayomiServer, fallback }
 
+/// Natural numeric sort for downloaded page files (1.webp before 10.webp).
+int compareDownloadedPagePaths(String a, String b) {
+  final fileNameA = a.split(RegExp(r'[/\\]')).last;
+  final fileNameB = b.split(RegExp(r'[/\\]')).last;
+  final matchA = RegExp(r'(\d+)').firstMatch(fileNameA);
+  final matchB = RegExp(r'(\d+)').firstMatch(fileNameB);
+  if (matchA != null && matchB != null) {
+    final numA = int.tryParse(matchA.group(1)!);
+    final numB = int.tryParse(matchB.group(1)!);
+    if (numA != null && numB != null && numA != numB) {
+      return numA.compareTo(numB);
+    }
+  }
+  return a.compareTo(b);
+}
+
 class ChapterPagesResult {
   final List<String> pageUrls;
   final ContentSourceType source;
@@ -57,20 +73,7 @@ class ContentResolverService {
                     name.endsWith('.bmp');
               })
               .toList();
-          localImages.sort((a, b) {
-            final fileNameA = a.uri.pathSegments.isNotEmpty ? a.uri.pathSegments.last : a.path;
-            final fileNameB = b.uri.pathSegments.isNotEmpty ? b.uri.pathSegments.last : b.path;
-            final matchA = RegExp(r'(\d+)').firstMatch(fileNameA);
-            final matchB = RegExp(r'(\d+)').firstMatch(fileNameB);
-            if (matchA != null && matchB != null) {
-              final numA = int.tryParse(matchA.group(1)!);
-              final numB = int.tryParse(matchB.group(1)!);
-              if (numA != null && numB != null && numA != numB) {
-                return numA.compareTo(numB);
-              }
-            }
-            return a.path.compareTo(b.path);
-          });
+          localImages.sort((a, b) => compareDownloadedPagePaths(a.path, b.path));
           if (localImages.isNotEmpty) {
             final paths = localImages.map((f) => f.path).toList();
             await LoggerService.instance.logInfo('Resolved ${paths.length} pages from Local Storage (Offline Download)', 'ContentResolver');

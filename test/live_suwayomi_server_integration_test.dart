@@ -7,23 +7,35 @@ import 'package:sunfire/src/core/sync/graphql_client_service.dart';
 
 class _RealHttpOverrides extends HttpOverrides {}
 
+const _liveUrl = 'http://localhost:4567';
+
 void main() {
   HttpOverrides.global = _RealHttpOverrides();
+  late bool up;
 
-  group('LIVE SUWAYOMI SERVER INTEGRATION TESTS', () {
-    setUp(() async {
-      SharedPreferences.setMockInitialValues({
-        'server_url': 'http://localhost:4567',
-        'sunfire_server_url': 'http://localhost:4567',
-      });
-      await SettingsService.instance.initialize();
-      GraphQLClientService.instance.initialize('http://localhost:4567');
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({
+      'server_url': _liveUrl,
+      'sunfire_server_url': _liveUrl,
     });
+    await SettingsService.instance.initialize();
+    GraphQLClientService.instance.initialize(_liveUrl);
+    up = await GraphQLClientService.instance.checkServerReachable(force: true);
+    if (!up) {
+      print('Suwayomi not at $_liveUrl — live tests will skip');
+    }
+  });
 
+  setUp(() async {
+    GraphQLClientService.instance.initialize(_liveUrl);
+    if (up) {
+      await GraphQLClientService.instance.checkServerReachable(force: true);
+    }
+  });
+  group('LIVE SUWAYOMI SERVER INTEGRATION TESTS', () {
     test('1. Live Server Query: Fetch real server sources', () async {
-      final isOnline = await GraphQLClientService.instance.checkServerReachable();
-      if (!isOnline) {
-        print('Skipping live test: Suwayomi server not reachable in current test harness');
+      if (!up) {
+        markTestSkipped('Suwayomi Docker not running on $_liveUrl');
         return;
       }
       final data = await GraphQLClientService.instance.fetchSources();
@@ -36,9 +48,8 @@ void main() {
     });
 
     test('2. Live Server Query: Fetch real server extensions (installed & uninstalled)', () async {
-      final isOnline = await GraphQLClientService.instance.checkServerReachable();
-      if (!isOnline) {
-        print('Skipping live test: Suwayomi server not reachable in current test harness');
+      if (!up) {
+        markTestSkipped('Suwayomi Docker not running on $_liveUrl');
         return;
       }
       final data = await GraphQLClientService.instance.fetchExtensions();
@@ -51,17 +62,19 @@ void main() {
       final installed = nodes.where((e) => e['isInstalled'] == true).toList();
       final available = nodes.where((e) => e['isInstalled'] != true).toList();
 
-      print('✓ [LIVE SUCCESS] Suwayomi returned ${nodes.length} total extensions: ${installed.length} installed, ${available.length} available to install!');
+      print(
+        '✓ [LIVE SUCCESS] Suwayomi returned ${nodes.length} total extensions: '
+        '${installed.length} installed, ${available.length} available!',
+      );
       expect(nodes.length, greaterThan(10));
     });
 
     test('3. Live Server Mutation: Test extension update mutation schema compatibility', () async {
-      final isOnline = await GraphQLClientService.instance.checkServerReachable();
-      if (!isOnline) {
-        print('Skipping live test: Suwayomi server not reachable in current test harness');
+      if (!up) {
+        markTestSkipped('Suwayomi Docker not running on $_liveUrl');
         return;
       }
-      
+
       final extensionsData = await GraphQLClientService.instance.fetchExtensions();
       String testId = 'eu.kanade.tachiyomi.extension.all.test_dummy';
       if (extensionsData != null && extensionsData['extensions']?['nodes'] != null) {
@@ -84,14 +97,29 @@ void main() {
         ''',
         variables: {
           'id': testId,
-          'patch': {'isInstalled': false},
+          // Current Suwayomi schema uses install/uninstall/update booleans
+          // (not legacy isInstalled). Use update:false as a no-op schema probe
+          // against an installed extension when possible.
+          'patch': {'update': false},
         },
         label: 'testMutation',
       );
 
-      // Either returns mutated extension or server validation response
-      expect(data != null || isOnline, isTrue);
+      expect(data, isNotNull);
       print('✓ [LIVE SUCCESS] Suwayomi accepted UpdateExtensionPatchInput mutation schema!\n');
+    });
+
+    test('4. Live library + categories + trackers smoke', () async {
+      if (!up) {
+        markTestSkipped('Suwayomi Docker not running on $_liveUrl');
+        return;
+      }
+      final lib = await GraphQLClientService.instance.fetchLibrary();
+      final cats = await GraphQLClientService.instance.fetchCategories();
+      final trackers = await GraphQLClientService.instance.fetchTrackers();
+      expect(lib?['mangas']?['nodes'], isNotEmpty);
+      expect(cats?['categories']?['nodes'], isNotEmpty);
+      expect(trackers?['trackers']?['nodes'], isNotEmpty);
     });
   });
 }

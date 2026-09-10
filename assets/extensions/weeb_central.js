@@ -4,10 +4,10 @@ const mangayomiSources = [{
     "lang": "en",
     "baseUrl": "https://weebcentral.com",
     "apiUrl": "",
-    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://weebcentral.com",
+    "iconUrl": "asset:assets/icons/sources/weeb_central.png",
     "typeSource": "single",
     "itemType": 0,
-    "version": "1.2.0",
+    "version": "1.2.1",
     "pkgPath": "javascript/manga/src/en/weeb_central.js"
 }];
 

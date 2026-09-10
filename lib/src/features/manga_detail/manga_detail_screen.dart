@@ -16,7 +16,11 @@ import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/widgets/empty_state_widget.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../main_shell.dart';
+import '../browse/global_search_screen.dart';
+import '../browse/migrate_search_screen.dart';
 import 'tracking_bottom_sheet.dart';
 
 class MangaDetailScreen extends StatefulWidget {
@@ -554,8 +558,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       await SyncEngine.instance.syncMangaLibraryState(widget.mangaServerId, newState);
 
       // If newly added to library and a default category is set, assign it on server!
-      if (newState && SettingsService.instance.defaultCategoryId != null && GraphQLClientService.instance.isConfigured && widget.mangaServerId > 0) {
-        await GraphQLClientService.instance.setMangaCategories(
+      if (newState && SettingsService.instance.defaultCategoryId != null && widget.mangaServerId > 0) {
+        await SyncEngine.instance.syncMangaCategories(
           widget.mangaServerId,
           _manga!.categoryIds,
         );
@@ -650,10 +654,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         _manga!.categoryIds = catList;
                       });
                       await IsarService.instance.saveManga(_manga!);
-                      if (GraphQLClientService.instance.isConfigured && widget.mangaServerId > 0) {
-                        try {
-                          await GraphQLClientService.instance.setMangaCategories(widget.mangaServerId, catList);
-                        } catch (_) {}
+                      if (widget.mangaServerId > 0) {
+                        await SyncEngine.instance.syncMangaCategories(widget.mangaServerId, catList);
                       }
                       if (sheetContext.mounted) {
                         Navigator.pop(sheetContext);
@@ -695,17 +697,56 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   void _continueReading() {
     if (_chapters.isEmpty) return;
-    // 1. Resume chapter currently in progress
-    final inProgress = _chapters.where((c) => !c.isRead && c.lastPageRead > 0).toList();
-    if (inProgress.isNotEmpty) {
-      inProgress.sort((a, b) => (b.lastReadAt ?? 0).compareTo(a.lastReadAt ?? 0));
-      _openReader(_targetChapterId(inProgress.first));
-      return;
-    }
-    // 2. Find next unread chapter in reading order (lowest chapter number)
-    final sortedByNum = List<Chapter>.from(_chapters)..sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
-    final unread = sortedByNum.firstWhere((c) => !c.isRead, orElse: () => sortedByNum.first);
-    _openReader(_targetChapterId(unread));
+    final target = pickContinueReadingChapter(_chapters);
+    if (target != null) _openReader(_targetChapterId(target));
+  }
+
+  Future<void> _openMigrate(Manga manga) async {
+    final installed = QuickJsService.instance.getInstalledExtensionNames();
+    final sources = installed
+        .map((name) => {
+              'id': 'local_js_${name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_').toLowerCase()}',
+              'name': name,
+              'displayName': name,
+              'isLocalJs': true,
+            })
+        .toList();
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MigrateSearchScreen(manga: manga, sources: sources),
+      ),
+    );
+    if (mounted) _loadLocalDataOnly();
+  }
+
+  void _onGenreTap(String genre) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GlobalSearchScreen(initialQuery: genre),
+      ),
+    );
+  }
+
+  Widget _chapterEmptyState() {
+    final hasFilter = _chapterFilter != 'All' || _chapterSearch.trim().isNotEmpty;
+    return EmptyStateWidget(
+      icon: hasFilter ? Icons.filter_alt_off_rounded : Icons.menu_book_outlined,
+      title: hasFilter ? 'No Matching Chapters' : 'No Chapters Found',
+      subtitle: hasFilter
+          ? 'Clear the chapter filter or search to see all chapters.'
+          : 'Pull to refresh or check the source connection.',
+      actionLabel: hasFilter ? 'Clear Filter' : null,
+      onAction: hasFilter
+          ? () => setState(() {
+                _chapterFilter = 'All';
+                _chapterSearch = '';
+                _isSearchingChapters = false;
+              })
+          : null,
+    );
   }
 
   Future<void> _refreshUnreadCount() async {
@@ -719,10 +760,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   void _toggleChapterRead(Chapter ch) async {
     final newState = !ch.isRead;
-    setState(() {
-      ch.isRead = newState;
-      if (!newState) ch.lastPageRead = 0;
-    });
+    setState(() => ch.applyReadState(newState));
     await IsarService.instance.saveChapter(ch);
     await _refreshUnreadCount();
 
@@ -755,7 +793,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   void _markPreviousChaptersRead(Chapter ch) async {
     final prevs = _chapters.where((c) => c.chapterNumber < ch.chapterNumber && !c.isRead).toList();
     for (final p in prevs) {
-      p.isRead = true;
+      p.applyReadState(true);
       if (_settings.deleteChapterAfterMarkedRead && p.isDownloaded) {
         if (!p.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
           DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(p));
@@ -783,20 +821,46 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   }
 
   void _selectAllChapters() {
+    final visible = _visibleChapters();
     setState(() {
-      if (_selectedChapterIds.length == _chapters.length) {
-        _selectedChapterIds.clear();
+      final visibleIds = visible.map(_targetChapterId).toSet();
+      final allVisibleSelected =
+          visibleIds.isNotEmpty && visibleIds.every(_selectedChapterIds.contains);
+      if (allVisibleSelected) {
+        _selectedChapterIds.removeAll(visibleIds);
       } else {
-        _selectedChapterIds.addAll(_chapters.map(_targetChapterId));
+        _selectedChapterIds.addAll(visibleIds);
       }
     });
+  }
+
+  List<Chapter> _visibleChapters() {
+    var sortedChapters = List<Chapter>.from(_chapters);
+    if (_chapterFilter == 'Unread') {
+      sortedChapters = sortedChapters.where((c) => !c.isRead).toList();
+    } else if (_chapterFilter == 'Downloaded') {
+      sortedChapters = sortedChapters.where((c) =>
+        DownloadManagerService.instance.isChapterDownloadedLocally(_targetChapterId(c)) ||
+        (c.serverId > 0 && DownloadManagerService.instance.isChapterDownloadedOnServer(c.serverId)) ||
+        c.isDownloaded
+      ).toList();
+    } else if (_chapterFilter == 'Bookmarked') {
+      sortedChapters = sortedChapters.where((c) => c.isBookmarked).toList();
+    }
+    if (_chapterSearch.trim().isNotEmpty) {
+      final q = _chapterSearch.trim().toLowerCase();
+      sortedChapters = sortedChapters.where((c) =>
+        c.name.toLowerCase().contains(q) ||
+        c.chapterNumber.toString().contains(q)
+      ).toList();
+    }
+    return sortedChapters;
   }
 
   void _markSelectedRead(bool read) async {
     final targets = _chapters.where((c) => _selectedChapterIds.contains(_targetChapterId(c))).toList();
     for (final c in targets) {
-      c.isRead = read;
-      if (!read) c.lastPageRead = 0;
+      c.applyReadState(read);
       if (read && _settings.deleteChapterAfterMarkedRead && c.isDownloaded) {
         if (!c.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
           DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(c));
@@ -1147,29 +1211,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
 
     final manga = _manga!;
-    var sortedChapters = List<Chapter>.from(_chapters);
-
-    // Filter by Read/Downloaded/Bookmarked status
-    if (_chapterFilter == 'Unread') {
-      sortedChapters = sortedChapters.where((c) => !c.isRead).toList();
-    } else if (_chapterFilter == 'Downloaded') {
-      sortedChapters = sortedChapters.where((c) =>
-        DownloadManagerService.instance.isChapterDownloadedLocally(_targetChapterId(c)) ||
-        (c.serverId > 0 && DownloadManagerService.instance.isChapterDownloadedOnServer(c.serverId)) ||
-        c.isDownloaded
-      ).toList();
-    } else if (_chapterFilter == 'Bookmarked') {
-      sortedChapters = sortedChapters.where((c) => c.isBookmarked).toList();
-    }
-
-    // Filter by search query
-    if (_chapterSearch.trim().isNotEmpty) {
-      final q = _chapterSearch.trim().toLowerCase();
-      sortedChapters = sortedChapters.where((c) =>
-        c.name.toLowerCase().contains(q) ||
-        c.chapterNumber.toString().contains(q)
-      ).toList();
-    }
+    var sortedChapters = _visibleChapters();
 
     if (_sortAscending) {
       sortedChapters.sort((a, b) {
@@ -1241,7 +1283,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           : null,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth >= 840) {
+          if (constraints.maxWidth >= sunfireDetailTwoPaneMinWidth) {
             return _buildTabletLayout(context, manga, sortedChapters, primaryColor, isSelecting);
           }
           return _buildPhoneLayout(context, manga, sortedChapters, primaryColor, isSelecting);
@@ -1424,6 +1466,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       return SunfireBadge(
                         label: g,
                         variant: SunfireBadgeVariant.chip,
+                        onTap: () => _onGenreTap(g),
                       );
                     }).toList(),
                   ),
@@ -1550,7 +1593,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               const Divider(height: 1, color: Color(0x1AFFFFFF)),
               Expanded(
                 child: sortedChapters.isEmpty
-                    ? const Center(child: Text('No chapters found.', style: TextStyle(color: Colors.grey)))
+                    ? _chapterEmptyState()
                     : ListView.builder(
                         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
@@ -1599,26 +1642,37 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 tooltip: manga.inLibrary ? 'In Library (Tap to remove)' : 'Add to Library',
                 onPressed: _toggleInLibrary,
               ),
-              if (manga.inLibrary)
-                IconButton(
-                  icon: const Icon(Icons.label_outline_rounded, color: Colors.white),
-                  tooltip: 'Edit Categories',
-                  onPressed: _showCategoryPickerDialog,
-                ),
               IconButton(
                 icon: const Icon(Icons.download_rounded, color: Colors.white),
                 tooltip: 'Download Chapters',
                 onPressed: _showBatchDownloadModal,
               ),
-              IconButton(
-                icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                tooltip: 'Refresh',
-                onPressed: _loadMangaDetails,
-              ),
-              IconButton(
-                icon: const Icon(Icons.public_rounded, color: Colors.white),
-                tooltip: 'Open in Browser',
-                onPressed: () => _openInBrowser(manga.url),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+                color: const Color(0xFF1F1F26),
+                onSelected: (value) async {
+                  switch (value) {
+                    case 'categories':
+                      await _showCategoryPickerDialog();
+                      break;
+                    case 'refresh':
+                      await _loadMangaDetails();
+                      break;
+                    case 'browser':
+                      await _openInBrowser(manga.url);
+                      break;
+                    case 'migrate':
+                      await _openMigrate(manga);
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  if (manga.inLibrary)
+                    const PopupMenuItem(value: 'categories', child: Text('Edit Categories')),
+                  const PopupMenuItem(value: 'refresh', child: Text('Refresh')),
+                  const PopupMenuItem(value: 'browser', child: Text('Open in Browser')),
+                  const PopupMenuItem(value: 'migrate', child: Text('Migrate Source')),
+                ],
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
@@ -1832,14 +1886,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       return SunfireBadge(
                         label: g,
                         variant: SunfireBadgeVariant.chip,
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Tag: $g'),
-                              duration: const Duration(seconds: 1),
-                            ),
-                          );
-                        },
+                        onTap: () => _onGenreTap(g),
                       );
                     }).toList(),
                   ),
@@ -1984,11 +2031,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         ),
 
         if (sortedChapters.isEmpty)
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(32.0),
-              child: Center(child: Text('No chapters found.', style: TextStyle(color: Colors.grey))),
-            ),
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _chapterEmptyState(),
           )
         else
           SliverPadding(

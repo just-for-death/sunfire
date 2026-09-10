@@ -8,6 +8,7 @@ import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/widgets/empty_state_widget.dart';
 import '../../main_shell.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -123,14 +124,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
     if (confirmed == true) {
       final chapters = await IsarService.instance.getReadingHistory();
       for (final ch in chapters) {
-        ch.lastReadAt = 0;
-        if (ch.serverId > 0) {
-          await SyncEngine.instance.syncChapterProgress(
-            ch.serverId,
-            isRead: ch.isRead,
-            lastPageRead: ch.lastPageRead,
-          );
-        }
+        ch.clearHistoryTimestamp();
       }
       await IsarService.instance.saveChapters(chapters);
       await _loadHistory();
@@ -189,30 +183,12 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                           child: Container(
                             alignment: Alignment.center,
                             padding: const EdgeInsets.only(top: 80.0, left: 24.0, right: 24.0),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.history_toggle_off_rounded, size: 64, color: primaryColor.withAlpha(120)),
-                                const SizedBox(height: 16),
-                                const Text('No Reading History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Start reading a chapter to track\nyour reading progress here.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                                ),
-                                const SizedBox(height: 20),
-                                ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryColor,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                                  ),
-                                  icon: const Icon(Icons.explore_outlined, color: Colors.white, size: 18),
-                                  label: const Text('Browse Manga', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                  onPressed: () => context.go('/browse'),
-                                ),
-                              ],
+                            child: EmptyStateWidget(
+                              icon: Icons.history_toggle_off_rounded,
+                              title: 'No Reading History',
+                              subtitle: 'Start reading a chapter to track your reading progress here.',
+                              actionLabel: 'Browse Manga',
+                              onAction: () => MainShell.switchToTab(3),
                             ),
                           ),
                         ),
@@ -290,8 +266,8 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                      ],
                                    ),
                                  );
-                                 if (remove == true) {
-                                   ch.lastReadAt = null;
+                                   if (remove == true) {
+                                   ch.clearHistoryTimestamp();
                                    await IsarService.instance.saveChapter(ch);
                                    _loadHistory();
                                  }

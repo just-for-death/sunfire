@@ -7,13 +7,13 @@
 -keep class io.flutter.plugins.** { *; }
 -keep class com.sunfire.app.** { *; }
 
-# Keep annotations / generics used by Gson, Retrofit-style plugins, and R8.
+# Keep annotations / generics used by Gson-style plugins and R8.
 -keepattributes *Annotation*
 -keepattributes Signature
 -keepattributes InnerClasses
 -keepattributes EnclosingMethod
 
-# Optional Play Core refs from Flutter deferred components (not bundled in release APK).
+# Optional Play Core refs from Flutter deferred components (not bundled).
 -dontwarn com.google.android.play.core.**
 
 # flutter_secure_storage
@@ -39,7 +39,6 @@
 
 # Local notifications
 -keep class com.dexterous.** { *; }
--keep class com.google.firebase.messaging.** { *; }
 
 # dynamic_color / Material You
 -keep class io.material.plugins.dynamic_color.** { *; }
@@ -59,6 +58,11 @@
 
 # app_links / deep linking
 -keep class com.llfbandit.app_links.** { *; }
+
+# Isar / QuickJS JNI
+-keep class dev.isar.** { *; }
+-keep class com.github.dart_lang.jni.** { *; }
+-keep class io.github.ponnamkarthik.** { *; }
 
 # volume key plugin
 -keep class dev.darttools.flutter_android_volume_keydown.** { *; }

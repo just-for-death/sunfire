@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../services/settings_service.dart';
 
@@ -26,7 +25,7 @@ class AppTheme {
         primary: baseColorScheme.primary,
       ),
       scaffoldBackgroundColor: oledBackground,
-      textTheme: GoogleFonts.plusJakartaSansTextTheme(ThemeData.dark().textTheme),
+      textTheme: ThemeData.dark().textTheme,
       cardTheme: CardThemeData(
         color: glassSurface,
         elevation: 0,
@@ -38,6 +37,9 @@ class AppTheme {
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         centerTitle: false,
       ),
       chipTheme: ChipThemeData(
@@ -71,7 +73,7 @@ class AppTheme {
       primaryColor: baseColorScheme.primary,
       colorScheme: baseColorScheme,
       scaffoldBackgroundColor: const Color(0xFFF8F9FA),
-      textTheme: GoogleFonts.plusJakartaSansTextTheme(ThemeData.light().textTheme),
+      textTheme: ThemeData.light().textTheme,
       cardTheme: CardThemeData(
         color: Colors.white,
         elevation: 0.5,
@@ -83,6 +85,9 @@ class AppTheme {
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         centerTitle: false,
       ),
       chipTheme: ChipThemeData(

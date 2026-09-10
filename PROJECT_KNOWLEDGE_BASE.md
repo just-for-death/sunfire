@@ -16,7 +16,8 @@
    - Re-maps library items so chapters can be scraped on-device when server is offline.
 
 ### B. Networking & Cloudflare Bypass (`MClient`)
-* **Cronet on Android, Cupertino on iOS/macOS, Standard Client on Linux/Desktop**.
+* `dart:io` HttpClient on Android/Linux/Windows (no Play Services Cronet / GMS).
+* Cupertino `NSURLSession` on iOS/macOS.
 * **FlareSolverr Integration**:
   - Automatically intercepts Cloudflare 403 / challenge pages.
   - Normalizes proxy endpoints to `/v1`.
@@ -75,9 +76,9 @@
 ## 5. Maintenance & Release Workflow
 1. When modifying an extension in `mangayomi-extensions`:
    - Update `.js` code in `javascript/manga/src/en/`.
-   - Bump version in `index.json` (e.g. `1.2.0` -> `1.3.0`).
-   - Copy to local runtime directory (`~/Documents/extensions/`) with updated companion `.json`.
-   - Commit and push to `just-for-death/mangayomi-extensions`.
+   - Bump version in both `mangayomiSources` (inside the JS file) and `index.json`.
+   - Run `sunfire/scripts/sync_bundled_extensions.sh` so `sunfire/assets/extensions/` matches.
+   - Commit and push to `just-for-death/mangayomi-extensions` (and Sunfire if assets changed).
 2. When modifying the client in `sunfire`:
    - Run `fvm flutter analyze` to maintain 0 issues.
    - Run `fvm flutter test` for unit and regression tests.

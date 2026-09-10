@@ -8,33 +8,15 @@
 //      Dio first then a curl fallback (mirrors the production desktop path)
 //   5. Validate each downloaded file is a real image (magic-byte sniffing,
 //      not an HTML error/interstitial page) and report size + timing.
-import 'dart:ffi';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:ffi/ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/engine/javascript/js_extension_service.dart';
 import 'package:sunfire/src/core/engine/javascript/m_client.dart';
 import 'package:sunfire/src/core/engine/quickjs_service.dart';
 
-const int _rtldNow = 2;
-const int _rtldGlobal = 0x100;
-
-typedef _DlopenNative = Pointer Function(Pointer<Utf8> filename, Int32 flag);
-typedef _DlopenDart = Pointer Function(Pointer<Utf8> filename, int flag);
-
-void _loadQuickJsPluginGlobally(String path) {
-  final libc = DynamicLibrary.process();
-  final dlopen = libc.lookupFunction<_DlopenNative, _DlopenDart>('dlopen');
-  final pathPtr = path.toNativeUtf8();
-  try {
-    final handle = dlopen(pathPtr, _rtldNow | _rtldGlobal);
-    if (handle == nullptr) throw StateError('dlopen failed for $path');
-  } finally {
-    calloc.free(pathPtr);
-  }
-}
+import 'support/quickjs_test_loader.dart';
 
 String? _sniffImageType(List<int> bytes) {
   if (bytes.length < 12) return null;
@@ -75,9 +57,10 @@ void main() {
   test(
     'Download a chapter from every extension and validate images',
     () async {
-      _loadQuickJsPluginGlobally(
-        '/home/zoro/Documents/Projects/manga/sunfire/build/linux/x64/debug/bundle/lib/libflutter_qjs_plugin.so',
-      );
+      if (!tryLoadQuickJsPluginGlobally()) {
+        markTestSkipped('QuickJS native plugin missing — run flutter build linux --debug');
+        return;
+      }
       MClient.cfProxyUrl = 'http://100.85.171.6:8191';
 
       final extDir = Directory('/home/zoro/Documents/Projects/manga/mangayomi-extensions/javascript/manga/src/en');

@@ -8,6 +8,7 @@ import 'src/core/db/isar_service.dart';
 import 'src/core/engine/image_transport_service.dart';
 import 'src/core/engine/javascript/m_client.dart';
 import 'src/core/engine/quickjs_service.dart';
+import 'src/core/engine/source_preferences.dart';
 import 'src/core/logging/logger_service.dart';
 import 'src/core/services/download_manager_service.dart';
 import 'src/core/services/image_cache_helper.dart';
@@ -54,6 +55,12 @@ void main() async {
     await SettingsService.instance.initialize();
   } catch (e) {
     debugPrint('SettingsService init error: $e');
+  }
+
+  try {
+    await SourcePreferences.hydrate();
+  } catch (e) {
+    debugPrint('SourcePreferences hydrate error: $e');
   }
 
   try {

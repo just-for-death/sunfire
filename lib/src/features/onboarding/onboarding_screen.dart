@@ -125,12 +125,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _authType = ServerAuthType.none;
     });
 
-    // Jump directly to Repos step so user can review/add repos or proceed
-    _pageController.animateToPage(
-      2,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOut,
-    );
+    void skipToRepos() {
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(2);
+      }
+    }
+
+    skipToRepos();
+    WidgetsBinding.instance.addPostFrameCallback((_) => skipToRepos());
   }
 
   Future<void> _testAndConnectServer() async {
@@ -192,22 +194,39 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  void _addNewRepo() {
+  bool _containsRepo(String url) {
+    final normalized = RepoManager.normalizeRepoUrl(url);
+    return _userRepoUrls.any((existing) =>
+        existing == url || RepoManager.normalizeRepoUrl(existing) == normalized);
+  }
+
+  Future<void> _addPresetRepo(String name, String url) async {
+    final normalized = RepoManager.normalizeRepoUrl(url);
+    if (_containsRepo(normalized)) return;
+    setState(() => _userRepoUrls.insert(0, normalized));
+    RepoManager.instance.addUserRepo(name, normalized);
+    await SettingsService.instance.addCustomRepo(normalized);
+  }
+
+  Future<void> _addNewRepo() async {
     final url = _newRepoUrlController.text.trim();
-    if (url.isNotEmpty && !_userRepoUrls.contains(url)) {
+    if (url.isNotEmpty && !_containsRepo(url)) {
+      final normalized = RepoManager.normalizeRepoUrl(url);
       setState(() {
-        _userRepoUrls.insert(0, url);
+        _userRepoUrls.insert(0, normalized);
         _newRepoUrlController.clear();
       });
-      RepoManager.instance.addUserRepo(RepoManager.deriveRepoTitle(url), url);
+      RepoManager.instance.addUserRepo(RepoManager.deriveRepoTitle(normalized), normalized);
+      await SettingsService.instance.addCustomRepo(normalized);
     }
   }
 
-  void _removeRepo(String url) {
+  Future<void> _removeRepo(String url) async {
     setState(() {
       _userRepoUrls.remove(url);
     });
     RepoManager.instance.removeUserRepo(url);
+    await SettingsService.instance.removeCustomRepo(url);
   }
 
   Future<void> _runInitialHydration() async {
@@ -332,12 +351,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final cleanUrl = _serverUrlController.text.trim().replaceAll(RegExp(r'/+$'), '');
     final auth = _buildAuthHeader();
 
+    for (final url in _userRepoUrls) {
+      await SettingsService.instance.addCustomRepo(url);
+    }
+
     await SourceMigrationService.instance.markOnboardingCompleted(
       serverUrl: cleanUrl,
       authHeader: auth,
       selectedRepos: _userRepoUrls,
     );
     SettingsService.instance.onboardingCompleted = true;
+    if (cleanUrl.isNotEmpty) {
+      SettingsService.instance.serverUrl = cleanUrl;
+    }
 
     if (_flareSolverrController.text.trim().isNotEmpty) {
       SettingsService.instance.cfProxyUrl = _flareSolverrController.text.trim();
@@ -360,16 +386,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D11),
       body: SafeArea(
-        child: PageView(
-          controller: _pageController,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            _buildWelcomeStep(),
-            _buildServerStep(),
-            _buildReposStep(),
-            _buildHydrationStep(),
-            _buildCompletionStep(),
-          ],
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: PageView(
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _buildWelcomeStep(),
+                _buildServerStep(),
+                _buildReposStep(),
+                _buildHydrationStep(),
+                _buildCompletionStep(),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -674,7 +706,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: [
                     Icon(Icons.shield_outlined, color: Colors.amberAccent, size: 20),
                     SizedBox(width: 8),
-                    Text('FlareSolverr Proxy (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                    Expanded(
+                      child: Text(
+                        'FlareSolverr Proxy (Optional)',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -769,6 +808,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  Widget _buildPresetRepoCard({
+    required Color primaryColor,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onAdd,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: primaryColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: primaryColor, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+              ],
+            ),
+          ),
+          FilledButton.tonal(
+            onPressed: onAdd,
+            child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── STEP 3: REPOSITORIES ────────────────────────────────────
   Widget _buildReposStep() {
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -777,6 +853,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Expanded(
+            child: ListView(
+              children: [
           const SizedBox(height: 12),
           Row(
             children: [
@@ -794,44 +873,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Sunfire is a neutral reader. Paste your Mangayomi JSON extension repositories below:',
+            'Add the official Sunfire catalog for updates, and optionally a community MangaYomi index for extra sources:',
             style: TextStyle(color: Colors.grey, fontSize: 13),
           ),
           const SizedBox(height: 16),
-          if (_userRepoUrls.isEmpty)
-            Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: primaryColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: primaryColor.withValues(alpha: 0.25)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.auto_awesome_rounded, color: primaryColor, size: 22),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('MangaYomi Community Repository', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                        Text('100+ public scrapers (MangaDex, ComicK, etc.)', style: TextStyle(fontSize: 11, color: Colors.white70)),
-                      ],
-                    ),
-                  ),
-                  FilledButton.tonal(
-                    onPressed: () {
-                      const defaultRepo = 'https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/index.json';
-                      if (!_userRepoUrls.contains(defaultRepo)) {
-                        setState(() => _userRepoUrls.insert(0, defaultRepo));
-                        RepoManager.instance.addUserRepo(RepoManager.deriveRepoTitle(defaultRepo), defaultRepo);
-                      }
-                    },
-                    child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  ),
-                ],
-              ),
+          if (!_containsRepo(RepoManager.officialIndexUrl))
+            _buildPresetRepoCard(
+              primaryColor: primaryColor,
+              icon: Icons.local_fire_department_rounded,
+              title: RepoManager.officialRepoTitle,
+              subtitle: '9 maintained sources (same as bundled extensions)',
+              onAdd: () => _addPresetRepo(RepoManager.officialRepoTitle, RepoManager.officialIndexUrl),
+            ),
+          if (!_containsRepo(RepoManager.communityIndexUrl))
+            _buildPresetRepoCard(
+              primaryColor: primaryColor,
+              icon: Icons.auto_awesome_rounded,
+              title: RepoManager.communityRepoTitle,
+              subtitle: '100+ public scrapers (MangaDex, ComicK, etc.)',
+              onAdd: () => _addPresetRepo(RepoManager.communityRepoTitle, RepoManager.communityIndexUrl),
             ),
           Row(
             children: [
@@ -861,10 +921,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _userRepoUrls.length,
-              itemBuilder: (context, idx) {
+          ...List.generate(_userRepoUrls.length, (idx) {
                 final url = _userRepoUrls[idx];
                 final label = RepoManager.deriveRepoTitle(url);
                 return Container(
@@ -895,9 +952,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ],
                   ),
                 );
-              },
-            ),
-          ),
+          }),
           const SizedBox(height: 12),
           if (_isStandalone) ...[
             Container(
@@ -915,7 +970,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     children: [
                       Icon(Icons.shield_outlined, color: Colors.amberAccent, size: 18),
                       SizedBox(width: 8),
-                      Text('FlareSolverr Proxy (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
+                      Expanded(
+                        child: Text(
+                          'FlareSolverr Proxy (Optional)',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -955,6 +1017,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
           ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               OutlinedButton(
@@ -989,7 +1055,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('Start Setup & Hydration', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Flexible(
+                        child: Text(
+                          'Start Setup & Hydration',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
                       SizedBox(width: 8),
                       Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
                     ],
