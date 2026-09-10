@@ -68,6 +68,14 @@ test_results/
 # FVM Version Cache
 .fvm/
 
+# Local editor / agent tooling (not part of the app)
+.cursor/
+.cursorrules
+AGENTS.md
+CLAUDE.md
+.github/copilot-instructions.md
+.github/instructions/
+
 # Release Artifacts
 *.apk
 *.ipa
