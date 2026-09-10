@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sunfire/src/core/engine/repo_manager.dart';
 import 'package:sunfire/src/core/engine/source_migration_service.dart';
 import 'package:sunfire/src/features/browse/browse_screen.dart';
 import 'package:sunfire/src/features/onboarding/onboarding_screen.dart';
@@ -81,7 +82,7 @@ void main() {
 
       await migration.markOnboardingCompleted(
         serverUrl: 'http://127.0.0.1:4567',
-        selectedRepos: ['https://m2k3a.github.io/mangayomi-extensions/index.json'],
+        selectedRepos: [RepoManager.officialIndexUrl],
         prefs: prefs,
       );
 

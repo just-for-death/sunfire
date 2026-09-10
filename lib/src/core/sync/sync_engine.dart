@@ -35,6 +35,23 @@ class SyncEngine {
     await triggerSync();
   }
 
+  /// Bypass wipe-guard and apply server library removals (Settings → Advanced).
+  Future<void> forceReconcileWithServer() async {
+    if (_isSyncing) return;
+    if (!GraphQLClientService.instance.isConfigured) return;
+    _isSyncing = true;
+    try {
+      final online = await GraphQLClientService.instance.checkServerReachable(force: true);
+      if (!online) return;
+      await _flushPendingMutations();
+      await _syncCategories();
+      await _syncSourcesAndReplicate();
+      await _performFullSync(forceLibraryRemovals: true);
+    } finally {
+      _isSyncing = false;
+    }
+  }
+
   Future<void> triggerSync() async {
     if (_isSyncing) return;
     if (!GraphQLClientService.instance.isConfigured) {
@@ -169,6 +186,203 @@ class SyncEngine {
     await IsarService.instance.saveSyncRecord(record);
   }
 
+  Future<void> syncCategoryCreate({required String name, required int localServerId, int order = 0}) async {
+    if (name.trim().isEmpty) return;
+
+    if (GraphQLClientService.instance.isConfigured) {
+      final isOnline = await GraphQLClientService.instance.checkServerReachable();
+      if (isOnline) {
+        try {
+          final res = await GraphQLClientService.instance.createCategory(name);
+          final created = res?['createCategory']?['category'];
+          if (created is Map) {
+            final remoteId = parseIntSafe(created['id']);
+            if (remoteId > 0 && remoteId != localServerId) {
+              final cats = await IsarService.instance.getCategories();
+              final match = cats.where((c) => c.serverId == localServerId).toList();
+              if (match.isNotEmpty) {
+                final cat = match.first;
+                await IsarService.instance.deleteCategory(localServerId);
+                cat.serverId = remoteId;
+                cat.name = created['name']?.toString() ?? name;
+                cat.order = parseIntSafe(created['order'], order);
+                await IsarService.instance.saveCategory(cat);
+              }
+            }
+            return;
+          }
+        } catch (e) {
+          await LoggerService.instance.logWarning('Direct category create failed ($name): $e, queuing', 'SyncEngine');
+        }
+      }
+    }
+
+    final record = SyncRecord()
+      ..recordId = const Uuid().v4()
+      ..entityType = SyncEntityType.category
+      ..entityId = localServerId.toString()
+      ..action = SyncAction.create
+      ..payloadJson = jsonEncode({
+        'op': 'create',
+        'name': name,
+        'localServerId': localServerId,
+        'order': order,
+      })
+      ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000
+      ..deviceId = _deviceId ?? 'default_device'
+      ..state = SyncRecordState.pending;
+    await IsarService.instance.saveSyncRecord(record);
+  }
+
+  Future<void> syncCategoryDelete(int categoryServerId) async {
+    if (categoryServerId <= 0) return;
+
+    if (GraphQLClientService.instance.isConfigured) {
+      final isOnline = await GraphQLClientService.instance.checkServerReachable();
+      if (isOnline) {
+        try {
+          final res = await GraphQLClientService.instance.deleteCategory(categoryServerId);
+          if (res != null) return;
+        } catch (e) {
+          await LoggerService.instance.logWarning('Direct category delete failed ($categoryServerId): $e, queuing', 'SyncEngine');
+        }
+      }
+    }
+
+    final record = SyncRecord()
+      ..recordId = const Uuid().v4()
+      ..entityType = SyncEntityType.category
+      ..entityId = categoryServerId.toString()
+      ..action = SyncAction.delete
+      ..payloadJson = jsonEncode({
+        'op': 'delete',
+        'categoryId': categoryServerId,
+      })
+      ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000
+      ..deviceId = _deviceId ?? 'default_device'
+      ..state = SyncRecordState.pending;
+    await IsarService.instance.saveSyncRecord(record);
+  }
+
+  Future<void> syncMangaCategories(int mangaServerId, List<int> categoryIds) async {
+    if (mangaServerId <= 0) return;
+
+    if (GraphQLClientService.instance.isConfigured) {
+      final isOnline = await GraphQLClientService.instance.checkServerReachable();
+      if (isOnline) {
+        try {
+          final res = await GraphQLClientService.instance.setMangaCategories(mangaServerId, categoryIds);
+          if (res != null) return;
+        } catch (e) {
+          await LoggerService.instance.logWarning('Direct manga categories sync failed ($mangaServerId): $e, queuing', 'SyncEngine');
+        }
+      }
+    }
+
+    final record = SyncRecord()
+      ..recordId = const Uuid().v4()
+      ..entityType = SyncEntityType.category
+      ..entityId = 'manga_$mangaServerId'
+      ..action = SyncAction.update
+      ..payloadJson = jsonEncode({
+        'op': 'assign',
+        'mangaId': mangaServerId,
+        'categoryIds': categoryIds,
+      })
+      ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000
+      ..deviceId = _deviceId ?? 'default_device'
+      ..state = SyncRecordState.pending;
+    await IsarService.instance.saveSyncRecord(record);
+  }
+
+  Future<void> syncCategoryRename(int categoryServerId, String newName) async {
+    if (categoryServerId < 0 || newName.trim().isEmpty) return;
+    final trimmed = newName.trim();
+
+    if (GraphQLClientService.instance.isConfigured) {
+      final isOnline = await GraphQLClientService.instance.checkServerReachable();
+      if (isOnline) {
+        try {
+          final res = await GraphQLClientService.instance.updateCategoryName(categoryServerId, trimmed);
+          if (res != null) return;
+        } catch (e) {
+          await LoggerService.instance.logWarning('Direct category rename failed ($categoryServerId): $e, queuing', 'SyncEngine');
+        }
+      }
+    }
+
+    final record = SyncRecord()
+      ..recordId = const Uuid().v4()
+      ..entityType = SyncEntityType.category
+      ..entityId = categoryServerId.toString()
+      ..action = SyncAction.update
+      ..payloadJson = jsonEncode({
+        'op': 'rename',
+        'categoryId': categoryServerId,
+        'name': trimmed,
+      })
+      ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000
+      ..deviceId = _deviceId ?? 'default_device'
+      ..state = SyncRecordState.pending;
+    await IsarService.instance.saveSyncRecord(record);
+  }
+
+  /// Queue tracker progress for all bound trackers of [mangaServerId].
+  /// Online: fetch track records and push immediately. Offline: queue a
+  /// manga-level progress record replayed on the next flush.
+  Future<void> syncMangaTrackerProgress(int mangaServerId, double chapterNumber) async {
+    if (mangaServerId <= 0 || chapterNumber < 0) return;
+
+    if (GraphQLClientService.instance.isConfigured) {
+      final isOnline = await GraphQLClientService.instance.checkServerReachable();
+      if (isOnline) {
+        try {
+          final pushed = await _pushTrackerProgressForManga(mangaServerId, chapterNumber);
+          if (pushed) return;
+        } catch (e) {
+          await LoggerService.instance.logWarning(
+            'Direct tracker progress sync failed ($mangaServerId): $e, queuing',
+            'SyncEngine',
+          );
+        }
+      }
+    }
+
+    final record = SyncRecord()
+      ..recordId = const Uuid().v4()
+      ..entityType = SyncEntityType.tracker
+      ..entityId = 'manga_$mangaServerId'
+      ..action = SyncAction.update
+      ..payloadJson = jsonEncode({
+        'op': 'mangaProgress',
+        'mangaId': mangaServerId,
+        'chapterNumber': chapterNumber,
+      })
+      ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000
+      ..deviceId = _deviceId ?? 'default_device'
+      ..state = SyncRecordState.pending;
+    await IsarService.instance.saveSyncRecord(record);
+  }
+
+  Future<bool> _pushTrackerProgressForManga(int mangaServerId, double chapterNumber) async {
+    final data = await GraphQLClientService.instance.fetchTrackRecords(mangaServerId);
+    final nodes = data?['trackRecords']?['nodes'];
+    if (nodes is! List || nodes.isEmpty) return true; // nothing bound — treat as success
+    var allOk = true;
+    for (final node in nodes) {
+      if (node is! Map) continue;
+      final trackerId = parseIntSafe(node['trackerId']);
+      if (trackerId <= 0) continue;
+      final res = await GraphQLClientService.instance.trackProgress(
+        mangaServerId,
+        trackerId,
+        chapterNumber,
+      );
+      allOk = allOk && res != null;
+    }
+    return allOk;
+  }
+
   Future<void> _flushPendingMutations() async {
     final pendingRecords = await IsarService.instance.getPendingSyncRecords();
     if (pendingRecords.isEmpty) return;
@@ -187,16 +401,22 @@ class SyncEngine {
             if (record.action == SyncAction.update) {
               final chapterId = parseIntSafe(payload['chapterId']);
               if (chapterId > 0) {
-                if (payload.containsKey('isBookmarked')) {
+                var allOk = true;
+                var attempted = false;
+                if (chapterMutationNeedsBookmark(payload)) {
+                  attempted = true;
                   final isBookmarked = parseBoolSafe(payload['isBookmarked']);
                   final res = await GraphQLClientService.instance.updateChapterBookmark(chapterId, isBookmarked);
-                  success = res != null;
-                } else {
+                  allOk = allOk && res != null;
+                }
+                if (chapterMutationNeedsReadProgress(payload)) {
+                  attempted = true;
                   final isRead = parseBoolSafe(payload['isRead']);
                   final lastPageRead = parseIntSafe(payload['lastPageRead']);
                   final res = await GraphQLClientService.instance.updateChapterReadStatus(chapterId, isRead, lastPageRead);
-                  success = res != null;
+                  allOk = allOk && res != null;
                 }
+                success = attempted && allOk;
               } else {
                 success = true;
               }
@@ -204,11 +424,18 @@ class SyncEngine {
             break;
           case SyncEntityType.tracker:
             if (record.action == SyncAction.update) {
-              final trackerId = parseIntSafe(payload['trackerId']);
-              final mangaId = parseIntSafe(payload['mangaId']);
-              final chapterNumber = parseDoubleSafe(payload['chapterNumber']);
-              final res = await GraphQLClientService.instance.trackProgress(mangaId, trackerId, chapterNumber);
-              success = res != null;
+              final op = payload['op']?.toString() ?? '';
+              if (op == 'mangaProgress') {
+                final mangaId = parseIntSafe(payload['mangaId']);
+                final chapterNumber = parseDoubleSafe(payload['chapterNumber']);
+                success = await _pushTrackerProgressForManga(mangaId, chapterNumber);
+              } else {
+                final trackerId = parseIntSafe(payload['trackerId']);
+                final mangaId = parseIntSafe(payload['mangaId']);
+                final chapterNumber = parseDoubleSafe(payload['chapterNumber']);
+                final res = await GraphQLClientService.instance.trackProgress(mangaId, trackerId, chapterNumber);
+                success = res != null;
+              }
             }
             break;
           case SyncEntityType.manga:
@@ -220,6 +447,43 @@ class SyncEngine {
             }
             break;
           case SyncEntityType.category:
+            final op = payload['op']?.toString() ?? '';
+            if (op == 'create' || record.action == SyncAction.create) {
+              final name = payload['name']?.toString() ?? '';
+              final localServerId = parseIntSafe(payload['localServerId']);
+              final res = await GraphQLClientService.instance.createCategory(name);
+              final created = res?['createCategory']?['category'];
+              if (created is Map) {
+                final remoteId = parseIntSafe(created['id']);
+                if (remoteId > 0 && localServerId > 0 && remoteId != localServerId) {
+                  final cats = await IsarService.instance.getCategories();
+                  final match = cats.where((c) => c.serverId == localServerId).toList();
+                  if (match.isNotEmpty) {
+                    final cat = match.first;
+                    await IsarService.instance.deleteCategory(localServerId);
+                    cat.serverId = remoteId;
+                    cat.name = created['name']?.toString() ?? name;
+                    await IsarService.instance.saveCategory(cat);
+                  }
+                }
+                success = true;
+              }
+            } else if (op == 'delete' || record.action == SyncAction.delete) {
+              final categoryId = parseIntSafe(payload['categoryId'] ?? record.entityId);
+              final res = await GraphQLClientService.instance.deleteCategory(categoryId);
+              success = res != null;
+            } else if (op == 'assign') {
+              final mangaId = parseIntSafe(payload['mangaId']);
+              final ids = (payload['categoryIds'] as List?)?.map((e) => parseIntSafe(e)).toList() ?? <int>[];
+              final res = await GraphQLClientService.instance.setMangaCategories(mangaId, ids);
+              success = res != null;
+            } else if (op == 'rename') {
+              final categoryId = parseIntSafe(payload['categoryId'] ?? record.entityId);
+              final name = payload['name']?.toString() ?? '';
+              final res = await GraphQLClientService.instance.updateCategoryName(categoryId, name);
+              success = res != null;
+            }
+            break;
           case SyncEntityType.source:
             break;
         }
@@ -314,7 +578,7 @@ class SyncEngine {
     }
   }
 
-  Future<void> _performFullSync() async {
+  Future<void> _performFullSync({bool forceLibraryRemovals = false}) async {
     final nowUnix = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
 
@@ -355,7 +619,12 @@ class SyncEngine {
 
           final sourceMap = nodeMap['source'] as Map<String, dynamic>?;
           manga.sourceName = sourceMap?['name'] as String? ?? sourceMap?['displayName'] as String? ?? nodeMap['sourceId']?.toString() ?? 'Unknown Source';
-          manga.lang = 'en';
+          final sourceLang = sourceMap?['lang']?.toString();
+          if (sourceLang != null && sourceLang.trim().isNotEmpty) {
+            manga.lang = sourceLang.trim();
+          } else if (manga.lang.isEmpty) {
+            manga.lang = 'en';
+          }
 
           // Save the manga's URL on the source website — used by local QuickJS extensions
           // to scrape chapters directly when the server is offline.
@@ -401,7 +670,8 @@ class SyncEngine {
         // If server returned far fewer manga than Isar has, something is wrong
         // (server was wiped/reset). Skip marking local entries as removed.
         final serverCount = serverMangas.length;
-        final removalSafe = localCountBefore == 0 ||
+        final removalSafe = forceLibraryRemovals ||
+            localCountBefore == 0 ||
             (serverCount > 0 && serverCount >= localCountBefore * 0.3); // server has at least 30% of what we had
 
         if (removalSafe && serverCount > 0) {

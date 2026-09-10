@@ -5,12 +5,12 @@ const mangayomiSources = [
     "id": 559183086,
     "baseUrl": "https://nhentai.net",
     "apiUrl": "https://nhentai.net/api/v2",
-    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://nhentai.net",
+    "iconUrl": "asset:assets/icons/sources/nhentai.png",
     "typeSource": "single",
     "isManga": true,
     "isNsfw": true,
     "itemType": 0,
-    "version": "1.1.1",
+    "version": "1.1.2",
     "pkgPath": "javascript/manga/src/en/nhentai.js"
   }
 ];

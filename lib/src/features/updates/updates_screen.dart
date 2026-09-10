@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +12,7 @@ import '../../core/services/image_cache_helper.dart';
 import '../../core/services/library_update_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/sync/websocket_service.dart';
 import '../../main_shell.dart';
 
 class UpdatesScreen extends StatefulWidget {
@@ -28,12 +31,28 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   bool _isCheckingServer = false;
   bool _isOffline = false;
   String? _lastUpdateText;
+  bool _unreadOnly = false;
+  String _searchQuery = '';
+  bool _isSearching = false;
+  String? _liveUpdateStatus;
+  StreamSubscription? _wsUpdateSub;
+  StreamSubscription? _wsDownloadSub;
 
   @override
   void initState() {
     super.initState();
     _loadUpdates();
     MainShell.selectedTabNotifier.addListener(_onTabChanged);
+    _wsUpdateSub = WebSocketService.instance.onUpdateStatus.listen((event) {
+      if (!mounted) return;
+      final status = event['status']?.toString() ?? event.toString();
+      setState(() => _liveUpdateStatus = status);
+      _loadUpdatesFromIsarCache();
+    });
+    _wsDownloadSub = WebSocketService.instance.onDownloadStatus.listen((event) {
+      if (!mounted) return;
+      setState(() {});
+    });
   }
 
   void _onTabChanged() {
@@ -42,9 +61,27 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     }
   }
 
+  List<Map<String, dynamic>> get _filteredUpdates {
+    var list = List<Map<String, dynamic>>.from(_updatesList);
+    if (_unreadOnly) {
+      list = list.where((it) => !(it['chapter'] as Chapter).isRead).toList();
+    }
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      list = list.where((it) {
+        final ch = it['chapter'] as Chapter;
+        final title = (it['mangaTitle'] ?? ch.mangaTitle).toString().toLowerCase();
+        return title.contains(q) || ch.name.toLowerCase().contains(q);
+      }).toList();
+    }
+    return list;
+  }
+
   @override
   void dispose() {
     MainShell.selectedTabNotifier.removeListener(_onTabChanged);
+    _wsUpdateSub?.cancel();
+    _wsDownloadSub?.cancel();
     super.dispose();
   }
 
@@ -87,10 +124,11 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       // Fetch last update timestamp
       final tsStr = await GraphQLClientService.instance
           .fetchLastUpdateTimestamp()
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 4), onTimeout: () => null);
+      if (!mounted) return;
       if (tsStr != null) {
         final ts = int.tryParse(tsStr);
-        if (ts != null && mounted) {
+        if (ts != null) {
           final dt = DateTime.fromMillisecondsSinceEpoch(ts > 100000000000 ? ts : ts * 1000);
           setState(() {
             _lastUpdateText = 'Last update: ${DateFormat('MM/dd/yyyy, hh:mm a').format(dt)}';
@@ -98,10 +136,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         }
       }
 
+      if (!mounted) return;
       final data = await GraphQLClientService.instance
           .fetchUpdatesChapters(first: 100)
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 8), onTimeout: () => null);
 
+      if (!mounted) return;
       if (data != null && data.containsKey('chapters')) {
         final nodes = data['chapters']['nodes'] as List<dynamic>?;
         if (nodes != null) {
@@ -321,10 +361,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   Future<void> _toggleChapterRead(Map<String, dynamic> item) async {
     final ch = item['chapter'] as Chapter;
     final newState = !ch.isRead;
-    setState(() {
-      ch.isRead = newState;
-      if (!newState) ch.lastPageRead = 0;
-    });
+    setState(() => ch.applyReadState(newState));
 
     await IsarService.instance.saveChapter(ch);
 
@@ -388,7 +425,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     setState(() {
       for (final it in unreadItems) {
         final ch = it['chapter'] as Chapter;
-        ch.isRead = true;
+        ch.applyReadState(true);
         chaptersToUpdate.add(ch);
       }
     });
@@ -708,11 +745,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                               ),
                             )
                           : Icon(
-                              isDownloaded ? Icons.cloud_done_rounded : Icons.download_rounded,
+                              isLocalDownloaded
+                                  ? Icons.download_done_rounded
+                                  : (ch.isDownloadedOnServer || (item['isDownloaded'] as bool? ?? false)
+                                      ? Icons.cloud_done_rounded
+                                      : Icons.download_rounded),
                               color: isDownloaded ? Colors.greenAccent : Colors.grey,
                               size: isTablet ? 22 : 20,
                             ),
-                      tooltip: 'Download options',
+                      tooltip: isLocalDownloaded
+                          ? 'Downloaded on device'
+                          : (ch.isDownloadedOnServer ? 'Downloaded on server' : 'Download options'),
                       visualDensity: VisualDensity.compact,
                       onPressed: () => _showDownloadOptions(item),
                     ),
@@ -748,8 +791,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     final isTablet = screenWidth >= 720;
 
     // Group updates by dateHeader
+    final visibleUpdates = _filteredUpdates;
     final Map<String, List<Map<String, dynamic>>> groupedUpdates = {};
-    for (final item in _updatesList) {
+    for (final item in visibleUpdates) {
       final header = item['dateHeader'] as String? ?? 'Recent';
       groupedUpdates.putIfAbsent(header, () => []).add(item);
     }
@@ -757,11 +801,27 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 64,
-        title: Column(
+        title: _isSearching
+            ? TextField(
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Search updates...',
+                  border: InputBorder.none,
+                ),
+                onChanged: (v) => setState(() => _searchQuery = v),
+              )
+            : Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Updates', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
-            if (!GraphQLClientService.instance.isConfigured)
+            if (_liveUpdateStatus != null && _liveUpdateStatus!.isNotEmpty)
+              Text(
+                _liveUpdateStatus!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: primaryColor, fontWeight: FontWeight.w600),
+              )
+            else if (!GraphQLClientService.instance.isConfigured)
               Container(
                 margin: const EdgeInsets.only(top: 2),
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
@@ -783,6 +843,22 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           ],
         ),
         actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close_rounded : Icons.search_rounded),
+            tooltip: 'Search',
+            onPressed: () => setState(() {
+              _isSearching = !_isSearching;
+              if (!_isSearching) _searchQuery = '';
+            }),
+          ),
+          IconButton(
+            icon: Icon(
+              _unreadOnly ? Icons.filter_alt_rounded : Icons.filter_alt_outlined,
+              color: _unreadOnly ? primaryColor : null,
+            ),
+            tooltip: _unreadOnly ? 'Show all updates' : 'Unread only',
+            onPressed: () => setState(() => _unreadOnly = !_unreadOnly),
+          ),
           ListenableBuilder(
             listenable: LibraryUpdateService.instance,
             builder: (context, _) {

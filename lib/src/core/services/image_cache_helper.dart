@@ -356,7 +356,7 @@ class ImageCacheHelper {
               await file.writeAsBytes(bytes);
               _resolvedPaths[mangaServerId] = file.path;
             }
-            final urlFile = File('$basePath/url_${url.hashCode.abs()}.jpg');
+            final urlFile = File('$basePath/url_${_hashUrl(url)}.jpg');
             await urlFile.writeAsBytes(bytes);
           } catch (_) {}
         }

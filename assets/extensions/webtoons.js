@@ -5,11 +5,11 @@ const mangayomiSources = [{
     "langs": ["en", "fr", "id", "th", "es", "zh", "de"],
     "baseUrl": "https://www.webtoons.com",
     "apiUrl": "",
-    "iconUrl": "https://upload.wikimedia.org/wikipedia/commons/0/09/Naver_Line_Webtoon_logo.png",
+    "iconUrl": "asset:assets/icons/sources/webtoons.png",
     "typeSource": "single",
     "isManga": true,
     "isNsfw": false,
-    "version": "1.2.0",
+    "version": "1.2.1",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "javascript/manga/src/en/webtoons.js"

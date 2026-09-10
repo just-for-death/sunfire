@@ -5,12 +5,11 @@ const mangayomiSources = [
     "id": 376287717,
     "baseUrl": "https://readcomicsonline.ru",
     "apiUrl": "",
-    "iconUrl":
-      "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/dart/manga/multisrc/mmrcms/src/en/readcomicsonline/icon.png",
+    "iconUrl": "asset:assets/icons/sources/read_comics_online.png",
     "typeSource": "single",
     "isManga": true,
     "itemType": 0,
-    "version": "1.2.2",
+    "version": "1.2.3",
     "pkgPath": "javascript/manga/src/en/read_comics_online.js",
   },
 ];

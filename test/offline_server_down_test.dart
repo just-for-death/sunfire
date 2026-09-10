@@ -12,19 +12,24 @@ void main() {
   group('OFFLINE VALIDATION: Server Down & Local Extension Operations', () {
     test('1. Server unreachable check: GraphQLClientService does not crash app', () async {
       final gql = GraphQLClientService.instance;
-      gql.initialize('http://localhost:4567'); // Server is verified down
+      // Intentionally dead port — do not use :4567 (may be a live Docker Suwayomi).
+      gql.initialize('http://127.0.0.1:45999');
 
-      // Verify server is not reachable
       expect(gql.isConfigured, isTrue);
 
-      bool caughtGracefully = false;
+      final online = await gql
+          .checkServerReachable()
+          .timeout(const Duration(seconds: 3), onTimeout: () => false);
+      expect(online, isFalse);
+
+      Map<String, dynamic>? res;
+      var threw = false;
       try {
-        final res = await gql.fetchLibrary().timeout(const Duration(seconds: 2));
-        expect(res, isNull);
-      } catch (e) {
-        caughtGracefully = true;
+        res = await gql.fetchLibrary().timeout(const Duration(seconds: 3));
+      } catch (_) {
+        threw = true;
       }
-      expect(caughtGracefully || true, isTrue);
+      expect(threw || res == null, isTrue);
     });
 
     test('2. SyncEngine with server down: Does NOT wipe local cache', () async {

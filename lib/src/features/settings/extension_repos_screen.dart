@@ -16,11 +16,59 @@ class ExtensionReposScreen extends StatefulWidget {
 class _ExtensionReposScreenState extends State<ExtensionReposScreen> {
   final SettingsService _settings = SettingsService.instance;
   final TextEditingController _urlController = TextEditingController();
+  bool _isRefreshing = false;
+  String? _lastRefreshText;
 
   @override
   void dispose() {
     _urlController.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshReposNow() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    try {
+      final urls = _settings.customRepos;
+      if (urls.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Add a repository first.')),
+          );
+        }
+        return;
+      }
+      final count = await RepoManager.instance.downloadAndInstallAllRepoExtensions(userRepoUrls: urls);
+      if (!mounted) return;
+      setState(() {
+        _lastRefreshText = 'Updated $count extensions · ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Installed/updated $count extensions from repos.')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Repo refresh failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
+    }
+  }
+
+  bool _listContainsRepo(List<String> urls, String candidate) {
+    final normalized = RepoManager.normalizeRepoUrl(candidate);
+    return urls.any((url) => url == candidate || RepoManager.normalizeRepoUrl(url) == normalized);
+  }
+
+  Future<void> _addPreset(String url) async {
+    final normalized = RepoManager.normalizeRepoUrl(url);
+    await _settings.addCustomRepo(normalized);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Added repository: ${RepoManager.deriveRepoTitle(normalized)}')),
+    );
   }
 
   void _showAddRepoDialog() {
@@ -42,7 +90,7 @@ class _ExtensionReposScreenState extends State<ExtensionReposScreen> {
                 controller: _urlController,
                 autofocus: true,
                 decoration: InputDecoration(
-                  hintText: 'https://raw.githubusercontent.com/.../index.json',
+                  hintText: RepoManager.officialIndexUrl,
                   prefixIcon: Icon(Icons.link_rounded, color: primaryColor),
                   filled: true,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -104,7 +152,42 @@ class _ExtensionReposScreenState extends State<ExtensionReposScreen> {
           body: ListView(
             padding: const EdgeInsets.only(bottom: 120),
             children: [
+              const SectionTitle(title: 'Suggested Repositories'),
+              if (!_listContainsRepo(customList, RepoManager.officialIndexUrl))
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  leading: Icon(Icons.local_fire_department_rounded, color: primaryColor),
+                  title: const Text(RepoManager.officialRepoTitle, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  subtitle: const Text('9 maintained sources (same as bundled extensions)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  trailing: TextButton(
+                    onPressed: () => _addPreset(RepoManager.officialIndexUrl),
+                    child: const Text('Add'),
+                  ),
+                ),
+              if (!_listContainsRepo(customList, RepoManager.communityIndexUrl))
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  leading: Icon(Icons.auto_awesome_rounded, color: primaryColor),
+                  title: const Text(RepoManager.communityRepoTitle, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  subtitle: const Text('100+ public scrapers (MangaDex, ComicK, etc.)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  trailing: TextButton(
+                    onPressed: () => _addPreset(RepoManager.communityIndexUrl),
+                    child: const Text('Add'),
+                  ),
+                ),
               const SectionTitle(title: 'Configured Repositories'),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                leading: _isRefreshing
+                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Icon(Icons.system_update_alt_rounded, color: primaryColor),
+                title: const Text('Update Extensions Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                subtitle: Text(
+                  _lastRefreshText ?? 'Fetch indexes and install available updates from configured repos',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                onTap: _isRefreshing ? null : _refreshReposNow,
+              ),
               if (customList.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(24.0),
@@ -117,7 +200,7 @@ class _ExtensionReposScreenState extends State<ExtensionReposScreen> {
                         const Text('No custom repositories configured', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 6),
                         const Text(
-                          'Add community MangaYomi index.json repository URLs to discover and install scrapers.',
+                          'Add the official Sunfire index or a community MangaYomi index.json to discover and update scrapers.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.grey, fontSize: 13),
                         ),
