@@ -36,6 +36,21 @@ bool chapterMutationNeedsBookmark(Map<String, dynamic> payload) =>
 bool chapterMutationNeedsReadProgress(Map<String, dynamic> payload) =>
     payload.containsKey('isRead') || payload.containsKey('lastPageRead');
 
+/// Suwayomi `TrackProgressInput` is only `mangaId`. The server copies local
+/// chapter-read state onto every bound MAL/AniList/etc. record. Score, status,
+/// and dates go through [GraphQLClientService.updateTrack] (`UpdateTrackInput`).
+const String kTrackProgressMutation = r'''
+      mutation($mangaId: Int!) {
+        trackProgress(input: { mangaId: $mangaId }) {
+          trackRecords {
+            id
+            trackerId
+            lastChapterRead
+          }
+        }
+      }
+    ''';
+
 class GraphQLClientService {
   static GraphQLClientService? _instance;
   late Dio _dio;
@@ -694,18 +709,12 @@ class GraphQLClientService {
     return await query(mutStr, variables: {'id': chapterId, 'isRead': isRead, 'lastPageRead': lastPageRead}, label: 'updateChapterReadStatus');
   }
 
-  Future<Map<String, dynamic>?> trackProgress(int mangaId, [int trackerId = 1, double chapterNumber = 1.0]) async {
-    const mutStr = r'''
-      mutation($trackerId: Int!, $mangaId: Int!, $lastChapterRead: Float) {
-        trackProgress(input: { trackerId: $trackerId, mangaId: $mangaId, lastChapterRead: $lastChapterRead }) {
-          track {
-            id
-            lastChapterRead
-          }
-        }
-      }
-    ''';
-    return await query(mutStr, variables: {'trackerId': trackerId, 'mangaId': mangaId, 'lastChapterRead': chapterNumber}, label: 'trackProgress');
+  Future<Map<String, dynamic>?> trackProgress(int mangaId) async {
+    return await query(
+      kTrackProgressMutation,
+      variables: {'mangaId': mangaId},
+      label: 'trackProgress',
+    );
   }
 
   Future<Map<String, dynamic>?> fetchTrackRecords(int mangaId) async {

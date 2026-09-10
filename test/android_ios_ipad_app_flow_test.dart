@@ -278,6 +278,37 @@ void main() {
       expect(find.byIcon(Icons.local_fire_department_rounded), findsOneWidget);
     });
 
+    testWidgets('iPad sidebar collapse/expand does not overflow during animation', (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(const MaterialApp(home: MainShell()));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(tester.takeException(), isNull);
+      expect(sunfireSidebarExpandedLayoutMinWidth, 180);
+
+      await tester.tap(find.byTooltip('Collapse sidebar'));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 40));
+        expect(tester.takeException(), isNull);
+      }
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byTooltip('Expand sidebar'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Expand sidebar'));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 40));
+        expect(tester.takeException(), isNull);
+      }
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byTooltip('Collapse sidebar'), findsOneWidget);
+    });
+
     testWidgets('compact Android phone nav does not overflow', (tester) async {
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1.0;
