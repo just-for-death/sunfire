@@ -42,6 +42,14 @@ void main() {
       expect(tracker['op'], 'mangaProgress');
     });
 
+    test('3b. trackProgress mutation matches Suwayomi TrackProgressInput (mangaId only)', () {
+      expect(kTrackProgressMutation.contains(r'$mangaId: Int!'), isTrue);
+      expect(kTrackProgressMutation.contains('input: { mangaId: \$mangaId }'), isTrue);
+      expect(kTrackProgressMutation.contains('trackerId:'), isFalse);
+      expect(kTrackProgressMutation.contains('lastChapterRead:'), isFalse);
+      expect(kTrackProgressMutation.contains('trackRecords'), isTrue);
+    });
+
     test('4. SourceIconHelper maps all shipped extension display names', () {
       const names = [
         'Weeb Central',
