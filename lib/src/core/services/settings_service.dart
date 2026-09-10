@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/javascript/m_client.dart';
+import '../engine/repo_manager.dart';
 
 class SettingsService extends ChangeNotifier {
   static SettingsService? _instance;
@@ -16,6 +17,31 @@ class SettingsService extends ChangeNotifier {
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
+    await _migrateOnboardingReposIntoCustomRepos();
+    for (final url in customRepos) {
+      final normalized = RepoManager.normalizeRepoUrl(url);
+      RepoManager.instance.addUserRepo(RepoManager.deriveRepoTitle(normalized), normalized);
+    }
+  }
+
+  /// Onboarding historically wrote `sunfire_selected_repos`; Browse/Settings read `custom_repos`.
+  Future<void> _migrateOnboardingReposIntoCustomRepos() async {
+    final legacy = _prefs?.getStringList('sunfire_selected_repos') ?? [];
+    if (legacy.isEmpty) return;
+    final existing = List<String>.from(customRepos);
+    var changed = false;
+    for (final url in legacy) {
+      final normalized = RepoManager.normalizeRepoUrl(url);
+      if (normalized.isEmpty) continue;
+      final already = existing.any((e) => RepoManager.normalizeRepoUrl(e) == normalized);
+      if (!already) {
+        existing.add(normalized);
+        changed = true;
+      }
+    }
+    if (changed) {
+      await _prefs?.setStringList('custom_repos', existing);
+    }
   }
 
   // ── MANGA DETAILS ────────────────────────────────────────
@@ -259,24 +285,15 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── STORAGE & DOWNLOADS ──────────────────────────────────
-  bool get autoDownloadEnabled => _prefs?.getBool('auto_download_enabled') ?? false;
-  set autoDownloadEnabled(bool value) {
-    _prefs?.setBool('auto_download_enabled', value);
-    notifyListeners();
-  }
+  // Legacy aliases — keep prefs keys readable for older installs.
+  bool get autoDownloadEnabled => autoDownloadWhileReading;
+  set autoDownloadEnabled(bool value) => autoDownloadWhileReading = value;
 
-  int get autoDownloadCount => _prefs?.getInt('auto_download_count') ?? 3;
-  set autoDownloadCount(int value) {
-    _prefs?.setInt('auto_download_count', value);
-    notifyListeners();
-  }
+  int get autoDownloadCount => downloadAheadChapterCount;
+  set autoDownloadCount(int value) => downloadAheadChapterCount = value;
 
-  bool get autoDeleteRead => _prefs?.getBool('auto_delete_read') ?? true;
-  set autoDeleteRead(bool value) {
-    _prefs?.setBool('auto_delete_read', value);
-    notifyListeners();
-  }
+  bool get autoDeleteRead => deleteChapterAfterMarkedRead;
+  set autoDeleteRead(bool value) => deleteChapterAfterMarkedRead = value;
 
   bool get deleteChapterAfterMarkedRead => _prefs?.getBool('delete_chapter_after_marked_read') ?? false;
   set deleteChapterAfterMarkedRead(bool value) {
@@ -396,18 +413,24 @@ class SettingsService extends ChangeNotifier {
   List<String> get customRepos => _prefs?.getStringList('custom_repos') ?? [];
 
   Future<void> addCustomRepo(String url) async {
+    final normalized = RepoManager.normalizeRepoUrl(url);
+    if (normalized.isEmpty) return;
     final list = List<String>.from(customRepos);
-    if (!list.contains(url)) {
-      list.add(url);
+    final already = list.any((existing) => RepoManager.normalizeRepoUrl(existing) == normalized);
+    if (!already) {
+      list.add(normalized);
       await _prefs?.setStringList('custom_repos', list);
+      RepoManager.instance.addUserRepo(RepoManager.deriveRepoTitle(normalized), normalized);
       notifyListeners();
     }
   }
 
   Future<void> removeCustomRepo(String url) async {
-    final list = List<String>.from(customRepos);
-    list.remove(url);
+    final normalized = RepoManager.normalizeRepoUrl(url);
+    final list = List<String>.from(customRepos)
+      ..removeWhere((existing) => existing == url || RepoManager.normalizeRepoUrl(existing) == normalized);
     await _prefs?.setStringList('custom_repos', list);
+    RepoManager.instance.removeUserRepo(normalized);
     notifyListeners();
   }
 

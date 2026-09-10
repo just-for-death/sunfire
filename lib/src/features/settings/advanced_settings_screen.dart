@@ -11,6 +11,7 @@ import '../../core/engine/javascript/m_client.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
+import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -212,6 +213,38 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Diagnostic logs cleared.')),
+                );
+              }
+            },
+          ),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            leading: const Icon(Icons.sync_problem_rounded, color: Colors.orangeAccent),
+            title: const Text('Force Reconcile With Server', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+            subtitle: const Text('Apply server library removals even if the wipe-guard would skip them', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            onTap: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: const Color(0xFF1F1F24),
+                  title: const Text('Force reconcile?'),
+                  content: const Text(
+                    'Titles that exist only on this device but not on the Suwayomi server will be removed from your library. Downloaded files are not deleted.',
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Reconcile'),
+                    ),
+                  ],
+                ),
+              );
+              if (ok != true) return;
+              await SyncEngine.instance.forceReconcileWithServer();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Library reconciled with server.')),
                 );
               }
             },

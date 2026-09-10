@@ -4,10 +4,10 @@ const mangayomiSources = [{
     "lang": "en",
     "baseUrl": "https://fanfox.net",
     "apiUrl": "",
-    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://www.mangahere.cc",
+    "iconUrl": "asset:assets/icons/sources/mangahere.png",
     "typeSource": "single",
     "itemType": 0,
-    "version": "1.2.2",
+    "version": "1.2.3",
     "pkgPath": "javascript/manga/src/en/mangahere.js"
 }];
 

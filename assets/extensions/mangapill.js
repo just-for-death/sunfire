@@ -5,11 +5,10 @@ const mangayomiSources = [
     "lang": "en",
     "baseUrl": "https://mangapill.com",
     "apiUrl": "",
-    "iconUrl":
-      "https://www.google.com/s2/favicons?sz=64&domain=https://mangapill.com/",
+    "iconUrl": "asset:assets/icons/sources/mangapill.png",
     "typeSource": "single",
     "isManga": true,
-    "version": "1.3.1",
+    "version": "1.3.2",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "javascript/manga/src/en/mangapill.js",
