@@ -1,16 +1,25 @@
-<!--
- Copyright (c) 2024 Contributors to the Sunfire project
-
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
--->
-
+<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <!-- FOSS: no cleartext by default. Do not set usesCleartextTraffic on
+         <application> (scanners treat that as a dangerous manifest bit). -->
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
-            <certificates src="user"/>
-            <certificates src="system"/>
+            <certificates src="system" />
         </trust-anchors>
     </base-config>
+
+    <!-- Loopback / emulator host only. Android NSC cannot express RFC1918
+         CIDR; use HTTPS or a reverse proxy for LAN Suwayomi on private IPs. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+    </domain-config>
+
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+            <certificates src="system" />
+        </trust-anchors>
+    </debug-overrides>
 </network-security-config>

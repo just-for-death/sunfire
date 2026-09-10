@@ -250,6 +250,10 @@ void main() {
         prefs.getStringList(SourceMigrationService.keySelectedRepos),
         equals(['m2k3a', 'Mallyd11', 'Swakshan']),
       );
+      expect(
+        prefs.getStringList('custom_repos'),
+        equals(['m2k3a', 'Mallyd11', 'Swakshan']),
+      );
     });
 
     test('11. Reset onboarding allows re-running setup if user switches server in settings', () async {

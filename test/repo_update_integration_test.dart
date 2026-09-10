@@ -19,6 +19,10 @@ void main() {
         equals('https://raw.githubusercontent.com/example/manga-repo/main/index.json'),
       );
       expect(
+        RepoManager.normalizeRepoUrl('https://github.com/just-for-death/mangayomi-extensions'),
+        equals(RepoManager.officialIndexUrl),
+      );
+      expect(
         RepoManager.normalizeRepoUrl('https://example.com/custom/index.json'),
         equals('https://example.com/custom/index.json'),
       );

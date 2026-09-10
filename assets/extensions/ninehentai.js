@@ -5,12 +5,12 @@ const mangayomiSources = [
     "id": 768949056,
     "baseUrl": "https://9hentai.so",
     "apiUrl": "https://9hentai.so/api",
-    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://9hentai.so",
+    "iconUrl": "asset:assets/icons/sources/ninehentai.png",
     "typeSource": "single",
     "isManga": true,
     "isNsfw": true,
     "itemType": 0,
-    "version": "1.1.1",
+    "version": "1.1.2",
     "pkgPath": "javascript/manga/src/en/ninehentai.js"
   }
 ];

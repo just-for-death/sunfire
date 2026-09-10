@@ -4,10 +4,10 @@ const mangayomiSources = [{
     "lang": "en",
     "baseUrl": "https://ww3.mangafreak.me",
     "apiUrl": "",
-    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://ww3.mangafreak.me",
+    "iconUrl": "asset:assets/icons/sources/mangafreak.png",
     "typeSource": "single",
     "itemType": 0,
-    "version": "1.0.3",
+    "version": "1.0.4",
     "pkgPath": "javascript/manga/src/en/mangafreak.js"
 }];
 

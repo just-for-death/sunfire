@@ -36,5 +36,12 @@ class Manga {
   /// Used for progress display fully offline.
   int chapterCount = 0;
 
+  /// Optional per-series reading mode override (`Long Strip`, `Paged RTL (Manga)`, …).
+  /// Null/empty means fall back to the global Settings reading mode.
+  String? readingModeOverride;
+
+  /// Unix ms of the most recent chapter open for this series (library “Last Read” sort).
+  int? lastReadAt;
+
   Manga();
 }

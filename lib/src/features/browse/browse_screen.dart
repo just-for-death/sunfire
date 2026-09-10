@@ -5,10 +5,12 @@ import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/engine/repo_manager.dart';
+import '../../core/engine/source_icon_helper.dart';
 import '../../core/engine/source_migration_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/server_auth_helper.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import 'extension_details_screen.dart';
@@ -75,7 +77,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final currentServerUrl = SettingsService.instance.serverUrl;
     if (currentServerUrl.isNotEmpty) {
       if (!GraphQLClientService.instance.isConfigured || GraphQLClientService.instance.baseUrl != currentServerUrl) {
-        GraphQLClientService.instance.initialize(currentServerUrl);
+        final authToken = await ServerAuthHelper.getRawAuthHeader();
+        GraphQLClientService.instance.initialize(currentServerUrl, authToken: authToken);
       }
     }
     final serverUrl = GraphQLClientService.instance.baseUrl ?? currentServerUrl;
@@ -89,7 +92,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         'id': localId,
         'name': name,
         'displayName': name,
-        'lang': 'EN',
+        'lang': QuickJsService.instance.getSourceLang(name),
         'supportsLatest': true,
         'isPinned': SettingsService.instance.isSourcePinned(localId),
         'iconUrl': QuickJsService.instance.getSourceIconUrl(name),
@@ -855,67 +858,54 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: iconUrl.isNotEmpty
-                          ? Image.network(
-                              iconUrl,
-                              fit: BoxFit.cover,
-                              cacheWidth: 100,
-                              cacheHeight: 100,
-                              errorBuilder: (_, __, ___) => Center(
-                                child: Text(
-                                  name.substring(0, 1).toUpperCase(),
-                                  style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16),
-                                ),
-                              ),
-                            )
-                        : Center(
-                            child: Text(
-                              name.substring(0, 1).toUpperCase(),
-                              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                          ),
+                      child: SourceIconImage(
+                        name: name,
+                        iconUrl: iconUrl,
+                        size: 36,
+                        fallbackColor: primaryColor,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        const SizedBox(height: 3),
+                        Wrap(
+                          spacing: 5,
+                          runSpacing: 3,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            SunfireBadge(
+                              label: lang,
+                              color: Colors.grey,
+                              textColor: Colors.white70,
+                            ),
+                            SunfireBadge(
+                              label: isLocalJs ? 'Local' : 'Server',
+                              color: isLocalJs ? Colors.tealAccent : Colors.lightBlueAccent,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      const SizedBox(height: 3),
-                      Wrap(
-                        spacing: 5,
-                        runSpacing: 3,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          SunfireBadge(
-                            label: lang,
-                            color: Colors.grey,
-                            textColor: Colors.white70,
-                          ),
-                          SunfireBadge(
-                            label: isLocalJs ? 'Local' : 'Server',
-                            color: isLocalJs ? Colors.tealAccent : Colors.lightBlueAccent,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (supportsLatest)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 4.0),
-                        child: TextButton(
-                          style: TextButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      if (supportsLatest)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4.0),
+                          child: TextButton(
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             backgroundColor: Colors.white.withValues(alpha: 0.06),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
@@ -1267,26 +1257,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(10),
-                                    child: iconUrl.isNotEmpty
-                                        ? Image.network(
-                                            iconUrl,
-                                            fit: BoxFit.cover,
-                                            cacheWidth: 120,
-                                            cacheHeight: 120,
-                                            errorBuilder: (_, __, ___) => Center(
-                                              child: Text(
-                                                (name.isNotEmpty ? name[0] : (lang.isNotEmpty ? lang[0] : 'E')).toUpperCase(),
-                                                style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16),
-                                              ),
-                                            ),
-                                          )
-                                        : Center(
-                                            child: Text(
-                                              (name.isNotEmpty ? name[0] : (lang.isNotEmpty ? lang[0] : 'E')).toUpperCase(),
-                                              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16),
-                                            ),
-                                          ),
-),
+                                    child: SourceIconImage(
+                                      name: name.isNotEmpty ? name : (lang.isNotEmpty ? lang : 'E'),
+                                      iconUrl: iconUrl,
+                                      size: 42,
+                                      fallbackColor: primaryColor,
+                                    ),
+                                  ),
                                 ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -1498,13 +1475,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: iconUrl.isNotEmpty
-                            ? Image.network(
-                                iconUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Icon(Icons.swap_horizontal_circle_outlined, color: primaryColor, size: 22),
-                              )
-                            : Icon(Icons.swap_horizontal_circle_outlined, color: primaryColor, size: 22),
+                        child: SourceIconImage(
+                          name: name,
+                          iconUrl: iconUrl,
+                          size: 42,
+                          fallbackColor: primaryColor,
+                        ),
                       ),
                     ),
                     title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),

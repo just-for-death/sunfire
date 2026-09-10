@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'package:cronet_http/cronet_http.dart';
 import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -9,21 +8,10 @@ import 'package:http_interceptor/http_interceptor.dart';
 import '../../logging/logger_service.dart';
 import '../../services/settings_service.dart';
 
-CronetEngine? _sharedCronetEngine;
-
 http.Client _createNativeEngineClient() {
-  if (!kIsWeb && Platform.isAndroid) {
-    try {
-      _sharedCronetEngine ??= CronetEngine.build(
-        cacheMode: CacheMode.memory,
-        cacheMaxSize: 32 * 1024 * 1024,
-        enableHttp2: true,
-        enableQuic: true,
-        enableBrotli: true,
-      );
-      return CronetClient.fromCronetEngine(_sharedCronetEngine!);
-    } catch (_) {}
-  } else if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
+  // Android/Linux/Windows: dart:io HttpClient (no Play Services Cronet).
+  // Apple: NSURLSession via cupertino_http.
+  if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
     try {
       return CupertinoClient.defaultSessionConfiguration();
     } catch (_) {}

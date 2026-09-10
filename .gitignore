@@ -63,6 +63,7 @@ android/key.properties
 .sentry-native/
 test_*.py
 implementation_plan.md
+test_results/
 
 # FVM Version Cache
 .fvm/
@@ -72,3 +73,4 @@ implementation_plan.md
 *.ipa
 *.part
 *.zip
+release/

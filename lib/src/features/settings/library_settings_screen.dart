@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../core/db/isar_service.dart';
@@ -6,6 +9,7 @@ import '../../core/services/library_update_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/background_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
@@ -106,45 +110,39 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
   Future<void> _addCategory(String name) async {
     if (name.trim().isEmpty) return;
     final trimmed = name.trim();
-    if (GraphQLClientService.instance.isConfigured) {
-      try {
-        await GraphQLClientService.instance.createCategory(trimmed);
-      } catch (_) {}
-    }
     final existing = await IsarService.instance.getCategories();
-    if (!existing.any((c) => c.name.toLowerCase() == trimmed.toLowerCase())) {
-      final localCat = Category()
-        ..serverId = DateTime.now().millisecondsSinceEpoch
-        ..name = trimmed
-        ..order = existing.length;
-      await IsarService.instance.saveCategory(localCat);
+    if (existing.any((c) => c.name.toLowerCase() == trimmed.toLowerCase())) {
+      await _loadData();
+      return;
     }
+    final localCat = Category()
+      ..serverId = DateTime.now().millisecondsSinceEpoch
+      ..name = trimmed
+      ..order = existing.length;
+    await IsarService.instance.saveCategory(localCat);
+    await SyncEngine.instance.syncCategoryCreate(
+      name: trimmed,
+      localServerId: localCat.serverId,
+      order: localCat.order,
+    );
     await _loadData();
   }
 
   Future<void> _renameCategory(Category cat, String newName) async {
     if (newName.trim().isEmpty) return;
     final trimmed = newName.trim();
-    if (GraphQLClientService.instance.isConfigured) {
-      try {
-        await GraphQLClientService.instance.updateCategoryName(cat.serverId, trimmed);
-      } catch (_) {}
-    }
     cat.name = trimmed;
     await IsarService.instance.saveCategory(cat);
     if (_settings.defaultCategoryId == cat.serverId) {
       _settings.defaultCategoryName = trimmed;
     }
+    await SyncEngine.instance.syncCategoryRename(cat.serverId, trimmed);
     await _loadData();
   }
 
   Future<void> _deleteCategory(Category cat) async {
     await IsarService.instance.deleteCategory(cat.serverId);
-    if (GraphQLClientService.instance.isConfigured) {
-      try {
-        await GraphQLClientService.instance.deleteCategory(cat.serverId);
-      } catch (_) {}
-    }
+    await SyncEngine.instance.syncCategoryDelete(cat.serverId);
     if (_settings.defaultCategoryId == cat.serverId) {
       _settings.defaultCategoryId = null;
       _settings.defaultCategoryName = 'Default';
@@ -447,6 +445,24 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
                     const SectionTitle(title: 'Automated Updates & Notifications (Mihon Parity)'),
+                    if (!kIsWeb && !Platform.isAndroid)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF191920),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0x1AFFFFFF)),
+                          ),
+                          child: const Text(
+                            'On iPhone and iPad, library updates run when you open the app (background WorkManager is Android-only for sideload stability).',
+                            style: TextStyle(fontSize: 12.5, color: Colors.white70, height: 1.35),
+                          ),
+                        ),
+                      ),
+                    if (!kIsWeb && Platform.isAndroid) ...[
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                       title: Wrap(
@@ -510,6 +526,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                         BackgroundService.instance.rescheduleTask();
                       },
                     ),
+                    ],
                     SettingsPropTile(
                       title: 'New Chapter Notifications',
                       subtitle: 'Show system notifications when new chapters are found',

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:app_links/app_links.dart';
 import 'package:dynamic_color/dynamic_color.dart';
@@ -28,6 +27,15 @@ import 'features/settings/reader_settings_screen.dart';
 import 'features/settings/server_settings_screen.dart';
 import 'features/stats/stats_screen.dart';
 import 'main_shell.dart';
+
+double effectiveTopSafeInset({
+  required double rawTop,
+  required bool isApple,
+  required bool isTablet,
+}) {
+  if (rawTop > 0.5) return rawTop;
+  return isApple ? (isTablet ? 24.0 : 47.0) : 0.0;
+}
 
 class SunfireApp extends StatefulWidget {
   const SunfireApp({super.key});
@@ -365,19 +373,22 @@ class _SunfireAppState extends State<SunfireApp> {
               routerConfig: _router,
               builder: (context, child) {
                 final mediaQuery = MediaQuery.of(context);
-                final screenWidth = mediaQuery.size.width;
-                final isTablet = screenWidth >= 720;
+                final isTablet = mediaQuery.size.width >= 720;
                 final isApple = Theme.of(context).platform == TargetPlatform.iOS ||
                     Theme.of(context).platform == TargetPlatform.macOS;
 
-                // Guarantee minimum top safe area inset for iPadOS, LiveContainer,
-                // and sideload environments where safeAreaInsets.top can be reported as 0 or 24.
-                final minTopPadding = isTablet
-                    ? (isApple ? 54.0 : 48.0)
-                    : (isApple ? 48.0 : 24.0);
-
-                final effectiveTopPadding = math.max(mediaQuery.padding.top, minTopPadding);
-                final effectiveTopViewPadding = math.max(mediaQuery.viewPadding.top, minTopPadding);
+                // Only invent a top inset when the platform reports none (sideload /
+                // LiveContainer). Never raise a real iPad/iPhone inset — that draws a
+                // second status-bar strip over the UI.
+                final rawTop = mediaQuery.padding.top;
+                final rawViewTop = mediaQuery.viewPadding.top;
+                final fallbackTop = effectiveTopSafeInset(
+                  rawTop: rawTop,
+                  isApple: isApple,
+                  isTablet: isTablet,
+                );
+                final effectiveTopPadding = rawTop > 0.5 ? rawTop : fallbackTop;
+                final effectiveTopViewPadding = rawViewTop > 0.5 ? rawViewTop : fallbackTop;
 
                 return MediaQuery(
                   data: mediaQuery.copyWith(

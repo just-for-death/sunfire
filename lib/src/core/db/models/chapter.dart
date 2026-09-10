@@ -63,5 +63,38 @@ class Chapter {
     }
   }
 
+  /// Aligns local progress with the reader complete-chapter path.
+  void applyReadState(bool read) {
+    isRead = read;
+    if (read) {
+      if (pageCount > 0) lastPageRead = pageCount;
+    } else {
+      lastPageRead = 0;
+    }
+  }
+
+  /// Clears history feed membership without changing read/unread status.
+  void clearHistoryTimestamp() {
+    lastReadAt = null;
+  }
+
   Chapter();
+}
+
+/// Picks the chapter Continue Reading should open (in-progress → next unread → last read).
+Chapter? pickContinueReadingChapter(List<Chapter> chapters) {
+  if (chapters.isEmpty) return null;
+  final inProgress = chapters.where((c) => !c.isRead && c.lastPageRead > 0).toList();
+  if (inProgress.isNotEmpty) {
+    inProgress.sort((a, b) => (b.lastReadAt ?? 0).compareTo(a.lastReadAt ?? 0));
+    return inProgress.first;
+  }
+  final sortedByNum = List<Chapter>.from(chapters)..sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
+  final hasUnread = sortedByNum.any((c) => !c.isRead);
+  if (hasUnread) {
+    return sortedByNum.firstWhere((c) => !c.isRead);
+  }
+  final byLastRead = List<Chapter>.from(chapters)
+    ..sort((a, b) => (b.lastReadAt ?? 0).compareTo(a.lastReadAt ?? 0));
+  return byLastRead.first;
 }
