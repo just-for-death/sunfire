@@ -337,7 +337,7 @@ class SyncEngine {
       final isOnline = await GraphQLClientService.instance.checkServerReachable();
       if (isOnline) {
         try {
-          final pushed = await _pushTrackerProgressForManga(mangaServerId, chapterNumber);
+          final pushed = await _pushTrackerProgressForManga(mangaServerId);
           if (pushed) return;
         } catch (e) {
           await LoggerService.instance.logWarning(
@@ -364,23 +364,14 @@ class SyncEngine {
     await IsarService.instance.saveSyncRecord(record);
   }
 
-  Future<bool> _pushTrackerProgressForManga(int mangaServerId, double chapterNumber) async {
+  /// Pushes MAL/AniList progress via `trackProgress(mangaId)` after chapter
+  /// read has been applied on the server. Does not send trackerId.
+  Future<bool> _pushTrackerProgressForManga(int mangaServerId) async {
     final data = await GraphQLClientService.instance.fetchTrackRecords(mangaServerId);
     final nodes = data?['trackRecords']?['nodes'];
     if (nodes is! List || nodes.isEmpty) return true; // nothing bound — treat as success
-    var allOk = true;
-    for (final node in nodes) {
-      if (node is! Map) continue;
-      final trackerId = parseIntSafe(node['trackerId']);
-      if (trackerId <= 0) continue;
-      final res = await GraphQLClientService.instance.trackProgress(
-        mangaServerId,
-        trackerId,
-        chapterNumber,
-      );
-      allOk = allOk && res != null;
-    }
-    return allOk;
+    final res = await GraphQLClientService.instance.trackProgress(mangaServerId);
+    return res != null;
   }
 
   Future<void> _flushPendingMutations() async {
@@ -427,13 +418,10 @@ class SyncEngine {
               final op = payload['op']?.toString() ?? '';
               if (op == 'mangaProgress') {
                 final mangaId = parseIntSafe(payload['mangaId']);
-                final chapterNumber = parseDoubleSafe(payload['chapterNumber']);
-                success = await _pushTrackerProgressForManga(mangaId, chapterNumber);
+                success = await _pushTrackerProgressForManga(mangaId);
               } else {
-                final trackerId = parseIntSafe(payload['trackerId']);
                 final mangaId = parseIntSafe(payload['mangaId']);
-                final chapterNumber = parseDoubleSafe(payload['chapterNumber']);
-                final res = await GraphQLClientService.instance.trackProgress(mangaId, trackerId, chapterNumber);
+                final res = await GraphQLClientService.instance.trackProgress(mangaId);
                 success = res != null;
               }
             }

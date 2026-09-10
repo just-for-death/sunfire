@@ -24,6 +24,10 @@ const double sunfireTabletMinWidth = 720.0;
 /// Manga detail two-pane (cover + chapter list). Wider than the shell rail breakpoint.
 const double sunfireDetailTwoPaneMinWidth = 840.0;
 
+/// Inner sidebar width at which labels/header Row are shown. Below this, compact
+/// icons are used so expand/collapse animation cannot overflow (~36px Row).
+const double sunfireSidebarExpandedLayoutMinWidth = 180.0;
+
 bool usesTabletShell(double width) => width >= sunfireTabletMinWidth;
 
 class MainShell extends StatefulWidget {
@@ -314,16 +318,18 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   // ── IPADOS FLOATING FROSTED GLASS SIDEBAR ───────────────────────────────────
   // ════════════════════════════════════════════════════════════════════════════
   Widget _buildTabletSidebar(BuildContext context, Color primaryColor) {
-    final isExpanded = _isSidebarExpanded;
-    final sidebarWidth = isExpanded ? 242.0 : 72.0;
+    final sidebarWidth = _isSidebarExpanded ? 242.0 : 72.0;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeInOutCubic,
       width: sidebarWidth,
       child: Padding(
-        padding: EdgeInsets.only(top: 8, bottom: 8, left: 8, right: isExpanded ? 0 : 4),
-        child: ClipRRect(
+        padding: EdgeInsets.only(top: 8, bottom: 8, left: 8, right: _isSidebarExpanded ? 0 : 4),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isExpanded = constraints.maxWidth >= sunfireSidebarExpandedLayoutMinWidth;
+            return ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
@@ -449,6 +455,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               ),
             ),
           ),
+        );
+          },
         ),
       ),
     );
@@ -498,7 +506,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     ),
                     Row(
                       children: [
-                        Container(
+                        Flexible(
+                          child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(
                             color: primaryColor.withValues(alpha: 0.18),
@@ -507,6 +516,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                           ),
                           child: Text(
                             'v9.0 BETA',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: primaryColor,
                               fontSize: 9,
@@ -514,6 +525,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                               letterSpacing: 0.3,
                             ),
                           ),
+                        ),
                         ),
                       ],
                     ),
@@ -524,6 +536,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 icon: const Icon(Icons.view_sidebar_rounded, color: Colors.white60, size: 20),
                 tooltip: 'Collapse sidebar',
                 visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
                 onPressed: _toggleSidebar,
               ),
             ],
@@ -644,8 +658,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   curve: Curves.easeOutCubic,
-                  width: 46,
-                  height: 46,
+                  width: 40,
+                  height: 40,
                   decoration: isSelected
                       ? BoxDecoration(
                           gradient: RadialGradient(
@@ -747,8 +761,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               borderRadius: BorderRadius.circular(14),
               onTap: onTap,
               child: SizedBox(
-                width: 46,
-                height: 46,
+                width: 40,
+                height: 40,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
