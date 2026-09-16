@@ -107,9 +107,13 @@ class DownloadManagerService extends ChangeNotifier {
             final serverUrl = SettingsService.instance.serverUrl;
             if (serverUrl.isNotEmpty) {
               final serverHost = Uri.tryParse(serverUrl)?.host;
+              // The user explicitly configured this server; accept its self-signed cert.
               if (serverHost != null && host == serverHost) return true;
             }
-            if (host == 'localhost' || host == '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('100.')) {
+            // Loopback only: local dev emulators / local Suwayomi instances.
+            // NO blanket acceptance for private/IPv4 ranges — that would permit
+            // MITM on arbitrary LAN hosts.
+            if (host == 'localhost' || host == '127.0.0.1' || host == '::1') {
               return true;
             }
             return false;
@@ -488,8 +492,12 @@ class DownloadManagerService extends ChangeNotifier {
       );
       if (_isValidImageBytes(response.data)) {
         pageBytes = response.data;
+      } else {
+        LoggerService.instance.logWarning('Download pass 1 returned invalid bytes for $pageUrl', 'Download');
       }
-    } catch (_) {}
+    } catch (e) {
+      LoggerService.instance.logWarning('Download pass 1 (standard) failed for $pageUrl: $e', 'Download');
+    }
 
     // Pass 2: Retry with Referer stripped (anti-hotlink bypass)
     if (pageBytes == null && headers.containsKey('Referer') && cancelToken?.isCancelled != true) {
@@ -502,8 +510,12 @@ class DownloadManagerService extends ChangeNotifier {
         );
         if (_isValidImageBytes(r2.data)) {
           pageBytes = r2.data;
+        } else {
+          LoggerService.instance.logWarning('Download pass 2 returned invalid bytes for $pageUrl', 'Download');
         }
-      } catch (_) {}
+      } catch (e) {
+        LoggerService.instance.logWarning('Download pass 2 (no Referer) failed for $pageUrl: $e', 'Download');
+      }
     }
 
     // Pass 3: Retry with Origin Referer
@@ -518,8 +530,12 @@ class DownloadManagerService extends ChangeNotifier {
         );
         if (_isValidImageBytes(r3.data)) {
           pageBytes = r3.data;
+        } else {
+          LoggerService.instance.logWarning('Download pass 3 returned invalid bytes for $pageUrl', 'Download');
         }
-      } catch (_) {}
+      } catch (e) {
+        LoggerService.instance.logWarning('Download pass 3 (origin Referer) failed for $pageUrl: $e', 'Download');
+      }
     }
 
     // Pass 4: Clean Desktop Chrome User-Agent and Image Accept headers
@@ -535,8 +551,12 @@ class DownloadManagerService extends ChangeNotifier {
         );
         if (_isValidImageBytes(r4.data)) {
           pageBytes = r4.data;
+        } else {
+          LoggerService.instance.logWarning('Download pass 4 returned invalid bytes for $pageUrl', 'Download');
         }
-      } catch (_) {}
+      } catch (e) {
+        LoggerService.instance.logWarning('Download pass 4 (browser UA) failed for $pageUrl: $e', 'Download');
+      }
     }
 
     if (cancelToken?.isCancelled == true) return;
@@ -558,7 +578,9 @@ class DownloadManagerService extends ChangeNotifier {
               break;
             }
           }
-        } catch (_) {}
+        } catch (e) {
+          LoggerService.instance.logWarning('curl fallback ($exe) failed for $pageUrl: $e', 'Download');
+        }
       }
     }
 
