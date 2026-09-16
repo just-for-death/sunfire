@@ -24,8 +24,8 @@ import '../../core/services/download_manager_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../settings/advanced_settings_screen.dart';
-import 'reading_mode.dart';
 import 'reader_scroll_utils.dart';
+import 'reading_mode.dart';
 
 export 'reading_mode.dart' show ReadingMode;
 
