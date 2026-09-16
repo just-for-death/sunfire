@@ -114,7 +114,7 @@ On first launch, connect a Suwayomi server (`http://192.168.1.100:4567`, optiona
 ## CI
 
 - **GitHub Actions** (`.github/workflows/ci.yml`) — `flutter analyze`, deterministic unit tests (network-free), and an unsigned split-per-ABI Android release build on push/PR to `main`/`master`/`develop`.
-- **Codemagic** (`codemagic.yaml`) — Android universal + split APKs and an unsigned iOS IPA for sideloading (AltStore / TrollStore / Sideloadly). On a `v*` tag build, all artifacts are published to a [GitHub Release](https://github.com/just-for-death/sunfire/releases) with a git-log changelog (set a `GITHUB_TOKEN` secret with `repo` scope in Codemagic → Environment variables).
+- **Codemagic** (`codemagic.yaml`) — Android universal + split APKs and an unsigned iOS IPA for sideloading (AltStore / TrollStore / Sideloadly).
 
 ---
 
