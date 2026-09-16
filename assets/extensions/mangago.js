@@ -10,7 +10,7 @@ const mangayomiSources = [{
     "iconUrl": "asset:assets/icons/sources/mangago.png",
     "typeSource": "single",
     "itemType": 0,
-    "version": "1.3.2",
+    "version": "1.3.3",
     "pkgPath": "javascript/manga/src/en/mangago.js"
 }];
 
@@ -164,19 +164,30 @@ class DefaultExtension extends MProvider {
         }
 
         const chapters = [];
-        const rows = doc.querySelectorAll("#chapter_table tr, table.uk-table tr, #raws_table tr, tr");
+        const seen = new Set();
+        // Only real chapter rows: never fall back to a bare `tr`/`a`, which picks up
+        // the embedded Google Custom Search box (`<a ...>×</a>` → javascript:void(0))
+        // and appends a phantom "×" chapter.
+        let rows = doc.querySelectorAll("#chapter_table tr, table.uk-table tr, #raws_table tr");
+        if (!rows || rows.length === 0) {
+            rows = doc.querySelectorAll("tr");
+        }
         for (const row of rows) {
-            const a = row.querySelector("a.chico, a.chapter, a[href*='/read-manga/'], a");
-            if (a) {
-                const chTitle = a.text.trim();
-                const chLink = a.attr("href") || a.getHref || "";
-                if (chTitle && chLink) {
-                    chapters.push({
-                        name: chTitle,
-                        url: this._absUrl(chLink)
-                    });
-                }
-            }
+            const a = row.querySelector("a.chico, a.chapter, a[href*='/read-manga/'], a[href*='/nbt/'], a[href*='/chapter-']");
+            if (!a) continue;
+            const chTitle = (a.text || "").trim();
+            const chLink = a.attr("href") || a.getHref || "";
+            if (!chTitle || !chLink) continue;
+            // Reject non-navigable/placeholder links and junk labels.
+            if (chLink.indexOf("javascript:") === 0 || chLink === "#" || chLink.indexOf("#") === 0) continue;
+            if (chTitle === "×" || chTitle === "x" || chTitle === "X" || chTitle === "-") continue;
+            const abs = this._absUrl(chLink);
+            if (seen.has(abs)) continue;
+            seen.add(abs);
+            chapters.push({
+                name: chTitle,
+                url: abs
+            });
         }
 
         return {
