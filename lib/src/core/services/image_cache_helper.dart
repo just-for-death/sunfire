@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../constants/app_constants.dart';
 import '../db/isar_service.dart';
 import '../db/models/manga.dart';
 import '../engine/quickjs_service.dart';
@@ -274,7 +275,7 @@ class ImageCacheHelper {
       // PASS 4 (Self-Healing Clean Browser): Retry with standard Chrome Desktop UA and Image Accept headers
       if (bytes == null) {
         final browserHeaders = Map<String, String>.from(headers)
-          ..['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+          ..['User-Agent'] = kBrowserUserAgent
           ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
         bytes = await _attemptHttpFetch(url, browserHeaders);
       }
