@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:volume_controller/volume_controller.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../constants/app_constants.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
@@ -1960,7 +1961,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         if (res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) {
           try {
             final browserHeaders = Map<String, String>.from(initialHeaders)
-              ..['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+              ..['User-Agent'] = kBrowserUserAgent
               ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
             res = await client.get(uri, headers: browserHeaders).timeout(const Duration(seconds: 15));
           } catch (_) {}

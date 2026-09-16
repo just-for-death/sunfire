@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../constants/app_constants.dart';
 import '../db/isar_service.dart';
 import '../engine/content_resolver_service.dart';
 import '../engine/javascript/m_client.dart';
@@ -525,7 +526,7 @@ class DownloadManagerService extends ChangeNotifier {
     if (pageBytes == null && cancelToken?.isCancelled != true) {
       try {
         final browserHeaders = Map<String, dynamic>.from(headers)
-          ..['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+          ..['User-Agent'] = kBrowserUserAgent
           ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
         final r4 = await _dio.get<List<int>>(
           pageUrl,
