@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -10,6 +11,28 @@ import 'javascript/m_client.dart';
 import 'repo_manager.dart';
 import 'source_icon_helper.dart';
 import 'source_preferences.dart';
+
+class _AsyncLock {
+  Future<void>? _last;
+
+  Future<T> synchronized<T>(Future<T> Function() block) async {
+    final prev = _last;
+    final completer = Completer<void>();
+    _last = completer.future;
+
+    if (prev != null) {
+      try {
+        await prev;
+      } catch (_) {}
+    }
+
+    try {
+      return await block();
+    } finally {
+      completer.complete();
+    }
+  }
+}
 
 class QuickJsService {
   static QuickJsService? _instance;
@@ -24,6 +47,8 @@ class QuickJsService {
   final List<String> _poolAccessOrder = []; // tracks LRU order
   static const int _poolMaxSize = 5;
 
+  final Map<String, _AsyncLock> _sourceLocks = {};
+
   QuickJsService._();
 
   static QuickJsService get instance {
@@ -33,6 +58,23 @@ class QuickJsService {
 
   /// Check whether QuickJS C-FFI bindings are functional on the current host.
   bool get isSupported => !kIsWeb;
+
+  _AsyncLock _getLockFor(String sourceName) {
+    return _sourceLocks.putIfAbsent(sourceName, () => _AsyncLock());
+  }
+
+  /// Execute an action on a pooled [JsExtensionService] runtime with serialization lock.
+  Future<T> withRuntime<T>(
+    String sourceName,
+    String jsCode,
+    Future<T> Function(JsExtensionService service) action,
+  ) {
+    final lockKey = _canonicalizeKey(sourceName);
+    return _getLockFor(lockKey).synchronized(() async {
+      final service = _getOrCreateRuntime(sourceName, jsCode);
+      return await action(service);
+    });
+  }
 
   /// Get or create a pooled JsExtensionService runtime for [sourceName].
   JsExtensionService _getOrCreateRuntime(String sourceName, String jsCode) {
@@ -105,7 +147,7 @@ class QuickJsService {
               : '1.0.0';
           final shouldOverride = !_installedJsSources.containsKey(cleanKey) ||
               existingVer == null ||
-              RepoManager.compareVersions(bundledVer, existingVer) >= 0;
+              RepoManager.compareVersions(bundledVer, existingVer) > 0;
 
           if (shouldOverride) {
             _installedJsSources[cleanKey] = code;
@@ -642,6 +684,10 @@ class QuickJsService {
       final verMatch = RegExp(r'''(?:['"]?version['"]?)\s*:\s*['"]([^'"]+)['"]''').firstMatch(jsCode);
       if (verMatch != null) version = verMatch.group(1)!.trim();
     }
+    if (lang == 'en') {
+      final langMatch = RegExp(r'''(?:['"]?(?:lang|langs)['"]?)\s*:\s*['"]([^'"]+)['"]''').firstMatch(jsCode);
+      if (langMatch != null) lang = langMatch.group(1)!.trim();
+    }
     if (id == 0) {
       final idMatch = RegExp(r'''(?:['"]?id['"]?)\s*:\s*([0-9]+)''').firstMatch(jsCode);
       if (idMatch != null) id = int.tryParse(idMatch.group(1)!) ?? 0;
@@ -677,41 +723,37 @@ class QuickJsService {
       return [];
     }
 
-    final service = JsExtensionService(
-      sourceMeta: _sourceMetaFor(jsCode),
-      sourceCode: jsCode,
-    );
-
     try {
-      final hasLegacyFilters = (selectedSort != null && selectedSort != 'Popularity') ||
-          (selectedStatus != null && selectedStatus != 'All') ||
-          (selectedType != null && selectedType != 'All');
-          
-      final hasDynamicFilters = dynamicFilters != null && dynamicFilters.isNotEmpty;
+      return await withRuntime<List<Map<String, dynamic>>>(sourceName, jsCode, (service) async {
+        final hasLegacyFilters = (selectedSort != null && selectedSort != 'Popularity') ||
+            (selectedStatus != null && selectedStatus != 'All') ||
+            (selectedType != null && selectedType != 'All');
+            
+        final hasDynamicFilters = dynamicFilters != null && dynamicFilters.isNotEmpty;
 
-      Map<String, dynamic> result;
-      if (searchQuery != null && searchQuery.isNotEmpty) {
-        result = await service.search(searchQuery, page, hasDynamicFilters ? dynamicFilters : null);
-      } else if (hasDynamicFilters) {
-        result = await service.search('', page, dynamicFilters);
-      } else if (hasLegacyFilters) {
-        // Build a structured filter list so JS extensions can use the correct filtered URL
-        // instead of doing an empty search which returns nothing.
-        final filterList = <Map<String, dynamic>>[];
-        if (selectedSort != null) filterList.add({'name': 'SortBy', 'value': selectedSort});
-        if (selectedStatus != null) filterList.add({'name': 'Status', 'value': selectedStatus});
-        if (selectedType != null) filterList.add({'name': 'Type', 'value': selectedType});
-        result = await service.search('', page, filterList);
-      } else if (isLatest) {
-        result = await service.getLatestUpdates(page);
-      } else {
-        result = await service.getPopular(page);
-      }
+        Map<String, dynamic> result;
+        if (searchQuery != null && searchQuery.isNotEmpty) {
+          result = await service.search(searchQuery, page, hasDynamicFilters ? dynamicFilters : null);
+        } else if (hasDynamicFilters) {
+          result = await service.search('', page, dynamicFilters);
+        } else if (hasLegacyFilters) {
+          final filterList = <Map<String, dynamic>>[];
+          if (selectedSort != null) filterList.add({'name': 'SortBy', 'value': selectedSort});
+          if (selectedStatus != null) filterList.add({'name': 'Status', 'value': selectedStatus});
+          if (selectedType != null) filterList.add({'name': 'Type', 'value': selectedType});
+          result = await service.search('', page, filterList);
+        } else if (isLatest) {
+          result = await service.getLatestUpdates(page);
+        } else {
+          result = await service.getPopular(page);
+        }
 
-      final list = result['list'] as List<dynamic>?;
-      if (list != null) {
-        return list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
-      }
+        final list = result['list'] as List<dynamic>?;
+        if (list != null) {
+          return list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+        }
+        return [];
+      });
     } catch (e) {
       // Handle headless flutter test environment mock fallback
       if (jsCode.contains('searchManga') || jsCode.contains('getPopular') || jsCode.contains('title:')) {
@@ -733,10 +775,8 @@ class QuickJsService {
         }
       }
       await LoggerService.instance.logError('Local scraping failed for $sourceName: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
-    } finally {
-      service.dispose();
+      return [];
     }
-    return [];
   }
 
   /// ── RESOLVE EXTENSION DIRECT COVER URL IF SUPPORTED ──
@@ -774,20 +814,14 @@ class QuickJsService {
       } catch (_) {}
     }
 
-    final service = JsExtensionService(
-      sourceMeta: _sourceMetaFor(jsCode),
-      sourceCode: jsCode,
-    );
-
     try {
-      final result = await service.getDetail(targetUrl);
-      return result;
+      return await withRuntime<Map<String, dynamic>>(sourceName, jsCode, (service) async {
+        return await service.getDetail(targetUrl);
+      });
     } catch (e) {
       await LoggerService.instance.logError('Local getDetail failed for $sourceName ($targetUrl): $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
-    } finally {
-      service.dispose();
+      return {};
     }
-    return {};
   }
 
   Future<List<String>> fetchChapterPagesLocal(String sourceName, String chapterUrl) async {
@@ -806,13 +840,12 @@ class QuickJsService {
       }
     }
 
-    // 1. Try with pooled runtime first
+    // 1. Try with pooled runtime with mutex serialization
     try {
-      final service = _getOrCreateRuntime(sourceName, jsCode);
-      final pages = await service.getPageList(targetUrl);
+      final pages = await withRuntime<List<String>>(sourceName, jsCode, (service) async {
+        return await service.getPageList(targetUrl);
+      });
       if (pages.isNotEmpty) return pages;
-      // If empty, invalidate pooled runtime to clear any corrupted state
-      _invalidateRuntime(sourceName);
     } catch (e) {
       _invalidateRuntime(sourceName);
       // In unit test runner if C symbol lookup fails
@@ -825,7 +858,7 @@ class QuickJsService {
       }
     }
 
-    // 2. Retry with a dedicated fresh runtime on failure or empty results
+    // 2. Retry with a fresh runtime on failure or empty results
     try {
       final freshService = JsExtensionService(
         sourceMeta: _sourceMetaFor(jsCode),
@@ -848,16 +881,14 @@ class QuickJsService {
     final jsCode = getExtensionCode(sourceName);
     if (jsCode == null || jsCode.isEmpty) return [];
 
-    // Use pooled runtime for filters too
-    final service = _getOrCreateRuntime(sourceName, jsCode);
-
     try {
-      return await service.extensionCallAsync<List<dynamic>>('getFilterList()');
+      return await withRuntime<List<dynamic>>(sourceName, jsCode, (service) async {
+        return await service.extensionCallAsync<List<dynamic>>('getFilterList()');
+      });
     } catch (e, stack) {
       LoggerService.instance.logError('Failed to fetch source filters for $sourceName: $e', exception: e, stackTrace: stack, category: 'QuickJS');
       return [];
     }
-    // NOTE: do NOT dispose — runtime stays in pool
   }
 
   void dispose() {
@@ -867,5 +898,6 @@ class QuickJsService {
     }
     _runtimePool.clear();
     _poolAccessOrder.clear();
+    _sourceLocks.clear();
   }
 }
