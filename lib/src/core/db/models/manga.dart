@@ -43,5 +43,19 @@ class Manga {
   /// Unix ms of the most recent chapter open for this series (library “Last Read” sort).
   int? lastReadAt;
 
+  /// Metron.cloud series ID for comic tracking and metadata enrichment.
+  @Index()
+  int? metronSeriesId;
+
+  /// Comic publisher from Metron (e.g. Marvel, DC, Image).
+  String? publisher;
+
+  /// When true, prevents background Suwayomi sync from overwriting Metron-enriched
+  /// description, author, publisher, and clean genres.
+  bool isMetadataLocked = false;
+
+  /// Cached JSON string mapping issue numbers to Metron issue IDs (e.g. {"1": 10243, "2": 10244}).
+  String? metronIssuesJson;
+
   Manga();
 }

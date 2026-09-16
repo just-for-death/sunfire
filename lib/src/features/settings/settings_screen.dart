@@ -12,6 +12,7 @@ import 'general_settings_screen.dart';
 import 'library_settings_screen.dart';
 import 'reader_settings_screen.dart';
 import 'server_settings_screen.dart';
+import 'tracking_settings_screen.dart';
 
 class _SettingSearchItem {
   final String title;
@@ -47,6 +48,24 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
   String _searchQuery = '';
 
   late final List<_SettingSearchItem> _searchRegistry = [
+    // ── TRACKING ──
+    _SettingSearchItem(
+      title: 'Metron.cloud Western Comic Tracking',
+      subtitle: 'Connect Metron API Token for comic metadata and scrobbling',
+      category: 'Tracking',
+      icon: Icons.auto_stories,
+      keywords: ['metron', 'tracking', 'scrobble', 'comics', 'token', 'rate limit', 'marvel', 'dc'],
+      destination: (context) => const TrackingSettingsScreen(),
+    ),
+    _SettingSearchItem(
+      title: 'Manga Trackers (AniList, MAL, Kitsu)',
+      subtitle: 'Synchronize reading progress with AniList, MyAnimeList, and Kitsu',
+      category: 'Tracking',
+      icon: Icons.track_changes_outlined,
+      keywords: ['tracking', 'anilist', 'myanimelist', 'mal', 'kitsu', 'shikimori', 'bangumi', 'scrobble'],
+      destination: (context) => const TrackingSettingsScreen(),
+    ),
+
     // ── SERVER ──
     _SettingSearchItem(
       title: 'Server URL & Connection',
@@ -537,7 +556,21 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       },
                     ),
 
-                    // 5. BACKUP AND RESTORE
+                    // 5. TRACKING & SCROBBLING
+                    _buildTile(
+                      icon: Icons.track_changes_outlined,
+                      title: 'Tracking & Scrobbling',
+                      subtitle: 'Metron.cloud Western comics, AniList, MyAnimeList, and Kitsu',
+                      tags: ['LOCAL', 'SERVER'],
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const TrackingSettingsScreen()),
+                        );
+                      },
+                    ),
+
+                    // 6. BACKUP AND RESTORE
                     _buildTile(
                       icon: Icons.settings_backup_restore_rounded,
                       title: 'Backup and Restore',
