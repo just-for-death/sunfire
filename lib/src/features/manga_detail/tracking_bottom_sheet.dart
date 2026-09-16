@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
+import '../../core/db/isar_service.dart';
+import '../../core/db/models/manga.dart';
 import '../../core/logging/logger_service.dart';
+import '../../core/metron/metron_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../settings/tracking_settings_screen.dart';
 
 class TrackingBottomSheet extends StatefulWidget {
   final int mangaServerId;
@@ -35,9 +39,12 @@ class TrackingBottomSheet extends StatefulWidget {
 }
 
 class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
+  static const int kMetronTrackerId = -99;
+
   bool _isLoading = true;
   List<Map<String, dynamic>> _trackers = [];
   List<Map<String, dynamic>> _boundRecords = [];
+  Manga? _localManga;
 
   // Search mode state
   int? _searchingTrackerId;
@@ -45,6 +52,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   final TextEditingController _trackerSearchController = TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
+  bool _isScrobbling = false;
 
   // Tracker status mapping
   static const Map<int, String> statusNames = {
@@ -72,6 +80,13 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
 
   Future<void> _loadTrackingData() async {
     setState(() => _isLoading = true);
+
+    // 1. Load local manga for Metron status
+    try {
+      _localManga = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
+    } catch (_) {}
+
+    // 2. Load server trackers if connected
     if (!GraphQLClientService.instance.isConfigured) {
       if (mounted) setState(() => _isLoading = false);
       return;
@@ -104,6 +119,32 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
       _searchResults = [];
     });
 
+    if (trackerId == kMetronTrackerId) {
+      // Search Metron
+      try {
+        final query = _searchQuery.isEmpty ? widget.mangaTitle : _searchQuery;
+        final res = await MetronService.instance.searchSeries(query: query);
+        if (mounted) {
+          setState(() {
+            _searchResults = res.series.map((s) => {
+              'title': s.displayName,
+              'remoteId': s.id,
+              'coverUrl': s.image,
+              'totalChapters': s.issueCount,
+              'publisher': s.publisher?.name,
+              'status': s.status,
+              'isMetron': true,
+            }).toList();
+            _isSearching = false;
+          });
+        }
+      } catch (e, stack) {
+        LoggerService.instance.logError('Failed to search Metron: $e', exception: e, stackTrace: stack, category: 'Metron');
+        if (mounted) setState(() => _isSearching = false);
+      }
+      return;
+    }
+
     try {
       final data = await GraphQLClientService.instance.searchTracker(trackerId, _searchQuery.isEmpty ? widget.mangaTitle : _searchQuery);
       final list = data?['searchTracker']?['trackSearches'] as List<dynamic>? ?? [];
@@ -122,8 +163,103 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   Future<void> _bindManga(int trackerId, dynamic remoteId) async {
     setState(() => _isLoading = true);
     _searchingTrackerId = null;
+
+    if (trackerId == kMetronTrackerId) {
+      try {
+        final seriesId = int.parse(remoteId.toString());
+        final detail = await MetronService.instance.getSeriesDetail(seriesId);
+        final issuesData = await MetronService.instance.getSeriesIssues(seriesId);
+
+        final issueMapJson = issuesData.issueMap.map((k, v) => MapEntry('"$k"', v.toString()));
+        final jsonStr = '{${issueMapJson.entries.map((e) => '${e.key}:${e.value}').join(',')}}';
+
+        _localManga ??= await IsarService.instance.getMangaByServerId(widget.mangaServerId);
+        if (_localManga != null) {
+          _localManga!.metronSeriesId = seriesId;
+          _localManga!.publisher = detail.publisher?.name;
+          _localManga!.isMetadataLocked = true;
+          _localManga!.metronIssuesJson = jsonStr;
+
+          if (detail.description != null && detail.description!.isNotEmpty) {
+            _localManga!.description = detail.description;
+          }
+          if (detail.genres.isNotEmpty) {
+            _localManga!.genres = detail.genres;
+          }
+          if (detail.status != null && detail.status!.isNotEmpty) {
+            _localManga!.status = detail.status;
+          }
+
+          await IsarService.instance.saveManga(_localManga!);
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Linked to "${detail.name}"! Metadata enriched & locked.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e, st) {
+        LoggerService.instance.logError('Failed to bind Metron: $e', exception: e, stackTrace: st, category: 'Metron');
+      }
+      await _loadTrackingData();
+      return;
+    }
+
     await GraphQLClientService.instance.bindTrack(widget.mangaServerId, trackerId, remoteId);
     await _loadTrackingData();
+  }
+
+  Future<void> _unlinkMetron() async {
+    setState(() => _isLoading = true);
+    if (_localManga != null) {
+      _localManga!.metronSeriesId = null;
+      _localManga!.publisher = null;
+      _localManga!.metronIssuesJson = null;
+      _localManga!.isMetadataLocked = false;
+      await IsarService.instance.saveManga(_localManga!);
+    }
+    await _loadTrackingData();
+  }
+
+  Future<void> _scrobbleAllReadChapters() async {
+    if (_localManga == null || _localManga!.metronSeriesId == null) return;
+    setState(() => _isScrobbling = true);
+
+    try {
+      final chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+      final readChapters = chapters.where((c) => c.isRead).toList();
+
+      final issuesData = await MetronService.instance.getSeriesIssues(_localManga!.metronSeriesId!);
+      final issueMap = issuesData.issueMap;
+
+      int scrobbledCount = 0;
+      for (final ch in readChapters) {
+        final matchedKey = MetronService.matchIssueNumber(ch.name, ch.chapterNumber, issueMap);
+        if (matchedKey != null && issueMap.containsKey(matchedKey)) {
+          final issueId = issueMap[matchedKey]!;
+          try {
+            await MetronService.instance.scrobbleIssue(issueId: issueId);
+            scrobbledCount++;
+          } catch (_) {}
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Scrobbled $scrobbledCount read issues to Metron!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e, st) {
+      LoggerService.instance.logError('Failed to scrobble read chapters: $e', exception: e, stackTrace: st, category: 'Metron');
+    } finally {
+      if (mounted) setState(() => _isScrobbling = false);
+    }
   }
 
   Future<void> _unbindRecord(int recordId) async {
@@ -411,11 +547,16 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
             Text(widget.mangaTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 13)),
             const SizedBox(height: 20),
 
+            // ── METRON (WESTERN COMICS) TRACKER ──
+            _buildMetronTrackerCard(primaryColor),
+            const SizedBox(height: 12),
+
+            // ── SERVER MANGA TRACKERS ──
             if (_trackers.isEmpty) ...[
               const Center(
                 child: Padding(
-                  padding: EdgeInsets.all(32.0),
-                  child: Text('No tracker services configured on server.', style: TextStyle(color: Colors.grey)),
+                  padding: EdgeInsets.all(24.0),
+                  child: Text('No server manga trackers (MAL/AniList) configured.', style: TextStyle(color: Colors.grey, fontSize: 12)),
                 ),
               ),
             ] else ...[
@@ -651,4 +792,144 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
       ),
     );
   }
+
+  Widget _buildMetronTrackerCard(Color primaryColor) {
+    final isMetronConfigured = MetronService.instance.isConfigured;
+    final isLinked = _localManga?.metronSeriesId != null;
+
+    return Material(
+      color: const Color(0x1F2A2A32),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isLinked ? Colors.blueAccent.withValues(alpha: 0.5) : const Color(0x2BFFFFFF),
+          width: 0.8,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.auto_stories_rounded,
+                      color: isLinked ? Colors.blueAccent : Colors.grey,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Metron.cloud (Western Comics)',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ],
+                ),
+                if (isLinked)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'LINKED',
+                      style: TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (isLinked) ...[
+              Text(
+                'Publisher: ${_localManga?.publisher ?? "Unknown Publisher"}',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              const SizedBox(height: 4),
+              const Row(
+                children: [
+                  Icon(Icons.lock_outline, size: 14, color: Colors.greenAccent),
+                  SizedBox(width: 4),
+                  Text(
+                    'Metadata Locked & Enriched',
+                    style: TextStyle(color: Colors.greenAccent, fontSize: 11),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    icon: _isScrobbling
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.cloud_upload_outlined, size: 16, color: Colors.white),
+                    label: Text(
+                      _isScrobbling ? 'Scrobbling...' : 'Scrobble Read Chapters',
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: _isScrobbling ? null : _scrobbleAllReadChapters,
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.link_off_rounded, color: Colors.redAccent, size: 16),
+                    label: const Text('Unlink', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                    onPressed: _unlinkMetron,
+                  ),
+                ],
+              ),
+            ] else ...[
+              if (!isMetronConfigured) ...[
+                Row(
+                  children: [
+                    const Text('Metron token not configured.', style: TextStyle(color: Colors.amberAccent, fontSize: 12)),
+                    const Spacer(),
+                    TextButton.icon(
+                      icon: const Icon(Icons.settings_rounded, size: 16),
+                      label: const Text('Configure'),
+                      onPressed: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const TrackingSettingsScreen()),
+                        );
+                        setState(() {});
+                      },
+                    ),
+                  ],
+                ),
+              ] else ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Not linked with Metron.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.search_rounded, size: 18, color: Colors.white),
+                      label: const Text('Match & Enrich', style: TextStyle(color: Colors.white)),
+                      onPressed: () {
+                        _searchQuery = widget.mangaTitle;
+                        _trackerSearchController.text = widget.mangaTitle;
+                        _searchTracker(kMetronTrackerId);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
+
