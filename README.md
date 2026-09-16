@@ -111,25 +111,6 @@ On first launch, connect a Suwayomi server (`http://192.168.1.100:4567`, optiona
 
 ---
 
-## Extension repository
-
-Bundled scrapers live in `assets/extensions/`.
-Upstream: [`just-for-death/mangayomi-extensions`](https://github.com/just-for-death/mangayomi-extensions)
-
-Repository index:
-
-```
-https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json
-```
-
-To update bundled sources, bump **both** the JS `mangayomiSources.version` and `index.json`, then run:
-
-```bash
-scripts/sync_bundled_extensions.sh
-```
-
----
-
 ## CI
 
 - **GitHub Actions** (`.github/workflows/ci.yml`) — `flutter analyze`, deterministic unit tests (network-free), and an unsigned split-per-ABI Android release build on push/PR to `main`/`master`/`develop`.
@@ -184,7 +165,7 @@ assets/
 
 - Open an [issue](https://github.com/just-for-death/sunfire/issues) for bugs or ideas.
 - Fork, branch, and submit a PR. Prefer small, focused changes.
-- When touching bundled sources, follow the extension repo workflow above and keep `index.json` in sync.
+- When touching bundled sources in `assets/extensions/`, keep the extension repo index in sync.
 - Run `flutter analyze` and the test suite before opening a PR.
 
 ---
