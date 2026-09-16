@@ -229,22 +229,20 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     setState(() => _isScrobbling = true);
 
     try {
-      final chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+      final mId = _localManga?.id ?? widget.mangaServerId;
+      var chapters = await IsarService.instance.getChaptersForManga(mId);
+      if (chapters.isEmpty && widget.mangaServerId != mId) {
+        chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+      }
       final readChapters = chapters.where((c) => c.isRead).toList();
-
-      final issuesData = await MetronService.instance.getSeriesIssues(_localManga!.metronSeriesId!);
-      final issueMap = issuesData.issueMap;
 
       int scrobbledCount = 0;
       for (final ch in readChapters) {
-        final matchedKey = MetronService.matchIssueNumber(ch.name, ch.chapterNumber, issueMap);
-        if (matchedKey != null && issueMap.containsKey(matchedKey)) {
-          final issueId = issueMap[matchedKey]!;
-          try {
-            await MetronService.instance.scrobbleIssue(issueId: issueId);
-            scrobbledCount++;
-          } catch (_) {}
-        }
+        final ok = await MetronService.instance.scrobbleMangaChapter(
+          manga: _localManga!,
+          chapter: ch,
+        );
+        if (ok) scrobbledCount++;
       }
 
       if (mounted) {

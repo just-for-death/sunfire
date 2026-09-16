@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
@@ -1255,34 +1254,24 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       );
     }
 
-    // Push tracker progress when a chapter first becomes fully read.
-    if (!wasRead && _chapter!.isRead && _chapter!.mangaId > 0) {
-      _scrobbleToMetronIfLinked(_chapter!);
-      final chapterNum = _chapter!.chapterNumber > 0
-          ? _chapter!.chapterNumber
-          : clampedPage.toDouble();
-      SyncEngine.instance.syncMangaTrackerProgress(_chapter!.mangaId, chapterNum);
+    // Push tracker progress when a chapter becomes fully read.
+    if ((!wasRead && _chapter!.isRead) || isComplete) {
+      if (_chapter!.mangaId > 0) {
+        _scrobbleToMetronIfLinked(_chapter!);
+        final chapterNum = _chapter!.chapterNumber > 0
+            ? _chapter!.chapterNumber
+            : clampedPage.toDouble();
+        SyncEngine.instance.syncMangaTrackerProgress(_chapter!.mangaId, chapterNum);
+      }
     }
   }
 
   void _scrobbleToMetronIfLinked(Chapter chapter) {
     if (!_settings.metronAutoScrobble) return;
-    final parent = _parentManga;
-    if (parent == null || parent.metronSeriesId == null) return;
-
-    final issuesJson = parent.metronIssuesJson;
-    if (issuesJson != null && issuesJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(issuesJson) as Map<String, dynamic>;
-        final issueMap = decoded.map((k, v) => MapEntry(k, int.tryParse(v.toString()) ?? 0));
-        final matchedKey = MetronService.matchIssueNumber(chapter.name, chapter.chapterNumber, issueMap);
-        if (matchedKey != null && issueMap.containsKey(matchedKey)) {
-          final issueId = issueMap[matchedKey]!;
-          if (issueId > 0) {
-            MetronService.instance.scrobbleIssue(issueId: issueId).catchError((_) => false);
-          }
-        }
-      } catch (_) {}
+    if (_parentManga != null && _parentManga!.metronSeriesId != null) {
+      MetronService.instance.scrobbleMangaChapter(manga: _parentManga!, chapter: chapter).catchError((_) => false);
+    } else if (chapter.mangaId > 0) {
+      MetronService.instance.scrobbleChapterByMangaId(mangaId: chapter.mangaId, chapter: chapter).catchError((_) => false);
     }
   }
 
