@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../db/isar_service.dart';
+import '../db/models/chapter.dart';
+import '../db/models/manga.dart';
 import '../logging/logger_service.dart';
 import 'metron_api_client.dart';
 import 'metron_models.dart';
@@ -257,34 +261,134 @@ class MetronService extends ChangeNotifier {
     }
   }
 
+  /// Scrobble a manga chapter to Metron if the manga has a linked Metron series.
+  Future<bool> scrobbleMangaChapter({
+    required Manga manga,
+    required Chapter chapter,
+    DateTime? readDate,
+  }) async {
+    final seriesId = manga.metronSeriesId;
+    if (seriesId == null || seriesId <= 0) return false;
+    if (!isConfigured) return false;
+
+    try {
+      Map<String, int>? issueMap;
+      final issuesJson = manga.metronIssuesJson;
+      if (issuesJson != null && issuesJson.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(issuesJson) as Map<String, dynamic>;
+          issueMap = decoded.map((k, v) => MapEntry(k, int.tryParse(v.toString()) ?? 0));
+        } catch (_) {}
+      }
+
+      if (issueMap == null || issueMap.isEmpty) {
+        final issuesData = await getSeriesIssues(seriesId);
+        issueMap = issuesData.issueMap;
+      }
+
+      final matchedKey = matchIssueNumber(chapter.name, chapter.chapterNumber, issueMap);
+      if (matchedKey != null && issueMap.containsKey(matchedKey)) {
+        final issueId = issueMap[matchedKey]!;
+        if (issueId > 0) {
+          final ok = await scrobbleIssue(issueId: issueId, readDate: readDate);
+          if (ok) {
+            LoggerService.instance.logInfo(
+              'Auto-scrobbled "${chapter.name}" (Metron Issue #$matchedKey, ID $issueId) for "${manga.title}"',
+              'Metron',
+            );
+          }
+          return ok;
+        }
+      } else {
+        LoggerService.instance.logWarning(
+          'Metron could not match chapter "${chapter.name}" (num: ${chapter.chapterNumber}) to an issue in series $seriesId',
+          'Metron',
+        );
+      }
+    } catch (e, st) {
+      LoggerService.instance.logError(
+        'Failed to auto-scrobble chapter "${chapter.name}" for "${manga.title}": $e',
+        exception: e,
+        stackTrace: st,
+        category: 'Metron',
+      );
+    }
+    return false;
+  }
+
+  /// Auto-scrobble helper by manga ID (loads Manga from Isar if needed).
+  Future<bool> scrobbleChapterByMangaId({
+    required int mangaId,
+    required Chapter chapter,
+    DateTime? readDate,
+  }) async {
+    final manga = await IsarService.instance.getMangaByServerId(mangaId) ??
+        await IsarService.instance.getManga(mangaId);
+    if (manga == null) return false;
+    return await scrobbleMangaChapter(manga: manga, chapter: chapter, readDate: readDate);
+  }
+
   /// Normalize a chapter number and title to match against a Metron issue map.
   static String? matchIssueNumber(String chapterName, double chapterNumber, Map<String, int> issueMap) {
     // 1. Direct double formatted as integer or decimal
-    final intPart = chapterNumber.toInt();
-    if (chapterNumber == intPart) {
-      final intStr = intPart.toString();
-      if (issueMap.containsKey(intStr)) return intStr;
-    } else {
-      final floatStr = chapterNumber.toString();
-      if (issueMap.containsKey(floatStr)) return floatStr;
+    if (chapterNumber > 0) {
+      final intPart = chapterNumber.toInt();
+      if (chapterNumber == intPart) {
+        final intStr = intPart.toString();
+        if (issueMap.containsKey(intStr)) return intStr;
+      } else {
+        final floatStr = chapterNumber.toString();
+        if (issueMap.containsKey(floatStr)) return floatStr;
+      }
     }
 
     // 2. Extract leading number or "#X" from chapter title
     final hashMatch = RegExp(r'#\s*(\d+(\.\d+)?)').firstMatch(chapterName);
     if (hashMatch != null) {
       final numStr = hashMatch.group(1)!;
+      final asDouble = double.tryParse(numStr);
+      if (asDouble != null) {
+        final intEq = asDouble.toInt();
+        if (asDouble == intEq && issueMap.containsKey(intEq.toString())) {
+          return intEq.toString();
+        }
+      }
       if (issueMap.containsKey(numStr)) return numStr;
     }
 
-    final issueWordMatch = RegExp(r'(?:issue|chapter|ch\.?)\s*(\d+(\.\d+)?)', caseSensitive: false).firstMatch(chapterName);
+    final issueWordMatch = RegExp(r'(?:issue|chapter|ch\.?|no\.?)\s*#?\s*(\d+(\.\d+)?)', caseSensitive: false).firstMatch(chapterName);
     if (issueWordMatch != null) {
       final numStr = issueWordMatch.group(1)!;
+      final asDouble = double.tryParse(numStr);
+      if (asDouble != null) {
+        final intEq = asDouble.toInt();
+        if (asDouble == intEq && issueMap.containsKey(intEq.toString())) {
+          return intEq.toString();
+        }
+      }
       if (issueMap.containsKey(numStr)) return numStr;
     }
 
-    // 3. Fallback: check if the integer part is in the map
-    if (issueMap.containsKey(intPart.toString())) {
-      return intPart.toString();
+    // 3. Any standalone number token in chapter name (e.g. "014", "14")
+    final digitsMatch = RegExp(r'\b(\d+(\.\d+)?)\b').firstMatch(chapterName);
+    if (digitsMatch != null) {
+      final numStr = digitsMatch.group(1)!;
+      final asDouble = double.tryParse(numStr);
+      if (asDouble != null) {
+        final intEq = asDouble.toInt();
+        if (asDouble == intEq && issueMap.containsKey(intEq.toString())) {
+          return intEq.toString();
+        }
+      }
+      if (issueMap.containsKey(numStr)) return numStr;
+    }
+
+    // 4. Fallback: check if the integer part is in the map
+    if (chapterNumber > 0) {
+      final intPartStr = chapterNumber.toInt().toString();
+      if (issueMap.containsKey(intPartStr)) {
+        return intPartStr;
+      }
     }
 
     return null;
