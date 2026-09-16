@@ -157,6 +157,7 @@ class MClient {
     String targetUrl, {
     String method = 'GET',
     dynamic postData,
+    Map<String, String>? headers,
   }) async {
     if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
       return null;
@@ -175,8 +176,28 @@ class MClient {
         'session': session,
         'maxTimeout': 60000,
       };
+      if (headers != null && headers.isNotEmpty) {
+        payload['headers'] = headers;
+      }
       if (isPost && postData != null) {
-        payload['postData'] = postData is String ? postData : jsonEncode(postData);
+        if (postData is String) {
+          payload['postData'] = postData;
+        } else if (postData is Map) {
+          final ct = headers?.entries.firstWhere(
+            (e) => e.key.toLowerCase() == 'content-type',
+            orElse: () => const MapEntry('', ''),
+          ).value.toLowerCase() ?? '';
+          if (ct.contains('application/json')) {
+            payload['postData'] = jsonEncode(postData);
+          } else {
+            // Encode as application/x-www-form-urlencoded
+            payload['postData'] = postData.entries
+                .map((e) => '${Uri.encodeQueryComponent(e.key.toString())}=${Uri.encodeQueryComponent(e.value?.toString() ?? '')}')
+                .join('&');
+          }
+        } else {
+          payload['postData'] = jsonEncode(postData);
+        }
       }
       final timeoutSecs = math.max(SettingsService.instance.networkTimeoutSeconds, 65);
       final res = await http.post(

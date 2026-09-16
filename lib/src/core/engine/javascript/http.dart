@@ -203,7 +203,12 @@ class Client {
       // If Cloudflare block was received (403/503 with Cloudflare headers), attempt direct FlareSolverr fetch
       if (isCloudflare(response) && urlStr.startsWith('http')) {
         if (MClient.cfProxyUrl.isNotEmpty) {
-          final solved = await MClient.solveAndFetchWithProxy(urlStr, method: method, postData: body);
+          final solved = await MClient.solveAndFetchWithProxy(
+            urlStr,
+            method: method,
+            postData: body,
+            headers: headers,
+          );
           if (solved != null) {
             return jsonEncode(solved);
           }
@@ -233,7 +238,12 @@ class Client {
         });
       }
       if (urlStr.startsWith('http') && MClient.cfProxyUrl.isNotEmpty) {
-        final solved = await MClient.solveAndFetchWithProxy(urlStr, method: method, postData: reqBody);
+        final solved = await MClient.solveAndFetchWithProxy(
+          urlStr,
+          method: method,
+          postData: reqBody,
+          headers: {'User-Agent': kBrowserUserAgent},
+        );
         if (_isDisposed) {
           return jsonEncode({
             'body': '',
