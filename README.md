@@ -12,7 +12,6 @@
   <a href="#"><img alt="Platform: Android" src="https://img.shields.io/badge/android-3DDC84?style=flat-square&logo=android&logoColor=white"></a>
   <a href="#"><img alt="Platform: iOS / iPadOS" src="https://img.shields.io/badge/iOS%20%2F%20iPadOS-000000?style=flat-square&logo=apple&logoColor=white"></a>
   <a href="#"><img alt="Platform: Linux" src="https://img.shields.io/badge/linux-FCC624?style=flat-square&logo=linux&logoColor=black"></a>
-  <a href="#"><img alt="Platform: Web" src="https://img.shields.io/badge/web-4285F4?style=flat-square&logo=googlechrome&logoColor=white"></a>
 </p>
 
 <p align="center">
@@ -47,9 +46,12 @@
 | Android | ✅ Primary target |
 | iOS / iPadOS | ✅ |
 | Linux (desktop) | ✅ local dev / testing |
-| Web | ✅ |
+| Web | ❌ Not supported (see note below) |
 
 > Builds for **macOS / Windows** are not configured yet — PRs welcome.
+>
+> **Web**: not currently buildable — the app's Isar database and QuickJS
+> runtime are native (`dart:ffi`) and have no web implementation.
 
 ---
 
@@ -71,7 +73,6 @@ flutter pub get
 flutter run -d linux                 # Linux desktop
 flutter run -d <android-device>      # Android
 flutter run -d <ios-device>          # iOS / iPad
-flutter run -d chrome                # Web
 ```
 
 ### Release builds
@@ -85,13 +86,6 @@ flutter build ipa
 ```
 
 On first launch, enter a Suwayomi server URL (e.g. `http://192.168.1.100:4567`) or skip it and use the bundled local JS sources.
-
-### F-Droid / IzzyOnDroid notes
-
-- No Play Services Cronet or GMS — Android uses plain `dart:io` HTTP.
-- `dependenciesInfo.includeInApk` is disabled (no encrypted Play dependency blob).
-- Prefer the **arm64-v8a** split APK.
-- Cleartext HTTP is limited to loopback/emulator (`localhost`, `127.0.0.1`, `10.0.2.2`). Use HTTPS for LAN Suwayomi IPs.
 
 ---
 
