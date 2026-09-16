@@ -21,7 +21,8 @@ dependencies:
   flutter_qjs:
     git:
       url: https://github.com/kodjodevf/flutter_qjs.git
-      ref: main
+      # Pinned to a commit for reproducible builds; bump deliberately.
+      ref: 3261eb462c975d66dbd713c15f1959c6f976412e
   http: ^1.2.0
   flutter_secure_storage: ^9.2.4
   flutter_cache_manager: ^3.4.1
