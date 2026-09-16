@@ -15,6 +15,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import 'extension_details_screen.dart';
 import 'global_search_screen.dart';
+import 'metron_browse_screen.dart';
 import 'migrate_search_screen.dart';
 import 'source_manga_grid_screen.dart';
 
@@ -50,7 +51,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     SettingsService.instance.addListener(_onSettingsChanged);
     _fetchServerSources();
     _fetchExtensions();
@@ -536,6 +537,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           tabs: const [
             Tab(text: 'Sources'),
             Tab(text: 'Extensions'),
+            Tab(text: 'Comics'),
             Tab(text: 'Migrate'),
           ],
         ),
@@ -549,6 +551,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             children: [
               _buildSourcesTab(),
               _buildExtensionsTab(),
+              const MetronBrowseScreen(),
               _buildMigrateTab(),
             ],
           ),
