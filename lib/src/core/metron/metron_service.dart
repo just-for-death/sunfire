@@ -48,15 +48,30 @@ class MetronService extends ChangeNotifier {
       final token = await _storage.read(key: _storageKey);
       if (token != null && token.isNotEmpty) {
         configureToken(token);
+        _migrateLegacyPlaintextToken();
         return;
       }
     } catch (_) {}
 
+    // One-time migration: older builds kept a plaintext copy in SharedPreferences.
+    // Read it once, move it into secure storage, then purge the plaintext copy.
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString(_storageKey);
-      if (token != null && token.isNotEmpty) {
-        configureToken(token);
+      final legacy = prefs.getString(_storageKey);
+      if (legacy != null && legacy.isNotEmpty) {
+        configureToken(legacy);
+        await _storage.write(key: _storageKey, value: legacy);
+        await prefs.remove(_storageKey);
+      }
+    } catch (_) {}
+  }
+
+  /// Best-effort purge of any leftover plaintext token from older builds.
+  Future<void> _migrateLegacyPlaintextToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey(_storageKey)) {
+        await prefs.remove(_storageKey);
       }
     } catch (_) {}
   }
@@ -68,18 +83,10 @@ class MetronService extends ChangeNotifier {
       try {
         await _storage.delete(key: _storageKey);
       } catch (_) {}
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(_storageKey);
-      } catch (_) {}
       configureToken(null);
     } else {
       try {
         await _storage.write(key: _storageKey, value: clean);
-      } catch (_) {}
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_storageKey, clean);
       } catch (_) {}
       configureToken(clean);
     }
