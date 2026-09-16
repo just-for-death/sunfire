@@ -56,6 +56,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   bool _isLoading = true;
   bool _showControls = true;
   int _currentPage = 1;
+  bool _isDraggingSlider = false;
+  double? _sliderDragValue;
 
   // Zoom & Gestures
   bool _isZoomed = false;
@@ -861,17 +863,58 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     if (loadGen != _loadGeneration) return;
 
     if (_chapter != null) {
-      _siblingChapters = await IsarService.instance.getChaptersForManga(_chapter!.mangaId);
-      _siblingChapters.sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
-      final idx = _siblingChapters.indexWhere((c) => (c.id == _chapter!.id) || (c.serverId != 0 && c.serverId == _chapter!.serverId));
-      if (idx != -1) {
-        if (idx + 1 < _siblingChapters.length) _nextChapter = _siblingChapters[idx + 1];
-        if (idx - 1 >= 0) _prevChapter = _siblingChapters[idx - 1];
+      final mId = _chapter!.mangaId > 0 ? _chapter!.mangaId : (_parentManga?.serverId ?? _parentManga?.id ?? 0);
+      var siblings = await IsarService.instance.getChaptersForManga(mId);
+      if (siblings.isEmpty && _parentManga != null) {
+        if (_parentManga!.id > 0 && _parentManga!.id != mId) {
+          siblings = await IsarService.instance.getChaptersForManga(_parentManga!.id);
+        }
+        if (siblings.isEmpty && _parentManga!.serverId > 0 && _parentManga!.serverId != mId) {
+          siblings = await IsarService.instance.getChaptersForManga(_parentManga!.serverId);
+        }
       }
-      final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
+      _siblingChapters = siblings;
+
+      double parseNum(Chapter c) {
+        if (c.chapterNumber > 0) return c.chapterNumber;
+        final m = RegExp(r'(?:ch(?:apter)?\.?|ep(?:isode)?\.?|#)\s*(\d+(?:\.\d+)?)', caseSensitive: false).firstMatch(c.name)
+            ?? RegExp(r'(\d+(?:\.\d+)?)').firstMatch(c.name);
+        if (m != null) {
+          return double.tryParse(m.group(1)!) ?? 0.0;
+        }
+        return 0.0;
+      }
+
+      _siblingChapters.sort((a, b) {
+        final numA = parseNum(a);
+        final numB = parseNum(b);
+        if (numA != numB) return numA.compareTo(numB);
+        return a.name.compareTo(b.name);
+      });
+
+      final idx = _siblingChapters.indexWhere((c) =>
+          (c.id != 0 && c.id == _chapter!.id) ||
+          (c.serverId != 0 && c.serverId == _chapter!.serverId) ||
+          (c.url.isNotEmpty && c.url == _chapter!.url) ||
+          (c.name.trim().toLowerCase() == _chapter!.name.trim().toLowerCase()));
+
+      Chapter? nextCh;
+      Chapter? prevCh;
+      if (idx != -1) {
+        if (idx + 1 < _siblingChapters.length) nextCh = _siblingChapters[idx + 1];
+        if (idx - 1 >= 0) prevCh = _siblingChapters[idx - 1];
+      }
+
+      final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId) ?? _parentManga;
       if (mounted) {
-        setState(() => _applyMangaReadingMode(manga));
+        setState(() {
+          _nextChapter = nextCh;
+          _prevChapter = prevCh;
+          _applyMangaReadingMode(manga);
+        });
       } else {
+        _nextChapter = nextCh;
+        _prevChapter = prevCh;
         _applyMangaReadingMode(manga);
       }
     }
@@ -1107,10 +1150,17 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   void _onVerticalScroll() {
+    if (_isDraggingSlider) return;
     if (_pageUrls.isEmpty || !_scrollController.hasClients) return;
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.offset;
     if (maxScroll <= 0) return;
+
+    // Reveal controls when reaching the end of the chapter
+    if (currentScroll >= maxScroll - 30 && !_showControls) {
+      _showControls = true;
+      if (mounted) setState(() {});
+    }
 
     // Show floating page indicator when scrolling with controls hidden
     if (!_showControls) {
@@ -1170,8 +1220,18 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   void _onPageChanged(int index) {
     _resetZoom();
+    if (index >= _pageUrls.length) {
+      _setPageIndicator(_pageUrls.length);
+      _debouncedUpdateProgress(_pageUrls.length);
+      if (!_showControls) {
+        _showControls = true;
+        if (mounted) setState(() {});
+      }
+      return;
+    }
     final page = index + 1;
     _setPageIndicator(page);
+    if (mounted) setState(() {});
 
     // Trigger prefetch early when reaching 65% of pages in paged mode
     if (_pageUrls.isNotEmpty && page >= (_pageUrls.length * 0.65).round() && _nextChapter != null) {
@@ -2188,39 +2248,129 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   Widget _buildChapterTransitionCard() {
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final colorScheme = Theme.of(context).colorScheme;
+    final primaryColor = colorScheme.primary;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 36),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1F1F24),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
-      ),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      constraints: const BoxConstraints(maxWidth: 460),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(Icons.check_circle_outline_rounded, color: primaryColor, size: 48),
-          const SizedBox(height: 12),
-          Text('Finished ${_chapter?.name ?? "Chapter"}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          if (_nextChapter != null) ...[
-            Text('Up Next: ${_nextChapter!.name}', style: TextStyle(color: primaryColor, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              onPressed: () => _loadChapterAndPages(_chapterTargetId(_nextChapter!)),
-              child: const Text('Read Next Chapter', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+          // ── Finished chapter section ──
+          if (_chapter != null)
+            _buildChapterTransitionSection(
+              label: 'Finished',
+              chapter: _chapter!,
+              labelColor: primaryColor,
             ),
-          ] else ...[
-            const Text('You have caught up with the latest chapter!', style: TextStyle(color: Colors.grey)),
-          ],
+
+          const SizedBox(height: 28),
+
+          // ── Next chapter section ──
+          if (_nextChapter != null) ...[
+            _buildChapterTransitionSection(
+              label: 'Next',
+              chapter: _nextChapter!,
+              labelColor: primaryColor,
+            ),
+            const SizedBox(height: 24),
+            // Read Next Chapter button
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: colorScheme.onPrimary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                onPressed: () => _loadChapterAndPages(_chapterTargetId(_nextChapter!)),
+                child: const Text(
+                  'Read Next Chapter',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+              ),
+            ),
+          ] else
+            // No next chapter card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colorScheme.outlineVariant, width: 0.8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: primaryColor, size: 20),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Text(
+                      "You're all caught up — there's no next chapter.",
+                      style: TextStyle(fontSize: 13, height: 1.35),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _buildChapterTransitionSection({required String label, required Chapter chapter, required Color labelColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$label:',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: labelColor,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            if (chapter.isDownloaded) ...[
+              Icon(Icons.check_circle_rounded, color: labelColor, size: 18),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Text(
+                chapter.name,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  height: 1.25,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        if (chapter.scanlator != null && chapter.scanlator!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              chapter.scanlator!,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.white.withValues(alpha: 0.45),
+                height: 1.3,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
     );
   }
 
@@ -2690,23 +2840,39 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                                                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                                               ),
                                               child: Slider(
-                                                value: _currentPage.toDouble().clamp(1.0, _pageUrls.length.toDouble()),
+                                                value: (_isDraggingSlider
+                                                    ? (_sliderDragValue ?? _currentPage.toDouble())
+                                                    : _currentPage.toDouble()).clamp(1.0, _pageUrls.length.toDouble()),
                                                 min: 1.0,
                                                 max: _pageUrls.length.toDouble(),
                                                 divisions: _pageUrls.length > 1 ? _pageUrls.length - 1 : 1,
+                                                onChangeStart: (_) {
+                                                  setState(() => _isDraggingSlider = true);
+                                                },
                                                 onChanged: (val) {
                                                   final targetPage = val.round();
-                                                  setState(() => _currentPage = targetPage);
+                                                  setState(() {
+                                                    _sliderDragValue = val;
+                                                    _currentPage = targetPage;
+                                                  });
                                                   if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
                                                     if (_pageController.hasClients) {
                                                       _pageController.jumpToPage(targetPage - 1);
                                                     }
                                                   } else {
-                                                    if (_scrollController.hasClients && _pageUrls.length > 1 && _scrollController.position.maxScrollExtent > 0) {
-                                                      final targetOffset = ((targetPage - 1) / (_pageUrls.length - 1)) * _scrollController.position.maxScrollExtent;
-                                                      _scrollController.jumpTo(targetOffset);
+                                                    if (_scrollController.hasClients) {
+                                                      _jumpToWebtoonPage(targetPage);
                                                     }
                                                   }
+                                                },
+                                                onChangeEnd: (val) {
+                                                  final targetPage = val.round();
+                                                  setState(() {
+                                                    _isDraggingSlider = false;
+                                                    _sliderDragValue = null;
+                                                    _currentPage = targetPage;
+                                                  });
+                                                  _debouncedUpdateProgress(targetPage);
                                                 },
                                               ),
                                             ),
@@ -2963,6 +3129,31 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                                     ],
                                   ),
                           ),
+                        ),
+                      ),
+                    ),
+            // ── 5. END-OF-CHAPTER OVERLAY (paged mode + webtoon with seamlessTransitions=false) ──
+                  if (_currentPage >= _pageUrls.length &&
+                      _pageUrls.isNotEmpty &&
+                      (_readingMode == ReadingMode.pagedLtr ||
+                          _readingMode == ReadingMode.pagedRtl ||
+                          !_settings.seamlessTransitions))
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 80 + MediaQuery.of(context).padding.bottom,
+                      child: Container(
+                        padding: const EdgeInsets.only(top: 60, bottom: 16),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Color(0xCC000000)],
+                            stops: [0.0, 0.35],
+                          ),
+                        ),
+                        child: Center(
+                          child: _buildChapterTransitionCard(),
                         ),
                       ),
                     ),
