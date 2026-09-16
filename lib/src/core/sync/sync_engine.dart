@@ -591,8 +591,11 @@ class SyncEngine {
           manga ??= Manga()..serverId = serverId;
 
           manga.title = nodeMap['title'] as String? ?? 'Untitled';
-          manga.author = nodeMap['author'] as String?;
-          manga.description = nodeMap['description'] as String?;
+          // Only overwrite author/description from server if user has NOT locked metadata via Metron enrichment
+          if (!manga.isMetadataLocked) {
+            manga.author = nodeMap['author'] as String?;
+            manga.description = nodeMap['description'] as String?;
+          }
           manga.inLibrary = true;
           manga.inLibraryAt = nodeMap['inLibraryAt'] != null ? int.tryParse(nodeMap['inLibraryAt'].toString()) : null;
           manga.unreadCount = parseIntSafe(nodeMap['unreadCount']);
@@ -739,16 +742,21 @@ class SyncEngine {
 
           final mangaData = data['manga'] as Map<String, dynamic>;
 
-          // Update manga fields from detail response
-          manga.description = mangaData['description'] as String? ?? manga.description;
-          manga.status = mangaData['status'] as String? ?? manga.status;
+          // Update manga fields from detail response (respect metadata lock from Metron)
+          if (!manga.isMetadataLocked) {
+            manga.description = mangaData['description'] as String? ?? manga.description;
+            manga.status = mangaData['status'] as String? ?? manga.status;
+            final genresList = mangaData['genre'] as List<dynamic>?;
+            if (genresList != null) {
+              manga.genres = genresList.map((g) => g.toString()).toList();
+            }
+          } else {
+            // Still update status from server even when locked — status is operational data, not editorial
+            manga.status = mangaData['status'] as String? ?? manga.status;
+          }
           final rawMangaUrl = (mangaData['url'] ?? mangaData['realUrl']) as String?;
           if (rawMangaUrl != null && rawMangaUrl.isNotEmpty) {
             manga.url = rawMangaUrl;
-          }
-          final genresList = mangaData['genre'] as List<dynamic>?;
-          if (genresList != null) {
-            manga.genres = genresList.map((g) => g.toString()).toList();
           }
           manga.lastFetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
