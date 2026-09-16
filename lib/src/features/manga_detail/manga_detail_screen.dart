@@ -11,6 +11,7 @@ import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
+import '../../core/metron/metron_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
@@ -773,6 +774,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     if (ch.serverId > 0) {
       SyncEngine.instance.syncChapterProgress(ch.serverId, isRead: newState, lastPageRead: ch.lastPageRead);
     }
+
+    if (newState && _manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
+      MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: ch).catchError((_) => false);
+    }
   }
 
   void _toggleChapterBookmark(Chapter ch) async {
@@ -801,6 +806,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
       if (p.serverId > 0) {
         SyncEngine.instance.syncChapterProgress(p.serverId, isRead: true, lastPageRead: p.lastPageRead);
+      }
+      if (_manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
+        MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: p).catchError((_) => false);
       }
     }
     await IsarService.instance.saveChapters(prevs);
@@ -868,6 +876,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
       if (c.serverId > 0) {
         SyncEngine.instance.syncChapterProgress(c.serverId, isRead: read, lastPageRead: c.lastPageRead);
+      }
+      if (read && _manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
+        MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: c).catchError((_) => false);
       }
     }
     await IsarService.instance.saveChapters(targets);
