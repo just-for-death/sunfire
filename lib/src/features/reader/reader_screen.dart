@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
@@ -21,6 +22,7 @@ import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
 import '../../core/engine/javascript/m_client.dart';
 import '../../core/engine/quickjs_service.dart';
+import '../../core/metron/metron_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/sync_engine.dart';
@@ -1255,10 +1257,32 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
     // Push tracker progress when a chapter first becomes fully read.
     if (!wasRead && _chapter!.isRead && _chapter!.mangaId > 0) {
+      _scrobbleToMetronIfLinked(_chapter!);
       final chapterNum = _chapter!.chapterNumber > 0
           ? _chapter!.chapterNumber
           : clampedPage.toDouble();
-      unawaited(SyncEngine.instance.syncMangaTrackerProgress(_chapter!.mangaId, chapterNum));
+      SyncEngine.instance.syncMangaTrackerProgress(_chapter!.mangaId, chapterNum);
+    }
+  }
+
+  void _scrobbleToMetronIfLinked(Chapter chapter) {
+    if (!_settings.metronAutoScrobble) return;
+    final parent = _parentManga;
+    if (parent == null || parent.metronSeriesId == null) return;
+
+    final issuesJson = parent.metronIssuesJson;
+    if (issuesJson != null && issuesJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(issuesJson) as Map<String, dynamic>;
+        final issueMap = decoded.map((k, v) => MapEntry(k, int.tryParse(v.toString()) ?? 0));
+        final matchedKey = MetronService.matchIssueNumber(chapter.name, chapter.chapterNumber, issueMap);
+        if (matchedKey != null && issueMap.containsKey(matchedKey)) {
+          final issueId = issueMap[matchedKey]!;
+          if (issueId > 0) {
+            MetronService.instance.scrobbleIssue(issueId: issueId).catchError((_) => false);
+          }
+        }
+      } catch (_) {}
     }
   }
 
