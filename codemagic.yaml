@@ -120,10 +120,6 @@ workflows:
       vars:
         LANG: en_US.UTF-8
         LC_ALL: en_US.UTF-8
-        # GitHub token with `repo` scope. Add it as a SECRET in Codemagic →
-        # Environment variables (name: GITHUB_TOKEN). Used to publish the
-        # release artifacts to GitHub Releases; if unset, publishing is skipped.
-        GITHUB_TOKEN: $GITHUB_TOKEN
     triggering:
       events:
         - tag
@@ -184,74 +180,6 @@ workflows:
             fi
           fi
           ls -lh "$CM_BUILD_DIR/release/"
-      - name: Generate changelog from git log
-        script: |
-          set -e
-          cd "$CM_BUILD_DIR"
-          # Make sure previous tags are available for the changelog range
-          git fetch --tags --quiet 2>/dev/null || true
-          if [ -n "${CM_TAG}" ]; then
-            # Commits since the previous tag (or last 60 if none yet)
-            PREV_TAG=$(git describe --tags --abbrev=0 "${CM_TAG}^" 2>/dev/null || echo "")
-            if [ -n "$PREV_TAG" ]; then
-              {
-                echo "# Sunfire ${CM_TAG}"
-                echo ""
-                echo "Changes since ${PREV_TAG}:"
-                echo ""
-                git log --oneline --no-merges "${PREV_TAG}..${CM_TAG}"
-              } > changelog.md
-            else
-              {
-                echo "# Sunfire ${CM_TAG}"
-                echo ""
-                echo "No previous release tag found — showing recent commits:"
-                echo ""
-                git log --oneline --no-merges -60 "${CM_TAG}"
-              } > changelog.md
-            fi
-          else
-            # Not a tag build; still write a fallback changelog
-            {
-              echo "# Sunfire (build)"
-              echo ""
-              git log --oneline --no-merges -20
-            } > changelog.md
-          fi
-          echo "Changelog:"
-          sed -n '1,25p' changelog.md
-      - name: Publish to GitHub Release
-        script: |
-          set -e
-          cd "$CM_BUILD_DIR"
-          if [ -z "${CM_TAG}" ]; then
-            echo "Not a tag build — skipping GitHub release."
-            exit 0
-          fi
-          if [ -z "${GITHUB_TOKEN}" ]; then
-            echo "GITHUB_TOKEN is not set — skipping GitHub release."
-            echo "Add a secret GITHUB_TOKEN (repo scope) in Codemagic → Environment variables."
-            exit 0
-          fi
-          shopt -s nullglob
-          artifacts=(release/Sunfire-*.apk release/Sunfire-*.ipa)
-          if [ ${#artifacts[@]} -eq 0 ]; then
-            echo "No artifacts found to publish — skipping GitHub release."
-            exit 1
-          fi
-          echo "Publishing release ${CM_TAG} with artifacts:"
-          printf '  %s\n' "${artifacts[@]}"
-          if gh release view "${CM_TAG}" >/dev/null 2>&1; then
-            echo "Release already exists — updating notes and uploading missing artifacts."
-            gh release edit "${CM_TAG}" --notes-file changelog.md --title "Sunfire ${CM_TAG}"
-            gh release upload "${CM_TAG}" "${artifacts[@]}" --clobber
-          else
-            gh release create "${CM_TAG}" \
-              --title "Sunfire ${CM_TAG}" \
-              --notes-file changelog.md \
-              "${artifacts[@]}"
-          fi
-          echo "✅ Published: https://github.com/just-for-death/sunfire/releases/tag/${CM_TAG}"
     artifacts:
       - release/Sunfire-*.apk
       - release/Sunfire-*.ipa
