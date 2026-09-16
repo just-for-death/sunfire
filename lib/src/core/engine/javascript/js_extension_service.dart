@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
 
+import '../../../constants/app_constants.dart';
 import '../quickjs_service.dart';
 import 'dom_selector.dart';
 import 'http.dart';
@@ -46,7 +47,7 @@ class MProvider {
     }
     getHeaders(url) {
         return {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": "$kBrowserUserAgent",
             "Referer": this.source.baseUrl || ""
         };
     }

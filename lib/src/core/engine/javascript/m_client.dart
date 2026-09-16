@@ -5,6 +5,7 @@ import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_interceptor/http_interceptor.dart';
+import '../../../constants/app_constants.dart';
 import '../../logging/logger_service.dart';
 import '../../services/settings_service.dart';
 
@@ -21,7 +22,7 @@ http.Client _createNativeEngineClient() {
 
 class MClient {
   static final Map<String, String> _cookies = {};
-  static String _userAgent = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6832.64 Mobile Safari/537.36';
+  static String _userAgent = kMobileUserAgent;
   static String cfProxyUrl = '';
 
   // Deduplication map — one in-flight Future per domain root

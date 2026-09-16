@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_interceptor/http_interceptor.dart';
+import '../../../constants/app_constants.dart';
 import '../../services/settings_service.dart';
 import 'm_client.dart';
 
@@ -146,7 +147,7 @@ class Client {
       }
 
       final headers = <String, String>{
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': kBrowserUserAgent,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
       };
