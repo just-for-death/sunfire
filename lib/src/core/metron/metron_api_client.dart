@@ -52,11 +52,12 @@ class MetronApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          // 1. Inject Authentication
+          // 1. Inject Authentication (Metron API requires Bearer <token>)
           if (_apiToken != null && _apiToken!.trim().isNotEmpty) {
             final token = _apiToken!.trim();
-            // Metron DRF standard format: Token <key>
-            options.headers['Authorization'] = token.startsWith('Token ') ? token : 'Token $token';
+            options.headers['Authorization'] = token.startsWith('Bearer ') || token.startsWith('Basic ')
+                ? token
+                : 'Bearer $token';
           }
 
           // 2. Throttle outbound requests
@@ -128,7 +129,10 @@ class MetronApiClient {
   void setToken(String? token) {
     _apiToken = token?.trim();
     if (_apiToken != null && _apiToken!.isNotEmpty) {
-      _dio.options.headers['Authorization'] = _apiToken!.startsWith('Token ') ? _apiToken! : 'Token $_apiToken';
+      final headerVal = _apiToken!.startsWith('Bearer ') || _apiToken!.startsWith('Basic ')
+          ? _apiToken!
+          : 'Bearer $_apiToken';
+      _dio.options.headers['Authorization'] = headerVal;
     } else {
       _dio.options.headers.remove('Authorization');
     }
