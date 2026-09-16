@@ -540,7 +540,7 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: main
+      ref: "3261eb462c975d66dbd713c15f1959c6f976412e"
       resolved-ref: "3261eb462c975d66dbd713c15f1959c6f976412e"
       url: "https://github.com/kodjodevf/flutter_qjs.git"
     source: git
