@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  Current version: <code>11.0.0-beta+32</code>
+  Current version: <code>1.0.0+1</code> (Stable Release)
 </p>
 
 ---
