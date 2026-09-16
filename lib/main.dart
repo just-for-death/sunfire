@@ -10,6 +10,7 @@ import 'src/core/engine/javascript/m_client.dart';
 import 'src/core/engine/quickjs_service.dart';
 import 'src/core/engine/source_preferences.dart';
 import 'src/core/logging/logger_service.dart';
+import 'src/core/metron/metron_service.dart';
 import 'src/core/services/download_manager_service.dart';
 import 'src/core/services/image_cache_helper.dart';
 import 'src/core/services/notification_service.dart';
@@ -55,6 +56,12 @@ void main() async {
     await SettingsService.instance.initialize();
   } catch (e) {
     debugPrint('SettingsService init error: $e');
+  }
+
+  try {
+    await MetronService.instance.initialize();
+  } catch (e) {
+    debugPrint('MetronService init error: $e');
   }
 
   try {

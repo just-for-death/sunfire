@@ -489,4 +489,20 @@ class SettingsService extends ChangeNotifier {
     _prefs?.setBool('auto_scroll_smooth_ease_in', value);
     notifyListeners();
   }
+
+  // ── METRON.CLOUD TRACKING ──────────────────────────────────
+  /// Auto-scrobble issues to Metron when a chapter finishes reading.
+  bool get metronAutoScrobble => _prefs?.getBool('metron_auto_scrobble') ?? true;
+  set metronAutoScrobble(bool value) {
+    _prefs?.setBool('metron_auto_scrobble', value);
+    notifyListeners();
+  }
+
+  /// Auto-match newly added library comics against Metron for metadata enrichment.
+  bool get metronAutoMatch => _prefs?.getBool('metron_auto_match') ?? false;
+  set metronAutoMatch(bool value) {
+    _prefs?.setBool('metron_auto_match', value);
+    notifyListeners();
+  }
 }
+
