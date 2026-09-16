@@ -32,10 +32,15 @@
 - **Local-first** — read offline. Library and reading state live in [Isar](https://isar.dev); scrapers run on-device via [QuickJS](https://bellard.org/quickjs/) — no cloud, no account needed.
 - **Suwayomi sync** — bidirectional sync of library, categories, history, chapter progress, and tracker progress whenever a server is reachable.
 - **Offline queue** — mark-read, bookmarks, library changes, category edits, and tracker-progress updates replay the moment you're back online.
-- **Adaptive UI** — phone bottom nav (<720px), tablet/iPad navigation rail (≥720px), and a two-pane manga detail view (≥840px). Volume keys turn pages on Android and iOS.
-- **FOSS extension icons** — bundled letter-tile PNGs instead of the Google Favicon CDN.
-- **Reader** — long-strip, long-strip-with-gaps, paged LTR, and paged RTL; pinch/double-tap zoom, crop, inverted taps, and auto-scroll.
+- **Manga tracking** — track Western comics on [Metron.cloud](https://metron.cloud) directly, plus AniList / MyAnimeList / Kitsu tracking via your Suwayomi server. Auto-scrobble chapter reads back to your tracker.
+- **Reader** — four reading modes (long strip, long strip with gaps, paged LTR, paged RTL), pinch/double-tap zoom, white-border cropping, color filters (invert / grayscale / amber / sepia), 3-zone tap navigation, volume-key page turns, and auto-scroll with speed presets.
+- **Chapter transitions** — Mihon-style end-of-chapter card ("Finished:" / "Next:") with a full-width **Read Next Chapter** button and scanlator attribution.
+- **Adaptive UI** — phone bottom nav (<720px), tablet/iPad navigation rail (≥720px), and a two-pane manga detail view (≥840px).
+- **Reading stats** — daily streak, chapters read, total read time, overall progress, top genres, and source distribution.
+- **Backup & restore** — JSON backups with configurable categories / chapters / history inclusion and optional scheduled backups.
+- **Downloads** — per-chapter and batch downloads with a queue, pause/cancel, retry passes (Referer stripping, origin Referer, browser UA, curl fallback), and offline reading.
 - **Anti-bot** — optional [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) support for Cloudflare-protected sources.
+- **FOSS extension icons** — bundled letter-tile PNGs instead of the Google Favicon CDN.
 
 ---
 
@@ -52,6 +57,16 @@
 >
 > **Web**: not currently buildable — the app's Isar database and QuickJS
 > runtime are native (`dart:ffi`) and have no web implementation.
+
+---
+
+## Screens & navigation
+
+- **Library** — your manga with categories, sorting, and filtering.
+- **Updates** — recent chapter feed from your sources and bundled scrapers.
+- **History** — continue-reading list with last-read progress.
+- **Browse** — extension sources and repositories: search, global search, category filters, and extension management.
+- **More** — downloads queue, reading stats, trackers, and the full settings suite (server, library, downloads, reader, appearance, general, advanced, backup, extension repos).
 
 ---
 
@@ -85,7 +100,14 @@ flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build
 flutter build ipa
 ```
 
-On first launch, enter a Suwayomi server URL (e.g. `http://192.168.1.100:4567`) or skip it and use the bundled local JS sources.
+On first launch, connect a Suwayomi server (`http://192.168.1.100:4567`, optionally with basic auth / bearer token), or skip it and run in **Standalone Mode** using the bundled local JS sources.
+
+---
+
+## Tracking
+
+- **Metron.cloud (Western comics)** — configure an API token in *Settings → Manga Trackers*. Search series, link them to your library, and set status / volumes / chapters / reading lists. Auto-scrobble pushes chapter-read events back to Metron.
+- **AniList / MyAnimeList / Kitsu** — enabled when a Suwayomi server is connected; progress syncs through the server's tracker integration.
 
 ---
 
@@ -108,6 +130,13 @@ scripts/sync_bundled_extensions.sh
 
 ---
 
+## CI
+
+- **GitHub Actions** (`.github/workflows/ci.yml`) — `flutter analyze`, deterministic unit tests (network-free), and an unsigned split-per-ABI Android release build on push/PR to `main`/`master`/`develop`.
+- **Codemagic** (`codemagic.yaml`) — Android universal + split APKs and an unsigned iOS IPA for sideloading (AltStore / TrollStore / Sideloadly).
+
+---
+
 ## Tests
 
 ```bash
@@ -127,13 +156,27 @@ Coverage is practical and server-aware:
 
 ```
 lib/
-├── core/          # services: settings, sync engine, tracker, storage
-├── features/      # feature screens: reader, library, extensions, ...
+├── core/          # services: settings, sync engine, trackers, DB, storage
+│   ├── db/        #   Isar models & repositories
+│   ├── engine/    #   QuickJS runtime, JS scrapers, image transport
+│   ├── metron/    #   Metron.cloud API client & models
+│   ├── sync/      #   Suwayomi GraphQL, WebSocket, sync engine
+│   ├── logging/   #   on-device diagnostic log with live stream
+│   ├── services/  #   downloads, notifications, image cache, settings
+│   └── theme/     #   light/dark/OLED themes, Material You
+├── features/      # screens: reader, library, browse, manga detail, ...
 └── main.dart
 assets/
 ├── extensions/    # bundled JS sources
 └── icons/         # launcher icons, source letter-tiles, logo
 ```
+
+---
+
+## Security notes
+
+- Server connection is opted-in per host: custom TLS certificate validation only trusts the explicitly-configured server host (plus loopback) — no blanket LAN-range MITM allowance.
+- The Metron tracking token is stored in platform secure storage (Keychain / Keystore), never in plaintext preferences.
 
 ---
 
