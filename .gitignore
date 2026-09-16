@@ -57,6 +57,7 @@ ios/Flutter/ephemeral/
 # Gradle caches (local machine; should not be committed)
 android/.gradle/
 **/local.properties
+**/GeneratedPluginRegistrant.java
 
 # Android signing material — NEVER commit (keystores + credentials)
 android/key.properties
