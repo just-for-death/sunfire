@@ -29,6 +29,12 @@ void main() {
 
       final key2 = MetronService.matchIssueNumber('Batman Chapter 100 - Endgame', 0.0, issueMap);
       expect(key2, '100');
+
+      final key3 = MetronService.matchIssueNumber('#1', 0.0, issueMap);
+      expect(key3, '1');
+
+      final key4 = MetronService.matchIssueNumber('#10', 0.0, issueMap);
+      expect(key4, '10');
     });
 
     test('returns null when no match found', () {
