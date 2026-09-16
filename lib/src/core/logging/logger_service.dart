@@ -169,6 +169,14 @@ class LoggerService {
     _writeFuture = _writeFuture.then((_) async {
       try {
         if (_logFile != null) {
+          if (await _logFile!.exists()) {
+            final len = await _logFile!.length();
+            if (len > 2 * 1024 * 1024) {
+              final oldContent = await _logFile!.readAsString();
+              final truncated = oldContent.substring(oldContent.length ~/ 2);
+              await _logFile!.writeAsString(truncated);
+            }
+          }
           await _logFile!.writeAsString(text, mode: FileMode.append, flush: true);
         }
       } catch (_) {}

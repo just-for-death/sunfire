@@ -182,12 +182,14 @@ class RepoManager {
     _userRepos.removeWhere((r) => r['url'] == normUrl || r['url'] == url);
   }
 
-  /// Returns a cache-friendly key for a given repo URL
+  /// Returns a deterministic, collision-free, filesystem-safe cache key for a given repo URL.
   String _cacheKeyFor(String url) {
-    final clean = url.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-    final prefix = clean.substring(0, clean.length.clamp(0, 40));
-    final hash = url.hashCode.abs();
-    return '${prefix}_$hash';
+    final bytes = utf8.encode(url);
+    final b64 = base64Url.encode(bytes).replaceAll('=', '');
+    if (b64.length <= 80) return b64;
+    final prefix = b64.substring(0, 35);
+    final suffix = b64.substring(b64.length - 35);
+    return '${prefix}_${bytes.length}_$suffix';
   }
 
   Future<File> _cacheFileFor(String indexUrl) async {
