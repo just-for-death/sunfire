@@ -97,9 +97,10 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
         }
       }
     } catch (e) {
+      await MetronService.instance.saveToken(token);
       if (mounted) {
         setState(() {
-          _verificationMessage = 'Error connecting to Metron: $e';
+          _verificationMessage = '⚠️ Token saved, but Metron.cloud timed out ($e). Connection will proceed when network route stabilizes.';
           _verificationSuccess = false;
         });
       }
