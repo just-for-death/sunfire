@@ -15,7 +15,9 @@ import '../engine/content_resolver_service.dart';
 import '../engine/javascript/m_client.dart';
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
+import '../sync/download_foreground_task.dart';
 import '../sync/graphql_client_service.dart';
+import 'notification_service.dart';
 import 'settings_service.dart';
 
 enum LocalDownloadStatus { queued, downloading, completed, failed, paused }
@@ -25,6 +27,9 @@ class LocalDownloadTask {
   final int mangaId;
   final String chapterName;
   final String mangaTitle;
+  /// Reading-order number (e.g. 1 for chapter 1). Used to decide which queued
+  /// chapter downloads next so a batch downloads 1, 2, 3… instead of 100, 99…
+  final double chapterNumber;
   double progress; // 0.0 to 1.0
   LocalDownloadStatus status;
   String? error;
@@ -34,6 +39,7 @@ class LocalDownloadTask {
     required this.mangaId,
     required this.chapterName,
     required this.mangaTitle,
+    this.chapterNumber = 0,
     this.progress = 0.0,
     this.status = LocalDownloadStatus.queued,
     this.error,
@@ -44,6 +50,7 @@ class LocalDownloadTask {
     'mangaId': mangaId,
     'chapterName': chapterName,
     'mangaTitle': mangaTitle,
+    'chapterNumber': chapterNumber,
     'progress': progress,
     'status': status.name,
     'error': error,
@@ -55,6 +62,7 @@ class LocalDownloadTask {
       mangaId: map['mangaId'] as int,
       chapterName: map['chapterName'] as String? ?? '',
       mangaTitle: map['mangaTitle'] as String? ?? '',
+      chapterNumber: (map['chapterNumber'] as num?)?.toDouble() ?? 0,
       progress: (map['progress'] as num?)?.toDouble() ?? 0.0,
       status: LocalDownloadStatus.values.firstWhere(
         (e) => e.name == map['status'],
@@ -126,6 +134,11 @@ class DownloadManagerService extends ChangeNotifier {
 
   static const String _queuePrefKey = 'sunfire_download_queue_v1';
 
+  /// Persisted so an explicit "Pause" survives app restarts. Without this the
+  /// startup/foreground auto-resume would silently re-start a queue the user
+  /// stopped on purpose (e.g. to save mobile data), making Pause meaningless.
+  static const String _queuePausedPrefKey = 'sunfire_download_queue_v1_paused';
+
   List<LocalDownloadTask> get localTasks => List.unmodifiable(_localTasks);
   Set<int> get downloadedLocalChapterIds => _downloadedLocalChapterIds;
   Set<int> get downloadedServerChapterIds => _downloadedServerChapterIds;
@@ -188,10 +201,118 @@ class DownloadManagerService extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadQueuePausedFlag() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _isQueuePaused = prefs.getBool(_queuePausedPrefKey) ?? false;
+    } catch (_) {}
+  }
+
+  Future<void> _persistQueuePausedFlag() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_queuePausedPrefKey, _isQueuePaused);
+    } catch (_) {}
+  }
+
   bool _isQueuePaused = false;
   bool get isQueuePaused => _isQueuePaused;
 
-  void pauseLocalQueue() {
+  // ── Batch tracking for background/notification reporting ────────────
+  int _batchTotal = 0;
+  int _completedInBatch = 0;
+  int _failedInBatch = 0;
+  bool _batchCounted = false;
+
+  /// Refreshes the snapshot + notifier while the queue is processing so the
+  /// background isolate never mistakes a long-running chapter for a dead
+  /// main isolate (see [DownloadForegroundTask.isSnapshotStale]).
+  Timer? _notifierHeartbeat;
+
+  void _beginBatch() {
+    if (_batchCounted) return;
+    _batchCounted = true;
+    // Count only tasks that will actually be attempted in this run (retryable
+    // ones). Failed/cancelled leftovers from earlier runs are excluded.
+    _batchTotal = countRetryableTasks(_localTasks);
+    _completedInBatch = 0;
+    _failedInBatch = 0;
+  }
+
+  /// Tasks a queue run will actually attempt (queued + paused + downloading).
+  /// Extracted so tests can verify batch totals without a running queue.
+  static int countRetryableTasks(List<LocalDownloadTask> tasks) {
+    return tasks.where((t) =>
+        t.status == LocalDownloadStatus.queued ||
+        t.status == LocalDownloadStatus.paused ||
+        t.status == LocalDownloadStatus.downloading).length;
+  }
+
+  void _purgeBatchCounters() {
+    _batchTotal = 0;
+    _completedInBatch = 0;
+    _failedInBatch = 0;
+    _batchCounted = false;
+  }
+
+  /// Reflects the current live queue in the Android foreground-service
+  /// notification (and the iOS/desktop progress notification).
+  Future<void> _refreshActiveNotifier() async {
+    if (_isQueuePaused) {
+      await _stopActiveNotifier();
+      return;
+    }
+    final current = _localTasks.where((t) => t.status == LocalDownloadStatus.downloading).firstOrNull ??
+        _localTasks.where((t) => t.status == LocalDownloadStatus.queued).firstOrNull;
+    if (current == null) {
+      await _stopActiveNotifier();
+      return;
+    }
+
+    final title = current.mangaTitle.isEmpty ? 'Manga' : current.mangaTitle;
+    final chapterLabel = current.chapterName.isEmpty ? 'Chapter' : current.chapterName;
+
+    if (DownloadForegroundTask.isSupported && SettingsService.instance.backgroundDownloadsEnabled) {
+      await DownloadForegroundTask.instance.update(
+        mangaTitle: title,
+        currentChapter: chapterLabel,
+        completed: _completedInBatch,
+        total: _batchTotal > 0 ? _batchTotal : _localTasks.length,
+        active: true,
+      );
+    } else {
+      // Non-Android platforms, AND Android when the user disabled background
+      // downloads: fall back to the ongoing flutter_local_notifications
+      // progress notification so there is always download feedback.
+      await NotificationService.instance.showDownloadProgress(
+        title: 'Downloading: $title',
+        body: '$chapterLabel • $_completedInBatch/${_batchTotal > 0 ? _batchTotal : _localTasks.length} chapters',
+        progress: _batchTotal > 0 ? _completedInBatch / _batchTotal : 0,
+      );
+    }
+  }
+
+  /// Stops the active notifier when there is nothing downloading: the Android
+  /// foreground service, or — on non-Android AND Android-with-background-
+  /// disabled — the fallback flutter_local_notifications progress
+  /// notification (which otherwise lingers as a stale "Downloading…" card).
+  Future<void> _stopActiveNotifier() async {
+    if (DownloadForegroundTask.isSupported && SettingsService.instance.backgroundDownloadsEnabled) {
+      await DownloadForegroundTask.instance.stop();
+    } else {
+      await NotificationService.instance.cancelDownloadProgressNotification();
+    }
+  }
+
+  /// Public entry point used by the Settings toggle to drop the foreground
+  /// service when background downloads are disabled mid-queue.
+  void stopBackgroundNotifier() {
+    if (DownloadForegroundTask.isSupported) {
+      DownloadForegroundTask.instance.stop();
+    }
+  }
+
+  Future<void> pauseLocalQueue() async {
     _isQueuePaused = true;
     for (final token in _cancelTokens.values) {
       try {
@@ -204,28 +325,45 @@ class DownloadManagerService extends ChangeNotifier {
         task.status = LocalDownloadStatus.paused;
       }
     }
-    _saveQueueState();
+    await _saveQueueState();
+    await _persistQueuePausedFlag();
+    await _stopActiveNotifier();
     notifyListeners();
   }
 
-  void resumeLocalQueue() {
+  Future<void> resumeLocalQueue() async {
     _isQueuePaused = false;
     for (final task in _localTasks) {
       if (task.status == LocalDownloadStatus.downloading || task.status == LocalDownloadStatus.paused) {
         task.status = LocalDownloadStatus.queued;
       }
     }
-    _saveQueueState();
+    await _saveQueueState();
+    await _persistQueuePausedFlag();
     if (!_isProcessingLocalQueue && _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
       _processLocalQueue();
     }
     notifyListeners();
   }
 
+  /// Called when the app returns to the foreground. Unlike [resumeLocalQueue]
+  /// (the explicit user/UI entry point), this never overrides an intentional
+  /// pause: an explicitly paused queue stays paused until the user resumes it.
+  void resumeLocalQueueAfterForeground() {
+    if (_isQueuePaused) return;
+    resumeLocalQueue();
+  }
+
   Future<void> initialize() async {
     await _scanDownloadedLocalChapters();
     await _loadQueueState();
-    resumeLocalQueue();
+    await _loadQueuePausedFlag();
+    // Auto-resume only when the user didn't explicitly pause the queue. A
+    // paused queue must survive app restarts — otherwise Pause would only
+    // last until the next launch.
+    if (!_isQueuePaused) {
+      await resumeLocalQueue();
+    }
   }
 
   Future<void> _scanDownloadedLocalChapters() async {
@@ -279,49 +417,93 @@ class DownloadManagerService extends ChangeNotifier {
     required int mangaId,
     required String chapterName,
     required String mangaTitle,
+    double chapterNumber = 0,
   }) async {
     if (_localTasks.any((t) => t.chapterId == chapterId && (t.status == LocalDownloadStatus.downloading || t.status == LocalDownloadStatus.queued))) {
       return;
     }
 
+    final wasFailed =
+        _localTasks.any((t) => t.chapterId == chapterId && t.status == LocalDownloadStatus.failed);
     final task = LocalDownloadTask(
       chapterId: chapterId,
       mangaId: mangaId,
       chapterName: chapterName,
       mangaTitle: mangaTitle,
+      chapterNumber: chapterNumber,
     );
     _localTasks.removeWhere((t) => t.chapterId == chapterId);
     _localTasks.add(task);
+    // Keep the reported batch total accurate: enqueuing a brand-new item
+    // during a run grows the total, but retrying a failed one merely replaces
+    // its slot (and undoes the failure it already logged) instead of
+    // inflating both counters.
+    if (_batchCounted) {
+      if (wasFailed) {
+        if (_failedInBatch > 0) _failedInBatch--;
+      } else {
+        _batchTotal++;
+      }
+    }
     await _saveQueueState();
     notifyListeners();
 
     _processLocalQueue();
   }
 
+  // Download in reading order: ascending chapter number, grouped by manga.
+  // Source chapter lists are usually newest-first, so without this a batch of
+  // chapters 1..100 would start at 100 and work backwards.
+  static List<LocalDownloadTask> sortQueuedTasks(List<LocalDownloadTask> tasks) {
+    final sorted = tasks.where((t) => t.status == LocalDownloadStatus.queued).toList();
+    sorted.sort((a, b) {
+      final byManga = a.mangaId.compareTo(b.mangaId);
+      if (byManga != 0) return byManga;
+      final byChapter = a.chapterNumber.compareTo(b.chapterNumber);
+      // Deterministic tie-breaker (Dart's sort is unstable) so equal chapter
+      // numbers (e.g. series with duplicate-numbered releases) still queue in
+      // a stable, predictable order.
+      if (byChapter != 0) return byChapter;
+      return a.chapterId.compareTo(b.chapterId);
+    });
+    return sorted;
+  }
+
   Future<void> _processLocalQueue() async {
     if (_isProcessingLocalQueue || _isQueuePaused) return;
     _isProcessingLocalQueue = true;
+    _beginBatch();
 
+    // Keep the FGS snapshot fresh during long per-chapter downloads so the
+    // background isolate's staleness guard doesn't kill a healthy service.
+    _notifierHeartbeat?.cancel();
+    _notifierHeartbeat = Timer.periodic(DownloadForegroundTask.heartbeatInterval, (_) {
+      _refreshActiveNotifier();
+    });
+
+    var stoppedForNetwork = false;
     try {
       while (!_isQueuePaused) {
         // Check network constraints (Wi-Fi only vs Mobile Data support)
         final networkAllowed = await _checkNetworkAllowed();
         if (!networkAllowed) {
+          stoppedForNetwork = true;
           debugPrint('[DownloadManager] ⏸️ Pausing queue: Network condition not met (Wi-Fi only: ${SettingsService.instance.downloadOnlyOnWifi})');
           break;
         }
 
-        LocalDownloadTask? task;
-        try {
-          task = _localTasks.firstWhere((t) => t.status == LocalDownloadStatus.queued);
-        } catch (_) {
-          task = null;
-        }
-        if (task == null) break;
+        // Download chapters in reading order (ascending chapter number) so a
+        // batch of 1..100 starts at chapter 1, then 2, 3, … rather than the
+        // source's newest-first order. Tasks are grouped by manga.
+        final queued = sortQueuedTasks(_localTasks);
+        if (queued.isEmpty) break;
+        final task = queued.first;
 
         task.status = LocalDownloadStatus.downloading;
+        task.error = null;
         await _saveQueueState();
         notifyListeners();
+        await _refreshActiveNotifier();
 
         try {
           await _downloadChapterLocally(task);
@@ -330,6 +512,7 @@ class DownloadManagerService extends ChangeNotifier {
           } else {
             task.status = LocalDownloadStatus.completed;
             task.progress = 1.0;
+            _completedInBatch++;
             _downloadedLocalChapterIds.add(task.chapterId);
             _downloadedLocalMangaIds.add(task.mangaId);
             final m = await IsarService.instance.getMangaByServerId(task.mangaId);
@@ -353,15 +536,52 @@ class DownloadManagerService extends ChangeNotifier {
           } else {
             task.status = LocalDownloadStatus.failed;
             task.error = e.toString();
+            _failedInBatch++;
             await LoggerService.instance.logError('Failed to download chapter ${task.chapterId}: $e', exception: e, stackTrace: stack, category: 'DownloadManager');
           }
         }
         await _saveQueueState();
         notifyListeners();
+        await _refreshActiveNotifier();
       }
     } finally {
       _isProcessingLocalQueue = false;
+      _notifierHeartbeat?.cancel();
+      _notifierHeartbeat = null;
+      final pendingQueued =
+          !_isQueuePaused && _localTasks.any((t) => t.status == LocalDownloadStatus.queued);
+      if (_isQueuePaused || stoppedForNetwork) {
+        // Interrupted (paused or waiting for connectivity) — keep the queue,
+        // drop the notifier, and don't report a finished batch. The
+        // connectivity listener / resume handler restarts processing.
+        await _stopActiveNotifier();
+      } else if (pendingQueued) {
+        // New items were enqueued while the loop was draining (rare race).
+        // Re-enter so they are processed instead of left stranded.
+        _processLocalQueue();
+      } else {
+        await _finishBatch();
+      }
       notifyListeners();
+    }
+  }
+
+  Future<void> _finishBatch() async {
+    if (!_batchCounted) {
+      await _stopActiveNotifier();
+      return;
+    }
+    final succeeded = _completedInBatch;
+    final failed = _failedInBatch;
+    final total = _batchTotal > 0 ? _batchTotal : (succeeded + failed);
+    _purgeBatchCounters();
+    await _stopActiveNotifier();
+    if (total > 0) {
+      await NotificationService.instance.showDownloadsCompleted(
+        succeeded: succeeded,
+        failed: failed,
+        total: total,
+      );
     }
   }
 
@@ -596,8 +816,14 @@ class DownloadManagerService extends ChangeNotifier {
       _cancelTokens.remove(chapterId)?.cancel('Cancelled');
       final task = _localTasks.where((t) => t.chapterId == chapterId).firstOrNull;
       if (task != null) {
+        final wasCompleted = task.status == LocalDownloadStatus.completed;
         task.status = LocalDownloadStatus.failed;
         task.error = 'Cancelled';
+        // A removed in-flight/queued task no longer counts toward the batch
+        // total reported in the completion notification.
+        if (_batchCounted && !wasCompleted && _batchTotal > 0) {
+          _batchTotal--;
+        }
       }
 
       final appDir = await getApplicationDocumentsDirectory();
@@ -637,8 +863,13 @@ class DownloadManagerService extends ChangeNotifier {
     _cancelTokens.remove(chapterId)?.cancel('Cancelled');
     final task = _localTasks.where((t) => t.chapterId == chapterId).firstOrNull;
     if (task != null) {
+      final wasCompleted = task.status == LocalDownloadStatus.completed;
       task.status = LocalDownloadStatus.failed;
       task.error = 'Cancelled';
+      if (!wasCompleted && _batchCounted) {
+        // User-cancelled tasks count as failures in the batch summary.
+        _failedInBatch++;
+      }
       _saveQueueState();
       notifyListeners();
       _cleanupIncompleteDownload(chapterId);
@@ -656,7 +887,19 @@ class DownloadManagerService extends ChangeNotifier {
   }
 
   Future<void> dismissLocalTask(int chapterId) async {
+    final task = _localTasks.where((t) => t.chapterId == chapterId).firstOrNull;
     final token = _cancelTokens.remove(chapterId);
+    if (task != null) {
+      // Mark the task cancelled BEFORE the in-flight download throws, so the
+      // queue loop recognises a deliberate dismiss instead of logging a
+      // failure — while still removing it from the reported batch total.
+      final wasCompleted = task.status == LocalDownloadStatus.completed;
+      task.status = LocalDownloadStatus.failed;
+      task.error = 'Cancelled';
+      if (!wasCompleted && _batchCounted && _batchTotal > 0) {
+        _batchTotal--;
+      }
+    }
     if (token != null) {
       try {
         token.cancel('Task dismissed');
@@ -705,12 +948,15 @@ class DownloadManagerService extends ChangeNotifier {
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
+    _notifierHeartbeat?.cancel();
+    _notifierHeartbeat = null;
     for (final token in _cancelTokens.values) {
       try {
         token.cancel('Service disposed');
       } catch (_) {}
     }
     _cancelTokens.clear();
+    _stopActiveNotifier();
     super.dispose();
   }
 }

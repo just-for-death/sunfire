@@ -4,8 +4,11 @@
      <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
      <uses-permission android:name="android.permission.WAKE_LOCK" />
      <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-     <!-- WorkManager needs boot completed; FGS permissions omitted (no app <service>). -->
+     <!-- WorkManager needs boot completed. -->
      <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+     <!-- Foreground service keeps chapter downloads alive while the app is in the background. -->
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -56,5 +59,13 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Foreground service that keeps the download queue alive while Sunfire
+             is backgrounded. Declared with dataSync type for Android 14+.
+             Warning: do not rename this service — the plugin resolves it by name. -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
     </application>
 </manifest>
