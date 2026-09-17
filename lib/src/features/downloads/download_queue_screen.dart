@@ -256,6 +256,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                                         mangaId: task.mangaId,
                                         chapterName: task.chapterName,
                                         mangaTitle: task.mangaTitle,
+                                        chapterNumber: task.chapterNumber,
                                       ),
                                     ),
                                     IconButton(

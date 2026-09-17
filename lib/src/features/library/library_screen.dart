@@ -637,6 +637,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           mangaId: mangaId,
           chapterName: ch.name,
           mangaTitle: m?.title ?? 'Manga',
+          chapterNumber: ch.chapterNumber,
         );
         totalQueued++;
       }

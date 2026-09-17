@@ -26,6 +26,7 @@ import '../../core/services/download_manager_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../settings/advanced_settings_screen.dart';
+import 'reader_chapter_navigation.dart';
 import 'reader_scroll_utils.dart';
 import 'reading_mode.dart';
 
@@ -50,6 +51,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   Chapter? _nextChapter;
   Chapter? _prevChapter;
   List<Chapter> _siblingChapters = [];
+  /// Id of the last chapter the end-of-chapter dialog was shown for, so it
+  /// appears once per chapter (Mihon/Mangayomi behaviour).
+  int? _endOfChapterDialogChapterId;
   List<String> _pageUrls = [];
   final Map<String, Uint8List> _recoveredImageBytes = {};
   final Set<String> _recoveringUrls = {};
@@ -228,6 +232,10 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         _stopAutoScroll();
         if (_settings.autoScrollAutoNextChapter && _nextChapter != null) {
           _loadChapterAndPages(_chapterTargetId(_nextChapter!));
+        } else {
+          // Hands-free scrolling ended: surface the Mihon-style popup so the
+          // user can choose Next/Previous/Close instead of being stuck.
+          _maybeShowEndOfChapterDialog();
         }
         return;
       }
@@ -746,10 +754,20 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _safeExitReader();
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.audioVolumeDown && _settings.volumeKeyTurn) {
-      _goToNextPage();
+      // Debounce with the same window as the platform volume listener so a
+      // single physical press isn't turned twice (keyboard event + listener).
+      final now = DateTime.now();
+      if (now.difference(_lastIosVolumeTurnTime).inMilliseconds >= 280) {
+        _lastIosVolumeTurnTime = now;
+        _goToNextPage();
+      }
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.audioVolumeUp && _settings.volumeKeyTurn) {
-      _goToPrevPage();
+      final now = DateTime.now();
+      if (now.difference(_lastIosVolumeTurnTime).inMilliseconds >= 280) {
+        _lastIosVolumeTurnTime = now;
+        _goToPrevPage();
+      }
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.keyS) {
       if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) {
@@ -837,7 +855,15 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   Future<void> _loadChapterAndPages(int chapterId) async {
     final loadGen = ++_loadGeneration;
     _currentChapterId = chapterId;
+    // Flush any pending (debounced) progress write for the outgoing chapter
+    // BEFORE tearing it down. Without this, quickly advancing within the
+    // debounce window (e.g. reading the last page and immediately moving on)
+    // drops the final page — the chapter is never marked read, the tracker is
+    // never pushed, and the "delete finished chapter" rules never run.
     _progressDebounceTimer?.cancel();
+    if (_chapter != null && _pageUrls.isNotEmpty) {
+      _updateProgress(_currentPage);
+    }
     _stopAutoScroll();
     _recoveredImageBytes.clear();
     _recoveringUrls.clear();
@@ -854,6 +880,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _currentPage = 1;
       _nextChapter = null;
       _prevChapter = null;
+      _endOfChapterDialogChapterId = null;
       _webtoonPageKeys.clear();
     });
     _pageIndicator.value = 1;
@@ -873,36 +900,15 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
           siblings = await IsarService.instance.getChaptersForManga(_parentManga!.serverId);
         }
       }
-      _siblingChapters = siblings;
+      _siblingChapters = sortSiblingChapters(siblings);
 
-      double parseNum(Chapter c) {
-        if (c.chapterNumber > 0) return c.chapterNumber;
-        final m = RegExp(r'(?:ch(?:apter)?\.?|ep(?:isode)?\.?|#)\s*(\d+(?:\.\d+)?)', caseSensitive: false).firstMatch(c.name)
-            ?? RegExp(r'(\d+(?:\.\d+)?)').firstMatch(c.name);
-        if (m != null) {
-          return double.tryParse(m.group(1)!) ?? 0.0;
-        }
-        return 0.0;
-      }
-
-      _siblingChapters.sort((a, b) {
-        final numA = parseNum(a);
-        final numB = parseNum(b);
-        if (numA != numB) return numA.compareTo(numB);
-        return a.name.compareTo(b.name);
-      });
-
-      final idx = _siblingChapters.indexWhere((c) =>
-          (c.id != 0 && c.id == _chapter!.id) ||
-          (c.serverId != 0 && c.serverId == _chapter!.serverId) ||
-          (c.url.isNotEmpty && c.url == _chapter!.url) ||
-          (c.name.trim().toLowerCase() == _chapter!.name.trim().toLowerCase()));
+      final idx = findSiblingChapterIndex(_siblingChapters, _chapter!);
 
       Chapter? nextCh;
       Chapter? prevCh;
       if (idx != -1) {
-        if (idx + 1 < _siblingChapters.length) nextCh = _siblingChapters[idx + 1];
-        if (idx - 1 >= 0) prevCh = _siblingChapters[idx - 1];
+        nextCh = siblingChapterAt(_siblingChapters, idx, 1);
+        prevCh = siblingChapterAt(_siblingChapters, idx, -1);
       }
 
       final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId) ?? _parentManga;
@@ -1029,6 +1035,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       }
     }
 
+    // Generation guard: a stale resolution (e.g. a 30s timeout fired after the
+    // user moved on) must not clobber the CURRENT chapter's state. Checked
+    // before ANY field write below.
+    if (loadGen != _loadGeneration) return;
+
     _sourceName = resolved.effectiveSourceName ?? sourceName;
     _pageUrls = resolved.pageUrls;
     if (_chapter != null && _pageUrls.isNotEmpty && _chapter!.pageCount != _pageUrls.length) {
@@ -1108,6 +1119,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         mangaId: ch.mangaId,
         chapterName: ch.name,
         mangaTitle: mangaTitle,
+        chapterNumber: ch.chapterNumber,
       );
     }
   }
@@ -1198,6 +1210,15 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _prefetchChapter(_nextChapter!);
     }
 
+    // End-of-chapter: scrolled to the bottom → pop the Mihon-style dialog
+    // once per chapter.
+    // Skip the dialog while auto-scroll is actively driving the sheet: the
+    // auto-scroll end-of-chapter path shows it itself (when auto-next is
+    // off), and popping a modal over a still-scrolling sheet is jarring.
+    if (pageRatio >= 1.0 && maxScroll > 50 && !_isAutoScrolling) {
+      _maybeShowEndOfChapterDialog();
+    }
+
     // Prefetch a few previous pages' images when scrolling up (helps placeholder stability).
     if (computedPage > 1) {
       final start = (computedPage - 4).clamp(1, _pageUrls.length);
@@ -1232,6 +1253,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     final page = index + 1;
     _setPageIndicator(page);
     if (mounted) setState(() {});
+
+    // End-of-chapter: landing on the last page pops the Mihon-style dialog
+    // (once per chapter).
+    if (page >= _pageUrls.length && _pageUrls.isNotEmpty) {
+      _maybeShowEndOfChapterDialog();
+    }
 
     // Trigger prefetch early when reaching 65% of pages in paged mode
     if (_pageUrls.isNotEmpty && page >= (_pageUrls.length * 0.65).round() && _nextChapter != null) {
@@ -1314,8 +1341,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       );
     }
 
-    // Push tracker progress when a chapter becomes fully read.
-    if ((!wasRead && _chapter!.isRead) || isComplete) {
+    // Push tracker progress only when the chapter *transitions* to fully read.
+    // The previous `|| isComplete` re-scrobbled/re-synced on every save at
+    // the last page (mark-read, dispose, chapter-switch flush) even after the
+    // chapter was already read, producing duplicate scrobbles per chapter.
+    if (!wasRead && _chapter!.isRead) {
       if (_chapter!.mangaId > 0) {
         _scrobbleToMetronIfLinked(_chapter!);
         final chapterNum = _chapter!.chapterNumber > 0
@@ -1824,7 +1854,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   void _showChapterSelectorSheet() {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final currentIndex = _siblingChapters.indexWhere((c) => c.serverId == _chapter?.serverId);
+    // Use the fuzzy sibling matcher so serverId==0 (locally-created) chapters
+    // still highlight correctly instead of matching nothing (-1).
+    final currentIndex = _chapter != null ? findSiblingChapterIndex(_siblingChapters, _chapter!) : -1;
 
     showModalBottomSheet(
       context: context,
@@ -2370,6 +2402,97 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
               overflow: TextOverflow.ellipsis,
             ),
           ),
+      ],
+    );
+  }
+
+  /// Mihon/Mangayomi-style end-of-chapter dialog: shown once per chapter when
+  /// the reader reaches the last page, offering Previous/Next/Close.
+  void _maybeShowEndOfChapterDialog() {
+    if (!mounted || _chapter == null || _pageUrls.isEmpty) return;
+    if (!_settings.showEndOfChapterDialog) return;
+    final chapterId = _chapterTargetId(_chapter!);
+    if (!shouldShowEndOfChapterDialog(
+      enabled: _settings.showEndOfChapterDialog,
+      hasPages: _pageUrls.isNotEmpty,
+      lastDialogChapterId: _endOfChapterDialogChapterId,
+      chapterId: chapterId,
+    )) {
+      return;
+    }
+    _endOfChapterDialogChapterId = chapterId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: _buildEndOfChapterDialog,
+      );
+    });
+  }
+
+  Widget _buildEndOfChapterDialog(BuildContext dialogContext) {
+    final colorScheme = Theme.of(dialogContext).colorScheme;
+    final next = _nextChapter;
+    final prev = _prevChapter;
+    final chapter = _chapter;
+
+    void goTo(Chapter? ch) {
+      if (ch == null || !mounted) return;
+      Navigator.of(dialogContext).pop();
+      _loadChapterAndPages(_chapterTargetId(ch));
+    }
+
+    return AlertDialog(
+      backgroundColor: colorScheme.surface,
+      title: const Text('End of Chapter'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            chapter?.name ?? '',
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (next == null) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Icon(Icons.info_outline_rounded, color: colorScheme.primary, size: 20),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    "You're all caught up — there's no next chapter.",
+                    style: TextStyle(fontSize: 13, height: 1.35),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+      actionsAlignment: MainAxisAlignment.center,
+      actions: [
+        TextButton.icon(
+          onPressed: prev != null ? () => goTo(prev) : null,
+          icon: const Icon(Icons.skip_previous_rounded),
+          label: const Text('Previous Chapter'),
+        ),
+        FilledButton.icon(
+          onPressed: next != null ? () => goTo(next) : null,
+          icon: const Icon(Icons.skip_next_rounded),
+          label: const Text('Next Chapter'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Close'),
+        ),
       ],
     );
   }
@@ -3142,19 +3265,32 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                       left: 0,
                       right: 0,
                       bottom: 80 + MediaQuery.of(context).padding.bottom,
-                      child: Container(
-                        padding: const EdgeInsets.only(top: 60, bottom: 16),
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, Color(0xCC000000)],
-                            stops: [0.0, 0.35],
+                      child: Stack(
+                        children: [
+                          // Decorative scrim — must NOT steal taps from the
+                          // page behind it (IgnorePointer lets taps pass
+                          // through to tap-zones / page controls).
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [Colors.transparent, Color(0xCC000000)],
+                                    stops: [0.0, 0.35],
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                        child: Center(
-                          child: _buildChapterTransitionCard(),
-                        ),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 60, bottom: 16),
+                            child: Center(
+                              child: _buildChapterTransitionCard(),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
             ],
