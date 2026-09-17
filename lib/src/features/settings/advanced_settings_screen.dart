@@ -28,7 +28,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
   int _chapterCount = 0;
   int _categoryCount = 0;
   bool _isLoadingStats = true;
-  String _versionStr = 'v1.5.0';
+  String _versionStr = 'v2.0.0';
 
   @override
   void initState() {
@@ -42,7 +42,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
       final manga = await IsarService.instance.getAllManga();
       final chapters = await IsarService.instance.getAllChapters();
       final cats = await IsarService.instance.getCategories();
-      String versionDisplay = 'v1.5.0';
+      String versionDisplay = 'v2.0.0';
       try {
         final info = await PackageInfo.fromPlatform();
         if (info.version.isNotEmpty) {
@@ -245,6 +245,20 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Library reconciled with server.')),
+                );
+              }
+            },
+          ),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            leading: const Icon(Icons.refresh_rounded, color: Colors.lightBlueAccent),
+            title: const Text('Retry Failed Sync', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+            subtitle: const Text('Re-queue sync records that failed or were abandoned after 5 retries', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            onTap: () async {
+              final count = await SyncEngine.instance.retryFailedSyncRecords();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(count > 0 ? '$count failed record(s) re-queued for sync.' : 'No failed sync records to retry.')),
                 );
               }
             },

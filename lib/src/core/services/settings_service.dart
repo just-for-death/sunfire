@@ -287,6 +287,25 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Whether an entry's language passes the selected-language filter.
+  ///
+  /// `all` (or no selection) disables filtering. Entries with an unknown/empty
+  /// language always pass so content is never hidden by accident.
+  static bool languageMatchesFilter(String lang, List<String> selectedLanguages) {
+    if (selectedLanguages.isEmpty || selectedLanguages.contains('all')) return true;
+    final l = lang.trim().toLowerCase();
+    if (l.isEmpty) return true;
+    return selectedLanguages.contains(l);
+  }
+
+  /// Short uppercase language code for badges, or null when the language is a
+  /// default/universal label that doesn't warrant a badge.
+  static String? languageBadgeLabel(String lang) {
+    final v = lang.trim().toUpperCase();
+    if (v.isEmpty || v == 'EN' || v == 'ALL' || v == 'MULTI' || v == 'UNIVERSAL') return null;
+    return v.length <= 6 ? v : v.substring(0, 6);
+  }
+
   bool get showNsfwSources => _prefs?.getBool('show_nsfw_sources') ?? true;
   set showNsfwSources(bool value) {
     _prefs?.setBool('show_nsfw_sources', value);

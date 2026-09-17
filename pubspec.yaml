@@ -2,7 +2,7 @@ name: sunfire
 description: Sunfire - A local-first, server-synced manga reader.
 
 publish_to: "none"
-version: 1.5.0+1
+version: 2.0.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -37,12 +37,16 @@ dependencies:
   wakelock_plus: ^1.2.8
   workmanager: ^0.10.9
   connectivity_plus: ^7.0.0
+  battery_plus: ^6.2.1
   web_socket_channel: ^3.0.1
   html: ^0.15.6
   pseudom: ^1.0.1
   xpath_selector_html_parser: ^3.0.1
   http_interceptor: ^2.0.0
   cupertino_http: ^2.4.0
+  crypto: ^3.0.6
+  archive: ^4.0.2
+  file_picker: ^8.1.7
   volume_controller: ^3.6.1
 
 dev_dependencies:

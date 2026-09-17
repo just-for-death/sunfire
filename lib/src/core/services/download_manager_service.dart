@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:battery_plus/battery_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -17,6 +18,7 @@ import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/download_foreground_task.dart';
 import '../sync/graphql_client_service.dart';
+import 'battery_state_service.dart';
 import 'notification_service.dart';
 import 'settings_service.dart';
 
@@ -78,6 +80,7 @@ class DownloadManagerService extends ChangeNotifier {
   DownloadManagerService._() {
     _configureDio();
     _initConnectivityListener();
+    _initBatteryListener();
   }
 
   final List<LocalDownloadTask> _localTasks = [];
@@ -88,6 +91,11 @@ class DownloadManagerService extends ChangeNotifier {
   StreamSubscription? _connectivitySubscription;
 
   bool _isProcessingLocalQueue = false;
+  bool _waitingForCharger = false;
+
+  /// True while the queue is idle solely because `downloadOnlyWhileCharging` is
+  /// set and the device is unplugged. Exposed to the Downloads screen for a banner.
+  bool get isWaitingForCharger => _waitingForCharger;
   final Dio _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 30),
     receiveTimeout: const Duration(minutes: 2),
@@ -104,6 +112,30 @@ class DownloadManagerService extends ChangeNotifier {
         }
       });
     } catch (_) {}
+  }
+
+  StreamSubscription? _batterySubscription;
+
+  void _initBatteryListener() {
+    try {
+      _batterySubscription = BatteryStateService.instance.onBatteryStateChanged.listen((state) {
+        final charging = state == BatteryState.charging || state == BatteryState.full;
+        // Only resume from a charge-gate — an explicit user pause is never overridden.
+        if (charging && !_isQueuePaused && !_isProcessingLocalQueue &&
+            _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
+          _processLocalQueue();
+        }
+      });
+    } catch (_) {}
+  }
+
+  /// Test seam: overrides the real platform battery query.
+  @visibleForTesting
+  Future<bool> Function()? chargingProbe;
+
+  Future<bool> _isCharging() async {
+    if (chargingProbe != null) return chargingProbe!();
+    return BatteryStateService.instance.isCharging();
   }
 
   void _configureDio() {
@@ -354,6 +386,37 @@ class DownloadManagerService extends ChangeNotifier {
     resumeLocalQueue();
   }
 
+  bool _interruptedByBackground = false;
+
+  /// Pure predicate: a background transition only counts as an interruption when
+  /// the queue was processing or a task was actively downloading.
+  static bool backgroundInterruptsDownloads({
+    required bool isProcessing,
+    required bool hasActiveDownloads,
+  }) => isProcessing || hasActiveDownloads;
+
+  /// Marks the queue as interrupted when the app backgrounds while downloads
+  /// are mid-flight. iOS/macOS suspend active transfers, so the foreground
+  /// resume surfaces a notification instead of restarting silently.
+  void noteAppBackgrounded() {
+    _interruptedByBackground = backgroundInterruptsDownloads(
+      isProcessing: _isProcessingLocalQueue,
+      hasActiveDownloads: _localTasks.any((t) => t.status == LocalDownloadStatus.downloading),
+    );
+  }
+
+  /// Consumes the background-interrupt marker, returning true when a resume
+  /// should tell the user "downloads were paused in background — resumed".
+  bool consumeBackgroundInterrupted() {
+    final was = _interruptedByBackground;
+    _interruptedByBackground = false;
+    return was;
+  }
+
+  /// Test seam: force the background-interrupt marker without real tasks.
+  @visibleForTesting
+  void debugSetBackgroundInterrupted(bool value) => _interruptedByBackground = value;
+
   Future<void> initialize() async {
     await _scanDownloadedLocalChapters();
     await _loadQueueState();
@@ -492,6 +555,19 @@ class DownloadManagerService extends ChangeNotifier {
           break;
         }
 
+        // Charge-only gate: `downloadOnlyWhileCharging` pauses the queue when the
+        // device is unplugged and resumes on plug-in (battery listener above).
+        if (BatteryStateService.shouldPauseForCharging(
+          chargeOnlyEnabled: SettingsService.instance.downloadOnlyWhileCharging,
+          isCharging: await _isCharging(),
+        )) {
+          stoppedForNetwork = true;
+          _waitingForCharger = true;
+          debugPrint('[DownloadManager] ⏸️ Pausing queue: Waiting for charger (download while charging enabled)');
+          break;
+        }
+        _waitingForCharger = false;
+
         // Download chapters in reading order (ascending chapter number) so a
         // batch of 1..100 starts at chapter 1, then 2, 3, … rather than the
         // source's newest-first order. Tasks are grouped by manga.
@@ -551,15 +627,17 @@ class DownloadManagerService extends ChangeNotifier {
       final pendingQueued =
           !_isQueuePaused && _localTasks.any((t) => t.status == LocalDownloadStatus.queued);
       if (_isQueuePaused || stoppedForNetwork) {
-        // Interrupted (paused or waiting for connectivity) — keep the queue,
-        // drop the notifier, and don't report a finished batch. The
-        // connectivity listener / resume handler restarts processing.
+        // Interrupted (paused or waiting for connectivity/charger) — keep the
+        // queue, drop the notifier, and don't report a finished batch. The
+        // connectivity / battery listeners and resume handler restart processing.
         await _stopActiveNotifier();
       } else if (pendingQueued) {
         // New items were enqueued while the loop was draining (rare race).
         // Re-enter so they are processed instead of left stranded.
+        _waitingForCharger = false;
         _processLocalQueue();
       } else {
+        _waitingForCharger = false;
         await _finishBatch();
       }
       notifyListeners();
@@ -948,6 +1026,7 @@ class DownloadManagerService extends ChangeNotifier {
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
+    _batterySubscription?.cancel();
     _notifierHeartbeat?.cancel();
     _notifierHeartbeat = null;
     for (final token in _cancelTokens.values) {

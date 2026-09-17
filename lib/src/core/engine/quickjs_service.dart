@@ -273,6 +273,25 @@ class QuickJsService {
         .toLowerCase();
     final displayName = sourceName.replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '').trim();
 
+    // Reconcile stale variants: the update request may be keyed differently than
+    // the existing install (e.g. repo name "MangaDex (ALL)" → `mangadex`, while a
+    // disk/bundled install lives under the pkg file name `mangadex_all`). Removing
+    // the colliding variants here is what lets an update *replace* the previous
+    // install instead of requiring a manual uninstall first.
+    final staleKeys = <String>[];
+    for (final key in _installedJsSources.keys) {
+      if (key != cleanName && _sameExtensionIdentity(key, cleanName)) {
+        staleKeys.add(key);
+      }
+    }
+    for (final k in staleKeys) {
+      _installedJsSources.remove(k);
+      _canonicalDisplayNames.remove(k);
+      _installedVersions.remove(k);
+      _installedIcons.remove(k);
+      _invalidateRuntime(k);
+    }
+
     _installedJsSources[cleanName] = jsCode;
     _canonicalDisplayNames[cleanName] = displayName;
     if (version != null && version.isNotEmpty) {
@@ -302,6 +321,25 @@ class QuickJsService {
         'version': version ?? _installedVersions[cleanName] ?? '1.0.0',
         'iconUrl': iconUrl ?? _installedIcons[cleanName] ?? '',
       }));
+
+      // Drop stale variant files (e.g. mangadex_all.js / mangadex_all.json) so the
+      // canonical file is the only remaining install on disk.
+      if (staleKeys.isNotEmpty) {
+        try {
+          final files = await extDir.list().toList();
+          for (final f in files) {
+            if (f is File && (f.path.endsWith('.js') || f.path.endsWith('.json'))) {
+              final raw = f.uri.pathSegments.last;
+              final base = raw.endsWith('.json')
+                  ? raw.substring(0, raw.length - '.json'.length)
+                  : raw.substring(0, raw.length - '.js'.length);
+              if (base != cleanName && (staleKeys.contains(base) || staleKeys.any((k) => _sameExtensionIdentity(k, base)))) {
+                await f.delete();
+              }
+            }
+          }
+        } catch (_) {}
+      }
       return true;
     } catch (e) {
       await LoggerService.instance.logError('Failed to persist extension $sourceName: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
@@ -319,6 +357,51 @@ class QuickJsService {
         .replaceAll('mangas', 'manga')
         .replaceAll('hentais', 'hentai');
   }
+
+  /// Stable canonical identity of an extension name, independent of how the
+  /// install was keyed (display name vs pkg file name). Trailing `(LANG)` suffixes
+  /// and separator characters are collapsed so "MangaDex (ALL)" and "mangadex"
+  /// share the same identity.
+  static String extensionIdentityKey(String raw) {
+    return raw
+        .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '')
+        .toLowerCase();
+  }
+
+  /// Language/variant markers appended to pkg file names (e.g. `mangadex_all.js`,
+  /// `mangadex_en.js`). `_variantBase` strips trailing known tokens so those
+  /// file-name-keyed installs collapse onto the canonical identity.
+  static const Set<String> _knownVariantTokens = {
+    'all', 'multi', 'universal', 'en', 'ja', 'ko', 'zh', 'ru', 'fr', 'de', 'es',
+    'pt', 'it', 'ar', 'hi', 'th', 'vi', 'id', 'ms', 'tr', 'pl', 'nl', 'sv', 'no',
+    'fi', 'da', 'cs', 'el', 'he', 'hu', 'ro', 'uk',
+  };
+
+  /// Logical identity after stripping trailing known language/variant tokens.
+  static String extensionVariantIdentityKey(String raw) {
+    final identity = extensionIdentityKey(raw);
+    var tokens = identity.split('_');
+    while (tokens.length > 1 && _knownVariantTokens.contains(tokens.last)) {
+      tokens = tokens.sublist(0, tokens.length - 1);
+    }
+    return tokens.join('_');
+  }
+
+  /// True when [a] and [b] refer to the same logical extension regardless of how
+  /// each was keyed (canonical name, display name, or file-name/lang-suffixed).
+  static bool _sameExtensionIdentity(String a, String b) {
+    if (a == b) return true;
+    final ia = extensionIdentityKey(a);
+    final ib = extensionIdentityKey(b);
+    if (ia.isEmpty || ib.isEmpty) return false;
+    if (ia == ib) return true;
+    return extensionVariantIdentityKey(a) == extensionVariantIdentityKey(b);
+  }
+
+  /// Public identity comparison used by UI dedup logic.
+  static bool sameExtensionIdentity(String a, String b) => _sameExtensionIdentity(a, b);
 
   bool isSourceInstalledLocally(String sourceName) {
     if (sourceName.isEmpty) return false;
@@ -347,10 +430,9 @@ class QuickJsService {
   bool isLocalExtensionInstalled(String sourceName) => isSourceInstalledLocally(sourceName);
 
   Future<bool> deleteLocalExtension(String sourceName) async {
-    final canonQuery = _canonicalizeKey(sourceName);
     final toDelete = <String>[];
     for (final key in _installedJsSources.keys) {
-      if (key == sourceName || _canonicalizeKey(key) == canonQuery) {
+      if (key == sourceName || _sameExtensionIdentity(key, sourceName)) {
         toDelete.add(key);
       }
     }
@@ -375,8 +457,11 @@ class QuickJsService {
           final files = await extDir.list().toList();
           for (final f in files) {
             if (f is File && (f.path.endsWith('.js') || f.path.endsWith('.json'))) {
-              final base = f.uri.pathSegments.last.replaceAll('.js', '').replaceAll('.json', '');
-              if (_canonicalizeKey(base) == canonQuery || toDelete.contains(base)) {
+              final raw = f.uri.pathSegments.last;
+              final base = raw.endsWith('.json')
+                  ? raw.substring(0, raw.length - '.json'.length)
+                  : raw.substring(0, raw.length - '.js'.length);
+              if (toDelete.contains(base) || _sameExtensionIdentity(base, sourceName)) {
                 await f.delete();
               }
             }
@@ -390,12 +475,16 @@ class QuickJsService {
   }
 
   String getInstalledVersion(String sourceName) {
-    final canonQuery = _canonicalizeKey(sourceName);
+    // Return the highest version among all identity-matching install variants, so
+    // a canonical install never reports a stale legacy-variant version.
+    String? best;
     for (final entry in _installedVersions.entries) {
-      if (entry.key == sourceName || _canonicalizeKey(entry.key) == canonQuery) {
-        return entry.value;
+      if (entry.key == sourceName || _sameExtensionIdentity(entry.key, sourceName)) {
+        final v = entry.value;
+        if (best == null || RepoManager.compareVersions(v, best) > 0) best = v;
       }
     }
+    if (best != null && best.isNotEmpty) return best;
     final code = getExtensionCode(sourceName);
     if (code != null && code.isNotEmpty) {
       final meta = extractSourceMetadata(code);

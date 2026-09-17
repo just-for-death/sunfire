@@ -10,6 +10,7 @@ import '../../core/db/models/chapter.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/library_update_service.dart';
+import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/websocket_service.dart';
@@ -27,6 +28,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   bool get wantKeepAlive => true;
 
   List<Map<String, dynamic>> _updatesList = [];
+  final Map<int, String> _langByMangaId = {};
   bool _isLoading = true;
   bool _isCheckingServer = false;
   bool _isOffline = false;
@@ -65,6 +67,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     var list = List<Map<String, dynamic>>.from(_updatesList);
     if (_unreadOnly) {
       list = list.where((it) => !(it['chapter'] as Chapter).isRead).toList();
+    }
+    // Honor the reader's selected languages (Mihon parity): 'all' shows everything.
+    final selectedLangs = SettingsService.instance.selectedLanguages;
+    if (selectedLangs.isNotEmpty && !selectedLangs.contains('all')) {
+      list = list.where((it) {
+        final lang = (it['lang'] as String? ?? '').trim().toLowerCase();
+        return SettingsService.languageMatchesFilter(lang, selectedLangs);
+      }).toList();
     }
     final q = _searchQuery.trim().toLowerCase();
     if (q.isNotEmpty) {
@@ -113,6 +123,26 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     if (GraphQLClientService.instance.isConfigured) {
       _fetchServerUpdatesInBackground();
     }
+  }
+
+  /// Builds mangaId → language cache from the local library so update feed items
+  /// can be language-badged and filtered (`showLanguageBadges` / `selectedLanguages`).
+  Future<void> _loadLangMap() async {
+    try {
+      if (_langByMangaId.isNotEmpty) return;
+      final mangas = await IsarService.instance.getLibraryManga();
+      for (final m in mangas) {
+        if (m.serverId > 0) _langByMangaId[m.serverId] = m.lang;
+        if (m.id > 0) _langByMangaId[m.id] = m.lang;
+      }
+    } catch (_) {}
+  }
+
+  /// Short uppercase language code for badges, or null when the entry is
+  /// default English / universal and doesn't warrant a badge.
+  String? _languageBadgeLabel(String lang) {
+    if (!SettingsService.instance.showLanguageBadges) return null;
+    return SettingsService.languageBadgeLabel(lang);
   }
 
   Future<void> _fetchServerUpdatesInBackground() async {
@@ -211,6 +241,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                 'title': title,
                 'thumbnailUrl': thumb,
                 'sourceName': sourceName,
+                'lang': _langByMangaId[resolvedMId] ?? '',
                 'isDownloaded': isDownloaded,
                 'fetchedAt': fetchedAt,
                 'dateHeader': _formatDateHeader(fetchedAt),
@@ -256,6 +287,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
   Future<void> _loadUpdatesFromIsarCache() async {
     try {
+      await _loadLangMap();
       final chapters = await IsarService.instance.getRecentChapters(limit: 100);
       if (chapters.isEmpty && _updatesList.isNotEmpty) {
         // Retain current in-memory feed if cache temporarily returns empty
@@ -297,6 +329,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           'title': title,
           'thumbnailUrl': thumb,
           'sourceName': '',
+          'lang': _langByMangaId[ch.mangaId] ?? '',
           'isDownloaded': ch.isDownloaded || ch.isDownloadedOnServer,
           'fetchedAt': ch.fetchedAt,
           'dateHeader': _formatDateHeader(ch.fetchedAt),
@@ -712,6 +745,29 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                             fontSize: 11,
                             color: Colors.white38,
                             fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                      if (_languageBadgeLabel(item['lang'] as String? ?? '') != null) ...[
+                        const SizedBox(height: 4),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0x26FFFFFF),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0x26FFFFFF)),
+                            ),
+                            child: Text(
+                              _languageBadgeLabel(item['lang'] as String? ?? '')!,
+                              style: const TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white70,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                           ),
                         ),
                       ],
