@@ -111,7 +111,9 @@ class DownloadManagerService extends ChangeNotifier {
           _processLocalQueue();
         }
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[DownloadManager] Connectivity listener error: $e');
+    }
   }
 
   StreamSubscription? _batterySubscription;
@@ -126,7 +128,9 @@ class DownloadManagerService extends ChangeNotifier {
           _processLocalQueue();
         }
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[DownloadManager] Battery listener error: $e');
+    }
   }
 
   /// Test seam: overrides the real platform battery query.
@@ -194,8 +198,9 @@ class DownloadManagerService extends ChangeNotifier {
     try {
       final results = await Connectivity().checkConnectivity();
       return isNetworkAllowed(results);
-    } catch (_) {
-      return true;
+    } catch (e) {
+      debugPrint('[DownloadManager] Network check error: $e');
+      return true; // Fail-open for safety
     }
   }
 
@@ -237,14 +242,18 @@ class DownloadManagerService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isQueuePaused = prefs.getBool(_queuePausedPrefKey) ?? false;
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[DownloadManager] Error loading pause flag: $e');
+    }
   }
 
   Future<void> _persistQueuePausedFlag() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_queuePausedPrefKey, _isQueuePaused);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[DownloadManager] Error persisting pause flag: $e');
+    }
   }
 
   bool _isQueuePaused = false;
@@ -349,7 +358,9 @@ class DownloadManagerService extends ChangeNotifier {
     for (final token in _cancelTokens.values) {
       try {
         token.cancel('Queue paused');
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[DownloadManager] Token cancel error: $e');
+      }
     }
     _cancelTokens.clear();
     for (final task in _localTasks) {
@@ -961,7 +972,9 @@ class DownloadManagerService extends ChangeNotifier {
       if (await chapterDir.exists()) {
         await chapterDir.delete(recursive: true);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[DownloadManager] Cleanup incomplete download error: $e');
+    }
   }
 
   Future<void> dismissLocalTask(int chapterId) async {
