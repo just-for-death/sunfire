@@ -290,6 +290,16 @@ class NotificationService {
     return (title: title, body: body);
   }
 
+  /// Pure text builder for the background-resume notification. Extracted so
+  /// tests can assert the exact user-facing strings without a plugin instance.
+  static ({String title, String body}) downloadsResumedSummary({required int queuedCount}) {
+    final title = 'Downloads resumed';
+    final body = queuedCount == 1
+        ? '1 download was paused in the background and has resumed now that the app is open.'
+        : '$queuedCount downloads were paused in the background and have resumed now that the app is open.';
+    return (title: title, body: body);
+  }
+
   /// Posts a completion/failure summary for a finished download batch.
   Future<void> showDownloadsCompleted({
     required int succeeded,
@@ -344,6 +354,59 @@ class NotificationService {
       debugPrint('[NotificationService] Downloads finished notification: "$title" - "$body"');
     } catch (e) {
       debugPrint('[NotificationService] Failed to dispatch downloads finished notification: $e');
+    }
+  }
+
+  /// Informs the user that active downloads were interrupted while the app was
+  /// in the background and have been resumed on foreground. iOS/macOS suspend
+  /// transfers (no `UIBackgroundModes`), so this makes the pause explicit
+  /// instead of silent. No-op when download notifications are disabled.
+  Future<void> showDownloadsResumedNotification({required int queuedCount}) async {
+    if (queuedCount <= 0 || !SettingsService.instance.downloadNotificationsEnabled) return;
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    final summary = downloadsResumedSummary(queuedCount: queuedCount);
+    final title = summary.title;
+    final body = summary.body;
+
+    final androidDetails = AndroidNotificationDetails(
+      downloadsChannelId,
+      downloadsChannelName,
+      channelDescription: downloadsChannelDescription,
+      importance: Importance.low,
+      priority: Priority.low,
+      onlyAlertOnce: true,
+      category: AndroidNotificationCategory.status,
+      styleInformation: BigTextStyleInformation(body, contentTitle: title),
+      icon: '@mipmap/launcher_icon',
+    );
+
+    const darwinDetails = DarwinNotificationDetails(
+      presentAlert: false,
+      presentBadge: true,
+      presentSound: false,
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: darwinDetails,
+      macOS: darwinDetails,
+      linux: const LinuxNotificationDetails(),
+    );
+
+    try {
+      await _plugin.show(
+        id: downloadProgressNotificationId,
+        title: title,
+        body: body,
+        notificationDetails: details,
+        payload: '/downloads',
+      );
+      debugPrint('[NotificationService] Downloads resumed notification posted');
+    } catch (e) {
+      debugPrint('[NotificationService] Failed to dispatch downloads resumed notification: $e');
     }
   }
 }
