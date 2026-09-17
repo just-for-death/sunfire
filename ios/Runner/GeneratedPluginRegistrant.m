@@ -12,10 +12,22 @@
 @import app_links;
 #endif
 
+#if __has_include(<battery_plus/FPPBatteryPlusPlugin.h>)
+#import <battery_plus/FPPBatteryPlusPlugin.h>
+#else
+@import battery_plus;
+#endif
+
 #if __has_include(<connectivity_plus/ConnectivityPlusPlugin.h>)
 #import <connectivity_plus/ConnectivityPlusPlugin.h>
 #else
 @import connectivity_plus;
+#endif
+
+#if __has_include(<file_picker/FilePickerPlugin.h>)
+#import <file_picker/FilePickerPlugin.h>
+#else
+@import file_picker;
 #endif
 
 #if __has_include(<flutter_foreground_task/FlutterForegroundTaskPlugin.h>)
@@ -100,7 +112,9 @@
 
 + (void)registerWithRegistry:(NSObject<FlutterPluginRegistry>*)registry {
   [AppLinksIosPlugin registerWithRegistrar:[registry registrarForPlugin:@"AppLinksIosPlugin"]];
+  [FPPBatteryPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"FPPBatteryPlusPlugin"]];
   [ConnectivityPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"ConnectivityPlusPlugin"]];
+  [FilePickerPlugin registerWithRegistrar:[registry registrarForPlugin:@"FilePickerPlugin"]];
   [FlutterForegroundTaskPlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterForegroundTaskPlugin"]];
   [FlutterLocalNotificationsPlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterLocalNotificationsPlugin"]];
   [FlutterQjsPlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterQjsPlugin"]];

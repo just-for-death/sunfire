@@ -176,6 +176,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     try {
       final items = <Map<String, dynamic>>[];
       final seenKeys = <String>{};
+      final repoJsIdentities = <String>[];
 
       // 1. Fetch server-side Keiyoushi APK extensions via GraphQL
       try {
@@ -232,8 +233,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
       for (final js in jsList) {
         if (!SettingsService.instance.showNsfwSources && js.isNsfw) continue;
-        final key = 'js_${js.name}_${js.lang}'.toLowerCase();
-        if (!seenKeys.add(key)) continue;
+        final identity = QuickJsService.extensionIdentityKey(js.name);
+        final key = 'js_${identity}_${js.lang}'.toLowerCase();
+        if (identity.isEmpty || !seenKeys.add(key)) continue; // merged repo lists are already deduped; skip intra-repo dupes
 
         final jsLang = js.lang.toLowerCase();
         final isEn = jsLang == 'en' || jsLang == 'all';
@@ -246,6 +248,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           iconUrl = QuickJsService.instance.getSourceIconUrl(js.name);
         }
 
+        repoJsIdentities.add(js.name);
+
         items.add({
           'id': '${js.name}_${js.lang}',
           'name': js.lang.toLowerCase() == 'en' || js.lang.isEmpty ? js.name : '${js.name} (${js.lang.toUpperCase()})',
@@ -257,12 +261,21 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           'sourceCodeUrl': js.sourceCodeUrl,
           'iconUrl': iconUrl,
           'isJs': true,
+          'sha256': js.sha256,
         });
       }
 
       // 3. Append any locally installed extensions not present in the repo lists
       for (final installedName in QuickJsService.instance.getInstalledExtensionNames()) {
-        final key = 'js_${installedName}_en'.toLowerCase();
+        // Skip when a repo item already covers the same logical extension — this
+        // prevents duplicate rows when an install was keyed differently than the
+        // repo name (e.g. `mangadex_all` legacy install vs repo "MangaDex").
+        if (repoJsIdentities.any((repo) => QuickJsService.sameExtensionIdentity(repo, installedName))) {
+          continue;
+        }
+        final identity = QuickJsService.extensionVariantIdentityKey(installedName);
+        if (identity.isEmpty) continue;
+        final key = 'js_${identity}_en'.toLowerCase();
         if (!seenKeys.add(key)) continue;
 
         final installedVer = QuickJsService.instance.getInstalledVersion(installedName);
@@ -336,6 +349,41 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     });
   }
 
+  /// True when every configured repo is the first-party Sunfire catalog. Any
+  /// third-party repo in play means JS extensions must go through the trust gate.
+  bool _isOfficialRepoOnly() {
+    final sel = _selectedRepoUrl;
+    if (sel.isNotEmpty && sel != 'ALL' && sel != RepoManager.officialIndexUrl) {
+      return false;
+    }
+    final repos = SettingsService.instance.customRepos;
+    return repos.every((r) => r == RepoManager.officialIndexUrl);
+  }
+
+  Future<bool?> _confirmThirdPartyInstall(BuildContext context, String name) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F24),
+        title: const Text('Third-party extension', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(
+          '"$name" comes from a non-official repository.\n\n'
+          'Extensions run untrusted JavaScript that can access your network and '
+          'reading data. Only install from repositories you trust.',
+          style: const TextStyle(fontSize: 13.5),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB45309)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Install anyway'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _toggleExtensionInstallation(Map<String, dynamic> ext, {bool isUpdate = false}) async {
     final name = ext['name'] as String;
     final isInstalled = ext['isInstalled'] as bool;
@@ -343,6 +391,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final sourceCodeUrl = ext['sourceCodeUrl'] as String? ?? '';
     final version = ext['version'] as String? ?? '1.0.0';
     String? customStatusMessage;
+
+    // Trust warning: extensions run untrusted JavaScript (QuickJS). Installing or
+    // updating from a non-official repo gets an explicit third-party confirmation.
+    if (isJs && !_isOfficialRepoOnly() && (!isInstalled || isUpdate)) {
+      final confirmed = await _confirmThirdPartyInstall(context, name);
+      if (confirmed != true) return;
+    }
 
     if (!isUpdate) {
       setState(() {
@@ -353,7 +408,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     try {
       if (isJs) {
         if ((!isInstalled || isUpdate) && sourceCodeUrl.isNotEmpty) {
-          final code = await RepoManager.instance.downloadJsSourceCode(sourceCodeUrl);
+          // Integrity check: repos that declare a sha256 for the extension get
+          // the downloaded JS verified before it is installed. A mismatch
+          // (tamper / CDN mangling) refuses the install.
+          final declaredSha = (ext['sha256'] as String? ?? '').trim();
+          final code = await RepoManager.instance.downloadJsSourceCode(
+            sourceCodeUrl,
+            expectedSha256: declaredSha.isEmpty ? null : declaredSha,
+          );
           if (code != null) {
             final iconUrl = ext['iconUrl'] as String? ?? '';
             await QuickJsService.instance.saveLocalExtension(
@@ -393,6 +455,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 );
               }
             }
+          } else {
+            // Download failed or integrity check failed — roll the toggle back.
+            setState(() {
+              ext['isInstalled'] = isInstalled;
+            });
+            customStatusMessage =
+                'Install refused — could not download or verify $name (sha256 integrity check).';
           }
         } else if (isInstalled && !isUpdate) {
           await QuickJsService.instance.deleteLocalExtension(name);

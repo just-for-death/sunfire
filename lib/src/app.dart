@@ -22,6 +22,7 @@ import 'features/settings/browse_settings_screen.dart';
 import 'features/settings/downloads_settings_screen.dart';
 import 'features/settings/extension_repos_screen.dart';
 import 'features/settings/general_settings_screen.dart';
+import 'features/settings/import_tachibk_screen.dart';
 import 'features/settings/library_settings_screen.dart';
 import 'features/settings/reader_settings_screen.dart';
 import 'features/settings/server_settings_screen.dart';
@@ -186,6 +187,13 @@ class _SunfireAppState extends State<SunfireApp> {
           pageBuilder: (context, state) => _buildTransitionPage(
             state: state,
             child: const BackupSettingsScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/import-backup',
+          pageBuilder: (context, state) => _buildTransitionPage(
+            state: state,
+            child: const ImportTachibkScreen(),
           ),
         ),
         GoRoute(
