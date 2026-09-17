@@ -24,6 +24,14 @@ class NotificationService {
   static const String channelName = 'New Chapters';
   static const String channelDescription = 'Alerts when new chapters are available for your library';
 
+  // ── Downloads channel & notification ids ─────────────────────────────
+  static const String downloadsChannelId = 'sunfire_downloads';
+  static const String downloadsChannelName = 'Downloads';
+  static const String downloadsChannelDescription = 'Progress and completion of chapter downloads';
+
+  static const int downloadProgressNotificationId = 4001;
+  static const int downloadSummaryNotificationId = 4002;
+
   /// Stream of notification payloads tapped by user (e.g. '/updates')
   final StreamController<String?> _selectNotificationStream = StreamController<String?>.broadcast();
   Stream<String?> get onNotificationTapped => _selectNotificationStream.stream;
@@ -84,6 +92,19 @@ class NotificationService {
               playSound: true,
               enableVibration: true,
               showBadge: true,
+            ),
+          );
+
+          // Low-priority, silent channel for download progress/completion.
+          await androidPlugin.createNotificationChannel(
+            const AndroidNotificationChannel(
+              downloadsChannelId,
+              downloadsChannelName,
+              description: downloadsChannelDescription,
+              importance: Importance.low,
+              playSound: false,
+              enableVibration: false,
+              showBadge: false,
             ),
           );
 
@@ -176,6 +197,153 @@ class NotificationService {
       debugPrint('[NotificationService] Dispatched new chapter notification: "$title" - "$body"');
     } catch (e) {
       debugPrint('[NotificationService] Failed to dispatch notification: $e');
+    }
+  }
+
+  // ── DOWNLOAD NOTIFICATIONS ──────────────────────────────────────────
+
+  /// Shows/updates an ongoing progress notification for active downloads.
+  /// Used on non-Android platforms (Android uses the foreground-service
+  /// notification via `DownloadForegroundTask` instead so users don't see two).
+  Future<void> showDownloadProgress({
+    required String title,
+    required String body,
+    double? progress,
+  }) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    final androidDetails = AndroidNotificationDetails(
+      downloadsChannelId,
+      downloadsChannelName,
+      channelDescription: downloadsChannelDescription,
+      importance: Importance.low,
+      priority: Priority.low,
+      onlyAlertOnce: true,
+      ongoing: true,
+      autoCancel: false,
+      showProgress: true,
+      progress: progress == null ? 0 : (progress.clamp(0.0, 1.0) * 100).round(),
+      maxProgress: 100,
+      indeterminate: progress == null,
+      category: AndroidNotificationCategory.progress,
+      icon: '@mipmap/launcher_icon',
+    );
+
+    const darwinDetails = DarwinNotificationDetails(
+      presentAlert: false,
+      presentBadge: false,
+      presentSound: false,
+    );
+
+    const linuxDetails = LinuxNotificationDetails();
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: darwinDetails,
+      macOS: darwinDetails,
+      linux: linuxDetails,
+    );
+
+    try {
+      await _plugin.show(
+        id: downloadProgressNotificationId,
+        title: title,
+        body: body,
+        notificationDetails: details,
+        payload: '/downloads',
+      );
+    } catch (e) {
+      debugPrint('[NotificationService] Failed to update download progress notification: $e');
+    }
+  }
+
+  /// Hides the ongoing download-progress notification.
+  Future<void> cancelDownloadProgressNotification() async {
+    try {
+      if (!_isInitialized) return;
+      await _plugin.cancel(id: downloadProgressNotificationId);
+    } catch (e) {
+      debugPrint('[NotificationService] Failed to cancel download progress notification: $e');
+    }
+  }
+
+  /// Pure text builder for the batch-completion summary. Extracted so tests
+  /// can assert the exact user-facing strings without a plugin instance.
+  static ({String title, String body}) downloadsCompletionSummary({
+    required int succeeded,
+    required int failed,
+    required int total,
+  }) {
+    String title;
+    String body;
+    if (failed > 0) {
+      title = failed == total ? '$failed Downloads Failed' : '$total Chapters Downloaded';
+      body = failed == total
+          ? 'All $total downloads failed. Check the Downloads queue for details.'
+          : '$succeeded succeeded, $failed failed. Check the Downloads queue for details.';
+    } else {
+      title = 'Downloads Completed';
+      body = total == 1 ? '1 chapter downloaded' : '$total chapters downloaded';
+    }
+    return (title: title, body: body);
+  }
+
+  /// Posts a completion/failure summary for a finished download batch.
+  Future<void> showDownloadsCompleted({
+    required int succeeded,
+    required int failed,
+    required int total,
+  }) async {
+    if (total <= 0 || !SettingsService.instance.downloadNotificationsEnabled) return;
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    final summary = downloadsCompletionSummary(succeeded: succeeded, failed: failed, total: total);
+    final title = summary.title;
+    final body = summary.body;
+
+    final androidDetails = AndroidNotificationDetails(
+      downloadsChannelId,
+      downloadsChannelName,
+      channelDescription: downloadsChannelDescription,
+      importance: Importance.low,
+      priority: Priority.low,
+      onlyAlertOnce: true,
+      category: AndroidNotificationCategory.status,
+      styleInformation: BigTextStyleInformation(body, contentTitle: title),
+      icon: '@mipmap/launcher_icon',
+    );
+
+    const darwinDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const linuxDetails = LinuxNotificationDetails();
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: darwinDetails,
+      macOS: darwinDetails,
+      linux: linuxDetails,
+    );
+
+    try {
+      await _plugin.cancel(id: downloadProgressNotificationId);
+      await _plugin.show(
+        id: downloadSummaryNotificationId,
+        title: title,
+        body: body,
+        notificationDetails: details,
+        payload: '/downloads',
+      );
+      debugPrint('[NotificationService] Downloads finished notification: "$title" - "$body"');
+    } catch (e) {
+      debugPrint('[NotificationService] Failed to dispatch downloads finished notification: $e');
     }
   }
 }

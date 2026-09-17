@@ -106,7 +106,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      DownloadManagerService.instance.resumeLocalQueue();
+      // Resume the queue on foreground, but never override an explicit user
+      // "Pause" (persisted across restarts).
+      DownloadManagerService.instance.resumeLocalQueueAfterForeground();
       WebSocketService.instance.connect();
       if (GraphQLClientService.instance.isConfigured && !_isSyncing) {
         SyncEngine.instance.triggerSync();

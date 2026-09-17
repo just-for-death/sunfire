@@ -211,6 +211,14 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                 onBoolChanged: (val) => _settings.seamlessTransitions = val,
               ),
               SettingsPropTile(
+                title: 'End-of-Chapter Popup',
+                subtitle: 'Show a Previous/Next/Close dialog when you reach the last page (like Mihon)',
+                scope: SettingScope.local,
+                kind: SettingsPropKind.switchTile,
+                boolValue: _settings.showEndOfChapterDialog,
+                onBoolChanged: (val) => _settings.showEndOfChapterDialog = val,
+              ),
+              SettingsPropTile(
                 title: 'Keep Screen Awake',
                 subtitle: 'Prevent device display from sleeping while reading',
                 scope: SettingScope.local,

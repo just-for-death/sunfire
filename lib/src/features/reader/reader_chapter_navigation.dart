@@ -1,0 +1,60 @@
+import '../../core/db/models/chapter.dart';
+
+/// Numeric reading order for a chapter: prefer the explicit [Chapter.chapterNumber],
+/// otherwise parse it from the display name ("Chapter 12", "Ep. 7", "#3", or a
+/// bare number). Returns 0.0 when nothing can be extracted.
+double chapterSortNumber(Chapter c) {
+  if (c.chapterNumber > 0) return c.chapterNumber;
+  final m = RegExp(r'(?:ch(?:apter)?\.?|ep(?:isode)?\.?|#)\s*(\d+(?:\.\d+)?)', caseSensitive: false).firstMatch(c.name) ??
+      RegExp(r'(\d+(?:\.\d+)?)').firstMatch(c.name);
+  if (m != null) {
+    return double.tryParse(m.group(1)!) ?? 0.0;
+  }
+  return 0.0;
+}
+
+/// Sorts a manga's chapter list into reading order (ascending number,
+/// name as tie-break). The source's newest-first order is reversed here so
+/// "next chapter" means chapter N+1, not the newest one.
+List<Chapter> sortSiblingChapters(List<Chapter> chapters) {
+  final sorted = List<Chapter>.from(chapters);
+  sorted.sort((a, b) {
+    final numA = chapterSortNumber(a);
+    final numB = chapterSortNumber(b);
+    if (numA != numB) return numA.compareTo(numB);
+    return a.name.compareTo(b.name);
+  });
+  return sorted;
+}
+
+/// Index of [chapter] in an already-sorted sibling list, matching by id,
+/// serverId, url, then trimmed name. Returns -1 when not found (in which
+/// case there is no reliable next/previous chapter).
+int findSiblingChapterIndex(List<Chapter> sorted, Chapter chapter) {
+  return sorted.indexWhere((c) =>
+      (c.id != 0 && c.id == chapter.id) ||
+      (c.serverId != 0 && c.serverId == chapter.serverId) ||
+      (c.url.isNotEmpty && c.url == chapter.url) ||
+      (c.name.trim().toLowerCase() == chapter.name.trim().toLowerCase()));
+}
+
+/// The chapter [offset] slots away from [index] in [sorted], or null when the
+/// slot is out of range. offset = 1 → next chapter, offset = -1 → previous.
+Chapter? siblingChapterAt(List<Chapter> sorted, int index, int offset) {
+  if (index < 0) return null;
+  final target = index + offset;
+  if (target < 0 || target >= sorted.length) return null;
+  return sorted[target];
+}
+
+/// Whether the end-of-chapter dialog may be shown: enabled by the user, the
+/// chapter has pages, and it hasn't already been shown for [chapterId] this
+/// session. Pure so the reader's gating logic is unit-testable.
+bool shouldShowEndOfChapterDialog({
+  required bool enabled,
+  required bool hasPages,
+  required int? lastDialogChapterId,
+  required int chapterId,
+}) {
+  return enabled && hasPages && lastDialogChapterId != chapterId;
+}

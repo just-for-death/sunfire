@@ -165,7 +165,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         } else if (diff.inDays == 1) {
           return 'Yesterday';
         }
-        return DateFormat.yMMMd().format(dt);
+        // Respect the user's Date Format setting (General → Date Format)
+        // instead of a hardcoded locale format.
+        return _settings.formatDate(dt);
       }
     }
     return null;
@@ -892,7 +894,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   }
 
   void _downloadSelected(bool local) async {
-    final targets = _chapters.where((c) => _selectedChapterIds.contains(_targetChapterId(c))).toList();
+    // Download in reading order: chapter 1 before chapter 2, etc. Source
+    // chapter lists are usually newest-first, so without this sort a batch
+    // would start from the latest chapter and work backwards.
+    final targets = _chapters
+        .where((c) => _selectedChapterIds.contains(_targetChapterId(c)))
+        .toList()
+      ..sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
     if (local) {
       for (final c in targets) {
         await DownloadManagerService.instance.enqueueLocalDownload(
@@ -900,6 +908,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           mangaId: _targetMangaId(),
           chapterName: c.name,
           mangaTitle: _manga?.title ?? 'Manga',
+          chapterNumber: c.chapterNumber,
         );
       }
     } else {
@@ -936,6 +945,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final primaryColor = Theme.of(context).colorScheme.primary;
     // Sort unread chapters in ascending reading order so "Next chapter(s)" downloads the chronological next to read
     final unreadChapters = _chapters.where((c) => !c.isRead).toList()
+      ..sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
+    // "All chapters" must also start from chapter 1 (source lists are newest-first).
+    final allChapters = List<Chapter>.from(_chapters)
       ..sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
     bool downloadToLocal = true;
 
@@ -979,7 +991,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   _buildDownloadOptionTile('Next 5 chapters', 5, unreadChapters, primaryColor, downloadToLocal),
                   _buildDownloadOptionTile('Next 10 chapters', 10, unreadChapters, primaryColor, downloadToLocal),
                   _buildDownloadOptionTile('All unread chapters (${unreadChapters.length})', unreadChapters.length, unreadChapters, primaryColor, downloadToLocal),
-                  _buildDownloadOptionTile('All chapters (${_chapters.length})', _chapters.length, _chapters, primaryColor, downloadToLocal),
+                  _buildDownloadOptionTile('All chapters (${allChapters.length})', allChapters.length, allChapters, primaryColor, downloadToLocal),
                 ],
               ),
             );
@@ -1004,6 +1016,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               mangaId: _targetMangaId(),
               chapterName: c.name,
               mangaTitle: _manga?.title ?? 'Manga',
+              chapterNumber: c.chapterNumber,
             );
           }
         } else {
@@ -1156,6 +1169,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       mangaId: _targetMangaId(),
                       chapterName: ch.name,
                       mangaTitle: _manga?.title ?? 'Manga',
+                      chapterNumber: ch.chapterNumber,
                     );
                     messenger.showSnackBar(
                       SnackBar(content: Text('Downloading ${ch.name} to device...')),
@@ -2184,6 +2198,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         mangaId: _targetMangaId(),
                         chapterName: ch.name,
                         mangaTitle: _manga?.title ?? 'Manga',
+                        chapterNumber: ch.chapterNumber,
                       );
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Queued ${ch.name} for local download')));
                       setState(() {});

@@ -375,7 +375,34 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
 
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
 
-                    // ── 5. NETWORK RESTRICTIONS ──
+                    // ── 5. NOTIFICATIONS & BACKGROUND ──
+                    const SectionTitle(title: 'Notifications & Background'),
+                    SettingsPropTile(
+                      title: 'Download notifications',
+                      subtitle: 'Show a notification when a batch of downloads finishes',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.switchTile,
+                      boolValue: _settings.downloadNotificationsEnabled,
+                      onBoolChanged: (v) => _settings.downloadNotificationsEnabled = v,
+                    ),
+                    if (Theme.of(context).platform == TargetPlatform.android)
+                      SettingsPropTile(
+                        title: 'Background downloads',
+                        subtitle: 'Keep downloading while the app is in the background (Android foreground service)',
+                        scope: SettingScope.local,
+                        kind: SettingsPropKind.switchTile,
+                        boolValue: _settings.backgroundDownloadsEnabled,
+                        onBoolChanged: (v) {
+                          _settings.backgroundDownloadsEnabled = v;
+                          if (!v) {
+                            DownloadManagerService.instance.stopBackgroundNotifier();
+                          }
+                        },
+                      ),
+
+                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+
+                    // ── 6. NETWORK RESTRICTIONS ──
                     const SectionTitle(title: 'Network Restrictions'),
                     SettingsPropTile(
                       title: 'Download only on Wi-Fi',
