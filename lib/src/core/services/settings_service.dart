@@ -173,6 +173,14 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Mihon/Mangayomi-style end-of-chapter dialog with Previous/Next/Close
+  /// actions, shown once per chapter when the last page is reached.
+  bool get showEndOfChapterDialog => _prefs?.getBool('show_end_of_chapter_dialog') ?? true;
+  set showEndOfChapterDialog(bool value) {
+    _prefs?.setBool('show_end_of_chapter_dialog', value);
+    notifyListeners();
+  }
+
   bool get volumeKeyTurn => _prefs?.getBool('volume_key_turn') ?? true;
   set volumeKeyTurn(bool value) {
     _prefs?.setBool('volume_key_turn', value);
@@ -334,6 +342,20 @@ class SettingsService extends ChangeNotifier {
   bool get downloadOnlyWhileCharging => _prefs?.getBool('download_only_while_charging') ?? false;
   set downloadOnlyWhileCharging(bool value) {
     _prefs?.setBool('download_only_while_charging', value);
+    notifyListeners();
+  }
+
+  /// Show a system notification when a batch of chapter downloads finishes.
+  bool get downloadNotificationsEnabled => _prefs?.getBool('download_notifications_enabled') ?? true;
+  set downloadNotificationsEnabled(bool value) {
+    _prefs?.setBool('download_notifications_enabled', value);
+    notifyListeners();
+  }
+
+  /// Keep downloading in the background via the Android foreground service.
+  bool get backgroundDownloadsEnabled => _prefs?.getBool('background_downloads_enabled') ?? true;
+  set backgroundDownloadsEnabled(bool value) {
+    _prefs?.setBool('background_downloads_enabled', value);
     notifyListeners();
   }
 

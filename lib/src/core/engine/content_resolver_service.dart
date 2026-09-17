@@ -45,6 +45,22 @@ class ContentResolverService {
   static final ContentResolverService instance = ContentResolverService._();
   ContentResolverService._();
 
+  /// Joins a relative page/thumbnail [path] against [base] using proper URI
+  /// resolution instead of naive string concatenation. Naive concat produces
+  /// broken URLs when the base already ends with `/` and the path starts with
+  /// `/` (`https://host//api/…`), or collapses when the base carries a path.
+  /// Absolute http(s) and non-http schemes (data:, asset:) pass through.
+  static String resolveRelativeUrl(String base, String path) {
+    if (base.isEmpty) return path;
+    if (path.startsWith('http://') || path.startsWith('https://') ||
+        (path.length >= 2 && path[1] == ':')) {
+      return path;
+    }
+    final uri = Uri.tryParse(base);
+    if (uri == null || uri.host.isEmpty) return '$base$path';
+    return uri.resolve(path).toString();
+  }
+
   /// ── CHAPTER PAGES RESOLVER (1. Local Download -> 2. Local Extension -> 3. Server) ──
   Future<ChapterPagesResult> resolveChapterPages({
     required int chapterServerId,
@@ -156,7 +172,7 @@ class ContentResolverService {
             if (metaUrl != null && metaUrl.isNotEmpty) {
               sourceBaseUrl = metaUrl.endsWith('/') ? metaUrl.substring(0, metaUrl.length - 1) : metaUrl;
               final path = cleanChapterUrl.startsWith('/') ? cleanChapterUrl : '/$cleanChapterUrl';
-              cleanChapterUrl = '$sourceBaseUrl$path';
+              cleanChapterUrl = resolveRelativeUrl(sourceBaseUrl, path);
             }
           }
         } else if (cleanChapterUrl.startsWith('http')) {
@@ -199,7 +215,7 @@ class ContentResolverService {
             final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
             final urls = rawPages.map((p) {
               final str = p.toString();
-              return str.startsWith('http') ? str : '$serverUrl$str';
+              return resolveRelativeUrl(serverUrl, str);
             }).toList();
             await LoggerService.instance.logInfo('Resolved ${urls.length} pages via Suwayomi Server', 'ContentResolver');
             return ChapterPagesResult(
@@ -298,7 +314,7 @@ class ContentResolverService {
                 final map = n as Map<String, dynamic>;
                 final rawThumb = map['thumbnailUrl'] as String?;
                 final thumb = (rawThumb != null && rawThumb.isNotEmpty)
-                    ? (rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb')
+                    ? (rawThumb.startsWith('http') ? rawThumb : resolveRelativeUrl(serverUrl, rawThumb))
                     : null;
                 return {
                   'id': map['id'],
