@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import '../logging/logger_service.dart';
 
 int parseIntSafe(dynamic value, [int fallback = 0]) {
@@ -65,6 +66,17 @@ class GraphQLClientService {
 
   String? _authToken;
 
+  /// Set to true when the server answers 401/403 (bad or expired token). Cleared
+  /// on a successful authenticated request or when the user reconnects. UI layers
+  /// listen to this to offer a "Reconnect to server" surface.
+  final ValueNotifier<bool> authErrorNotifier = ValueNotifier(false);
+
+  bool get hasAuthError => authErrorNotifier.value;
+
+  void notifyAuthError() => authErrorNotifier.value = true;
+
+  void clearAuthError() => authErrorNotifier.value = false;
+
   Map<String, String> get authHeaders {
     if (_authToken != null && _authToken!.trim().isNotEmpty) {
       final token = _authToken!.trim();
@@ -84,12 +96,14 @@ class GraphQLClientService {
       _authToken = null;
       _lastReachableCheck = null;
       _lastReachableStatus = false;
+      clearAuthError();
       return;
     }
     _baseUrl = clean.endsWith('/') ? clean.substring(0, clean.length - 1) : clean;
     _authToken = authToken;
     _lastReachableCheck = null;
     _lastReachableStatus = false;
+    clearAuthError();
     final headers = <String, dynamic>{'Content-Type': 'application/json'};
     if (authToken != null && authToken.trim().isNotEmpty) {
       final token = authToken.trim();
@@ -131,7 +145,13 @@ class GraphQLClientService {
           receiveTimeout: const Duration(milliseconds: 3000),
         ),
       );
-      _lastReachableStatus = (res.statusCode == 200);
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        // Server is up but rejects our credentials — surface a reconnect prompt.
+        _lastReachableStatus = false;
+        notifyAuthError();
+      } else {
+        _lastReachableStatus = (res.statusCode == 200);
+      }
     } catch (_) {
       _lastReachableStatus = false;
     }
@@ -163,6 +183,8 @@ class GraphQLClientService {
 
       _lastReachableStatus = true;
       _lastReachableCheck = DateTime.now();
+      // A successful authenticated response means credentials are valid again.
+      clearAuthError();
 
       var data = response.data;
       if (data is String) {
@@ -184,6 +206,12 @@ class GraphQLClientService {
       if (_isTransportFailure(e)) {
         _lastReachableStatus = false;
         _lastReachableCheck = DateTime.now();
+      }
+      if (e.type == DioExceptionType.badResponse) {
+        final code = e.response?.statusCode ?? 0;
+        if (code == 401 || code == 403) {
+          notifyAuthError();
+        }
       }
       // Suppress spammy connection refused errors during offline operation
       if (e.message != null && !e.message!.contains('Connection refused')) {
@@ -494,6 +522,22 @@ class GraphQLClientService {
       }
     ''';
     return await query(mutStr, variables: {'id': mangaServerId}, label: 'fetchMangaAndChapters');
+  }
+
+  /// Resolves a manga by (sourceId, url) on the server via Suwayomi's
+  /// `addManga` mutation, returning the server manga id or null on failure.
+  /// Used by client-side `.tachibk` restore.
+  Future<int?> fetchMangaIdByUrl(String sourceId, String url) async {
+    const mutStr = r'''
+      mutation($sourceId: LongString!, $url: String!) {
+        addManga(input: { sourceId: $sourceId, url: $url }) {
+          id
+        }
+      }
+    ''';
+    final res = await query(mutStr, variables: {'sourceId': sourceId, 'url': url}, label: 'addMangaByUrl');
+    final id = res?['addManga']?['id'];
+    return id is int ? id : (id is num ? id.toInt() : null);
   }
 
   Future<Map<String, dynamic>?> fetchCategories() async {

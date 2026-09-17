@@ -187,7 +187,8 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
           );
         }
 
-        return ListView.builder(
+        final waitingForCharger = _downloadService.isWaitingForCharger;
+        final queueList = ListView.builder(
           padding: const EdgeInsets.all(16.0),
           itemCount: tasks.length,
           itemBuilder: (context, index) {
@@ -271,6 +272,35 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
               ),
             );
           },
+        );
+
+        if (!waitingForCharger) return queueList;
+        return Column(
+          children: [
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0x1F2A2A32),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0x33FFC107), width: 1),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.battery_charging_full_rounded, color: Colors.amberAccent, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Queue paused — "Download only while charging" is on. Downloads resume when the device is plugged in.',
+                      style: const TextStyle(fontSize: 12.5, color: Colors.amberAccent),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: queueList),
+          ],
         );
       },
     );

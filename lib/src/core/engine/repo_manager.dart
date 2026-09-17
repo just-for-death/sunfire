@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import '../logging/logger_service.dart';
@@ -16,6 +17,9 @@ class RepoSourceItem {
   final bool isJs;
   final String baseUrl;
   final bool isNsfw;
+  /// Optional sha256 hex digest declared by the repo (Suwayomi/Keiyoushi
+  /// indexes). When present, downloaded JS is verified against it before install.
+  final String sha256;
 
   const RepoSourceItem({
     required this.name,
@@ -26,6 +30,7 @@ class RepoSourceItem {
     required this.isJs,
     this.baseUrl = '',
     this.isNsfw = false,
+    this.sha256 = '',
   });
 
   factory RepoSourceItem.fromJson(Map<String, dynamic> json, [String repoIndexUrl = '']) {
@@ -80,6 +85,7 @@ class RepoSourceItem {
       isJs: isJs,
       baseUrl: baseUrl,
       isNsfw: isNsfw,
+      sha256: (json['sha256'] ?? json['hash'] ?? json['sourceCodeHash'] ?? '').toString().trim(),
     );
   }
 }
@@ -328,7 +334,16 @@ class RepoManager {
     return dedupMap.values.toList();
   }
 
-  Future<String?> downloadJsSourceCode(String jsUrl) async {
+  /// Verifies downloaded source code against a declared sha256 hex digest.
+  /// Returns true when [expectedHex] is empty (no declaration) or matches.
+  static bool verifySha256(String content, String expectedHex) {
+    final expected = expectedHex.trim().toLowerCase();
+    if (expected.isEmpty) return true;
+    final actual = sha256.convert(utf8.encode(content)).toString().toLowerCase();
+    return actual == expected;
+  }
+
+  Future<String?> downloadJsSourceCode(String jsUrl, {String? expectedSha256}) async {
     try {
       final sep = jsUrl.contains('?') ? '&' : '?';
       final freshUrl = '$jsUrl${sep}_t=${DateTime.now().millisecondsSinceEpoch}';
@@ -339,7 +354,23 @@ class RepoManager {
           validateStatus: (status) => status != null && status >= 200 && status < 300,
         ),
       );
-      return response.data;
+      final code = response.data;
+      if (code == null || code.trim().isEmpty) return null;
+
+      final expected = (expectedSha256 ?? '').trim().toLowerCase();
+      if (!verifySha256(code, expected)) {
+        final actual = sha256.convert(utf8.encode(code)).toString().toLowerCase();
+        await LoggerService.instance.logWarning(
+          '✗ Integrity check FAILED for $jsUrl — sha256 mismatch (refusing install). '
+          'Expected $expected, got $actual.',
+          'RepoManager',
+        );
+        return null;
+      }
+      if (expected.isNotEmpty) {
+        await LoggerService.instance.logInfo('✓ sha256 verified for $jsUrl', 'RepoManager');
+      }
+      return code;
     } catch (e) {
       await LoggerService.instance.logWarning('Failed to download JS from $jsUrl: $e', 'RepoManager');
       return null;
@@ -496,7 +527,7 @@ class RepoManager {
         // 4. Try candidates sequentially until one downloads successfully
         for (final scored in listToTry) {
           final item = scored.item;
-          final jsCode = await downloadJsSourceCode(item.sourceCodeUrl);
+          final jsCode = await downloadJsSourceCode(item.sourceCodeUrl, expectedSha256: item.sha256);
           if (jsCode != null && jsCode.trim().isNotEmpty) {
             await QuickJsService.instance.saveLocalExtension(
               item.name,
@@ -587,7 +618,7 @@ class RepoManager {
       }
 
       try {
-        final jsCode = await downloadJsSourceCode(source.sourceCodeUrl);
+        final jsCode = await downloadJsSourceCode(source.sourceCodeUrl, expectedSha256: source.sha256);
         if (jsCode != null && jsCode.trim().isNotEmpty) {
           await QuickJsService.instance.saveLocalExtension(
             source.name,
@@ -643,7 +674,7 @@ class RepoManager {
 
         if (match.sourceCodeUrl.isNotEmpty && match.version.isNotEmpty && currentVer.isNotEmpty) {
           if (compareVersions(match.version, currentVer) > 0) {
-            final jsCode = await downloadJsSourceCode(match.sourceCodeUrl);
+            final jsCode = await downloadJsSourceCode(match.sourceCodeUrl, expectedSha256: match.sha256);
             if (jsCode != null && jsCode.trim().isNotEmpty) {
               await QuickJsService.instance.saveLocalExtension(
                 name,

@@ -1513,11 +1513,19 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     );
   }
 
+  /// Short uppercase language code for badges, or null for default English/
+  /// universal manga that doesn't warrant a badge.
+  String? _languageBadgeLabel(String lang) {
+    if (!SettingsService.instance.showLanguageBadges) return null;
+    return SettingsService.languageBadgeLabel(lang);
+  }
+
   Widget _buildMangaCard(Manga manga, {bool isCompact = false, bool isCoverOnly = false, bool isTablet = false}) {
     final mId = manga.serverId > 0 ? manga.serverId : manga.id;
     final isSelected = _selectedMangaIds.contains(mId);
     final primaryColor = Theme.of(context).colorScheme.primary;
     final isDownloaded = DownloadManagerService.instance.downloadedMangaIds.contains(mId);
+    final langBadge = _languageBadgeLabel(manga.lang);
 
     return RepaintBoundary(
       child: Material(
@@ -1627,9 +1635,32 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           ),
                         ),
                       ),
-                    if (_settings.showDownloadedBadges && isDownloaded && !isSelected)
+                    if (langBadge != null && !isSelected)
                       Positioned(
                         top: 8,
+                        left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xB3262CFF),
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.45),
+                                blurRadius: 3,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            langBadge,
+                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
+                          ),
+                        ),
+                      ),
+                    if (_settings.showDownloadedBadges && isDownloaded && !isSelected)
+                      Positioned(
+                        top: langBadge != null ? 34 : 8,
                         left: 8,
                         child: Container(
                           padding: const EdgeInsets.all(4),
@@ -1698,6 +1729,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final isSelected = _selectedMangaIds.contains(mId);
     final primaryColor = Theme.of(context).colorScheme.primary;
     final isDownloaded = DownloadManagerService.instance.downloadedMangaIds.contains(mId);
+    final langBadge = _languageBadgeLabel(manga.lang);
 
     return RepaintBoundary(
       child: Padding(
@@ -1735,6 +1767,17 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
             subtitle: Row(
               children: [
                 Flexible(child: Text(manga.sourceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 12))),
+                if (langBadge != null) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: const Color(0x26FFFFFF),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(langBadge, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white70, letterSpacing: 0.4)),
+                  ),
+                ],
                 if (isDownloaded && _settings.showDownloadedBadges) ...[
                   const SizedBox(width: 6),
                   const Icon(Icons.download_done_rounded, size: 14, color: Color(0xFF10B981)),
