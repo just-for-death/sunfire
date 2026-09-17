@@ -219,6 +219,23 @@ class RepoManager {
     return 0;
   }
 
+  /// Compares Sunfire's OWN app-version strings, which do NOT follow strict
+  /// semver across the release lineage: the stable line restarted at 1.0.0
+  /// AFTER the betas reached 11.0.0-beta in time. Under pure semver,
+  /// "11.0.0-beta" compares greater than "1.0.0", so a stable→beta migration
+  /// would wrongly look like a downgrade.
+  ///
+  /// Rule: a STABLE build (no "-" prerelease marker) ALWAYS beats any
+  /// prerelease build regardless of numeric core; otherwise delegates to
+  /// [compareVersions] (which is untouched and stays pure semver for
+  /// extension versions).
+  static int compareAppVersions(String v1, String v2) {
+    final pre1 = v1.contains('-');
+    final pre2 = v2.contains('-');
+    if (pre1 != pre2) return pre1 ? -1 : 1;
+    return compareVersions(v1, v2);
+  }
+
   Future<List<RepoSourceItem>> fetchRepoSources(String indexUrl) async {
     final normalizedUrl = normalizeRepoUrl(indexUrl);
     final cacheFile = await _cacheFileFor(normalizedUrl);
@@ -231,7 +248,13 @@ class RepoManager {
       final raw = response.data is String
           ? response.data as String
           : jsonEncode(response.data);
-      await cacheFile.writeAsString(raw);
+      // A failed cache write must never discard the freshly fetched index —
+      // the source of truth is the network response, not the cache.
+      try {
+        await cacheFile.writeAsString(raw);
+      } catch (_) {
+        LoggerService.instance.logWarning('Repo index cache write failed for $normalizedUrl', 'RepoManager');
+      }
       final decoded = jsonDecode(raw);
       final List<dynamic> list;
       if (decoded is List) {

@@ -649,7 +649,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       onTap: () {
                         _showRadioDialog(
                           title: 'Library Display Mode',
-                          options: const ['Comfortable Grid', 'Compact Grid', 'List'],
+                          options: const ['Comfortable Grid', 'Compact Grid', 'List', 'Cover Only'],
                           currentValue: _settings.libraryDisplayMode,
                           onSelected: (val) => setState(() => _settings.libraryDisplayMode = val),
                         );

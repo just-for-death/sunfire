@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'src/app.dart';
 import 'src/core/db/isar_service.dart';
@@ -16,6 +17,7 @@ import 'src/core/services/image_cache_helper.dart';
 import 'src/core/services/notification_service.dart';
 import 'src/core/services/settings_service.dart';
 import 'src/core/sync/background_service.dart';
+import 'src/core/sync/download_foreground_task.dart';
 import 'src/core/sync/graphql_client_service.dart';
 import 'src/core/sync/server_auth_helper.dart';
 import 'src/core/sync/sync_engine.dart';
@@ -116,6 +118,20 @@ void main() async {
     }
   } catch (_) {}
 
+  // Android foreground service that keeps the download queue alive while the
+  // app is backgrounded. No-op on other platforms. Initialised BEFORE the
+  // download manager so the "Stop" (pause) callback is registered before the
+  // queue can start the service — a tap during the very first seconds is
+  // never lost.
+  try {
+    DownloadForegroundTask.instance.initialize();
+    // Handle pause signal sent from the background isolate when the user taps
+    // "Stop" on the foreground-service notification.
+    FlutterForegroundTask.addTaskDataCallback(_onForegroundTaskData);
+  } catch (e) {
+    debugPrint('DownloadForegroundTask init error: $e');
+  }
+
   try {
     await DownloadManagerService.instance.initialize();
   } catch (e) {
@@ -123,4 +139,11 @@ void main() async {
   }
 
   runApp(const SunfireApp());
+}
+
+/// Handles messages from the foreground-service background isolate.
+void _onForegroundTaskData(Object data) {
+  if (data is Map<String, dynamic> && data['action'] == 'pause') {
+    DownloadManagerService.instance.pauseLocalQueue();
+  }
 }

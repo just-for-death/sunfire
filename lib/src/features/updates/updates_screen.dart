@@ -548,6 +548,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                     mangaId: ch.mangaId,
                     chapterName: ch.name,
                     mangaTitle: resolvedMangaTitle,
+                    chapterNumber: ch.chapterNumber,
                   );
                   messenger.showSnackBar(
                     SnackBar(content: Text('Downloading ${ch.name} to local device...')),
