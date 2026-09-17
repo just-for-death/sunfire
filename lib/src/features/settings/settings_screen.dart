@@ -506,12 +506,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       title: 'Server',
                       subtitle: 'Connection, bindings, SOCKS proxy, FlareSolverr (Server & Local), OPDS, SyncYomi',
                       tags: ['SERVER'],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const ServerSettingsScreen()),
-                        );
-                      },
+                      onTap: () => context.push('/settings/server'),
                     ),
 
                     // 2. LIBRARY
@@ -520,12 +515,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       title: 'Library',
                       subtitle: 'Categories, global update interval, skip update rules, badges',
                       tags: ['SERVER', 'LOCAL'],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const LibrarySettingsScreen()),
-                        );
-                      },
+                      onTap: () => context.push('/settings/library'),
                     ),
 
                     // 3. DOWNLOADS
@@ -534,12 +524,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       title: 'Downloads',
                       subtitle: 'Server downloads directory, CBZ compression, limits, Wi-Fi rules',
                       tags: ['SERVER', 'LOCAL'],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const DownloadsSettingsScreen()),
-                        );
-                      },
+                      onTap: () => context.push('/settings/downloads'),
                     ),
 
                     // 4. BROWSE
@@ -548,12 +533,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       title: 'Browse',
                       subtitle: 'NSFW sources, extension repos, local FlareSolverr, scrapers concurrency',
                       tags: ['SERVER', 'LOCAL'],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const BrowseSettingsScreen()),
-                        );
-                      },
+                      onTap: () => context.push('/settings/browse'),
                     ),
 
                     // 5. TRACKING & SCROBBLING
@@ -576,12 +556,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       title: 'Backup and Restore',
                       subtitle: 'Manual and automatic Suwayomi backups, retention TTL schedule',
                       tags: ['SERVER'],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const BackupSettingsScreen()),
-                        );
-                      },
+                      onTap: () => context.push('/settings/backup'),
                     ),
 
                     // 6. READER
@@ -590,12 +565,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       title: 'Reader',
                       subtitle: 'Reading mode, navigation layout, volume keys, crop borders',
                       tags: ['LOCAL'],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const ReaderSettingsScreen()),
-                        );
-                      },
+                      onTap: () => context.push('/settings/reader'),
                     ),
 
                     // 7. APPEARANCE
@@ -604,12 +574,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       title: 'Appearance',
                       subtitle: 'Theme mode, pure black OLED, color palette, grid covers',
                       tags: ['LOCAL'],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const AppearanceSettingsScreen()),
-                        );
-                      },
+                      onTap: () => context.push('/settings/appearance'),
                     ),
 
                     // 8. GENERAL
@@ -618,12 +583,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       title: 'General',
                       subtitle: 'App locale, cache management, network timeouts',
                       tags: ['LOCAL'],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const GeneralSettingsScreen()),
-                        );
-                      },
+                      onTap: () => context.push('/settings/general'),
                     ),
 
                     // 9. STATISTICS
@@ -641,12 +601,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       title: 'Advanced Diagnostics',
                       subtitle: 'Diagnostic logs, FlareSolverr proxy, system information',
                       tags: ['LOCAL'],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const AdvancedSettingsScreen()),
-                        );
-                      },
+                      onTap: () => context.push('/settings/advanced'),
                     ),
                   ],
                 ),
