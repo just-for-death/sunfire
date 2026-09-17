@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:isar/isar.dart';
 import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -374,13 +374,49 @@ class SyncEngine {
     return res != null;
   }
 
+  /// Rewrites pending offline 'assign' records that still reference the local
+  /// temporary category id so they replay against the real server id once the
+  /// category-create mutation has been flushed. Returns only the records whose
+  /// payload actually changed (callers persist those).
+  ///
+  /// Pure so tests can verify the remap without a live queue or DB.
+  @visibleForTesting
+  static List<SyncRecord> remapOfflineAssignRecords({
+    required List<SyncRecord> records,
+    required int localServerId,
+    required int remoteId,
+  }) {
+    final changed = <SyncRecord>[];
+    for (final rec in records) {
+      if (rec.entityType != SyncEntityType.category) continue;
+      try {
+        final payload = jsonDecode(rec.payloadJson) as Map<String, dynamic>;
+        if (payload['op'] != 'assign' || payload['categoryIds'] is! List) continue;
+        final ids = (payload['categoryIds'] as List).map((e) => parseIntSafe(e)).toList();
+        final replaced = ids.map((id) => id == localServerId ? remoteId : id).toList();
+        if (ids.join(',') != replaced.join(',')) {
+          payload['categoryIds'] = replaced;
+          rec.payloadJson = jsonEncode(payload);
+          changed.add(rec);
+        }
+      } catch (_) {}
+    }
+    return changed;
+  }
+
   Future<void> _flushPendingMutations() async {
     final pendingRecords = await IsarService.instance.getPendingSyncRecords();
     if (pendingRecords.isEmpty) return;
 
-    // Replay mutations strictly in chronological order
+    // Replay mutations strictly in chronological order. Records created within
+    // the same second (common in bursts) replay in insertion order via the
+    // auto-increment id — Dart/Isar sorts aren't stable, so a bare timestamp
+    // comparison alone would be nondeterministic.
     final executionList = List<SyncRecord>.from(pendingRecords)
-      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      ..sort((a, b) {
+        final byTs = a.timestamp.compareTo(b.timestamp);
+        return byTs != 0 ? byTs : a.id.compareTo(b.id);
+      });
 
     for (final record in executionList) {
       try {
@@ -452,6 +488,20 @@ class SyncEngine {
                     cat.serverId = remoteId;
                     cat.name = created['name']?.toString() ?? name;
                     await IsarService.instance.saveCategory(cat);
+                    // Mangas assigned to the temporary id while offline were
+                    // queued with the temp id baked into their 'assign'
+                    // payload. Rewrite them to the real server id, or the
+                    // assign replay would send an unknown category and the
+                    // server would silently drop the assignment.
+                    final pendingAssigns = await IsarService.instance.getPendingSyncRecords();
+                    final remapped = remapOfflineAssignRecords(
+                      records: pendingAssigns,
+                      localServerId: localServerId,
+                      remoteId: remoteId,
+                    );
+                    for (final rec in remapped) {
+                      await IsarService.instance.saveSyncRecord(rec);
+                    }
                   }
                 }
                 success = true;
