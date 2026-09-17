@@ -53,6 +53,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   /// Id of the last chapter the end-of-chapter dialog was shown for, so it
   /// appears once per chapter (Mihon/Mangayomi behaviour).
   int? _endOfChapterDialogChapterId;
+  /// Flag to prevent duplicate dialog triggers within the same chapter
+  bool _isDialogShowing = false;
   List<String> _pageUrls = [];
   final Map<String, Uint8List> _recoveredImageBytes = {};
   final Set<String> _recoveringUrls = {};
@@ -146,7 +148,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       if (!kIsWeb && (Platform.isIOS || Platform.isMacOS || Platform.isAndroid)) {
         try {
           VolumeController.instance.showSystemUI = true;
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[Reader] Failed to show system UI on pause: $e');
+        }
       }
     } else if (state == AppLifecycleState.resumed) {
       if (!kIsWeb &&
@@ -154,7 +158,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
           _settings.volumeKeyTurn) {
         try {
           VolumeController.instance.showSystemUI = false;
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[Reader] Failed to hide system UI on resume: $e');
+        }
       }
     }
   }
@@ -178,7 +184,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         }
         _lastIosVolume = volume;
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[Reader] Failed to initialize volume key listener: $e');
+    }
   }
 
   void _toggleAutoScroll() {
@@ -418,11 +426,17 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   void _safeSetWakelock(bool enable) {
     try {
       if (enable) {
-        unawaited(WakelockPlus.enable().catchError((_) {}));
+        unawaited(WakelockPlus.enable().catchError((e) {
+          debugPrint('[Reader] Failed to enable wakelock: $e');
+        }));
       } else {
-        unawaited(WakelockPlus.disable().catchError((_) {}));
+        unawaited(WakelockPlus.disable().catchError((e) {
+          debugPrint('[Reader] Failed to disable wakelock: $e');
+        }));
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[Reader] Wakelock toggle error: $e');
+    }
   }
 
   void _scrollVerticalBy(double delta) {
@@ -436,7 +450,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[Reader] Zoom animation error: $e');
+    }
   }
 
   /// Shared webtoon "page" step for side taps, volume keys, and keyboard.
@@ -828,7 +844,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       try {
         VolumeController.instance.removeListener();
         VolumeController.instance.showSystemUI = true;
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[Reader] Failed to cleanup volume controller: $e');
+      }
     }
     _progressDebounceTimer?.cancel();
     _scrollIndicatorTimer?.cancel();
@@ -909,6 +927,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _nextChapter = null;
       _prevChapter = null;
       _endOfChapterDialogChapterId = null;
+      _isDialogShowing = false;
       _webtoonPageKeys.clear();
     });
     _pageIndicator.value = 1;
@@ -991,7 +1010,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
             }
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[Reader] Chapter URL resolution error: $e');
+      }
     }
 
     // Auto-detect source name from URL if missing
@@ -1009,7 +1030,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                 sourceName = name;
                 break;
               }
-            } catch (_) {}
+            } catch (e) {
+              debugPrint('[Reader] Source matching error: $e');
+            }
           }
         }
       }
@@ -1022,7 +1045,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       try {
         final uri = Uri.parse(chapterUrlToResolve);
         unawaited(MClient.prewarmSession('${uri.scheme}://${uri.host}'));
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[Reader] Pre-warm session error: $e');
+      }
     }
 
     // Use prefetched pages if already available (instant load on next-chapter nav)
@@ -1184,8 +1209,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
               precacheImage(
                 NetworkImage(pUrl, headers: headers),
                 context,
-              ).catchError((_) {});
-            } catch (_) {}
+              ).catchError((e) {
+                debugPrint('[Reader] Image precache error: $e');
+              });
+            } catch (e) {
+              debugPrint('[Reader] Prefetch headers error: $e');
+            }
           }
         }
       }
@@ -2068,7 +2097,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                 return;
               }
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('[Reader] Curl fallback error for $exe: $e');
+          }
         }
       }
 
@@ -2084,14 +2115,18 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         // Pass 1: Standard fetch
         try {
           res = await client.get(uri, headers: initialHeaders).timeout(const Duration(seconds: 15));
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[Reader] HTTP fetch attempt 1 failed: $e');
+        }
 
         // Pass 2: If failed and had Referer, retry with NO Referer (anti-hotlink bypass)
         if ((res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) && initialHeaders.containsKey('Referer')) {
           final noReferer = Map<String, String>.from(initialHeaders)..remove('Referer');
           try {
             res = await client.get(uri, headers: noReferer).timeout(const Duration(seconds: 15));
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('[Reader] HTTP fetch attempt 2 (no referer) failed: $e');
+          }
         }
 
         // Pass 3: If still failed, retry with Origin Referer (same-origin requirement bypass)
@@ -2099,7 +2134,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
           try {
             final originReferer = Map<String, String>.from(initialHeaders)..['Referer'] = '${uri.origin}/';
             res = await client.get(uri, headers: originReferer).timeout(const Duration(seconds: 15));
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('[Reader] HTTP fetch attempt 3 (origin referer) failed: $e');
+          }
         }
 
         // Pass 4: Clean Browser User-Agent and Accept headers
@@ -2109,7 +2146,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
               ..['User-Agent'] = kBrowserUserAgent
               ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
             res = await client.get(uri, headers: browserHeaders).timeout(const Duration(seconds: 15));
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('[Reader] HTTP fetch attempt 4 (browser headers) failed: $e');
+          }
         }
 
         if (res != null && res.statusCode == 200 && res.bodyBytes.isNotEmpty && _isMagicImage(res.bodyBytes)) {
@@ -2452,6 +2491,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   void _maybeShowEndOfChapterDialog() {
     if (!mounted || _chapter == null || _pageUrls.isEmpty) return;
     if (!_settings.showEndOfChapterDialog) return;
+    if (_isDialogShowing) return; // Prevent duplicate triggers
+    
     final chapterId = _chapterTargetId(_chapter!);
     if (!shouldShowEndOfChapterDialog(
       enabled: _settings.showEndOfChapterDialog,
@@ -2461,14 +2502,23 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     )) {
       return;
     }
+    
     _endOfChapterDialogChapterId = chapterId;
+    _isDialogShowing = true;
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showDialog<void>(
+      if (!mounted) {
+        _isDialogShowing = false;
+        return;
+      }
+      showModalBottomSheet<void>(
         context: context,
-        barrierDismissible: true,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
         builder: _buildEndOfChapterDialog,
-      );
+      ).then((_) {
+        _isDialogShowing = false;
+      });
     });
   }
 
@@ -2484,13 +2534,36 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _loadChapterAndPages(_chapterTargetId(ch));
     }
 
-    return AlertDialog(
-      backgroundColor: colorScheme.surface,
-      title: const Text('End of Chapter'),
-      content: Column(
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Handle bar
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Title
+          Text(
+            'End of Chapter',
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Chapter name
           Text(
             chapter?.name ?? '',
             style: TextStyle(
@@ -2500,41 +2573,72 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
           ),
           if (next == null) ...[
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Icon(Icons.info_outline_rounded, color: colorScheme.primary, size: 20),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    "You're all caught up — there's no next chapter.",
-                    style: TextStyle(fontSize: 13, height: 1.35),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: colorScheme.primary, size: 20),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      "You're all caught up — there's no next chapter.",
+                      style: TextStyle(fontSize: 13, height: 1.35),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
+          const SizedBox(height: 24),
+          // Action buttons
+          Row(
+            children: [
+              if (prev != null)
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => goTo(prev),
+                    icon: const Icon(Icons.skip_previous_rounded, size: 20),
+                    label: const Text('Previous'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              if (prev != null && next != null) const SizedBox(width: 12),
+              if (next != null)
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => goTo(next),
+                    icon: const Icon(Icons.skip_next_rounded, size: 20),
+                    label: const Text('Next'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              if (next == null && prev != null) const Spacer(),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Close'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
-      actionsAlignment: MainAxisAlignment.center,
-      actions: [
-        TextButton.icon(
-          onPressed: prev != null ? () => goTo(prev) : null,
-          icon: const Icon(Icons.skip_previous_rounded),
-          label: const Text('Previous Chapter'),
-        ),
-        FilledButton.icon(
-          onPressed: next != null ? () => goTo(next) : null,
-          icon: const Icon(Icons.skip_next_rounded),
-          label: const Text('Next Chapter'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Close'),
-        ),
-      ],
     );
   }
 

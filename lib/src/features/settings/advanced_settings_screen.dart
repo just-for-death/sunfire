@@ -48,7 +48,9 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
         if (info.version.isNotEmpty) {
           versionDisplay = 'v${info.version}${info.buildNumber.isNotEmpty ? '+${info.buildNumber}' : ''}';
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[AdvancedSettings] Failed to get package info: $e');
+      }
       if (mounted) {
         setState(() {
           _mangaCount = manga.length;
@@ -58,7 +60,8 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
           _isLoadingStats = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[AdvancedSettings] Failed to load stats: $e');
       if (mounted) setState(() => _isLoadingStats = false);
     }
   }
