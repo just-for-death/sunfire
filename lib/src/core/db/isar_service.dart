@@ -395,6 +395,13 @@ class IsarService {
     return await _isar.syncRecords.filter().stateEqualTo(SyncRecordState.pending).or().stateEqualTo(SyncRecordState.failed).findAll();
   }
 
+  /// Failed AND abandoned records (the dead-end queue) — returned so they can be
+  /// reset back to [SyncRecordState.pending] by a manual retry.
+  Future<List<SyncRecord>> getFailedSyncRecords() async {
+    if (!_isInitialized) return [];
+    return await _isar.syncRecords.filter().stateEqualTo(SyncRecordState.failed).or().stateEqualTo(SyncRecordState.abandoned).findAll();
+  }
+
   Future<void> deleteSyncRecord(Id id) async {
     if (!_isInitialized) return;
     await _isar.writeTxn(() async {

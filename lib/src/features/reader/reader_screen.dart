@@ -25,7 +25,6 @@ import '../../core/metron/metron_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/sync_engine.dart';
-import '../settings/advanced_settings_screen.dart';
 import 'reader_chapter_navigation.dart';
 import 'reader_scroll_utils.dart';
 import 'reading_mode.dart';
@@ -83,6 +82,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   final Map<int, TransformationController> _webtoonZoomControllers = {};
   int _loadGeneration = 0;
   DateTime? _lastPrevChapterNavAt;
+  DateTime? _lastPrevPageNavAt;
+  DateTime? _lastNextPageNavAt;
 
   // Prefetch cache: chapterServerId → resolved page URLs
   final Map<int, List<String>> _prefetchedChapters = {};
@@ -161,7 +162,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   void _initVolumeKeyListener() {
     try {
       VolumeController.instance.showSystemUI = false;
-      VolumeController.instance.getVolume().then((v) => _lastIosVolume = v);
+      VolumeController.instance.getVolume().then((v) => _lastIosVolume = v).catchError((_) => _lastIosVolume ?? 0.0);
       VolumeController.instance.addListener((volume) {
         if (!_settings.volumeKeyTurn || !mounted) return;
         final now = DateTime.now();
@@ -463,6 +464,22 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   TransformationController _webtoonZoomControllerFor(int index) {
     return _webtoonZoomControllers.putIfAbsent(index, TransformationController.new);
+  }
+
+  /// Keep per-page zoom state only for pages inside a small window around the
+  /// active page. Without this, very long (300–1000 page) webtoon chapters grow
+  /// one TransformationController + GlobalKey per page with no pruning.
+  void _pruneWebtoonZoomState(int activeIndex) {
+    const keepWindow = 40;
+    final evict = <int>[
+      for (final k in _webtoonZoomControllers.keys)
+        if ((k - activeIndex).abs() > keepWindow) k,
+    ];
+    if (evict.isEmpty) return;
+    for (final k in evict) {
+      _webtoonZoomControllers.remove(k)?.dispose();
+      _webtoonPageKeys.remove(k);
+    }
   }
 
   void _setPageIndicator(int page) {
@@ -844,8 +861,19 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   void _storeRecoveredImage(String url, Uint8List bytes) {
     if (_recoveredImageBytes.length >= 25) {
-      final oldestKey = _recoveredImageBytes.keys.first;
-      _recoveredImageBytes.remove(oldestKey);
+      // Never evict bytes for pages currently on screen (current page ±1) just
+      // because they happen to be the oldest — that would force a re-fetch and
+      // a visible flash under memory pressure while paging.
+      String? evictCandidate;
+      for (final key in _recoveredImageBytes.keys) {
+        final idx = _pageUrls.indexOf(key);
+        if (idx == -1 || (idx - (_currentPage - 1)).abs() > 1) {
+          evictCandidate = key;
+          break;
+        }
+      }
+      if (evictCandidate == null) return; // all cached entries are visible — keep them
+      _recoveredImageBytes.remove(evictCandidate);
     }
     _recoveredImageBytes[url] = bytes;
   }
@@ -1083,6 +1111,13 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       unawaited(_prefetchChapter(_nextChapter!));
     }
 
+    // Single-page chapters: persist progress as soon as the chapter opens so a
+    // mid-read app kill never loses it. Flows through the normal pipeline so
+    // delete-finished, scrobble-on-read and server sync rules all apply.
+    if (_pageUrls.length == 1 && _chapter != null && !_chapter!.isRead) {
+      _debouncedUpdateProgress(1);
+    }
+
     // Auto-download ahead trigger
     if (_settings.autoDownloadWhileReading) {
       _triggerDownloadAhead();
@@ -1241,15 +1276,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   void _onPageChanged(int index) {
     _resetZoom();
-    if (index >= _pageUrls.length) {
-      _setPageIndicator(_pageUrls.length);
-      _debouncedUpdateProgress(_pageUrls.length);
-      if (!_showControls) {
-        _showControls = true;
-        if (mounted) setState(() {});
-      }
-      return;
-    }
     final page = index + 1;
     _setPageIndicator(page);
     if (mounted) setState(() {});
@@ -1515,6 +1541,13 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
     if (isPaged) {
       if (_currentPage < _pageUrls.length && _pageController.hasClients) {
+        // Throttle rapid taps so one tap never double-advances a paged chapter.
+        final now = DateTime.now();
+        if (_lastNextPageNavAt != null &&
+            now.difference(_lastNextPageNavAt!) < const Duration(milliseconds: 700)) {
+          return;
+        }
+        _lastNextPageNavAt = now;
         HapticFeedback.lightImpact();
         _pageController.nextPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
       } else if (_nextChapter != null) {
@@ -1544,6 +1577,13 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
     if (isPaged) {
       if (_currentPage > 1 && _pageController.hasClients) {
+        // Throttle rapid taps so one tap never double-advances a paged chapter.
+        final now = DateTime.now();
+        if (_lastPrevPageNavAt != null &&
+            now.difference(_lastPrevPageNavAt!) < const Duration(milliseconds: 700)) {
+          return;
+        }
+        _lastPrevPageNavAt = now;
         HapticFeedback.lightImpact();
         _pageController.previousPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
       } else if (_prevChapter != null) {
@@ -2243,6 +2283,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
     final useZoom = isPaged || enablePerPageZoom;
     if (useZoom) {
+      if (enablePerPageZoom) _pruneWebtoonZoomState(index);
       final transform = enablePerPageZoom ? _webtoonZoomControllerFor(index) : _transformationController;
       return GestureDetector(
         onDoubleTapDown: (details) => _doubleTapDetails = details,
@@ -2586,12 +2627,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                         ),
                         icon: const Icon(Icons.security_rounded, size: 18),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const AdvancedSettingsScreen()),
-                          );
-                        },
+                        onPressed: () => context.push('/settings/advanced'),
                         label: const Text('Configure FlareSolverr', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                   ],
