@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import 'core/services/download_manager_service.dart';
 import 'core/services/library_update_service.dart';
+import 'core/services/notification_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/sync/graphql_client_service.dart';
 import 'core/sync/sync_engine.dart';
@@ -14,7 +15,6 @@ import 'core/sync/websocket_service.dart';
 import 'features/browse/browse_screen.dart';
 import 'features/history/history_screen.dart';
 import 'features/library/library_screen.dart';
-import 'features/settings/server_settings_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/updates/updates_screen.dart';
 
@@ -79,6 +79,33 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _pageController = PageController(initialPage: _currentIndex);
     MainShell.selectedTabNotifier.addListener(_onExternalTabChange);
     WidgetsBinding.instance.addObserver(this);
+    GraphQLClientService.instance.authErrorNotifier.addListener(_onAuthErrorChanged);
+  }
+
+  bool _authBannerShown = false;
+
+  /// Surfaces 401/403 responses from the server as a one-shot "Reconnect to
+  /// server" prompt instead of silent sync/library failures.
+  void _onAuthErrorChanged() {
+    if (!GraphQLClientService.instance.authErrorNotifier.value) {
+      _authBannerShown = false;
+      return;
+    }
+    if (_authBannerShown || !mounted) return;
+    _authBannerShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: const Text('Server rejected your login (401/403). Reconnect to keep syncing.'),
+          action: SnackBarAction(
+            label: 'Reconnect',
+            onPressed: () => context.push('/settings/server'),
+          ),
+        ),
+      );
+    });
   }
 
   void _onExternalTabChange() {
@@ -99,6 +126,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void dispose() {
     MainShell.selectedTabNotifier.removeListener(_onExternalTabChange);
     WidgetsBinding.instance.removeObserver(this);
+    GraphQLClientService.instance.authErrorNotifier.removeListener(_onAuthErrorChanged);
     _pageController.dispose();
     super.dispose();
   }
@@ -106,6 +134,19 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // iOS/macOS suspend active transfers when the app backgrounds; unless we
+      // reset the marker here the user would never learn the queue was
+      // interrupted. Android (FGS) and desktop keep going in background.
+      final wasInterrupted = DownloadManagerService.instance.consumeBackgroundInterrupted();
+      if (wasInterrupted) {
+        final pending = DownloadManagerService.instance.localTasks
+            .where((t) =>
+                t.status == LocalDownloadStatus.queued ||
+                t.status == LocalDownloadStatus.downloading ||
+                t.status == LocalDownloadStatus.paused)
+            .length;
+        NotificationService.instance.showDownloadsResumedNotification(queuedCount: pending);
+      }
       // Resume the queue on foreground, but never override an explicit user
       // "Pause" (persisted across restarts).
       DownloadManagerService.instance.resumeLocalQueueAfterForeground();
@@ -116,6 +157,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       if (!LibraryUpdateService.instance.isUpdating) {
         LibraryUpdateService.instance.checkForNewChapters(isManual: false);
       }
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      DownloadManagerService.instance.noteAppBackgrounded();
     }
   }
 
@@ -818,10 +863,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ServerSettingsScreen()),
-                ),
+                onTap: () => context.push('/settings/server'),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
                   decoration: BoxDecoration(

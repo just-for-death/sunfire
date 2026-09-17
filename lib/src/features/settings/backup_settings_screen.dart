@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
@@ -198,6 +199,13 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                       const SnackBar(content: Text('Upload backup archive to Suwayomi WebUI or server backups directory')),
                     );
                   },
+                ),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  leading: const Icon(Icons.restore_from_trash_rounded),
+                  title: const Text('Restore from .tachibk File (Device)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                  subtitle: const Text('Parse a .tachibk backup on this device and import it into your server library', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  onTap: () => context.push('/settings/import-backup'),
                 ),
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
                 const SectionTitle(title: 'Automatic Backup Schedule (Server)'),

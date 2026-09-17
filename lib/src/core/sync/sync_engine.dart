@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
@@ -33,6 +34,25 @@ class SyncEngine {
     _deviceId = deviceId ?? 'default_device';
     await LoggerService.instance.logInfo('SyncEngine initialized for deviceId: $_deviceId', 'SyncEngine');
     await triggerSync();
+  }
+
+  /// Reset failed/abandoned sync records back to pending so a manual retry can
+  /// flush them again (Advanced Settings → "Retry failed sync").
+  Future<int> retryFailedSyncRecords() async {
+    final records = await IsarService.instance.getFailedSyncRecords();
+    if (records.isEmpty) return 0;
+    for (final record in records) {
+      record.retryCount = 0;
+      record.state = SyncRecordState.pending;
+      await IsarService.instance.saveSyncRecord(record);
+    }
+    await LoggerService.instance.logInfo(
+      'Reset ${records.length} failed/abandoned sync record(s) to pending for retry',
+      'SyncEngine',
+    );
+    // Kick an immediate flush so the retry is not only queued for the next cycle.
+    unawaited(triggerSync());
+    return records.length;
   }
 
   /// Bypass wipe-guard and apply server library removals (Settings → Advanced).

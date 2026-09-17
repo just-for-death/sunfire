@@ -8,6 +8,7 @@ import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/graphql_client_service.dart';
 import '../sync/sync_engine.dart';
+import 'battery_state_service.dart';
 import 'notification_service.dart';
 import 'settings_service.dart';
 
@@ -38,6 +39,12 @@ class LibraryUpdateService extends ChangeNotifier {
     } catch (_) {
       return true;
     }
+  }
+
+  /// Charge-only gate for automated updates (`libraryUpdateOnlyCharging`).
+  Future<bool> _satisfiesChargingConstraint() async {
+    if (!SettingsService.instance.libraryUpdateOnlyCharging) return true;
+    return BatteryStateService.instance.isCharging();
   }
 
   /// Unified library update: handles both live Suwayomi server jobs and local QuickJS scraping.
@@ -72,6 +79,13 @@ class LibraryUpdateService extends ChangeNotifier {
       final satisfiesNetwork = await _satisfiesNetworkConstraint();
       if (!satisfiesNetwork) {
         debugPrint('[LibraryUpdateService] Skipping update: not connected to Wi-Fi / Ethernet.');
+        _isUpdating = false;
+        return 0;
+      }
+
+      final satisfiesCharging = await _satisfiesChargingConstraint();
+      if (!satisfiesCharging) {
+        debugPrint('[LibraryUpdateService] Skipping update: charge-only mode and device is not charging.');
         _isUpdating = false;
         return 0;
       }
