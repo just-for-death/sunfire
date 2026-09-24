@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -116,7 +117,7 @@ void main() async {
     if (savedCfProxy.isNotEmpty) {
       MClient.cfProxyUrl = savedCfProxy;
     }
-  } catch (_) {}
+  } catch (ignoredError) { if (kDebugMode) debugPrint('[main] ignored error: $ignoredError'); }
 
   // Android foreground service that keeps the download queue alive while the
   // app is backgrounded. No-op on other platforms. Initialised BEFORE the

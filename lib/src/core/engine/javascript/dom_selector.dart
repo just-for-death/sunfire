@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart';
@@ -88,7 +89,7 @@ class JsDomSelector {
       if (element == null) {
         try {
           element = doc.querySelector(selector);
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[dom_selector] ignored error: $ignoredError'); }
       }
       return _storeElement(element);
     });
@@ -101,7 +102,7 @@ class JsDomSelector {
       if (element == null && ele != null) {
         try {
           element = ele.querySelector(selector);
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[dom_selector] ignored error: $ignoredError'); }
       }
       return _storeElement(element);
     });
@@ -215,7 +216,7 @@ class JsDomSelector {
       if (elements == null || elements.isEmpty) {
         try {
           elements = doc.querySelectorAll(selector);
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[dom_selector] ignored error: $ignoredError'); }
       }
       List<int> elementKeys = [];
       for (var element in elements ?? []) {
@@ -233,7 +234,7 @@ class JsDomSelector {
       if (elements == null || elements.isEmpty) {
         try {
           elements = ele?.querySelectorAll(selector);
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[dom_selector] ignored error: $ignoredError'); }
       }
       List<int> elementKeys = [];
       for (var element in elements ?? []) {
@@ -299,7 +300,7 @@ class Document {
             ).forEach((key) => {
                 if (key != null && key > 0) elements.push(new Element(key));
             });
-        } catch (_) {}
+        } catch (e) { console.log("doc_select error: " + e); }
         return elements;
     }
     xpathFirst(xpath) {
@@ -467,7 +468,7 @@ class Element {
             ).forEach((key) => {
                 if (key != null && key > 0) elements.push(new Element(key));
             });
-        } catch (_) {}
+        } catch (e) { console.log("ele_select error: " + e); }
         return elements;
     }
     hasAttr(attr) {

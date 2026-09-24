@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:path_provider/path_provider.dart';
 
 import '../db/isar_service.dart';
@@ -164,7 +165,7 @@ class ContentResolverService {
             }
           }
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[content_resolver_service] ignored error: $ignoredError'); }
     }
 
     // Auto-detect source name from URL domain if still missing
@@ -182,7 +183,7 @@ class ContentResolverService {
                 effectiveSourceName = name;
                 break;
               }
-            } catch (_) {}
+            } catch (ignoredError) { if (kDebugMode) debugPrint('[content_resolver_service] ignored error: $ignoredError'); }
           }
         }
       }
@@ -209,7 +210,7 @@ class ContentResolverService {
           try {
             final uri = Uri.parse(cleanChapterUrl);
             sourceBaseUrl = '${uri.scheme}://${uri.host}';
-          } catch (_) {}
+          } catch (ignoredError) { if (kDebugMode) debugPrint('[content_resolver_service] ignored error: $ignoredError'); }
         }
 
         // Fire FlareSolverr pre-warm in parallel — don't await, let scraping start immediately.

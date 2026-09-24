@@ -197,6 +197,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
 
   Future<void> _checkStandaloneUpdates() async {
     final libraryManga = await IsarService.instance.getLibraryManga();
+    // One batched query up front instead of one per manga inside the loop.
+    final existingChaptersByManga = await IsarService.instance.getChaptersForMangas(
+      libraryManga.map((m) => m.serverId > 0 ? m.serverId : m.id).toList(),
+    );
     for (final manga in libraryManga) {
       if (manga.sourceName.isEmpty || manga.url.isEmpty) continue;
       try {
@@ -208,7 +212,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           final rawChapters = detail['chapters'] as List<dynamic>?;
           if (rawChapters != null && rawChapters.isNotEmpty) {
             final mId = manga.serverId > 0 ? manga.serverId : manga.id;
-            final existingChapters = await IsarService.instance.getChaptersForManga(mId);
+            final existingChapters = existingChaptersByManga[mId] ?? const <Chapter>[];
             final existingUrls = existingChapters.map((c) => c.url).toSet();
             final newChapters = <Chapter>[];
             for (int i = 0; i < rawChapters.length; i++) {
@@ -528,9 +532,33 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     );
   }
 
+  /// Manga per chapter-batch query in the batch actions below. Bounds memory
+  /// (all chapters of a chunk are held at once) while still replacing one Isar
+  /// query per manga with one per chunk.
+  static const int _batchChunkSize = 50;
+
   Future<void> _batchMarkRead(bool isRead) async {
-    for (final id in _selectedMangaIds) {
-      final chapters = await IsarService.instance.getChaptersForManga(id);
+    final selectedIds = List<int>.from(_selectedMangaIds);
+    final chaptersByManga = <int, List<Chapter>>{};
+    for (var i = 0; i < selectedIds.length; i += _batchChunkSize) {
+      final end = i + _batchChunkSize > selectedIds.length ? selectedIds.length : i + _batchChunkSize;
+      chaptersByManga
+        ..clear()
+        ..addAll(await IsarService.instance.getChaptersForMangas(selectedIds.sublist(i, end)));
+      await _markChunkRead(selectedIds.sublist(i, end), chaptersByManga, isRead);
+    }
+    _exitBatchMode();
+    await _loadFromIsarOnly();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isRead ? 'Marked all as read' : 'Marked all as unread')),
+      );
+    }
+  }
+
+  Future<void> _markChunkRead(List<int> ids, Map<int, List<Chapter>> chaptersByManga, bool isRead) async {
+    for (final id in ids) {
+      final chapters = chaptersByManga[id] ?? <Chapter>[];
       for (final ch in chapters) {
         ch.applyReadState(isRead);
         if (ch.serverId > 0) {
@@ -547,13 +575,6 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         m.unreadCount = isRead ? 0 : chapters.length;
         await IsarService.instance.saveManga(m);
       }
-    }
-    _exitBatchMode();
-    await _loadFromIsarOnly();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isRead ? 'Marked all as read' : 'Marked all as unread')),
-      );
     }
   }
 
@@ -613,9 +634,18 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     int totalQueued = 0;
     final mangaList = List<int>.from(_selectedMangaIds);
 
-    for (final mangaId in mangaList) {
+    final chaptersByManga = <int, List<Chapter>>{};
+    for (var i = 0; i < mangaList.length; i++) {
+      final mangaId = mangaList[i];
+      // Load chapters a chunk at a time instead of one query per manga.
+      if (i % _batchChunkSize == 0) {
+        final end = i + _batchChunkSize > mangaList.length ? mangaList.length : i + _batchChunkSize;
+        chaptersByManga
+          ..clear()
+          ..addAll(await IsarService.instance.getChaptersForMangas(mangaList.sublist(i, end)));
+      }
       final m = await _resolveManga(mangaId);
-      final chapters = await IsarService.instance.getChaptersForManga(mangaId);
+      final chapters = List<Chapter>.of(chaptersByManga[mangaId] ?? const <Chapter>[]);
       chapters.sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
 
       final unreadNotDownloaded = chapters.where((c) {

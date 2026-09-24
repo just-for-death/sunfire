@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show ValueNotifier;
+import 'package:dio/io.dart';
+import 'package:flutter/foundation.dart' show ValueNotifier, debugPrint, kDebugMode;
 import '../logging/logger_service.dart';
+import '../services/server_tls_trust.dart';
 
 int parseIntSafe(dynamic value, [int fallback = 0]) {
   if (value == null) return fallback;
@@ -115,13 +117,20 @@ class GraphQLClientService {
     }
     try {
       _dio.close(force: true);
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[graphql_client_service] ignored error: $ignoredError'); }
     _dio = Dio(BaseOptions(
       baseUrl: '$_baseUrl/api/graphql',
       connectTimeout: const Duration(seconds: 45),
       receiveTimeout: const Duration(seconds: 90),
       headers: headers,
     ));
+    // Accept a self-signed cert for the configured server only (same rule as
+    // image loading and downloads) — without this, HTTPS servers with a
+    // private cert work for images/downloads but every sync request fails.
+    final adapter = _dio.httpClientAdapter;
+    if (adapter is IOHttpClientAdapter) {
+      adapter.createHttpClient = () => createServerTrustingHttpClient(() => _baseUrl);
+    }
   }
 
   bool get isConfigured => _baseUrl != null && _baseUrl!.trim().isNotEmpty;
@@ -129,6 +138,14 @@ class GraphQLClientService {
 
   DateTime? _lastReachableCheck;
   bool _lastReachableStatus = false;
+
+  /// True when the most recent request or probe failed at the transport level
+  /// (timeout, dropped connection, 5xx, DNS) and left the server marked
+  /// unreachable. [query] swallows every failure and returns null, so callers
+  /// use this after a null result to tell "the network dropped" apart from
+  /// "the server understood and rejected the request" (GraphQL/4xx errors
+  /// leave the status reachable). False before any request has been made.
+  bool get isKnownUnreachable => _lastReachableCheck != null && !_lastReachableStatus;
 
   Future<bool> checkServerReachable({bool force = false}) async {
     if (!isConfigured) return false;
