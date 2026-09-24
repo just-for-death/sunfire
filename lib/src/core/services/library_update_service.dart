@@ -185,6 +185,13 @@ class LibraryUpdateService extends ChangeNotifier {
         final libraryManga = await IsarService.instance.getLibraryManga();
         final int totalManga = libraryManga.length;
 
+        // Fetch every manga's existing chapters in one batched query instead
+        // of one Isar query per manga inside the loop below — the N+1 here
+        // was the dominant cost of a full-library update on large libraries.
+        final existingChaptersByManga = await IsarService.instance.getChaptersForMangas(
+          libraryManga.map((m) => m.serverId > 0 ? m.serverId : m.id).toList(),
+        );
+
         for (int i = 0; i < totalManga; i++) {
           final manga = libraryManga[i];
           _progress = 0.10 + ((i + 1) / (totalManga > 0 ? totalManga : 1)) * 0.65;
@@ -203,7 +210,7 @@ class LibraryUpdateService extends ChangeNotifier {
               final rawChapters = detail['chapters'] as List<dynamic>?;
               if (rawChapters != null && rawChapters.isNotEmpty) {
                 final mId = manga.serverId > 0 ? manga.serverId : manga.id;
-                final existing = await IsarService.instance.getChaptersForManga(mId);
+                final existing = existingChaptersByManga[mId] ?? const <Chapter>[];
                 final existingUrls = existing.map((c) => c.url).toSet();
                 final existingServerIds = existing.map((c) => c.serverId).toSet();
                 final newChaptersToSave = <Chapter>[];

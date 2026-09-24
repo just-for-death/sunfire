@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
@@ -125,7 +126,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         if (dt.year >= 1975) {
           return dt.millisecondsSinceEpoch ~/ 1000;
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[manga_detail_screen] ignored error: $ignoredError'); }
     }
 
     return null;
@@ -460,7 +461,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
             }
           }
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[manga_detail_screen] ignored error: $ignoredError'); }
     }
 
     _manga ??= Manga()
@@ -567,7 +568,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           _manga!.categoryIds,
         );
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[manga_detail_screen] ignored error: $ignoredError'); }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

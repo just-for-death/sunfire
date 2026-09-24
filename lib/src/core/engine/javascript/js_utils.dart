@@ -17,7 +17,7 @@ class JsUtils {
       try {
         final List<dynamic> params = args is String ? jsonDecode(args) : args;
         debugPrint('[JS] ${params.join(' ')}');
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[js_utils] ignored error: $ignoredError'); }
       return null;
     });
 

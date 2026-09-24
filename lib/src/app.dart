@@ -303,7 +303,7 @@ class _SunfireAppState extends State<SunfireApp> {
           WidgetsBinding.instance.addPostFrameCallback((_) => _handleUri(uri));
         }
       }).catchError((_) {});
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[app] ignored error: $ignoredError'); }
   }
 
   void _handleUri(Uri uri) {

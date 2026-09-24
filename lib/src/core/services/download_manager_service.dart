@@ -16,11 +16,12 @@ import '../engine/content_resolver_service.dart';
 import '../engine/javascript/m_client.dart';
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
-import 'safe_curl.dart';
 import '../sync/download_foreground_task.dart';
 import '../sync/graphql_client_service.dart';
 import 'battery_state_service.dart';
 import 'notification_service.dart';
+import 'safe_curl.dart';
+import 'server_tls_trust.dart';
 import 'settings_service.dart';
 
 enum LocalDownloadStatus { queued, downloading, completed, failed, paused }
@@ -152,27 +153,12 @@ class DownloadManagerService extends ChangeNotifier {
   void _configureDio() {
     try {
       if (_dio.httpClientAdapter is IOHttpClientAdapter) {
-        (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
-          final client = HttpClient();
-          client.badCertificateCallback = (cert, host, port) {
-            final serverUrl = SettingsService.instance.serverUrl;
-            if (serverUrl.isNotEmpty) {
-              final serverHost = Uri.tryParse(serverUrl)?.host;
-              // The user explicitly configured this server; accept its self-signed cert.
-              if (serverHost != null && host == serverHost) return true;
-            }
-            // Loopback only: local dev emulators / local Suwayomi instances.
-            // NO blanket acceptance for private/IPv4 ranges — that would permit
-            // MITM on arbitrary LAN hosts.
-            if (host == 'localhost' || host == '127.0.0.1' || host == '::1') {
-              return true;
-            }
-            return false;
-          };
-          return client;
-        };
+        // Shared trust rule (configured server host + loopback only; NO
+        // blanket acceptance of LAN ranges) — see server_tls_trust.dart.
+        (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient =
+            () => createServerTrustingHttpClient(() => SettingsService.instance.serverUrl);
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[download_manager_service] ignored error: $ignoredError'); }
   }
 
   static const String _queuePrefKey = 'sunfire_download_queue_v1';
@@ -960,7 +946,11 @@ class DownloadManagerService extends ChangeNotifier {
 
     // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl-impersonate
     if ((pageBytes == null || pageBytes.isEmpty) && !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-      final curlArgs = buildCurlArgs(url: pageUrl, maxTimeSeconds: 25, headers: headers);
+      final curlArgs = buildCurlArgs(
+        url: pageUrl,
+        maxTimeSeconds: 25,
+        headers: headers.map((k, v) => MapEntry(k, v.toString())),
+      );
       for (final exe in (curlArgs == null ? const <String>[] : kCurlCandidates)) {
         if (cancelToken?.isCancelled == true) return;
         try {
@@ -1080,7 +1070,7 @@ class DownloadManagerService extends ChangeNotifier {
     if (token != null) {
       try {
         token.cancel('Task dismissed');
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[download_manager_service] ignored error: $ignoredError'); }
     }
     _localTasks.removeWhere((t) => t.chapterId == chapterId);
     await _saveQueueState();
@@ -1131,7 +1121,7 @@ class DownloadManagerService extends ChangeNotifier {
     for (final token in _cancelTokens.values) {
       try {
         token.cancel('Service disposed');
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[download_manager_service] ignored error: $ignoredError'); }
     }
     _cancelTokens.clear();
     _stopActiveNotifier();
