@@ -58,6 +58,21 @@ class QuickJsService {
 
   final Map<String, _AsyncLock> _sourceLocks = {};
 
+  bool _initialized = false;
+  String? _initError;
+
+  /// Whether [initialize] completed without a top-level failure. Individual
+  /// extension loads are best-effort; check [installedSourceCount] for how much
+  /// actually loaded.
+  bool get isInitialized => _initialized;
+
+  /// Set when [initialize] fails at the top level (e.g. neither the disk nor
+  /// the bundled extension loader could run). Null when all good.
+  String? get initializationError => _initError;
+
+  /// Number of JS extension sources currently registered (installed + bundled).
+  int get installedSourceCount => _installedJsSources.length;
+
   QuickJsService._();
 
   static QuickJsService get instance {
@@ -132,7 +147,11 @@ class QuickJsService {
     try {
       await _loadInstalledExtensionsFromDisk();
       await _loadBundledExtensionsFromAssets();
+      _initialized = true;
+      _initError = null;
     } catch (e, stack) {
+      _initialized = false;
+      _initError = e.toString();
       await LoggerService.instance.logError('Failed to initialize QuickJS: $e', exception: e, stackTrace: stack, category: 'QuickJS');
     }
   }

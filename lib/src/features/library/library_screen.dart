@@ -921,7 +921,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           final name = textController.text.trim();
                           if (name.isNotEmpty) {
                             final newCat = Category()
-                              ..serverId = DateTime.now().millisecondsSinceEpoch
+                              ..serverId = IsarService.generateSyntheticServerId()
                               ..name = name
                               ..order = _categories.length;
                             await IsarService.instance.saveCategory(newCat);

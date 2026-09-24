@@ -25,6 +25,15 @@ class IsarService {
     return -(DateTime.now().microsecondsSinceEpoch % 1000000000 * 10000 + _syntheticIdCounter);
   }
 
+  /// Reserves an id for an offline-created entity that has no server id yet.
+  /// Negative range never collides with real Suwayomi ids, and
+  /// [isSyntheticServerId] lets sync code tell pending-local entities apart
+  /// from server-backed ones. Used for offline manga, chapters and categories.
+  static int generateSyntheticServerId() => _generateSyntheticServerId();
+
+  /// True for ids produced by [generateSyntheticServerId] (offline-temp ids).
+  static bool isSyntheticServerId(int id) => id < 0;
+
   IsarService._();
 
   static IsarService get instance {
@@ -393,6 +402,19 @@ class IsarService {
 
   Future<void> saveCategories(List<Category> categories, {bool replaceAll = true}) async {
     if (!_isInitialized) return;
+    Set<int> protectedIds = const {};
+    if (replaceAll) {
+      // Categories that only exist locally (offline-created, still waiting on
+      // a queued create) have ids the server doesn't know about. A server pull
+      // must not wipe them, or the pending create's id remap has nothing to
+      // attach to and the category reappears as an uncategorizable orphan on
+      // the server. Synthetic (negative) temp ids are covered too.
+      protectedIds = (await getPendingCategoryRecords())
+          .where((r) => r.action == SyncAction.create)
+          .map((r) => int.tryParse(r.entityId))
+          .whereType<int>()
+          .toSet();
+    }
     await _isar.writeTxn(() async {
       final existing = await _isar.categorys.where().findAll();
       final existingMap = {for (var e in existing) e.serverId: e.id};
@@ -403,7 +425,13 @@ class IsarService {
       }
       if (replaceAll && categories.isNotEmpty) {
         final newServerIds = categories.map((c) => c.serverId).toSet();
-        final toDelete = existing.where((e) => !newServerIds.contains(e.serverId)).map((e) => e.id).toList();
+        final toDelete = existing
+            .where((e) =>
+                !newServerIds.contains(e.serverId) &&
+                !protectedIds.contains(e.serverId) &&
+                !isSyntheticServerId(e.serverId))
+            .map((e) => e.id)
+            .toList();
         await _isar.categorys.deleteAll(toDelete);
       }
       await _isar.categorys.putAll(categories);

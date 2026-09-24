@@ -116,7 +116,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
       return;
     }
     final localCat = Category()
-      ..serverId = DateTime.now().millisecondsSinceEpoch
+      ..serverId = IsarService.generateSyntheticServerId()
       ..name = trimmed
       ..order = existing.length;
     await IsarService.instance.saveCategory(localCat);
