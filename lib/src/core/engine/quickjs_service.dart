@@ -358,6 +358,8 @@ class QuickJsService {
 
   static String _canonicalizeKey(String raw) {
     return raw
+        .replaceAll('local_js_', '')
+        .replaceAll('localjs', '')
         .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
         .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
         .toLowerCase()
@@ -373,6 +375,8 @@ class QuickJsService {
   /// share the same identity.
   static String extensionIdentityKey(String raw) {
     return raw
+        .replaceAll('local_js_', '')
+        .replaceAll('localjs_', '')
         .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
         .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
         .replaceAll(RegExp(r'^_+|_+$'), '')
@@ -414,13 +418,14 @@ class QuickJsService {
 
   bool isSourceInstalledLocally(String sourceName) {
     if (sourceName.isEmpty) return false;
-    final cleanName = sourceName
+    final stripped = sourceName.replaceAll('local_js_', '').replaceAll('localjs_', '');
+    final cleanName = stripped
         .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
         .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
         .toLowerCase();
     final canonQuery = _canonicalizeKey(sourceName);
 
-    if (_installedJsSources.containsKey(cleanName)) return true;
+    if (_installedJsSources.containsKey(cleanName) || _installedJsSources.containsKey(sourceName)) return true;
 
     for (final key in _installedJsSources.keys) {
       final canonKey = _canonicalizeKey(key);
@@ -690,7 +695,8 @@ class QuickJsService {
     if (_installedJsSources.isEmpty) {
       _loadBundledExtensionsFromDiskFallback();
     }
-    final cleanName = sourceName
+    final stripped = sourceName.replaceAll('local_js_', '').replaceAll('localjs_', '');
+    final cleanName = stripped
         .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
         .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
         .toLowerCase();
@@ -699,9 +705,13 @@ class QuickJsService {
     if (_installedJsSources.containsKey(cleanName)) {
       return _installedJsSources[cleanName];
     }
+    if (_installedJsSources.containsKey(sourceName)) {
+      return _installedJsSources[sourceName];
+    }
     for (final entry in _installedJsSources.entries) {
-      final keyAlpha = entry.key.replaceAll('_', '');
-      if (cleanName == entry.key || alphaOnly == keyAlpha) {
+      final keyClean = entry.key.replaceAll('local_js_', '').replaceAll('localjs_', '');
+      final keyAlpha = keyClean.replaceAll('_', '').replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+      if (cleanName == entry.key || cleanName == keyClean || alphaOnly == keyAlpha) {
         return entry.value;
       }
       if (alphaOnly.length >= 5 && keyAlpha.length >= 5) {
