@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:isar/isar.dart';
 import 'package:uuid/uuid.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
+import '../services/wakelock_coordinator.dart';
 import '../db/isar_service.dart';
 import '../db/models/category.dart';
 import '../db/models/chapter.dart';
@@ -87,7 +87,7 @@ class SyncEngine {
       }
       try {
         if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-          await WakelockPlus.enable();
+          await WakelockCoordinator.instance.acquire('sync');
         }
       } catch (_) {}
       await LoggerService.instance.logInfo('Starting sync cycle with server...', 'SyncEngine');
@@ -99,7 +99,7 @@ class SyncEngine {
     } finally {
       try {
         if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-          await WakelockPlus.disable();
+          await WakelockCoordinator.instance.release('sync');
         }
       } catch (_) {}
       _isSyncing = false;

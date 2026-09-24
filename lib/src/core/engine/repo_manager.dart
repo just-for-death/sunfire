@@ -651,7 +651,12 @@ class RepoManager {
   /// ── UPDATE ALL INSTALLED EXTENSIONS ──────────────────────────────
   /// Checks configured repositories for newer versions of installed JS extensions
   /// and updates them if a newer version is available.
-  Future<int> updateInstalledExtensions(List<String> repoUrls) async {
+  ///
+  /// When [requireIntegrity] is true (unattended background updates), an update
+  /// is only applied if the repo declares a sha256 for it and the source URL is
+  /// https. Without that, nothing but the (unsigned) repo index vouches for the
+  /// code, and running unreviewed remote JS with no user present is not safe.
+  Future<int> updateInstalledExtensions(List<String> repoUrls, {bool requireIntegrity = false}) async {
     if (repoUrls.isEmpty) return 0;
     int updatedCount = 0;
     try {
@@ -674,6 +679,14 @@ class RepoManager {
 
         if (match.sourceCodeUrl.isNotEmpty && match.version.isNotEmpty && currentVer.isNotEmpty) {
           if (compareVersions(match.version, currentVer) > 0) {
+            if (requireIntegrity &&
+                (match.sha256.trim().isEmpty || !match.sourceCodeUrl.toLowerCase().startsWith('https://'))) {
+              await LoggerService.instance.logWarning(
+                'Skipped unattended update of $name to v${match.version}: repo declares no sha256 or source is not https. Update it manually from the Extensions screen.',
+                'RepoManager',
+              );
+              continue;
+            }
             final jsCode = await downloadJsSourceCode(match.sourceCodeUrl, expectedSha256: match.sha256);
             if (jsCode != null && jsCode.trim().isNotEmpty) {
               await QuickJsService.instance.saveLocalExtension(

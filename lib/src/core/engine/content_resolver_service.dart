@@ -11,6 +11,24 @@ import 'source_migration_service.dart';
 
 enum ContentSourceType { localExtension, localDownload, suwayomiServer, fallback }
 
+/// Marker file written at the root of `downloads/<chapterId>/` once every page
+/// has been verified on disk. Its presence is the ONLY thing that makes a
+/// download folder eligible to be resolved as "this chapter is downloaded" —
+/// a folder without it is either mid-download or was left behind by a
+/// failed/cancelled/paused attempt and must not be treated as complete.
+/// Content is the expected page count as plain text, so readers/resolvers
+/// can sanity-check the file listing against it.
+const String kDownloadCompleteMarkerName = '.download_complete';
+
+Future<bool> isDownloadFolderComplete(Directory chapterDir, {int? expectedPageCount}) async {
+  final marker = File('${chapterDir.path}/$kDownloadCompleteMarkerName');
+  if (!await marker.exists()) return false;
+  if (expectedPageCount == null) return true;
+  final raw = (await marker.readAsString()).trim();
+  final markedCount = int.tryParse(raw);
+  return markedCount != null && markedCount == expectedPageCount;
+}
+
 /// Natural numeric sort for downloaded page files (e.g. ch10_p2.jpg before ch10_p10.jpg).
 int compareDownloadedPagePaths(String a, String b) {
   final fileNameA = a.split(RegExp(r'[/\\]')).last;
@@ -66,16 +84,27 @@ class ContentResolverService {
     required int chapterServerId,
     String? chapterUrl,
     String? sourceName,
+    // The downloader calls this to get a fresh page list to download INTO
+    // downloads/<id>/. It must never resolve against that same (possibly
+    // partial) folder, or a retried/resumed download sees its own
+    // incomplete output, treats every already-saved file as "the full
+    // chapter", and reports itself complete without fetching the rest.
+    bool allowLocalDownload = true,
   }) async {
     var effectiveSourceName = sourceName;
     var effectiveChapterUrl = chapterUrl;
 
     // ── PRIORITY 1: LOCAL DOWNLOADS (Instant Offline Storage) ─────────────
-    if (chapterServerId > 0) {
+    if (allowLocalDownload && chapterServerId > 0) {
       try {
         final appDir = await getApplicationDocumentsDirectory();
         final chapterDir = Directory('${appDir.path}/downloads/$chapterServerId');
-        if (await chapterDir.exists()) {
+        // Only trust this folder if the download that wrote it finished and
+        // verified every page (see kDownloadCompleteMarkerName). Otherwise
+        // it's a partial/corrupt leftover from a failed, cancelled, or
+        // paused attempt and must fall through to extension/server so the
+        // remaining pages actually get fetched.
+        if (await chapterDir.exists() && await isDownloadFolderComplete(chapterDir)) {
           final files = await chapterDir.list().toList();
           final localImages = files
               .whereType<File>()

@@ -11,6 +11,7 @@ import '../db/isar_service.dart';
 import '../db/models/manga.dart';
 import '../engine/quickjs_service.dart';
 import '../sync/graphql_client_service.dart';
+import 'safe_curl.dart';
 
 class ImageCacheHelper {
   static final List<String> _candidateCoverPaths = [];
@@ -282,12 +283,10 @@ class ImageCacheHelper {
 
       // PASS 5: Fallback on desktop with curl-impersonate / curl binaries to bypass TLS fingerprint blocks
       if (bytes == null && !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-        final candidates = ['/usr/bin/curl-impersonate', 'curl-impersonate', 'curl-impersonate-chrome', '/usr/bin/curl', 'curl'];
-        for (final exe in candidates) {
+        final curlArgs = buildCurlArgs(url: url, maxTimeSeconds: 15, headers: headers);
+        for (final exe in (curlArgs == null ? const <String>[] : kCurlCandidates)) {
           try {
-            final args = <String>['-s', '-L', '--max-time', '15'];
-            headers.forEach((k, v) => args.addAll(['-H', '$k: $v']));
-            args.add(url);
+            final args = curlArgs!;
             final res = await Process.run(exe, args, stdoutEncoding: null);
             if (res.exitCode == 0) {
               final b = res.stdout as List<int>;

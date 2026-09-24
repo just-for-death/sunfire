@@ -384,6 +384,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     );
   }
 
+  /// The install/uninstall flow awaits network + disk work; the user can leave
+  /// the Browse tab meanwhile, and setState on a disposed State throws.
+  void _setStateIfMounted(VoidCallback fn) {
+    if (mounted) setState(fn);
+  }
+
   void _toggleExtensionInstallation(Map<String, dynamic> ext, {bool isUpdate = false}) async {
     final name = ext['name'] as String;
     final isInstalled = ext['isInstalled'] as bool;
@@ -424,7 +430,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               version: version,
               iconUrl: iconUrl,
             );
-            setState(() {
+            _setStateIfMounted(() {
               ext['isInstalled'] = true;
               ext['hasUpdate'] = false;
               ext['installedVersion'] = version;
@@ -457,7 +463,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             }
           } else {
             // Download failed or integrity check failed — roll the toggle back.
-            setState(() {
+            _setStateIfMounted(() {
               ext['isInstalled'] = isInstalled;
             });
             customStatusMessage =
@@ -465,7 +471,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           }
         } else if (isInstalled && !isUpdate) {
           await QuickJsService.instance.deleteLocalExtension(name);
-          setState(() {
+          _setStateIfMounted(() {
             ext['isInstalled'] = false;
             ext['hasUpdate'] = false;
           });
@@ -475,20 +481,20 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         final pkgName = (ext['pkgName'] ?? ext['id']).toString();
         if (isUpdate) {
           await GraphQLClientService.instance.updateServerExtension(pkgName);
-          setState(() {
+          _setStateIfMounted(() {
             ext['hasUpdate'] = false;
           });
           customStatusMessage = 'Updated $name on server';
         } else if (isInstalled) {
           await GraphQLClientService.instance.uninstallServerExtension(pkgName);
-          setState(() {
+          _setStateIfMounted(() {
             ext['isInstalled'] = false;
             ext['hasUpdate'] = false;
           });
           customStatusMessage = 'Uninstalled $name from server';
         } else {
           await GraphQLClientService.instance.installServerExtension(pkgName);
-          setState(() {
+          _setStateIfMounted(() {
             ext['isInstalled'] = true;
             ext['hasUpdate'] = false;
           });
