@@ -352,6 +352,7 @@ class ContentResolverService {
                   'thumbnailUrl': thumb,
                   'author': map['author'],
                   'artist': map['artist'],
+                  'origin': 'server',
                 };
               }).toList();
             }

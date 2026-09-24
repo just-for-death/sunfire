@@ -942,7 +942,10 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _recoveredImageBytes[url] = bytes;
   }
 
-  int _chapterTargetId(Chapter ch) => ch.serverId > 0 ? ch.serverId : ch.id;
+  // Local chapters are persisted with synthetic NEGATIVE serverIds, so `!= 0`
+  // (not `> 0`) is the right discriminator — a negative id still resolves via
+  // the unique serverId index and can never be confused with a real Suwayomi id.
+  int _chapterTargetId(Chapter ch) => ch.serverId != 0 ? ch.serverId : ch.id;
 
   Future<void> _loadChapterAndPages(int chapterId) async {
     final loadGen = ++_loadGeneration;
@@ -988,8 +991,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     // unrelated chapter that merely shares the number as its local id.
     Chapter? loadedChapter = await IsarService.instance.getChapterByServerId(chapterId);
     if (loadedChapter == null) {
+      // Local-id fallback: only accept a chapter whose OWN local id equals the
+      // requested id (proves it was addressed as a local chapter) and that has
+      // no positive server id — so a server id can never be misresolved through
+      // a coincidental auto-increment collision.
       final byLocalId = await IsarService.instance.getChapterByLocalId(chapterId);
-      if (byLocalId != null && byLocalId.serverId == 0) loadedChapter = byLocalId;
+      if (byLocalId != null && byLocalId.id == chapterId && byLocalId.serverId <= 0) loadedChapter = byLocalId;
     }
     if (loadGen != _loadGeneration) return;
     _chapter = loadedChapter;
