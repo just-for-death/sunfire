@@ -304,7 +304,12 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
     final targetThumb = (targetManga['imageUrl'] ?? targetManga['thumbnailUrl'] ?? targetManga['cover'] ?? '').toString();
     final rawTargetTitle = (targetManga['title'] ?? targetManga['name'] ?? '').toString().trim();
     final targetTitle = rawTargetTitle.isNotEmpty ? rawTargetTitle : widget.manga.title;
-    bool isServerSource = targetManga.containsKey('id') &&
+    // Only results that demonstrably came from the Suwayomi server carry a real
+    // server manga id. Local JS-extension scrapes may return arbitrary numeric
+    // website ids — treating one as a server id would push server mutations
+    // against a bogus/foreign record.
+    bool isServerSource = targetManga['origin'] == 'server' &&
+        targetManga.containsKey('id') &&
         targetManga['id'] != null &&
         int.tryParse(targetManga['id'].toString()) != null &&
         parseIntSafe(targetManga['id']) > 0;
@@ -664,8 +669,9 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
               tc.lastPageRead = match.lastPageRead;
               tc.lastReadAt = match.lastReadAt;
               tc.isBookmarked = match.isBookmarked;
-              tc.isDownloadedLocally = match.isDownloadedLocally;
-              tc.localPath = match.localPath;
+              // NOTE: download state is deliberately NOT copied — the source
+              // chapters' downloaded files belong to the source URLs, not the
+              // target's, so claiming them downloaded here would be a lie.
               tc.fetchedAt = match.fetchedAt;
               updatedTargetChapters.add(tc);
 

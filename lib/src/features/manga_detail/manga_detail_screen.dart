@@ -187,6 +187,14 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
     // 1. Check local Isar DB first to display immediate cached state only if valid
     _manga = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
+    if (_manga == null) {
+      // The route may address a LOCAL standalone manga by its Isar auto-increment
+      // id (such manga carry synthetic negative serverIds). Only accept a
+      // local-id hit that is actually standalone — never one with a real
+      // (positive) serverId, which would mean we collided with a different series.
+      final byLocal = await IsarService.instance.getManga(widget.mangaServerId);
+      if (byLocal != null && byLocal.serverId < 0) _manga = byLocal;
+    }
     _chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
     final hasValidCachedChapters = _chapters.isNotEmpty && _chapters.every((c) => c.url.isNotEmpty);
     if (_manga != null && hasValidCachedChapters && mounted) {
@@ -195,8 +203,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
     final isLocalExtension = QuickJsService.instance.hasExtension(_manga?.sourceName ?? '');
 
-    // 2. Fetch fresh details AND chapters from Suwayomi GraphQL ONLY for server manga
-    if (!isLocalExtension && GraphQLClientService.instance.isConfigured && widget.mangaServerId > 0 && widget.mangaServerId < 200000) {
+    // 2. Fetch fresh details AND chapters from Suwayomi GraphQL ONLY for server manga.
+    // A local standalone resolved above (serverId < 0) must never trigger a server
+    // fetch keyed by its local auto-increment id.
+    final resolvedAsServerManga = _manga != null
+        ? (_manga!.serverId > 0 && _manga!.serverId == widget.mangaServerId)
+        : widget.mangaServerId > 0;
+    if (resolvedAsServerManga && !isLocalExtension && GraphQLClientService.instance.isConfigured) {
       try {
         var detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
 
@@ -379,9 +392,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               final rawChNum = (cMap['chapterNumber'] as num?)?.toDouble();
               final chNum = (rawChNum != null && rawChNum > 0) ? rawChNum : _extractChapterNumber(chName, i, chList.length);
 
-              final chServerId = (widget.mangaServerId > 0 && widget.mangaServerId < 200000)
-                  ? (widget.mangaServerId * 10000 + i + 1)
-                  : (((widget.mangaServerId.hashCode & 0x0007FFFF) * 1000) + (i + 1));
+              // Negative synthetic id — positive ids would share the unique
+              // serverId index with real Suwayomi chapters (overwrite/alias).
+              final chServerId = -((widget.mangaServerId.abs() * 100000) + i + 1);
 
               final rawDate = cMap['dateUpload'] ?? cMap['uploadDate'] ?? cMap['date'] ?? cMap['releaseDate'];
               final rawDateStr = rawDate?.toString().trim();
@@ -689,7 +702,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
   }
 
-  int _targetChapterId(Chapter ch) => ch.serverId > 0 ? ch.serverId : ch.id;
+  // Never pass a raw auto-increment id as a chapter target: local chapters
+  // carry synthetic negative serverIds and resolve through them.
+  int _targetChapterId(Chapter ch) => ch.serverId != 0 ? ch.serverId : ch.id;
   int _targetMangaId() => (_manga?.serverId != null && _manga!.serverId > 0) ? _manga!.serverId : (_manga?.id ?? widget.mangaServerId);
 
   void _openReader(int chapterServerId) async {

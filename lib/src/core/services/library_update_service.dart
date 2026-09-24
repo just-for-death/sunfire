@@ -225,9 +225,11 @@ class LibraryUpdateService extends ChangeNotifier {
                   final chMap = rawChapters[cIdx] as Map<String, dynamic>;
                   final chUrl = (chMap['url'] ?? chMap['link'] ?? '').toString();
                   if (chUrl.isNotEmpty && !existingUrls.contains(chUrl)) {
-                    int chServerId = (mId > 0 && mId < 200000)
-                        ? (mId * 10000 + cIdx + 1)
-                        : (((mId.hashCode & 0x0007FFFF) * 1000) + (cIdx + 1));
+                    // Synthetic ids must be NEGATIVE: positive ids share the
+                    // unique serverId index with real Suwayomi chapters and can
+                    // overwrite/alias them (and get progress pushed to the wrong
+                    // server chapter via the serverId > 0 sync guard).
+                    int chServerId = -(mId.abs() * 100000 + cIdx + 1);
                     while (existingServerIds.contains(chServerId)) {
                       chServerId++;
                     }
