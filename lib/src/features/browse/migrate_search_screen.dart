@@ -31,6 +31,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
   String _activeFilter = 'PINNED'; // 'PINNED', 'ALL', 'HAS_RESULTS'
   final Map<String, List<Map<String, dynamic>>> _searchResults = {};
   final Map<String, bool> _loadingStates = {};
+  int _searchGeneration = 0;
 
   @override
   void initState() {
@@ -58,6 +59,10 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
 
+    // Generation token: stale per-source searches from an earlier run must not
+    // write their results/loading flags into this run's freshly-cleared maps.
+    final generation = ++_searchGeneration;
+
     final targetSources = _getTargetSources();
 
     setState(() {
@@ -75,11 +80,12 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
         s['id'].toString(),
         query,
         s['name'] as String? ?? s['displayName'] as String? ?? 'Source',
+        generation,
       )),
     );
   }
 
-  Future<void> _searchSingleSource(String sourceId, String query, String sourceName) async {
+  Future<void> _searchSingleSource(String sourceId, String query, String sourceName, int generation) async {
     try {
       final list = await ContentResolverService.instance.resolveSourceManga(
         sourceId: sourceId,
@@ -88,16 +94,16 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
         page: 1,
       ).timeout(const Duration(seconds: 8), onTimeout: () => []);
 
-      if (mounted) {
-        setState(() {
-          _searchResults[sourceId] = list;
-          _loadingStates[sourceId] = false;
-        });
-      }
+      if (generation != _searchGeneration || !mounted) return;
+      setState(() {
+        _searchResults[sourceId] = list;
+        _loadingStates[sourceId] = false;
+      });
     } catch (e) {
+      if (generation != _searchGeneration) return;
       await LoggerService.instance.logWarning('Search timed out on source $sourceId: $e', 'Migrate');
     } finally {
-      if (mounted) {
+      if (generation == _searchGeneration && mounted) {
         setState(() {
           _searchResults.putIfAbsent(sourceId, () => []);
           _loadingStates[sourceId] = false;

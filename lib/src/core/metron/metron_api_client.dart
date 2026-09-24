@@ -91,14 +91,26 @@ class MetronApiClient {
         onError: (DioException err, handler) async {
           _scheduleNextSpacing();
 
-          // Handle HTTP 429 Too Many Requests
+          // Handle HTTP 429 Too Many Requests. The retry re-enters this same
+          // interceptor (via _dio.fetch), so a server that keeps answering 429
+          // must not loop forever — cap consecutive retries and surface the
+          // rate-limit error to the caller once exhausted.
           if (err.response?.statusCode == 429) {
+            final attempts = ((err.requestOptions.extra['_metron429Retries'] as num?) ?? 0) + 1;
+            if (attempts > 3) {
+              LoggerService.instance.logWarning(
+                'Metron HTTP 429 retried $attempts times without success — giving up on this request.',
+                'Metron',
+              );
+              return handler.next(err);
+            }
+            err.requestOptions.extra['_metron429Retries'] = attempts;
             final retryAfterRaw = err.response?.headers.value('retry-after');
             final retrySeconds = int.tryParse(retryAfterRaw ?? '') ??
                 (_rateLimitState.burstResetSeconds > 0 ? _rateLimitState.burstResetSeconds : 5);
 
             LoggerService.instance.logWarning(
-              'Metron HTTP 429 received. Backing off for ${retrySeconds}s before retry.',
+              'Metron HTTP 429 received. Backing off for ${retrySeconds}s before retry (attempt $attempts/3).',
               'Metron',
             );
 

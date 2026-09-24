@@ -444,9 +444,11 @@ class IsarService {
       final cat = await _isar.categorys.filter().serverIdEqualTo(serverId).findFirst();
       if (cat != null) {
         await _isar.categorys.delete(cat.id);
-      } else {
-        await _isar.categorys.delete(serverId);
       }
+      // No fallback delete by `serverId` as a local id: a server category that
+      // is no longer in the DB (already pulled-deleted) carries a positive
+      // serverId that can collide with an unrelated row's auto-increment id,
+      // silently deleting the wrong category.
     });
   }
 

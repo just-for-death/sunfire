@@ -15,30 +15,47 @@ import 'source_preferences.dart';
 class _AsyncLock {
   Future<void>? _last;
 
-  /// Waits for the previously queued holder before running [block], but never
-  /// waits longer than [maxWait] for it. Without this cap, a single hung JS
-  /// call (source stuck in a scrape, dead FlareSolverr session, etc.) blocks
-  /// every later call queued behind it indefinitely — the reader's own 30s
-  /// timeout only stops IT from waiting, it doesn't free the lock. The stuck
-  /// holder may still complete later; its result is just no longer awaited.
+  /// Serializes [block] so callers of one source never overlap their native
+  /// QuickJS evals (flutter_qjs `evaluateAsync` is a synchronous FFI call
+  /// under the hood, so two in-flight calls on one runtime re-enter native
+  /// QuickJS — undefined behavior / crash). Waits for the previously queued
+  /// holder, but never longer than [maxWait]: without this cap a single hung
+  /// JS call (stuck scrape, dead FlareSolverr session) blocks every later call
+  /// queued behind it indefinitely — the reader's own 30s timeout only stops
+  /// IT from waiting, it doesn't free the lock. When the wait overruns, the
+  /// previous holder may STILL be executing on the shared runtime, so
+  /// [onOverrun] lets the caller switch to a fresh runtime instead of
+  /// re-entering the busy one; the overrun holder's future is re-chained so
+  /// later callers keep waiting for it too.
   Future<T> synchronized<T>(
     Future<T> Function() block, {
     Duration maxWait = const Duration(seconds: 35),
+    void Function()? onOverrun,
   }) async {
     final prev = _last;
     final completer = Completer<void>();
     _last = completer.future;
 
+    var overran = false;
     if (prev != null) {
       try {
-        await prev.timeout(maxWait, onTimeout: () {});
+        await prev.timeout(maxWait, onTimeout: () {
+          overran = true;
+        });
       } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
     }
+    if (overran) onOverrun?.call();
 
     try {
       return await block();
     } finally {
       if (!completer.isCompleted) completer.complete();
+      // Re-chain: if the previous holder overran, it may still be running on
+      // the shared runtime; subsequent callers must wait for it as well, not
+      // just for this caller, or they could re-enter the busy runtime.
+      _last = (prev == null || !overran)
+          ? completer.future
+          : Future.wait([prev, completer.future]);
     }
   }
 }
@@ -88,16 +105,39 @@ class QuickJsService {
   }
 
   /// Execute an action on a pooled [JsExtensionService] runtime with serialization lock.
+  ///
+  /// When a call has to wait longer than the lock's cap because a previous
+  /// holder is still executing on the shared pooled runtime (rare: hung scrape
+  /// / dead proxy session), it must NOT re-enter that busy native runtime.
+  /// It instead runs on a temporary fresh runtime that is disposed afterwards.
   Future<T> withRuntime<T>(
     String sourceName,
     String jsCode,
     Future<T> Function(JsExtensionService service) action,
   ) {
     final lockKey = _canonicalizeKey(sourceName);
+    var overran = false;
     return _getLockFor(lockKey).synchronized(() async {
-      final service = _getOrCreateRuntime(sourceName, jsCode);
-      return await action(service);
+      final service = overran
+          ? _createEphemeralRuntime(sourceName, jsCode)
+          : _getOrCreateRuntime(sourceName, jsCode);
+      try {
+        return await action(service);
+      } finally {
+        if (overran) service.dispose();
+      }
+    }, onOverrun: () {
+      overran = true;
     });
+  }
+
+  /// A throwaway runtime used only when the shared pooled runtime is still
+  /// busy from a previous holder. Never pooled, always disposed by its caller.
+  JsExtensionService _createEphemeralRuntime(String sourceName, String jsCode) {
+    return JsExtensionService(
+      sourceMeta: _sourceMetaFor(jsCode, sourceName),
+      sourceCode: jsCode,
+    );
   }
 
   /// Get or create a pooled JsExtensionService runtime for [sourceName].
@@ -882,8 +922,13 @@ class QuickJsService {
         return [];
       });
     } catch (e) {
-      // Handle headless flutter test environment mock fallback
-      if (jsCode.contains('searchManga') || jsCode.contains('getPopular') || jsCode.contains('title:')) {
+      // Handle headless flutter test environment mock fallback. This
+      // fabricates manga entries scraped out of the extension's own source
+      // code (regex over `title:`/`url:` literals), so it must NEVER run in a
+      // release build — a Cloudflare block or JS error would otherwise show
+      // phantom series in Browse. `flutter test` runs in debug mode, so the
+      // fallback stays available to the test environment.
+      if (kDebugMode && (jsCode.contains('searchManga') || jsCode.contains('getPopular') || jsCode.contains('title:'))) {
         final titles = RegExp(r'''title:\s*["']([^"']+)["']''').allMatches(jsCode);
         final urls = RegExp(r'''url:\s*["']([^"']+)["']''').allMatches(jsCode);
         if (titles.isNotEmpty) {
