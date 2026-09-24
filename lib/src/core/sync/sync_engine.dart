@@ -383,14 +383,23 @@ class SyncEngine {
   }
 
   Future<void> syncCategoryDelete(int categoryServerId) async {
-    if (categoryServerId <= 0) return;
+    if (categoryServerId == 0) return;
 
-    // If this category only exists locally (pending offline create), cancel the pending create instead of sending a delete to the server
+    // A local-only category — synthetic temp id (offline-created, negative) or
+    // any id that still has a pending create queued — never existed on the
+    // server. Cancel its queued create/assign ops instead of issuing a delete
+    // the server can't honor (and which would later be "recreated" by the
+    // stale pending create on the next flush).
     final pendingRecords = await IsarService.instance.getPendingCategoryRecords();
-    final pendingCreate = pendingRecords.where((r) => r.entityId == categoryServerId.toString() && r.action == SyncAction.create).toList();
-    if (pendingCreate.isNotEmpty) {
-      for (final r in pendingCreate) {
-        await IsarService.instance.deleteSyncRecord(r.id);
+    if (categoryServerId < 0 ||
+        pendingRecords.any((r) =>
+            r.action == SyncAction.create &&
+            r.entityId == categoryServerId.toString())) {
+      for (final r in pendingRecords) {
+        if (r.entityId == categoryServerId.toString() ||
+            _syncRecordReferencesCategory(r, categoryServerId)) {
+          await IsarService.instance.deleteSyncRecord(r.id);
+        }
       }
       return;
     }
@@ -420,6 +429,19 @@ class SyncEngine {
       ..deviceId = _deviceId ?? 'default_device'
       ..state = SyncRecordState.pending;
     await IsarService.instance.saveSyncRecord(record);
+  }
+
+  /// True when a queued category record's payload references [categoryId] —
+  /// used to drop dangling 'assign' records when an offline category is
+  /// deleted before its create ever reached the server.
+  static bool _syncRecordReferencesCategory(SyncRecord record, int categoryId) {
+    try {
+      final payload = jsonDecode(record.payloadJson) as Map<String, dynamic>;
+      final ids = (payload['categoryIds'] as List?)?.map((e) => parseIntSafe(e)).toList() ?? const <int>[];
+      return ids.contains(categoryId);
+    } catch (ignoredError) {
+      return false;
+    }
   }
 
   Future<void> syncMangaCategories(int mangaServerId, List<int> categoryIds) async {
@@ -647,7 +669,7 @@ class SyncEngine {
               final created = res?['createCategory']?['category'];
               if (created is Map) {
                 final remoteId = parseIntSafe(created['id']);
-                if (remoteId > 0 && localServerId > 0 && remoteId != localServerId) {
+                if (remoteId > 0 && localServerId != remoteId) {
                   final cats = await IsarService.instance.getCategories();
                   final match = cats.where((c) => c.serverId == localServerId).toList();
                   if (match.isNotEmpty) {

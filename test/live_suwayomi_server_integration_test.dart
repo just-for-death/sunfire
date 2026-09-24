@@ -193,5 +193,47 @@ void main() {
       expect(ids.contains(resolvedId), isFalse,
           reason: 'probe manga must be removed from the server library after the test');
     });
+
+    test('fetchMangaDetails merges ALL chapters via the paginated root query', () async {
+      if (!up) {
+        markTestSkipped('Suwayomi Docker not running on $_liveUrl');
+        return;
+      }
+      // Pick any library manga that actually has chapters.
+      final lib = await GraphQLClientService.instance.fetchLibrary();
+      final mangas = ((lib?['mangas']?['nodes'] as List?) ?? const []);
+      int? targetId;
+      int? expectedTotal;
+      for (final raw in mangas.take(40)) {
+        final m = raw as Map;
+        final id = parseIntSafe(m['id']);
+        if (id <= 0) continue;
+        final countRes = await GraphQLClientService.instance.query(
+          'query { chapters(condition: { mangaId: $id }) { totalCount } }',
+          label: 'test.chaptersTotal',
+        );
+        final total = parseIntSafe((countRes?['chapters'] as Map?)?['totalCount']);
+        if (total > 0) {
+          targetId = id;
+          expectedTotal = total;
+          break;
+        }
+      }
+      if (targetId == null) {
+        markTestSkipped('no library manga with chapters to paginate');
+        return;
+      }
+
+      final details = await GraphQLClientService.instance.fetchMangaDetails(targetId);
+      expect(details, isNotNull);
+      expect(details!['manga'], containsPair('id', targetId),
+          reason: 'manga block must survive the paginated detail fetch');
+      final nodes = details['manga']?['chapters']?['nodes'] as List?;
+      expect(nodes, isNotNull);
+      expect(nodes!.length, expectedTotal,
+          reason: 'chapters must be assembled from every page — a truncated default '
+              'page would drop chapters of long series');
+      print('✓ [LIVE] manga=$targetId chapters=${nodes.length} (all pages merged)');
+    });
   });
 }
