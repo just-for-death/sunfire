@@ -1052,7 +1052,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                                 ),
                               ),
                             ),
-                          if (_updatesList.isEmpty)
+                          if (visibleUpdates.isEmpty)
                             SliverToBoxAdapter(
                               child: Container(
                                 alignment: Alignment.center,
@@ -1062,24 +1062,39 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                                   children: [
                                     Icon(Icons.notifications_none_rounded, size: 64, color: primaryColor.withAlpha(120)),
                                     const SizedBox(height: 16),
-                                    const Text('No Recent Updates', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                    Text(
+                                      _updatesList.isEmpty ? 'No Recent Updates' : 'No Matching Updates',
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                    ),
                                     const SizedBox(height: 8),
-                                    const Text(
-                                      'Pull down to check for updates or\nadd more manga to your library.',
+                                    Text(
+                                      _updatesList.isEmpty
+                                          ? 'Pull down to check for updates or\nadd more manga to your library.'
+                                          : 'Nothing matches your current filters\n(unread-only, languages, or search).',
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                                      style: const TextStyle(color: Colors.grey, fontSize: 13),
                                     ),
                                     const SizedBox(height: 20),
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: primaryColor,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                    if (_updatesList.isEmpty)
+                                      ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: primaryColor,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                        ),
+                                        icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                                        label: const Text('Check Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                        onPressed: _checkServerForUpdates,
+                                      )
+                                    else
+                                      TextButton.icon(
+                                        onPressed: () => setState(() {
+                                          _unreadOnly = false;
+                                          _searchQuery = '';
+                                        }),
+                                        icon: const Icon(Icons.filter_alt_off_rounded, size: 18),
+                                        label: const Text('Clear filters', style: TextStyle(fontWeight: FontWeight.bold)),
                                       ),
-                                      icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                                      label: const Text('Check Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                      onPressed: _checkServerForUpdates,
-                                    ),
                                   ],
                                 ),
                               ),

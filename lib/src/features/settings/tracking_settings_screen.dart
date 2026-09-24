@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -50,7 +51,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
           _serverTrackers = nodes.map((e) => e as Map<String, dynamic>).toList();
         });
       }
-    } catch (_) {
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[tracking_settings_screen] fetchServerTrackers: $ignoredError');
     } finally {
       if (mounted) setState(() => _loadingServerTrackers = false);
     }

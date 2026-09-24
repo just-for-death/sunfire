@@ -214,6 +214,13 @@ class GraphQLClientService {
               ? errors[0]['message']
               : errors.toString();
           await LoggerService.instance.logWarning('GraphQL Error [$label]: $errorMsg', 'GraphQL');
+          // A GraphQL-level auth/credentials error (server replies HTTP 200
+          // with an `errors` payload) must surface the reconnect prompt just
+          // like an HTTP 401/403 does. Without this, bad credentials silently
+          // null-out every mutation while the UI claims the server is fine.
+          if (_looksLikeAuthError(errorMsg)) {
+            notifyAuthError();
+          }
           return null;
         }
         return data['data'] as Map<String, dynamic>?;
@@ -257,6 +264,21 @@ class GraphQLClientService {
       default:
         return e.response == null;
     }
+  }
+
+  /// Heuristic for Suwayomi/GraphQL-Java auth rejection messages that arrive
+  /// inside an HTTP-200 `errors` payload (e.g. "Authentication required",
+  /// "Invalid credentials", "Forbidden", "Not authorized").
+  static bool _looksLikeAuthError(String message) {
+    final m = message.toLowerCase();
+    return m.contains('authenticat') ||
+        m.contains('credential') ||
+        m.contains('forbidden') ||
+        m.contains('not authorized') ||
+        m.contains('unauthoriz') ||
+        m.contains('access denied') ||
+        m.contains('invalid token') ||
+        m.contains('bearer token');
   }
 
   Future<Map<String, dynamic>?> fetchSources() async {
@@ -355,14 +377,19 @@ class GraphQLClientService {
 
   Future<Map<String, dynamic>?> updateExtension(String pkgName, String action) async {
     final act = action.toUpperCase();
+    bool success;
     if (act == 'INSTALL') {
-      await installServerExtension(pkgName);
+      success = await installServerExtension(pkgName);
     } else if (act == 'UNINSTALL') {
-      await uninstallServerExtension(pkgName);
+      success = await uninstallServerExtension(pkgName);
     } else if (act == 'UPDATE') {
-      await updateServerExtension(pkgName);
+      success = await updateServerExtension(pkgName);
+    } else {
+      return null;
     }
-    return {'status': 'ok'};
+    // Propagate failure (null on a swallowed network/GraphQL error) so the
+    // caller can roll back its optimistic UI instead of reporting success.
+    return success ? {'status': 'ok'} : null;
   }
 
   Future<Map<String, dynamic>?> fetchSourceManga(String sourceId, {bool isLatest = false, int page = 1, String? searchQuery}) async {
@@ -475,10 +502,23 @@ class GraphQLClientService {
       final nodes = mangasMap['nodes'] as List<dynamic>? ?? [];
       allNodes.addAll(nodes);
 
-      if (nodes.length < pageSize || allNodes.length >= totalCount) {
+      // Break only when the page shortfall proves we've reached the end, or
+      // when a *present* totalCount is satisfied. totalCount is 0 when the
+      // server omits the field — trusting it then would truncate an entire
+      // library to one 200-item page (and, downstream, poison the wipe-guard
+      // ratio). The `offset` progress check guards against offset-ignoring
+      // servers that would otherwise loop forever.
+      if (nodes.length < pageSize || (totalCount > 0 && allNodes.length >= totalCount)) {
         break;
       }
-      offset += nodes.length;
+      if (offset == allNodes.length) {
+        await LoggerService.instance.logWarning(
+          'fetchLibrary: server did not advance offset ($offset) — stopping to avoid an infinite loop.',
+          'GraphQL',
+        );
+        break;
+      }
+      offset = allNodes.length;
     }
 
     return {
@@ -567,8 +607,13 @@ class GraphQLClientService {
       final hasNextPage = pageInfo != null
           ? pageInfo['hasNextPage'] == true
           : pageNodes.length >= pageSize;
+      final prevOffset = offset;
       offset += pageNodes.length;
       if (!hasNextPage || pageNodes.length < pageSize) break;
+      // A misbehaving server may ignore `offset` and return the same page
+      // forever with hasNextPage: true. Cap the loop so a broken server can't
+      // hang sync or balloon `allNodes` into an OOM.
+      if (offset == prevOffset || allNodes.length > 25000) break;
     }
 
     // Reassemble data['manga']['chapters']['nodes'] — the shape all callers

@@ -722,8 +722,15 @@ class SyncEngine {
           // GraphQLClientService.query() swallows every failure and returns
           // null, so a dropped connection lands here, not in the catch below.
           // If the client now considers the server unreachable, the mutation
-          // wasn't rejected — don't spend one of its retries on it.
-          await _recordDispatchFailure(record, transient: GraphQLClientService.instance.isKnownUnreachable);
+          // wasn't rejected — don't spend one of its retries on it. An active
+          // auth error (401/403) is NOT transient: counting it against the
+          // retry budget abandons the record in a bounded number of cycles
+          // instead of re-attempting it for 14 days with a bad credential.
+          final client = GraphQLClientService.instance;
+          await _recordDispatchFailure(
+            record,
+            transient: client.isKnownUnreachable && !client.hasAuthError,
+          );
         }
       } catch (e, stack) {
         await _recordDispatchFailure(record, transient: isTransientSyncError(e));

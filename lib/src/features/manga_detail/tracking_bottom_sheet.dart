@@ -209,8 +209,19 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
       return;
     }
 
-    await GraphQLClientService.instance.bindTrack(widget.mangaServerId, trackerId, remoteId);
-    await _loadTrackingData();
+    try {
+      await GraphQLClientService.instance.bindTrack(widget.mangaServerId, trackerId, remoteId);
+      await _loadTrackingData();
+    } catch (e, st) {
+      LoggerService.instance.logError('Failed to bind tracker: $e', exception: e, stackTrace: st, category: 'Tracking');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Failed to link this series to the tracker.'),
+          backgroundColor: Colors.redAccent,
+        ));
+      }
+    }
   }
 
   Future<void> _unlinkMetron() async {
@@ -263,8 +274,19 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
 
   Future<void> _unbindRecord(int recordId) async {
     setState(() => _isLoading = true);
-    await GraphQLClientService.instance.unbindTrack(recordId);
-    await _loadTrackingData();
+    try {
+      await GraphQLClientService.instance.unbindTrack(recordId);
+      await _loadTrackingData();
+    } catch (e, st) {
+      LoggerService.instance.logError('Failed to unbind tracker: $e', exception: e, stackTrace: st, category: 'Tracking');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Failed to unlink the tracking record.'),
+          backgroundColor: Colors.redAccent,
+        ));
+      }
+    }
   }
 
   void _showEditTrackDialog(Map<String, dynamic> record, String trackerName) {
@@ -384,7 +406,14 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       decoration: BoxDecoration(color: const Color(0x1F2A2A32), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0x2BFFFFFF))),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<double>(
-                          value: (currentScore >= 0 && currentScore <= 10) ? currentScore : 0.0,
+                          // Server scores can be fractional (e.g. 6.5) while the
+                          // picker only offers integer steps; snap the displayed
+                          // value to an existing item so DropdownButton's
+                          // "exactly one item with value" assert never fires.
+                          // `currentScore` itself stays untouched for saving.
+                          value: currentScore < 0 || currentScore > 10
+                              ? 0.0
+                              : (currentScore.roundToDouble().clamp(0.0, 10.0)),
                           dropdownColor: const Color(0xFF1F1F24),
                           isExpanded: true,
                           items: [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0].map((s) {
@@ -484,16 +513,28 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                   style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   onPressed: () async {
                     Navigator.pop(dialogCtx);
+                    if (!mounted) return;
                     setState(() => _isLoading = true);
-                    await GraphQLClientService.instance.updateTrack(
-                      recordId: recordId,
-                      lastChapterRead: currentChapter,
-                      status: currentStatus,
-                      scoreString: currentScore > 0 ? (currentScore.truncateToDouble() == currentScore ? currentScore.toInt().toString() : currentScore.toString()) : null,
-                      startDate: startEpochStr,
-                      finishDate: finishEpochStr,
-                    );
-                    await _loadTrackingData();
+                    try {
+                      await GraphQLClientService.instance.updateTrack(
+                        recordId: recordId,
+                        lastChapterRead: currentChapter,
+                        status: currentStatus,
+                        scoreString: currentScore > 0 ? (currentScore.truncateToDouble() == currentScore ? currentScore.toInt().toString() : currentScore.toString()) : null,
+                        startDate: startEpochStr,
+                        finishDate: finishEpochStr,
+                      );
+                      await _loadTrackingData();
+                    } catch (e, st) {
+                      LoggerService.instance.logError('Failed to update tracking record: $e', exception: e, stackTrace: st, category: 'Tracking');
+                      if (mounted) {
+                        setState(() => _isLoading = false);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('Failed to save tracking changes.'),
+                          backgroundColor: Colors.redAccent,
+                        ));
+                      }
+                    }
                   },
                   child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),

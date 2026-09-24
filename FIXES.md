@@ -1,8 +1,9 @@
-# Sunfire audit fixes — batches 1-3 (cumulative)
+# Sunfire audit fixes — batches 1-4 (cumulative)
 
-Static, uncompiled fixes (no Flutter/Dart toolchain in the sandbox — every
-file was syntax-checked with tree-sitter only). Run `flutter analyze` and
-`flutter test` locally before pushing.
+Batches 1-3 were delivered as a static zip/patch (no toolchain in that
+sandbox). Batch 4 landed directly in the repo under the normal git workflow
+and was validated with `flutter analyze` (clean) and `flutter test`
+(448 passed / 1 skipped).
 
 ## Apply
 Unzip over your repo root (this zip already contains batch 1, so it just
@@ -49,11 +50,83 @@ Finding 9 said extensions install "without a user prompt". Manual installs from 
 - Repos that declare no sha256 will no longer auto-update in the background (item 9).
 - Stricter image validation (item 13): a source serving an unusual format will now fail to download instead of saving junk. Tell me the format if you hit this.
 
-## Still NOT done (from the audit)
+## Batch 4 (new — post-v3.0.0-stable deep audit)
+
+Batch 4 fixes the final deep-audit findings (feature + UI + code-path audit,
+validated with `flutter analyze` clean and `flutter test` 448 passed / 1 skipped):
+
+**Core engine / reliability**
+22. quickjs_service.dart — (6.3) production mock-data scrape fallback is gated
+    behind `kDebugMode` so a Cloudflare-blocked source can never surface a
+    phantom "manga" to users (Browse/library/detail). (6.1) `_AsyncLock` now
+    reports wait overruns and `withRuntime` routes overrun callers onto a
+    temporary fresh runtime instead of re-entering the still-busy native one
+    (flutter_qjs `evaluateAsync` is a synchronous FFI eval; two overlapping
+    evals on one runtime is undefined behavior). Overrun holder futures are
+    re-chained so later callers keep waiting for the straggler.
+23. metron_api_client.dart — (7.1) HTTP 429 retries are capped at 3
+    (`requestOptions.extra['_metron429Retries']`) instead of retrying forever
+    while the rate-limit stays active.
+24. isar_service.dart — (5.2) `deleteCategory` uses serverId only; the local-id
+    fallback that could delete the wrong row is removed (mirrors Batch 1 item 1).
+25. graphql_client_service.dart — (3.1) HTTP-200 GraphQL payloads that carry an
+    auth-shaped error now surface a reconnect prompt via the new
+    `_looksLikeAuthError` + `notifyAuthError()` path; (3.2) `fetchLibrary`
+    stops truncating at the server's first `totalCount` position (offset-stall
+    guard) so the library no longer silently stops at chapter/Manga boundaries;
+    (3.3) details-fetch loop capped against an offset-ignoring server plus a
+    25000-node ceiling; (3.4) `updateExtension` propagates failure instead of
+    always returning success.
+26. sync_engine.dart — (2.4) dispatch failures are classified `transient` only
+    when the server is genuinely unreachable AND there is no auth error, so
+    rejected credentials no longer enter the 14-day retry churn.
+27. websocket_service.dart — (4.1) pong watchdog: pings were sent every 25s but
+    pongs were never verified, so a half-open TCP connection (server killed
+    without FIN) kept `_isConnected=true` forever. Now a pong timestamp is
+    tracked and 75s of silence forces a disconnect + reconnect.
+28. repo_manager.dart — repo cache files are only written AFTER JSON parses AND
+    `_coerceSourceList` validates, so a corrupted cache can never be persisted.
+29. Empty `catch (_) {}` blocks: audited every catch in lib/; the two genuinely
+    empty ones (tracking_settings_screen.dart `_fetchServerTrackers`,
+    image_cache_helper.dart guarded direct fetch) now log via `kDebugMode`.
+
+**Browse / search / import**
+30. browse_screen.dart — uninstall now shows a confirmation dialog for BOTH JS
+    and server extensions (with dependent-library count warning); the
+    `deleteLocalExtension` result is honored; a busy-set prevents double-tap
+    races; all setters mounted-guarded.
+31. global_search_screen.dart / migrate_search_screen.dart — generation tokens +
+    15s per-source timeouts so a slow source can never clobber the results of a
+    newer search with stale ones.
+32. import_tachibk_screen.dart — `_applyImport` wrapped in try/catch with
+    error surface instead of an unhandled async failure.
+33. tracking_bottom_sheet.dart — `_bindManga`/`_unbindRecord`/Save-Changes are
+    try/catch + mounted-guarded; the score-dropdown snaps to saved value.
+
+**Settings / onboarding / stats / updates / reader**
+34. onboarding_screen.dart — `_finishOnboarding` persists the NORMALIZED server
+    URL (scheme-repaired like `_testAndConnectServer`), so typing
+    `192.168.1.5:4567` survives; hydration catch/finally are mounted-guarded.
+35. server_settings_screen.dart — URL tile normalizes (trim, strip trailing
+    slashes, prepend `http://`) before persisting/initializing, matching
+    onboarding.
+36. stats_screen.dart — "1 days" → "1 day".
+37. updates_screen.dart — filtered-to-empty state ("No Matching Updates" with
+    Clear-filters) instead of a blank list when unread/language/search filters
+    exclude everything.
+38. reader_screen.dart — paged-mode EOC transition-card itemCount is gated on
+    `seamlessTransitions && showEndOfChapterDialog` (same as long-strip), so
+    the dead end-of-chapter toggle can no longer produce a phantom page.
+
+## Still NOT done (from the audit) — as of Batch 4
 Image retry-storm memory, 700ms page-turn throttle, SyncRecord coalescing and
 transient-error abandon counting, unread-state propagation, wipe-guard
-count/8s timeout, N+1 chapter queries / startup scan cost, JS 180s lock vs 30s
-reader timeout, `cleanupBulkScrapedUpdates` serverId>200000 heuristic,
+count/8s timeout, N+1 chapter queries / startup scan cost,
+`cleanupBulkScrapedUpdates` serverId>200000 heuristic,
 volume-key paging at min/max, debug-key release fallback in build.gradle,
-charger banner / resume flicker, "Continue reading" sort, CI workflow,
-91 empty `catch (_) {}` blocks.
+charger banner / resume flicker, "Continue reading" sort, CI workflow.
+
+Items from the original list that ARE now done in Batch 4: the JS 180s lock vs
+30s reader timeout (item 22, overrun ephemeral runtime) and the empty
+`catch (_) {}` blocks (item 29 — the two genuinely empty ones now log; there
+are no remaining empty catch bodies).

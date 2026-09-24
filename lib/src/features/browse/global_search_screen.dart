@@ -20,6 +20,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   final Map<String, List<Map<String, dynamic>>> _resultsBySource = {};
   final Set<String> _loadingSources = {};
   List<Map<String, dynamic>> _sources = [];
+  int _searchGeneration = 0;
 
   @override
   void initState() {
@@ -86,6 +87,10 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return;
 
+    // Generation token: in-flight workers from a previous search must not
+    // write their stale results into the freshly-cleared maps of a newer one.
+    final generation = ++_searchGeneration;
+
     setState(() {
       _resultsBySource.clear();
       _loadingSources.addAll(_sources.map((s) => s['name'] as String));
@@ -101,12 +106,15 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         final sourceId = src['id'] as String;
         final sourceName = src['name'] as String;
         try {
-          final list = await ContentResolverService.instance.resolveSourceManga(
-            sourceId: sourceId,
-            sourceName: sourceName,
-            searchQuery: trimmed,
-            page: 1,
-          );
+          final list = await ContentResolverService.instance
+              .resolveSourceManga(
+                sourceId: sourceId,
+                sourceName: sourceName,
+                searchQuery: trimmed,
+                page: 1,
+              )
+              .timeout(const Duration(seconds: 15));
+          if (generation != _searchGeneration) return;
           if (!mounted) return;
           setState(() {
             _loadingSources.remove(sourceName);
@@ -115,6 +123,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
             }
           });
         } catch (_) {
+          if (generation != _searchGeneration) return;
           if (mounted) {
             setState(() => _loadingSources.remove(sourceName));
           }

@@ -17,6 +17,8 @@ class WebSocketService {
   int _reconnectDelaySeconds = 5;
   Timer? _reconnectTimer;
   Timer? _pingTimer;
+  Timer? _pongWatchdogTimer;
+  DateTime? _lastPongAt;
   bool _isConnecting = false;
   bool _isDisposed = false;
 
@@ -119,11 +121,31 @@ class WebSocketService {
 
   void _startPingTimer() {
     _pingTimer?.cancel();
+    _lastPongAt = DateTime.now();
     _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) {
       if (_isConnected && _channel != null) {
         try {
           _channel?.sink.add(jsonEncode({'type': 'ping'}));
         } catch (ignoredError) { if (kDebugMode) debugPrint('[websocket_service] ignored error: $ignoredError'); }
+      }
+    });
+
+    // A server that stops answering pings — or a TCP connection whose socket
+    // half-closed silently (killed server, network drop without FIN) — never
+    // fires onError/onDone, so _isConnected would stick true forever with no
+    // reconnect. Watchdog: if we've pinged and seen no pong for 75s, force a
+    // disconnect so the reconnect loop re-establishes the channel.
+    _pongWatchdogTimer?.cancel();
+    _pongWatchdogTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (!_isConnected) return;
+      final last = _lastPongAt;
+      if (last == null) return;
+      if (DateTime.now().difference(last) > const Duration(seconds: 75)) {
+        LoggerService.instance.logWarning(
+          'WebSocket pong watchdog: no pong for 75s — forcing reconnect.',
+          'WebSocket',
+        );
+        _handleDisconnect('WebSocket heartbeat timeout (no pong)');
       }
     });
   }
@@ -144,7 +166,8 @@ class WebSocketService {
       } else if (type == 'ping') {
         _channel?.sink.add(jsonEncode({'type': 'pong'}));
       } else if (type == 'pong') {
-        // Heartbeat pong received from server
+        // Heartbeat pong received from server — clears the watchdog.
+        _lastPongAt = DateTime.now();
       } else if (type == 'next' || type == 'data') {
         final payload = data['payload'] as Map<String, dynamic>?;
         if (payload != null && payload.containsKey('data')) {
@@ -187,6 +210,7 @@ class WebSocketService {
     _isConnected = false;
     _isConnecting = false;
     _pingTimer?.cancel();
+    _pongWatchdogTimer?.cancel();
     _subscription?.cancel();
     try {
       _channel?.sink.close();
@@ -207,6 +231,7 @@ class WebSocketService {
   void dispose() {
     _isDisposed = true;
     _pingTimer?.cancel();
+    _pongWatchdogTimer?.cancel();
     _reconnectTimer?.cancel();
     _handshakeTimer?.cancel();
     _subscription?.cancel();
