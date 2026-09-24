@@ -12,7 +12,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:volume_controller/volume_controller.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
+import '../../core/services/wakelock_coordinator.dart';
 
 import '../../constants/app_constants.dart';
 import '../../core/db/isar_service.dart';
@@ -24,6 +24,7 @@ import '../../core/engine/quickjs_service.dart';
 import '../../core/metron/metron_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/settings_service.dart';
+import '../../core/services/safe_curl.dart';
 import '../../core/sync/sync_engine.dart';
 import 'reader_chapter_navigation.dart';
 import 'reader_scroll_utils.dart';
@@ -58,6 +59,10 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   List<String> _pageUrls = [];
   final Map<String, Uint8List> _recoveredImageBytes = {};
   final Set<String> _recoveringUrls = {};
+  /// URLs whose automatic recovery already failed. Without this every rebuild
+  /// of a failed page re-ran the full multi-pass fetch (and up to 5 curl
+  /// attempts on desktop). Only an explicit tap on Retry clears an entry.
+  final Set<String> _failedImageUrls = {};
   bool _isLoading = true;
   bool _showControls = true;
   int _currentPage = 1;
@@ -110,6 +115,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   // Hands-free Webtoon Auto-Scroll (Vsync Synchronized)
   bool _isAutoScrolling = false;
+  // Set when auto-scroll advances to the next chapter so hands-free scrolling
+  // resumes once that chapter has loaded (loading stops the ticker).
+  bool _resumeAutoScrollAfterLoad = false;
   double _autoScrollSpeed = 50.0; // px/sec
   Ticker? _autoScrollTicker;
   Duration? _lastAutoScrollElapsed;
@@ -240,6 +248,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       if (max > 50 && cur >= max - 8) {
         _stopAutoScroll();
         if (_settings.autoScrollAutoNextChapter && _nextChapter != null) {
+          _resumeAutoScrollAfterLoad = true;
           _loadChapterAndPages(_chapterTargetId(_nextChapter!));
         } else {
           // Hands-free scrolling ended: surface the Mihon-style popup so the
@@ -426,11 +435,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   void _safeSetWakelock(bool enable) {
     try {
       if (enable) {
-        unawaited(WakelockPlus.enable().catchError((e) {
+        unawaited(WakelockCoordinator.instance.acquire('reader').catchError((e) {
           debugPrint('[Reader] Failed to enable wakelock: $e');
         }));
       } else {
-        unawaited(WakelockPlus.disable().catchError((e) {
+        unawaited(WakelockCoordinator.instance.release('reader').catchError((e) {
           debugPrint('[Reader] Failed to disable wakelock: $e');
         }));
       }
@@ -836,6 +845,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   @override
   void dispose() {
+    // Invalidate any in-flight chapter load so it stops touching state.
+    _loadGeneration++;
     WidgetsBinding.instance.removeObserver(this);
     _autoScrollTicker?.stop();
     _autoScrollTicker?.dispose();
@@ -863,13 +874,14 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     if (_settings.keepScreenAwake) {
       _safeSetWakelock(false);
     }
-    if (_chapter != null) {
+    if (_chapter != null && !_isLoading && _pageUrls.isNotEmpty) {
       _updateProgress(_currentPage);
     }
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _focusNode.dispose();
     _recoveredImageBytes.clear();
     _recoveringUrls.clear();
+    _failedImageUrls.clear();
     _prefetchedChapters.clear();
     _scrollController.removeListener(_onVerticalScroll);
     _scrollController.dispose();
@@ -901,6 +913,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   Future<void> _loadChapterAndPages(int chapterId) async {
     final loadGen = ++_loadGeneration;
     _currentChapterId = chapterId;
+    final resumeAutoScroll = _resumeAutoScrollAfterLoad;
+    _resumeAutoScrollAfterLoad = false;
     // Flush any pending (debounced) progress write for the outgoing chapter
     // BEFORE tearing it down. Without this, quickly advancing within the
     // debounce window (e.g. reading the last page and immediately moving on)
@@ -913,6 +927,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _stopAutoScroll();
     _recoveredImageBytes.clear();
     _recoveringUrls.clear();
+    _failedImageUrls.clear();
     _cachedPageHeights.clear();
     for (final c in _webtoonZoomControllers.values) {
       c.dispose();
@@ -932,9 +947,20 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     });
     _pageIndicator.value = 1;
 
-    _chapter = await IsarService.instance.getChapterByServerId(chapterId) ??
-        (await IsarService.instance.getAllChapters()).where((c) => c.serverId == chapterId || c.id == chapterId).firstOrNull;
+    // Resolve into a LOCAL first and only publish it to `_chapter` after the
+    // generation check. Assigning `_chapter` before the check let a slower,
+    // older load overwrite the newer load's chapter and every later step
+    // (progress, next/prev, page resolve) then ran against the wrong chapter.
+    // Server id wins; the local Isar id is only a fallback for chapters that
+    // have no server id (locally imported), so a server id can never match an
+    // unrelated chapter that merely shares the number as its local id.
+    Chapter? loadedChapter = await IsarService.instance.getChapterByServerId(chapterId);
+    if (loadedChapter == null) {
+      final byLocalId = await IsarService.instance.getChapterByLocalId(chapterId);
+      if (byLocalId != null && byLocalId.serverId == 0) loadedChapter = byLocalId;
+    }
     if (loadGen != _loadGeneration) return;
+    _chapter = loadedChapter;
 
     if (_chapter != null) {
       final mId = _chapter!.mangaId > 0 ? _chapter!.mangaId : (_parentManga?.serverId ?? _parentManga?.id ?? 0);
@@ -947,6 +973,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
           siblings = await IsarService.instance.getChaptersForManga(_parentManga!.serverId);
         }
       }
+      // A newer _loadChapterAndPages call may have already replaced _chapter
+      // and started its own sibling/manga lookups while these awaits were in
+      // flight. Without this check, this stale call would overwrite the
+      // NEW chapter's sibling list / next-prev / reading mode with data
+      // computed for the OLD chapter.
+      if (loadGen != _loadGeneration) return;
       _siblingChapters = sortSiblingChapters(siblings);
 
       final idx = findSiblingChapterIndex(_siblingChapters, _chapter!);
@@ -959,6 +991,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       }
 
       final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId) ?? _parentManga;
+      if (loadGen != _loadGeneration) return;
       if (mounted) {
         setState(() {
           _nextChapter = nextCh;
@@ -993,6 +1026,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         if (manga != null && effectiveSource.isNotEmpty) {
           final target = manga.url.isNotEmpty ? manga.url : manga.title;
           final details = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSource, target);
+          // This scrape can take a while; if the user has since opened a
+          // different chapter, `_chapter` now points at THAT chapter. Writing
+          // the URL we just resolved for the OLD chapter onto it here would
+          // silently corrupt the new chapter's URL in Isar.
+          if (loadGen != _loadGeneration) return;
           final chList = (details['chapters'] ?? details['chapterList'] ?? details['epList']) as List<dynamic>?;
           if (chList != null && chList.isNotEmpty) {
             final match = chList.cast<dynamic>().where(
@@ -1108,7 +1146,13 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       }
     }
 
-    _currentPage = (_chapter != null && _chapter!.lastPageRead > 0 && _chapter!.lastPageRead <= _pageUrls.length)
+    // A finished chapter re-opens at page 1. Restoring lastPageRead (which is
+    // the last page for a completed chapter) would drop the user on the final
+    // page and immediately trigger the end-of-chapter dialog.
+    _currentPage = (_chapter != null &&
+            !_chapter!.isRead &&
+            _chapter!.lastPageRead > 0 &&
+            _chapter!.lastPageRead <= _pageUrls.length)
         ? _chapter!.lastPageRead
         : 1;
 
@@ -1128,6 +1172,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         _pageController.jumpToPage(targetPage);
       } else if (!isPaged && _scrollController.hasClients) {
         _jumpToWebtoonPage(_currentPage);
+      }
+      final isWebtoon = !isPaged;
+      if (resumeAutoScroll && isWebtoon && _scrollController.hasClients && !_isAutoScrolling) {
+        setState(() => _isAutoScrolling = true);
+        _startAutoScroll();
       }
     });
 
@@ -1332,12 +1381,17 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   void _updateProgress(int page) {
     if (_chapter == null) return;
+    // No pages loaded (still loading, timed out, or the source returned an
+    // empty list): there is no progress to record. Without this guard the
+    // `page >= totalPages` completion check below degenerates to `1 >= 1` for
+    // chapters whose pageCount is still 0, so simply backing out of a chapter
+    // that failed to load marked it READ (scrobbling, server sync, and
+    // "delete finished chapter" rules all fired).
+    if (_pageUrls.isEmpty) return;
     // Privacy & Security: If Incognito Mode is enabled, do not persist reading progress or sync to server
     if (_settings.incognitoMode) return;
 
-    final totalPages = _pageUrls.isNotEmpty
-        ? _pageUrls.length
-        : (_chapter!.pageCount > 0 ? _chapter!.pageCount : page);
+    final totalPages = _pageUrls.length;
     final clampedPage = totalPages > 0 ? page.clamp(1, totalPages) : page;
     final isComplete = page >= totalPages;
     final wasRead = _chapter!.isRead;
@@ -1573,7 +1627,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         // Throttle rapid taps so one tap never double-advances a paged chapter.
         final now = DateTime.now();
         if (_lastNextPageNavAt != null &&
-            now.difference(_lastNextPageNavAt!) < const Duration(milliseconds: 700)) {
+            now.difference(_lastNextPageNavAt!) < const Duration(milliseconds: 250)) {
           return;
         }
         _lastNextPageNavAt = now;
@@ -1609,7 +1663,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         // Throttle rapid taps so one tap never double-advances a paged chapter.
         final now = DateTime.now();
         if (_lastPrevPageNavAt != null &&
-            now.difference(_lastPrevPageNavAt!) < const Duration(milliseconds: 700)) {
+            now.difference(_lastPrevPageNavAt!) < const Duration(milliseconds: 250)) {
           return;
         }
         _lastPrevPageNavAt = now;
@@ -2066,25 +2120,30 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     return false;
   }
 
-  Future<void> _recoverImage(String url, int index) async {
+  Future<void> _recoverImage(String url, int index, {bool manual = false}) async {
+    if (manual) {
+      _failedImageUrls.remove(url);
+    } else if (_failedImageUrls.contains(url)) {
+      return;
+    }
     if (_recoveringUrls.contains(url) || _recoveredImageBytes.containsKey(url)) return;
     _recoveringUrls.add(url);
+    if (manual && mounted) setState(() {});
     try {
       final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
       final cookieHeaders = MClient.getCookiesPref(url);
 
       // 1. On Desktop: try curl-impersonate FIRST with clean baseHeaders (Referer only)
       if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
-        for (final exe in ['/usr/bin/curl-impersonate', 'curl-impersonate', 'curl-impersonate-chrome', '/usr/bin/curl', 'curl']) {
+        final curlArgs = buildCurlArgs(
+          url: url,
+          maxTimeSeconds: 15,
+          headers: baseHeaders,
+          skipHeaders: const {'user-agent', 'cookie'},
+        );
+        for (final exe in (curlArgs == null ? const <String>[] : kCurlCandidates)) {
           try {
-            final args = <String>['-s', '-L', '--max-time', '15'];
-            baseHeaders.forEach((k, v) {
-              final kLower = k.toLowerCase();
-              if (kLower != 'user-agent' && kLower != 'cookie') {
-                args.addAll(['-H', '$k: $v']);
-              }
-            });
-            args.add(url);
+            final args = curlArgs!;
             final processRes = await Process.run(exe, args, stdoutEncoding: null);
             if (processRes.exitCode == 0) {
               final bytes = processRes.stdout as List<int>;
@@ -2167,6 +2226,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       debugPrint('[Reader] Image fetch error for $url: $e');
     } finally {
       _recoveringUrls.remove(url);
+      if (!_recoveredImageBytes.containsKey(url)) {
+        _failedImageUrls.add(url);
+        // Swap the spinner for the Retry affordance.
+        if (mounted) setState(() {});
+      }
     }
   }
 
@@ -2247,7 +2311,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
               : IconButton(
                   icon: const Icon(Icons.refresh_rounded, color: Colors.grey),
                   tooltip: 'Retry Page ${index + 1}',
-                  onPressed: () => _recoverImage(url, index),
+                  onPressed: () => _recoverImage(url, index, manual: true),
                 ),
         ),
       );
@@ -2286,7 +2350,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
               child: _recoveringUrls.contains(url)
                   ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
                   : InkWell(
-                      onTap: () => _recoverImage(url, index),
+                      onTap: () => _recoverImage(url, index, manual: true),
                       borderRadius: BorderRadius.circular(12),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

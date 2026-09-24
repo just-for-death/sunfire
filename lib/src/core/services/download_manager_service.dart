@@ -16,6 +16,7 @@ import '../engine/content_resolver_service.dart';
 import '../engine/javascript/m_client.dart';
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
+import 'safe_curl.dart';
 import '../sync/download_foreground_task.dart';
 import '../sync/graphql_client_service.dart';
 import 'battery_state_service.dart';
@@ -91,6 +92,12 @@ class DownloadManagerService extends ChangeNotifier {
   StreamSubscription? _connectivitySubscription;
 
   bool _isProcessingLocalQueue = false;
+  // Bumped every time pauseLocalQueue() runs. Lets the in-flight download's
+  // catch block tell "the network/parse genuinely failed" apart from "this
+  // exception is just the pause's own token.cancel() unwinding" — even when
+  // a quick resume has already reset the task's status back to `queued`
+  // before that catch block gets to run (see resumeLocalQueue/pauseLocalQueue).
+  int _pauseEpoch = 0;
   bool _waitingForCharger = false;
 
   /// True while the queue is idle solely because `downloadOnlyWhileCharging` is
@@ -355,6 +362,7 @@ class DownloadManagerService extends ChangeNotifier {
 
   Future<void> pauseLocalQueue() async {
     _isQueuePaused = true;
+    _pauseEpoch++;
     for (final token in _cancelTokens.values) {
       try {
         token.cancel('Queue paused');
@@ -429,14 +437,60 @@ class DownloadManagerService extends ChangeNotifier {
   void debugSetBackgroundInterrupted(bool value) => _interruptedByBackground = value;
 
   Future<void> initialize() async {
-    await _scanDownloadedLocalChapters();
     await _loadQueueState();
+    await _migrateLegacyDownloadFolders();
+    await _scanDownloadedLocalChapters();
     await _loadQueuePausedFlag();
     // Auto-resume only when the user didn't explicitly pause the queue. A
     // paused queue must survive app restarts — otherwise Pause would only
     // last until the next launch.
     if (!_isQueuePaused) {
       await resumeLocalQueue();
+    }
+  }
+
+  /// One-time upgrade step for the completion-marker scheme. Folders written
+  /// by earlier versions have no `.download_complete` marker, so without this
+  /// every chapter the user already downloaded would suddenly stop being
+  /// treated as downloaded (and the reader would go back online for it).
+  ///
+  /// Grandfather them once: a markerless numeric folder that contains at least
+  /// one image and is NOT part of the persisted queue gets a marker holding its
+  /// image count. From then on the strict rule applies to every new download.
+  /// (A partial folder from before the upgrade is grandfathered too — that is
+  /// exactly how it behaved before — and can be re-downloaded or deleted.)
+  Future<void> _migrateLegacyDownloadFolders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      const doneKey = 'downloads_completion_marker_migrated_v1';
+      if (prefs.getBool(doneKey) == true) return;
+      final appDir = await getApplicationDocumentsDirectory();
+      final downloadsDir = Directory('${appDir.path}/downloads');
+      if (await downloadsDir.exists()) {
+        final queuedIds = _localTasks.map((t) => t.chapterId).toSet();
+        await for (final entity in downloadsDir.list()) {
+          if (entity is! Directory) continue;
+          final segments = entity.uri.pathSegments.where((s) => s.isNotEmpty).toList();
+          final id = segments.isEmpty ? null : int.tryParse(segments.last);
+          if (id == null || queuedIds.contains(id)) continue;
+          if (await isDownloadFolderComplete(entity)) continue;
+          var images = 0;
+          await for (final f in entity.list()) {
+            if (f is! File) continue;
+            final n = f.path.toLowerCase();
+            if (n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.png') ||
+                n.endsWith('.webp') || n.endsWith('.gif') || n.endsWith('.bmp')) {
+              images++;
+            }
+          }
+          if (images > 0) {
+            await File('${entity.path}/$kDownloadCompleteMarkerName').writeAsString('$images');
+          }
+        }
+      }
+      await prefs.setBool(doneKey, true);
+    } catch (e) {
+      LoggerService.instance.logError('Legacy download marker migration failed: $e', category: 'DownloadManager');
     }
   }
 
@@ -451,7 +505,11 @@ class DownloadManagerService extends ChangeNotifier {
             final segments = entity.uri.pathSegments.where((s) => s.isNotEmpty).toList();
             if (segments.isNotEmpty) {
               final id = int.tryParse(segments.last);
-              if (id != null) {
+              // Only count this folder as a real downloaded chapter if it
+              // finished — see kDownloadCompleteMarkerName. A folder left
+              // behind by a failed/killed/cancelled download has no marker
+              // and must not be reported as "downloaded" to the UI or reader.
+              if (id != null && await isDownloadFolderComplete(entity)) {
                 _downloadedLocalChapterIds.add(id);
                 final ch = await IsarService.instance.getChapterByServerId(id);
                 if (ch != null && ch.mangaId > 0) {
@@ -585,6 +643,7 @@ class DownloadManagerService extends ChangeNotifier {
         final queued = sortQueuedTasks(_localTasks);
         if (queued.isEmpty) break;
         final task = queued.first;
+        final epochAtStart = _pauseEpoch;
 
         task.status = LocalDownloadStatus.downloading;
         task.error = null;
@@ -616,7 +675,17 @@ class DownloadManagerService extends ChangeNotifier {
             }
           }
         } catch (e, stack) {
-          if (task.status == LocalDownloadStatus.paused) {
+          if (_pauseEpoch != epochAtStart) {
+            // The queue was paused (and possibly already resumed) while this
+            // task was mid-flight, so `token.cancel()` unwinding here is
+            // expected, not a real failure — even though a fast resume may
+            // have already reset task.status to `queued` before we got here.
+            // Restore whichever state is actually accurate now instead of
+            // trusting the current task.status, so the chapter isn't lost
+            // to a false "failed" and silently skipped by future batches.
+            task.status = _isQueuePaused ? LocalDownloadStatus.paused : LocalDownloadStatus.queued;
+            task.error = null;
+          } else if (task.status == LocalDownloadStatus.paused) {
             // Retain paused state; do not overwrite with failed
           } else if (task.status == LocalDownloadStatus.failed && task.error == 'Cancelled') {
             // Retain cancelled state
@@ -685,6 +754,11 @@ class DownloadManagerService extends ChangeNotifier {
       chapterServerId: task.chapterId,
       chapterUrl: chapterUrl,
       sourceName: sourceName,
+      // Never resolve against our own downloads/<id>/ folder here — a
+      // retry/resume must always get the real page list from the
+      // extension/server, not whatever partial set of files a previous
+      // failed attempt left behind.
+      allowLocalDownload: false,
     );
 
     final rawPages = resolved.pageUrls;
@@ -743,6 +817,12 @@ class DownloadManagerService extends ChangeNotifier {
       if (existingFiles.length < totalPages) {
         throw Exception('Incomplete download: only ${existingFiles.length}/$totalPages pages saved');
       }
+      // Only now — with every page verified present — write the completion
+      // marker. This is what the resolver/reader/startup scan check before
+      // trusting this folder as "downloaded"; without it a partial folder
+      // from this same failed/cancelled attempt would otherwise look
+      // identical to a finished one on the next retry.
+      await File('${chapterDir.path}/$kDownloadCompleteMarkerName').writeAsString('$totalPages');
     } finally {
       _cancelTokens.remove(task.chapterId);
     }
@@ -760,12 +840,20 @@ class DownloadManagerService extends ChangeNotifier {
       return true;
     }
     // GIF: GIF87a / GIF89a
-    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return true;
+    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x38) return true;
     // BMP: 42 4D
     if (b[0] == 0x42 && b[1] == 0x4D) return true;
-    // Reject HTML/XML/JSON error responses (<, {, [)
-    if (b[0] == 60 || b[0] == 123 || b[0] == 91) return false;
-    return b.length > 500;
+    // AVIF / HEIC: ISO-BMFF box, "ftyp" at offset 4
+    if (b[4] == 0x66 && b[5] == 0x74 && b[6] == 0x79 && b[7] == 0x70) return true;
+    // JPEG XL: bare codestream (FF 0A) or container signature box
+    if (b[0] == 0xFF && b[1] == 0x0A) return true;
+    if (b[0] == 0x00 && b[1] == 0x00 && b[2] == 0x00 && b[3] == 0x0C && b[4] == 0x4A && b[5] == 0x58 && b[6] == 0x4C && b[7] == 0x20) {
+      return true;
+    }
+    // Anything else (HTML/JSON/Cloudflare challenge pages, truncated junk)
+    // is NOT an image. The previous "any non-HTML blob over 500 bytes" fallback
+    // let error bodies be saved as pages and the chapter marked downloaded.
+    return false;
   }
 
   Future<void> _downloadSinglePage(
@@ -872,13 +960,11 @@ class DownloadManagerService extends ChangeNotifier {
 
     // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl-impersonate
     if ((pageBytes == null || pageBytes.isEmpty) && !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-      final candidates = ['/usr/bin/curl-impersonate', 'curl-impersonate', 'curl-impersonate-chrome', '/usr/bin/curl', 'curl'];
-      for (final exe in candidates) {
+      final curlArgs = buildCurlArgs(url: pageUrl, maxTimeSeconds: 25, headers: headers);
+      for (final exe in (curlArgs == null ? const <String>[] : kCurlCandidates)) {
         if (cancelToken?.isCancelled == true) return;
         try {
-          final args = <String>['-s', '-L', '--max-time', '25'];
-          headers.forEach((k, v) => args.addAll(['-H', '$k: $v']));
-          args.add(pageUrl);
+          final args = curlArgs!;
           final res = await Process.run(exe, args, stdoutEncoding: null);
           if (res.exitCode == 0) {
             final b = res.stdout as List<int>;
