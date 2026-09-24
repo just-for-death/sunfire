@@ -254,6 +254,12 @@ class RepoManager {
       final raw = response.data is String
           ? response.data as String
           : jsonEncode(response.data);
+      // Parse BEFORE touching the cache: if the endpoint served garbage (HTML
+      // error page, gateway 200, truncated body), jsonDecode throws and we
+      // fall through to the previous cache below WITHOUT overwriting it with
+      // junk. Only a structurally valid index is promoted to the cache.
+      final decoded = jsonDecode(raw);
+      final List<dynamic> list = _coerceSourceList(decoded);
       // A failed cache write must never discard the freshly fetched index —
       // the source of truth is the network response, not the cache.
       try {
@@ -261,38 +267,31 @@ class RepoManager {
       } catch (_) {
         LoggerService.instance.logWarning('Repo index cache write failed for $normalizedUrl', 'RepoManager');
       }
-      final decoded = jsonDecode(raw);
-      final List<dynamic> list;
-      if (decoded is List) {
-        list = decoded;
-      } else if (decoded is Map && decoded['sources'] is List) {
-        list = decoded['sources'] as List;
-      } else if (decoded is Map && decoded['data'] is List) {
-        list = decoded['data'] as List;
-      } else {
-        list = [];
-      }
       return list.whereType<Map<String, dynamic>>().map((item) => RepoSourceItem.fromJson(item, normalizedUrl)).toList();
     } catch (_) {
       if (await cacheFile.exists()) {
         try {
           final cached = await cacheFile.readAsString();
           final decoded = jsonDecode(cached);
-          final List<dynamic> list;
-          if (decoded is List) {
-            list = decoded;
-          } else if (decoded is Map && decoded['sources'] is List) {
-            list = decoded['sources'] as List;
-          } else if (decoded is Map && decoded['data'] is List) {
-            list = decoded['data'] as List;
-          } else {
-            list = [];
-          }
+          final List<dynamic> list = _coerceSourceList(decoded);
           return list.whereType<Map<String, dynamic>>().map((item) => RepoSourceItem.fromJson(item, normalizedUrl)).toList();
         } catch (ignoredError) { if (kDebugMode) debugPrint('[repo_manager] ignored error: $ignoredError'); }
       }
       return [];
     }
+  }
+
+  /// Normalizes the many index encodings repos use ([{...}] , {sources: [...]},
+  /// {data: [...]}, ...) into a plain list. Returns [] for anything else.
+  static List<dynamic> _coerceSourceList(dynamic decoded) {
+    if (decoded is List) {
+      return decoded;
+    } else if (decoded is Map && decoded['sources'] is List) {
+      return decoded['sources'] as List;
+    } else if (decoded is Map && decoded['data'] is List) {
+      return decoded['data'] as List;
+    }
+    return [];
   }
 
   /// Fetches and aggregates sources across multiple repositories.

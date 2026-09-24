@@ -98,44 +98,63 @@ class _ImportTachibkScreenState extends State<ImportTachibkScreen> {
     if (plan == null || _applying) return;
     setState(() => _applying = true);
 
-    final result = await TachiBkImportService.instance.applyPlan(plan);
-    if (!mounted) return;
-    setState(() {
-      _applying = false;
-      _applied = true;
-    });
+    try {
+      final result = await TachiBkImportService.instance.applyPlan(plan);
+      if (!mounted) return;
+      setState(() {
+        _applying = false;
+        _applied = true;
+      });
 
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Restore ${result.imported > 0 ? 'complete' : 'finished'}'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Imported: ${result.imported}   Failed: ${result.failed}'),
-              const SizedBox(height: 10),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Text(
-                    result.messages.join('\n'),
-                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Restore ${result.imported > 0 ? 'complete' : 'finished'}'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Imported: ${result.imported}   Failed: ${result.failed}'),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Text(
+                      result.messages.join('\n'),
+                      style: const TextStyle(fontSize: 12, color: Colors.white70),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Done'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Done'),
-          ),
-        ],
-      ),
-    );
+      );
+    } catch (e, st) {
+      LoggerService.instance.logError('TachiBk import failed', exception: e, stackTrace: st, category: 'TachiBkImport');
+      if (!mounted) return;
+      setState(() => _applying = false);
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Restore failed'),
+          content: Text('The import could not be applied.\n\n$e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override

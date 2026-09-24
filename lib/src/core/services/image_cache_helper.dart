@@ -193,7 +193,7 @@ class ImageCacheHelper {
           return Uint8List.fromList(b);
         }
       }
-    } catch (_) {
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] guarded direct fetch failed: $ignoredError');
     } finally {
       client?.close(force: true);
     }

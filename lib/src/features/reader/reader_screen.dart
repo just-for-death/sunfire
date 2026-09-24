@@ -20,6 +20,7 @@ import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
 import '../../core/engine/javascript/m_client.dart';
 import '../../core/engine/quickjs_service.dart';
+import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/safe_curl.dart';
@@ -628,6 +629,10 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   void _schedulePageHeightCache(String url, double width, Widget imageWidget) {
+    // Failed URLs must never be probed again: resolving them would issue a
+    // fresh network fetch and, when the stream never completes, leak the
+    // ImageStreamListener. Cached heights are already known — skip those too.
+    if (_failedImageUrls.contains(url) || _cachedPageHeights.containsKey(url)) return;
     if (imageWidget is! Image) return;
     final provider = imageWidget.image;
     final stream = provider.resolve(ImageConfiguration(size: Size(width, width * 2)));
@@ -948,6 +953,22 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   int _chapterTargetId(Chapter ch) => ch.serverId != 0 ? ch.serverId : ch.id;
 
   Future<void> _loadChapterAndPages(int chapterId) async {
+    try {
+      await _loadChapterAndPagesInner(chapterId);
+    } catch (e, st) {
+      LoggerService.instance.logError('Chapter load failed: $e', exception: e, stackTrace: st, category: 'Reader');
+      // Never leave a permanent spinner: clear the loading state and the page
+      // list so the empty-state screen (with its Retry button) renders instead.
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _pageUrls = [];
+        });
+      }
+    }
+  }
+
+  Future<void> _loadChapterAndPagesInner(int chapterId) async {
     final loadGen = ++_loadGeneration;
     _currentChapterId = chapterId;
     final resumeAutoScroll = _resumeAutoScrollAfterLoad;
@@ -2349,60 +2370,92 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         ),
       );
     } else {
-      final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
-      final cookieHeaders = MClient.getCookiesPref(url);
-      final headers = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
-
-      image = Image.network(
-        url,
-        headers: headers,
-        width: imageWidth,
-        fit: boxFit,
-        alignment: imageAlignment,
-        gaplessPlayback: true,
-        isAntiAlias: !isWebtoon,
-        filterQuality: isWebtoon ? FilterQuality.low : FilterQuality.medium,
-        loadingBuilder: (_, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            height: placeholderHeight,
-            width: imageWidth ?? double.infinity,
-            color: _canvasBackgroundColor,
-            child: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _recoverImage(url, index);
-          });
-          return Container(
-            height: isWebtoon ? placeholderHeight : 300.0,
-            width: imageWidth ?? double.infinity,
-            color: _canvasBackgroundColor,
-            child: Center(
-              child: _recoveringUrls.contains(url)
-                  ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
-                  : InkWell(
-                      onTap: () => _recoverImage(url, index, manual: true),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.refresh_rounded, size: 28, color: Colors.grey),
-                            const SizedBox(height: 6),
-                            Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text('Tap to Retry', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                          ],
-                        ),
+      // Gate on the known-failed set FIRST so a failed URL renders the static
+      // retry affordance instead of re-issuing an Image.network fetch on every
+      // webtoon item rebuild. _recoverImage(manual:) clears the flag to retry.
+      if (_failedImageUrls.contains(url)) {
+        image = Container(
+          height: isWebtoon ? placeholderHeight : 300.0,
+          width: imageWidth ?? double.infinity,
+          color: _canvasBackgroundColor,
+          child: Center(
+            child: _recoveringUrls.contains(url)
+                ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
+                : InkWell(
+                    onTap: () => _recoverImage(url, index, manual: true),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.refresh_rounded, size: 28, color: Colors.grey),
+                          const SizedBox(height: 6),
+                          Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text('Tap to Retry', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                        ],
                       ),
                     ),
-            ),
-          );
-        },
-      );
+                  ),
+          ),
+        );
+      } else {
+        final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
+        final cookieHeaders = MClient.getCookiesPref(url);
+        final headers = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
+
+        image = Image.network(
+          url,
+          headers: headers,
+          width: imageWidth,
+          fit: boxFit,
+          alignment: imageAlignment,
+          gaplessPlayback: true,
+          isAntiAlias: !isWebtoon,
+          filterQuality: isWebtoon ? FilterQuality.low : FilterQuality.medium,
+          loadingBuilder: (_, child, progress) {
+            if (progress == null) return child;
+            return Container(
+              height: placeholderHeight,
+              width: imageWidth ?? double.infinity,
+              color: _canvasBackgroundColor,
+              child: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _recoverImage(url, index);
+            });
+            return Container(
+              height: isWebtoon ? placeholderHeight : 300.0,
+              width: imageWidth ?? double.infinity,
+              color: _canvasBackgroundColor,
+              child: Center(
+                child: _recoveringUrls.contains(url)
+                    ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
+                    : InkWell(
+                        onTap: () => _recoverImage(url, index, manual: true),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.refresh_rounded, size: 28, color: Colors.grey),
+                              const SizedBox(height: 6),
+                              Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text('Tap to Retry', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+            );
+          },
+        );
+      }
     }
 
     if (_activeColorFilter != null) {
@@ -2761,7 +2814,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                               scrollCacheExtent: ScrollCacheExtent.pixels(2500),
                               addRepaintBoundaries: false,
                               clipBehavior: Clip.none,
-                              itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
+                              itemCount: _pageUrls.isEmpty
+                                  ? 0
+                                  : (_settings.seamlessTransitions && _settings.showEndOfChapterDialog ? _pageUrls.length + 1 : _pageUrls.length),
                               itemBuilder: (context, index) {
                                 if (index == _pageUrls.length) {
                                   return _buildChapterTransitionCard();
@@ -2811,7 +2866,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                                 ? const NeverScrollableScrollPhysics()
                                 : const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                             reverse: _readingMode == ReadingMode.pagedRtl,
-                            itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
+                            itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions && _settings.showEndOfChapterDialog ? _pageUrls.length + 1 : _pageUrls.length),
                             onPageChanged: _onPageChanged,
                             itemBuilder: (context, index) {
                               if (index == _pageUrls.length) {
