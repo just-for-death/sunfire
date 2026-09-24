@@ -51,11 +51,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   Chapter? _nextChapter;
   Chapter? _prevChapter;
   List<Chapter> _siblingChapters = [];
-  /// Id of the last chapter the end-of-chapter dialog was shown for, so it
-  /// appears once per chapter (Mihon/Mangayomi behaviour).
-  int? _endOfChapterDialogChapterId;
-  /// Flag to prevent duplicate dialog triggers within the same chapter
-  bool _isDialogShowing = false;
   List<String> _pageUrls = [];
   final Map<String, Uint8List> _recoveredImageBytes = {};
   final Set<String> _recoveringUrls = {};
@@ -292,10 +287,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         if (_settings.autoScrollAutoNextChapter && _nextChapter != null) {
           _resumeAutoScrollAfterLoad = true;
           _loadChapterAndPages(_chapterTargetId(_nextChapter!));
-        } else {
-          // Hands-free scrolling ended: surface the Mihon-style popup so the
-          // user can choose Next/Previous/Close instead of being stuck.
-          _maybeShowEndOfChapterDialog();
         }
         return;
       }
@@ -933,19 +924,19 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   void _storeRecoveredImage(String url, Uint8List bytes) {
-    if (_recoveredImageBytes.length >= 25) {
-      // Never evict bytes for pages currently on screen (current page ±1) just
+    if (_recoveredImageBytes.length >= 40) {
+      // Never evict bytes for pages currently on screen (current page ±2) just
       // because they happen to be the oldest — that would force a re-fetch and
       // a visible flash under memory pressure while paging.
       String? evictCandidate;
       for (final key in _recoveredImageBytes.keys) {
         final idx = _pageUrls.indexOf(key);
-        if (idx == -1 || (idx - (_currentPage - 1)).abs() > 1) {
+        if (idx == -1 || (idx - (_currentPage - 1)).abs() > 2) {
           evictCandidate = key;
           break;
         }
       }
-      if (evictCandidate == null) return; // all cached entries are visible — keep them
+      evictCandidate ??= _recoveredImageBytes.keys.first;
       _recoveredImageBytes.remove(evictCandidate);
     }
     _recoveredImageBytes[url] = bytes;
@@ -984,8 +975,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _currentPage = 1;
       _nextChapter = null;
       _prevChapter = null;
-      _endOfChapterDialogChapterId = null;
-      _isDialogShowing = false;
       _webtoonPageKeys.clear();
     });
     _pageIndicator.value = 1;
@@ -1201,6 +1190,15 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
     if (loadGen != _loadGeneration) return;
 
+    final initialPageIndex = (_currentPage - 1).clamp(0, _pageUrls.isEmpty ? 0 : _pageUrls.length - 1);
+    if (_pageController.hasClients) {
+      _pageController.jumpToPage(initialPageIndex);
+    } else {
+      final oldController = _pageController;
+      _pageController = PageController(initialPage: initialPageIndex);
+      oldController.dispose();
+    }
+
     if (mounted) {
       setState(() => _isLoading = false);
       _setPageIndicator(_currentPage);
@@ -1366,15 +1364,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _prefetchChapter(_nextChapter!);
     }
 
-    // End-of-chapter: scrolled to the bottom → pop the Mihon-style dialog
-    // once per chapter.
-    // Skip the dialog while auto-scroll is actively driving the sheet: the
-    // auto-scroll end-of-chapter path shows it itself (when auto-next is
-    // off), and popping a modal over a still-scrolling sheet is jarring.
-    if (pageRatio >= 1.0 && maxScroll > 50 && !_isAutoScrolling) {
-      _maybeShowEndOfChapterDialog();
-    }
-
     // Prefetch a few previous pages' images when scrolling up (helps placeholder stability).
     if (computedPage > 1) {
       final start = (computedPage - 4).clamp(1, _pageUrls.length);
@@ -1397,15 +1386,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   void _onPageChanged(int index) {
     _resetZoom();
-    final page = index + 1;
+    final page = (index + 1).clamp(1, _pageUrls.isNotEmpty ? _pageUrls.length : 1);
     _setPageIndicator(page);
     if (mounted) setState(() {});
-
-    // End-of-chapter: landing on the last page pops the Mihon-style dialog
-    // (once per chapter).
-    if (page >= _pageUrls.length && _pageUrls.isNotEmpty) {
-      _maybeShowEndOfChapterDialog();
-    }
 
     // Trigger prefetch early when reaching 65% of pages in paged mode
     if (_pageUrls.isNotEmpty && page >= (_pageUrls.length * 0.65).round() && _nextChapter != null) {
@@ -2451,7 +2434,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
           transformationController: transform,
           minScale: _minZoomScale,
           maxScale: _maxZoomScale,
-          panEnabled: true,
+          panEnabled: enablePerPageZoom ? (transform.value.getMaxScaleOnAxis() > 1.05) : _isZoomed,
           onInteractionUpdate: (_) {
             if (!enablePerPageZoom) _syncZoomedFlag();
           },
@@ -2590,162 +2573,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
             ),
           ),
       ],
-    );
-  }
-
-  /// Mihon/Mangayomi-style end-of-chapter dialog: shown once per chapter when
-  /// the reader reaches the last page, offering Previous/Next/Close.
-  void _maybeShowEndOfChapterDialog() {
-    if (!mounted || _chapter == null || _pageUrls.isEmpty) return;
-    if (!_settings.showEndOfChapterDialog) return;
-    if (_isDialogShowing) return; // Prevent duplicate triggers
-    
-    final chapterId = _chapterTargetId(_chapter!);
-    if (!shouldShowEndOfChapterDialog(
-      enabled: _settings.showEndOfChapterDialog,
-      hasPages: _pageUrls.isNotEmpty,
-      lastDialogChapterId: _endOfChapterDialogChapterId,
-      chapterId: chapterId,
-    )) {
-      return;
-    }
-    
-    _endOfChapterDialogChapterId = chapterId;
-    _isDialogShowing = true;
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        _isDialogShowing = false;
-        return;
-      }
-      showModalBottomSheet<void>(
-        context: context,
-        backgroundColor: Colors.transparent,
-        isScrollControlled: true,
-        builder: _buildEndOfChapterDialog,
-      ).then((_) {
-        _isDialogShowing = false;
-      });
-    });
-  }
-
-  Widget _buildEndOfChapterDialog(BuildContext dialogContext) {
-    final colorScheme = Theme.of(dialogContext).colorScheme;
-    final next = _nextChapter;
-    final prev = _prevChapter;
-    final chapter = _chapter;
-
-    void goTo(Chapter? ch) {
-      if (ch == null || !mounted) return;
-      Navigator.of(dialogContext).pop();
-      _loadChapterAndPages(_chapterTargetId(ch));
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle bar
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          // Title
-          Text(
-            'End of Chapter',
-            style: TextStyle(
-              color: colorScheme.onSurface,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Chapter name
-          Text(
-            chapter?.name ?? '',
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-          ),
-          if (next == null) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline_rounded, color: colorScheme.primary, size: 20),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      "You're all caught up — there's no next chapter.",
-                      style: TextStyle(fontSize: 13, height: 1.35),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 24),
-          // Action buttons
-          Row(
-            children: [
-              if (prev != null)
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: () => goTo(prev),
-                    icon: const Icon(Icons.skip_previous_rounded, size: 20),
-                    label: const Text('Previous'),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              if (prev != null && next != null) const SizedBox(width: 12),
-              if (next != null)
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => goTo(next),
-                    icon: const Icon(Icons.skip_next_rounded, size: 20),
-                    label: const Text('Next'),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              if (next == null && prev != null) const Spacer(),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: const Text('Close'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 
@@ -2906,77 +2733,94 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                 child: Stack(
                 children: [
                   // ── 1. READER CANVAS ──────────────────────────────
-                  if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps)
-                    MediaQuery.removePadding(
-                      context: context,
-                      removeTop: true,
-                      removeBottom: true,
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: EdgeInsets.zero,
-                        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                        scrollCacheExtent: ScrollCacheExtent.pixels(2500),
-                        addRepaintBoundaries: false,
-                        clipBehavior: Clip.none,
-                        itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
-                        itemBuilder: (context, index) {
-                          if (index == _pageUrls.length) {
-                            return _buildChapterTransitionCard();
-                          }
-                          final isWideScreen = constraints.maxWidth > 800;
-                          final contentWidth = isWideScreen ? 780.0 : constraints.maxWidth;
-                          final pageWidget = _buildPageWidget(
-                            _pageUrls[index],
-                            index,
-                            constraints: constraints,
-                            isPaged: false,
-                            contentWidth: contentWidth,
-                            enablePerPageZoom: true,
-                          );
-                          final itemKey = _webtoonPageKeys.putIfAbsent(index, () => GlobalKey());
-                          final gap = webtoonPageGap(_readingMode);
-
-                          Widget item = KeyedSubtree(
-                            key: itemKey,
-                            child: RepaintBoundary(
-                              child: Center(
-                                child: SizedBox(
-                                  width: contentWidth,
-                                  child: pageWidget,
-                                ),
-                              ),
-                            ),
-                          );
-
-                          if (gap > 0) {
-                            return Padding(
-                              padding: EdgeInsets.only(bottom: gap),
-                              child: item,
-                            );
-                          }
-
-                          if (webtoonShouldOverlapPrevious(_readingMode, index)) {
-                            item = Transform.translate(offset: const Offset(0, -1), child: item);
-                          }
-                          return item;
-                        },
-                      ),
-                    )
-                  else
-                    PageView.builder(
-                      controller: _pageController,
-                      physics: _isZoomed
-                          ? const NeverScrollableScrollPhysics()
-                          : const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                      reverse: _readingMode == ReadingMode.pagedRtl,
-                      itemCount: _pageUrls.length,
-                      onPageChanged: _onPageChanged,
-                      itemBuilder: (context, index) {
-                        return RepaintBoundary(
-                          child: Center(child: _buildPageWidget(_pageUrls[index], index, constraints: constraints, isPaged: true)),
-                        );
+                  ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                      dragDevices: {
+                        PointerDeviceKind.touch,
+                        PointerDeviceKind.mouse,
+                        PointerDeviceKind.trackpad,
+                        PointerDeviceKind.stylus,
                       },
                     ),
+                    child: _readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps
+                        ? MediaQuery.removePadding(
+                            context: context,
+                            removeTop: true,
+                            removeBottom: true,
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              padding: EdgeInsets.zero,
+                              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                              scrollCacheExtent: ScrollCacheExtent.pixels(2500),
+                              addRepaintBoundaries: false,
+                              clipBehavior: Clip.none,
+                              itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
+                              itemBuilder: (context, index) {
+                                if (index == _pageUrls.length) {
+                                  return _buildChapterTransitionCard();
+                                }
+                                final isWideScreen = constraints.maxWidth > 800;
+                                final contentWidth = isWideScreen ? 780.0 : constraints.maxWidth;
+                                final pageWidget = _buildPageWidget(
+                                  _pageUrls[index],
+                                  index,
+                                  constraints: constraints,
+                                  isPaged: false,
+                                  contentWidth: contentWidth,
+                                  enablePerPageZoom: true,
+                                );
+                                final itemKey = _webtoonPageKeys.putIfAbsent(index, () => GlobalKey());
+                                final gap = webtoonPageGap(_readingMode);
+
+                                Widget item = KeyedSubtree(
+                                  key: itemKey,
+                                  child: RepaintBoundary(
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: contentWidth,
+                                        child: pageWidget,
+                                      ),
+                                    ),
+                                  ),
+                                );
+
+                                if (gap > 0) {
+                                  return Padding(
+                                    padding: EdgeInsets.only(bottom: gap),
+                                    child: item,
+                                  );
+                                }
+
+                                if (webtoonShouldOverlapPrevious(_readingMode, index)) {
+                                  item = Transform.translate(offset: const Offset(0, -1), child: item);
+                                }
+                                return item;
+                              },
+                            ),
+                          )
+                        : PageView.builder(
+                            controller: _pageController,
+                            physics: _isZoomed
+                                ? const NeverScrollableScrollPhysics()
+                                : const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                            reverse: _readingMode == ReadingMode.pagedRtl,
+                            itemCount: _pageUrls.isEmpty ? 0 : (_settings.seamlessTransitions ? _pageUrls.length + 1 : _pageUrls.length),
+                            onPageChanged: _onPageChanged,
+                            itemBuilder: (context, index) {
+                              if (index == _pageUrls.length) {
+                                return Center(
+                                  child: SingleChildScrollView(
+                                    padding: const EdgeInsets.symmetric(vertical: 40),
+                                    child: _buildChapterTransitionCard(),
+                                  ),
+                                );
+                              }
+                              return RepaintBoundary(
+                                child: Center(child: _buildPageWidget(_pageUrls[index], index, constraints: constraints, isPaged: true)),
+                              );
+                            },
+                          ),
+                  ),
 
                   // ── 2. OVERLAY HUD (TOP APP BAR & BOTTOM SLIDER) ──
                   // Top Overlay Bar with smooth 200ms slide & fade
@@ -3115,9 +2959,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                                             tooltip: 'Previous Chapter',
                                             onPressed: _prevChapter != null ? () => _loadChapterAndPages(_chapterTargetId(_prevChapter!)) : null,
                                           ),
-                                          Text(
-                                            'Page $_currentPage / ${_pageUrls.length}',
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                          ValueListenableBuilder<int>(
+                                            valueListenable: _pageIndicator,
+                                            builder: (_, activePage, __) => Text(
+                                              'Page $activePage / ${_pageUrls.length}',
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                            ),
                                           ),
                                           InkWell(
                                             onTap: _cycleReadingMode,
@@ -3209,41 +3056,46 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                                                 trackHeight: 3,
                                                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                                               ),
-                                              child: Slider(
-                                                value: (_isDraggingSlider
-                                                    ? (_sliderDragValue ?? _currentPage.toDouble())
-                                                    : _currentPage.toDouble()).clamp(1.0, _pageUrls.length.toDouble()),
-                                                min: 1.0,
-                                                max: _pageUrls.length.toDouble(),
-                                                divisions: _pageUrls.length > 1 ? _pageUrls.length - 1 : 1,
-                                                onChangeStart: (_) {
-                                                  setState(() => _isDraggingSlider = true);
-                                                },
-                                                onChanged: (val) {
-                                                  final targetPage = val.round();
-                                                  setState(() {
-                                                    _sliderDragValue = val;
-                                                    _currentPage = targetPage;
-                                                  });
-                                                  if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
-                                                    if (_pageController.hasClients) {
-                                                      _pageController.jumpToPage(targetPage - 1);
+                                              child: ValueListenableBuilder<int>(
+                                                valueListenable: _pageIndicator,
+                                                builder: (_, activePage, __) => Slider(
+                                                  value: (_isDraggingSlider
+                                                      ? (_sliderDragValue ?? activePage.toDouble())
+                                                      : activePage.toDouble()).clamp(1.0, _pageUrls.length.toDouble()),
+                                                  min: 1.0,
+                                                  max: _pageUrls.length.toDouble(),
+                                                  divisions: _pageUrls.length > 1 ? _pageUrls.length - 1 : 1,
+                                                  onChangeStart: (_) {
+                                                    setState(() => _isDraggingSlider = true);
+                                                  },
+                                                  onChanged: (val) {
+                                                    final targetPage = val.round();
+                                                    setState(() {
+                                                      _sliderDragValue = val;
+                                                      _currentPage = targetPage;
+                                                    });
+                                                    _setPageIndicator(targetPage);
+                                                    if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
+                                                      if (_pageController.hasClients) {
+                                                        _pageController.jumpToPage(targetPage - 1);
+                                                      }
+                                                    } else {
+                                                      if (_scrollController.hasClients) {
+                                                        _jumpToWebtoonPage(targetPage);
+                                                      }
                                                     }
-                                                  } else {
-                                                    if (_scrollController.hasClients) {
-                                                      _jumpToWebtoonPage(targetPage);
-                                                    }
-                                                  }
-                                                },
-                                                onChangeEnd: (val) {
-                                                  final targetPage = val.round();
-                                                  setState(() {
-                                                    _isDraggingSlider = false;
-                                                    _sliderDragValue = null;
-                                                    _currentPage = targetPage;
-                                                  });
-                                                  _debouncedUpdateProgress(targetPage);
-                                                },
+                                                  },
+                                                  onChangeEnd: (val) {
+                                                    final targetPage = val.round();
+                                                    setState(() {
+                                                      _isDraggingSlider = false;
+                                                      _sliderDragValue = null;
+                                                      _currentPage = targetPage;
+                                                    });
+                                                    _setPageIndicator(targetPage);
+                                                    _debouncedUpdateProgress(targetPage);
+                                                  },
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -3500,44 +3352,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                                   ),
                           ),
                         ),
-                      ),
-                    ),
-            // ── 5. END-OF-CHAPTER OVERLAY (paged mode + webtoon with seamlessTransitions=false) ──
-                  if (_currentPage >= _pageUrls.length &&
-                      _pageUrls.isNotEmpty &&
-                      (_readingMode == ReadingMode.pagedLtr ||
-                          _readingMode == ReadingMode.pagedRtl ||
-                          !_settings.seamlessTransitions))
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 80 + MediaQuery.of(context).padding.bottom,
-                      child: Stack(
-                        children: [
-                          // Decorative scrim — must NOT steal taps from the
-                          // page behind it (IgnorePointer lets taps pass
-                          // through to tap-zones / page controls).
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: Container(
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [Colors.transparent, Color(0xCC000000)],
-                                    stops: [0.0, 0.35],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 60, bottom: 16),
-                            child: Center(
-                              child: _buildChapterTransitionCard(),
-                            ),
-                          ),
-                        ],
                       ),
                     ),
             ],

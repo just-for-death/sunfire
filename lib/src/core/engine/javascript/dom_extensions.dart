@@ -412,7 +412,7 @@ extension DocumentExtension on Document? {
 
   String? attr(String attribute) {
     try {
-      return this?.attributes[attribute];
+      return this?.documentElement?.attr(attribute);
     } catch (_) {
       return null;
     }

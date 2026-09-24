@@ -90,11 +90,19 @@ void main() {
       }, timeout: const Timeout(Duration(minutes: 2)));
 
       test('2. Latest Updates - Real-time Content', () async {
-        final result = await quickJs.fetchSourceMangaLocal(
+        var result = await quickJs.fetchSourceMangaLocal(
           'Mangago',
           isLatest: true,
           page: 1,
         );
+        if (result.isEmpty) {
+          await Future.delayed(const Duration(seconds: 2));
+          result = await quickJs.fetchSourceMangaLocal(
+            'Mangago',
+            isLatest: true,
+            page: 1,
+          );
+        }
         
         expect(result, isNotEmpty);
         expect(result.length, greaterThan(0));
