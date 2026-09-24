@@ -375,6 +375,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       WebSocketService.instance.initialize(cleanUrl, authToken: auth);
       SyncEngine.instance.initialize();
       await BackgroundService.instance.initialize();
+    } else {
+      GraphQLClientService.instance.initialize('');
+      WebSocketService.instance.initialize('');
     }
 
     if (mounted) {

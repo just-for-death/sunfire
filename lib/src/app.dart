@@ -418,16 +418,12 @@ class _NavigationLogger extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
-    if (route.settings.name != null || route.settings.name == null) {
-      LoggerService.instance.logInfo('Navigated to ${route.settings.name ?? route.runtimeType}', 'Navigation');
-    }
+    LoggerService.instance.logInfo('Navigated to ${route.settings.name ?? route.runtimeType}', 'Navigation');
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPop(route, previousRoute);
-    if (route.settings.name != null || route.settings.name == null) {
-      LoggerService.instance.logInfo('Popped from ${route.settings.name ?? route.runtimeType}', 'Navigation');
-    }
+    LoggerService.instance.logInfo('Popped from ${route.settings.name ?? route.runtimeType}', 'Navigation');
   }
 }

@@ -557,6 +557,42 @@ class GraphQLClientService {
     return id is int ? id : (id is num ? id.toInt() : null);
   }
 
+  /// Fuzzy-matches [sourceName] (display name from a local JS extension) against
+  /// installed Suwayomi server sources and returns the matching server source ID
+  /// string, or null when no match is found.
+  Future<String?> resolveServerSourceId(String sourceName) async {
+    try {
+      final sourcesData = await fetchSources();
+      final nodes = sourcesData?['sources']?['nodes'] as List<dynamic>?;
+      if (nodes == null) return null;
+
+      String normalize(String n) => n
+          .toLowerCase()
+          .replaceAll(RegExp(r'[\(\[{].*?[\)\]}]'), '')
+          .replaceAll(RegExp(r'[^a-z0-9\s]'), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+
+      final targetNorm = normalize(sourceName);
+      if (targetNorm.isEmpty) return null;
+
+      for (final n in nodes) {
+        final map = n as Map<String, dynamic>;
+        final nameNorm = normalize(map['name'] as String? ?? '');
+        final dispNorm = normalize(map['displayName'] as String? ?? '');
+        if (nameNorm == targetNorm ||
+            dispNorm == targetNorm ||
+            nameNorm.contains(targetNorm) ||
+            targetNorm.contains(nameNorm)) {
+          return map['id'].toString();
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> fetchCategories() async {
     const queryStr = '''
       {

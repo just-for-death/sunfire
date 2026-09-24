@@ -156,12 +156,27 @@ class Client {
         if (v != null) headers[k.toString()] = v.toString();
       });
 
+      final contentType = headers.entries.firstWhere(
+        (e) => e.key.toLowerCase() == 'content-type',
+        orElse: () => const MapEntry('', ''),
+      ).value.toLowerCase();
+
+      dynamic effectiveBody = body;
+      if (body is Map) {
+        if (contentType.contains('json')) {
+          effectiveBody = jsonEncode(body);
+        } else {
+          effectiveBody = body.map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''));
+        }
+      }
+
       final uri = Uri.parse(urlStr);
       http.Response response;
 
       final timeoutSecs = SettingsService.instance.networkTimeoutSeconds;
       final requestTimeout = Duration(seconds: timeoutSecs > 0 ? timeoutSecs : 30);
-      switch (method.toUpperCase()) {
+      final upperMethod = method.toUpperCase();
+      switch (upperMethod) {
         case 'GET':
           response = await client.get(uri, headers: headers).timeout(requestTimeout);
           break;
@@ -169,7 +184,7 @@ class Client {
           response = await client.post(
             uri,
             headers: headers,
-            body: body is Map ? jsonEncode(body) : body,
+            body: effectiveBody,
           ).timeout(requestTimeout);
           break;
         case 'HEAD':
@@ -179,34 +194,34 @@ class Client {
           response = await client.put(
             uri,
             headers: headers,
-            body: body is Map ? jsonEncode(body) : body,
+            body: effectiveBody,
           ).timeout(requestTimeout);
           break;
         case 'DELETE':
           response = await client.delete(
             uri,
             headers: headers,
-            body: body is Map ? jsonEncode(body) : body,
+            body: effectiveBody,
           ).timeout(requestTimeout);
           break;
         case 'PATCH':
           response = await client.patch(
             uri,
             headers: headers,
-            body: body is Map ? jsonEncode(body) : body,
+            body: effectiveBody,
           ).timeout(requestTimeout);
           break;
         default:
           response = await client.get(uri, headers: headers).timeout(requestTimeout);
       }
 
-      // If Cloudflare block was received (403/503 with Cloudflare headers), attempt direct FlareSolverr fetch
+      // If Cloudflare block was received (403/503 with Cloudflare headers), attempt direct FlareSolverr fetch for supported methods (GET/POST)
       if (isCloudflare(response) && urlStr.startsWith('http')) {
-        if (MClient.cfProxyUrl.isNotEmpty) {
+        if ((upperMethod == 'GET' || upperMethod == 'POST') && MClient.cfProxyUrl.isNotEmpty) {
           final solved = await MClient.solveAndFetchWithProxy(
             urlStr,
-            method: method,
-            postData: body,
+            method: upperMethod,
+            postData: effectiveBody,
             headers: headers,
           );
           if (solved != null) {

@@ -180,36 +180,42 @@ class LibraryUpdateService extends ChangeNotifier {
 
         // Pull updated chapters and manga down to Isar
         await SyncEngine.instance.triggerSync();
-      } else {
-        // Standalone or local mode: scrape library manga via QuickJS
-        final libraryManga = await IsarService.instance.getLibraryManga();
-        final int totalManga = libraryManga.length;
+      }
 
-        // Fetch every manga's existing chapters in one batched query instead
-        // of one Isar query per manga inside the loop below — the N+1 here
-        // was the dominant cost of a full-library update on large libraries.
+      // Standalone or local mode, plus any local/migrated manga even when server is active
+      final libraryManga = await IsarService.instance.getLibraryManga();
+      final localManga = libraryManga.where((m) =>
+          !GraphQLClientService.instance.isConfigured ||
+          m.sourceName.startsWith('local_js_') ||
+          m.serverId <= 0 ||
+          QuickJsService.instance.hasExtension(m.sourceName)
+      ).toList();
+      final int totalManga = localManga.length;
+
+      if (totalManga > 0) {
         final existingChaptersByManga = await IsarService.instance.getChaptersForMangas(
-          libraryManga.map((m) => m.serverId > 0 ? m.serverId : m.id).toList(),
+          localManga.map((m) => m.serverId != 0 ? m.serverId : m.id).toList(),
         );
 
         for (int i = 0; i < totalManga; i++) {
-          final manga = libraryManga[i];
+          final manga = localManga[i];
           _progress = 0.10 + ((i + 1) / (totalManga > 0 ? totalManga : 1)) * 0.65;
           _statusMessage = 'Updating ${manga.title} (${i + 1}/$totalManga)...';
           notifyListeners();
 
-          if (manga.sourceName.isEmpty || manga.url.isEmpty) continue;
+          if (manga.sourceName.isEmpty) continue;
 
           try {
+            final targetUrl = manga.url.isNotEmpty ? manga.url : manga.title;
             final detail = await QuickJsService.instance.fetchMangaDetailsLocal(
               manga.sourceName,
-              manga.url,
+              targetUrl,
             );
 
             if (detail.containsKey('chapters')) {
               final rawChapters = detail['chapters'] as List<dynamic>?;
               if (rawChapters != null && rawChapters.isNotEmpty) {
-                final mId = manga.serverId > 0 ? manga.serverId : manga.id;
+                final mId = manga.serverId != 0 ? manga.serverId : manga.id;
                 final existing = existingChaptersByManga[mId] ?? const <Chapter>[];
                 final existingUrls = existing.map((c) => c.url).toSet();
                 final existingServerIds = existing.map((c) => c.serverId).toSet();
@@ -217,7 +223,7 @@ class LibraryUpdateService extends ChangeNotifier {
 
                 for (int cIdx = 0; cIdx < rawChapters.length; cIdx++) {
                   final chMap = rawChapters[cIdx] as Map<String, dynamic>;
-                  final chUrl = chMap['url']?.toString() ?? '';
+                  final chUrl = (chMap['url'] ?? chMap['link'] ?? '').toString();
                   if (chUrl.isNotEmpty && !existingUrls.contains(chUrl)) {
                     int chServerId = (mId > 0 && mId < 200000)
                         ? (mId * 10000 + cIdx + 1)
@@ -244,7 +250,9 @@ class LibraryUpdateService extends ChangeNotifier {
 
                 if (newChaptersToSave.isNotEmpty) {
                   await IsarService.instance.saveChapters(newChaptersToSave);
-                  final freshManga = await IsarService.instance.getMangaByServerId(mId) ?? manga;
+                  final freshManga = manga.serverId != 0
+                      ? (await IsarService.instance.getMangaByServerId(manga.serverId) ?? manga)
+                      : (await IsarService.instance.getManga(manga.id) ?? manga);
                   freshManga.unreadCount = (freshManga.unreadCount ?? 0) + newChaptersToSave.length;
                   await IsarService.instance.saveManga(freshManga);
                 }

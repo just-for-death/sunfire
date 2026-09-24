@@ -94,6 +94,8 @@ class SourceMigrationService {
   /// Example: "MangaDex (EN) [v1.4]" -> "mangadex"
   String normalizeSourceName(String name) {
     var clean = name.toLowerCase();
+    clean = clean.replaceAll('local_js_', '').replaceAll('localjs_', '');
+    clean = clean.replaceAll('_', ' ');
     // Strip language and variant suffixes like (EN), (ALL), (unoriginal), (preview), [EN], etc.
     clean = clean.replaceAll(RegExp(r'[\(\[\{].*?[\)\]\}]'), '');
     // Strip common domain extensions like .com, .net, .org, .me, .cc, .to, .ru, .io
