@@ -446,11 +446,19 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   kind: SettingsPropKind.textField,
                   stringValue: _clientUrl,
                   onStringChanged: (v) async {
-                    setState(() => _clientUrl = v);
-                    _settings.serverUrl = v;
+                    // Normalize the same way onboarding does: trim, drop
+                    // trailing slashes, prepend http:// when no scheme is
+                    // present. Without this the settings screen stores a
+                    // schemeless URL that Dio can never dial on reconnect.
+                    var url = v.trim().replaceAll(RegExp(r'/+$'), '');
+                    if (url.isNotEmpty && !url.startsWith('http://') && !url.startsWith('https://')) {
+                      url = 'http://$url';
+                    }
+                    setState(() => _clientUrl = url);
+                    _settings.serverUrl = url;
                     final auth = _clientAuth.toHeaderValue();
-                    GraphQLClientService.instance.initialize(v, authToken: auth);
-                    WebSocketService.instance.initialize(v, authToken: auth);
+                    GraphQLClientService.instance.initialize(url, authToken: auth);
+                    WebSocketService.instance.initialize(url, authToken: auth);
                     await _loadSettings();
                   },
                 ),

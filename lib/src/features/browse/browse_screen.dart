@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -390,6 +391,43 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     if (mounted) setState(fn);
   }
 
+  /// Extension keys currently mid-install/uninstall. Double-tapping a tile
+  /// otherwise runs two concurrent mutations of the same `ext` map (an
+  /// install racing its own uninstall), so the buttons stay disabled while a
+  /// toggle is in flight.
+  final Set<String> _busyExtensions = {};
+
+  /// Confirmation before an uninstall. Uninstalling a JS scraper only removes
+  /// the local copy — any library manga that reference this source keep their
+  /// rows but lose the ability to fetch new chapters (and if the extension is
+  /// also installed server-side, that half stays behind, so the source is far
+  /// from gone). Surface the dependent count so the user can decide.
+  Future<bool?> _confirmUninstallExtension(BuildContext context, String name, int dependentCount) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F24),
+        title: Text('Uninstall "$name"?', style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(
+          dependentCount > 0
+              ? 'This source is referenced by $dependentCount manga in your library. '
+                  'They will keep their stored chapters, but new chapter updates for them '
+                  'will stop working unless you migrate them to another source first.'
+              : 'This will remove the extension from your device.',
+          style: const TextStyle(fontSize: 13.5),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB91C1C)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Uninstall'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _toggleExtensionInstallation(Map<String, dynamic> ext, {bool isUpdate = false}) async {
     final name = ext['name'] as String;
     final isInstalled = ext['isInstalled'] as bool;
@@ -398,132 +436,165 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final version = ext['version'] as String? ?? '1.0.0';
     String? customStatusMessage;
 
-    // Trust warning: extensions run untrusted JavaScript (QuickJS). Installing or
-    // updating from a non-official repo gets an explicit third-party confirmation.
-    if (isJs && !_isOfficialRepoOnly() && (!isInstalled || isUpdate)) {
-      final confirmed = await _confirmThirdPartyInstall(context, name);
-      if (confirmed != true) return;
-    }
-
-    if (!isUpdate) {
-      setState(() {
-        ext['isInstalled'] = !isInstalled;
-      });
-    }
-
+    // In-flight guard: refuse a second toggle on the same extension while one
+    // is already running (double-tap previously fired two concurrent
+    // installs/mutations of the same ext map, racing each other).
+    if (!_busyExtensions.add(name)) return;
     try {
-      if (isJs) {
-        if ((!isInstalled || isUpdate) && sourceCodeUrl.isNotEmpty) {
-          // Integrity check: repos that declare a sha256 for the extension get
-          // the downloaded JS verified before it is installed. A mismatch
-          // (tamper / CDN mangling) refuses the install.
-          final declaredSha = (ext['sha256'] as String? ?? '').trim();
-          final code = await RepoManager.instance.downloadJsSourceCode(
-            sourceCodeUrl,
-            expectedSha256: declaredSha.isEmpty ? null : declaredSha,
-          );
-          if (code != null) {
-            final iconUrl = ext['iconUrl'] as String? ?? '';
-            await QuickJsService.instance.saveLocalExtension(
-              name,
-              code,
-              version: version,
-              iconUrl: iconUrl,
+      // Trust warning: extensions run untrusted JavaScript (QuickJS). Installing or
+      // updating from a non-official repo gets an explicit third-party confirmation.
+      if (isJs && !_isOfficialRepoOnly() && (!isInstalled || isUpdate)) {
+        final confirmed = await _confirmThirdPartyInstall(context, name);
+        if (confirmed != true) return;
+      }
+
+      // Uninstall confirmation. Uninstalling a JS scraper only removes the
+      // local copy — any library manga referencing this source keep their rows
+      // but lose new-chapter updates (and a dual-channel install leaves its
+      // server half behind). Server extensions are just as destructive, so the
+      // confirm fires for both channels.
+      if (isInstalled && !isUpdate) {
+        int dependentCount = 0;
+        try {
+          final libraryManga = await IsarService.instance.getLibraryManga();
+          dependentCount = libraryManga.where((m) => m.sourceName == name).length;
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[browse] ignored error: $ignoredError'); }
+        if (!mounted) return;
+        final confirmed = await _confirmUninstallExtension(context, name, dependentCount);
+        if (confirmed != true) return;
+      }
+
+      if (!isUpdate) {
+        setState(() {
+          ext['isInstalled'] = !isInstalled;
+        });
+      }
+
+      try {
+        if (isJs) {
+          if ((!isInstalled || isUpdate) && sourceCodeUrl.isNotEmpty) {
+            // Integrity check: repos that declare a sha256 for the extension get
+            // the downloaded JS verified before it is installed. A mismatch
+            // (tamper / CDN mangling) refuses the install.
+            final declaredSha = (ext['sha256'] as String? ?? '').trim();
+            final code = await RepoManager.instance.downloadJsSourceCode(
+              sourceCodeUrl,
+              expectedSha256: declaredSha.isEmpty ? null : declaredSha,
             );
+            if (code != null) {
+              final iconUrl = ext['iconUrl'] as String? ?? '';
+              await QuickJsService.instance.saveLocalExtension(
+                name,
+                code,
+                version: version,
+                iconUrl: iconUrl,
+              );
+              _setStateIfMounted(() {
+                ext['isInstalled'] = true;
+                ext['hasUpdate'] = false;
+                ext['installedVersion'] = version;
+              });
+
+              // Check if available on server and trigger dual install
+              final serverExtensionNames = _extensionList
+                  .where((e) => e['isJs'] == false)
+                  .map((e) => e['name'] as String)
+                  .toList();
+
+              final dualResult = SourceMigrationService.instance.checkAndInstallSourceDualChannel(
+                jsExtensionName: name,
+                serverAvailableSourceNames: serverExtensionNames,
+              );
+
+              customStatusMessage = isUpdate ? 'Updated $name to v$version' : dualResult.statusMessage;
+
+              if (dualResult.isAvailableOnServer && GraphQLClientService.instance.isConfigured) {
+                final serverExt = _extensionList.firstWhere(
+                  (e) => e['name'] == dualResult.serverSourceName,
+                  orElse: () => {},
+                );
+                if (serverExt.isNotEmpty && serverExt['id'] != null) {
+                  await GraphQLClientService.instance.updateExtension(
+                    serverExt['id'].toString(),
+                    'INSTALL',
+                  );
+                }
+              }
+            } else {
+              // Download failed or integrity check failed — roll the toggle back.
+              _setStateIfMounted(() {
+                ext['isInstalled'] = isInstalled;
+              });
+              customStatusMessage =
+                  'Install refused — could not download or verify $name (sha256 integrity check).';
+            }
+          } else if (isInstalled && !isUpdate) {
+            final deleted = await QuickJsService.instance.deleteLocalExtension(name);
+            if (deleted) {
+              _setStateIfMounted(() {
+                ext['isInstalled'] = false;
+                ext['hasUpdate'] = false;
+              });
+              customStatusMessage = 'Uninstalled $name';
+            } else {
+              // Deletion failure (file locked/in use) must not flop the tile to
+              // "uninstalled" — keep it installed and say what happened.
+              _setStateIfMounted(() {
+                ext['isInstalled'] = true;
+              });
+              customStatusMessage = 'Could not uninstall $name — the extension file could not be deleted.';
+            }
+          }
+        } else if (GraphQLClientService.instance.isConfigured) {
+          final pkgName = (ext['pkgName'] ?? ext['id']).toString();
+          if (isUpdate) {
+            await GraphQLClientService.instance.updateServerExtension(pkgName);
+            _setStateIfMounted(() {
+              ext['hasUpdate'] = false;
+            });
+            customStatusMessage = 'Updated $name on server';
+          } else if (isInstalled) {
+            await GraphQLClientService.instance.uninstallServerExtension(pkgName);
+            _setStateIfMounted(() {
+              ext['isInstalled'] = false;
+              ext['hasUpdate'] = false;
+            });
+            customStatusMessage = 'Uninstalled $name from server';
+          } else {
+            await GraphQLClientService.instance.installServerExtension(pkgName);
             _setStateIfMounted(() {
               ext['isInstalled'] = true;
               ext['hasUpdate'] = false;
-              ext['installedVersion'] = version;
             });
-
-            // Check if available on server and trigger dual install
-            final serverExtensionNames = _extensionList
-                .where((e) => e['isJs'] == false)
-                .map((e) => e['name'] as String)
-                .toList();
-
-            final dualResult = SourceMigrationService.instance.checkAndInstallSourceDualChannel(
-              jsExtensionName: name,
-              serverAvailableSourceNames: serverExtensionNames,
-            );
-
-            customStatusMessage = isUpdate ? 'Updated $name to v$version' : dualResult.statusMessage;
-
-            if (dualResult.isAvailableOnServer && GraphQLClientService.instance.isConfigured) {
-              final serverExt = _extensionList.firstWhere(
-                (e) => e['name'] == dualResult.serverSourceName,
-                orElse: () => {},
-              );
-              if (serverExt.isNotEmpty && serverExt['id'] != null) {
-                await GraphQLClientService.instance.updateExtension(
-                  serverExt['id'].toString(),
-                  'INSTALL',
-                );
-              }
-            }
-          } else {
-            // Download failed or integrity check failed — roll the toggle back.
-            _setStateIfMounted(() {
-              ext['isInstalled'] = isInstalled;
-            });
-            customStatusMessage =
-                'Install refused — could not download or verify $name (sha256 integrity check).';
+            customStatusMessage = 'Installed $name on server';
           }
-        } else if (isInstalled && !isUpdate) {
-          await QuickJsService.instance.deleteLocalExtension(name);
-          _setStateIfMounted(() {
-            ext['isInstalled'] = false;
-            ext['hasUpdate'] = false;
-          });
-          customStatusMessage = 'Uninstalled $name';
         }
-      } else if (GraphQLClientService.instance.isConfigured) {
-        final pkgName = (ext['pkgName'] ?? ext['id']).toString();
-        if (isUpdate) {
-          await GraphQLClientService.instance.updateServerExtension(pkgName);
-          _setStateIfMounted(() {
-            ext['hasUpdate'] = false;
+      } catch (e, stack) {
+        LoggerService.instance.logError('Failed to toggle extension $name: $e', exception: e, stackTrace: stack, category: 'Browse');
+        if (!isUpdate && mounted) {
+          setState(() {
+            ext['isInstalled'] = isInstalled;
           });
-          customStatusMessage = 'Updated $name on server';
-        } else if (isInstalled) {
-          await GraphQLClientService.instance.uninstallServerExtension(pkgName);
-          _setStateIfMounted(() {
-            ext['isInstalled'] = false;
-            ext['hasUpdate'] = false;
-          });
-          customStatusMessage = 'Uninstalled $name from server';
-        } else {
-          await GraphQLClientService.instance.installServerExtension(pkgName);
-          _setStateIfMounted(() {
-            ext['isInstalled'] = true;
-            ext['hasUpdate'] = false;
-          });
-          customStatusMessage = 'Installed $name on server';
         }
+        customStatusMessage = 'Failed to ${isUpdate ? 'update' : (isInstalled ? 'uninstall' : 'install')} $name';
       }
-    } catch (e, stack) {
-      LoggerService.instance.logError('Failed to toggle extension $name: $e', exception: e, stackTrace: stack, category: 'Browse');
-      if (!isUpdate && mounted) {
-        setState(() {
-          ext['isInstalled'] = isInstalled;
-        });
-      }
-      customStatusMessage = 'Failed to ${isUpdate ? 'update' : (isInstalled ? 'uninstall' : 'install')} $name';
-    }
 
-    await _fetchServerSources();
+      await _fetchServerSources();
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            customStatusMessage ??
-                (isUpdate
-                    ? 'Updated $name to v$version'
-                    : (isInstalled ? 'Uninstalled $name' : 'Installed $name')),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              customStatusMessage ??
+                  (isUpdate
+                      ? 'Updated $name to v$version'
+                      : (isInstalled ? 'Uninstalled $name' : 'Installed $name')),
+            ),
           ),
-        ),
-      );
+        );
+      }
+    } finally {
+      _busyExtensions.remove(name);
     }
   }
 

@@ -136,7 +136,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 // ── SUMMARY CARDS ──
                 Row(
                   children: [
-                    Expanded(child: _buildMetricCard('Reading Streak', '$_readingStreakDays days', Icons.local_fire_department_rounded, Colors.orangeAccent)),
+                    Expanded(child: _buildMetricCard('Reading Streak', _readingStreakDays == 1 ? '1 day' : '$_readingStreakDays days', Icons.local_fire_department_rounded, Colors.orangeAccent)),
                     const SizedBox(width: 12),
                     Expanded(child: _buildMetricCard('Chapters Read', '$_totalReadChapters', Icons.check_circle_rounded, Colors.greenAccent)),
                   ],

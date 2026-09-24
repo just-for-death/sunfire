@@ -330,6 +330,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     } catch (e, st) {
       LoggerService.instance.logError('Initial hydration error',
           exception: e, stackTrace: st, category: 'Onboarding');
+      if (!mounted) return;
       setState(() {
         _sourcesStatusText = '✓ Local-first mode active (Offline ready)';
         _libraryStatusText = '✓ Local database initialized';
@@ -337,19 +338,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _hydrationStep = 4;
       });
       await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
     } finally {
-      setState(() {
-        _isHydrating = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isHydrating = false;
+        });
+      }
     }
   }
 
   Future<void> _finishOnboarding() async {
-    final cleanUrl = _serverUrlController.text.trim().replaceAll(RegExp(r'/+$'), '');
+    // Persist the *normalized* server URL (same scheme-repair the connection
+    // test applies). Saving the raw text means a user who typed
+    // "192.168.1.5:4567" would later have a schemeless base URL that can't be
+    // dialed by Dio, breaking every reconnect / GraphQL initialization.
+    var cleanUrl = _serverUrlController.text.trim().replaceAll(RegExp(r'/+$'), '');
+    if (cleanUrl.isNotEmpty && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = 'http://$cleanUrl';
+    }
     final auth = _buildAuthHeader();
 
     for (final url in _userRepoUrls) {
