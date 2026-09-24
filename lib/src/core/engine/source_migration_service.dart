@@ -90,6 +90,60 @@ class SourceMigrationService {
   static SourceMigrationService get instance => _instance;
   SourceMigrationService._internal();
 
+  /// Normalizes a URL for identity matching: strips scheme + host and trailing
+  /// separators so local-extension URLs and Suwayomi-stored URLs of the same
+  /// series compare equal. Example: "https://www.webtoons.com/en/drama/x/" -> "/en/drama/x"
+  String normalizeUrlForMatch(String url) {
+    var u = url.trim().toLowerCase();
+    u = u.replaceAll(RegExp(r'^https?://[^/]+'), '');
+    u = u.replaceAll(RegExp(r'[/?#]+$'), '');
+    return u;
+  }
+
+  /// Before a migration creates a new library entry, check whether the same
+  /// series already exists locally under the same source — for example the
+  /// entry the Suwayomi server sync created for a webtoons source. Returning it
+  /// lets the caller FUSE with the server-tracked record instead of producing a
+  /// duplicate. Prefers URL identity, falls back to normalized-title equality
+  /// only when one side lacks a usable URL (so two distinct series that happen
+  /// to share a title are never fused).
+  Future<Manga?> findExistingLibraryManga({
+    required String sourceName,
+    required String url,
+    required String title,
+  }) async {
+    final targetSrc = normalizeSourceName(sourceName);
+    if (targetSrc.isEmpty) return null;
+
+    final targetUrl = normalizeUrlForMatch(url);
+    final targetTitleNorm = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '').trim();
+
+    final library = await IsarService.instance.getLibraryManga();
+    for (final m in library) {
+      if (normalizeSourceName(m.sourceName) != targetSrc) continue;
+
+      final mUrl = normalizeUrlForMatch(m.url);
+      if (targetUrl.isNotEmpty && mUrl.isNotEmpty) {
+        if (mUrl == targetUrl ||
+            (mUrl.length >= 4 && (mUrl.contains(targetUrl) || targetUrl.contains(mUrl)))) {
+          return m;
+        }
+        // Both sides have distinct URLs — do NOT fall through to title matching;
+        // they are different series even if titles happen to match.
+        continue;
+      }
+
+      // One side lacks a URL: normalized-title equality is the only signal left.
+      if (targetTitleNorm.isNotEmpty) {
+        final mTitleNorm = m.title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '').trim();
+        if (mTitleNorm.isNotEmpty && mTitleNorm == targetTitleNorm) {
+          return m;
+        }
+      }
+    }
+    return null;
+  }
+
   /// Normalizes a source name for resilient fuzzy matching.
   /// Example: "MangaDex (EN) [v1.4]" -> "mangadex"
   String normalizeSourceName(String name) {

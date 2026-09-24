@@ -121,5 +121,77 @@ void main() {
       expect(cats?['categories']?['nodes'], isNotEmpty);
       expect(trackers?['trackers']?['nodes'], isNotEmpty);
     });
+
+    test('5. Live migration path: URL resolution creates a real server manga (with cleanup)', () async {
+      if (!up) {
+        markTestSkipped('Suwayomi Docker not running on $_liveUrl');
+        return;
+      }
+      // This is exactly what _executeMigration's server-resolution/backfill does:
+      // resolve source id, then resolve the manga on the server so a
+      // local-extension migration stays server-synced.
+      final webtoonsSourceId = await GraphQLClientService.instance.resolveServerSourceId('Webtoons');
+      if (webtoonsSourceId == null) {
+        markTestSkipped('Webtoons source not installed on this Suwayomi server');
+        return;
+      }
+      print('✓ [LIVE] Resolved webtoons server source id: $webtoonsSourceId');
+
+      // Grab a REAL entry from the source's latest catalog (its url may be
+      // relative, e.g. /de/canvas/...), then resolve it back via
+      // fetchMangaIdByUrl — the exact primitive migrations rely on.
+      final browse = await GraphQLClientService.instance.fetchSourceManga(
+        webtoonsSourceId,
+        isLatest: true,
+        page: 1,
+      );
+      final entries = (browse?['fetchSourceManga']?['mangas'] as List?) ?? const [];
+      if (entries.isEmpty) {
+        markTestSkipped('Webtoons source returned no catalog entries');
+        return;
+      }
+      final probe = (entries.first as Map).cast<String, dynamic>();
+      final probeUrl = (probe['url'] ?? '').toString();
+      final probeTitle = (probe['title'] ?? '').toString();
+      expect(probeUrl, isNotEmpty, reason: 'catalog entry should expose its url');
+
+      final resolvedId = await GraphQLClientService.instance.fetchMangaIdByUrl(
+        webtoonsSourceId,
+        probeUrl,
+        title: probeTitle,
+      );
+      print('✓ [LIVE] "$probeTitle" @ $probeUrl -> server manga id $resolvedId');
+      expect(resolvedId, isNotNull,
+          reason: 'URL resolution should yield a server manga id (addManga or search fallback)');
+      expect(resolvedId!, greaterThan(0));
+
+      try {
+        // Details + chapter round-trip must succeed against the resolved record.
+        final details = await GraphQLClientService.instance.fetchMangaDetails(resolvedId);
+        expect(details, isNotNull);
+        final chapters = await GraphQLClientService.instance.fetchMangaAndChapters(resolvedId);
+        expect(chapters, isNotNull);
+
+        // The migration adds the resolved manga to the server library — assert
+        // the round trip, then clean up.
+        await GraphQLClientService.instance.updateMangaLibraryState(resolvedId, true);
+        final libIn = await GraphQLClientService.instance.fetchLibrary();
+        final idsIn = ((libIn?['mangas']?['nodes'] as List?) ?? const [])
+            .map((e) => (e as Map)['id'])
+            .toList();
+        expect(idsIn.contains(resolvedId), isTrue,
+            reason: 'updated manga should appear in the server library');
+      } finally {
+        // Cleanup: pull the probe manga out of the user's library.
+        await GraphQLClientService.instance.updateMangaLibraryState(resolvedId, false);
+      }
+
+      final lib = await GraphQLClientService.instance.fetchLibrary();
+      final ids = ((lib?['mangas']?['nodes'] as List?) ?? const [])
+          .map((e) => (e as Map)['id'])
+          .toList();
+      expect(ids.contains(resolvedId), isFalse,
+          reason: 'probe manga must be removed from the server library after the test');
+    });
   });
 }
