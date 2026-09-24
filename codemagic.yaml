@@ -1,5 +1,5 @@
 # ==============================================================================
-# Codemagic CI/CD for Sunfire Manga Reader — v2.0.0
+# Codemagic CI/CD for Sunfire Manga Reader — v2.5.0
 # Supports: Android (Universal & Split APKs) & iOS (Unsigned Sideload IPA)
 # ==============================================================================
 
@@ -9,7 +9,7 @@ workflows:
   # WORKFLOW 1: ANDROID RELEASE (Linux x2 — Fast & Lightweight)
   # ────────────────────────────────────────────────────────────────────────────
   android-release:
-    name: Android Release (Universal & Split APKs) - v2.0.0
+    name: Android Release (Universal & Split APKs) - v2.5.0
     max_build_duration: 60
     instance_type: linux_x2
     environment:
@@ -53,7 +53,7 @@ workflows:
   # WORKFLOW 2: iOS RELEASE (Mac Mini M2 — AltStore / TrollStore / Sideloadly)
   # ────────────────────────────────────────────────────────────────────────────
   ios-release:
-    name: iOS IPA (Unsigned Sideload) - v2.0.0
+    name: iOS IPA (Unsigned Sideload) - v2.5.0
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -109,7 +109,7 @@ workflows:
   # WORKFLOW 3: ALL PLATFORMS (Unified CI — Triggered on Tags and Main)
   # ────────────────────────────────────────────────────────────────────────────
   all-release:
-    name: Multi-Platform Release (APK & IPA) - v2.0.0
+    name: Multi-Platform Release (APK & IPA) - v2.5.0
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:

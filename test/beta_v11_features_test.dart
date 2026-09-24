@@ -9,11 +9,11 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('BETA V11 FEATURE SUITE', () {
-    test('1. pubspec version is 2.0.0', () {
+    test('1. pubspec version is 2.5.0', () {
       final pubspec = File('pubspec.yaml').readAsStringSync();
       final match = RegExp(r'^version:\s*(.+)$', multiLine: true).firstMatch(pubspec);
       expect(match, isNotNull);
-      expect(match!.group(1)!.trim(), startsWith('2.0.0'));
+      expect(match!.group(1)!.trim(), startsWith('2.5.0'));
     });
 
     test('2. every bundled extension has a FOSS asset icon file', () {
