@@ -150,7 +150,7 @@ class TachiBkImportService {
       final manga = entry.manga;
       try {
         final serverId = await GraphQLClientService.instance
-            .fetchMangaIdByUrl(src.id, manga.url);
+            .fetchMangaIdByUrl(src.id, manga.url, title: manga.title);
         if (serverId == null) {
           failed++;
           messages.add('✗ ${manga.title}: could not resolve on ${src.name}');
