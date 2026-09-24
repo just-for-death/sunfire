@@ -114,6 +114,13 @@ class _ExtensionReposScreenState extends State<ExtensionReposScreen> {
               onPressed: () async {
                 final url = _urlController.text.trim();
                 if (url.isNotEmpty) {
+                  final parsed = Uri.tryParse(url);
+                  if (parsed == null || !parsed.hasScheme || parsed.host.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter a valid HTTP/HTTPS URL')),
+                    );
+                    return;
+                  }
                   final normalized = RepoManager.normalizeRepoUrl(url);
                   await _settings.addCustomRepo(normalized);
                   _urlController.clear();
