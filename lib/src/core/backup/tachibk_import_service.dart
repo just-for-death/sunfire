@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../logging/logger_service.dart';
 import '../sync/graphql_client_service.dart';
+import '../sync/sync_engine.dart';
 import 'tachibk_parser.dart';
 
 /// A source that exists on the Suwayomi server (from `sources { nodes }`).
@@ -163,6 +164,9 @@ class TachiBkImportService {
         if (wanted.isNotEmpty) {
           await GraphQLClientService.instance.setMangaCategories(serverId, wanted);
         }
+        // Modern Suwayomi has no addManga mutation, so the resolved manga must be
+        // explicitly added to the library for the restore to be visible.
+        await SyncEngine.instance.syncMangaLibraryState(serverId, true);
         imported++;
         messages.add('✓ ${manga.title} restored (${src.name})');
       } catch (e) {

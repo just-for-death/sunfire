@@ -219,9 +219,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
               final chMap = rawChapters[i] as Map<String, dynamic>;
               final chUrl = chMap['url']?.toString() ?? '';
               if (chUrl.isNotEmpty && !existingUrls.contains(chUrl)) {
-                final chServerId = (mId > 0 && mId < 200000)
-                    ? (mId * 10000 + i + 1)
-                    : (((mId.hashCode & 0x0007FFFF) * 1000) + (i + 1));
+                final chServerId = -(mId.abs() * 100000 + i + 1);
                 final ch = Chapter()
                   ..serverId = chServerId
                   ..mangaId = mId

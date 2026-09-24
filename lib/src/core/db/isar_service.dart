@@ -219,11 +219,26 @@ class IsarService {
   Future<List<Chapter>> getReadingHistory() async {
     if (!_isInitialized) return [];
     try {
-      return await _isar.chapters
+      // Only surface history for manga still in the library — removed manga
+      // leave their local chapter records behind, which must not show in History.
+      final libraryManga = await getLibraryManga();
+      final libraryIds = <int>{
+        for (final m in libraryManga) ...[
+          if (m.serverId != 0) m.serverId,
+          m.id,
+        ],
+      };
+      if (libraryIds.isEmpty) return [];
+
+      final chapters = await _isar.chapters
           .filter()
           .lastReadAtGreaterThan(0)
           .sortByLastReadAtDesc()
           .findAll();
+      return [
+        for (final ch in chapters)
+          if (libraryIds.contains(ch.mangaId)) ch,
+      ];
     } catch (e, stack) {
       LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'Database');
       return [];
