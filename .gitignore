@@ -79,7 +79,6 @@ fixes.patch
 
 # Flutter test native-lib build artifacts (libffiquickjs.so etc.)
 test/build/
-.github/instructions/
 
 # Release Artifacts
 *.apk
