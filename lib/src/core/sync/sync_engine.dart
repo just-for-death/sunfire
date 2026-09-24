@@ -385,6 +385,16 @@ class SyncEngine {
   Future<void> syncCategoryDelete(int categoryServerId) async {
     if (categoryServerId <= 0) return;
 
+    // If this category only exists locally (pending offline create), cancel the pending create instead of sending a delete to the server
+    final pendingRecords = await IsarService.instance.getPendingCategoryRecords();
+    final pendingCreate = pendingRecords.where((r) => r.entityId == categoryServerId.toString() && r.action == SyncAction.create).toList();
+    if (pendingCreate.isNotEmpty) {
+      for (final r in pendingCreate) {
+        await IsarService.instance.deleteSyncRecord(r.id);
+      }
+      return;
+    }
+
     if (GraphQLClientService.instance.isConfigured) {
       final isOnline = await GraphQLClientService.instance.checkServerReachable();
       if (isOnline) {

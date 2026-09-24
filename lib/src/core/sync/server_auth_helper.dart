@@ -58,7 +58,7 @@ class ServerAuthCredentials {
           );
         }
       } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
-      return const ServerAuthCredentials(type: ServerAuthType.basic);
+      return const ServerAuthCredentials(type: ServerAuthType.none);
     } else if (trimmed.startsWith('Bearer ')) {
       return ServerAuthCredentials(
         type: ServerAuthType.bearer,

@@ -107,8 +107,9 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
 
   void _showMigrationConfirmation(Map<String, dynamic> targetManga, Map<String, dynamic> targetSource) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final targetTitle = targetManga['title'] as String;
+    final targetTitle = (targetManga['title'] ?? targetManga['name'] ?? widget.manga.title).toString();
     final targetSourceName = targetSource['displayName'] as String? ?? targetSource['name'] as String;
+    final targetThumb = (targetManga['imageUrl'] ?? targetManga['thumbnailUrl'] ?? targetManga['cover'] ?? '').toString();
 
     bool copyHistory = true;
     bool copyCategories = true;
@@ -187,9 +188,10 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                               children: [
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: targetManga['thumbnailUrl'] != null && (targetManga['thumbnailUrl'] as String).isNotEmpty
+                                  child: targetThumb.isNotEmpty
                                       ? Image.network(
-                                          targetManga['thumbnailUrl'] as String,
+                                          targetThumb,
+                                          headers: QuickJsService.getImageHeaders(targetSourceName, targetThumb),
                                           width: 48,
                                           height: 68,
                                           fit: BoxFit.cover,
@@ -297,7 +299,15 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
   }) async {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final targetSourceName = targetSource['displayName'] as String? ?? targetSource['name'] as String;
-    final targetMangaId = parseIntSafe(targetManga['id']);
+    final targetLink = (targetManga['link'] ?? targetManga['url'] ?? '').toString();
+    final targetThumb = (targetManga['imageUrl'] ?? targetManga['thumbnailUrl'] ?? targetManga['cover'] ?? '').toString();
+    final rawTargetTitle = (targetManga['title'] ?? targetManga['name'] ?? '').toString().trim();
+    final targetTitle = rawTargetTitle.isNotEmpty ? rawTargetTitle : widget.manga.title;
+    bool isServerSource = targetManga.containsKey('id') &&
+        targetManga['id'] != null &&
+        int.tryParse(targetManga['id'].toString()) != null &&
+        parseIntSafe(targetManga['id']) > 0;
+    var targetMangaId = parseIntSafe(targetManga['id']);
 
     // Show loading progress overlay
     showDialog(
@@ -327,23 +337,91 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
       ),
     );
 
+    bool migrationSuccess = false;
     try {
+      // If target manga came from a local JS scraper (no server ID) but Suwayomi is connected,
+      // resolve or create the manga on the Suwayomi server so both client and server stay in sync.
+      if (!isServerSource && GraphQLClientService.instance.isConfigured) {
+        try {
+          String? serverSourceId;
+          if (targetSource['id'] != null &&
+              int.tryParse(targetSource['id'].toString()) != null &&
+              parseIntSafe(targetSource['id']) > 0) {
+            serverSourceId = targetSource['id'].toString();
+          } else {
+            serverSourceId = await GraphQLClientService.instance.resolveServerSourceId(targetSourceName);
+          }
+
+          if (serverSourceId != null) {
+            // Try searching on Suwayomi with target title first
+            final searchRes = await GraphQLClientService.instance.fetchSourceManga(
+              serverSourceId,
+              searchQuery: targetTitle,
+            );
+            final mangas = searchRes?['fetchSourceManga']?['mangas'] as List<dynamic>?;
+            if (mangas != null && mangas.isNotEmpty) {
+              final normTargetLink = targetLink.toLowerCase().replaceAll(RegExp(r'^https?://[^/]+'), '');
+              final normTargetTitle = targetTitle.toLowerCase().trim();
+              for (final m in mangas) {
+                final mMap = m as Map<String, dynamic>;
+                final mUrl = (mMap['url'] ?? '').toString().toLowerCase();
+                final mTitle = (mMap['title'] ?? '').toString().toLowerCase().trim();
+                if ((normTargetLink.isNotEmpty && (mUrl == normTargetLink || normTargetLink.contains(mUrl) || mUrl.contains(normTargetLink))) ||
+                    mTitle == normTargetTitle) {
+                  final sid = parseIntSafe(mMap['id']);
+                  if (sid > 0) {
+                    targetMangaId = sid;
+                    isServerSource = true;
+                    break;
+                  }
+                }
+              }
+            }
+
+            // Fallback: try addManga mutation if search didn't resolve an existing record
+            if (!isServerSource && targetLink.isNotEmpty) {
+              final remoteId = await GraphQLClientService.instance.fetchMangaIdByUrl(serverSourceId, targetLink);
+              if (remoteId != null && remoteId > 0) {
+                targetMangaId = remoteId;
+                isServerSource = true;
+              }
+            }
+          }
+        } catch (e) {
+          await LoggerService.instance.logWarning('Server manga resolution failed during migration: $e', 'Migrate');
+        }
+      }
+
+      if (targetMangaId <= 0 && targetLink.isNotEmpty) {
+        targetMangaId = (targetLink.hashCode ^ targetSourceName.hashCode).abs();
+      }
+
       Manga? targetMangaEntity;
 
       // 1. Fetch Target Manga into Suwayomi Library if server-backed
-      if (GraphQLClientService.instance.isConfigured && targetMangaId > 0) {
-        await GraphQLClientService.instance.fetchMangaAndChapters(targetMangaId);
+      if (isServerSource && GraphQLClientService.instance.isConfigured && targetMangaId > 0) {
         await GraphQLClientService.instance.updateMangaLibraryState(targetMangaId, true);
+        if (copyCategories && widget.manga.categoryIds.isNotEmpty) {
+          try {
+            await GraphQLClientService.instance.updateMangaCategories(
+              targetMangaId,
+              List<int>.from(widget.manga.categoryIds),
+            );
+          } catch (e) {
+            await LoggerService.instance.logWarning('Failed to sync migrated categories: $e', 'Migrate');
+          }
+        }
+        await GraphQLClientService.instance.fetchMangaAndChapters(targetMangaId);
         targetMangaEntity = await IsarService.instance.getMangaByServerId(targetMangaId);
       }
 
       // 2. If target entity is local or not in Isar yet, ensure it is created and saved
       if (targetMangaEntity == null) {
         targetMangaEntity = Manga()
-          ..serverId = targetMangaId
-          ..title = targetManga['title'] as String? ?? widget.manga.title
-          ..url = targetManga['url'] as String? ?? ''
-          ..thumbnailUrl = targetManga['thumbnailUrl'] as String? ?? ''
+          ..serverId = isServerSource ? targetMangaId : -targetMangaId
+          ..title = targetTitle
+          ..url = targetLink
+          ..thumbnailUrl = targetThumb
           ..sourceName = targetSourceName
           ..inLibrary = true
           ..inLibraryAt = DateTime.now().millisecondsSinceEpoch ~/ 1000
@@ -352,17 +430,30 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
           ..author = targetManga['author'] as String?
           ..description = targetManga['description'] as String?
           ..genres = (targetManga['genre'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? []
-          ..categoryIds = [];
+          ..categoryIds = copyCategories ? List<int>.from(widget.manga.categoryIds) : [];
         await IsarService.instance.saveManga(targetMangaEntity);
       } else {
         targetMangaEntity.inLibrary = true;
+        if (isServerSource && targetMangaEntity.serverId != targetMangaId) {
+          targetMangaEntity.serverId = targetMangaId;
+        }
+        if (targetMangaEntity.url.isEmpty && targetLink.isNotEmpty) {
+          targetMangaEntity.url = targetLink;
+        }
+        if ((targetMangaEntity.thumbnailUrl == null || targetMangaEntity.thumbnailUrl!.isEmpty) && targetThumb.isNotEmpty) {
+          targetMangaEntity.thumbnailUrl = targetThumb;
+        }
+        if (copyCategories && widget.manga.categoryIds.isNotEmpty) {
+          targetMangaEntity.categoryIds = List<int>.from(widget.manga.categoryIds);
+        }
+        await IsarService.instance.saveManga(targetMangaEntity);
       }
 
       // 3. Transfer Category assignments
       if (copyCategories && widget.manga.categoryIds.isNotEmpty) {
         targetMangaEntity.categoryIds = List<int>.from(widget.manga.categoryIds);
         await IsarService.instance.saveManga(targetMangaEntity);
-        if (GraphQLClientService.instance.isConfigured && targetMangaId > 0) {
+        if (isServerSource && GraphQLClientService.instance.isConfigured && targetMangaId > 0) {
           try {
             await GraphQLClientService.instance.updateMangaCategories(
               targetMangaId,
@@ -374,44 +465,71 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
         }
       }
 
-      // 4. Transfer Chapter Reading Progress & History
-      if (copyHistory) {
-        final srcMangaId = widget.manga.serverId > 0 ? widget.manga.serverId : widget.manga.id;
-        final tgtMangaId = targetMangaEntity.serverId > 0 ? targetMangaEntity.serverId : targetMangaEntity.id;
-        final sourceChapters = await IsarService.instance.getChaptersForManga(srcMangaId);
-        var targetChapters = await IsarService.instance.getChaptersForManga(tgtMangaId);
+      // 4. Ensure target chapters are populated for local JS extensions
+      final tgtMangaId = targetMangaEntity.serverId != 0 ? targetMangaEntity.serverId : targetMangaEntity.id;
+      var targetChapters = await IsarService.instance.getChaptersForManga(tgtMangaId);
 
-        if (targetChapters.isEmpty && targetSourceName.isNotEmpty && QuickJsService.instance.hasExtension(targetSourceName)) {
-          try {
-            final targetUrl = targetMangaEntity.url.isNotEmpty ? targetMangaEntity.url : targetMangaEntity.title;
-            final details = await QuickJsService.instance.fetchMangaDetailsLocal(targetSourceName, targetUrl);
-            final chList = details['chapters'] as List<dynamic>? ?? [];
-            final toSave = <Chapter>[];
-            for (var i = 0; i < chList.length; i++) {
-              final cMap = chList[i] as Map<String, dynamic>;
-              final cUrl = cMap['url']?.toString() ?? '';
-              final ch = Chapter()
-                ..serverId = -(tgtMangaId.abs() * 10000 + i + 1)
-                ..mangaId = tgtMangaId
-                ..name = cMap['name']?.toString() ?? 'Chapter ${i + 1}'
-                ..chapterNumber = (cMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble()
-                ..url = cUrl
-                ..realUrl = cUrl
-                ..mangaTitle = targetMangaEntity.title
-                ..mangaThumbnailUrl = targetMangaEntity.thumbnailUrl
-                ..fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000
-                ..isRead = false
-                ..lastPageRead = 0;
-              toSave.add(ch);
-            }
-            if (toSave.isNotEmpty) {
-              await IsarService.instance.saveChapters(toSave);
-              targetChapters = await IsarService.instance.getChaptersForManga(tgtMangaId);
-            }
-          } catch (e) {
-            await LoggerService.instance.logWarning('Failed to fetch target chapters during migration: $e', 'Migrate');
+      if (targetChapters.isEmpty && targetSourceName.isNotEmpty && QuickJsService.instance.hasExtension(targetSourceName)) {
+        try {
+          final targetUrl = targetMangaEntity.url.isNotEmpty ? targetMangaEntity.url : targetMangaEntity.title;
+          final details = await QuickJsService.instance.fetchMangaDetailsLocal(targetSourceName, targetUrl);
+
+          bool metaUpdated = false;
+          if ((targetMangaEntity.description == null || targetMangaEntity.description!.isEmpty) && details['description'] != null) {
+            targetMangaEntity.description = details['description'].toString();
+            metaUpdated = true;
           }
+          if ((targetMangaEntity.author == null || targetMangaEntity.author!.isEmpty) && details['author'] != null) {
+            targetMangaEntity.author = details['author'].toString();
+            metaUpdated = true;
+          }
+          if ((targetMangaEntity.artist == null || targetMangaEntity.artist!.isEmpty) && details['artist'] != null) {
+            targetMangaEntity.artist = details['artist'].toString();
+            metaUpdated = true;
+          }
+          final detailThumb = (details['imageUrl'] ?? details['thumbnailUrl'] ?? details['cover'])?.toString();
+          if ((targetMangaEntity.thumbnailUrl == null || targetMangaEntity.thumbnailUrl!.isEmpty) && detailThumb != null && detailThumb.isNotEmpty) {
+            targetMangaEntity.thumbnailUrl = detailThumb;
+            metaUpdated = true;
+          }
+          if (metaUpdated) {
+            await IsarService.instance.saveManga(targetMangaEntity);
+          }
+
+          final chList = (details['chapters'] ?? details['chapterList'] ?? details['epList'] ?? details['episodes']) as List<dynamic>? ?? [];
+          final toSave = <Chapter>[];
+          for (var i = 0; i < chList.length; i++) {
+            final cMap = chList[i] as Map<String, dynamic>;
+            final cUrl = (cMap['url'] ?? cMap['link'] ?? '').toString();
+            final ch = Chapter()
+              ..serverId = -(tgtMangaId.abs() * 10000 + i + 1)
+              ..mangaId = tgtMangaId
+              ..name = cMap['name']?.toString() ?? 'Chapter ${i + 1}'
+              ..chapterNumber = (cMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble()
+              ..url = cUrl
+              ..realUrl = cUrl
+              ..mangaTitle = targetMangaEntity.title
+              ..mangaThumbnailUrl = targetMangaEntity.thumbnailUrl
+              ..fetchedAt = 0
+              ..isRead = false
+              ..lastPageRead = 0;
+            toSave.add(ch);
+          }
+          if (toSave.isNotEmpty) {
+            await IsarService.instance.saveChapters(toSave);
+            targetChapters = await IsarService.instance.getChaptersForManga(tgtMangaId);
+            targetMangaEntity.unreadCount = targetChapters.length;
+            await IsarService.instance.saveManga(targetMangaEntity);
+          }
+        } catch (e) {
+          await LoggerService.instance.logWarning('Failed to fetch target chapters during migration: $e', 'Migrate');
         }
+      }
+
+      // 5. Transfer Chapter Reading Progress & History
+      if (copyHistory) {
+        final srcMangaId = widget.manga.serverId != 0 ? widget.manga.serverId : widget.manga.id;
+        final sourceChapters = await IsarService.instance.getChaptersForManga(srcMangaId);
 
         if (sourceChapters.isNotEmpty && targetChapters.isNotEmpty) {
           final sourceByNumber = <double, Chapter>{};
@@ -440,10 +558,14 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
               }
             }
 
-            if (match != null && (match.isRead || match.lastPageRead > 0)) {
+            if (match != null && (match.isRead || match.lastPageRead > 0 || match.isBookmarked || match.isDownloadedLocally)) {
               tc.isRead = match.isRead;
               tc.lastPageRead = match.lastPageRead;
               tc.lastReadAt = match.lastReadAt;
+              tc.isBookmarked = match.isBookmarked;
+              tc.isDownloadedLocally = match.isDownloadedLocally;
+              tc.localPath = match.localPath;
+              tc.fetchedAt = match.fetchedAt;
               updatedTargetChapters.add(tc);
 
               if (tc.serverId > 0) {
@@ -465,8 +587,8 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
         }
       }
 
-      // 5. Transfer Manga Tracking records
-      if (copyTracking && widget.manga.serverId > 0 && targetMangaId > 0 && GraphQLClientService.instance.isConfigured) {
+      // 6. Transfer Manga Tracking records
+      if (copyTracking && isServerSource && widget.manga.serverId > 0 && targetMangaId > 0 && GraphQLClientService.instance.isConfigured) {
         try {
           final existingTracks = await GraphQLClientService.instance.fetchTrackRecords(widget.manga.serverId);
           final nodes = existingTracks?['trackRecords']?['nodes'] as List<dynamic>? ?? [];
@@ -490,6 +612,10 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
           await SyncEngine.instance.syncMangaLibraryState(widget.manga.serverId, false);
         }
       }
+      if (isServerSource && GraphQLClientService.instance.isConfigured) {
+        unawaited(SyncEngine.instance.triggerSync());
+      }
+      migrationSuccess = true;
     } catch (e, stack) {
       await LoggerService.instance.logError('Migration error: $e', exception: e, stackTrace: stack, category: 'Migrate');
     } finally {
@@ -499,13 +625,22 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Successfully migrated "${widget.manga.title}" to $targetSourceName!'),
-          backgroundColor: primaryColor,
-        ),
-      );
-      Navigator.pop(context, true);
+      if (migrationSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Successfully migrated "${widget.manga.title}" to $targetSourceName!'),
+            backgroundColor: primaryColor,
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to migrate "${widget.manga.title}". Please try again.'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
   }
 
@@ -739,8 +874,9 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                                 )
                               else
                                 ...results.map((res) {
-                                  final thumb = res['thumbnailUrl'] as String? ?? '';
-                                  final title = res['title'] as String? ?? 'Untitled';
+                                  final thumb = (res['thumbnailUrl'] ?? res['imageUrl'] ?? res['cover'] ?? '').toString();
+                                  final rawTitle = (res['title'] ?? res['name'] ?? '').toString().trim();
+                                  final title = rawTitle.isNotEmpty ? rawTitle : 'Untitled';
 
                                   return ListTile(
                                     leading: thumb.isNotEmpty

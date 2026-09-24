@@ -45,7 +45,6 @@ class RepoSourceItem {
 
     final isJs = (json['sourceCodeLanguage'] == 1) ||
         (json['typeSource'] != null) ||
-        (json['isManga'] == true) ||
         url.endsWith('.js') ||
         url.contains('/javascript/') ||
         pkgPath.endsWith('.js') ||

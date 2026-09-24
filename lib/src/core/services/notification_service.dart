@@ -409,4 +409,8 @@ class NotificationService {
       debugPrint('[NotificationService] Failed to dispatch downloads resumed notification: $e');
     }
   }
+
+  void dispose() {
+    _selectNotificationStream.close();
+  }
 }
