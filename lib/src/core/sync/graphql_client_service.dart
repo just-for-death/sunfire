@@ -1141,9 +1141,12 @@ class GraphQLClientService {
       final res = await query(patchMut, variables: {'id': mangaId, 'add': toAdd, 'remove': toRemove}, label: 'updateMangaCategories');
       if (res != null) return res;
     }
+    // Modern Suwayomi's UpdateMangaCategoriesPatchInput has no `categories`
+    // field — only addToCategories / clearCategories / removeFromCategories.
+    // "Replace all" is therefore a clear + add (verified against live schema).
     const mutStr = r'''
       mutation($id: Int!, $categories: [Int!]!) {
-        updateMangaCategories(input: { id: $id, patch: { categories: $categories } }) {
+        updateMangaCategories(input: { id: $id, patch: { clearCategories: true, addToCategories: $categories } }) {
           clientMutationId
         }
       }

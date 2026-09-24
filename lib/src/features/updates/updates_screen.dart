@@ -540,7 +540,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     final messenger = ScaffoldMessenger.of(context);
     final ch = item['chapter'] as Chapter;
     final isDownloaded = item['isDownloaded'] as bool? ?? false;
-    final chId = ch.serverId > 0 ? ch.serverId : ch.id;
+    final chId = ch.serverId != 0 ? ch.serverId : ch.id;
     final isLocalDownloaded = DownloadManagerService.instance.isChapterDownloadedLocally(chId);
     final resolvedMangaTitle = (item['title'] as String?) ?? 'Manga';
 
@@ -627,7 +627,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     final mangaId = item['mangaId'] as int;
     final title = item['title'] as String;
     final thumb = item['thumbnailUrl'] as String;
-    final chId = ch.serverId > 0 ? ch.serverId : ch.id;
+    final chId = ch.serverId != 0 ? ch.serverId : ch.id;
 
     final isLocalDownloaded = DownloadManagerService.instance.isChapterDownloadedLocally(chId);
     final isDownloading = DownloadManagerService.instance.localTasks
@@ -827,7 +827,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                       tooltip: 'Read chapter',
                       visualDensity: VisualDensity.compact,
                       onPressed: () async {
-                        await context.push('/reader/${ch.serverId > 0 ? ch.serverId : ch.id}');
+                        await context.push('/reader/${ch.serverId != 0 ? ch.serverId : ch.id}');
                         if (mounted) _loadUpdatesFromIsarCache();
                       },
                     ),

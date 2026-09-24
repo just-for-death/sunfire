@@ -48,9 +48,9 @@ void callbackDispatcher() {
       // Note: checkForNewChapters automatically invokes SyncEngine.triggerSync()
       await LibraryUpdateService.instance.checkForNewChapters(isManual: false);
 
-      // Update extensions if repos are configured.
+      // Update extensions if repos are configured AND auto-update is enabled.
       final repos = SettingsService.instance.customRepos;
-      if (repos.isNotEmpty) {
+      if (repos.isNotEmpty && SettingsService.instance.autoUpdateJsSources) {
         await RepoManager.instance.updateInstalledExtensions(repos, requireIntegrity: true);
       }
 
