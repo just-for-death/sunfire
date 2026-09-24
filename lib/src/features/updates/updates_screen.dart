@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
@@ -135,7 +136,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         if (m.serverId > 0) _langByMangaId[m.serverId] = m.lang;
         if (m.id > 0) _langByMangaId[m.id] = m.lang;
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[updates_screen] ignored error: $ignoredError'); }
   }
 
   /// Short uppercase language code for badges, or null when the entry is

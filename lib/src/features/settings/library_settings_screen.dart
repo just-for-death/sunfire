@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../core/db/isar_service.dart';
@@ -82,7 +82,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
             setState(() => _categories = serverCats);
           }
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[library_settings_screen] ignored error: $ignoredError'); }
     }
     if (mounted) setState(() => _isLoadingCategories = false);
   }

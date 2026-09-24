@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -84,7 +85,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     // 1. Load local manga for Metron status
     try {
       _localManga = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[tracking_bottom_sheet] ignored error: $ignoredError'); }
 
     // 2. Load server trackers if connected
     if (!GraphQLClientService.instance.isConfigured) {

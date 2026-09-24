@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../logging/logger_service.dart';
+import '../services/server_tls_trust.dart';
 
 class WebSocketService {
   static WebSocketService? _instance;
@@ -75,9 +78,12 @@ class WebSocketService {
     _isConnecting = true;
 
     try {
-      _channel = WebSocketChannel.connect(
+      // IOWebSocketChannel (not WebSocketChannel.connect) so the same
+      // configured-server-only self-signed trust as the HTTP client applies.
+      _channel = IOWebSocketChannel.connect(
         Uri.parse(_wsUrl!),
         protocols: ['graphql-transport-ws'],
+        customClient: createServerTrustingHttpClient(() => _wsUrl),
       );
       _channel!.ready.catchError((e) {
         _handleDisconnect('WebSocket connect error: $e');
@@ -117,7 +123,7 @@ class WebSocketService {
       if (_isConnected && _channel != null) {
         try {
           _channel?.sink.add(jsonEncode({'type': 'ping'}));
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[websocket_service] ignored error: $ignoredError'); }
       }
     });
   }
@@ -184,7 +190,7 @@ class WebSocketService {
     _subscription?.cancel();
     try {
       _channel?.sink.close();
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[websocket_service] ignored error: $ignoredError'); }
 
     if (_isDisposed) return;
 
@@ -206,6 +212,6 @@ class WebSocketService {
     _subscription?.cancel();
     try {
       _channel?.sink.close();
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[websocket_service] ignored error: $ignoredError'); }
   }
 }

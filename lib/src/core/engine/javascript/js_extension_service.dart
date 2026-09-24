@@ -149,7 +149,7 @@ if (typeof extention === "undefined") {
           },
         ),
       );
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[js_extension_service] ignored error: $ignoredError'); }
     _isInitialized = false;
   }
 
@@ -178,7 +178,7 @@ if (typeof extention === "undefined") {
       if (decoded is Map) {
         return decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[js_extension_service] ignored error: $ignoredError'); }
     return {};
   }
 
@@ -189,7 +189,7 @@ if (typeof extention === "undefined") {
       if (!res.isError && res.stringResult.isNotEmpty) {
         return res.stringResult;
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[js_extension_service] ignored error: $ignoredError'); }
     return null;
   }
 

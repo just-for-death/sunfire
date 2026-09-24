@@ -20,7 +20,7 @@ class WakelockCoordinator {
     if (wasEmpty) {
       try {
         await WakelockPlus.enable();
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[wakelock_coordinator] ignored error: $ignoredError'); }
     }
   }
 
@@ -29,7 +29,7 @@ class WakelockCoordinator {
     if (_owners.isEmpty) {
       try {
         await WakelockPlus.disable();
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[wakelock_coordinator] ignored error: $ignoredError'); }
     }
   }
 }

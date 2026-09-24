@@ -12,7 +12,6 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:volume_controller/volume_controller.dart';
-import '../../core/services/wakelock_coordinator.dart';
 
 import '../../constants/app_constants.dart';
 import '../../core/db/isar_service.dart';
@@ -23,8 +22,9 @@ import '../../core/engine/javascript/m_client.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/metron/metron_service.dart';
 import '../../core/services/download_manager_service.dart';
-import '../../core/services/settings_service.dart';
 import '../../core/services/safe_curl.dart';
+import '../../core/services/settings_service.dart';
+import '../../core/services/wakelock_coordinator.dart';
 import '../../core/sync/sync_engine.dart';
 import 'reader_chapter_navigation.dart';
 import 'reader_scroll_utils.dart';
@@ -112,6 +112,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   // iOS Hardware Volume Rocker Turn
   double? _lastIosVolume;
   DateTime _lastIosVolumeTurnTime = DateTime.now();
+  bool _isRecenteringVolume = false;
 
   // Hands-free Webtoon Auto-Scroll (Vsync Synchronized)
   bool _isAutoScrolling = false;
@@ -179,21 +180,62 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       VolumeController.instance.getVolume().then((v) => _lastIosVolume = v).catchError((_) => _lastIosVolume ?? 0.0);
       VolumeController.instance.addListener((volume) {
         if (!_settings.volumeKeyTurn || !mounted) return;
+        // Ignore the callback our own _recenterVolume() call below triggers,
+        // so recentering never registers as a page turn.
+        if (_isRecenteringVolume) {
+          _isRecenteringVolume = false;
+          _lastIosVolume = volume;
+          return;
+        }
         final now = DateTime.now();
         if (now.difference(_lastIosVolumeTurnTime).inMilliseconds < 280) return;
         if (_lastIosVolume != null) {
+          bool turned = false;
           if (volume > _lastIosVolume!) {
             _lastIosVolumeTurnTime = now;
             _goToPrevPage();
+            turned = true;
           } else if (volume < _lastIosVolume!) {
             _lastIosVolumeTurnTime = now;
             _goToNextPage();
+            turned = true;
+          }
+          // At/near min or max volume there's no headroom left to detect the
+          // NEXT turn in that direction (volume can't go lower than 0 or
+          // higher than 1), so button presses silently stop working. Nudge
+          // back to the middle after every turn so there's always room on
+          // both sides; the listener suppression above keeps this silent.
+          // Android is excluded: there _handleKeyEvent consumes the volume
+          // keys, so the level never hits a bound and recentering would only
+          // change the user's media volume for no benefit.
+          if (turned && (Platform.isIOS || Platform.isMacOS) && (volume <= 0.05 || volume >= 0.95)) {
+            _recenterVolume();
+            return;
           }
         }
         _lastIosVolume = volume;
       });
     } catch (e) {
       debugPrint('[Reader] Failed to initialize volume key listener: $e');
+    }
+  }
+
+  Timer? _recenterGuardTimer;
+
+  void _recenterVolume() {
+    _isRecenteringVolume = true;
+    _lastIosVolume = 0.5;
+    // If the platform never reports our own setVolume back (or reports it
+    // late), the suppression flag would otherwise stay set and swallow the
+    // next real page turn. Clear it after a short grace period regardless.
+    _recenterGuardTimer?.cancel();
+    _recenterGuardTimer = Timer(const Duration(milliseconds: 600), () => _isRecenteringVolume = false);
+    try {
+      VolumeController.instance.setVolume(0.5);
+    } catch (e) {
+      _isRecenteringVolume = false;
+      _recenterGuardTimer?.cancel();
+      debugPrint('[Reader] Failed to recenter volume: $e');
     }
   }
 
@@ -847,6 +889,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   void dispose() {
     // Invalidate any in-flight chapter load so it stops touching state.
     _loadGeneration++;
+    _recenterGuardTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _autoScrollTicker?.stop();
     _autoScrollTicker?.dispose();

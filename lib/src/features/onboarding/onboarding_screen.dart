@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -307,7 +308,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         if (GraphQLClientService.instance.isConfigured) {
           try {
             await SyncEngine.instance.triggerSync().timeout(const Duration(seconds: 45));
-          } catch (_) {}
+          } catch (ignoredError) { if (kDebugMode) debugPrint('[onboarding_screen] ignored error: $ignoredError'); }
           final libraryItems = await IsarService.instance.getLibraryManga();
           _totalHydratedManga = libraryItems.length;
         }

@@ -51,7 +51,7 @@ class MetronService extends ChangeNotifier {
         _migrateLegacyPlaintextToken();
         return;
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[metron_service] ignored error: $ignoredError'); }
 
     // One-time migration: older builds kept a plaintext copy in SharedPreferences.
     // Read it once, move it into secure storage, then purge the plaintext copy.
@@ -63,7 +63,7 @@ class MetronService extends ChangeNotifier {
         await _storage.write(key: _storageKey, value: legacy);
         await prefs.remove(_storageKey);
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[metron_service] ignored error: $ignoredError'); }
   }
 
   /// Best-effort purge of any leftover plaintext token from older builds.
@@ -73,7 +73,7 @@ class MetronService extends ChangeNotifier {
       if (prefs.containsKey(_storageKey)) {
         await prefs.remove(_storageKey);
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[metron_service] ignored error: $ignoredError'); }
   }
 
   /// Save or clear the Metron API token securely
@@ -82,12 +82,12 @@ class MetronService extends ChangeNotifier {
     if (clean == null || clean.isEmpty) {
       try {
         await _storage.delete(key: _storageKey);
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[metron_service] ignored error: $ignoredError'); }
       configureToken(null);
     } else {
       try {
         await _storage.write(key: _storageKey, value: clean);
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[metron_service] ignored error: $ignoredError'); }
       configureToken(clean);
     }
   }
@@ -285,7 +285,7 @@ class MetronService extends ChangeNotifier {
         try {
           final decoded = jsonDecode(issuesJson) as Map<String, dynamic>;
           issueMap = decoded.map((k, v) => MapEntry(k, int.tryParse(v.toString()) ?? 0));
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[metron_service] ignored error: $ignoredError'); }
       }
 
       if (issueMap == null || issueMap.isEmpty) {
