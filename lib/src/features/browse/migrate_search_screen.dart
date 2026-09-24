@@ -6,6 +6,7 @@ import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
 import '../../core/engine/quickjs_service.dart';
+import '../../core/engine/source_migration_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/sync/graphql_client_service.dart';
@@ -341,19 +342,22 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
     try {
       // If target manga came from a local JS scraper (no server ID) but Suwayomi is connected,
       // resolve or create the manga on the Suwayomi server so both client and server stay in sync.
+      // This runs for EVERY source: search first, then always fall back to addManga-by-URL so
+      // the server tracks the migrated manga even when the search misses (webtoons and friends).
       if (!isServerSource && GraphQLClientService.instance.isConfigured) {
-        try {
-          String? serverSourceId;
-          if (targetSource['id'] != null &&
-              int.tryParse(targetSource['id'].toString()) != null &&
-              parseIntSafe(targetSource['id']) > 0) {
-            serverSourceId = targetSource['id'].toString();
-          } else {
-            serverSourceId = await GraphQLClientService.instance.resolveServerSourceId(targetSourceName);
-          }
+        String? serverSourceId;
+        if (targetSource['id'] != null &&
+            int.tryParse(targetSource['id'].toString()) != null &&
+            parseIntSafe(targetSource['id']) > 0) {
+          serverSourceId = targetSource['id'].toString();
+        } else {
+          serverSourceId = await GraphQLClientService.instance.resolveServerSourceId(targetSourceName);
+        }
 
-          if (serverSourceId != null) {
-            // Try searching on Suwayomi with target title first
+        if (serverSourceId != null) {
+          // (a) Try searching on Suwayomi with target title. A failed or empty search
+          // must never prevent the addManga fallback in (b), so it has its own catch.
+          try {
             final searchRes = await GraphQLClientService.instance.fetchSourceManga(
               serverSourceId,
               searchQuery: targetTitle,
@@ -362,12 +366,23 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
             if (mangas != null && mangas.isNotEmpty) {
               final normTargetLink = targetLink.toLowerCase().replaceAll(RegExp(r'^https?://[^/]+'), '');
               final normTargetTitle = targetTitle.toLowerCase().trim();
+              final normAlphaTitle = normTargetTitle.replaceAll(RegExp(r'[^a-z0-9]'), '');
+              final normAlphaTargetLink = normTargetLink.replaceAll(RegExp(r'[/?#]+$'), '');
               for (final m in mangas) {
                 final mMap = m as Map<String, dynamic>;
                 final mUrl = (mMap['url'] ?? '').toString().toLowerCase();
                 final mTitle = (mMap['title'] ?? '').toString().toLowerCase().trim();
-                if ((normTargetLink.isNotEmpty && (mUrl == normTargetLink || normTargetLink.contains(mUrl) || mUrl.contains(normTargetLink))) ||
-                    mTitle == normTargetTitle) {
+                final mAlphaTitle = mTitle.replaceAll(RegExp(r'[^a-z0-9]'), '');
+                final normAlphaMUrl = mUrl.replaceAll(RegExp(r'^https?://[^/]+'), '').replaceAll(RegExp(r'[/?#]+$'), '');
+                // Exact URL, fuzzy path-alias, exact title, then normalized-title
+                // fallback (webtoons and friends often differ in casing/punctuation
+                // between the local extension and the Suwayomi source record).
+                if ((normTargetLink.isNotEmpty && normAlphaMUrl.isNotEmpty &&
+                        (normAlphaMUrl == normAlphaTargetLink ||
+                            (normAlphaMUrl.length >= 6 &&
+                                (normAlphaMUrl.contains(normAlphaTargetLink) || normAlphaTargetLink.contains(normAlphaMUrl))))) ||
+                    mTitle == normTargetTitle ||
+                    (normAlphaTitle.isNotEmpty && normAlphaTitle.length >= 4 && normAlphaMUrl.isEmpty && mAlphaTitle == normAlphaTitle)) {
                   final sid = parseIntSafe(mMap['id']);
                   if (sid > 0) {
                     targetMangaId = sid;
@@ -377,23 +392,37 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                 }
               }
             }
+          } catch (e) {
+            await LoggerService.instance.logWarning('Server search failed during migration: $e', 'Migrate');
+          }
 
-            // Fallback: try addManga mutation if search didn't resolve an existing record
-            if (!isServerSource && targetLink.isNotEmpty) {
-              final remoteId = await GraphQLClientService.instance.fetchMangaIdByUrl(serverSourceId, targetLink);
+          // (b) Create/resolve the manga on the server by URL — ALWAYS attempted for
+          // every source when the search above did not resolve an existing record.
+          if (!isServerSource && targetLink.isNotEmpty) {
+            try {
+              final remoteId = await GraphQLClientService.instance.fetchMangaIdByUrl(
+                serverSourceId,
+                targetLink,
+                title: targetTitle,
+              );
               if (remoteId != null && remoteId > 0) {
                 targetMangaId = remoteId;
                 isServerSource = true;
               }
+            } catch (e) {
+              await LoggerService.instance.logWarning('Server addManga failed during migration: $e', 'Migrate');
             }
           }
-        } catch (e) {
-          await LoggerService.instance.logWarning('Server manga resolution failed during migration: $e', 'Migrate');
         }
       }
 
       if (targetMangaId <= 0 && targetLink.isNotEmpty) {
         targetMangaId = (targetLink.hashCode ^ targetSourceName.hashCode).abs();
+      } else if (targetMangaId <= 0 && targetTitle.isNotEmpty) {
+        // Empty link: derive from title so serverId is never 0 — serverId is a
+        // unique-indexed field and a 0 would `replace` any other record that
+        // still holds the default value (Isar unique + replace:true).
+        targetMangaId = (targetTitle.hashCode ^ targetSourceName.hashCode).abs();
       }
 
       Manga? targetMangaEntity;
@@ -413,6 +442,24 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
         }
         await GraphQLClientService.instance.fetchMangaAndChapters(targetMangaId);
         targetMangaEntity = await IsarService.instance.getMangaByServerId(targetMangaId);
+      }
+
+      // 1b. FUSE instead of duplicate: the same series may already exist locally
+      // under this source (e.g. a webtoons entry the Suwayomi server sync
+      // created). Reuse it so we keep the server link and history instead of
+      // creating a second webtoons entry.
+      if (targetMangaEntity == null) {
+        targetMangaEntity = await SourceMigrationService.instance.findExistingLibraryManga(
+          sourceName: targetSourceName,
+          url: targetLink,
+          title: targetTitle,
+        );
+        if (targetMangaEntity != null) {
+          await LoggerService.instance.logInfo(
+            'Migration fused with existing library entry ${targetMangaEntity.serverId} ("${targetMangaEntity.title}", ${targetMangaEntity.sourceName}) for $targetSourceName — no duplicate created',
+            'Migrate',
+          );
+        }
       }
 
       // 2. If target entity is local or not in Isar yet, ensure it is created and saved
@@ -447,6 +494,60 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
           targetMangaEntity.categoryIds = List<int>.from(widget.manga.categoryIds);
         }
         await IsarService.instance.saveManga(targetMangaEntity);
+      }
+
+      // 2b. Server backfill for EVERY source migration: if the target ended up as a
+      // local-only entity (serverId <= 0) — e.g. a freshly created entry whose
+      // server resolution missed, or a fused entry from an earlier failed
+      // migration — create it on Suwayomi by URL so the server tracks it too,
+      // then keep the real server id locally. This is what guarantees the migrated
+      // manga is synced server-side regardless of which source it came from.
+      if (GraphQLClientService.instance.isConfigured &&
+          targetMangaEntity.serverId <= 0 &&
+          targetLink.isNotEmpty) {
+        try {
+          String? serverSourceId;
+          if (targetSource['id'] != null &&
+              int.tryParse(targetSource['id'].toString()) != null &&
+              parseIntSafe(targetSource['id']) > 0) {
+            serverSourceId = targetSource['id'].toString();
+          } else {
+            serverSourceId = await GraphQLClientService.instance.resolveServerSourceId(targetSourceName);
+          }
+
+          if (serverSourceId != null) {
+            final remoteId = await GraphQLClientService.instance.fetchMangaIdByUrl(
+              serverSourceId,
+              targetLink,
+              title: targetTitle,
+            );
+            if (remoteId != null && remoteId > 0) {
+              targetMangaId = remoteId;
+              targetMangaEntity.serverId = remoteId;
+              isServerSource = true;
+
+              if (copyCategories && widget.manga.categoryIds.isNotEmpty) {
+                try {
+                  await GraphQLClientService.instance.updateMangaCategories(
+                    remoteId,
+                    List<int>.from(widget.manga.categoryIds),
+                  );
+                } catch (e) {
+                  await LoggerService.instance.logWarning('Failed to sync migrated categories to server: $e', 'Migrate');
+                }
+              }
+              await GraphQLClientService.instance.updateMangaLibraryState(remoteId, true);
+              await GraphQLClientService.instance.fetchMangaAndChapters(remoteId);
+              await IsarService.instance.saveManga(targetMangaEntity);
+              await LoggerService.instance.logInfo(
+                'Migration linked to server: server manga id $remoteId ("${targetMangaEntity.title}") — server will track chapters & progress',
+                'Migrate',
+              );
+            }
+          }
+        } catch (e) {
+          await LoggerService.instance.logWarning('Server backfill failed during migration: $e', 'Migrate');
+        }
       }
 
       // 3. Transfer Category assignments
@@ -612,7 +713,11 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
           await SyncEngine.instance.syncMangaLibraryState(widget.manga.serverId, false);
         }
       }
-      if (isServerSource && GraphQLClientService.instance.isConfigured) {
+      // Every migration that achieved a server link (resolved by search, by URL
+      // addManga, or via backfill) triggers a background sync so client and server
+      // converge — for every source, not just server-resolvable ones.
+      final serverLinked = isServerSource || targetMangaEntity.serverId > 0;
+      if (serverLinked && GraphQLClientService.instance.isConfigured) {
         unawaited(SyncEngine.instance.triggerSync());
       }
       migrationSuccess = true;

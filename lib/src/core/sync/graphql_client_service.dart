@@ -382,6 +382,7 @@ class GraphQLClientService {
               id
               title
               thumbnailUrl
+              url
             }
             hasNextPage
           }
@@ -404,6 +405,7 @@ class GraphQLClientService {
               id
               title
               thumbnailUrl
+              url
             }
             hasNextPage
           }
@@ -541,20 +543,108 @@ class GraphQLClientService {
     return await query(mutStr, variables: {'id': mangaServerId}, label: 'fetchMangaAndChapters');
   }
 
-  /// Resolves a manga by (sourceId, url) on the server via Suwayomi's
-  /// `addManga` mutation, returning the server manga id or null on failure.
-  /// Used by client-side `.tachibk` restore.
-  Future<int?> fetchMangaIdByUrl(String sourceId, String url) async {
-    const mutStr = r'''
-      mutation($sourceId: LongString!, $url: String!) {
-        addManga(input: { sourceId: $sourceId, url: $url }) {
-          id
+  /// Resolves the server manga id for a series URL on [sourceId] — the path
+  /// used by source migration and `.tachibk` restore to keep a local-only
+  /// series server-synced. Modern Suwayomi dropped the `addManga` mutation, so
+  /// this first tries legacy `addManga` (older servers), then falls back to
+  /// searching the source — preferring the caller's [title], then a query
+  /// derived from [url] — and matching the best result by normalized URL or
+  /// title. Returns the server manga id, or null when the series cannot be
+  /// resolved on this server.
+  Future<int?> fetchMangaIdByUrl(String sourceId, String url, {String? title}) async {
+    if (url.trim().isEmpty) return null;
+
+    // 1) Legacy Tachidesk/Suwayomi servers still expose the addManga mutation.
+    try {
+      const mutStr = r'''
+        mutation($sourceId: LongString!, $url: String!) {
+          addManga(input: { sourceId: $sourceId, url: $url }) {
+            id
+          }
+        }
+      ''';
+      final res = await query(mutStr, variables: {'sourceId': sourceId, 'url': url}, label: 'addMangaByUrl');
+      final id = res?['addManga']?['id'];
+      if (id is int && id > 0) return id;
+      if (id is num && id.toInt() > 0) return id.toInt();
+    } catch (e) {
+      await LoggerService.instance
+          .logWarning('addManga unsupported on this server, falling back to search: $e', 'GraphQL');
+    }
+
+    // 2) Modern Suwayomi: search the source and pick the best match by URL/title.
+    // Title-first — URL-slug words often fuzzy-match unrelated series (e.g.
+    // webtoons indexes series under their localized titles, not their slugs).
+    try {
+      final queries = <String>{};
+      if (title != null && title.trim().length >= 3) queries.add(title.trim());
+      final derived = urlToSearchQuery(url);
+      if (derived.isNotEmpty) queries.add(derived);
+      for (final q in queries) {
+        final searchRes = await fetchSourceManga(sourceId, searchQuery: q);
+        final mangas = searchRes?['fetchSourceManga']?['mangas'] as List<dynamic>?;
+        final id = pickBestSourceMangaId(mangas, url: url, title: q);
+        if (id != null) return id;
+      }
+      return null;
+    } catch (e) {
+      await LoggerService.instance.logWarning('Source search fallback failed for $url: $e', 'GraphQL');
+      return null;
+    }
+  }
+
+  /// Derives a search query from a manga URL: strips scheme/host/query, keeps the
+  /// last meaningful path segment, and turns separators into spaces
+  /// (e.g. ".../tower-of-god/list?title_no=95" -> "tower of god").
+  static String urlToSearchQuery(String url) {
+    var u = url.split('?').first.split('#').first;
+    u = u.replaceAll(RegExp(r'^https?://[^/]+'), '');
+    final segments =
+        u.split('/').where((s) => s.trim().isNotEmpty).map((s) => s.trim()).toList();
+    // Trailing husk segments that are meaningless as search terms.
+    const husks = {'list', 'all', 'seasons', 'season', 'genre', 'index', 'main', 'detail'};
+    while (segments.isNotEmpty &&
+        (husks.contains(segments.last.toLowerCase()) ||
+            RegExp(r'^title[_-]?no[=:]?\d*$').hasMatch(segments.last.toLowerCase()))) {
+      segments.removeLast();
+    }
+    if (segments.isEmpty) return '';
+    final q = segments.last.replaceAll(RegExp(r'[-_+.]+'), ' ').trim();
+    return q.length >= 3 ? q : '';
+  }
+
+  /// Picks the best id from a [fetchSourceManga] `mangas` list for [url]/[title]:
+  /// exact normalized URL, URL path-alias (containment), then normalized-title
+  /// equality. Returns null when nothing is a confident match.
+  int? pickBestSourceMangaId(List<dynamic>? mangas, {required String url, required String title}) {
+    if (mangas == null || mangas.isEmpty) return null;
+    final normTargetUrl = url
+        .toLowerCase()
+        .replaceAll(RegExp(r'^https?://[^/]+'), '')
+        .replaceAll(RegExp(r'[/?#]+$'), '');
+    final normAlphaTitle = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    int? titleFallbackId;
+    for (final m in mangas) {
+      final mMap = m is Map<String, dynamic> ? m : null;
+      if (mMap == null) continue;
+      final rawId = mMap['id'];
+      final sid = rawId is int ? rawId : (rawId is num ? rawId.toInt() : null);
+      if (sid == null || sid <= 0) continue;
+
+      final mUrl = (mMap['url'] ?? '').toString().toLowerCase();
+      final mTitle = (mMap['title'] ?? '').toString().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final normMUrl = mUrl.replaceAll(RegExp(r'^https?://[^/]+'), '').replaceAll(RegExp(r'[/?#]+$'), '');
+      if (normTargetUrl.isNotEmpty && normMUrl.isNotEmpty) {
+        if (normMUrl == normTargetUrl ||
+            (normMUrl.length >= 6 && (normMUrl.contains(normTargetUrl) || normTargetUrl.contains(normMUrl)))) {
+          return sid;
         }
       }
-    ''';
-    final res = await query(mutStr, variables: {'sourceId': sourceId, 'url': url}, label: 'addMangaByUrl');
-    final id = res?['addManga']?['id'];
-    return id is int ? id : (id is num ? id.toInt() : null);
+      if (mTitle.isNotEmpty && mTitle == normAlphaTitle) {
+        titleFallbackId ??= sid;
+      }
+    }
+    return titleFallbackId;
   }
 
   /// Fuzzy-matches [sourceName] (display name from a local JS extension) against
