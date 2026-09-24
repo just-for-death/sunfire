@@ -74,6 +74,9 @@ test_results/
 # FVM Version Cache
 .fvm/
 
+# Generated patch copies of applied audit fixes (see FIXES.md)
+fixes.patch
+
 # Release Artifacts
 *.apk
 *.ipa
