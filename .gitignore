@@ -76,6 +76,9 @@ test_results/
 
 # Generated patch copies of applied audit fixes (see FIXES.md)
 fixes.patch
+
+# Flutter test native-lib build artifacts (libffiquickjs.so etc.)
+test/build/
 .github/instructions/
 
 # Release Artifacts

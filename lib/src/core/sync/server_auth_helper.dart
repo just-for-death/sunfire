@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -56,7 +57,7 @@ class ServerAuthCredentials {
             password: pass,
           );
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
       return const ServerAuthCredentials(type: ServerAuthType.basic);
     } else if (trimmed.startsWith('Bearer ')) {
       return ServerAuthCredentials(
@@ -86,7 +87,7 @@ class ServerAuthHelper {
       if (header != null && header.isNotEmpty) {
         return ServerAuthCredentials.fromHeaderValue(header);
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
 
     // Fallback to SharedPreferences if Keychain is restricted / fails
     try {
@@ -106,20 +107,20 @@ class ServerAuthHelper {
       } else {
         await _storage.write(key: storageKey, value: header);
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
 
     // Clean up any legacy plaintext credentials in SharedPreferences
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(storageKey);
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
   }
 
   static Future<String> getRawAuthHeader() async {
     try {
       final val = await _storage.read(key: storageKey);
       if (val != null) return val;
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -132,11 +133,11 @@ class ServerAuthHelper {
   static Future<void> clearCredentials() async {
     try {
       await _storage.delete(key: storageKey);
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
 
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(storageKey);
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
   }
 }

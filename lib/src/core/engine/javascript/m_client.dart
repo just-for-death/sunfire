@@ -15,7 +15,7 @@ http.Client _createNativeEngineClient() {
   if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
     try {
       return CupertinoClient.defaultSessionConfiguration();
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
   }
   return http.Client();
 }
@@ -78,7 +78,7 @@ class MClient {
       for (final key in _cookies.keys) {
         if (host.endsWith(key) || key.endsWith(root)) return true;
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
     return false;
   }
 
@@ -103,7 +103,7 @@ class MClient {
       } finally {
         _activeSolves.remove(root);
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
   }
 
   static Future<void> _doPrewarm(String url, String root) async {
@@ -133,7 +133,7 @@ class MClient {
       if (cookie != null && cookie.isNotEmpty) {
         return {HttpHeaders.cookieHeader: cookie};
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
     return {};
   }
 
@@ -149,7 +149,7 @@ class MClient {
       if (ua.isNotEmpty) {
         _userAgent = ua;
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
   }
 
   /// Directly sends a request to FlareSolverr / Byparr and returns the solved response.
@@ -279,7 +279,7 @@ class LoggerInterceptor extends InterceptorContract {
       final method = request.method;
       final url = request.url.toString();
       LoggerService.instance.logNetwork('-> HTTP $method $url', 'MClient');
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
     return request;
   }
 
@@ -302,7 +302,7 @@ class LoggerInterceptor extends InterceptorContract {
       } else {
         LoggerService.instance.logNetwork('<- HTTP $status $method $url', 'MClient');
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
     return response;
   }
 }

@@ -179,7 +179,7 @@ class LoggerService {
           }
           await _logFile!.writeAsString(text, mode: FileMode.append, flush: true);
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[logger_service] ignored error: $ignoredError'); }
     });
     return _writeFuture;
   }
@@ -204,6 +204,6 @@ class LoggerService {
       if (_logFile != null && await _logFile!.exists()) {
         await _logFile!.writeAsString('');
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[logger_service] ignored error: $ignoredError'); }
   }
 }

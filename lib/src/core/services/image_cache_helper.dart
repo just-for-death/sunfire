@@ -2,7 +2,7 @@ import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -12,6 +12,7 @@ import '../db/models/manga.dart';
 import '../engine/quickjs_service.dart';
 import '../sync/graphql_client_service.dart';
 import 'safe_curl.dart';
+import 'server_tls_trust.dart';
 
 class ImageCacheHelper {
   static final List<String> _candidateCoverPaths = [];
@@ -28,11 +29,11 @@ class ImageCacheHelper {
       try {
         final appSupportDir = await getApplicationSupportDirectory();
         paths.add('${appSupportDir.path}/covers');
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
       try {
         final appDir = await getApplicationDocumentsDirectory();
         paths.add('${appDir.path}/covers');
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
 
       // Common Linux user paths
       if (!kIsWeb && Platform.isLinux) {
@@ -52,10 +53,10 @@ class ImageCacheHelper {
             if (!await dir.exists()) {
               await dir.create(recursive: true);
             }
-          } catch (_) {}
+          } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
         }
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
   }
 
   static String? getLocalCoverPath(int mangaServerId) {
@@ -105,7 +106,7 @@ class ImageCacheHelper {
             await f.delete();
           }
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
     }
   }
 
@@ -129,7 +130,7 @@ class ImageCacheHelper {
         _memoryCache[effectiveUrl] = bytes;
         if (_memoryCache.length > 200) _memoryCache.remove(_memoryCache.keys.first);
         return bytes;
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
     }
 
     if (_inFlightFetches.containsKey(effectiveUrl)) return _inFlightFetches[effectiveUrl];
@@ -169,21 +170,12 @@ class ImageCacheHelper {
       final uri = Uri.tryParse(url) ?? Uri.tryParse(Uri.encodeFull(url));
       if (uri == null) return null;
 
-      client = HttpClient();
+      // Shared trust rule (configured server host + loopback) — same as the
+      // GraphQL client, WebSocket and download manager.
+      client = createServerTrustingHttpClient(
+        () => GraphQLClientService.instance.isConfigured ? GraphQLClientService.instance.baseUrl : null,
+      );
       client.connectionTimeout = const Duration(seconds: 10);
-      client.badCertificateCallback = (cert, host, port) {
-        if (GraphQLClientService.instance.isConfigured &&
-            GraphQLClientService.instance.baseUrl != null) {
-          final serverUri = Uri.tryParse(GraphQLClientService.instance.baseUrl!);
-          if (serverUri != null && serverUri.host == host) {
-            return true;
-          }
-        }
-        if (host == 'localhost' || host == '127.0.0.1') {
-          return true;
-        }
-        return false;
-      };
       final req = await client.getUrl(uri);
       
       final reqHeaders = Map<String, String>.from(headers);
@@ -241,12 +233,12 @@ class ImageCacheHelper {
                 try {
                   m.thumbnailUrl = directCover;
                   await IsarService.instance.saveManga(m);
-                } catch (_) {}
+                } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
                 url = directCover;
               }
             }
           }
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
       }
 
       // PASS 1: Standard fetch with configured headers
@@ -270,7 +262,7 @@ class ImageCacheHelper {
             final originHeaders = Map<String, String>.from(headers)..['Referer'] = originReferer;
             bytes = await _attemptHttpFetch(url, originHeaders);
           }
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
       }
 
       // PASS 4 (Self-Healing Clean Browser): Retry with standard Chrome Desktop UA and Image Accept headers
@@ -295,7 +287,7 @@ class ImageCacheHelper {
                 break;
               }
             }
-          } catch (_) {}
+          } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
         }
       }
 
@@ -337,12 +329,12 @@ class ImageCacheHelper {
                 try {
                   m.thumbnailUrl = realCoverUrl;
                   await IsarService.instance.saveManga(m);
-                } catch (_) {}
+                } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
                 _memoryCache[realCoverUrl] = bytes;
               }
             }
           }
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
       }
 
       if (bytes != null && bytes.length > 200) {
@@ -358,11 +350,11 @@ class ImageCacheHelper {
             }
             final urlFile = File('$basePath/url_${_hashUrl(url)}.jpg');
             await urlFile.writeAsBytes(bytes);
-          } catch (_) {}
+          } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
         }
         return bytes;
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
     return null;
   }
 
@@ -433,7 +425,7 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
             }
           }
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
     }
     if ((url == null || url.isEmpty) && widget.mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
       url = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/${widget.mangaServerId}/thumbnail';

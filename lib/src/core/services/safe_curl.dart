@@ -4,6 +4,7 @@
 /// as the last argument lets a value starting with `-` be parsed as a curl
 /// option (e.g. `-o/path`), so every call must use `--` before the URL, be
 /// restricted to http(s), and never carry CR/LF into header values.
+library;
 
 /// Executables tried in order. `curl` and `/usr/bin/curl` are the same binary
 /// on nearly every system, so only one plain-curl entry is kept.
