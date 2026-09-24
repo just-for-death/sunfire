@@ -3,11 +3,15 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../logging/logger_service.dart';
 
+import 'list_chunks.dart';
 import 'models/category.dart';
 import 'models/chapter.dart';
 import 'models/manga.dart';
 import 'models/sync_meta.dart';
 import 'models/sync_record.dart';
+
+/// Max manga ids per `anyOf` chapter query in [IsarService.getChaptersForMangas].
+const int kChapterQueryChunkSize = 200;
 
 class IsarService {
   static IsarService? _instance;
@@ -173,6 +177,29 @@ class IsarService {
     // an unrelated collection's key space) and could return that unrelated
     // manga's chapters. Do a single unambiguous lookup only.
     return await _isar.chapters.filter().mangaIdEqualTo(mangaId).sortByChapterNumberDesc().findAll();
+  }
+
+  /// Batched form of [getChaptersForManga] for callers that need chapters for
+  /// every manga in a list (library refresh, unread-count recompute, batch
+  /// actions). A chunked `anyOf` query plus an in-memory group-by avoids
+  /// issuing one Isar query per manga, which is the dominant cost on large
+  /// libraries.
+  Future<Map<int, List<Chapter>>> getChaptersForMangas(List<int> mangaIds) async {
+    if (!_isInitialized || mangaIds.isEmpty) return {};
+    final ids = mangaIds.toSet().toList();
+    final byManga = <int, List<Chapter>>{for (final id in ids) id: []};
+    // Chunked: one giant OR filter over thousands of ids is slow to compile
+    // and run, so query kChapterQueryChunkSize manga at a time.
+    for (final chunk in chunkList(ids, kChapterQueryChunkSize)) {
+      final rows = await _isar.chapters.filter().anyOf(chunk, (q, id) => q.mangaIdEqualTo(id)).findAll();
+      for (final ch in rows) {
+        (byManga[ch.mangaId] ??= []).add(ch);
+      }
+    }
+    for (final list in byManga.values) {
+      list.sort((a, b) => b.chapterNumber.compareTo(a.chapterNumber));
+    }
+    return byManga;
   }
 
   Future<Chapter?> getChapterByServerId(int serverId) async {
@@ -403,6 +430,71 @@ class IsarService {
   Future<List<SyncRecord>> getFailedSyncRecords() async {
     if (!_isInitialized) return [];
     return await _isar.syncRecords.filter().stateEqualTo(SyncRecordState.failed).or().stateEqualTo(SyncRecordState.abandoned).findAll();
+  }
+
+  /// Fresh copy of a queued record by its Isar id, or null if it was deleted.
+  /// The outbound flush uses this to avoid saving/deleting from a stale
+  /// in-memory copy after a concurrent coalesce rewrote the payload.
+  Future<SyncRecord?> getSyncRecord(Id id) async {
+    if (!_isInitialized) return null;
+    return await _isar.syncRecords.get(id);
+  }
+
+  /// Pending/failed (i.e. not in-flight, synced or abandoned) chapter records
+  /// for one chapter. Filtered inside Isar, so per-page-turn callers don't
+  /// materialize the whole queue the way [getPendingSyncRecords] does.
+  ///
+  /// One query per queued state rather than an Isar filter group, so this only
+  /// relies on the `and()` / `Equal` filters already used elsewhere.
+  Future<List<SyncRecord>> getPendingChapterRecords(String chapterEntityId) async {
+    if (!_isInitialized) return [];
+    final out = <SyncRecord>[];
+    for (final state in const [SyncRecordState.pending, SyncRecordState.failed]) {
+      out.addAll(await _isar.syncRecords
+          .filter()
+          .entityTypeEqualTo(SyncEntityType.chapter)
+          .and()
+          .entityIdEqualTo(chapterEntityId)
+          .and()
+          .stateEqualTo(state)
+          .findAll());
+    }
+    return out;
+  }
+
+  /// Entity ids (chapter server ids, as strings) of every chapter that has an
+  /// unsynced outbound mutation queued. One pass per sync, so server pulls can
+  /// protect optimistic local state without a query per chapter.
+  Future<Set<String>> getPendingChapterEntityIds() async {
+    if (!_isInitialized) return <String>{};
+    final ids = <String>{};
+    for (final state in const [SyncRecordState.pending, SyncRecordState.failed]) {
+      final records = await _isar.syncRecords
+          .filter()
+          .entityTypeEqualTo(SyncEntityType.chapter)
+          .and()
+          .stateEqualTo(state)
+          .findAll();
+      ids.addAll(records.map((r) => r.entityId));
+    }
+    return ids;
+  }
+
+  /// Pending/failed category records (create/rename/delete/assign). Used to
+  /// rewrite queued 'assign' payloads after an offline-created category gets
+  /// its real server id, without loading the whole queue.
+  Future<List<SyncRecord>> getPendingCategoryRecords() async {
+    if (!_isInitialized) return [];
+    final out = <SyncRecord>[];
+    for (final state in const [SyncRecordState.pending, SyncRecordState.failed]) {
+      out.addAll(await _isar.syncRecords
+          .filter()
+          .entityTypeEqualTo(SyncEntityType.category)
+          .and()
+          .stateEqualTo(state)
+          .findAll());
+    }
+    return out;
   }
 
   Future<void> deleteSyncRecord(Id id) async {

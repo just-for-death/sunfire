@@ -28,6 +28,22 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+def hasReleaseKeystore = keystorePropertiesFile.exists() && keystoreProperties['storeFile']
+
+// Opt-in strict mode for real release pipelines: run with
+//   -PrequireReleaseSigning   (or env REQUIRE_RELEASE_SIGNING=true)
+// and any assemble/bundle/package Release task fails instead of silently
+// producing a debug-signed APK. Debug builds are unaffected.
+gradle.taskGraph.whenReady { graph ->
+    def strict = project.hasProperty('requireReleaseSigning') || System.getenv('REQUIRE_RELEASE_SIGNING') == 'true'
+    if (strict && !hasReleaseKeystore &&
+            graph.allTasks.any { it.name =~ /^(assemble|bundle|package)\w*Release$/ }) {
+        throw new GradleException(
+                'Release signing required but android/key.properties (with storeFile) is missing. ' +
+                'Refusing to build a debug-signed release.')
+    }
+}
+
 android {
     compileSdk 36
     ndkVersion "28.2.13676358"
@@ -90,9 +106,16 @@ android {
     }
     buildTypes {
         release {
-            if (keystorePropertiesFile.exists() && keystoreProperties['storeFile']) {
+            if (hasReleaseKeystore) {
                 signingConfig signingConfigs.release
             } else {
+                // Sideload/CI convenience: key.properties is gitignored, so
+                // keyless builds fall back to the debug key. Such an APK is NOT
+                // a proper release (debug-signed, can't update over a
+                // properly signed install) — so say so loudly, and let real
+                // release pipelines opt into a hard failure (see below).
+                logger.warn('WARNING: android/key.properties missing or has no storeFile — ' +
+                        'release build will be signed with the DEBUG key.')
                 signingConfig signingConfigs.debug
             }
             minifyEnabled true

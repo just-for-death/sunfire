@@ -15,21 +15,30 @@ import 'source_preferences.dart';
 class _AsyncLock {
   Future<void>? _last;
 
-  Future<T> synchronized<T>(Future<T> Function() block) async {
+  /// Waits for the previously queued holder before running [block], but never
+  /// waits longer than [maxWait] for it. Without this cap, a single hung JS
+  /// call (source stuck in a scrape, dead FlareSolverr session, etc.) blocks
+  /// every later call queued behind it indefinitely — the reader's own 30s
+  /// timeout only stops IT from waiting, it doesn't free the lock. The stuck
+  /// holder may still complete later; its result is just no longer awaited.
+  Future<T> synchronized<T>(
+    Future<T> Function() block, {
+    Duration maxWait = const Duration(seconds: 35),
+  }) async {
     final prev = _last;
     final completer = Completer<void>();
     _last = completer.future;
 
     if (prev != null) {
       try {
-        await prev;
-      } catch (_) {}
+        await prev.timeout(maxWait, onTimeout: () {});
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
     }
 
     try {
       return await block();
     } finally {
-      completer.complete();
+      if (!completer.isCompleted) completer.complete();
     }
   }
 }
@@ -160,7 +169,7 @@ class QuickJsService {
             _invalidateRuntime(displayName);
             _invalidateRuntime(fileName);
           }
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
       }
       if (assetPaths.isEmpty) {
         _loadBundledExtensionsFromDiskFallback();
@@ -195,7 +204,7 @@ class QuickJsService {
           }
         }
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
   }
 
   Future<void> _loadInstalledExtensionsFromDisk() async {
@@ -203,12 +212,12 @@ class QuickJsService {
     try {
       final appDir = await getApplicationDocumentsDirectory();
       candidateDirs.add('${appDir.path}/extensions');
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
 
     try {
       final appSupportDir = await getApplicationSupportDirectory();
       candidateDirs.add('${appSupportDir.path}/extensions');
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
 
     if (!kIsWeb && Platform.isLinux) {
       final home = Platform.environment['HOME'];
@@ -252,12 +261,12 @@ class QuickJsService {
                       _installedIcons[cleanKey] = metaJson['iconUrl'].toString();
                     }
                   }
-                } catch (_) {}
+                } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
               }
             }
           }
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
     }
   }
 
@@ -338,7 +347,7 @@ class QuickJsService {
               }
             }
           }
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
       }
       return true;
     } catch (e) {
@@ -450,7 +459,7 @@ class QuickJsService {
       try {
         final appSupportDir = await getApplicationSupportDirectory();
         candidateDirs.add(Directory('${appSupportDir.path}/extensions'));
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
 
       for (final extDir in candidateDirs) {
         if (await extDir.exists()) {
@@ -623,7 +632,7 @@ class QuickJsService {
             headers['Referer'] = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
           }
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
     }
 
     // 3. Attach domain / Cloudflare cookies from MClient
@@ -719,7 +728,7 @@ class QuickJsService {
     try {
       final match = RegExp(r'''(?:['"]?baseUrl['"]?)\s*:\s*['"]([^'"]+)''').firstMatch(jsCode);
       if (match != null) return match.group(1);
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
     return null;
   }
 
@@ -750,7 +759,7 @@ class QuickJsService {
           id = map['id'] ?? 0;
         }
       }
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
 
     // 2. If any core fields are empty, extract via robust regex patterns
     if (name.isEmpty) {
@@ -900,7 +909,7 @@ class QuickJsService {
             targetUrl = link;
           }
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
     }
 
     try {
@@ -983,7 +992,7 @@ class QuickJsService {
   void dispose() {
     // Drain pool and release all JS runtimes
     for (final s in _runtimePool.values) {
-      try { s.dispose(); } catch (_) {}
+      try { s.dispose(); } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
     }
     _runtimePool.clear();
     _poolAccessOrder.clear();

@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting, debugPrint, kDebugMode;
 import 'package:isar/isar.dart';
 import 'package:uuid/uuid.dart';
-import '../services/wakelock_coordinator.dart';
 import '../db/isar_service.dart';
 import '../db/models/category.dart';
 import '../db/models/chapter.dart';
@@ -16,7 +15,89 @@ import '../engine/source_migration_service.dart';
 import '../logging/logger_service.dart';
 import '../services/image_cache_helper.dart';
 import '../services/settings_service.dart';
+import '../services/wakelock_coordinator.dart';
 import 'graphql_client_service.dart';
+
+/// A queued mutation is abandoned after this many *counted* failures.
+const int kMaxSyncRetries = 5;
+
+/// Transient (network) failures don't count toward [kMaxSyncRetries], so they
+/// need their own ceiling: a record that has been stuck failing this long is
+/// abandoned instead of being retried forever.
+const int kTransientSyncMaxAgeSeconds = 14 * 24 * 60 * 60;
+
+/// Whether [e] is a transient network failure (dropped connection, timeout,
+/// DNS hiccup) rather than the server rejecting the mutation.
+///
+/// Deliberately narrow: bare substrings like "connection" also appear in real
+/// server-side error messages, and misclassifying those as transient would
+/// retry a rejected mutation forever. Pure so tests can check it directly.
+@visibleForTesting
+bool isTransientSyncError(Object e) {
+  if (e is SocketException || e is TimeoutException) return true;
+  final s = e.toString().toLowerCase();
+  return s.contains('socketexception') ||
+      s.contains('timeoutexception') ||
+      s.contains('timed out') ||
+      s.contains('connection refused') ||
+      s.contains('connection reset') ||
+      s.contains('connection closed') ||
+      s.contains('connection error') ||
+      s.contains('network is unreachable') ||
+      s.contains('failed host lookup');
+}
+
+/// New `retryCount` after a failed dispatch. Transient failures leave it
+/// unchanged; everything else (server rejection, GraphQL error) costs one.
+@visibleForTesting
+int retryCountAfterFailure(int current, {required bool transient}) => transient ? current : current + 1;
+
+/// State a queued record moves to after a failed dispatch.
+@visibleForTesting
+SyncRecordState stateAfterFailure({
+  required int retryCount,
+  required bool transient,
+  required int recordAgeSeconds,
+}) {
+  if (retryCount >= kMaxSyncRetries) return SyncRecordState.abandoned;
+  if (transient && recordAgeSeconds >= kTransientSyncMaxAgeSeconds) return SyncRecordState.abandoned;
+  return SyncRecordState.failed;
+}
+
+/// True if [payloadJson] only carries `chapterId`/`isRead`/`lastPageRead` (a
+/// pure progress update) and not a bookmark toggle. Only such records may be
+/// coalesced onto — a bookmark change must never be overwritten by progress.
+@visibleForTesting
+bool isPureChapterProgressPayload(String payloadJson) {
+  try {
+    final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
+    final keys = payload.keys.toSet();
+    return keys.difference({'chapterId', 'isRead', 'lastPageRead'}).isEmpty && keys.contains('lastPageRead');
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Merges a chapter's local `lastPageRead` with the server's during a pull.
+///
+/// Normally the highest value wins, so a pull never rewinds progress. The one
+/// exception is a chapter that was read locally but the server now reports as
+/// unread with no local mutation queued: it was marked unread on another
+/// device, so the server's page number replaces the stale high local one.
+/// A chapter with an unsynced local mutation always keeps its local value
+/// until that mutation replays.
+@visibleForTesting
+int mergeLastPageRead({
+  required int local,
+  required int server,
+  required bool localWasRead,
+  required bool serverIsRead,
+  required bool hasPendingMutation,
+}) {
+  if (hasPendingMutation) return local;
+  if (localWasRead && !serverIsRead) return server;
+  return local > server ? local : server;
+}
 
 class SyncEngine {
   static SyncEngine? _instance;
@@ -89,7 +170,7 @@ class SyncEngine {
         if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
           await WakelockCoordinator.instance.acquire('sync');
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[sync_engine] ignored error: $ignoredError'); }
       await LoggerService.instance.logInfo('Starting sync cycle with server...', 'SyncEngine');
       await _flushPendingMutations();
       await _pullServerState();
@@ -101,7 +182,7 @@ class SyncEngine {
         if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
           await WakelockCoordinator.instance.release('sync');
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[sync_engine] ignored error: $ignoredError'); }
       _isSyncing = false;
     }
   }
@@ -122,14 +203,47 @@ class SyncEngine {
             isRead,
             lastPageRead,
           );
-          if (res != null) return;
+          if (res != null) {
+            // The server now has the latest progress, so any still-queued
+            // progress update for this chapter is stale. Replaying it later
+            // would overwrite this newer value with an older one.
+            await _dropQueuedProgressRecords(chapterServerId);
+            return;
+          }
         } catch (e) {
           await LoggerService.instance.logWarning('Direct chapter read status sync failed ($chapterServerId): $e, queuing for replay', 'SyncEngine');
         }
       }
     }
 
-    // Queue offline SyncRecord for replay when online
+    // Queue offline SyncRecord for replay when online. Page turns fire this
+    // once per debounced scroll/page-change, so an offline reading session
+    // would otherwise queue one record per page — all but the last are
+    // redundant since only the final lastPageRead matters. Coalesce onto an
+    // existing pending, not-yet-attempted progress record for this chapter
+    // instead of piling up a new one each time.
+    final existing = (await IsarService.instance.getPendingChapterRecords(chapterServerId.toString()))
+        .where((r) =>
+            r.action == SyncAction.update && r.retryCount == 0 && isPureChapterProgressPayload(r.payloadJson))
+        .toList();
+
+    if (existing.isNotEmpty) {
+      final record = existing.first;
+      record.payloadJson = jsonEncode({
+        'chapterId': chapterServerId,
+        'isRead': isRead,
+        'lastPageRead': lastPageRead,
+      });
+      record.timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      await IsarService.instance.saveSyncRecord(record);
+      // Any duplicates beyond the first (shouldn't normally happen, but a
+      // race between two callers could produce one) are stale — drop them.
+      for (final dup in existing.skip(1)) {
+        await IsarService.instance.deleteSyncRecord(dup.id);
+      }
+      return;
+    }
+
     final record = SyncRecord()
       ..recordId = const Uuid().v4()
       ..entityType = SyncEntityType.chapter
@@ -144,6 +258,20 @@ class SyncEngine {
       ..deviceId = _deviceId ?? 'default_device'
       ..state = SyncRecordState.pending;
     await IsarService.instance.saveSyncRecord(record);
+  }
+
+  /// Deletes queued, not-yet-attempted pure progress records for a chapter
+  /// (see [isPureChapterProgressPayload]); bookmark records are left alone.
+  Future<void> _dropQueuedProgressRecords(int chapterServerId) async {
+    try {
+      final stale = (await IsarService.instance.getPendingChapterRecords(chapterServerId.toString()))
+          .where((r) => r.action == SyncAction.update && isPureChapterProgressPayload(r.payloadJson));
+      for (final r in stale) {
+        await IsarService.instance.deleteSyncRecord(r.id);
+      }
+    } catch (e) {
+      await LoggerService.instance.logWarning('Failed to drop stale queued progress for $chapterServerId: $e', 'SyncEngine');
+    }
   }
 
   Future<void> syncChapterBookmark(int chapterServerId, bool isBookmarked) async {
@@ -419,7 +547,7 @@ class SyncEngine {
           rec.payloadJson = jsonEncode(payload);
           changed.add(rec);
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[sync_engine] ignored error: $ignoredError'); }
     }
     return changed;
   }
@@ -438,7 +566,17 @@ class SyncEngine {
         return byTs != 0 ? byTs : a.id.compareTo(b.id);
       });
 
-    for (final record in executionList) {
+    for (final queued in executionList) {
+      // Re-read each record just before dispatch. Earlier steps of this same
+      // flush (the offline-category id remap) and concurrent writes (a direct
+      // progress write that dropped this record, a coalesced page turn) may
+      // have rewritten or deleted it since the list was loaded; dispatching
+      // the stale in-memory copy would replay an outdated payload.
+      final record = await IsarService.instance.getSyncRecord(queued.id);
+      if (record == null ||
+          (record.state != SyncRecordState.pending && record.state != SyncRecordState.failed)) {
+        continue;
+      }
       try {
         final payload = jsonDecode(record.payloadJson) as Map<String, dynamic>;
         bool success = false;
@@ -513,7 +651,7 @@ class SyncEngine {
                     // payload. Rewrite them to the real server id, or the
                     // assign replay would send an unknown category and the
                     // server would silently drop the assignment.
-                    final pendingAssigns = await IsarService.instance.getPendingSyncRecords();
+                    final pendingAssigns = await IsarService.instance.getPendingCategoryRecords();
                     final remapped = remapOfflineAssignRecords(
                       records: pendingAssigns,
                       localServerId: localServerId,
@@ -547,19 +685,52 @@ class SyncEngine {
         }
 
         if (success) {
-          await IsarService.instance.deleteSyncRecord(record.id);
+          await _completeDispatchedRecord(record);
         } else {
-          record.retryCount += 1;
-          record.state = record.retryCount >= 5 ? SyncRecordState.abandoned : SyncRecordState.failed;
-          await IsarService.instance.saveSyncRecord(record);
+          // GraphQLClientService.query() swallows every failure and returns
+          // null, so a dropped connection lands here, not in the catch below.
+          // If the client now considers the server unreachable, the mutation
+          // wasn't rejected — don't spend one of its retries on it.
+          await _recordDispatchFailure(record, transient: GraphQLClientService.instance.isKnownUnreachable);
         }
       } catch (e, stack) {
-        record.retryCount += 1;
-        record.state = record.retryCount >= 5 ? SyncRecordState.abandoned : SyncRecordState.failed;
-        await IsarService.instance.saveSyncRecord(record);
+        await _recordDispatchFailure(record, transient: isTransientSyncError(e));
         await LoggerService.instance.logError('Failed to dispatch SyncRecord #${record.id}: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
       }
     }
+  }
+
+  /// Removes a successfully dispatched record — unless its payload changed
+  /// while the request was in flight. Page turns coalesce onto queued progress
+  /// records, so a turn landing mid-flush rewrites the payload; deleting from
+  /// our stale in-memory copy would silently discard that newer progress.
+  /// In that case the record stays queued and the next cycle sends it.
+  Future<void> _completeDispatchedRecord(SyncRecord dispatched) async {
+    final current = await IsarService.instance.getSyncRecord(dispatched.id);
+    if (current == null) return;
+    if (current.payloadJson == dispatched.payloadJson) {
+      await IsarService.instance.deleteSyncRecord(dispatched.id);
+    } else {
+      await LoggerService.instance.logInfo(
+        'SyncRecord #${dispatched.id} changed while in flight — keeping it queued for the next cycle',
+        'SyncEngine',
+      );
+    }
+  }
+
+  /// Applies retry accounting after a failed dispatch. Re-reads the record so
+  /// only `retryCount`/`state` are written and a payload coalesced during the
+  /// request isn't reverted by saving the stale in-memory copy.
+  Future<void> _recordDispatchFailure(SyncRecord dispatched, {required bool transient}) async {
+    final current = await IsarService.instance.getSyncRecord(dispatched.id);
+    if (current == null) return;
+    current.retryCount = retryCountAfterFailure(current.retryCount, transient: transient);
+    current.state = stateAfterFailure(
+      retryCount: current.retryCount,
+      transient: transient,
+      recordAgeSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000 - current.timestamp,
+    );
+    await IsarService.instance.saveSyncRecord(current);
   }
 
   Future<void> _pullServerState() async {
@@ -800,6 +971,13 @@ class SyncEngine {
       final library = allLibrary.where((m) => m.serverId > 0).toList();
       if (library.isEmpty) return;
 
+      // Chapters with an unsynced outbound mutation still queued (e.g. this
+      // device marked something read/unread offline) must keep their local
+      // value until that mutation actually reaches the server — otherwise
+      // this pull would immediately overwrite the optimistic local change
+      // with the server's stale value on every sync cycle.
+      final pendingChapterIds = await IsarService.instance.getPendingChapterEntityIds();
+
       await LoggerService.instance.logInfo('Full chapter snapshot: syncing ${library.length} manga', 'SyncEngine');
 
       // Chunk fetch for concurrency
@@ -849,15 +1027,28 @@ class SyncEngine {
               chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
               chapter.pageCount = parseIntSafe(chMap['pageCount'], chapter.pageCount);
 
-              // Monotonic read merge — read state can only go true, never false
+              // Read-state merge: take the server's value outright unless this
+              // chapter has an unsynced outbound mutation queued, in which
+              // case keep the local value until that mutation replays — the
+              // old "OR true, never false" rule meant an unread-on-another-
+              // -device never made it back here.
               final serverIsRead = parseBoolSafe(chMap['isRead']);
-              chapter.isRead = chapter.isRead || serverIsRead;
+              final hasPendingMutation = pendingChapterIds.contains(chapter.serverId.toString());
+              final localWasRead = chapter.isRead;
+              if (!hasPendingMutation) {
+                chapter.isRead = serverIsRead;
+              }
 
-              // Monotonic lastPageRead merge — highest wins
+              // lastPageRead merge — highest wins, except a chapter marked
+              // unread elsewhere takes the server's page (see mergeLastPageRead).
               final serverLastPageRead = parseIntSafe(chMap['lastPageRead']);
-              chapter.lastPageRead = chapter.lastPageRead > serverLastPageRead
-                  ? chapter.lastPageRead
-                  : serverLastPageRead;
+              chapter.lastPageRead = mergeLastPageRead(
+                local: chapter.lastPageRead,
+                server: serverLastPageRead,
+                localWasRead: localWasRead,
+                serverIsRead: serverIsRead,
+                hasPendingMutation: hasPendingMutation,
+              );
 
               final rawServerLastReadAt = chMap['lastReadAt'] != null
                   ? int.tryParse(chMap['lastReadAt'].toString())
@@ -926,6 +1117,8 @@ class SyncEngine {
   // ── HISTORY SYNC (isRead = true chapters) ────────────────────────────────
   Future<void> _syncHistoryChapters({required String serverUrl}) async {
     try {
+      // One query for the whole pass — see _syncAllChaptersForLibrary.
+      final pendingChapterIds = await IsarService.instance.getPendingChapterEntityIds();
       final historyData = await GraphQLClientService.instance.fetchHistoryChapters(0);
       if (historyData != null && historyData.containsKey('chapters')) {
         final chNodes = historyData['chapters']['nodes'] as List<dynamic>;
@@ -951,9 +1144,20 @@ class SyncEngine {
           chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
           chapter.pageCount = parseIntSafe(chMap['pageCount'], chapter.pageCount);
 
-          // Monotonic merge
-          chapter.isRead = chapter.isRead || serverIsRead;
-          chapter.lastPageRead = chapter.lastPageRead > serverLastPageRead ? chapter.lastPageRead : serverLastPageRead;
+          // Read-state: take the server's value unless this chapter still has
+          // an unsynced outbound mutation queued (see _syncAllChaptersForLibrary).
+          final hasPendingMutation = pendingChapterIds.contains(chServerId.toString());
+          final localWasRead = chapter.isRead;
+          if (!hasPendingMutation) {
+            chapter.isRead = serverIsRead;
+          }
+          chapter.lastPageRead = mergeLastPageRead(
+            local: chapter.lastPageRead,
+            server: serverLastPageRead,
+            localWasRead: localWasRead,
+            serverIsRead: serverIsRead,
+            hasPendingMutation: hasPendingMutation,
+          );
           if (serverLastReadAt != null && serverLastReadAt > (chapter.lastReadAt ?? 0)) {
             chapter.lastReadAt = serverLastReadAt;
           }
@@ -1012,6 +1216,7 @@ class SyncEngine {
   // their fetchedAt timestamp and denormalized manga metadata.
   Future<void> _syncRecentUpdateChapters({required String serverUrl}) async {
     try {
+      final pendingChapterIds = await IsarService.instance.getPendingChapterEntityIds();
       final data = await GraphQLClientService.instance.fetchUpdatesChapters(first: 150);
       if (data == null || !data.containsKey('chapters')) return;
 
@@ -1030,8 +1235,22 @@ class SyncEngine {
         chapter.mangaId = parseIntSafe(map['mangaId'], chapter.mangaId);
         chapter.name = map['name'] as String? ?? chapter.name;
         chapter.chapterNumber = parseDoubleSafe(map['chapterNumber'], chapter.chapterNumber);
-        chapter.isRead = parseBoolSafe(map['isRead']) || chapter.isRead;
-        chapter.lastPageRead = parseIntSafe(map['lastPageRead'], chapter.lastPageRead);
+        final serverIsRead = parseBoolSafe(map['isRead']);
+        final hasPendingMutation = pendingChapterIds.contains(chServerId.toString());
+        final localWasRead = chapter.isRead;
+        if (!hasPendingMutation) {
+          chapter.isRead = serverIsRead;
+        }
+        // Same merge as the snapshot/history pulls: this used to take the
+        // server's page outright, which discarded offline reading progress
+        // that was still queued for upload.
+        chapter.lastPageRead = mergeLastPageRead(
+          local: chapter.lastPageRead,
+          server: parseIntSafe(map['lastPageRead'], chapter.lastPageRead),
+          localWasRead: localWasRead,
+          serverIsRead: serverIsRead,
+          hasPendingMutation: hasPendingMutation,
+        );
         chapter.isDownloadedOnServer = parseBoolSafe(map['isDownloaded']) || chapter.isDownloadedOnServer;
 
         final rawUpload = map['uploadDate'] ?? map['dateUpload'];

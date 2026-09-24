@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 
@@ -158,6 +158,6 @@ class BackgroundService {
     if (kIsWeb || !Platform.isAndroid) return;
     try {
       await Workmanager().cancelAll();
-    } catch (_) {}
+    } catch (ignoredError) { if (kDebugMode) debugPrint('[background_service] ignored error: $ignoredError'); }
   }
 }

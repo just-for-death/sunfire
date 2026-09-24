@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:html/dom.dart';
 import 'package:pseudom/pseudom.dart' as pseudom;
 import 'package:xpath_selector_html_parser/xpath_selector_html_parser.dart';
@@ -185,7 +186,7 @@ void _initPseudoSelector() {
       try {
         final parsed = pseudom.parse(sel);
         if (parsed.selectFirst(element) != null) return true;
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[dom_extensions] ignored error: $ignoredError'); }
     }
     return false;
   }
@@ -433,7 +434,7 @@ extension ElementExtension on Element {
           final target = parent!.nodes.firstWhere((e) => e == this) as Element;
           return pseudom.parse(_fixSelector(selector)).select(target).toList();
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[dom_extensions] ignored error: $ignoredError'); }
       return null;
     }
   }
@@ -453,7 +454,7 @@ extension ElementExtension on Element {
           final target = parent!.nodes.firstWhere((e) => e == this) as Element;
           return pseudom.parse(_fixSelector(selector)).selectFirst(target);
         }
-      } catch (_) {}
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[dom_extensions] ignored error: $ignoredError'); }
       return null;
     }
   }

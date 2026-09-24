@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:path_provider/path_provider.dart';
 import '../logging/logger_service.dart';
 import 'quickjs_service.dart';
@@ -289,7 +290,7 @@ class RepoManager {
             list = [];
           }
           return list.whereType<Map<String, dynamic>>().map((item) => RepoSourceItem.fromJson(item, normalizedUrl)).toList();
-        } catch (_) {}
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[repo_manager] ignored error: $ignoredError'); }
       }
       return [];
     }
