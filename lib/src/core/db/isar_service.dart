@@ -119,10 +119,14 @@ class IsarService {
 
   Future<Manga?> getMangaByServerId(int serverId) async {
     if (!_isInitialized) return null;
-    final byServer = await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
-    if (byServer != null) return byServer;
-    // Fallback to Isar local auto-increment ID for local standalone manga
-    return await _isar.mangas.get(serverId);
+    // serverId is a unique-indexed field that is always populated on save
+    // (real Suwayomi id, or a synthetic negative id for standalone manga), so
+    // this lookup is authoritative. We deliberately do NOT fall back to
+    // `_isar.mangas.get(serverId)` (Isar's local auto-increment id) — doing
+    // so previously let an unrelated record with a colliding local id be
+    // returned/overwritten whenever a server/synthetic id happened to match
+    // some other manga's internal Isar id.
+    return await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
   }
 
   /// Returns the count of manga currently marked as inLibrary in Isar.
@@ -162,26 +166,27 @@ class IsarService {
 
   Future<List<Chapter>> getChaptersForManga(int mangaId) async {
     if (!_isInitialized) return [];
-    final chapters = await _isar.chapters.filter().mangaIdEqualTo(mangaId).sortByChapterNumberDesc().findAll();
-    if (chapters.isNotEmpty) return chapters;
-    // Fallback: if mangaId was an Isar local ID, check its serverId, or vice versa
-    final manga = await _isar.mangas.get(mangaId);
-    if (manga != null && manga.serverId != 0 && manga.serverId != mangaId) {
-      return await _isar.chapters.filter().mangaIdEqualTo(manga.serverId).sortByChapterNumberDesc().findAll();
-    }
-    final byServerManga = await _isar.mangas.filter().serverIdEqualTo(mangaId).findFirst();
-    if (byServerManga != null && byServerManga.id != mangaId) {
-      return await _isar.chapters.filter().mangaIdEqualTo(byServerManga.id).sortByChapterNumberDesc().findAll();
-    }
-    return [];
+    // chapter.mangaId is always written as the parent manga's serverId (see
+    // sync_engine.dart), never as Isar's local auto-increment id. If a caller
+    // passes a manga's local Isar id by mistake, the old fallback here would
+    // reinterpret it as *some other* manga's serverId (via `.get(mangaId)`,
+    // an unrelated collection's key space) and could return that unrelated
+    // manga's chapters. Do a single unambiguous lookup only.
+    return await _isar.chapters.filter().mangaIdEqualTo(mangaId).sortByChapterNumberDesc().findAll();
   }
 
   Future<Chapter?> getChapterByServerId(int serverId) async {
     if (!_isInitialized) return null;
-    final byServer = await _isar.chapters.filter().serverIdEqualTo(serverId).findFirst();
-    if (byServer != null) return byServer;
-    // Fallback to Isar auto-increment ID
-    return await _isar.chapters.get(serverId);
+    // See getMangaByServerId — serverId is unique-indexed and authoritative;
+    // no fallback to the Isar local auto-increment id.
+    return await _isar.chapters.filter().serverIdEqualTo(serverId).findFirst();
+  }
+
+  /// Lookup by Isar's LOCAL auto-increment id. Only for chapters that have no
+  /// server id; never use this to resolve a server id.
+  Future<Chapter?> getChapterByLocalId(int id) async {
+    if (!_isInitialized || id <= 0) return null;
+    return await _isar.chapters.get(id);
   }
 
   Future<List<Chapter>> getReadingHistory() async {
@@ -312,24 +317,22 @@ class IsarService {
   Future<void> deleteManga(int serverId) async {
     if (!_isInitialized) return;
     await _isar.writeTxn(() async {
-      final manga = await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
-      final localManga = manga ?? await _isar.mangas.get(serverId);
+      // No fallback to `.get(serverId)` — see getMangaByServerId. Deleting
+      // whatever unrelated manga happened to own that local Isar id was the
+      // cause of "wrong series disappeared" reports.
+      final localManga = await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
+      // chapter.mangaId is always the manga's serverId (never its local
+      // Isar id), so the `.or().mangaIdEqualTo(localManga.id)` arm below
+      // matched by coincidence at best; drop it to avoid deleting chapters
+      // that belong to a different manga whose serverId happens to equal
+      // this manga's local id.
+      final targetServerId = localManga?.serverId ?? serverId;
       if (localManga != null) {
         await _isar.mangas.delete(localManga.id);
-        final chapters = await _isar.chapters
-            .filter()
-            .mangaIdEqualTo(localManga.serverId)
-            .or()
-            .mangaIdEqualTo(localManga.id)
-            .findAll();
-        if (chapters.isNotEmpty) {
-          await _isar.chapters.deleteAll(chapters.map((c) => c.id).toList());
-        }
-      } else {
-        final chapters = await _isar.chapters.filter().mangaIdEqualTo(serverId).findAll();
-        if (chapters.isNotEmpty) {
-          await _isar.chapters.deleteAll(chapters.map((c) => c.id).toList());
-        }
+      }
+      final chapters = await _isar.chapters.filter().mangaIdEqualTo(targetServerId).findAll();
+      if (chapters.isNotEmpty) {
+        await _isar.chapters.deleteAll(chapters.map((c) => c.id).toList());
       }
     });
   }

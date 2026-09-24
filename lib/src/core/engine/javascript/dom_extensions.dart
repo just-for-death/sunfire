@@ -180,7 +180,7 @@ void _initPseudoSelector() {
 
   bool isSelector(Element element, String? args) {
     if (args == null) return false;
-    final selectors = args.split(',').map((s) => s.trim()).toList();
+    final selectors = splitTopLevelSelectors(args);
     for (final sel in selectors) {
       try {
         final parsed = pseudom.parse(sel);
@@ -281,26 +281,88 @@ String _fixSelector(String selector) {
   return selector.replaceAll(':not', ':inot');
 }
 
+/// Splits a selector list on top-level commas only. Commas inside parentheses
+/// (`:is(a, b)`, `:has(a, b)`, `:nth-child(2n + 1)`), square brackets
+/// (`[data-x="a,b"]`) or quotes are kept intact, so real selectors are not
+/// torn apart. Returns trimmed, non-empty parts.
+List<String> splitTopLevelSelectors(String selector) {
+  final parts = <String>[];
+  final buf = StringBuffer();
+  var paren = 0;
+  var bracket = 0;
+  String? quote;
+  for (var i = 0; i < selector.length; i++) {
+    final ch = selector[i];
+    if (quote != null) {
+      buf.write(ch);
+      if (ch == '\\' && i + 1 < selector.length) {
+        buf.write(selector[++i]);
+      } else if (ch == quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (ch == '"' || ch == "'") {
+      quote = ch;
+      buf.write(ch);
+    } else if (ch == '(') {
+      paren++;
+      buf.write(ch);
+    } else if (ch == ')') {
+      if (paren > 0) paren--;
+      buf.write(ch);
+    } else if (ch == '[') {
+      bracket++;
+      buf.write(ch);
+    } else if (ch == ']') {
+      if (bracket > 0) bracket--;
+      buf.write(ch);
+    } else if (ch == ',' && paren == 0 && bracket == 0) {
+      final t = buf.toString().trim();
+      if (t.isNotEmpty) parts.add(t);
+      buf.clear();
+    } else {
+      buf.write(ch);
+    }
+  }
+  final last = buf.toString().trim();
+  if (last.isNotEmpty) parts.add(last);
+  return parts;
+}
+
+/// Runs each selector part against [root] and returns the union in document
+/// order (what a real comma-separated CSS selector returns), de-duplicated.
+List<Element> _selectUnionInDocumentOrder(Element root, List<String> parts) {
+  final found = <Element>{};
+  for (final part in parts) {
+    try {
+      found.addAll(pseudom.parse(_fixSelector(part)).select(root));
+    } catch (_) {
+      // A part the engine cannot parse contributes nothing.
+    }
+  }
+  if (found.length < 2) return found.toList();
+  final ordered = <Element>[];
+  final stack = <Element>[root];
+  while (stack.isNotEmpty && ordered.length < found.length) {
+    final el = stack.removeLast();
+    if (found.contains(el)) ordered.add(el);
+    for (var i = el.children.length - 1; i >= 0; i--) {
+      stack.add(el.children[i]);
+    }
+  }
+  return ordered;
+}
+
 extension DocumentExtension on Document? {
   List<Element>? select(String selector) {
     try {
       _initPseudoSelector();
       final dom = this?.documentElement;
       if (dom == null) return null;
-      if (selector.contains(',')) {
-        final results = <Element>[];
-        final seen = <Element>{};
-        for (final part in selector.split(',')) {
-          final trimmed = part.trim();
-          if (trimmed.isEmpty) continue;
-          try {
-            final subList = pseudom.parse(_fixSelector(trimmed)).select(dom);
-            for (final el in subList) {
-              if (seen.add(el)) results.add(el);
-            }
-          } catch (_) {}
-        }
-        return results;
+      final parts = splitTopLevelSelectors(selector);
+      if (parts.length > 1) {
+        return _selectUnionInDocumentOrder(dom, parts);
       }
       return pseudom.parse(_fixSelector(selector)).select(dom).toList();
     } catch (_) {
@@ -313,16 +375,10 @@ extension DocumentExtension on Document? {
       _initPseudoSelector();
       final dom = this?.documentElement;
       if (dom == null) return null;
-      if (selector.contains(',')) {
-        for (final part in selector.split(',')) {
-          final trimmed = part.trim();
-          if (trimmed.isEmpty) continue;
-          try {
-            final el = pseudom.parse(_fixSelector(trimmed)).selectFirst(dom);
-            if (el != null) return el;
-          } catch (_) {}
-        }
-        return null;
+      final parts = splitTopLevelSelectors(selector);
+      if (parts.length > 1) {
+        final all = _selectUnionInDocumentOrder(dom, parts);
+        return all.isEmpty ? null : all.first;
       }
       return pseudom.parse(_fixSelector(selector)).selectFirst(dom);
     } catch (_) {
@@ -366,20 +422,9 @@ extension ElementExtension on Element {
   List<Element>? select(String selector) {
     try {
       _initPseudoSelector();
-      if (selector.contains(',')) {
-        final results = <Element>[];
-        final seen = <Element>{};
-        for (final part in selector.split(',')) {
-          final trimmed = part.trim();
-          if (trimmed.isEmpty) continue;
-          try {
-            final subList = pseudom.parse(_fixSelector(trimmed)).select(this);
-            for (final el in subList) {
-              if (seen.add(el)) results.add(el);
-            }
-          } catch (_) {}
-        }
-        return results;
+      final parts = splitTopLevelSelectors(selector);
+      if (parts.length > 1) {
+        return _selectUnionInDocumentOrder(this, parts);
       }
       return pseudom.parse(_fixSelector(selector)).select(this).toList();
     } catch (_) {
@@ -396,16 +441,10 @@ extension ElementExtension on Element {
   Element? selectFirst(String selector) {
     try {
       _initPseudoSelector();
-      if (selector.contains(',')) {
-        for (final part in selector.split(',')) {
-          final trimmed = part.trim();
-          if (trimmed.isEmpty) continue;
-          try {
-            final el = pseudom.parse(_fixSelector(trimmed)).selectFirst(this);
-            if (el != null) return el;
-          } catch (_) {}
-        }
-        return null;
+      final parts = splitTopLevelSelectors(selector);
+      if (parts.length > 1) {
+        final all = _selectUnionInDocumentOrder(this, parts);
+        return all.isEmpty ? null : all.first;
       }
       return pseudom.parse(_fixSelector(selector)).selectFirst(this);
     } catch (_) {

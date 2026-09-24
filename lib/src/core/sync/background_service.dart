@@ -51,7 +51,7 @@ void callbackDispatcher() {
       // Update extensions if repos are configured.
       final repos = SettingsService.instance.customRepos;
       if (repos.isNotEmpty) {
-        await RepoManager.instance.updateInstalledExtensions(repos);
+        await RepoManager.instance.updateInstalledExtensions(repos, requireIntegrity: true);
       }
 
       await LoggerService.instance.logInfo(

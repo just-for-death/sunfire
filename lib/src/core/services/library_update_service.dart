@@ -59,35 +59,42 @@ class LibraryUpdateService extends ChangeNotifier {
     }
     _isUpdating = true;
 
-    // Constraint enforcement for background or automated triggers
+    // Constraint enforcement for background or automated triggers.
+    // The single-flight flag is already set, so any throw here MUST release it
+    // or every later update is skipped until the app restarts.
     if (!isManual) {
-      final freqHours = SettingsService.instance.libraryUpdateFrequencyHours;
-      if (freqHours <= 0) {
-        debugPrint('[LibraryUpdateService] Automated updates disabled in settings.');
-        _isUpdating = false;
-        return 0;
-      }
+      try {
+        final freqHours = SettingsService.instance.libraryUpdateFrequencyHours;
+        if (freqHours <= 0) {
+          debugPrint('[LibraryUpdateService] Automated updates disabled in settings.');
+          _isUpdating = false;
+          return 0;
+        }
 
-      final lastTime = SettingsService.instance.lastLibraryUpdateTimestamp;
-      final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      if (nowSec - lastTime < freqHours * 3600) {
-        debugPrint('[LibraryUpdateService] Update frequency interval ($freqHours h) has not elapsed yet.');
-        _isUpdating = false;
-        return 0;
-      }
+        final lastTime = SettingsService.instance.lastLibraryUpdateTimestamp;
+        final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        if (nowSec - lastTime < freqHours * 3600) {
+          debugPrint('[LibraryUpdateService] Update frequency interval ($freqHours h) has not elapsed yet.');
+          _isUpdating = false;
+          return 0;
+        }
 
-      final satisfiesNetwork = await _satisfiesNetworkConstraint();
-      if (!satisfiesNetwork) {
-        debugPrint('[LibraryUpdateService] Skipping update: not connected to Wi-Fi / Ethernet.');
-        _isUpdating = false;
-        return 0;
-      }
+        final satisfiesNetwork = await _satisfiesNetworkConstraint();
+        if (!satisfiesNetwork) {
+          debugPrint('[LibraryUpdateService] Skipping update: not connected to Wi-Fi / Ethernet.');
+          _isUpdating = false;
+          return 0;
+        }
 
-      final satisfiesCharging = await _satisfiesChargingConstraint();
-      if (!satisfiesCharging) {
-        debugPrint('[LibraryUpdateService] Skipping update: charge-only mode and device is not charging.');
+        final satisfiesCharging = await _satisfiesChargingConstraint();
+        if (!satisfiesCharging) {
+          debugPrint('[LibraryUpdateService] Skipping update: charge-only mode and device is not charging.');
+          _isUpdating = false;
+          return 0;
+        }
+      } catch (_) {
         _isUpdating = false;
-        return 0;
+        rethrow;
       }
     }
 
