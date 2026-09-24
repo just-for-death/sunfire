@@ -489,7 +489,99 @@ class GraphQLClientService {
     };
   }
 
+  /// Chapter node fields shared by the detail query and the paginated root
+  /// `chapters` query, so the two can never drift apart.
+  static const String _mangaChapterFields = '''
+        id
+        name
+        chapterNumber
+        url
+        realUrl
+        isRead
+        isBookmarked
+        lastPageRead
+        lastReadAt
+        pageCount
+        fetchedAt
+        uploadDate
+        scanlator
+''';
+
   Future<Map<String, dynamic>?> fetchMangaDetails(int mangaServerId) async {
+    // Manga block first, WITHOUT chapters: the nested `manga.chapters`
+    // connection takes no pagination args on most Suwayomi builds, so very
+    // long series silently truncate there. Chapters are fetched from the root
+    // paginated `chapters` query, then merged into the same response shape.
+    const mangaQueryStr = r'''
+      query($id: Int!) {
+        manga(id: $id) {
+          id
+          title
+          artist
+          author
+          description
+          genre
+          status
+          inLibrary
+          thumbnailUrl
+          url
+          realUrl
+          source {
+            id
+            name
+            displayName
+          }
+        }
+      }
+    ''';
+    final mangaRes = await query(mangaQueryStr, variables: {'id': mangaServerId}, label: 'fetchMangaDetails');
+    if (mangaRes == null || mangaRes['manga'] == null) {
+      return _fetchMangaDetailsLegacy(mangaServerId);
+    }
+
+    const pageSize = 500;
+    final allNodes = <dynamic>[];
+    var offset = 0;
+    while (true) {
+      final pageQueryStr = '''
+        query {
+          chapters(condition: { mangaId: $mangaServerId }, first: $pageSize, offset: $offset) {
+            pageInfo { hasNextPage }
+            nodes { $_mangaChapterFields }
+          }
+        }
+      ''';
+      final pageRes = await query(pageQueryStr, label: 'fetchMangaDetails.chapters');
+      if (pageRes == null || pageRes['chapters'] == null) {
+        // Schema without the paginated root `chapters` query (older/alternate
+        // Suwayomi builds): fall back to the single combined query. Best-effort
+        // — such servers may still truncate very long series.
+        if (offset == 0) return _fetchMangaDetailsLegacy(mangaServerId);
+        break;
+      }
+      final chapterMap = pageRes['chapters'] as Map<String, dynamic>;
+      final pageNodes = chapterMap['nodes'] as List? ?? const [];
+      if (pageNodes.isEmpty) break;
+      allNodes.addAll(pageNodes);
+      final pageInfo = chapterMap['pageInfo'] as Map<String, dynamic>?;
+      final hasNextPage = pageInfo != null
+          ? pageInfo['hasNextPage'] == true
+          : pageNodes.length >= pageSize;
+      offset += pageNodes.length;
+      if (!hasNextPage || pageNodes.length < pageSize) break;
+    }
+
+    // Reassemble data['manga']['chapters']['nodes'] — the shape all callers
+    // (detail screen, full chapter snapshot) consume.
+    final mangaMap = Map<String, dynamic>.from(mangaRes['manga'] as Map<String, dynamic>);
+    mangaMap['chapters'] = {'nodes': allNodes};
+    return {'manga': mangaMap};
+  }
+
+  /// Single-query fallback used when the root paginated `chapters` query (or
+  /// the manga query) is unavailable. Kept byte-for-byte identical to the
+  /// original combined query.
+  Future<Map<String, dynamic>?> _fetchMangaDetailsLegacy(int mangaServerId) async {
     const queryStr = r'''
       query($id: Int!) {
         manga(id: $id) {
