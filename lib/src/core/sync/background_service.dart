@@ -112,6 +112,12 @@ class BackgroundService {
           'BackgroundService: periodic sync registered (every ${freqHours}h, unmetered: $onlyWifi, charging: $onlyCharging)',
           'BackgroundService',
         );
+      } else {
+        // Frequency disabled (0 = off): make sure no stale periodic task from a
+        // previous boot survives. Without this, a task registered when the user
+        // had auto-update enabled keeps running after they disable it and the
+        // app is restarted.
+        await cancelAll();
       }
     } catch (e) {
       await LoggerService.instance.logWarning(

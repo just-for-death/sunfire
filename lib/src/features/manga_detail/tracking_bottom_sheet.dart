@@ -55,6 +55,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   bool _isSearching = false;
   bool _isScrobbling = false;
 
+  /// Monotonic token so a slow/stale search response can never clobber the
+  /// results of a newer search (metron unlink/search race, finding #21/#22).
+  int _searchGeneration = 0;
+
   // Tracker status mapping
   static const Map<int, String> statusNames = {
     1: 'Reading',
@@ -80,6 +84,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   }
 
   Future<void> _loadTrackingData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     // 1. Load local manga for Metron status
@@ -114,6 +119,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   }
 
   Future<void> _searchTracker(int trackerId) async {
+    if (!mounted) return;
+    final searchGen = ++_searchGeneration;
     setState(() {
       _searchingTrackerId = trackerId;
       _isSearching = true;
@@ -125,7 +132,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
       try {
         final query = _searchQuery.isEmpty ? widget.mangaTitle : _searchQuery;
         final res = await MetronService.instance.searchSeries(query: query);
-        if (mounted) {
+        // Ignore the response if a newer search was started meanwhile.
+        if (mounted && searchGen == _searchGeneration) {
           setState(() {
             _searchResults = res.series.map((s) => {
               'title': s.displayName,
@@ -141,7 +149,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
         }
       } catch (e, stack) {
         LoggerService.instance.logError('Failed to search Metron: $e', exception: e, stackTrace: stack, category: 'Metron');
-        if (mounted) setState(() => _isSearching = false);
+        if (mounted && searchGen == _searchGeneration) setState(() => _isSearching = false);
       }
       return;
     }
@@ -149,7 +157,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     try {
       final data = await GraphQLClientService.instance.searchTracker(trackerId, _searchQuery.isEmpty ? widget.mangaTitle : _searchQuery);
       final list = data?['searchTracker']?['trackSearches'] as List<dynamic>? ?? [];
-      if (mounted) {
+      // Ignore the response if a newer search was started meanwhile.
+      if (mounted && searchGen == _searchGeneration) {
         setState(() {
           _searchResults = list.map((n) => n as Map<String, dynamic>).toList();
           _isSearching = false;
@@ -157,11 +166,12 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
       }
     } catch (e, stack) {
       LoggerService.instance.logError('Failed to search tracker: $e', exception: e, stackTrace: stack, category: 'Tracking');
-      if (mounted) setState(() => _isSearching = false);
+      if (mounted && searchGen == _searchGeneration) setState(() => _isSearching = false);
     }
   }
 
   Future<void> _bindManga(int trackerId, dynamic remoteId) async {
+    if (!mounted || _isLoading) return;
     setState(() => _isLoading = true);
     _searchingTrackerId = null;
 
@@ -225,6 +235,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   }
 
   Future<void> _unlinkMetron() async {
+    if (!mounted || _isLoading) return;
     setState(() => _isLoading = true);
     if (_localManga != null) {
       _localManga!.metronSeriesId = null;
@@ -237,6 +248,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   }
 
   Future<void> _scrobbleAllReadChapters() async {
+    if (!mounted || _isScrobbling) return;
     if (_localManga == null || _localManga!.metronSeriesId == null) return;
     setState(() => _isScrobbling = true);
 
@@ -273,6 +285,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   }
 
   Future<void> _unbindRecord(int recordId) async {
+    if (!mounted || _isLoading) return;
     setState(() => _isLoading = true);
     try {
       await GraphQLClientService.instance.unbindTrack(recordId);
@@ -289,25 +302,43 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     }
   }
 
+  /// Normalizes a track-record date value (epoch ms or seconds) to epoch
+  /// milliseconds. Suwayomi stores these as ms, but legacy rows or other
+  /// clients may write seconds; treat any value < 1e12 as seconds (ms values
+  /// for the supported date range are >= 1e12). Returns null for 0/empty/invalid.
+  String? _normalizeTrackEpoch(dynamic raw) {
+    if (raw == null) return null;
+    final str = raw.toString().trim();
+    if (str.isEmpty || str == '0' || str == 'null') return null;
+    final parsed = int.tryParse(str);
+    if (parsed == null || parsed <= 0) return null;
+    final ms = parsed < 1000000000000 ? parsed * 1000 : parsed;
+    return ms.toString();
+  }
+
   void _showEditTrackDialog(Map<String, dynamic> record, String trackerName) {
     final recordId = parseIntSafe(record['id']);
     int currentStatus = parseIntSafe(record['status'], 1);
+    // Suwayomi/other clients may return a status the app does not know about
+    // (e.g. 0 or 7+); clamp to a known value so DropdownButton's
+    // "exactly one item with value" assert never fires (finding #20).
+    if (!statusNames.containsKey(currentStatus)) {
+      currentStatus = 1;
+    }
     double currentChapter = parseDoubleSafe(record['lastChapterRead']);
     int totalChapters = parseIntSafe(record['totalChapters']);
     double currentScore = parseDoubleSafe(record['score']);
-    
-    // Convert timestamp or string to human-readable format
-    String? startEpochStr = record['startDate']?.toString();
-    String? finishEpochStr = record['finishDate']?.toString();
-    if (startEpochStr == '0') startEpochStr = null;
-    if (finishEpochStr == '0') finishEpochStr = null;
+    // Suwayomi store dates as epoch ms, but be defensive: some legacy rows /
+    // other clients may carry seconds. Normalize to ms for display and save.
+    String? startEpochStr = _normalizeTrackEpoch(record['startDate']);
+    String? finishEpochStr = _normalizeTrackEpoch(record['finishDate']);
 
     String startDisplay = '';
-    if (startEpochStr != null && int.tryParse(startEpochStr) != null) {
+    if (startEpochStr != null) {
       startDisplay = DateFormat('MM/dd/yyyy').format(DateTime.fromMillisecondsSinceEpoch(int.parse(startEpochStr)));
     }
     String finishDisplay = '';
-    if (finishEpochStr != null && int.tryParse(finishEpochStr) != null) {
+    if (finishEpochStr != null) {
       finishDisplay = DateFormat('MM/dd/yyyy').format(DateTime.fromMillisecondsSinceEpoch(int.parse(finishEpochStr)));
     }
 
@@ -390,7 +421,15 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           ),
                           IconButton(
                             icon: Icon(Icons.add_circle_outline_rounded, color: primaryColor),
-                            onPressed: () => setDialogState(() => currentChapter++),
+                            onPressed: totalChapters > 0 && currentChapter >= totalChapters
+                                ? null
+                                : () => setDialogState(() {
+                                    currentChapter++;
+                                    // Clamp at total chapters when known (finding #24).
+                                    if (totalChapters > 0 && currentChapter > totalChapters) {
+                                      currentChapter = totalChapters.toDouble();
+                                    }
+                                  }),
                           ),
                         ],
                       ),
@@ -442,27 +481,45 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                             children: [
                               const Text('START DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
                               const SizedBox(height: 6),
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                                icon: const Icon(Icons.calendar_today_rounded, size: 14),
-                                label: Text(startDisplay.isNotEmpty ? startDisplay : 'Set Date', style: const TextStyle(fontSize: 11)),
-                                onPressed: () async {
-                                  final picked = await showDatePicker(
-                                    context: dialogCtx,
-                                    initialDate: DateTime.now(),
-                                    firstDate: DateTime(2000),
-                                    lastDate: DateTime(2035),
-                                  );
-                                  if (picked != null) {
-                                    setDialogState(() {
-                                      startDisplay = DateFormat('MM/dd/yyyy').format(picked);
-                                      startEpochStr = picked.millisecondsSinceEpoch.toString();
-                                    });
-                                  }
-                                },
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                      icon: const Icon(Icons.calendar_today_rounded, size: 14),
+                                      label: Text(startDisplay.isNotEmpty ? startDisplay : 'Set Date', style: const TextStyle(fontSize: 11)),
+                                      onPressed: () async {
+                                        final picked = await showDatePicker(
+                                          context: dialogCtx,
+                                          initialDate: DateTime.now(),
+                                          firstDate: DateTime(2000),
+                                          lastDate: DateTime(2035),
+                                        );
+                                        if (picked != null) {
+                                          setDialogState(() {
+                                            startDisplay = DateFormat('MM/dd/yyyy').format(picked);
+                                            startEpochStr = picked.millisecondsSinceEpoch.toString();
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  if (startDisplay.isNotEmpty)
+                                    IconButton(
+                                      icon: const Icon(Icons.clear_rounded, size: 15, color: Colors.grey),
+                                      tooltip: 'Clear start date',
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () => setDialogState(() {
+                                        startDisplay = '';
+                                        startEpochStr = null;
+                                      }),
+                                    ),
+                                ],
                               ),
                             ],
                           ),
@@ -474,27 +531,45 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                             children: [
                               const Text('FINISH DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
                               const SizedBox(height: 6),
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                                icon: const Icon(Icons.event_available_rounded, size: 14),
-                                label: Text(finishDisplay.isNotEmpty ? finishDisplay : 'Set Date', style: const TextStyle(fontSize: 11)),
-                                onPressed: () async {
-                                  final picked = await showDatePicker(
-                                    context: dialogCtx,
-                                    initialDate: DateTime.now(),
-                                    firstDate: DateTime(2000),
-                                    lastDate: DateTime(2035),
-                                  );
-                                  if (picked != null) {
-                                    setDialogState(() {
-                                      finishDisplay = DateFormat('MM/dd/yyyy').format(picked);
-                                      finishEpochStr = picked.millisecondsSinceEpoch.toString();
-                                    });
-                                  }
-                                },
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                      icon: const Icon(Icons.event_available_rounded, size: 14),
+                                      label: Text(finishDisplay.isNotEmpty ? finishDisplay : 'Set Date', style: const TextStyle(fontSize: 11)),
+                                      onPressed: () async {
+                                        final picked = await showDatePicker(
+                                          context: dialogCtx,
+                                          initialDate: DateTime.now(),
+                                          firstDate: DateTime(2000),
+                                          lastDate: DateTime(2035),
+                                        );
+                                        if (picked != null) {
+                                          setDialogState(() {
+                                            finishDisplay = DateFormat('MM/dd/yyyy').format(picked);
+                                            finishEpochStr = picked.millisecondsSinceEpoch.toString();
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  if (finishDisplay.isNotEmpty)
+                                    IconButton(
+                                      icon: const Icon(Icons.clear_rounded, size: 15, color: Colors.grey),
+                                      tooltip: 'Clear finish date',
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () => setDialogState(() {
+                                        finishDisplay = '';
+                                        finishEpochStr = null;
+                                      }),
+                                    ),
+                                ],
                               ),
                             ],
                           ),
@@ -655,7 +730,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(color: const Color(0x2BFFFFFF), borderRadius: BorderRadius.circular(6)),
                                     child: Text(
-                                      statusNames[parseIntSafe(bound['status'], 1)] ?? 'Reading',
+                                      statusNames[parseIntSafe(bound['status'], 1)] ?? 'Unknown',
                                       style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                     ),
                                   ),

@@ -41,6 +41,8 @@ class WebSocketService {
     if (trimmed.isEmpty) {
       _isDisposed = true;
       _pingTimer?.cancel();
+      _pongWatchdogTimer?.cancel();
+      _lastPongAt = null;
       _reconnectTimer?.cancel();
       _handshakeTimer?.cancel();
       _subscription?.cancel();
@@ -173,7 +175,10 @@ class WebSocketService {
         if (payload != null && payload.containsKey('data')) {
           final innerData = payload['data'] as Map<String, dynamic>?;
           if (innerData != null) {
-            if (innerData.containsKey('updateStatusChanged') && innerData['updateStatusChanged'] is Map<String, dynamic>) {
+            if (innerData.containsKey('libraryUpdateStatusChanged') && innerData['libraryUpdateStatusChanged'] is Map<String, dynamic>) {
+              _updateStatusController.add(innerData['libraryUpdateStatusChanged'] as Map<String, dynamic>);
+            } else if (innerData.containsKey('updateStatusChanged') && innerData['updateStatusChanged'] is Map<String, dynamic>) {
+              // Older Suwayomi builds still emit the deprecated field name.
               _updateStatusController.add(innerData['updateStatusChanged'] as Map<String, dynamic>);
             } else if (innerData.containsKey('downloadStatusChanged') && innerData['downloadStatusChanged'] is Map<String, dynamic>) {
               _downloadStatusController.add(innerData['downloadStatusChanged'] as Map<String, dynamic>);
@@ -187,12 +192,13 @@ class WebSocketService {
   }
 
   void _subscribeEvents() {
-    // 1. Subscribe updateStatusChanged (NO input args)
+    // 1. Subscribe libraryUpdateStatusChanged — the modern field name (the old
+    //    `updateStatusChanged` is deprecated on current Suwayomi builds).
     _channel?.sink.add(jsonEncode({
       'id': '1',
       'type': 'subscribe',
       'payload': {
-        'query': 'subscription { updateStatusChanged { isRunning completeJobs pendingJobs } }'
+        'query': 'subscription { libraryUpdateStatusChanged(input: { maxUpdates: 10 }) { jobsInfo { isRunning } } }'
       }
     }));
 

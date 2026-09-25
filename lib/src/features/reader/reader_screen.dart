@@ -1469,17 +1469,20 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _chapter!.lastReadAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     IsarService.instance.saveChapter(_chapter!);
 
-    // Keep series last-read stamp for library sorting.
+    // Keep series last-read stamp for library sorting. Stored in the same
+    // epoch-SECONDS unit as Chapter.lastReadAt and the server's chapter
+    // lastReadAt — a mixed ms/seconds value would break "Last Read" sorting
+    // and any future chapter-vs-manga comparison.
     final mangaId = _chapter!.mangaId;
     if (mangaId > 0) {
-      final stampMs = DateTime.now().millisecondsSinceEpoch;
+      final stampSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       if (_parentManga != null && (_parentManga!.serverId == mangaId || _parentManga!.id == mangaId)) {
-        _parentManga!.lastReadAt = stampMs;
+        _parentManga!.lastReadAt = stampSeconds;
         IsarService.instance.saveManga(_parentManga!);
       } else {
         IsarService.instance.getMangaByServerId(mangaId).then((manga) {
           if (manga != null) {
-            manga.lastReadAt = stampMs;
+            manga.lastReadAt = stampSeconds;
             IsarService.instance.saveManga(manga);
           }
         });

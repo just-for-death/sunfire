@@ -88,6 +88,7 @@ class DownloadManagerService extends ChangeNotifier {
   final List<LocalDownloadTask> _localTasks = [];
   final Set<int> _downloadedLocalChapterIds = {};
   final Set<int> _downloadedServerChapterIds = {};
+  final Set<int> _downloadedServerMangaIds = {};
   final Set<int> _downloadedLocalMangaIds = {};
   final Map<int, CancelToken> _cancelTokens = {};
   StreamSubscription? _connectivitySubscription;
@@ -520,12 +521,41 @@ class DownloadManagerService extends ChangeNotifier {
   bool isChapterDownloadedLocally(int chapterId) => _downloadedLocalChapterIds.contains(chapterId);
   bool isChapterDownloadedOnServer(int chapterId) => _downloadedServerChapterIds.contains(chapterId);
 
-  void markChapterDownloadedOnServer(int chapterId, bool isDownloaded) {
+  /// Manga (matching serverId / local-id conventions) that have at least one
+  /// chapter downloaded on the Suwayomi server. Used by the library
+  /// "Downloaded" filter — previously it only considered local downloads.
+  Set<int> get downloadedServerMangaIds => Set.unmodifiable(_downloadedServerMangaIds);
+
+  /// Rebuild [_downloadedServerMangaIds] from [_downloadedServerChapterIds] via
+  /// the chapter → manga mapping. Called after every server-queue mutation so
+  /// the derived set stays consistent with the chapter set.
+  Future<void> _rebuildServerMangaIds() async {
+    final mangaIds = <int>{};
+    for (final cid in _downloadedServerChapterIds) {
+      final ch = await IsarService.instance.getChapterByServerId(cid);
+      if (ch == null) continue;
+      mangaIds.add(ch.mangaId);
+      final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
+      if (m != null) {
+        if (m.serverId > 0) mangaIds.add(m.serverId);
+        mangaIds.add(m.id);
+      }
+    }
+    _downloadedServerMangaIds
+      ..clear()
+      ..addAll(mangaIds);
+  }
+
+  Future<void> markChapterDownloadedOnServer(int chapterId, bool isDownloaded) async {
     if (isDownloaded) {
       _downloadedServerChapterIds.add(chapterId);
     } else {
       _downloadedServerChapterIds.remove(chapterId);
     }
+    // Keep the derived manga set consistent with the chapter set: the library
+    // "Downloaded" filter reads downloadedServerMangaIds, so a mutation here
+    // must be reflected there too or the filter misses titles.
+    await _rebuildServerMangaIds();
     notifyListeners();
   }
 
@@ -1003,7 +1033,9 @@ class DownloadManagerService extends ChangeNotifier {
       final ch = await IsarService.instance.getChapterByServerId(chapterId);
       final mId = ch?.mangaId;
       if (ch != null) {
-        ch.isDownloaded = false;
+        // Only the LOCAL copy is being removed; a server-side download of the
+        // same chapter (if any) must keep its flag.
+        ch.isDownloadedLocally = false;
         await IsarService.instance.saveChapter(ch);
       }
       if (mId != null && mId > 0) {
@@ -1089,6 +1121,7 @@ class DownloadManagerService extends ChangeNotifier {
       final res = await GraphQLClientService.instance.enqueueChapterDownload(chapterId);
       if (res != null) {
         _downloadedServerChapterIds.add(chapterId);
+        await _rebuildServerMangaIds();
         notifyListeners();
       }
     }
@@ -1099,6 +1132,7 @@ class DownloadManagerService extends ChangeNotifier {
       final res = await GraphQLClientService.instance.enqueueChapterDownloads(chapterIds);
       if (res != null) {
         _downloadedServerChapterIds.addAll(chapterIds);
+        await _rebuildServerMangaIds();
         notifyListeners();
       }
     }
@@ -1108,6 +1142,7 @@ class DownloadManagerService extends ChangeNotifier {
     if (GraphQLClientService.instance.isConfigured) {
       await GraphQLClientService.instance.deleteDownloadedChapter(chapterId);
       _downloadedServerChapterIds.remove(chapterId);
+      await _rebuildServerMangaIds();
       notifyListeners();
     }
   }

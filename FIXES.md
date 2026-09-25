@@ -1,9 +1,12 @@
-# Sunfire audit fixes — batches 1-4 (cumulative)
+# Sunfire audit fixes — batches 1-5 (cumulative)
 
 Batches 1-3 were delivered as a static zip/patch (no toolchain in that
 sandbox). Batch 4 landed directly in the repo under the normal git workflow
 and was validated with `flutter analyze` (clean) and `flutter test`
-(448 passed / 1 skipped).
+(448 passed / 1 skipped). Batch 5 (final deep-audit sweep: sync/DB, engine,
+browse/migrate, library/detail, tracking, updates/reader, settings,
+notifications) was validated with `fvm flutter analyze` (clean) and
+`fvm flutter test` (448 passed / 1 skipped).
 
 ## Apply
 Unzip over your repo root (this zip already contains batch 1, so it just
@@ -118,11 +121,10 @@ validated with `flutter analyze` clean and `flutter test` 448 passed / 1 skipped
     `seamlessTransitions && showEndOfChapterDialog` (same as long-strip), so
     the dead end-of-chapter toggle can no longer produce a phantom page.
 
-## Still NOT done (from the audit) — as of Batch 4
+## Still NOT done (from the audit) — as of Batch 5
 Image retry-storm memory, 700ms page-turn throttle, SyncRecord coalescing and
 transient-error abandon counting, unread-state propagation, wipe-guard
 count/8s timeout, N+1 chapter queries / startup scan cost,
-`cleanupBulkScrapedUpdates` serverId>200000 heuristic,
 volume-key paging at min/max, debug-key release fallback in build.gradle,
 charger banner / resume flicker, "Continue reading" sort, CI workflow.
 
@@ -130,3 +132,167 @@ Items from the original list that ARE now done in Batch 4: the JS 180s lock vs
 30s reader timeout (item 22, overrun ephemeral runtime) and the empty
 `catch (_) {}` blocks (item 29 — the two genuinely empty ones now log; there
 are no remaining empty catch bodies).
+
+Item from the original list that IS now done in Batch 5: the
+`cleanupBulkScrapedUpdates` `serverId > 200000` heuristic (item 40 — only
+negative synthetic ids are treated as standalone-scraped now).
+
+---
+
+## Batch 5 (new — final deep-audit sweep)
+
+Final pass over the deep audit: sync/DB, engine, browse/migrate,
+library/detail, tracking, updates/reader, settings, backup import and
+notifications. Validated with `fvm flutter analyze` clean and
+`fvm flutter test` 448 passed / 1 skipped.
+
+**Sync / database**
+39. isar_service.dart — `getRecentChapters` and `getInProgressChapters` no
+    longer under-fill via a single `limit * N` pre-fetch; both now page through
+    the feed (pageSize + hard scan ceiling) and filter to library manga in
+    Dart, and `getInProgressChapters` excludes titles removed from the library
+    (previously a removed/never-added title could surface in Continue Reading).
+40. isar_service.dart — `cleanupBulkScrapedUpdates` only treats NEGATIVE
+    serverIds (the one synthetic range this app ever mints for standalone
+    chapters) as standalone-scraped; the old `serverId > 200000` heuristic
+    could delete genuine server history on libraries whose real chapter ids
+    exceed 200000.
+41. graphql_client_service.dart — `fetchHistoryChapters` paginates the whole
+    read history (`LAST_READ_AT DESC`, 500/page, offset-stall guard, 5000-node
+    ceiling) instead of one un-ordered 500-row shot that could silently lose
+    the most recently read entries.
+42. graphql_client_service.dart — `fetchServerUpdateStatus` queries the modern
+    `libraryUpdateStatus { jobsInfo { isRunning finishedJobs totalJobs } }`
+    field; library_update_service.dart and websocket_service.dart consume the
+    new shape, with the deprecated `updateStatus`/`updateStatusChanged` names
+    kept as a fallback for older server builds.
+43. graphql_client_service.dart — `createServerBackup` sends the
+    `PartialBackupFlagsInput` (`flags: { includeManga, includeCategories,
+    includeChapters }`) the current schema expects instead of the removed
+    top-level booleans; backup_settings_screen.dart surfaces a failure when the
+    server returns no backup URL instead of reporting a fake success.
+44. graphql_client_service.dart — library/extension/category queries now fetch
+    the `lang`/`default` fields they use, and `fetchChapterPages`'s loop-stall
+    guard uses the node-count delta so a server that ignores `offset` can no
+    longer loop (the old offset-equality check could compare new offset to an
+    unchanged one and keep looping on a server returning fewer rows per page).
+45. sync_engine.dart — `fetchLibrary` pull is hardened per node: non-map nodes,
+    non-positive ids and badly-typed fields are skipped instead of aborting the
+    entire sync; source name falls back through name/displayName/sourceId;
+    source language comes from the new `lang` field. The outer 8s `fetchLibrary`
+    timeout is removed — each page request is already individually bounded and
+    the cap wrongly disabled sync permanently for any library needing more than
+    one page (~200+ manga) or a slower server.
+46. sync_engine.dart — `syncMangaCategories` accepts `existingCategoryIds` and
+    `setMangaCategories` becomes a diff (add/remove) instead of a blind
+    replace, so editing categories on a client that doesn't currently know all
+    server categories can no longer wipe the unknown ones.
+47. sync_engine.dart — `_pushTrackerProgressForManga` treats a null
+    track-records payload as a failure (record stays queued for retry) instead
+    of "no tracker bound / success" — a transport or GraphQL error could
+    previously drop a pending progress mutation silently.
+48. websocket_service.dart — subscribes to `libraryUpdateStatusChanged` (the
+    modern event name; the old name is kept as a fallback) and `dispose()`
+    now cancels the pong watchdog timer/state.
+49. background_service.dart — disabling the update frequency (0h) now cancels
+    any stale periodic task registered on a previous boot instead of letting it
+    keep running after the user turned auto-update off.
+50. notification_service.dart — background-isolate notification taps (app
+    killed) are forwarded to the main isolate via `IsolateNameServer`, so the
+    payload actually navigates; new-chapter notifications use a per-batch
+    unique id (wrapping under the reserved download range) instead of a shared
+    `1001` that made successive notifications silently replace each other.
+
+**Engine**
+51. quickjs_service.dart — `getExtensionCoverUrl` is now `Future<String?>` and
+    runs under the per-source `withRuntime` lock. It previously evaled
+    directly on the shared pooled runtime (`_getOrCreateRuntime`) — an
+    unsynchronized FFI eval that is undefined behavior when it overlaps
+    another call on the same runtime. All 8 call sites
+    (sync_engine ×2, image_cache_helper ×3, library ×2, manga_detail) await it.
+
+**Browse / search / migrate**
+52. source_manga_grid_screen.dart + global_search_screen.dart — results not
+    from the Suwayomi server (`origin != 'server'`) get synthetic NEGATIVE
+    serverIds so a local JS scrape can never collide with a genuine server id
+    in Isar's unique index; quick-add gates its server mutations
+    (`updateMangaLibraryState` / `updateMangaCategories`) on `isServerSourced`
+    so a bogus/foreign id is never pushed up.
+53. migrate_search_screen.dart — hard `as String` / `as List<dynamic>` casts
+    replaced with `_sourceDisplayNameOf()` / `_coerceGenres()` helpers
+    (genre field accepts List, Map or comma-separated String from different
+    sources; chapter-list entries that aren't maps are skipped instead of
+    throwing mid-migration).
+54. manga_detail_screen.dart — `_loadMangaDetails` gets a generation token and
+    hardened `Map`/`List` casts, so a stale or schema-drifted response can
+    neither crash nor clobber a newer load; chapter dedup keys prefer URL over
+    chapter number (numbers are shared by prologues/re-releases and would
+    wrongly collapse distinct chapters).
+55. metron_series_detail_screen.dart + metron_api_client.dart —
+    `_applyMetronLink` persists the issue map with `jsonEncode` (a hand-joined
+    JSON string silently corrupted future scrobble lookups whenever a key
+    contained JSON-special characters); `_scheduleNextSpacing` completes the
+    CAPTURED completer instead of the (possibly replaced) current one — under
+    concurrency a late response swapping the completer before the spacing timer
+    fired left the older request hung forever.
+
+**Library / detail / tracking**
+56. library_screen.dart — `_clampCategoryIndex` keeps the selected category
+    valid after a server category rename/delete; the "Downloaded" filter also
+    matches SERVER-downloaded manga via the new `downloadedServerMangaIds`;
+    `chapterCount` is denormalized alongside `unreadCount` after library
+    updates; select-all decides on "are all VISIBLE items selected" instead of
+    list-length equality (stale selection ids toggled it the wrong way);
+    category create uses `max(order) + 1` instead of list length (collisions
+    after a deletion scrambled the tab order); the tune-icon dot now reflects
+    every active display customization.
+57. download_manager_service.dart — server-downloaded manga id set keeps the
+    library "Downloaded" filter in sync; rebuilt after every server-queue
+    mutation (enqueue, enqueue-many, delete, `markChapterDownloadedOnServer`)
+    and `deleteLocalDownload` only clears the LOCAL flag — a server download of
+    the same chapter keeps its flag.
+58. manga_detail_screen.dart — `_refreshUnreadCount` queries the route id first
+    (for standalone titles the old code queried a different id space, matched
+    nothing and silently saved unreadCount=0 on every read/unread action,
+    wiping the library badge); `_targetMangaId` guards a zero/unset id;
+    `setState` in the multi-select actions is mounted-guarded; chapter merge
+    copies download state per-flag so a server-only download isn't relabeled
+    local (and vice-versa).
+59. tracking_bottom_sheet.dart — search generation tokens (a slow/stale Metron
+    or tracker search can't clobber a newer one, finding #21/#22); track dates
+    normalized ms↔seconds (`_normalizeTrackEpoch`); unknown statuses clamped to
+    a known Dropdown value (#20); chapter stepper clamps at `totalChapters`
+    (#24); start/finish date rows get a clear button; `_bindManga` /
+    `_unlinkMetron` / `_scrobbleAllReadChapters` / `_unbindRecord` are
+    mounted/loading guarded; unbound status label shows "Unknown" instead of a
+    misleading "Reading".
+
+**Updates / reader / settings / shell**
+60. updates_screen.dart — the server-merge copies download state per-flag
+    (`isDownloadedLocally` / `isDownloadedOnServer`) instead of the combined
+    setter; the single-toggle and bulk mark-read actions now keep the library
+    unread badge in sync and run the manga-detail side effects
+    (delete-if-marked-read + Metron auto-scrobble) exactly as the detail screen
+    does — previously the badge went stale until the next full refresh.
+61. reader_screen.dart — the manga `lastReadAt` stamp the reader writes is
+    epoch-SECONDS (matching `Chapter.lastReadAt` and the server's chapter
+    lastReadAt), so library "Last Read" sorting no longer mixes milliseconds
+    and seconds.
+62. settings — server_settings_screen.dart: `authMode` now uses the real schema
+    enum (`BASIC_AUTH`/`SIMPLE_LOGIN`/`UI_LOGIN`), the WebUI flavor/channel/
+    interface dropdowns carry real enum values (`WEBUI`/`VUI`/`CUSTOM`,
+    `BUNDLED`/`STABLE`/`PREVIEW`, `BROWSER`/`ELECTRON` — the old `TAIDI`/
+    `SYSTEM` values never existed and could never be restored), version display
+    starts as "Unknown"; browse/downloads/server settings guard `setState`
+    after awaits, and `_update` no longer silently swallows the optimistic UI
+    change when disconnected (it tells the user nothing was persisted);
+    library_settings_screen.dart resolves the default category by id (a stale
+    stored name left the radio dialog with nothing selected) and adds a
+    dynamic dropdown item when the server's update interval isn't one of the
+    presets; tachibk import respects `favorite` (library membership) and only
+    creates categories actually referenced by imported entries.
+63. main_shell.dart — the start tab honors `MainShell.selectedTabNotifier`
+    (already set by the route pageBuilder for deep links / notification taps)
+    instead of clobbering it with the startScreen preference — previously a
+    notification's `/updates` route landed on the wrong tab with the URL
+    desynced.

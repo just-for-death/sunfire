@@ -60,19 +60,30 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    final startScreen = SettingsService.instance.startScreen.toLowerCase();
-    switch (startScreen) {
-      case 'updates':
-        _currentIndex = 1;
-        break;
-      case 'history':
-        _currentIndex = 2;
-        break;
-      case 'browse':
-        _currentIndex = 3;
-        break;
-      default:
-        _currentIndex = 0;
+    // The route pageBuilder (app.dart) calls MainShell.switchToTab(index)
+    // BEFORE this widget is mounted, so selectedTabNotifier already holds the
+    // tab the deep link / notification asked for. Honor it instead of
+    // clobbering it with the startScreen preference — previously
+    // _router.go('/updates') from a notification would land on the Library tab
+    // (or whatever startScreen says) with the URL desynced.
+    _currentIndex = MainShell.selectedTabNotifier.value;
+    if (_currentIndex == 0) {
+      // Notifier untouched (still the default) — apply the user's
+      // startScreen preference for a cold launch on /library.
+      final startScreen = SettingsService.instance.startScreen.toLowerCase();
+      switch (startScreen) {
+        case 'updates':
+          _currentIndex = 1;
+          break;
+        case 'history':
+          _currentIndex = 2;
+          break;
+        case 'browse':
+          _currentIndex = 3;
+          break;
+        default:
+          _currentIndex = 0;
+      }
     }
     MainShell.selectedTabNotifier.value = _currentIndex;
     _isSidebarExpanded = SettingsService.instance.tabletSidebarExpanded;

@@ -33,6 +33,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
     setState(() => _isLoading = true);
     try {
       final res = await GraphQLClientService.instance.fetchServerSettings();
+      if (!mounted) return;
       if (res != null && res.containsKey('settings')) {
         final s = res['settings'] as Map<String, dynamic>;
         setState(() {
@@ -41,17 +42,30 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
           _localSourcePath = (s['localSourcePath'] as String?) ?? '';
         });
       } else {
-        setState(() => _isConnected = false);
+        if (mounted) setState(() => _isConnected = false);
       }
     } catch (_) {
-      setState(() => _isConnected = false);
+      if (mounted) setState(() => _isConnected = false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _update(String key, dynamic val) async {
-    if (!_isConnected) return;
+    if (!_isConnected) {
+      // Don't silently swallow a user's change: the optimistic UI update above
+      // already happened, so tell the user nothing was persisted.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Not connected to server — change was not saved'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
     try {
       await GraphQLClientService.instance.updateServerSettings({key: val});
       if (mounted) {
