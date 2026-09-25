@@ -114,7 +114,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   bool _isAutoScrolling = false;
   // Set when auto-scroll advances to the next chapter so hands-free scrolling
   // resumes once that chapter has loaded (loading stops the ticker).
-  bool _resumeAutoScrollAfterLoad = false;
+  // Per-chapter flag: chapterServerId -> shouldResumeAutoScroll
+  final Map<int, bool> _resumeAutoScrollForChapter = {};
   double _autoScrollSpeed = 50.0; // px/sec
   Ticker? _autoScrollTicker;
   Duration? _lastAutoScrollElapsed;
@@ -286,8 +287,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       if (max > 50 && cur >= max - 8) {
         _stopAutoScroll();
         if (_settings.autoScrollAutoNextChapter && _nextChapter != null) {
-          _resumeAutoScrollAfterLoad = true;
-          _loadChapterAndPages(_chapterTargetId(_nextChapter!));
+          final nextChapterId = _chapterTargetId(_nextChapter!);
+          _resumeAutoScrollForChapter[nextChapterId] = true;
+          _loadChapterAndPages(nextChapterId);
         }
         return;
       }
@@ -971,8 +973,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   Future<void> _loadChapterAndPagesInner(int chapterId) async {
     final loadGen = ++_loadGeneration;
     _currentChapterId = chapterId;
-    final resumeAutoScroll = _resumeAutoScrollAfterLoad;
-    _resumeAutoScrollAfterLoad = false;
+    final resumeAutoScroll = _resumeAutoScrollForChapter.remove(chapterId) ?? false;
     // Flush any pending (debounced) progress write for the outgoing chapter
     // BEFORE tearing it down. Without this, quickly advancing within the
     // debounce window (e.g. reading the last page and immediately moving on)
