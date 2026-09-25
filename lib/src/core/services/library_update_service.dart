@@ -141,8 +141,9 @@ class LibraryUpdateService extends ChangeNotifier {
 
         await GraphQLClientService.instance.triggerServerLibraryUpdate();
 
-        // Poll libraryUpdateStatus until server jobs finish (max 45 seconds)
-        for (int i = 0; i < 30; i++) {
+        // Poll libraryUpdateStatus until server jobs finish (configurable timeout)
+        final maxPolls = (SettingsService.instance.serverUpdatePollTimeoutSeconds / 1.5).ceil().clamp(5, 120);
+        for (int i = 0; i < maxPolls; i++) {
           await Future.delayed(const Duration(milliseconds: 1500));
           final status = await GraphQLClientService.instance.fetchServerUpdateStatus();
           final jobsInfo = (status?['libraryUpdateStatus'] as Map<String, dynamic>?)?['jobsInfo'] as Map<String, dynamic>?;

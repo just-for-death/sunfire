@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -230,6 +233,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await SettingsService.instance.removeCustomRepo(url);
   }
 
+  /// Normalizes a server URL by trimming trailing slashes and ensuring a scheme.
+  /// Returns the normalized URL, or null if the input is empty.
+  String? _normalizeServerUrl(String? raw) {
+    if (raw == null) return null;
+    var url = raw.trim().replaceAll(RegExp(r'/+$'), '');
+    if (url.isEmpty) return null;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'http://$url';
+    }
+    return url;
+  }
+
   Future<void> _runInitialHydration() async {
     setState(() {
       _isHydrating = true;
@@ -307,8 +322,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         // ── STEP 2: HYDRATE LIBRARY & CHAPTERS ──
         if (GraphQLClientService.instance.isConfigured) {
           try {
-            await SyncEngine.instance.triggerSync().timeout(const Duration(seconds: 45));
-          } catch (ignoredError) { if (kDebugMode) debugPrint('[onboarding_screen] ignored error: $ignoredError'); }
+            // Configurable via SettingsService, default 45s for initial hydration
+            final timeoutSec = SettingsService.instance.initialSyncTimeoutSeconds;
+            await SyncEngine.instance.triggerSync().timeout(Duration(seconds: timeoutSec));
+          } catch (ignoredError) {
+            if (kDebugMode) debugPrint('[onboarding_screen] ignored error during sync: $ignoredError');
+            // Sync failure is non-fatal for onboarding; library will sync in background
+          }
           final libraryItems = await IsarService.instance.getLibraryManga();
           _totalHydratedManga = libraryItems.length;
         }
@@ -327,21 +347,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
+    } on TimeoutException catch (e, st) {
+      // Timeout is a recoverable error — we still have local-first capability
+      LoggerService.instance.logWarning('Initial hydration timed out', 'Onboarding');
+      if (!mounted) return;
+      _showHydrationError(
+        'Hydration timed out',
+        'Some data could not be fetched from the server. The app will start in local-first mode and sync in the background.',
+        e, st,
+      );
+    } on FormatException catch (e, st) {
+      // Malformed data from server — likely version mismatch or API change
+      LoggerService.instance.logError('Initial hydration format error', exception: e, stackTrace: st, category: 'Onboarding');
+      if (!mounted) return;
+      _showHydrationError(
+        'Server response format error',
+        'The server returned unexpected data. This may indicate a version mismatch. The app will start in local-first mode.',
+        e, st,
+      );
+    } on SocketException catch (e, st) {
+      // Network-level failure
+      LoggerService.instance.logError('Initial hydration network error', exception: e, stackTrace: st, category: 'Onboarding');
+      if (!mounted) return;
+      _showHydrationError(
+        'Network error',
+        'Could not reach the server. Please check your connection. The app will start in local-first mode.',
+        e, st,
+      );
     } catch (e, st) {
-      LoggerService.instance.logError('Initial hydration error',
-          exception: e, stackTrace: st, category: 'Onboarding');
+      // Unexpected error — log full details but don't crash the onboarding
+      LoggerService.instance.logError('Initial hydration unexpected error', exception: e, stackTrace: st, category: 'Onboarding');
       if (!mounted) return;
-      setState(() {
-        _sourcesStatusText = '✓ Local-first mode active (Offline ready)';
-        _libraryStatusText = '✓ Local database initialized';
-        _historyStatusText = '✓ Ready for on-device reading';
-        _hydrationStep = 4;
-      });
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (!mounted) return;
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+      _showHydrationError(
+        'Unexpected error during setup',
+        'An unexpected error occurred. The app will start in local-first mode. Check logs for details.',
+        e, st,
       );
     } finally {
       if (mounted) {
@@ -352,15 +392,64 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
+  /// Shows an error dialog during hydration and offers to continue in local-first mode
+  void _showHydrationError(String title, String message, Object error, StackTrace stackTrace) {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _continueInLocalFirstMode();
+            },
+            child: const Text('Continue in Local-First Mode'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              // Let user go back and retry
+              _pageController.previousPage(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            },
+            child: const Text('Go Back & Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Continues onboarding in local-first mode after an error
+  void _continueInLocalFirstMode() {
+    if (!mounted) return;
+    setState(() {
+      _sourcesStatusText = '⚠ Local-first mode active (Offline ready)';
+      _libraryStatusText = '✓ Local database initialized';
+      _historyStatusText = '✓ Ready for on-device reading';
+      _hydrationStep = 4;
+    });
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
   Future<void> _finishOnboarding() async {
     // Persist the *normalized* server URL (same scheme-repair the connection
     // test applies). Saving the raw text means a user who typed
     // "192.168.1.5:4567" would later have a schemeless base URL that can't be
     // dialed by Dio, breaking every reconnect / GraphQL initialization.
-    var cleanUrl = _serverUrlController.text.trim().replaceAll(RegExp(r'/+$'), '');
-    if (cleanUrl.isNotEmpty && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-      cleanUrl = 'http://$cleanUrl';
-    }
+    final cleanUrl = _normalizeServerUrl(_serverUrlController.text);
     final auth = _buildAuthHeader();
 
     for (final url in _userRepoUrls) {
@@ -368,12 +457,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
 
     await SourceMigrationService.instance.markOnboardingCompleted(
-      serverUrl: cleanUrl,
+      serverUrl: cleanUrl ?? '',
       authHeader: auth,
       selectedRepos: _userRepoUrls,
     );
     SettingsService.instance.onboardingCompleted = true;
-    if (cleanUrl.isNotEmpty) {
+    if (cleanUrl != null) {
       SettingsService.instance.serverUrl = cleanUrl;
     }
 
@@ -381,7 +470,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       SettingsService.instance.cfProxyUrl = _flareSolverrController.text.trim();
     }
 
-    if (cleanUrl.isNotEmpty) {
+    if (cleanUrl != null) {
       GraphQLClientService.instance.initialize(cleanUrl, authToken: auth);
       WebSocketService.instance.initialize(cleanUrl, authToken: auth);
       SyncEngine.instance.initialize();

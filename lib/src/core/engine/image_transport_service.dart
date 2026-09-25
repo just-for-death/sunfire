@@ -4,7 +4,7 @@ import '../logging/logger_service.dart';
 
 class ImageTransportService {
   static ImageTransportService? _instance;
-  late Dio _dio;
+  Dio? _dio;
 
   ImageTransportService._();
 
@@ -20,9 +20,18 @@ class ImageTransportService {
     ));
   }
 
+  void _ensureInitialized() {
+    _dio ??= Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 20),
+    ));
+  }
+
   Future<File?> downloadPageImage(String imageUrl, Map<String, String> headers, String savePath) async {
+    _ensureInitialized();
+    final dio = _dio!;
     try {
-      final response = await _dio.get<List<int>>(
+      final response = await dio.get<List<int>>(
         imageUrl,
         options: Options(
           headers: headers,
