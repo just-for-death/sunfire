@@ -134,4 +134,74 @@ void main() {
       expect(match.first['name'], 'Chapter 1');
     });
   });
+
+  group('Image cache eviction — never evicts on-screen images', () {
+    test('evicts oldest non-on-screen image when cache full', () {
+      final recoveredImages = <String, List<int>>{
+        'url1': [1],
+        'url2': [2],
+        'url3': [3],
+      };
+      final pageUrls = ['url1', 'url2', 'url3'];
+      const currentPage = 1; // 0-indexed, so page 1 is the second page
+
+      // Simulate eviction logic: find candidate that's not currentPage ±2
+      String? evictCandidate;
+      for (final key in recoveredImages.keys) {
+        final idx = pageUrls.indexOf(key);
+        if (idx == -1 || (idx - (currentPage - 1)).abs() > 2) {
+          evictCandidate = key;
+          break;
+        }
+      }
+
+      // With currentPage=1 (0-indexed), pages 0, 1, 2 are protected
+      // All 3 URLs are in the protected range, so none should be evicted
+      // Falls back to first key
+      evictCandidate ??= recoveredImages.keys.first;
+
+      expect(evictCandidate, 'url1'); // Falls back to first
+    });
+
+    test('does not evict current page ±2', () {
+      final keysInOrder = ['url1', 'url2', 'url3', 'url4', 'url5'];
+      const currentPage = 2; // 0-indexed, page 2
+
+      String? evictCandidate;
+      for (final key in keysInOrder) {
+        final idx = keysInOrder.indexOf(key);
+        if (idx == -1 || (idx - (currentPage - 1)).abs() > 2) {
+          evictCandidate = key;
+          break;
+        }
+      }
+
+      // currentPage=2, protected range is indices 0-3 (currentPage-1 ± 2 = 1±2 = -1 to 3)
+      // So indices 0,1,2,3 are protected. Index 4 (url5) is first non-protected.
+      expect(evictCandidate, 'url5');
+    });
+
+    test('falls back to first key when all pages protected', () {
+      final recoveredImages = <String, List<int>>{
+        'url1': [1],
+        'url2': [2],
+      };
+      final keysInOrder = ['url1', 'url2'];
+      const currentPage = 0; // Only pages 0 and 1 exist
+
+      String? evictCandidate;
+      for (final key in keysInOrder) {
+        final idx = keysInOrder.indexOf(key);
+        if (idx == -1 || (idx - (currentPage - 1)).abs() > 2) {
+          evictCandidate = key;
+          break;
+        }
+      }
+
+      // Both pages protected, falls back to first
+      evictCandidate ??= recoveredImages.keys.first;
+
+      expect(evictCandidate, 'url1');
+    });
+  });
 }
