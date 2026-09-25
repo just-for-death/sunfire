@@ -10,6 +10,7 @@ import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
+import '../../core/services/batch_mode_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
@@ -20,8 +21,6 @@ import '../../main_shell.dart';
 
 
 class LibraryScreen extends StatefulWidget {
-  static final ValueNotifier<bool> isBatchModeNotifier = ValueNotifier<bool>(false);
-
   const LibraryScreen({super.key});
 
   @override
@@ -367,7 +366,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         _selectedMangaIds.remove(mangaServerId);
         if (_selectedMangaIds.isEmpty) {
           _isBatchMode = false;
-          LibraryScreen.isBatchModeNotifier.value = false;
+          BatchModeService.instance.disable();
         }
       } else {
         if (!_isBatchMode) {
@@ -377,7 +376,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         }
         _selectedMangaIds.add(mangaServerId);
         _isBatchMode = true;
-        LibraryScreen.isBatchModeNotifier.value = true;
+        BatchModeService.instance.enable();
       }
     });
   }
@@ -395,11 +394,11 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       if (allVisibleSelected) {
         _selectedMangaIds.clear();
         _isBatchMode = false;
-        LibraryScreen.isBatchModeNotifier.value = false;
+        BatchModeService.instance.disable();
       } else {
         _selectedMangaIds.addAll(currentList.map((m) => m.serverId > 0 ? m.serverId : m.id));
         _isBatchMode = true;
-        LibraryScreen.isBatchModeNotifier.value = true;
+        BatchModeService.instance.enable();
       }
     });
   }
@@ -409,7 +408,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     setState(() {
       _selectedMangaIds.clear();
       _isBatchMode = false;
-      LibraryScreen.isBatchModeNotifier.value = false;
+      BatchModeService.instance.disable();
     });
   }
 

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/services/batch_mode_service.dart';
 import 'core/services/download_manager_service.dart';
 import 'core/services/library_update_service.dart';
 import 'core/services/notification_service.dart';
@@ -272,7 +273,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               children: _screens,
             ),
             bottomNavigationBar: ValueListenableBuilder<bool>(
-              valueListenable: LibraryScreen.isBatchModeNotifier,
+              valueListenable: BatchModeService.instance.isBatchMode,
               builder: (context, isBatch, child) {
                 if (isBatch) return const SizedBox.shrink();
                 return child!;
