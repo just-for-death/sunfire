@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
@@ -159,12 +161,13 @@ class _MetronSeriesDetailScreenState extends State<MetronSeriesDetailScreen> {
     if (_series == null) return;
 
     final issuesData = await MetronService.instance.getSeriesIssues(widget.seriesId);
-    final issueMapJson = issuesData.issueMap.map((k, v) => MapEntry('"$k"', v.toString()));
-    final jsonStr = '{${issueMapJson.entries.map((e) => '${e.key}:${e.value}').join(',')}}';
-
+    // Persist the issue-number -> Metron-id map as proper JSON. A hand-joined
+    // string breaks (silently corrupting later scrobble lookups) whenever a
+    // key contains JSON-special characters; jsonEncode is shape-safe for the
+    // Map<String, int> we write here.
+    manga.metronIssuesJson = jsonEncode(issuesData.issueMap);
     manga.metronSeriesId = widget.seriesId;
     manga.publisher = _series?.publisher?.name;
-    manga.metronIssuesJson = jsonStr;
     manga.isMetadataLocked = true;
 
     if (_series?.description != null && _series!.description!.isNotEmpty) {

@@ -42,6 +42,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   bool _sortAscending = false;
   bool _isDescExpanded = false;
 
+  /// Monotonic token for [_loadMangaDetails]: a refresh started while an older
+  /// load is still in flight must not let the stale result clobber the newer one.
+  int _loadGeneration = 0;
+
   // Chapter filter & search
   String _chapterFilter = 'All'; // 'All', 'Unread', 'Downloaded', 'Bookmarked'
   String _chapterSearch = '';
@@ -182,7 +186,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   }
 
   Future<void> _loadMangaDetails() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
+    final loadGen = ++_loadGeneration;
     final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
 
     // 1. Check local Isar DB first to display immediate cached state only if valid
@@ -197,7 +202,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
     _chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
     final hasValidCachedChapters = _chapters.isNotEmpty && _chapters.every((c) => c.url.isNotEmpty);
-    if (_manga != null && hasValidCachedChapters && mounted) {
+    if (_manga != null && hasValidCachedChapters && mounted && loadGen == _loadGeneration) {
       setState(() => _isLoading = false);
     }
 
@@ -214,14 +219,19 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         var detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
 
         // If chapters are empty on server, scrape online from source directly!
-        final rawChNodes = (detailsData?['manga']?['chapters']?['nodes'] as List<dynamic>?) ?? [];
+        final rawChNodes = detailsData?['manga']?['chapters']?['nodes'];
+        if (rawChNodes is! List) return;
         if (rawChNodes.isEmpty) {
           await GraphQLClientService.instance.fetchMangaAndChapters(widget.mangaServerId);
           detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
         }
 
         if (detailsData != null && detailsData.containsKey('manga') && detailsData['manga'] != null) {
-          final mMap = detailsData['manga'] as Map<String, dynamic>;
+          // Guard the cast: a schema change or non-object value must not crash
+          // the whole detail load.
+          final rawManga = detailsData['manga'];
+          if (rawManga is! Map<String, dynamic> && rawManga is! Map) return;
+          final mMap = rawManga is Map<String, dynamic> ? rawManga : Map<String, dynamic>.from(rawManga as Map);
           _manga ??= Manga()..serverId = widget.mangaServerId;
           _manga!.title = mMap['title'] as String? ?? _manga!.title;
           _manga!.author = mMap['author'] as String?;
@@ -251,7 +261,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           if (!hasDirectThumb) {
             String? directThumb;
             if (_manga!.sourceName.isNotEmpty && _manga!.url.isNotEmpty) {
-              directThumb = QuickJsService.instance.getExtensionCoverUrl(_manga!.sourceName, _manga!.url);
+              directThumb = await QuickJsService.instance.getExtensionCoverUrl(_manga!.sourceName, _manga!.url);
             }
             if (directThumb != null && directThumb.isNotEmpty) {
               _manga!.thumbnailUrl = directThumb;
@@ -263,16 +273,19 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           }
 
           if (mMap.containsKey('genre') && mMap['genre'] != null) {
-            _manga!.genres = (mMap['genre'] as List<dynamic>).map((g) => g.toString()).toList();
+            final rawGenre = mMap['genre'];
+            _manga!.genres = rawGenre is List
+                ? rawGenre.map((g) => g.toString()).toList()
+                : [rawGenre.toString()];
           }
 
           await IsarService.instance.saveManga(_manga!);
 
           // Process nested chapters
-          final chaptersMap = mMap['chapters'] as Map<String, dynamic>?;
-          if (chaptersMap != null && chaptersMap.containsKey('nodes')) {
-            final chNodes = chaptersMap['nodes'] as List<dynamic>?;
-            if (chNodes != null && chNodes.isNotEmpty) {
+          final chaptersMap = mMap['chapters'];
+          if (chaptersMap is Map && chaptersMap.containsKey('nodes')) {
+            final nodesRaw = chaptersMap['nodes'];
+            if (nodesRaw is List && nodesRaw.isNotEmpty) {
               final existingChapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
               final existingByServerId = <int, Chapter>{
                 for (final c in existingChapters)
@@ -288,8 +301,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               };
 
               final fetched = <Chapter>[];
-              for (final n in chNodes) {
-                final chMap = n as Map<String, dynamic>;
+              for (final n in nodesRaw) {
+                if (n is! Map) continue;
+                final chMap = Map<String, dynamic>.from(n);
                 final rawDateUpload = (chMap['dateUpload'] ?? chMap['uploadDate'])?.toString();
                 final uploadTimestamp = parseDateToUnix(rawDateUpload);
 
@@ -382,11 +396,14 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           }
           await IsarService.instance.saveManga(_manga!);
 
-          final chList = (localData['chapters'] ?? localData['chapterList'] ?? localData['epList'] ?? localData['episodes']) as List<dynamic>?;
-          if (chList != null && chList.isNotEmpty) {
+          final rawChList = (localData['chapters'] ?? localData['chapterList'] ?? localData['epList'] ?? localData['episodes']);
+          if (rawChList is List && rawChList.isNotEmpty) {
+            final chList = rawChList;
             final fetched = <Chapter>[];
             for (var i = 0; i < chList.length; i++) {
-              final cMap = chList[i] as Map<String, dynamic>;
+              final rawCMap = chList[i];
+              if (rawCMap is! Map) continue;
+              final cMap = Map<String, dynamic>.from(rawCMap);
               final chUrl = (cMap['url'] ?? cMap['link'] ?? '').toString();
               final chName = cMap['name']?.toString() ?? 'Chapter ${i + 1}';
               final rawChNum = (cMap['chapterNumber'] as num?)?.toDouble();
@@ -486,6 +503,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       await IsarService.instance.saveManga(_manga!);
     }
 
+    // A newer load was started while this one was in flight — its results are
+    // fresher; don't let this stale pass overwrite chapters/state.
+    if (loadGen != _loadGeneration) return;
+
     if (_chapters.isEmpty) {
       _chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
     }
@@ -493,7 +514,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     // Merge and deduplicate chapters cleanly
     _chapters = _mergeAndDeduplicateChapters(_chapters);
 
-    if (mounted) {
+    if (mounted && loadGen == _loadGeneration) {
       setState(() => _isLoading = false);
     }
   }
@@ -530,7 +551,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       final urlKey = ch.url.isNotEmpty ? 'url_${ch.url.toLowerCase().trim()}' : null;
       final nameKey = 'name_${cleanName.toLowerCase()}${scanlatorPart.isNotEmpty ? '_$scanlatorPart' : ''}';
 
-      final key = numKey ?? urlKey ?? nameKey;
+      // Dedup key priority: URL first (a URL identifies a distinct chapter
+      // release; a number can be shared by "Prologue" / "Chapter 0" or by
+      // re-releases, which would wrongly collapse them together).
+      final key = urlKey ?? numKey ?? nameKey;
 
       if (!map.containsKey(key)) {
         map[key] = ch;
@@ -544,7 +568,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         if (!existing.isRead && ch.isRead) existing.isRead = true;
         if (existing.lastPageRead == 0 && ch.lastPageRead > 0) existing.lastPageRead = ch.lastPageRead;
         if (existing.lastReadAt == null && ch.lastReadAt != null) existing.lastReadAt = ch.lastReadAt;
-        if (!existing.isDownloaded && ch.isDownloaded) existing.isDownloaded = true;
+        // Copy download state per-flag: the combined `isDownloaded` setter would
+        // mark a server-only download as a local one (and vice-versa), so
+        // preserve the local/server distinction across the merge.
+        if (!existing.isDownloadedLocally && ch.isDownloadedLocally) existing.isDownloadedLocally = true;
+        if (!existing.isDownloadedOnServer && ch.isDownloadedOnServer) existing.isDownloadedOnServer = true;
         if (existing.pageCount == 0 && ch.pageCount > 0) existing.pageCount = ch.pageCount;
       }
     }
@@ -558,7 +586,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     setState(() {
       _manga!.inLibrary = newState;
       if (newState) {
-        _manga!.inLibraryAt = DateTime.now().millisecondsSinceEpoch;
+        // Server stores inLibraryAt as epoch SECONDS (Instant.now().epochSecond);
+        // keep local writes in the same unit so library sort/sync stay consistent.
+        _manga!.inLibraryAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
         if (SettingsService.instance.defaultCategoryId != null) {
           final defId = SettingsService.instance.defaultCategoryId!;
           if (!_manga!.categoryIds.contains(defId)) {
@@ -584,11 +614,16 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     } catch (ignoredError) { if (kDebugMode) debugPrint('[manga_detail_screen] ignored error: $ignoredError'); }
 
     if (mounted) {
+      final defCatName = SettingsService.instance.defaultCategoryId != null
+          ? SettingsService.instance.defaultCategoryName
+          : null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             newState
-                ? 'Added to library (${SettingsService.instance.defaultCategoryName})'
+                ? defCatName != null
+                    ? 'Added to library ($defCatName)'
+                    : 'Added to library'
                 : 'Removed from library',
           ),
         ),
@@ -608,6 +643,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
 
     final selectedCatIds = Set<int>.from(_manga!.categoryIds);
+    // Snapshot the pre-edit category set so the server sync can be sent as an
+    // add/remove diff instead of a full replace — a replace would wipe server
+    // categories this client doesn't currently know about.
+    final previousCatIds = List<int>.from(_manga!.categoryIds);
     await showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1F1F24),
@@ -672,7 +711,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       });
                       await IsarService.instance.saveManga(_manga!);
                       if (widget.mangaServerId > 0) {
-                        await SyncEngine.instance.syncMangaCategories(widget.mangaServerId, catList);
+                        await SyncEngine.instance.syncMangaCategories(
+                          widget.mangaServerId,
+                          catList,
+                          existingCategoryIds: previousCatIds,
+                        );
                       }
                       if (sheetContext.mounted) {
                         Navigator.pop(sheetContext);
@@ -705,7 +748,17 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   // Never pass a raw auto-increment id as a chapter target: local chapters
   // carry synthetic negative serverIds and resolve through them.
   int _targetChapterId(Chapter ch) => ch.serverId != 0 ? ch.serverId : ch.id;
-  int _targetMangaId() => (_manga?.serverId != null && _manga!.serverId > 0) ? _manga!.serverId : (_manga?.id ?? widget.mangaServerId);
+
+  /// Resolves the manga id used for local-download tasks. For server manga this
+  /// is the real positive serverId; for standalone titles it must be the local
+  /// Isar id used across the library/download pipeline. Guard against a
+  /// zero/unset id (fresh Manga object not yet saved) and fall back to the
+  /// route id, which the rest of this screen treats as authoritative.
+  int _targetMangaId() {
+    if (_manga != null && _manga!.serverId > 0) return _manga!.serverId;
+    final localId = _manga?.id ?? 0;
+    return localId > 0 ? localId : widget.mangaServerId;
+  }
 
   void _openReader(int chapterServerId) async {
     await context.push('/reader/$chapterServerId');
@@ -770,8 +823,25 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   Future<void> _refreshUnreadCount() async {
     if (_manga == null) return;
-    final mId = _manga!.serverId > 0 ? _manga!.serverId : _manga!.id;
-    final chs = await IsarService.instance.getChaptersForManga(mId);
+    // This screen always reads AND writes chapters with
+    // `mangaId = widget.mangaServerId` (the route id), no matter whether it is
+    // a real Suwayomi id or a synthetic/local id for standalone manga. The old
+    // code queried `_manga!.serverId`/`_manga!.id` instead, which for a
+    // standalone title opened via the library is a DIFFERENT id space, the
+    // query matched nothing, and unreadCount was silently saved as 0 on every
+    // read/unread action — wiping the library unread badge. Query the route id
+    // first (authoritative for this screen), then fall back to the other id
+    // spaces in case legacy rows were minted under them.
+    var chs = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+    if (chs.isEmpty) {
+      final serverId = _manga!.serverId;
+      if (serverId != widget.mangaServerId) {
+        chs = await IsarService.instance.getChaptersForManga(serverId);
+      }
+      if (chs.isEmpty && _manga!.id != widget.mangaServerId && _manga!.id != serverId) {
+        chs = await IsarService.instance.getChaptersForManga(_manga!.id);
+      }
+    }
     final unread = chs.where((c) => !c.isRead).length;
     _manga!.unreadCount = unread;
     await IsarService.instance.saveManga(_manga!);
@@ -901,7 +971,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
     await IsarService.instance.saveChapters(targets);
     await _refreshUnreadCount();
-    setState(() => _selectedChapterIds.clear());
+    if (mounted) {
+      setState(() => _selectedChapterIds.clear());
+    }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Marked ${targets.length} chapters as ${read ? "read" : "unread"}')),
@@ -933,7 +1005,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         await DownloadManagerService.instance.enqueueServerDownloads(ids);
       }
     }
-    setState(() => _selectedChapterIds.clear());
+    if (mounted) {
+      setState(() => _selectedChapterIds.clear());
+    }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Enqueued ${targets.length} chapters for ${local ? "device" : "server"} download')),
@@ -949,7 +1023,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         await DownloadManagerService.instance.deleteServerDownload(c.serverId);
       }
     }
-    setState(() => _selectedChapterIds.clear());
+    if (mounted) {
+      setState(() => _selectedChapterIds.clear());
+    }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Deleted downloads for ${targets.length} chapters')),

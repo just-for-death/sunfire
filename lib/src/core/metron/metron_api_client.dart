@@ -130,11 +130,15 @@ class MetronApiClient {
   }
 
   void _scheduleNextSpacing() {
-    _lastRequestCompleter = Completer<void>();
+    // Complete the CAPTURED completer, never the (possibly replaced) current
+    // one. Under concurrency (e.g. search + detail fired together) a late
+    // response could otherwise replace _lastRequestCompleter before this
+    // timer fires, leaving any request awaiting the older completer hung
+    // forever with no spacing ever applied.
+    final completer = Completer<void>();
+    _lastRequestCompleter = completer;
     Future.delayed(_minRequestSpacing, () {
-      if (_lastRequestCompleter != null && !_lastRequestCompleter!.isCompleted) {
-        _lastRequestCompleter!.complete();
-      }
+      if (!completer.isCompleted) completer.complete();
     });
   }
 

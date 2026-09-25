@@ -26,7 +26,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
   bool _isLoading = true;
   bool _isConnected = false;
   int? _latencyMs;
-  String _serverVersion = 'v2.3.2344';
+  String _serverVersion = 'Unknown';
 
   // Client
   String _clientUrl = '';
@@ -105,6 +105,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     try {
       final res = await GraphQLClientService.instance.fetchServerSettings();
       final elapsed = DateTime.now().difference(start).inMilliseconds;
+      if (!mounted) return;
       if (res != null && res.containsKey('settings')) {
         final s = res['settings'] as Map<String, dynamic>;
         final about = res['aboutServer'] as Map<String, dynamic>?;
@@ -162,23 +163,40 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
           _useHikariPool = parseBoolSafe(s['useHikariConnectionPool'], true);
         });
       } else {
+        if (mounted) {
+          setState(() {
+            _isConnected = false;
+            _latencyMs = null;
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) {
         setState(() {
           _isConnected = false;
           _latencyMs = null;
         });
       }
-    } catch (_) {
-      setState(() {
-        _isConnected = false;
-        _latencyMs = null;
-      });
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _update(String key, dynamic val) async {
-    if (!_isConnected) return;
+    if (!_isConnected) {
+      // Don't silently swallow a user's change: the optimistic UI update above
+      // already happened, so tell the user nothing was persisted.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Not connected to server — change was not saved'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
     try {
       await GraphQLClientService.instance.updateServerSettings({key: val});
       if (mounted) {
@@ -527,18 +545,22 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     underline: const SizedBox(),
                     items: const [
                       DropdownMenuItem(value: 'NONE', child: Text('None')),
-                      DropdownMenuItem(value: 'BASIC', child: Text('HTTP Basic')),
+                      DropdownMenuItem(value: 'BASIC_AUTH', child: Text('HTTP Basic')),
+                      DropdownMenuItem(value: 'SIMPLE_LOGIN', child: Text('Simple Login')),
+                      DropdownMenuItem(value: 'UI_LOGIN', child: Text('UI Login')),
                     ],
                     onChanged: (v) {
                       if (v != null) {
                         setState(() => _authMode = v);
+                        // NONE/BASIC_AUTH/SIMPLE_LOGIN/UI_LOGIN are the values
+                        // the server actually accepts (schema enum AuthMode).
                         _update('authMode', v);
-                        if (v == 'BASIC') _showCredentialsDialog();
+                        if (v == 'BASIC_AUTH') _showCredentialsDialog();
                       }
                     },
                   ),
                 ),
-                if (_authMode == 'BASIC')
+                if (_authMode == 'BASIC_AUTH')
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                     title: const Text('Credentials', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
@@ -920,8 +942,11 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     dropdownColor: const Color(0xFF22222A),
                     underline: const SizedBox(),
                     items: const [
+                      // Real schema enum WebUIFlavor values (WEBUI/VUI/CUSTOM) —
+                      // 'TAIDI' never existed and could never be restored.
                       DropdownMenuItem(value: 'CUSTOM', child: Text('Custom / Modern')),
-                      DropdownMenuItem(value: 'TAIDI', child: Text('Taidi (Tachiyomi Classic)')),
+                      DropdownMenuItem(value: 'WEBUI', child: Text('WebUI')),
+                      DropdownMenuItem(value: 'VUI', child: Text('VUI')),
                     ],
                     onChanged: (v) {
                       if (v != null) {
@@ -948,6 +973,8 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     dropdownColor: const Color(0xFF22222A),
                     underline: const SizedBox(),
                     items: const [
+                      // Real schema enum WebUIChannel values.
+                      DropdownMenuItem(value: 'BUNDLED', child: Text('Bundled')),
                       DropdownMenuItem(value: 'STABLE', child: Text('Stable')),
                       DropdownMenuItem(value: 'PREVIEW', child: Text('Preview')),
                     ],
@@ -976,8 +1003,10 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     dropdownColor: const Color(0xFF22222A),
                     underline: const SizedBox(),
                     items: const [
+                      // Real schema enum WebUIInterface values — 'SYSTEM' was
+                      // never a valid server value.
                       DropdownMenuItem(value: 'BROWSER', child: Text('Browser')),
-                      DropdownMenuItem(value: 'SYSTEM', child: Text('System')),
+                      DropdownMenuItem(value: 'ELECTRON', child: Text('Electron')),
                     ],
                     onChanged: (v) {
                       if (v != null) {

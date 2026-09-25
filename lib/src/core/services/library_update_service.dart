@@ -141,11 +141,11 @@ class LibraryUpdateService extends ChangeNotifier {
 
         await GraphQLClientService.instance.triggerServerLibraryUpdate();
 
-        // Poll updateStatus until server jobs finish (max 45 seconds)
+        // Poll libraryUpdateStatus until server jobs finish (max 45 seconds)
         for (int i = 0; i < 30; i++) {
           await Future.delayed(const Duration(milliseconds: 1500));
           final status = await GraphQLClientService.instance.fetchServerUpdateStatus();
-          final updateStatus = status?['updateStatus'] as Map<String, dynamic>?;
+          final jobsInfo = (status?['libraryUpdateStatus'] as Map<String, dynamic>?)?['jobsInfo'] as Map<String, dynamic>?;
 
           int extractCount(dynamic jobObj) {
             if (jobObj is int) return jobObj;
@@ -162,16 +162,18 @@ class LibraryUpdateService extends ChangeNotifier {
             return 0;
           }
 
-          final running = extractCount(updateStatus?['runningJobs'] ?? status?['runningJobs']);
-          final pending = extractCount(updateStatus?['pendingJobs'] ?? status?['pendingJobs']);
+          final isRunning = jobsInfo?['isRunning'] == true;
+          final totalJobs = extractCount(jobsInfo?['totalJobs']);
+          final finishedJobs = extractCount(jobsInfo?['finishedJobs']);
+          final activeJobs = isRunning ? (totalJobs - finishedJobs).clamp(0, totalJobs) : 0;
 
           _progress = 0.15 + (i / 30.0) * 0.45;
-          _statusMessage = running > 0 || pending > 0
-              ? 'Server updating ($running running, $pending pending)...'
+          _statusMessage = activeJobs > 0
+              ? 'Server updating ($activeJobs job${activeJobs == 1 ? '' : 's'} in progress)...'
               : 'Server finished update jobs...';
           notifyListeners();
 
-          if (running == 0 && pending == 0) break;
+          if (activeJobs == 0) break;
         }
 
         _statusMessage = 'Syncing chapters from server...';

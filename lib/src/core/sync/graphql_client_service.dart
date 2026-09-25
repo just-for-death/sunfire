@@ -466,6 +466,7 @@ class GraphQLClientService {
               name
               displayName
               iconUrl
+              lang
             }
             categories {
               nodes {
@@ -570,6 +571,7 @@ class GraphQLClientService {
             id
             name
             displayName
+            lang
           }
         }
       }
@@ -602,18 +604,18 @@ class GraphQLClientService {
       final chapterMap = pageRes['chapters'] as Map<String, dynamic>;
       final pageNodes = chapterMap['nodes'] as List? ?? const [];
       if (pageNodes.isEmpty) break;
+      final prevCount = allNodes.length;
       allNodes.addAll(pageNodes);
       final pageInfo = chapterMap['pageInfo'] as Map<String, dynamic>?;
       final hasNextPage = pageInfo != null
           ? pageInfo['hasNextPage'] == true
           : pageNodes.length >= pageSize;
-      final prevOffset = offset;
       offset += pageNodes.length;
       if (!hasNextPage || pageNodes.length < pageSize) break;
       // A misbehaving server may ignore `offset` and return the same page
       // forever with hasNextPage: true. Cap the loop so a broken server can't
       // hang sync or balloon `allNodes` into an OOM.
-      if (offset == prevOffset || allNodes.length > 25000) break;
+      if (allNodes.length == prevCount || allNodes.length > 25000) break;
     }
 
     // Reassemble data['manga']['chapters']['nodes'] — the shape all callers
@@ -645,6 +647,7 @@ class GraphQLClientService {
             id
             name
             displayName
+            lang
           }
           chapters {
             nodes {
@@ -828,6 +831,7 @@ class GraphQLClientService {
             id
             name
             order
+            default
           }
         }
       }
@@ -852,9 +856,22 @@ class GraphQLClientService {
   }
 
   Future<Map<String, dynamic>?> fetchHistoryChapters(int offset) async {
-    final queryStr = '''
+    // Paginate the whole read history (not just the first 500) and order by
+    // last-read so the most recent history is always kept when the server
+    // truncates. The naive single-shot query with no order directive let the
+    // server default ordering hide the newest activity beyond the first page.
+    const pageSize = 500;
+    int cursor = offset < 0 ? 0 : offset;
+    final allNodes = <dynamic>[];
+    int? totalCount;
+    const pageQueryStr = '''
       {
-        chapters(condition: { isRead: true }, first: 500, offset: $offset) {
+        chapters(
+          condition: { isRead: true }
+          order: [{ by: LAST_READ_AT, byType: DESC }]
+          first: $pageSize
+          offset: PLACEHOLDER
+        ) {
           totalCount
           nodes {
             id
@@ -874,7 +891,35 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(queryStr, label: 'fetchHistoryChapters');
+
+    while (true) {
+      final queryStr = pageQueryStr.replaceFirst('PLACEHOLDER', '$cursor');
+      final res = await query(queryStr, label: 'fetchHistoryChapters');
+      if (res == null || !res.containsKey('chapters')) {
+        if (allNodes.isNotEmpty) {
+          return {'chapters': {'totalCount': totalCount ?? allNodes.length, 'nodes': allNodes}};
+        }
+        return res;
+      }
+      final chapterMap = res['chapters'] as Map<String, dynamic>?;
+      final pageNodes = chapterMap?['nodes'] as List? ?? const <dynamic>[];
+      totalCount ??= parseIntSafe(chapterMap?['totalCount']);
+      if (pageNodes.isEmpty) {
+        if (allNodes.isEmpty) return res;
+        break;
+      }
+      final prevCount = allNodes.length;
+      allNodes.addAll(pageNodes);
+      if (allNodes.length == prevCount) break; // server ignored offset — stop looping
+      // totalCount is non-null here: line 906 ran on the first page of this loop.
+      if (allNodes.length >= totalCount) break;
+      cursor += pageNodes.length;
+      if (allNodes.length >= 5000) break; // hard ceiling: never balloon memory
+    }
+
+    return {
+      'chapters': {'totalCount': totalCount, 'nodes': allNodes},
+    };
   }
 
   Future<Map<String, dynamic>?> fetchUpdatesChapters({int first = 100}) async {
@@ -942,12 +987,16 @@ class GraphQLClientService {
   }
 
   Future<Map<String, dynamic>?> fetchServerUpdateStatus() async {
+    // `updateStatus` is deprecated server-side; `libraryUpdateStatus.jobsInfo`
+    // exposes the equivalent counters (isRunning / totalJobs / finishedJobs).
     const queryStr = r'''
       {
-        updateStatus {
-          runningJobs { mangas { nodes { id title } } }
-          pendingJobs { mangas { nodes { id title } } }
-          completeJobs { mangas { nodes { id title } } }
+        libraryUpdateStatus {
+          jobsInfo {
+            isRunning
+            finishedJobs
+            totalJobs
+          }
         }
       }
     ''';
@@ -1056,6 +1105,8 @@ class GraphQLClientService {
             lastChapterRead
             totalChapters
             score
+            startDate
+            finishDate
           }
         }
       }
@@ -1506,14 +1557,24 @@ class GraphQLClientService {
   /// Create immediate backup on server with options
   Future<Map<String, dynamic>?> createServerBackup({bool includeCategories = true, bool includeChapters = true}) async {
     const mutStr = r'''
-      mutation CreateBackup($includeCategories: Boolean, $includeChapters: Boolean) {
-        createBackup(input: { includeCategories: $includeCategories, includeChapters: $includeChapters }) {
+      mutation CreateBackup($flags: PartialBackupFlagsInput) {
+        createBackup(input: { flags: $flags }) {
           clientMutationId
           url
         }
       }
     ''';
-    return await query(mutStr, variables: {'includeCategories': includeCategories, 'includeChapters': includeChapters}, label: 'createBackup');
+    return await query(
+      mutStr,
+      variables: {
+        'flags': {
+          'includeManga': true,
+          'includeCategories': includeCategories,
+          'includeChapters': includeChapters,
+        },
+      },
+      label: 'createBackup',
+    );
   }
 
   /// Query restore status for ongoing backup restoration

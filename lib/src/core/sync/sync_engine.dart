@@ -444,14 +444,15 @@ class SyncEngine {
     }
   }
 
-  Future<void> syncMangaCategories(int mangaServerId, List<int> categoryIds) async {
+  Future<void> syncMangaCategories(int mangaServerId, List<int> categoryIds, {List<int>? existingCategoryIds}) async {
     if (mangaServerId <= 0) return;
 
     if (GraphQLClientService.instance.isConfigured) {
       final isOnline = await GraphQLClientService.instance.checkServerReachable();
       if (isOnline) {
         try {
-          final res = await GraphQLClientService.instance.setMangaCategories(mangaServerId, categoryIds);
+          final res = await GraphQLClientService.instance
+              .setMangaCategories(mangaServerId, categoryIds, existingCategoryIds: existingCategoryIds);
           if (res != null) return;
         } catch (e) {
           await LoggerService.instance.logWarning('Direct manga categories sync failed ($mangaServerId): $e, queuing', 'SyncEngine');
@@ -548,7 +549,11 @@ class SyncEngine {
   /// read has been applied on the server. Does not send trackerId.
   Future<bool> _pushTrackerProgressForManga(int mangaServerId) async {
     final data = await GraphQLClientService.instance.fetchTrackRecords(mangaServerId);
-    final nodes = data?['trackRecords']?['nodes'];
+    // A null payload means the fetch failed (transport/GraphQL error) — we do
+    // NOT know whether a tracker is bound, so treat it as a failure so the
+    // pending mutation is retried rather than silently dropped as "success".
+    if (data == null) return false;
+    final nodes = data['trackRecords']?['nodes'];
     if (nodes is! List || nodes.isEmpty) return true; // nothing bound — treat as success
     final res = await GraphQLClientService.instance.trackProgress(mangaServerId);
     return res != null;
@@ -856,40 +861,56 @@ class SyncEngine {
     // ── STEP 2: Pull full library from Suwayomi ───────────────────────────
     bool serverReachable = false;
     try {
-      final libData = await GraphQLClientService.instance
-          .fetchLibrary()
-          .timeout(const Duration(seconds: 8));
+      // No wall-clock cap here: fetchLibrary() paginates `first: 200` pages
+      // internally, and every page request is individually bounded by query()'s
+      // send/receive timeouts. An outer .timeout() previously aborted the whole
+      // pull after 8s, permanently disabling sync for any library needing more
+      // than one page (~200+ manga) or a slower server.
+      final libData = await GraphQLClientService.instance.fetchLibrary();
       if (libData != null && libData.containsKey('mangas')) {
         serverReachable = true;
-        final nodes = libData['mangas']['nodes'] as List<dynamic>;
+        final rawNodes = libData['mangas']['nodes'];
+        final nodes = rawNodes is List ? rawNodes : const <dynamic>[];
         final serverMangas = <Manga>[];
 
         for (final n in nodes) {
-          final nodeMap = n as Map<String, dynamic>;
+          // One malformed node (a non-map, or fields typed differently than
+          // expected) must never abort the entire library pull — skip it and
+          // keep the rest of the sync going.
+          if (n is! Map) continue;
+          final nodeMap = Map<String, dynamic>.from(n);
           final serverId = parseIntSafe(nodeMap['id']);
+          if (serverId <= 0) continue;
           var manga = await IsarService.instance.getMangaByServerId(serverId);
           manga ??= Manga()..serverId = serverId;
 
-          manga.title = nodeMap['title'] as String? ?? 'Untitled';
+          manga.title = nodeMap['title']?.toString() ?? 'Untitled';
           // Only overwrite author/description from server if user has NOT locked metadata via Metron enrichment
           if (!manga.isMetadataLocked) {
-            manga.author = nodeMap['author'] as String?;
-            manga.description = nodeMap['description'] as String?;
+            manga.author = nodeMap['author']?.toString();
+            manga.description = nodeMap['description']?.toString();
           }
           manga.inLibrary = true;
           manga.inLibraryAt = nodeMap['inLibraryAt'] != null ? int.tryParse(nodeMap['inLibraryAt'].toString()) : null;
           manga.unreadCount = parseIntSafe(nodeMap['unreadCount']);
           manga.lastFetchedAt = nowUnix;
 
-          if (nodeMap.containsKey('categories') && nodeMap['categories'] != null) {
-            final catNodes = nodeMap['categories']['nodes'] as List<dynamic>?;
-            if (catNodes != null) {
-              manga.categoryIds = catNodes.map((c) => parseIntSafe((c as Map<String, dynamic>)['id'])).toList();
+          if (nodeMap.containsKey('categories') && nodeMap['categories'] != null && nodeMap['categories'] is Map) {
+            final catContainer = nodeMap['categories'] as Map;
+            final catNodes = catContainer['nodes'];
+            if (catNodes is List) {
+              manga.categoryIds = catNodes
+                  .whereType<Map>()
+                  .map((c) => parseIntSafe(c['id']))
+                  .where((id) => id > 0)
+                  .toList();
             }
           }
 
-          final sourceMap = nodeMap['source'] as Map<String, dynamic>?;
-          manga.sourceName = sourceMap?['name'] as String? ?? sourceMap?['displayName'] as String? ?? nodeMap['sourceId']?.toString() ?? 'Unknown Source';
+          final sourceMapNode = nodeMap['source'];
+          final sourceMap = sourceMapNode is Map ? Map<String, dynamic>.from(sourceMapNode) : null;
+          manga.sourceName =
+              sourceMap?['name']?.toString() ?? sourceMap?['displayName']?.toString() ?? nodeMap['sourceId']?.toString() ?? 'Unknown Source';
           final sourceLang = sourceMap?['lang']?.toString();
           if (sourceLang != null && sourceLang.trim().isNotEmpty) {
             manga.lang = sourceLang.trim();
@@ -899,11 +920,13 @@ class SyncEngine {
 
           // Save the manga's URL on the source website — used by local QuickJS extensions
           // to scrape chapters directly when the server is offline.
-          if (nodeMap['url'] != null && (nodeMap['url'] as String).isNotEmpty) {
-            manga.url = nodeMap['url'] as String;
+          final rawUrl = nodeMap['url'];
+          if (rawUrl != null && rawUrl.toString().isNotEmpty) {
+            manga.url = rawUrl.toString();
           }
 
-          final rawThumb = nodeMap['thumbnailUrl'] as String?;
+          final rawThumbNode = nodeMap['thumbnailUrl'];
+          final rawThumb = rawThumbNode?.toString();
           final isServerProxy = rawThumb == null || rawThumb.isEmpty || rawThumb.contains('/api/v1/manga/');
           final currentThumb = manga.thumbnailUrl;
           final hasDirectThumb = currentThumb != null &&
@@ -915,7 +938,7 @@ class SyncEngine {
             // Check if local extension can resolve direct CDN cover URL (zero network, instantaneous)
             String? extCover;
             if (manga.sourceName.isNotEmpty && manga.url.isNotEmpty) {
-              extCover = QuickJsService.instance.getExtensionCoverUrl(manga.sourceName, manga.url);
+              extCover = await QuickJsService.instance.getExtensionCoverUrl(manga.sourceName, manga.url);
             }
             if (extCover != null && extCover.isNotEmpty) {
               manga.thumbnailUrl = extCover;
@@ -1226,7 +1249,7 @@ class SyncEngine {
             if (!hasDirect) {
               String? extCover;
               if (parentManga.sourceName.isNotEmpty && parentManga.url.isNotEmpty) {
-                extCover = QuickJsService.instance.getExtensionCoverUrl(parentManga.sourceName, parentManga.url);
+                extCover = await QuickJsService.instance.getExtensionCoverUrl(parentManga.sourceName, parentManga.url);
               }
               if (extCover != null && extCover.isNotEmpty) {
                 parentManga.thumbnailUrl = extCover;
