@@ -219,7 +219,12 @@ class ContentResolverService {
           unawaited(MClient.prewarmSession(sourceBaseUrl));
         }
 
-        final localPages = await QuickJsService.instance.fetchChapterPagesLocal(effectiveSourceName, cleanChapterUrl);
+        final localPages = await Future.any([
+          QuickJsService.instance.fetchChapterPagesLocal(effectiveSourceName, cleanChapterUrl),
+          Future.delayed(const Duration(seconds: 20)).then((_) {
+            throw TimeoutException('Local extension scrape timed out after 20s');
+          }),
+        ]);
         if (localPages.isNotEmpty) {
           await LoggerService.instance.logInfo('Resolved ${localPages.length} pages via Local Extension ($effectiveSourceName)', 'ContentResolver');
           return ChapterPagesResult(
