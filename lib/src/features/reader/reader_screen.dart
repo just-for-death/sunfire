@@ -89,6 +89,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   DateTime? _lastNextPageNavAt;
 
   // Prefetch cache: chapterServerId → resolved page URLs
+  static const int _maxPrefetchedChapters = 3;
   final Map<int, List<String>> _prefetchedChapters = {};
   final Set<int> _prefetchingChapters = {};
 
@@ -1218,6 +1219,10 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     // before ANY field write below.
     if (loadGen != _loadGeneration) return;
 
+    // Clear prefetch cache on chapter change to prevent stale data and limit memory
+    _prefetchedChapters.clear();
+    debugPrint('[Reader] Cleared prefetch cache on chapter load');
+
     _sourceName = resolved.effectiveSourceName ?? sourceName;
     _pageUrls = resolved.pageUrls;
     if (_chapter != null && _pageUrls.isNotEmpty && _chapter!.pageCount != _pageUrls.length) {
@@ -1350,6 +1355,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       // Guard against stale prefetch: if generation changed, discard results
       if (loadGen != _loadGeneration) return;
       if (resolved.pageUrls.isNotEmpty) {
+        // Enforce max cache size: evict oldest if over limit
+        while (_prefetchedChapters.length >= _maxPrefetchedChapters) {
+          final oldestKey = _prefetchedChapters.keys.first;
+          _prefetchedChapters.remove(oldestKey);
+          debugPrint('[Reader] Prefetch cache full, evicted oldest chapter');
+        }
         _prefetchedChapters[sid] = resolved.pageUrls;
         debugPrint('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter $sid');
 
