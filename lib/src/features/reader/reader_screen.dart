@@ -1332,6 +1332,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   /// Prefetch the next chapter's page URLs into cache and precache image bitmaps into memory
   Future<void> _prefetchChapter(Chapter chapter) async {
     final sid = _chapterTargetId(chapter);
+    final loadGen = _loadGeneration; // Capture generation at start
     if (_prefetchedChapters.containsKey(sid) || _prefetchingChapters.contains(sid)) return;
     _prefetchingChapters.add(sid);
     try {
@@ -1342,6 +1343,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         chapterUrl: url.isNotEmpty ? url : null,
         sourceName: manga?.sourceName,
       );
+      // Guard against stale prefetch: if generation changed, discard results
+      if (loadGen != _loadGeneration) return;
       if (resolved.pageUrls.isNotEmpty) {
         _prefetchedChapters[sid] = resolved.pageUrls;
         debugPrint('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter $sid');
