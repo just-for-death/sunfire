@@ -60,6 +60,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   isar_generator: ^3.1.0+1
+  mocktail: ^1.0.4
 
 dependency_overrides:
   ffi: ^2.1.3
