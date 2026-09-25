@@ -952,14 +952,19 @@ class QuickJsService {
   }
 
   /// ── RESOLVE EXTENSION DIRECT COVER URL IF SUPPORTED ──
-  String? getExtensionCoverUrl(String sourceName, String mangaUrl) {
+  ///
+  /// Runs through the per-source serialization lock like every other runtime
+  /// call: getCoverUrl is a synchronous FFI eval, and two overlapping evals on
+  /// one pooled runtime is undefined behavior (see [withRuntime]).
+  Future<String?> getExtensionCoverUrl(String sourceName, String mangaUrl) async {
     final jsCode = getExtensionCode(sourceName);
     if (jsCode == null || jsCode.isEmpty || mangaUrl.isEmpty) {
       return null;
     }
     try {
-      final service = _getOrCreateRuntime(sourceName, jsCode);
-      return service.getCoverUrl(mangaUrl);
+      return await withRuntime<String?>(sourceName, jsCode, (service) async {
+        return service.getCoverUrl(mangaUrl);
+      });
     } catch (_) {
       return null;
     }

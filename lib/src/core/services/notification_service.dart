@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:ui' show IsolateNameServer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -7,10 +9,22 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../db/models/chapter.dart';
 import 'settings_service.dart';
 
-/// Top-level callback for notification responses in background or foreground
+/// Port name used to forward taps that arrive in the plugin's background
+/// isolate (app killed / not running) back to the main isolate.
+const String _notificationTapPortName = 'sunfire_notification_tap_port';
+
+/// Top-level callback for notification responses in background or foreground.
+/// Runs inside the plugin-spawned isolate, so it can only forward the payload
+/// over an isolate port — the real navigation happens on the main isolate
+/// ([NotificationService.initialize] registers the port and forwards to
+/// [onNotificationTapped]).
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) {
   debugPrint('[NotificationService] Notification tapped with payload: ${response.payload}');
+  final port = IsolateNameServer.lookupPortByName(_notificationTapPortName);
+  if (port != null) {
+    port.send(response.payload ?? '/updates');
+  }
 }
 
 class NotificationService {
@@ -19,6 +33,12 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
+
+  /// Per-batch id for new-chapter notifications. Android requires unique ids
+  /// per notification (`Notification.Builder` conflict otherwise), so a single
+  /// shared id (previously 1001) meant a second notification silently replaced
+  /// the first. The counter wraps below the reserved download ids (4001+).
+  int _nextNewChapterNotificationId = 1001;
 
   static const String channelId = 'sunfire_new_chapters';
   static const String channelName = 'New Chapters';
@@ -72,6 +92,19 @@ class NotificationService {
         },
         onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
       );
+
+      // Make background-isolate taps (app killed) reach the main isolate.
+      // Re-register defensively — the port may still hold an old listener from
+      // a previous initialize() call in the same process.
+      IsolateNameServer.removePortNameMapping(_notificationTapPortName);
+      final port = ReceivePort();
+      port.listen((payload) {
+        if (payload is String) {
+          debugPrint('[NotificationService] Background tap forwarded: $payload');
+          _selectNotificationStream.add(payload);
+        }
+      });
+      IsolateNameServer.registerPortWithName(port.sendPort, _notificationTapPortName);
 
       final launchDetails = await _plugin.getNotificationAppLaunchDetails();
       if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
@@ -187,8 +220,13 @@ class NotificationService {
     );
 
     try {
+      // Unique id per batch so successive notifications don't overwrite each
+      // other on Android. Reserve the 4001+ range for download notifications.
+      final notificationId = _nextNewChapterNotificationId;
+      _nextNewChapterNotificationId =
+          _nextNewChapterNotificationId >= 3999 ? 1001 : _nextNewChapterNotificationId + 1;
       await _plugin.show(
-        id: 1001,
+        id: notificationId,
         title: title,
         body: body,
         notificationDetails: details,

@@ -12,6 +12,37 @@ import '../../core/services/image_cache_helper.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 
+/// Coerce a source map's display/name field to a non-null String. Extension
+/// lists come from mixed origins (GraphQL nodes, repo JSON, GQL metadata) and
+/// a missing or non-String value must never throw a cast error mid-migration.
+String _sourceDisplayNameOf(Map<String, dynamic> source) {
+  final display = source['displayName'];
+  if (display is String && display.trim().isNotEmpty) return display;
+  final name = source['name'];
+  if (name is String && name.trim().isNotEmpty) return name;
+  return (source['id']?.toString() ?? '').isNotEmpty ? source['id'].toString() : 'Source';
+}
+
+/// Coerce a target manga's genre field to a list of strings. Extensions and
+/// the GraphQL server disagree on shape (List vs comma-joined String vs
+/// Map), so accept all of them without throwing.
+List<String> _coerceGenres(dynamic genre) {
+  if (genre == null) return const <String>[];
+  if (genre is List) {
+    return genre.where((e) => e != null).map((e) => e.toString()).toList();
+  }
+  if (genre is Map) {
+    return genre.values.where((e) => e != null).map((e) => e.toString()).toList();
+  }
+  final str = genre.toString().trim();
+  if (str.isEmpty) return const <String>[];
+  return str
+      .split(RegExp(r'\s*[,;|]\s*'))
+      .where((e) => e.trim().isNotEmpty)
+      .map((e) => e.trim())
+      .toList();
+}
+
 class MigrateSearchScreen extends StatefulWidget {
   final Manga manga;
   final List<Map<String, dynamic>> sources;
@@ -115,7 +146,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
   void _showMigrationConfirmation(Map<String, dynamic> targetManga, Map<String, dynamic> targetSource) {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final targetTitle = (targetManga['title'] ?? targetManga['name'] ?? widget.manga.title).toString();
-    final targetSourceName = targetSource['displayName'] as String? ?? targetSource['name'] as String;
+    final targetSourceName = _sourceDisplayNameOf(targetSource);
     final targetThumb = (targetManga['imageUrl'] ?? targetManga['thumbnailUrl'] ?? targetManga['cover'] ?? '').toString();
 
     bool copyHistory = true;
@@ -305,7 +336,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
     required bool deleteOriginal,
   }) async {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final targetSourceName = targetSource['displayName'] as String? ?? targetSource['name'] as String;
+    final targetSourceName = _sourceDisplayNameOf(targetSource);
     final targetLink = (targetManga['link'] ?? targetManga['url'] ?? '').toString();
     final targetThumb = (targetManga['imageUrl'] ?? targetManga['thumbnailUrl'] ?? targetManga['cover'] ?? '').toString();
     final rawTargetTitle = (targetManga['title'] ?? targetManga['name'] ?? '').toString().trim();
@@ -483,11 +514,11 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
           ..sourceName = targetSourceName
           ..inLibrary = true
           ..inLibraryAt = DateTime.now().millisecondsSinceEpoch ~/ 1000
-          ..status = targetManga['status'] as String? ?? 'UNKNOWN'
-          ..artist = targetManga['artist'] as String?
-          ..author = targetManga['author'] as String?
-          ..description = targetManga['description'] as String?
-          ..genres = (targetManga['genre'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? []
+          ..status = targetManga['status'] is String ? targetManga['status'] as String : targetManga['status']?.toString() ?? 'UNKNOWN'
+          ..artist = targetManga['artist']?.toString()
+          ..author = targetManga['author']?.toString()
+          ..description = targetManga['description']?.toString()
+          ..genres = _coerceGenres(targetManga['genre'])
           ..categoryIds = copyCategories ? List<int>.from(widget.manga.categoryIds) : [];
         await IsarService.instance.saveManga(targetMangaEntity);
       } else {
@@ -611,7 +642,9 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
           final chList = (details['chapters'] ?? details['chapterList'] ?? details['epList'] ?? details['episodes']) as List<dynamic>? ?? [];
           final toSave = <Chapter>[];
           for (var i = 0; i < chList.length; i++) {
-            final cMap = chList[i] as Map<String, dynamic>;
+            final entry = chList[i];
+            if (entry is! Map) continue;
+            final cMap = Map<String, dynamic>.from(entry);
             final cUrl = (cMap['url'] ?? cMap['link'] ?? '').toString();
             final ch = Chapter()
               ..serverId = -(tgtMangaId.abs() * 10000 + i + 1)
@@ -925,7 +958,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                     itemBuilder: (context, index) {
                       final source = targetSources[index];
                       final sourceId = source['id'].toString();
-                      final sourceName = source['displayName'] as String? ?? source['name'] as String;
+                      final sourceName = _sourceDisplayNameOf(source);
                       final lang = (source['lang'] as String? ?? 'en').toUpperCase();
                       final isLoading = _loadingStates[sourceId] ?? false;
                       final results = _searchResults[sourceId] ?? [];

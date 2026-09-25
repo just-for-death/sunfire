@@ -45,6 +45,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
     setState(() => _isLoadingCategories = true);
     // 1. Load from local DB
     final list = await IsarService.instance.getCategories();
+    if (!mounted) return;
     setState(() {
       _categories = list;
     });
@@ -115,10 +116,13 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
       await _loadData();
       return;
     }
+    // Order must be max(existing)+1: using the list length can collide with an
+    // existing order after a deletion, which scrambles tab ordering.
+    final maxOrder = existing.fold<int>(0, (acc, c) => c.order > acc ? c.order : acc);
     final localCat = Category()
       ..serverId = IsarService.generateSyntheticServerId()
       ..name = trimmed
-      ..order = existing.length;
+      ..order = maxOrder + 1;
     await IsarService.instance.saveCategory(localCat);
     await SyncEngine.instance.syncCategoryCreate(
       name: trimmed,
@@ -243,7 +247,14 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
 
   void _showDefaultCategoryDialog() {
     final options = ['None (Uncategorized)', ..._categories.map((c) => c.name)];
-    final currentVal = _settings.defaultCategoryId == null ? 'None (Uncategorized)' : _settings.defaultCategoryName;
+    // Resolve the current selection by id against the live category list — the
+    // stored name may be stale (renamed/deleted category) and would otherwise
+    // leave the radio dialog with nothing selected.
+    final currentId = _settings.defaultCategoryId;
+    final currentVal = currentId == null
+        ? 'None (Uncategorized)'
+        : (_categories.where((c) => c.serverId == currentId).map((c) => c.name).firstOrNull ??
+            'None (Uncategorized)');
     _showRadioDialog(
       title: 'Default Category',
       options: options,
@@ -402,12 +413,22 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                         value: _globalUpdateInterval,
                         dropdownColor: const Color(0xFF22222A),
                         underline: const SizedBox(),
-                        items: const [
-                          DropdownMenuItem(value: 0.0, child: Text('Disabled')),
-                          DropdownMenuItem(value: 6.0, child: Text('Every 6h')),
-                          DropdownMenuItem(value: 12.0, child: Text('Every 12h')),
-                          DropdownMenuItem(value: 24.0, child: Text('Every 24h')),
-                          DropdownMenuItem(value: 48.0, child: Text('Every 48h')),
+                        // The server accepts any positive hour count, so the
+                        // fixed preset set may not contain the current value —
+                        // include a dynamic item so the dropdown never ends up
+                        // with a value that has no matching entry (which would
+                        // render blank / assert in debug).
+                        items: [
+                          const DropdownMenuItem(value: 0.0, child: Text('Disabled')),
+                          const DropdownMenuItem(value: 6.0, child: Text('Every 6h')),
+                          const DropdownMenuItem(value: 12.0, child: Text('Every 12h')),
+                          const DropdownMenuItem(value: 24.0, child: Text('Every 24h')),
+                          const DropdownMenuItem(value: 48.0, child: Text('Every 48h')),
+                          if (!{0.0, 6.0, 12.0, 24.0, 48.0}.contains(_globalUpdateInterval))
+                            DropdownMenuItem(
+                              value: _globalUpdateInterval,
+                              child: Text('Every ${_globalUpdateInterval.toInt()}h (current)'),
+                            ),
                         ],
                         onChanged: (val) {
                           if (val != null) {

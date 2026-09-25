@@ -215,7 +215,7 @@ class ImageCacheHelper {
           if (m != null && effectiveSource.isNotEmpty && QuickJsService.instance.hasExtension(effectiveSource)) {
             String? directCover;
             if (m.url.isNotEmpty) {
-              directCover = QuickJsService.instance.getExtensionCoverUrl(effectiveSource, m.url);
+              directCover = await QuickJsService.instance.getExtensionCoverUrl(effectiveSource, m.url);
             }
             if (directCover == null || directCover.isEmpty) {
               final targetQuery = m.url.isNotEmpty ? m.url : m.title;
@@ -311,7 +311,7 @@ class ImageCacheHelper {
           if (m != null && effectiveSource.isNotEmpty && QuickJsService.instance.hasExtension(effectiveSource)) {
             String? realCoverUrl;
             if (m.url.isNotEmpty) {
-              realCoverUrl = QuickJsService.instance.getExtensionCoverUrl(effectiveSource, m.url);
+              realCoverUrl = await QuickJsService.instance.getExtensionCoverUrl(effectiveSource, m.url);
             }
             if (realCoverUrl == null || realCoverUrl.isEmpty) {
               final targetQuery = m.url.isNotEmpty ? m.url : m.title;
@@ -415,7 +415,7 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
           if (m.thumbnailUrl != null && m.thumbnailUrl!.isNotEmpty && !m.thumbnailUrl!.contains('/api/v1/manga/')) {
             url = m.thumbnailUrl;
           } else if (m.sourceName.isNotEmpty && m.url.isNotEmpty) {
-            final extCover = QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
+            final extCover = await QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
             if (extCover != null && extCover.isNotEmpty) {
               url = extCover;
               IsarService.instance.isar.writeTxn(() async {

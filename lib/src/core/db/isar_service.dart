@@ -271,18 +271,31 @@ class IsarService {
 
       if (libraryIds.isEmpty) return [];
 
-      final chapters = await _isar.chapters
-          .filter()
-          .fetchedAtGreaterThan(0)
-          .sortByFetchedAtDesc()
-          .limit(limit * 3)
-          .findAll();
-
+      // Fetch in pages of 300 and filter to library manga in Dart (Isar has no
+      // `mangaIdIn(...)` filter). Keep pulling pages until we either have the
+      // requested `limit` or have scanned the whole feed, instead of a single
+      // `limit * 3` pre-fetch that under-fills when many recent chapters belong
+      // to non-library manga.
+      const pageSize = 300;
       final result = <Chapter>[];
-      for (final ch in chapters) {
-        if (!libraryIds.contains(ch.mangaId)) continue;
-        result.add(ch);
-        if (result.length >= limit) break;
+      int offset = 0;
+      const maxScan = 10000; // hard ceiling: never balloon memory on huge feeds
+      while (result.length < limit && offset < maxScan) {
+        final page = await _isar.chapters
+            .filter()
+            .fetchedAtGreaterThan(0)
+            .sortByFetchedAtDesc()
+            .offset(offset)
+            .limit(pageSize)
+            .findAll();
+        if (page.isEmpty) break;
+        for (final ch in page) {
+          if (libraryIds.contains(ch.mangaId)) {
+            result.add(ch);
+            if (result.length >= limit) break;
+          }
+        }
+        offset += page.length;
       }
       return result;
     } catch (e, stack) {
@@ -293,7 +306,7 @@ class IsarService {
 
   /// Cleans up ONLY synthetic standalone-scraped chapters that were bulk-stamped
   /// (e.g. the initial Mangago local extension scrape that writes fake serverIds).
-  /// Real server chapters (serverId in normal positive range and without bulk stamps) are preserved.
+  /// Real server chapters (positive serverId) are preserved.
   Future<void> cleanupBulkScrapedUpdates() async {
     if (!_isInitialized) return;
     try {
@@ -304,9 +317,13 @@ class IsarService {
           .findAll();
       if (chaptersWithFetchedAt.isEmpty) return;
 
-      // Identify standalone-scraped chapters: url non-empty, serverId in synthetic range
+      // Identify standalone-scraped chapters: url non-empty and a synthetic
+      // NEGATIVE serverId (the only range this app ever mints for standalone
+      // chapters — see the -(...) formulas in detail/library/update/migrate).
+      // A positive serverId — however large — is always a real Suwayomi one on
+      // servers with big chapter tables, so never classify it as synthetic.
       final standaloneChapters = chaptersWithFetchedAt
-          .where((ch) => ch.url.isNotEmpty && (ch.serverId > 200000 || ch.serverId < 0))
+          .where((ch) => ch.url.isNotEmpty && isSyntheticServerId(ch.serverId))
           .toList();
       if (standaloneChapters.isEmpty) return;
 
@@ -353,16 +370,49 @@ class IsarService {
 
   /// Returns chapters that are currently in-progress (opened but not finished).
   /// Useful for a "Continue Reading" widget that works fully offline.
+  /// Only library manga are included — chapters of titles removed from the
+  /// library (or never added) must not surface in Continue Reading.
   Future<List<Chapter>> getInProgressChapters({int limit = 20}) async {
     if (!_isInitialized) return [];
-    final all = await _isar.chapters
-        .filter()
-        .isReadEqualTo(false)
-        .lastPageReadGreaterThan(0)
-        .sortByLastReadAtDesc()
-        .limit(limit)
-        .findAll();
-    return all;
+    try {
+      final libraryManga = await getLibraryManga();
+      final libraryIds = <int>{
+        for (final m in libraryManga) ...[
+          if (m.serverId != 0) m.serverId,
+          m.id,
+        ],
+      };
+      if (libraryIds.isEmpty) return [];
+
+      // Same paged scan as getRecentChapters: filter to library manga in Dart
+      // (no mangaIdIn filter in the generated Isar query builder).
+      const pageSize = 100;
+      final result = <Chapter>[];
+      int offset = 0;
+      const maxScan = 5000;
+      while (result.length < limit && offset < maxScan) {
+        final page = await _isar.chapters
+            .filter()
+            .isReadEqualTo(false)
+            .lastPageReadGreaterThan(0)
+            .sortByLastReadAtDesc()
+            .offset(offset)
+            .limit(pageSize)
+            .findAll();
+        if (page.isEmpty) break;
+        for (final ch in page) {
+          if (libraryIds.contains(ch.mangaId)) {
+            result.add(ch);
+            if (result.length >= limit) break;
+          }
+        }
+        offset += page.length;
+      }
+      return result;
+    } catch (e, stack) {
+      LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'Database');
+      return [];
+    }
   }
 
   Future<void> deleteManga(int serverId) async {

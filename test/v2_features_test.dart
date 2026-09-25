@@ -116,8 +116,16 @@ void main() {
           url: '/manga/gamma',
           title: 'Gamma',
           lang: 'en',
-          favorite: false,
+          favorite: true,
           categories: [],
+        ),
+        TachiBkManga(
+          sourceId: 1,
+          url: '/manga/delta',
+          title: 'Delta',
+          lang: 'en',
+          favorite: false,
+          categories: ['Reading'],
         ),
       ],
     );
@@ -130,16 +138,20 @@ void main() {
     test('matches installed sources by name+lang and flags missing ones', () {
       final plan = TachiBkImportService.planImport(backup, serverSources);
 
-      expect(plan.entries, hasLength(3));
+      expect(plan.entries, hasLength(4));
+      // Alpha and Gamma match a server source and are in the library.
       expect(plan.readyEntries, hasLength(2));
-      expect(plan.skippedEntries, hasLength(1));
-      expect(plan.skippedEntries.single.manga.title, 'Beta');
+      // Beta has no matching source; Delta is favorited=false (not in library).
+      expect(plan.skippedEntries, hasLength(2));
+      expect(plan.skippedEntries.map((e) => e.manga.title), containsAll(['Beta', 'Delta']));
       expect(plan.readyEntries.every((e) => e.matchedSource?.id == '1:111'), isTrue);
     });
 
-    test('collects categories to create across matched manga and backup meta', () {
+    test('collects categories to create only from matched, included manga', () {
       final plan = TachiBkImportService.planImport(backup, serverSources);
-      expect(plan.categoriesToCreate, ['Favorites', 'Reading']);
+      // 'Reading' is referenced only by Delta (favorite=false) and Beta
+      // (no matching source) — neither is imported, so it must not be created.
+      expect(plan.categoriesToCreate, ['Favorites']);
     });
 
     test('unchecking an entry removes it from the import set', () {

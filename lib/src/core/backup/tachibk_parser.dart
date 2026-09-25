@@ -29,7 +29,11 @@ class TachiBkManga {
   final String url;
   final String title;
   final String lang;
-  final bool favorite;
+
+  /// Whether the entry was in the library (`favorite: true`) in Tachiyomi.
+  /// `null` when the backup omitted the field (older exporters) — treated as
+  /// "import" by [TachiBkImportService.planImport].
+  final bool? favorite;
   final List<String> categories;
 
   const TachiBkManga({
@@ -124,7 +128,7 @@ class TachiBkParser {
             url: (m['url'] as String? ?? '').trim(),
             title: (m['title'] as String? ?? 'Unknown').trim(),
             lang: (m['lang'] as String? ?? 'en').trim().toLowerCase(),
-            favorite: m['favorite'] == true || _toInt(m['favorite']) == 1,
+            favorite: m.containsKey('favorite') ? (m['favorite'] == true || _toInt(m['favorite']) == 1) : null,
             categories: [
               for (final c in (m['categories'] as List? ?? const []))
                 if (c is String && c.trim().isNotEmpty) c.trim(),

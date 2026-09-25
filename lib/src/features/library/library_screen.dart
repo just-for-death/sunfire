@@ -82,7 +82,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       for (final m in list) {
         if (m.thumbnailUrl == null || m.thumbnailUrl!.isEmpty || m.thumbnailUrl!.contains('/api/v1/manga/')) {
           if (m.sourceName.isNotEmpty && m.url.isNotEmpty) {
-            final direct = QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
+            final direct = await QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
             if (direct != null && direct.isNotEmpty) {
               m.thumbnailUrl = direct;
               hasHealed = true;
@@ -98,6 +98,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         setState(() {
           _allManga = list;
           _categories = cats;
+          _clampCategoryIndex();
           _isLoading = false;
         });
       }
@@ -114,6 +115,21 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     }
   }
 
+  /// Keeps [_selectedCategoryIndex] valid after a category reload: if the
+  /// previously selected category no longer exists (deleted/renamed), fall back
+  /// to 'All' (index 0) instead of pointing past the end of the tab list or at
+  /// a different category than the user picked.
+  void _clampCategoryIndex() {
+    if (_selectedCategoryIndex > _categories.length) {
+      _selectedCategoryIndex = 0;
+    } else if (_selectedCategoryIndex > 0) {
+      final selectedId = _categories[_selectedCategoryIndex - 1].serverId;
+      if (!_categories.any((c) => c.serverId == selectedId)) {
+        _selectedCategoryIndex = 0;
+      }
+    }
+  }
+
   Future<void> _loadFromIsarOnly() async {
     try {
       final list = await IsarService.instance.getLibraryManga();
@@ -123,7 +139,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       for (final m in list) {
         if (m.thumbnailUrl == null || m.thumbnailUrl!.isEmpty || m.thumbnailUrl!.contains('/api/v1/manga/')) {
           if (m.sourceName.isNotEmpty && m.url.isNotEmpty) {
-            final direct = QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
+            final direct = await QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
             if (direct != null && direct.isNotEmpty) {
               m.thumbnailUrl = direct;
               hasHealed = true;
@@ -139,6 +155,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         setState(() {
           _allManga = list;
           _categories = cats;
+          _clampCategoryIndex();
         });
       }
     } catch (e, stack) {
@@ -148,7 +165,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
 
   Future<void> _backgroundSync() async {
     if (_isSyncing) return;
-    setState(() => _isSyncing = true);
+    if (mounted) setState(() => _isSyncing = true);
     try {
       await SyncEngine.instance.triggerSync().timeout(
         const Duration(seconds: 30),
@@ -160,6 +177,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         setState(() {
           _allManga = list;
           _categories = cats;
+          _clampCategoryIndex();
           _isOffline = false;
         });
       }
@@ -171,7 +189,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   }
 
   Future<void> _handleRefresh() async {
-    setState(() => _isSyncing = true);
+    if (mounted) setState(() => _isSyncing = true);
     try {
       if (GraphQLClientService.instance.isConfigured) {
         await SyncEngine.instance.triggerSync();
@@ -185,6 +203,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         setState(() {
           _allManga = list;
           _categories = cats;
+          _clampCategoryIndex();
           _isOffline = false;
         });
       }
@@ -238,6 +257,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
             if (newChapters.isNotEmpty) {
               await IsarService.instance.saveChapters(newChapters);
               manga.unreadCount = (manga.unreadCount ?? 0) + newChapters.length;
+              // Keep the denormalized chapter count in sync too — otherwise the
+              // "Chapters" sort and detail badge go stale after updates.
+              manga.chapterCount = existingChapters.length + newChapters.length;
               await IsarService.instance.saveManga(manga);
             }
           }
@@ -256,7 +278,11 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       list = list.where((m) => (m.unreadCount ?? 0) > 0).toList();
     } else if (_statusFilter == 'Downloaded') {
       final downloadedMangaIds = DownloadManagerService.instance.downloadedMangaIds;
-      list = list.where((m) => downloadedMangaIds.contains(m.serverId > 0 ? m.serverId : m.id)).toList();
+      final serverDownloadedIds = DownloadManagerService.instance.downloadedServerMangaIds;
+      list = list.where((m) {
+        final key = m.serverId > 0 ? m.serverId : m.id;
+        return downloadedMangaIds.contains(key) || serverDownloadedIds.contains(key);
+      }).toList();
     } else if (_statusFilter == 'Completed') {
       list = list.where((m) => (m.status ?? '').toLowerCase() == 'completed').toList();
     }
@@ -270,6 +296,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     // 2. Smart Search Query Filter (Mihon / Mangayomi Tokens)
     if (_searchQuery.trim().isNotEmpty) {
       final downloadedMangaIds = DownloadManagerService.instance.downloadedMangaIds;
+      final serverDownloadedIds = DownloadManagerService.instance.downloadedServerMangaIds;
       final tokens = _searchQuery.trim().toLowerCase().split(RegExp(r'\s+'));
       
       list = list.where((m) {
@@ -279,7 +306,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         final artist = (m.artist ?? '').toLowerCase();
         final genres = m.genres.map((g) => g.toLowerCase()).toList();
         final status = (m.status ?? '').toLowerCase();
-        final isDownloaded = downloadedMangaIds.contains(m.serverId > 0 ? m.serverId : m.id);
+        final isDownloaded = downloadedMangaIds.contains(m.serverId > 0 ? m.serverId : m.id) || serverDownloadedIds.contains(m.serverId > 0 ? m.serverId : m.id);
 
         for (final token in tokens) {
           if (token.isEmpty) continue;
@@ -358,8 +385,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   void _selectAll() {
     HapticFeedback.selectionClick();
     final currentList = _filteredManga;
+    // Decide based on whether *all currently visible* items are selected, not
+    // on matching lengths: the selection set may contain stale ids (e.g. the
+    // filter changed since items were picked), which made the old
+    // `length == length` check toggle the wrong way.
+    final allVisibleSelected = currentList.isNotEmpty &&
+        currentList.every((m) => _selectedMangaIds.contains(m.serverId > 0 ? m.serverId : m.id));
     setState(() {
-      if (_selectedMangaIds.length == currentList.length) {
+      if (allVisibleSelected) {
         _selectedMangaIds.clear();
         _isBatchMode = false;
         LibraryScreen.isBatchModeNotifier.value = false;
@@ -920,10 +953,18 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         onPressed: () async {
                           final name = textController.text.trim();
                           if (name.isNotEmpty) {
+                            // Order must be max(existing)+1: using the list
+                            // length can collide with an existing order after a
+                            // deletion, which scrambles the tab ordering
+                            // (getCategories sorts by `order`).
+                            final maxOrder = _categories.fold<int>(
+                              0,
+                              (acc, c) => c.order > acc ? c.order : acc,
+                            );
                             final newCat = Category()
                               ..serverId = IsarService.generateSyntheticServerId()
                               ..name = name
-                              ..order = _categories.length;
+                              ..order = maxOrder + 1;
                             await IsarService.instance.saveCategory(newCat);
                             await SyncEngine.instance.syncCategoryCreate(
                               name: name,
@@ -973,6 +1014,18 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
 
   int _getCategoryMangaCount(int catServerId) {
     return _allManga.where((m) => m.categoryIds.contains(catServerId)).length;
+  }
+
+  /// True when any filter/display customization in the "Filter & Display" sheet
+  /// is active (non-default). Drives the dot on the tune icon.
+  bool get _hasCustomDisplay {
+    return _statusFilter != 'All' ||
+        _settings.libraryDisplayMode != 'Comfortable Grid' ||
+        _settings.gridColumnCount != 0 ||
+        !_settings.showUnreadBadges ||
+        !_settings.showDownloadedBadges ||
+        _sortBy != 'Title' ||
+        !_isSortAscending;
   }
 
   void _showSortAndDisplayDialog() {
@@ -1280,7 +1333,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       clipBehavior: Clip.none,
                       children: [
                         const Icon(Icons.tune_rounded, size: 26),
-                        if (_statusFilter != 'All' || _settings.gridColumnCount > 0)
+                        if (_hasCustomDisplay)
                           Positioned(
                             top: -2,
                             right: -2,

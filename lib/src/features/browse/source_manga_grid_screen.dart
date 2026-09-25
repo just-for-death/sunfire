@@ -567,6 +567,12 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                       final thumb = (manga['thumbnailUrl'] ?? manga['imageUrl'])?.toString();
                                       final link = (manga['link'] ?? manga['url'] ?? '').toString();
 
+                                      // Only results that demonstrably came from the Suwayomi server
+                                      // carry a real server manga id in 'id'. Local JS-extension scrapes
+                                      // may return arbitrary website ids — treating one as a server id
+                                      // would (a) collide with genuine server ids in Isar's unique index
+                                      // and (b) push server mutations against a bogus/foreign record.
+                                      final isServerSourced = manga['origin'] == 'server';
                                       final rawId = manga['id'];
                                       int id = rawId is int ? rawId : (int.tryParse(rawId?.toString() ?? '0') ?? 0);
                                       if (id <= 0 && link.isNotEmpty) {
@@ -574,6 +580,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                       } else if (id <= 0 && title.isNotEmpty) {
                                         id = (title.hashCode ^ widget.sourceName.hashCode).abs();
                                       }
+                                      if (!isServerSourced && id > 0) id = -id;
 
                                       return Material(
                                         color: Colors.transparent,
@@ -609,7 +616,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                               }
                                             }
                                           },
-                                          onLongPress: () => _showMangaQuickActions(id, title, thumb),
+                                          onLongPress: () => _showMangaQuickActions(id, title, thumb, isServerSourced: isServerSourced),
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
@@ -679,7 +686,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
     );
   }
 
-  void _showMangaQuickActions(int mangaId, String title, String? thumb) {
+  void _showMangaQuickActions(int mangaId, String title, String? thumb, {required bool isServerSourced}) {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     showModalBottomSheet(
@@ -733,14 +740,18 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                       ..thumbnailUrl = thumb
                       ..sourceName = widget.sourceName
                       ..inLibrary = true
-                      ..inLibraryAt = DateTime.now().millisecondsSinceEpoch;
+                      // Server stores inLibraryAt as epoch SECONDS; keep the
+                      // local write in the same unit for consistent sorting.
+                      ..inLibraryAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
                     if (SettingsService.instance.defaultCategoryId != null) {
                       localManga.categoryIds = [SettingsService.instance.defaultCategoryId!];
                     }
                     await IsarService.instance.saveManga(localManga);
                   } else {
                     localManga.inLibrary = true;
-                    localManga.inLibraryAt = DateTime.now().millisecondsSinceEpoch;
+                    // Server stores inLibraryAt as epoch SECONDS; keep the
+                    // local write in the same unit for consistent sorting.
+                    localManga.inLibraryAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
                     if (SettingsService.instance.defaultCategoryId != null) {
                       final defId = SettingsService.instance.defaultCategoryId!;
                       if (!localManga.categoryIds.contains(defId)) {
@@ -749,7 +760,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                     }
                     await IsarService.instance.saveManga(localManga);
                   }
-                  if (GraphQLClientService.instance.isConfigured) {
+                  if (GraphQLClientService.instance.isConfigured && isServerSourced) {
                     await GraphQLClientService.instance.updateMangaLibraryState(mangaId, true);
                     if (SettingsService.instance.defaultCategoryId != null) {
                       await GraphQLClientService.instance.updateMangaCategories(mangaId, [SettingsService.instance.defaultCategoryId!]);

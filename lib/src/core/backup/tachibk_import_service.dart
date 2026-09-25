@@ -87,18 +87,23 @@ class TachiBkImportService {
 
     for (final m in backup.manga) {
       final source = _matchSource(backup, m, serverSources);
+      final include = m.favorite ?? true;
       entries.add(TachiBkImportPlanEntry(
         manga: m,
         status: source == null ? TachiBkPlanEntryStatus.sourceMissing : TachiBkPlanEntryStatus.ready,
         matchedSource: source,
+        // Respect the backup's library membership: only `favorite: true` manga
+        // were in the Tachiyomi library. Backups that omit the field (older
+        // exporters) default to include so legacy restores keep working.
+        include: include,
       ));
-      if (source == null) continue;
+      // Only collect categories that will actually be applied — categories
+      // referenced solely by unmatched/skipped entries must not be created on
+      // the server (otherwise the restore leaves empty categories behind).
+      if (source == null || !include) continue;
       for (final c in m.categories) {
         missingCategoryNames.add(c);
       }
-    }
-    for (final c in backup.categories) {
-      missingCategoryNames.add(c);
     }
 
     return TachiBkImportPlan(
