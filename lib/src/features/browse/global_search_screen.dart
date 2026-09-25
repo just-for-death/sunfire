@@ -139,12 +139,18 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     final thumb = (manga['thumbnailUrl'] ?? manga['imageUrl'])?.toString();
     final link = (manga['link'] ?? manga['url'] ?? '').toString();
 
+    // Only server-sourced results carry a real server manga id. Local JS-extension
+    // scrapes may return arbitrary website ids — store those under a synthetic
+    // NEGATIVE serverId (same convention as migration) so they can never collide
+    // with a genuine server id in Isar's unique index.
+    final isServerSourced = manga['origin'] == 'server';
     int id = parseIntSafe(manga['id']);
     if (id <= 0 && link.isNotEmpty) {
       id = (link.hashCode ^ sourceName.hashCode).abs();
     } else if (id <= 0 && title.isNotEmpty) {
       id = (title.hashCode ^ sourceName.hashCode).abs();
     }
+    if (!isServerSourced && id > 0) id = -id;
 
     if (id > 0) {
       var existing = await IsarService.instance.getMangaByServerId(id);

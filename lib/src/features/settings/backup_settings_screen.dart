@@ -135,10 +135,19 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                         includeChapters: includeChs,
                       );
                       if (context.mounted) {
-                        final url = res?['createBackup']?['url']?.toString() ?? 'data/backups';
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('✅ Backup created on server: $url')),
-                        );
+                        final createdUrl = res?['createBackup']?['url']?.toString();
+                        if (createdUrl != null && createdUrl.isNotEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('✅ Backup created on server: $createdUrl')),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('⚠️ Backup request failed — server did not create a backup. Check the server is reachable.'),
+                              backgroundColor: Colors.orange.shade800,
+                            ),
+                          );
+                        }
                       }
                     } catch (e) {
                       if (context.mounted) {
