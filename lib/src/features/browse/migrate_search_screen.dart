@@ -752,10 +752,14 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
 
       // 6. Delete Original Manga from Library if requested
       if (deleteOriginal) {
-        widget.manga.inLibrary = false;
-        await IsarService.instance.saveManga(widget.manga);
-        if (widget.manga.serverId > 0) {
-          await SyncEngine.instance.syncMangaLibraryState(widget.manga.serverId, false);
+        // Fetch fresh copy to avoid mutating widget parameter directly
+        final originalManga = await IsarService.instance.getMangaByServerId(widget.manga.serverId > 0 ? widget.manga.serverId : widget.manga.id);
+        if (originalManga != null) {
+          originalManga.inLibrary = false;
+          await IsarService.instance.saveManga(originalManga);
+          if (originalManga.serverId > 0) {
+            await SyncEngine.instance.syncMangaLibraryState(originalManga.serverId, false);
+          }
         }
       }
       // Every migration that achieved a server link (resolved by search, by URL
