@@ -20,6 +20,7 @@ import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../features/reader/chapter_number_utils.dart';
 import '../../main_shell.dart';
 import '../browse/global_search_screen.dart';
 import '../browse/migrate_search_screen.dart';
@@ -55,16 +56,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   final Set<int> _selectedChapterIds = {};
 
   double _extractChapterNumber(String name, int index, int totalCount) {
-    if (RegExp(r'\bprologue\b', caseSensitive: false).hasMatch(name)) {
-      return 0.0;
-    }
-    final match = RegExp(r'(?:ch(?:apter)?\.?|ep(?:isode)?\.?|#)\s*(\d+(?:\.\d+)?)', caseSensitive: false).firstMatch(name)
-        ?? RegExp(r'(\d+(?:\.\d+)?)').firstMatch(name);
-    if (match != null) {
-      final parsed = double.tryParse(match.group(1)!);
-      if (parsed != null && parsed >= 0) return parsed;
-    }
-    return (index + 1).toDouble();
+    return chapterSortNumberFromParts(
+      name: name,
+      fallbackIndex: index,
+    );
   }
 
   String _formatChapterSubtitle(Chapter ch) {

@@ -1,17 +1,12 @@
 import '../../core/db/models/chapter.dart';
+import 'chapter_number_utils.dart' as utils;
 
 /// Numeric reading order for a chapter: prefer the explicit [Chapter.chapterNumber],
 /// otherwise parse it from the display name ("Chapter 12", "Ep. 7", "#3", or a
 /// bare number). Returns 0.0 when nothing can be extracted.
-double chapterSortNumber(Chapter c) {
-  if (c.chapterNumber > 0) return c.chapterNumber;
-  final m = RegExp(r'(?:ch(?:apter)?\.?|ep(?:isode)?\.?|#)\s*(\d+(?:\.\d+)?)', caseSensitive: false).firstMatch(c.name) ??
-      RegExp(r'(\d+(?:\.\d+)?)').firstMatch(c.name);
-  if (m != null) {
-    return double.tryParse(m.group(1)!) ?? 0.0;
-  }
-  return 0.0;
-}
+///
+/// Re-exported from [chapter_number_utils] for backward compatibility.
+double chapterSortNumber(Chapter c) => utils.chapterSortNumber(c);
 
 /// Sorts a manga's chapter list into reading order (ascending number,
 /// name as tie-break). The source's newest-first order is reversed here so

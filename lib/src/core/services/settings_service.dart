@@ -432,6 +432,22 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Timeout in seconds for the initial onboarding sync.
+  /// Defaults to 45 seconds. Can be increased for slow connections/large libraries.
+  int get initialSyncTimeoutSeconds => _prefs?.getInt('initial_sync_timeout_seconds') ?? 45;
+  set initialSyncTimeoutSeconds(int value) {
+    _prefs?.setInt('initial_sync_timeout_seconds', value);
+    notifyListeners();
+  }
+
+  /// Maximum seconds to wait for server library update jobs to complete.
+  /// Defaults to 45 seconds (30 * 1.5s polling intervals).
+  int get serverUpdatePollTimeoutSeconds => _prefs?.getInt('server_update_poll_timeout_seconds') ?? 45;
+  set serverUpdatePollTimeoutSeconds(int value) {
+    _prefs?.setInt('server_update_poll_timeout_seconds', value);
+    notifyListeners();
+  }
+
   bool get newChapterNotificationsEnabled => _prefs?.getBool('new_chapter_notifications_enabled') ?? true;
   set newChapterNotificationsEnabled(bool value) {
     _prefs?.setBool('new_chapter_notifications_enabled', value);
