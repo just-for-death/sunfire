@@ -1309,6 +1309,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     final currentIdx = _siblingChapters.indexWhere((c) => (c.id == _chapter!.id) || (c.serverId != 0 && c.serverId == _chapter!.serverId));
     if (currentIdx == -1) return;
 
+    final loadGen = _loadGeneration; // Capture generation at start
     final upcoming = _siblingChapters
         .skip(currentIdx + 1)
         .where((c) => !c.isRead && !DownloadManagerService.instance.isChapterDownloadedLocally(_chapterTargetId(c)))
@@ -1317,6 +1318,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
     final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
     final mangaTitle = manga?.title ?? 'Manga';
+
+    // Guard against stale sibling data: if generation changed, discard
+    if (loadGen != _loadGeneration) return;
 
     for (final ch in upcoming) {
       DownloadManagerService.instance.enqueueLocalDownload(
