@@ -218,15 +218,23 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   Timer? _recenterGuardTimer;
+  int _recenterGeneration = 0;
 
   void _recenterVolume() {
+    final currentGen = ++_recenterGeneration;
     _isRecenteringVolume = true;
     _lastIosVolume = 0.5;
     // If the platform never reports our own setVolume back (or reports it
     // late), the suppression flag would otherwise stay set and swallow the
     // next real page turn. Clear it after a short grace period regardless.
+    // Use generation token to prevent stale timer callbacks from clearing
+    // the flag after a newer recenter call has started.
     _recenterGuardTimer?.cancel();
-    _recenterGuardTimer = Timer(const Duration(milliseconds: 600), () => _isRecenteringVolume = false);
+    _recenterGuardTimer = Timer(const Duration(milliseconds: 600), () {
+      if (_recenterGeneration == currentGen) {
+        _isRecenteringVolume = false;
+      }
+    });
     try {
       VolumeController.instance.setVolume(0.5);
     } catch (e) {
