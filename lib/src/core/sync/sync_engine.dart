@@ -80,10 +80,10 @@ bool isPureChapterProgressPayload(String payloadJson) {
 
 /// Merges a chapter's local `lastPageRead` with the server's during a pull.
 ///
-/// Normally the highest value wins, so a pull never rewinds progress. The one
-/// exception is a chapter that was read locally but the server now reports as
-/// unread with no local mutation queued: it was marked unread on another
-/// device, so the server's page number replaces the stale high local one.
+/// Normally the highest value wins, so a pull never rewinds progress.
+/// The server's page number is only used when it represents MORE progress
+/// (i.e., server > local). This prevents rewinding local progress when
+/// the server reports a chapter as unread with a low page number (e.g., 0).
 /// A chapter with an unsynced local mutation always keeps its local value
 /// until that mutation replays.
 @visibleForTesting
@@ -95,8 +95,11 @@ int mergeLastPageRead({
   required bool hasPendingMutation,
 }) {
   if (hasPendingMutation) return local;
-  if (localWasRead && !serverIsRead) return server;
-  return local > server ? local : server;
+  // Only take server's page if it represents MORE progress than local.
+  // This prevents rewinding progress when server marks a chapter unread
+  // with a low page number (often 0 or 1).
+  if (server > local) return server;
+  return local;
 }
 
 class SyncEngine {
