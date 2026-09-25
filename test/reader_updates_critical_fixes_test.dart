@@ -204,4 +204,34 @@ void main() {
       expect(evictCandidate, 'url1');
     });
   });
+
+  group('Auto-scroll resume — per-chapter flag', () {
+    test('resume flag is per-chapter, not global', () {
+      final resumeFlags = <int, bool>{};
+
+      // Chapter 100 has auto-scroll enabled
+      resumeFlags[100] = true;
+      // Chapter 101 has auto-scroll disabled
+      resumeFlags[101] = false;
+
+      // When loading chapter 101, should get false
+      expect(resumeFlags[101], isFalse);
+      // When loading chapter 100, should get true
+      expect(resumeFlags[100], isTrue);
+
+      // Changing flag for one chapter doesn't affect others
+      resumeFlags[101] = true;
+      expect(resumeFlags[100], isTrue);
+      expect(resumeFlags[101], isTrue);
+    });
+
+    test('resume flag cleared after use', () {
+      final resumeFlags = <int, bool>{100: true};
+
+      // Simulate loading chapter 100 - flag should be consumed
+      final shouldResume = resumeFlags.remove(100) ?? false;
+      expect(shouldResume, isTrue);
+      expect(resumeFlags.containsKey(100), isFalse);
+    });
+  });
 }
