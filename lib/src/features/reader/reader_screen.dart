@@ -2237,30 +2237,20 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
       // 1. On Desktop: try curl-impersonate FIRST with clean baseHeaders (Referer only)
       if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
-        final curlArgs = buildCurlArgs(
+        final bytes = await runCurlWithSemaphore(
           url: url,
           maxTimeSeconds: 15,
           headers: baseHeaders,
           skipHeaders: const {'user-agent', 'cookie'},
+          timeout: const Duration(seconds: 30),
         );
-        for (final exe in (curlArgs == null ? const <String>[] : kCurlCandidates)) {
-          try {
-            final args = curlArgs!;
-            final processRes = await Process.run(exe, args, stdoutEncoding: null);
-            if (processRes.exitCode == 0) {
-              final bytes = processRes.stdout as List<int>;
-              if (bytes.length > 200 && _isMagicImage(bytes)) {
-                if (mounted) {
-                  setState(() {
-                    _storeRecoveredImage(url, Uint8List.fromList(bytes));
-                  });
-                }
-                return;
-              }
-            }
-          } catch (e) {
-            debugPrint('[Reader] Curl fallback error for $exe: $e');
+        if (bytes != null && bytes.length > 200 && _isMagicImage(bytes)) {
+          if (mounted) {
+            setState(() {
+              _storeRecoveredImage(url, bytes);
+            });
           }
+          return;
         }
       }
 
