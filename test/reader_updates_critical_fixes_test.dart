@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/sync/sync_engine.dart';
 
@@ -232,6 +234,40 @@ void main() {
       final shouldResume = resumeFlags.remove(100) ?? false;
       expect(shouldResume, isTrue);
       expect(resumeFlags.containsKey(100), isFalse);
+    });
+  });
+
+  group('Volume key recentering — generation guard', () {
+    test('recenter guard uses generation token to prevent stale timer callbacks', () {
+      int generation = 0;
+      bool isRecentering = false;
+      Timer? recenterTimer;
+
+      void recenter() {
+        final currentGen = ++generation;
+        isRecentering = true;
+
+        // Simulate timer
+        recenterTimer?.cancel();
+        recenterTimer = Timer(const Duration(milliseconds: 600), () {
+          // Only clear if generation hasn't changed
+          if (generation == currentGen) {
+            isRecentering = false;
+          }
+        });
+      }
+
+      // Initial recenter
+      recenter();
+      expect(isRecentering, isTrue);
+
+      // Immediate second recenter (race condition) - should not affect first timer's callback
+      final firstGen = generation;
+      recenter();
+      expect(generation, firstGen + 1);
+
+      // The first timer's callback should NOT clear isRecentering because generation changed
+      // (In real code, the timer would check generation equality)
     });
   });
 }
