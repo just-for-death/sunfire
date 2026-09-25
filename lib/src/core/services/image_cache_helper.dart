@@ -1,6 +1,7 @@
 import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
@@ -14,10 +15,82 @@ import '../sync/graphql_client_service.dart';
 import 'safe_curl.dart';
 import 'server_tls_trust.dart';
 
+/// Per-URL lock to prevent duplicate concurrent fetches
+class _UrlLock {
+  final Map<String, _LockEntry> _locks = {};
+
+  Future<T> run<T>(String key, Future<T> Function() computation) async {
+    final entry = _locks.putIfAbsent(key, () => _LockEntry());
+    return entry.run(computation);
+  }
+
+  void release(String key) {
+    _locks.remove(key);
+  }
+}
+
+class _LockEntry {
+  Future<void>? _current;
+  Object? _result;
+  Object? _error;
+  bool _completed = false;
+  final List<Completer<void>> _waiters = [];
+
+  Future<T> run<T>(Future<T> Function() computation) async {
+    if (_completed) {
+      if (_error != null) throw _error!;
+      return _result as T;
+    }
+
+    if (_current != null) {
+      // Wait for current operation to complete
+      final completer = Completer<void>();
+      _waiters.add(completer);
+      try {
+        await completer.future;
+        if (_error != null) throw _error!;
+        return _result as T;
+      } finally {
+        _waiters.removeWhere((w) => w.isCompleted);
+      }
+    }
+
+    // Start new computation
+    final completer = Completer<void>();
+    _current = computation().then((_) {
+      _completed = true;
+      completer.complete();
+      _notifyWaiters();
+    }).catchError((e, st) {
+      _error = e;
+      _completed = true;
+      completer.completeError(e, st);
+    });
+
+    try {
+      final result = await computation();
+      _result = result;
+      completer.complete();
+      return _result as T;
+    } catch (e, st) {
+      _error = e;
+      completer.completeError(e, st);
+      rethrow;
+    }
+  }
+
+  void _notifyWaiters() {
+    for (final w in _waiters) {
+      if (!w.isCompleted) w.complete();
+    }
+  }
+}
+
+final _urlLocks = _UrlLock();
+
 class ImageCacheHelper {
   static final List<String> _candidateCoverPaths = [];
   static final LinkedHashMap<String, Uint8List> _memoryCache = LinkedHashMap<String, Uint8List>();
-  static final Map<String, Future<Uint8List?>> _inFlightFetches = {};
   static final Map<int, String> _resolvedPaths = {};
 
   static Future<void> initialize() async {
@@ -133,15 +206,8 @@ class ImageCacheHelper {
       } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
     }
 
-    if (_inFlightFetches.containsKey(effectiveUrl)) return _inFlightFetches[effectiveUrl];
-    
-    final completer = _inFlightFetches[effectiveUrl] = _doFetch(effectiveUrl, sourceName, mangaServerId);
-    try {
-      final res = await completer;
-      return res;
-    } finally {
-      _inFlightFetches.remove(effectiveUrl);
-    }
+    // Use per-URL lock to prevent duplicate concurrent fetches
+    return _urlLocks.run(effectiveUrl, () => _doFetch(effectiveUrl, sourceName, mangaServerId));
   }
 
   static bool _isValidImageBytes(List<int> b) {
