@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
+import '../../core/db/models/sync_record.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
 import '../../core/services/download_manager_service.dart';
@@ -280,14 +282,139 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           return fb.compareTo(fa);
         });
 
-        setState(() {
-          _updatesList = items;
-          _isLoading = false;
-          _isOffline = false;
-        });
+        // Merge server items INTO local list, preserving local-only chapters
+        // and chapters with pending mutations.
+        final mergedList = await _mergeServerItemsIntoLocal(_updatesList, items);
+        if (mounted) {
+          setState(() {
+            _updatesList = mergedList;
+            _isLoading = false;
+            _isOffline = false;
+          });
+        }
       }
     } catch (_) {
       if (mounted) setState(() => _isOffline = true);
+    }
+  }
+
+  /// Merges server-fetched update items into the local updates list.
+  ///
+  /// Preserves:
+  /// - Local-only chapters (serverId == 0 or negative synthetic IDs)
+  /// - Chapters with pending read-state mutations (tracked via SyncRecord)
+  /// - Local read-state for chapters with pending mutations
+  ///
+  /// Updates:
+  /// - Existing chapters by serverId with server data (isRead, lastPageRead, etc.)
+  /// - Adds new server chapters not present locally
+  Future<List<Map<String, dynamic>>> _mergeServerItemsIntoLocal(
+    List<Map<String, dynamic>> localItems,
+    List<Map<String, dynamic>> serverItems,
+  ) async {
+    // Compute pending read mutations once
+    final pendingReadChapterIds = await _computePendingReadChapterIds();
+
+    // Build a map of local items by serverId for quick lookup
+    final localByServerId = <int, Map<String, dynamic>>{};
+    final localOnlyItems = <Map<String, dynamic>>[];
+
+    for (final item in localItems) {
+      final ch = item['chapter'] as Chapter;
+      if (ch.serverId > 0) {
+        localByServerId[ch.serverId] = item;
+      } else {
+        // Local-only chapter (serverId <= 0) - always preserve
+        localOnlyItems.add(item);
+      }
+    }
+
+    final mergedItems = <Map<String, dynamic>>[];
+
+    // First, add/update items from server
+    for (final serverItem in serverItems) {
+      final serverCh = serverItem['chapter'] as Chapter;
+      final serverId = serverCh.serverId;
+
+      if (serverId > 0 && localByServerId.containsKey(serverId)) {
+        // Existing chapter - merge server data into local
+        final localItem = localByServerId[serverId]!;
+        final localCh = localItem['chapter'] as Chapter;
+
+        // Preserve local read state if there's a pending mutation
+        final hasPendingReadMutation = pendingReadChapterIds.contains(serverId);
+
+        final mergedItem = Map<String, dynamic>.from(serverItem);
+        mergedItem['chapter'] = Chapter()
+          ..id = localCh.id
+          ..serverId = serverCh.serverId
+          ..mangaId = serverCh.mangaId
+          ..name = serverCh.name
+          ..chapterNumber = serverCh.chapterNumber
+          ..isRead = hasPendingReadMutation ? localCh.isRead : serverCh.isRead
+          ..lastPageRead = serverCh.lastPageRead > localCh.lastPageRead
+              ? serverCh.lastPageRead
+              : localCh.lastPageRead
+          ..mangaTitle = serverCh.mangaTitle
+          ..mangaThumbnailUrl = serverCh.mangaThumbnailUrl
+          ..fetchedAt = serverCh.fetchedAt
+          ..isDownloadedLocally = localCh.isDownloadedLocally
+          ..isDownloadedOnServer = serverCh.isDownloadedOnServer
+          ..url = serverCh.url.isNotEmpty ? serverCh.url : localCh.url
+          ..isBookmarked = localCh.isBookmarked || serverCh.isBookmarked
+          ..scanlator = serverCh.scanlator
+          ..uploadDate = serverCh.uploadDate
+          ..pageCount = serverCh.pageCount;
+
+        mergedItems.add(mergedItem);
+      } else {
+        // New chapter from server - add as-is
+        mergedItems.add(serverItem);
+      }
+    }
+
+    // Add local-only items (serverId <= 0) that weren't in server response
+    mergedItems.addAll(localOnlyItems);
+
+    // Also add any local items with serverId > 0 that weren't in server response
+    // (e.g., chapters that exist locally but server didn't return in this batch)
+    for (final entry in localByServerId.entries) {
+      if (!mergedItems.any((item) => (item['chapter'] as Chapter).serverId == entry.key)) {
+        mergedItems.add(entry.value);
+      }
+    }
+
+    // Sort by fetchedAt descending (newest first)
+    mergedItems.sort((a, b) {
+      final fa = a['fetchedAt'] as int? ?? 0;
+      final fb = b['fetchedAt'] as int? ?? 0;
+      return fb.compareTo(fa);
+    });
+
+    return mergedItems;
+  }
+
+  /// Computes the set of chapterServerIds that have pending read-state mutations.
+  Future<Set<int>> _computePendingReadChapterIds() async {
+    try {
+      final pendingRecords = await IsarService.instance.getPendingSyncRecords();
+      final ids = <int>{};
+      for (final record in pendingRecords) {
+        if (record.entityType == SyncEntityType.chapter &&
+            record.action == SyncAction.update &&
+            record.retryCount == 0) {
+          final payload = jsonDecode(record.payloadJson) as Map<String, dynamic>;
+          if (payload.containsKey('isRead') || payload.containsKey('lastPageRead')) {
+            final chapterId = int.tryParse(record.entityId);
+            if (chapterId != null && chapterId > 0) {
+              ids.add(chapterId);
+            }
+          }
+        }
+      }
+      return ids;
+    } catch (_) {
+      return <int>{};
     }
   }
 

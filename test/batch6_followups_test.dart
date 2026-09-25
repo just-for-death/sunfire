@@ -24,9 +24,11 @@ void main() {
       expect(merge(local: 5, server: 12), 12);
     });
 
-    test('chapter marked unread elsewhere takes the server page', () {
-      expect(merge(local: 30, server: 0, localWasRead: true, serverIsRead: false), 0);
-      expect(merge(local: 30, server: 4, localWasRead: true, serverIsRead: false), 4);
+    test('chapter marked unread elsewhere does NOT rewind local progress', () {
+      // Server says unread (page 0 or 4), but local has more progress (30)
+      // Should NOT rewind to server's lower page
+      expect(merge(local: 30, server: 0, localWasRead: true, serverIsRead: false), 30);
+      expect(merge(local: 30, server: 4, localWasRead: true, serverIsRead: false), 30);
     });
 
     test('unread-elsewhere rule does not apply while a local mutation is queued', () {
