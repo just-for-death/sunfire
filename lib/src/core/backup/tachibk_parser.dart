@@ -128,7 +128,11 @@ class TachiBkParser {
             url: (m['url'] as String? ?? '').trim(),
             title: (m['title'] as String? ?? 'Unknown').trim(),
             lang: (m['lang'] as String? ?? 'en').trim().toLowerCase(),
-            favorite: m.containsKey('favorite') ? (m['favorite'] == true || _toInt(m['favorite']) == 1) : null,
+            favorite: m.containsKey('favorite')
+                ? (m['favorite'] == true ||
+                    (m['favorite'] is String && m['favorite'].toString().toLowerCase() == 'true') ||
+                    _toInt(m['favorite']) == 1)
+                : null,
             categories: [
               for (final c in (m['categories'] as List? ?? const []))
                 if (c is String && c.trim().isNotEmpty) c.trim(),

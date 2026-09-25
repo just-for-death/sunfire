@@ -56,6 +56,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   }
   
   void _onScroll() {
+    if (!mounted) return;
     if (!_scrollController.hasClients) return;
     if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 400 &&
         !_isLoading &&
@@ -108,6 +109,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   }
 
   Future<void> _loadMoreManga() async {
+    if (!mounted) return;
     if (_isLoadingMore || !_hasNextPage) return;
     setState(() => _isLoadingMore = true);
 
