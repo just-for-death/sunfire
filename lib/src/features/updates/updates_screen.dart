@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
+import '../../core/logging/logger_service.dart';
+import '../../core/metron/metron_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/library_update_service.dart';
@@ -262,7 +264,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
             ch.lastPageRead = ch.lastPageRead > existing.lastPageRead ? ch.lastPageRead : existing.lastPageRead;
             if (existing.url.isNotEmpty && ch.url.isEmpty) ch.url = existing.url;
             if (existing.isBookmarked) ch.isBookmarked = true;
-            if (existing.isDownloaded) ch.isDownloaded = true;
+            // Merge download state per-flag so a server-only existing download
+            // isn't miscopied onto the local flag (and vice-versa).
+            if (existing.isDownloadedLocally) ch.isDownloadedLocally = true;
+            if (existing.isDownloadedOnServer) ch.isDownloadedOnServer = true;
           }
         }
         await IsarService.instance.saveChapters(chaptersToSave);
@@ -403,6 +408,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       SyncEngine.instance.syncChapterProgress(ch.serverId, isRead: newState, lastPageRead: ch.lastPageRead);
     }
 
+    // Keep the library unread badge in sync — the reader and manga-detail
+    // paths both do this, and without it toggling read state here leaves the
+    // badge stale until the next full library refresh.
+    await _adjustMangaUnreadCount(ch.mangaId, delta: newState ? -1 : 1);
+
+    // Match manga-detail parity: delete-if-marked-read and the Metron scrobble
+    // fire only on the read transition there too (never on un-read).
+    if (newState) {
+      await _applyMarkedReadSideEffects(ch);
+    }
+
     if (mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -412,6 +428,41 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
+  }
+
+  /// Side effects shared with manga-detail when a chapter crosses to read:
+  /// honor "delete chapter after marked read" and auto-scrobble to Metron.
+  Future<void> _applyMarkedReadSideEffects(Chapter ch) async {
+    try {
+      final settings = SettingsService.instance;
+      if (settings.deleteChapterAfterMarkedRead && ch.isDownloaded) {
+        if (!ch.isBookmarked || settings.allowDeletingBookmarkedChapters) {
+          DownloadManagerService.instance.deleteLocalDownload(ch.serverId != 0 ? ch.serverId : ch.id);
+        }
+      }
+      if (settings.metronAutoScrobble && ch.mangaId > 0) {
+        MetronService.instance
+            .scrobbleChapterByMangaId(mangaId: ch.mangaId, chapter: ch)
+            .catchError((_) => false);
+      }
+    } catch (e) {
+      await LoggerService.instance.logWarning('Marked-read side effects failed for chapter ${ch.id}: $e', 'Updates');
+    }
+  }
+
+  /// Adjusts the parent manga's unread counter without re-querying every
+  /// chapter, mirroring the reader's incremental update.
+  Future<void> _adjustMangaUnreadCount(int mangaId, {required int delta}) async {
+    if (mangaId <= 0 || delta == 0) return;
+    try {
+      final manga = await IsarService.instance.getMangaByServerId(mangaId);
+      if (manga == null) return;
+      final updated = (manga.unreadCount ?? 0) + delta;
+      manga.unreadCount = updated > 0 ? updated : 0;
+      await IsarService.instance.saveManga(manga);
+    } catch (e) {
+      await LoggerService.instance.logWarning('Failed to adjust unread count for manga $mangaId: $e', 'Updates');
     }
   }
 
@@ -465,6 +516,25 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     });
 
     await IsarService.instance.saveChapters(chaptersToUpdate);
+
+    // Keep library unread badges in sync with bulk mark-read (same invariant
+    // the reader/detail maintain per chapter). Group deltas by manga so each
+    // manga wrapper is adjusted and persisted once instead of N times. Every
+    // chapter in chaptersToUpdate was unread before this batch (it derives
+    // from unreadItems above), so each contributes exactly one read marker.
+    final deltas = <int, int>{};
+    for (final ch in chaptersToUpdate) {
+      if (ch.mangaId <= 0) continue;
+      deltas[ch.mangaId] = (deltas[ch.mangaId] ?? 0) + 1;
+    }
+    for (final entry in deltas.entries) {
+      await _adjustMangaUnreadCount(entry.key, delta: -entry.value);
+    }
+
+    // manga-detail parity for the bulk path (delete-if-marked-read + scrobble).
+    for (final ch in chaptersToUpdate) {
+      await _applyMarkedReadSideEffects(ch);
+    }
 
     for (final ch in chaptersToUpdate) {
       if (ch.serverId > 0) {
