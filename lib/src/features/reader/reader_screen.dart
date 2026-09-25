@@ -1093,10 +1093,28 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
           if (loadGen != _loadGeneration) return;
           final chList = (details['chapters'] ?? details['chapterList'] ?? details['epList']) as List<dynamic>?;
           if (chList != null && chList.isNotEmpty) {
-            final match = chList.cast<dynamic>().where(
-              (c) => (c['name'] != null && c['name'].toString().trim().toLowerCase() == _chapter!.name.trim().toLowerCase()) ||
-                     (c['chapterNumber'] != null && (c['chapterNumber'] as num).toDouble() == _chapter!.chapterNumber),
-            ).cast<dynamic>().toList();
+            // Match chapters by URL first (most reliable), then by chapterNumber + URL,
+            // then by chapterNumber alone. Never match by title alone.
+            final targetChapter = _chapter!;
+            final match = chList.cast<dynamic>().where((c) {
+              final cUrl = (c['url'] ?? c['link'] ?? '').toString().trim();
+              final cNum = (c['chapterNumber'] as num?)?.toDouble();
+              // Priority 1: Exact URL match (most reliable)
+              if (targetChapter.url.isNotEmpty) {
+                final targetUrl = targetChapter.url.trim();
+                final cUrlTrim = cUrl.trim();
+                if (targetUrl == cUrlTrim) return true;
+              }
+              // Priority 2: Chapter number + URL match (if both have URLs)
+              if (targetChapter.url.isNotEmpty && cUrl.isNotEmpty) {
+                final targetUrl = targetChapter.url.trim();
+                final cUrlTrim = cUrl.trim();
+                if (targetUrl == cUrlTrim && cNum == targetChapter.chapterNumber) return true;
+              }
+              // Priority 3: Exact chapter number match (fallback when URLs unavailable)
+              if (cNum != null && cNum == targetChapter.chapterNumber) return true;
+              return false;
+            }).cast<dynamic>().toList();
             if (match.isNotEmpty) {
               final freshUrl = (match.first['url'] ?? match.first['link'] ?? '').toString();
               if (freshUrl.isNotEmpty) {

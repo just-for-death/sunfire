@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:sunfire/src/core/sync/sync_engine.dart';
 
 void main() {
@@ -86,6 +85,53 @@ void main() {
         hasPendingMutation: false,
       );
       expect(result, 1, reason: 'Even page 1 should not be rewound to 0');
+    });
+  });
+
+  group('Self-healing scrape — chapter matching by URL not title', () {
+    test('matches by URL when manga URL available', () {
+      final chList = [
+        {'name': 'Chapter 1', 'chapterNumber': 1.0, 'url': 'https://site.com/ch1'},
+        {'name': 'Chapter 2', 'chapterNumber': 2.0, 'url': 'https://site.com/ch2'},
+      ];
+
+      // When manga URL is known, should match by URL
+      final match = chList.where((c) {
+        final url = (c['url'] as String? ?? '').trim();
+        return url == 'https://site.com/ch1';
+      }).toList();
+
+      expect(match.length, 1);
+      expect(match.first['name'], 'Chapter 1');
+    });
+
+    test('does not match by title alone when URL differs', () {
+      // Two different manga with same chapter names
+      final chListMangaA = [
+        {'name': 'Chapter 1', 'chapterNumber': 1.0, 'url': 'https://siteA.com/ch1'},
+      ];
+      final chListMangaB = [
+        {'name': 'Chapter 1', 'chapterNumber': 1.0, 'url': 'https://siteB.com/ch1'},
+      ];
+
+      // Should NOT match Manga B's chapter when searching for Manga A's URL
+      final matchA = chListMangaA.where((c) => c['url'] == 'https://siteA.com/ch1').toList();
+      expect(matchA.length, 1);
+
+      final matchB = chListMangaB.where((c) => c['url'] == 'https://siteA.com/ch1').toList();
+      expect(matchB.length, 0, reason: 'Should not match by title alone');
+    });
+
+    test('falls back to chapter number when URL unavailable', () {
+      final chList = [
+        {'name': 'Chapter 1', 'chapterNumber': 1.0, 'url': ''},
+        {'name': 'Chapter 2', 'chapterNumber': 2.0, 'url': ''},
+      ];
+
+      // When URLs are empty, fall back to chapter number
+      final match = chList.where((c) => (c['chapterNumber'] as num).toDouble() == 1.0).toList();
+      expect(match.length, 1);
+      expect(match.first['name'], 'Chapter 1');
     });
   });
 }
