@@ -22,7 +22,11 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
   @override
   bool get wantKeepAlive => true;
   List<Map<String, dynamic>> _historyItems = [];
-  bool _isLoading = false;
+  // Starts TRUE. It was declared false and never set true outside the loader,
+  // so the very first frame of the tab unconditionally rendered "No Reading
+  // History" for a user with a full history — a false claim, on every cold
+  // start, for at least one frame.
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -43,7 +47,37 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
     super.dispose();
   }
 
-  Future<void> _loadHistory() async {
+  /// Monotonic token. A pass that is superseded must not write its results.
+  int _loadGeneration = 0;
+
+  /// The in-flight load, if any, so callers can await the real work.
+  ///
+  /// `_loadHistory` has four entry points — init, every switch to the tab (with
+  /// no debounce, unlike Library), the appbar sync button (no busy flag, so a
+  /// double-tap ran two full syncs), and the refresh indicator. Two concurrent
+  /// passes meant the one that finished LAST won, which is not necessarily the
+  /// newest — so a slow pass could land after a fast one and revert the list to
+  /// older data.
+  ///
+  /// A plain `bool` guard would also make the refresh indicator complete
+  /// instantly whenever a load was already running, which reads as the pull
+  /// doing nothing. Sharing the future means a second caller waits for the pass
+  /// that is actually going to populate the list.
+  Future<void>? _historyLoadInFlight;
+
+  bool get _isLoadingHistory => _historyLoadInFlight != null;
+
+  Future<void> _loadHistory() {
+    final existing = _historyLoadInFlight;
+    if (existing != null) return existing;
+    final started = _runHistoryLoad();
+    _historyLoadInFlight = started;
+    return started;
+  }
+
+  Future<void> _runHistoryLoad() async {
+    final loadGen = ++_loadGeneration;
+    if (mounted) setState(() => _isLoading = true);
     try {
       final chapters = await IsarService.instance.getReadingHistory();
       final items = <Map<String, dynamic>>[];
@@ -99,6 +133,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
         });
       }
 
+      if (loadGen != _loadGeneration) return;
       if (mounted) {
         setState(() {
           _historyItems = items;
@@ -106,9 +141,14 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
         });
       }
     } catch (e) {
+      if (loadGen != _loadGeneration) return;
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    } finally {
+      // Cleared before the future completes, so a caller awaiting the NEXT
+      // refresh gets a fresh pass rather than joining this one.
+      _historyLoadInFlight = null;
     }
   }
 
@@ -168,10 +208,12 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
           IconButton(
             icon: Icon(Icons.sync_rounded, color: primaryColor),
             tooltip: 'Sync History',
-            onPressed: () async {
-              await SyncEngine.instance.triggerSync();
-              await _loadHistory();
-            },
+            onPressed: _isLoadingHistory
+                ? null
+                : () async {
+                    await SyncEngine.instance.triggerSync();
+                    await _loadHistory();
+                  },
           ),
         ],
       ),
