@@ -231,6 +231,30 @@ class IsarService {
   /// actions). A chunked `anyOf` query plus an in-memory group-by avoids
   /// issuing one Isar query per manga, which is the dominant cost on large
   /// libraries.
+  /// Batched form of [getChapterByServerId], keyed by `serverId`.
+  ///
+  /// Exists because the updates feed merges up to 100 server chapters per fetch
+  /// and used to resolve each with its own awaited query — a sequential N+1 on
+  /// the hot path of every pull-to-refresh and every background sync. Chunked
+  /// for the same reason as [getChaptersForMangas]: one giant `anyOf` filter is
+  /// slow to compile and run.
+  ///
+  /// Absent ids are simply missing from the result, exactly as a null from the
+  /// single lookup.
+  Future<Map<int, Chapter>> getChaptersByServerIds(List<int> serverIds) async {
+    final out = <int, Chapter>{};
+    if (!_isInitialized || serverIds.isEmpty) return out;
+    final ids = serverIds.where((id) => id != 0).toSet().toList();
+    if (ids.isEmpty) return out;
+    for (final chunk in chunkList(ids, kChapterQueryChunkSize)) {
+      final rows = await _isar.chapters.filter().anyOf(chunk, (q, id) => q.serverIdEqualTo(id)).findAll();
+      for (final r in rows) {
+        out[r.serverId] = r;
+      }
+    }
+    return out;
+  }
+
   Future<Map<int, List<Chapter>>> getChaptersForMangas(List<int> mangaIds) async {
     if (!_isInitialized || mangaIds.isEmpty) return {};
     final ids = mangaIds.toSet().toList();
