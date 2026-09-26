@@ -162,7 +162,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       }
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.hidden) {
+        state == AppLifecycleState.hidden ||
+        // `detached` is the terminal state on Android engine-detach and on
+        // desktop window close, and on some paths is not preceded by `paused`.
+        // Without it, a kill while the download queue was mid-flight was never
+        // marked interrupted, so the resume notification that tells the user
+        // their downloads were cut short never fired.
+        state == AppLifecycleState.detached) {
       DownloadManagerService.instance.noteAppBackgrounded();
     }
   }

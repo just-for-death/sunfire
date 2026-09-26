@@ -95,18 +95,20 @@ bool isPureChapterProgressPayload(String payloadJson) {
 /// the server reports a chapter as unread with a low page number (e.g., 0).
 /// A chapter with an unsynced local mutation always keeps its local value
 /// until that mutation replays.
+///
+/// Read *state* is deliberately not an input. `isRead` is applied separately
+/// by the caller, gated on the same [hasPendingMutation], and the position is
+/// reconciled purely by magnitude. This signature previously took
+/// `localWasRead` and `serverIsRead` as `required` parameters and then read
+/// neither, which advertised a coupling that did not exist and invited a
+/// future reader to "fix" the merge by consulting them.
 @visibleForTesting
 int mergeLastPageRead({
   required int local,
   required int server,
-  required bool localWasRead,
-  required bool serverIsRead,
   required bool hasPendingMutation,
 }) {
   if (hasPendingMutation) return local;
-  // Only take server's page if it represents MORE progress than local.
-  // This prevents rewinding progress when server marks a chapter unread
-  // with a low page number (often 0 or 1).
   if (server > local) return server;
   return local;
 }
@@ -285,12 +287,70 @@ class SyncEngine {
     }
   }
 
+  /// Applies a read-state change to [chapter], persists it, and syncs it —
+  /// unless Incognito Mode is enabled, in which case nothing is written
+  /// anywhere and false is returned.
+  ///
+  /// The Incognito guard used to live only inside the reader's `_updateProgress`,
+  /// so the other eleven read-state mutation paths — marking a chapter read from
+  /// the Library, Manga Detail, or the Updates feed, marking previous chapters
+  /// read in bulk, and the migration flow — happily wrote progress to Isar and
+  /// pushed it to the server with Incognito on. Turning the setting on therefore
+  /// only protected the reader, which is the one entry point a user does not
+  /// use to mark things read; the setting was trivially defeated.
+  ///
+  /// Centralised here so the guard cannot be forgotten at a new call site, and
+  /// so the reader and the list screens behave identically. [lastPageRead] is
+  /// optional and, when given, is authoritative for the stored position —
+  /// including for a completion, where [Chapter.applyReadState] would otherwise
+  /// force the position to `pageCount`. It is applied *after* `applyReadState`
+  /// rather than before, because `applyReadState(false)` zeroes the position and
+  /// would otherwise silently discard a partial-progress value.
+  ///
+  /// Returns whether anything was actually written, so callers can skip
+  /// follow-up work (unread-count adjustment, snackbars) that would otherwise
+  /// contradict the no-op.
+  Future<bool> commitChapterReadState(
+    Chapter chapter, {
+    required bool isRead,
+    int? lastPageRead,
+  }) async {
+    if (SettingsService.instance.incognitoMode) return false;
+    chapter.applyReadState(isRead);
+    if (lastPageRead != null) {
+      chapter.lastPageRead = lastPageRead;
+    }
+    await IsarService.instance.saveChapter(chapter);
+    if (isRead) {
+      // Advance local read activity so History grouping, the in-progress query
+      // and Library "Last Read" sorting all see this action without a resync.
+      await stampLocalReadActivity(chapter);
+    }
+    if (chapter.serverId > 0) {
+      // Intentionally not awaited: the offline path queues a SyncRecord and
+      // the online path does a network round-trip, neither of which the UI
+      // should block on. Matches every previous call site.
+      unawaited(
+        syncChapterProgress(
+          chapter.serverId,
+          isRead: isRead,
+          lastPageRead: chapter.lastPageRead,
+        ),
+      );
+    }
+    return true;
+  }
+
   Future<void> syncChapterProgress(
     int chapterServerId, {
     required bool isRead,
     required int lastPageRead,
   }) async {
     if (chapterServerId <= 0) return;
+    // Defence in depth for [commitChapterReadState]. Anything that reaches the
+    // network or the replay queue leaks reading history, and the replay queue in
+    // particular would replay long after the user turned Incognito back off.
+    if (SettingsService.instance.incognitoMode) return;
 
     if (GraphQLClientService.instance.isConfigured) {
       final isOnline = await GraphQLClientService.instance.checkServerReachable();
@@ -1314,7 +1374,6 @@ class SyncEngine {
               // -device never made it back here.
               final serverIsRead = parseBoolSafe(chMap['isRead']);
               final hasPendingMutation = pendingChapterIds.contains(chapter.serverId.toString());
-              final localWasRead = chapter.isRead;
               if (!hasPendingMutation) {
                 chapter.isRead = serverIsRead;
               }
@@ -1325,8 +1384,6 @@ class SyncEngine {
               chapter.lastPageRead = mergeLastPageRead(
                 local: chapter.lastPageRead,
                 server: serverLastPageRead,
-                localWasRead: localWasRead,
-                serverIsRead: serverIsRead,
                 hasPendingMutation: hasPendingMutation,
               );
 
@@ -1447,15 +1504,12 @@ class SyncEngine {
           // Read-state: take the server's value unless this chapter still has
           // an unsynced outbound mutation queued (see _syncAllChaptersForLibrary).
           final hasPendingMutation = pendingChapterIds.contains(chServerId.toString());
-          final localWasRead = chapter.isRead;
           if (!hasPendingMutation) {
             chapter.isRead = serverIsRead;
           }
           chapter.lastPageRead = mergeLastPageRead(
             local: chapter.lastPageRead,
             server: serverLastPageRead,
-            localWasRead: localWasRead,
-            serverIsRead: serverIsRead,
             hasPendingMutation: hasPendingMutation,
           );
           mergeLastReadAt(chapter, chMap);
@@ -1541,7 +1595,6 @@ class SyncEngine {
         chapter.pageCount = parseIntSafe(map['pageCount'], chapter.pageCount);
         final serverIsRead = parseBoolSafe(map['isRead']);
         final hasPendingMutation = pendingChapterIds.contains(chServerId.toString());
-        final localWasRead = chapter.isRead;
         if (!hasPendingMutation) {
           chapter.isRead = serverIsRead;
         }
@@ -1551,8 +1604,6 @@ class SyncEngine {
         chapter.lastPageRead = mergeLastPageRead(
           local: chapter.lastPageRead,
           server: parseIntSafe(map['lastPageRead'], chapter.lastPageRead),
-          localWasRead: localWasRead,
-          serverIsRead: serverIsRead,
           hasPendingMutation: hasPendingMutation,
         );
         // Also missing here: without lastReadAt a chapter that arrives already

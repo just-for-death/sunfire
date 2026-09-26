@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
@@ -844,22 +845,24 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   void _toggleChapterRead(Chapter ch) async {
     final newState = !ch.isRead;
-    setState(() => ch.applyReadState(newState));
-    await IsarService.instance.saveChapter(ch);
+    // Centralised so the Incognito guard matches the reader's. Previously this
+    // path persisted to Isar and pushed to the server with Incognito on.
+    final wrote = await SyncEngine.instance.commitChapterReadState(ch, isRead: newState);
+    if (!wrote) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Incognito Mode is on — reading state is not saved')),
+        );
+      }
+      return;
+    }
+    if (mounted) setState(() {});
     await _refreshUnreadCount();
 
     if (newState && _settings.deleteChapterAfterMarkedRead && ch.isDownloaded) {
       if (!ch.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
         DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(ch));
       }
-    }
-
-    if (newState) {
-      // Advance local read activity (History grouping + Library sorting).
-      await SyncEngine.instance.stampLocalReadActivity(ch);
-    }
-    if (ch.serverId > 0) {
-      SyncEngine.instance.syncChapterProgress(ch.serverId, isRead: newState, lastPageRead: ch.lastPageRead);
     }
 
     if (newState && _manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
@@ -883,6 +886,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   }
 
   void _markPreviousChaptersRead(Chapter ch) async {
+    // Centralised Incognito guard (see commitChapterReadState).
+    if (SettingsService.instance.incognitoMode) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Incognito Mode is on — reading state is not saved')),
+        );
+      }
+      return;
+    }
     final prevs = _chapters.where((c) => c.chapterNumber < ch.chapterNumber && !c.isRead).toList();
     for (final p in prevs) {
       p.applyReadState(true);
@@ -955,6 +967,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   void _markSelectedRead(bool read) async {
     final targets = _chapters.where((c) => _selectedChapterIds.contains(_targetChapterId(c))).toList();
+    // Centralised Incognito guard (see commitChapterReadState).
+    if (SettingsService.instance.incognitoMode) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Incognito Mode is on — reading state is not saved')),
+        );
+      }
+      return;
+    }
     for (final c in targets) {
       c.applyReadState(read);
       if (read && _settings.deleteChapterAfterMarkedRead && c.isDownloaded) {
@@ -964,7 +985,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
       if (read) await SyncEngine.instance.stampLocalReadActivity(c);
       if (c.serverId > 0) {
-        SyncEngine.instance.syncChapterProgress(c.serverId, isRead: read, lastPageRead: c.lastPageRead);
+        unawaited(
+          SyncEngine.instance.syncChapterProgress(
+            c.serverId,
+            isRead: read,
+            lastPageRead: c.lastPageRead,
+          ),
+        );
       }
       if (read && _manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
         MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: c).catchError((_) => false);

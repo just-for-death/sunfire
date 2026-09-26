@@ -14,8 +14,6 @@ void main() {
         mergeLastPageRead(
           local: local,
           server: server,
-          localWasRead: localWasRead,
-          serverIsRead: serverIsRead,
           hasPendingMutation: pending,
         );
 
