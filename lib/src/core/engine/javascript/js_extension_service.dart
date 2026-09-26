@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
 
 import '../../../constants/app_constants.dart';
+import '../../logging/logger_service.dart';
 import '../quickjs_service.dart';
 import 'dom_selector.dart';
 import 'http.dart';
@@ -16,8 +17,19 @@ class JsExtensionService {
   final Map<String, dynamic> sourceMeta;
   final String sourceCode;
   bool _isInitialized = false;
+
+  /// Set when the extension's top-level code failed to evaluate, so later calls
+  /// can fail fast with a clear reason instead of recompiling per request.
+  bool _initFailed = false;
   JsDomSelector? _jsDomSelector;
   JsHttpClient? _httpClient;
+
+  /// True when the extension's top-level code failed to evaluate.
+  ///
+  /// A broken source used to be reported as healthy: `_isInitialized` was set
+  /// unconditionally, so every later call re-allocated a runtime, re-compiled
+  /// the whole scraper, threw, and returned an empty list — per request.
+  bool get initFailed => _initFailed;
 
   JsExtensionService({
     required this.sourceMeta,
@@ -140,7 +152,17 @@ if (typeof extention === "undefined") {
 }
 ''');
     if (res.isError) {
-      debugPrint('[JsExtensionService] ❌ Failed to instantiate extension: ${res.stringResult}');
+      // Logged, not debugPrint'd — `debugPrint` is stripped in release, so a
+      // syntactically broken extension was reported as healthy with no
+      // diagnostic anywhere.
+      LoggerService.instance.logWarning(
+        'Extension failed to instantiate: ${res.stringResult}',
+        'QuickJS',
+      );
+      // Still mark initialised so the runtime/bridges are torn down normally,
+      // but remember the failure so later calls fail fast with a clear reason
+      // instead of re-compiling the whole scraper on every single request.
+      _initFailed = true;
     }
     _isInitialized = true;
   }

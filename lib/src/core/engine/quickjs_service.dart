@@ -374,14 +374,31 @@ class QuickJsService {
         await extDir.create(recursive: true);
       }
       final file = File('${extDir.path}/$cleanName.js');
-      await file.writeAsString(jsCode);
+      // Write to a temp file and rename.
+      //
+      // `writeAsString` truncates in place, so a process kill (low-memory
+      // kill, background-task eviction, battery pull) mid-write left a
+      // PARTIAL `.js` in the extensions directory. On next launch the loader
+      // accepted it — its only rejection is a check for Dart bytecode, not for
+      // JS validity — leaving the extension permanently installed-but-broken:
+      // every call re-allocated a runtime, threw, and returned an empty list,
+      // and `getInstalledVersion` still reported a version so the updater saw
+      // nothing to do. The only recovery was a manual reinstall.
+      //
+      // `rename` is atomic on POSIX and NTFS within a filesystem, so the
+      // extension directory only ever contains a complete file.
+      final tmpFile = File('${extDir.path}/$cleanName.js.tmp');
+      await tmpFile.writeAsString(jsCode);
+      await tmpFile.rename(file.path);
 
       final metaFile = File('${extDir.path}/$cleanName.json');
-      await metaFile.writeAsString(jsonEncode({
+      final metaTmp = File('${extDir.path}/$cleanName.json.tmp');
+      await metaTmp.writeAsString(jsonEncode({
         'name': displayName,
         'version': version ?? _installedVersions[cleanName] ?? '1.0.0',
         'iconUrl': iconUrl ?? _installedIcons[cleanName] ?? '',
       }));
+      await metaTmp.rename(metaFile.path);
 
       // Drop stale variant files (e.g. mangadex_all.js / mangadex_all.json) so the
       // canonical file is the only remaining install on disk.
