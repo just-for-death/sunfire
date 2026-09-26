@@ -11,7 +11,10 @@ import 'core/logging/logger_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/theme/app_theme.dart';
+import 'features/browse/browse_screen.dart';
 import 'features/downloads/download_queue_screen.dart';
+import 'features/history/history_screen.dart';
+import 'features/library/library_screen.dart';
 import 'features/manga_detail/manga_detail_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/reader/reader_screen.dart';
@@ -26,7 +29,9 @@ import 'features/settings/import_tachibk_screen.dart';
 import 'features/settings/library_settings_screen.dart';
 import 'features/settings/reader_settings_screen.dart';
 import 'features/settings/server_settings_screen.dart';
+import 'features/settings/settings_screen.dart';
 import 'features/stats/stats_screen.dart';
+import 'features/updates/updates_screen.dart';
 import 'main_shell.dart';
 
 double effectiveTopSafeInset({
@@ -37,6 +42,230 @@ double effectiveTopSafeInset({
   if (rawTop > 0.5) return rawTop;
   return isApple ? (isTablet ? 24.0 : 47.0) : 0.0;
 }
+
+/// Builds the widget shown for a shell tab.
+///
+/// Production passes nothing and gets the real feature screens. Tests inject
+/// lightweight placeholders so routing, tab synchronisation and responsive
+/// layout can be exercised without booting every screen's service init.
+typedef SunfireTabPageBuilder = Widget Function(int tabIndex);
+
+Widget _defaultTabPage(int tabIndex) {
+  switch (tabIndex) {
+    case 0:
+      return const LibraryScreen();
+    case 1:
+      return const UpdatesScreen();
+    case 2:
+      return const HistoryScreen();
+    case 3:
+      return const BrowseScreen();
+    default:
+      return const SettingsScreen();
+  }
+}
+
+CustomTransitionPage<void> sunfireTransitionPage({
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 260),
+    reverseTransitionDuration: const Duration(milliseconds: 220),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curveAnimation = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curveAnimation,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.04, 0.0),
+            end: Offset.zero,
+          ).animate(curveAnimation),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+/// Shell tab path -> [MainShell] tab index.
+///
+/// `/more` and `/settings` are aliases for the same tab; both are kept so
+/// legacy deep links and the mobile "More" affordance keep working.
+const List<MapEntry<String, int>> sunfireTabRoutes = [
+  MapEntry('/library', 0),
+  MapEntry('/updates', 1),
+  MapEntry('/history', 2),
+  MapEntry('/browse', 3),
+  MapEntry('/more', 4),
+  MapEntry('/settings', 4),
+];
+
+/// Single source of truth for app routing.
+///
+/// Extracted from `initState` so tests can drive the real route table
+/// (including [MainShell] tab synchronisation and the [ShellRoute] shell)
+/// rather than re-declaring an approximation of it that can drift.
+///
+/// [tabBuilder] replaces the five shell tab pages with stubs, and
+/// [initialLocation] overrides the onboarding-derived landing route, so tests
+/// can assert routing and responsive chrome without booting every screen.
+GoRouter buildAppRouter({
+  SunfireTabPageBuilder? tabBuilder,
+  String? initialLocation,
+}) {
+  final tabPage = tabBuilder ?? _defaultTabPage;
+  return GoRouter(
+    initialLocation: initialLocation ??
+        (SettingsService.instance.onboardingCompleted ? '/library' : '/onboarding'),
+    observers: [_NavigationLogger()],
+    routes: [
+      GoRoute(
+        path: '/onboarding',
+        pageBuilder: (context, state) => sunfireTransitionPage(
+          state: state,
+          child: const OnboardingScreen(),
+        ),
+      ),
+      ShellRoute(
+        pageBuilder: (context, state, child) {
+          // Single MainShell instance; the router owns which tab is active.
+          return NoTransitionPage(child: MainShell(child: child));
+        },
+        routes: [
+          for (final tab in sunfireTabRoutes)
+            GoRoute(
+              path: tab.key,
+              pageBuilder: (context, state) {
+                // Runs before MainShell mounts, so selectedTabNotifier is
+                // already set when the shell reads it in initState.
+                MainShell.switchToTab(tab.value);
+                return NoTransitionPage(child: tabPage(tab.value));
+              },
+            ),
+          GoRoute(
+            path: '/settings/server',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const ServerSettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/library',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const LibrarySettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/downloads',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const DownloadsSettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/browse',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const BrowseSettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/backup',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const BackupSettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/import-backup',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const ImportTachibkScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/reader',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const ReaderSettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/appearance',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const AppearanceSettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/general',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const GeneralSettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/advanced',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const AdvancedSettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/extension-repos',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const ExtensionReposScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/downloads',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const DownloadQueueScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/stats',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const StatsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/manga/:id',
+            pageBuilder: (context, state) {
+              final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
+              return sunfireTransitionPage(
+                state: state,
+                child: MangaDetailScreen(mangaServerId: id),
+              );
+            },
+          ),
+          GoRoute(
+            path: '/reader/:id',
+            pageBuilder: (context, state) {
+              final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
+              return sunfireTransitionPage(
+                state: state,
+                child: ReaderScreen(chapterServerId: id),
+              );
+            },
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
 
 class SunfireApp extends StatefulWidget {
   const SunfireApp({super.key});
@@ -51,224 +280,10 @@ class _SunfireAppState extends State<SunfireApp> {
   StreamSubscription<Uri>? _linkSubscription;
   StreamSubscription<String?>? _notificationSubscription;
 
-  CustomTransitionPage<void> _buildTransitionPage({
-    required GoRouterState state,
-    required Widget child,
-  }) {
-    return CustomTransitionPage<void>(
-      key: state.pageKey,
-      child: child,
-      transitionDuration: const Duration(milliseconds: 260),
-      reverseTransitionDuration: const Duration(milliseconds: 220),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curveAnimation = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return FadeTransition(
-          opacity: curveAnimation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0.04, 0.0),
-              end: Offset.zero,
-            ).animate(curveAnimation),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
-
   @override
   void initState() {
     super.initState();
-    _router = GoRouter(
-      initialLocation: SettingsService.instance.onboardingCompleted ? '/library' : '/onboarding',
-      observers: [_NavigationLogger()],
-      routes: [
-        GoRoute(
-          path: '/onboarding',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const OnboardingScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/library',
-          pageBuilder: (context, state) {
-            MainShell.switchToTab(0);
-            return _buildTransitionPage(
-              state: state,
-              child: const MainShell(),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/updates',
-          pageBuilder: (context, state) {
-            MainShell.switchToTab(1);
-            return _buildTransitionPage(
-              state: state,
-              child: const MainShell(),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/history',
-          pageBuilder: (context, state) {
-            MainShell.switchToTab(2);
-            return _buildTransitionPage(
-              state: state,
-              child: const MainShell(),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/browse',
-          pageBuilder: (context, state) {
-            MainShell.switchToTab(3);
-            return _buildTransitionPage(
-              state: state,
-              child: const MainShell(),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/more',
-          pageBuilder: (context, state) {
-            MainShell.switchToTab(4);
-            return _buildTransitionPage(
-              state: state,
-              child: const MainShell(),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/settings',
-          pageBuilder: (context, state) {
-            MainShell.switchToTab(4);
-            return _buildTransitionPage(
-              state: state,
-              child: const MainShell(),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/settings/server',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const ServerSettingsScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/settings/library',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const LibrarySettingsScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/settings/downloads',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const DownloadsSettingsScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/settings/browse',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const BrowseSettingsScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/settings/backup',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const BackupSettingsScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/settings/import-backup',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const ImportTachibkScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/settings/reader',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const ReaderSettingsScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/settings/appearance',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const AppearanceSettingsScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/settings/general',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const GeneralSettingsScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/settings/advanced',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const AdvancedSettingsScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/settings/extension-repos',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const ExtensionReposScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/downloads',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const DownloadQueueScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/stats',
-          pageBuilder: (context, state) => _buildTransitionPage(
-            state: state,
-            child: const StatsScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/manga/:id',
-          pageBuilder: (context, state) {
-            final idStr = state.pathParameters['id'] ?? '0';
-            final id = int.tryParse(idStr) ?? 0;
-            return _buildTransitionPage(
-              state: state,
-              child: MangaDetailScreen(mangaServerId: id),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/reader/:id',
-          pageBuilder: (context, state) {
-            final idStr = state.pathParameters['id'] ?? '0';
-            final id = int.tryParse(idStr) ?? 0;
-            return _buildTransitionPage(
-              state: state,
-              child: ReaderScreen(chapterServerId: id),
-            );
-          },
-        ),
-      ],
-    );
+    _router = buildAppRouter();
     _initIncomingLinks();
   }
 

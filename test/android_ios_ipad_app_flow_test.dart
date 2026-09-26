@@ -20,6 +20,37 @@ import 'package:sunfire/src/features/onboarding/onboarding_screen.dart';
 import 'package:sunfire/src/features/reader/reading_mode.dart';
 import 'package:sunfire/src/main_shell.dart';
 
+/// Stand-in for a real tab screen. Lets these tests assert on [MainShell]'s
+/// responsive chrome and on router-driven tab switching without booting every
+/// feature screen (whose service initialisation makes `pumpAndSettle` hang).
+class _StubTab extends StatelessWidget {
+  const _StubTab({required this.index});
+
+  final int index;
+
+  @override
+  Widget build(BuildContext context) => Center(child: Text('stub-tab-$index'));
+}
+
+/// Pumps [MainShell] inside the real app router with stub tab pages.
+Future<void> _pumpShell(WidgetTester tester) async {
+  await SettingsService.instance.initialize();
+  SettingsService.instance.onboardingCompleted = true;
+  // The shell reads this static notifier to pick its initial tab; reset it so
+  // each test starts from a known state instead of inheriting the previous one.
+  MainShell.switchToTab(0);
+
+  final router = buildAppRouter(
+    initialLocation: '/library',
+    tabBuilder: (index) => _StubTab(index: index),
+  );
+  addTearDown(router.dispose);
+
+  await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 50));
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -233,9 +264,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(const MaterialApp(home: MainShell()));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      await _pumpShell(tester);
 
       expect(tester.takeException(), isNull);
       expect(find.text('Library'), findsWidgets);
@@ -254,9 +283,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(const MaterialApp(home: MainShell()));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      await _pumpShell(tester);
 
       expect(tester.takeException(), isNull);
       expect(find.text('Library'), findsWidgets);
@@ -270,9 +297,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(const MaterialApp(home: MainShell()));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      await _pumpShell(tester);
 
       expect(tester.takeException(), isNull);
       expect(find.byIcon(Icons.local_fire_department_rounded), findsOneWidget);
@@ -284,9 +309,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(const MaterialApp(home: MainShell()));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      await _pumpShell(tester);
       expect(tester.takeException(), isNull);
       expect(sunfireSidebarExpandedLayoutMinWidth, 180);
 
@@ -315,9 +338,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(const MaterialApp(home: MainShell()));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      await _pumpShell(tester);
       expect(tester.takeException(), isNull);
     });
 
