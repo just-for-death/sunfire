@@ -199,7 +199,30 @@ class DownloadManagerService extends ChangeNotifier {
     }
   }
 
-  Future<void> _saveQueueState() async {
+  /// Serializes every queue-state write into a single chain.
+  ///
+  /// Callers run on different async stacks (the queue loop, pause, cancel,
+  /// delete, dismiss, clear), and each did its own `getInstance()` +
+  /// `setString()`. Two `setString` platform-channel round-trips could be in
+  /// flight at once, and the snapshot is captured AFTER its own `await`, so
+  /// emission order and capture order can differ. A write carrying
+  /// `{status: "downloading"}` could therefore land AFTER one carrying
+  /// `{status: "completed"}` — and on next launch the `downloading → queued`
+  /// reconcile in `_loadQueueState` silently re-downloaded a chapter the user
+  /// had already been told finished.
+  ///
+  /// Chaining through one future makes the writes strictly ordered, so the last
+  /// state observed is the last state written.
+  Future<void> _pendingSave = Future<void>.value();
+
+  Future<void> _saveQueueState() {
+    _pendingSave = _pendingSave.then((_) => _writeQueueState()).catchError((Object e) {
+      debugPrint('[DownloadManager] Error saving queue state: $e');
+    });
+    return _pendingSave;
+  }
+
+  Future<void> _writeQueueState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonList = _localTasks.map((t) => t.toJson()).toList();
@@ -253,6 +276,51 @@ class DownloadManagerService extends ChangeNotifier {
 
   bool _isQueuePaused = false;
   bool get isQueuePaused => _isQueuePaused;
+
+  /// Re-evaluates the Wi-Fi and charging gates immediately.
+  ///
+  /// Both settings screens only acted on the DISABLE direction
+  /// (`if (!v) resumeLocalQueue()`); turning a gate ON was a no-op until the
+  /// running chapter happened to finish, because the gates are only re-read at
+  /// the top of the queue loop. So enabling "Download only on Wi-Fi" while on
+  /// cellular let the current chapter — up to ~12 minutes of Dio retry passes
+  /// plus curl fallbacks — keep burning mobile data, with no way to stop it
+  /// short of Pause.
+  ///
+  /// Cancels the in-flight token the way `pauseLocalQueue` does, but WITHOUT
+  /// setting `_isQueuePaused`: the queue is gated, not user-paused, so it must
+  /// still resume by itself when the resource returns.
+  Future<void> applyResourceGates() async {
+    if (_isQueuePaused) return;
+
+    final networkAllowed = await _checkNetworkAllowed();
+    final chargingOk = !BatteryStateService.shouldPauseForCharging(
+      chargeOnlyEnabled: SettingsService.instance.downloadOnlyWhileCharging,
+      isCharging: await _isCharging(),
+    );
+
+    if (networkAllowed && chargingOk) {
+      // A gate was just relaxed — re-kick if work is waiting.
+      if (!_isProcessingLocalQueue &&
+          _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
+        _waitingForCharger = false;
+        _processLocalQueue();
+      }
+      return;
+    }
+
+    // A gate was just tightened: stop the in-flight chapter now.
+    _waitingForCharger = !chargingOk;
+    for (final token in List<CancelToken>.from(_cancelTokens.values)) {
+      try {
+        token.cancel('Resource constraint enabled');
+      } catch (e) {
+        debugPrint('[DownloadManager] Token cancel error: $e');
+      }
+    }
+    await _saveQueueState();
+    notifyListeners();
+  }
 
   // ── Batch tracking for background/notification reporting ────────────
   int _batchTotal = 0;
@@ -652,6 +720,18 @@ class DownloadManagerService extends ChangeNotifier {
     var stoppedForNetwork = false;
     try {
       while (!_isQueuePaused) {
+        // Queue emptiness is checked FIRST, before the resource gates.
+        //
+        // The gates used to run first, so a single dropped connectivity sample
+        // arriving just after the last chapter completed set
+        // `stoppedForNetwork = true` and broke out — and the `finally` branch
+        // for that flag purges the batch counters without ever calling
+        // `_finishBatch`. A 40-chapter batch that fully succeeded reported
+        // nothing, so the user re-ran it. Checking for work first means "no
+        // work left" can never be misread as "blocked by a gate".
+        final queued = sortQueuedTasks(_localTasks);
+        if (queued.isEmpty) break;
+
         // Check network constraints (Wi-Fi only vs Mobile Data support)
         final networkAllowed = await _checkNetworkAllowed();
         if (!networkAllowed) {
@@ -676,8 +756,6 @@ class DownloadManagerService extends ChangeNotifier {
         // Download chapters in reading order (ascending chapter number) so a
         // batch of 1..100 starts at chapter 1, then 2, 3, … rather than the
         // source's newest-first order. Tasks are grouped by manga.
-        final queued = sortQueuedTasks(_localTasks);
-        if (queued.isEmpty) break;
         final task = queued.first;
         final epochAtStart = _pauseEpoch;
 
@@ -1163,10 +1241,23 @@ class DownloadManagerService extends ChangeNotifier {
       // queue loop recognises a deliberate dismiss instead of logging a
       // failure — while still removing it from the reported batch total.
       final wasCompleted = task.status == LocalDownloadStatus.completed;
+      // Captured BEFORE the overwrite below: this is how we tell "the cancel
+      // path already accounted for this task" from "dismissed cold".
+      final alreadyCountedAsCancelled = task.error == 'Cancelled';
       task.status = LocalDownloadStatus.failed;
       task.error = 'Cancelled';
       if (!wasCompleted && _batchCounted && _batchTotal > 0) {
-        _batchTotal--;
+        // `cancelLocalDownload` deliberately KEEPS the task in the list so the
+        // user can Retry or Dismiss it, and it already decremented
+        // `_batchTotal` and incremented `_failedInBatch` for this same task.
+        // Dismissing it then found the still-present task and decremented a
+        // SECOND time, so the denominator was short by one per
+        // cancel-then-dismiss: a 10-chapter batch with 2 of those reported
+        // "8 succeeded, 2 failed" of 8. The `> 0` guard only stopped it going
+        // negative.
+        if (!alreadyCountedAsCancelled) {
+          _batchTotal--;
+        }
       }
     }
     if (token != null) {

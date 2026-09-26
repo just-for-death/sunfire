@@ -666,23 +666,38 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _cachedPageHeights[url] = h;
   }
 
-  void _schedulePageHeightCache(String url, double width, Widget imageWidget) {
+  void _schedulePageHeightCacheForProvider(String url, double width, ImageProvider provider) {
     // Failed URLs must never be probed again: resolving them would issue a
     // fresh network fetch and, when the stream never completes, leak the
     // ImageStreamListener. Cached heights are already known — skip those too.
     if (_failedImageUrls.contains(url) || _cachedPageHeights.containsKey(url)) return;
-    if (imageWidget is! Image) return;
-    final provider = imageWidget.image;
+    // The only dedup used to be the height cache, which is absent while a page
+    // is still LOADING — the normal state. So every rebuild of a loading page
+    // attached ANOTHER listener to the same ImageStream, and the stream held
+    // them all: neither the closure nor the ImageStreamCompleter was
+    // collectable, so memory grew for the life of the chapter and each
+    // notifyListeners fanned out to N listeners. On a slow CDN, scrolling back
+    // and forth over one page added one per frame per visit.
+    if (!_heightProbesInFlight.add(url)) return;
+
     final stream = provider.resolve(ImageConfiguration(size: Size(width, width * 2)));
     late final ImageStreamListener listener;
+    void release() {
+      _heightProbesInFlight.remove(url);
+      stream.removeListener(listener);
+    }
+
     listener = ImageStreamListener((info, _) {
       _rememberPageHeight(url, width, Size(info.image.width.toDouble(), info.image.height.toDouble()));
-      stream.removeListener(listener);
+      release();
     }, onError: (_, __) {
-      stream.removeListener(listener);
+      release();
     });
     stream.addListener(listener);
   }
+
+  /// URLs with a live height probe, so a rebuild cannot stack listeners.
+  final Set<String> _heightProbesInFlight = {};
 
   void _syncZoomedFlag() {
     final scale = _transformationController.value.getMaxScaleOnAxis();
@@ -2640,6 +2655,20 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       }
     }
 
+    // Capture the provider BEFORE any wrapping.
+    //
+    // The height probe used to be handed the widget *after* the colour filter
+    // and crop were applied, and it does `if (imageWidget is! Image) return;`.
+    // With invert/grayscale/night-amber/sepia on, or crop-borders on, `image` is
+    // a ColorFiltered/ClipRect and never an Image — so `_cachedPageHeights`
+    // stayed permanently empty and every consumer fell back to the crude
+    // `contentWidth * 1.5` estimate. That broke two things: `resumeOffsetForPage`
+    // summed 1.5x width for every page, so `_jumpToWebtoonPage` (the only path
+    // used on chapter open, since the page-key shortcut misses on first load)
+    // landed a long webtoon dozens of pages off; and the per-page placeholder
+    // height was wrong, so the strip visibly reflowed as images streamed in.
+    final webtoonImageProvider = isWebtoon && image is Image ? image.image : null;
+
     if (_activeColorFilter != null) {
       image = ColorFiltered(colorFilter: _activeColorFilter!, child: image);
     }
@@ -2648,8 +2677,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       image = ClipRect(child: image);
     }
 
-    if (isWebtoon) {
-      _schedulePageHeightCache(url, resolvedWidth, image);
+    if (webtoonImageProvider != null) {
+      _schedulePageHeightCacheForProvider(url, resolvedWidth, webtoonImageProvider);
     }
 
     final useZoom = isPaged || enablePerPageZoom;
