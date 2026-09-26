@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants/app_constants.dart';
 import '../db/isar_service.dart';
 import '../engine/content_resolver_service.dart';
+import '../engine/image_validation.dart';
 import '../engine/javascript/m_client.dart';
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
@@ -686,29 +687,21 @@ class DownloadManagerService extends ChangeNotifier {
         notifyListeners();
         await _refreshActiveNotifier();
 
+        // Only the download itself lives inside the failure-handling `try`.
+        //
+        // The Isar bookkeeping below used to be inside it too, and an Isar
+        // write can throw on its own (disk full, corrupt DB, schema error). At
+        // that point `task.status` was already `completed`, so none of the
+        // pause/cancel guards matched and control fell to the generic failure
+        // branch — which incremented `_failedInBatch` (so the batch summary
+        // counted one chapter as both succeeded and failed) and recursively
+        // deleted `downloads/<id>/`, destroying a fully downloaded, verified,
+        // marker-bearing chapter because a metadata write failed.
+        //
+        // A DB bookkeeping failure is now logged and does not touch the
+        // download outcome, the batch counters, or the folder.
         try {
           await _downloadChapterLocally(task);
-          if (task.status == LocalDownloadStatus.paused || task.status == LocalDownloadStatus.failed) {
-            // Task was paused or cancelled during execution; preserve its state
-          } else {
-            task.status = LocalDownloadStatus.completed;
-            task.progress = 1.0;
-            _completedInBatch++;
-            _downloadedLocalChapterIds.add(task.chapterId);
-            _downloadedLocalMangaIds.add(task.mangaId);
-            final m = await IsarService.instance.getMangaByServerId(task.mangaId);
-            if (m != null) {
-              if (m.serverId > 0) _downloadedLocalMangaIds.add(m.serverId);
-              _downloadedLocalMangaIds.add(m.id);
-            }
-
-            // Update Isar DB
-            final ch = await IsarService.instance.getChapterByServerId(task.chapterId);
-            if (ch != null) {
-              ch.isDownloaded = true;
-              await IsarService.instance.saveChapter(ch);
-            }
-          }
         } catch (e, stack) {
           if (_pauseEpoch != epochAtStart) {
             // The queue was paused (and possibly already resumed) while this
@@ -731,6 +724,37 @@ class DownloadManagerService extends ChangeNotifier {
             await LoggerService.instance.logError('Failed to download chapter ${task.chapterId}: $e', exception: e, stackTrace: stack, category: 'DownloadManager');
             // Clean up the partial download folder so it doesn't leak disk space.
             await _cleanupIncompleteDownload(task.chapterId);
+          }
+        }
+
+        if (task.status == LocalDownloadStatus.paused || task.status == LocalDownloadStatus.failed) {
+          // Task was paused or cancelled during execution; preserve its state.
+        } else {
+          task.status = LocalDownloadStatus.completed;
+          task.progress = 1.0;
+          _completedInBatch++;
+          _downloadedLocalChapterIds.add(task.chapterId);
+          _downloadedLocalMangaIds.add(task.mangaId);
+          // Bookkeeping only — never allowed to fail the download.
+          try {
+            final m = await IsarService.instance.getMangaByServerId(task.mangaId);
+            if (m != null) {
+              if (m.serverId > 0) _downloadedLocalMangaIds.add(m.serverId);
+              _downloadedLocalMangaIds.add(m.id);
+            }
+
+            final ch = await IsarService.instance.getChapterByServerId(task.chapterId);
+            if (ch != null) {
+              ch.isDownloaded = true;
+              await IsarService.instance.saveChapter(ch);
+            }
+          } catch (e, stack) {
+            await LoggerService.instance.logError(
+              'Chapter ${task.chapterId} downloaded but its Isar bookkeeping failed: $e',
+              exception: e,
+              stackTrace: stack,
+              category: 'DownloadManager',
+            );
           }
         }
         await _saveQueueState();
@@ -784,6 +808,28 @@ class DownloadManagerService extends ChangeNotifier {
   }
 
   Future<void> _downloadChapterLocally(LocalDownloadTask task) async {
+    // Register the CancelToken FIRST, before the page-list resolve.
+    //
+    // It used to be created after `resolveChapterPages`, which can take ~20s
+    // via an extension and up to 90s via GraphQL. For that whole window
+    // `_cancelTokens` had no entry, so pauseLocalQueue, cancelLocalDownload,
+    // deleteLocalDownload and dismissLocalTask all cancelled nothing. The
+    // status guard did stop the download itself, but
+    // `deleteLocalDownload` had already removed `downloads/<id>/` and the
+    // resolve finished by recreating it — so a chapter the user deleted was
+    // written to disk in full anyway. They believed they freed the space.
+    final cancelToken = CancelToken();
+    _cancelTokens[task.chapterId] = cancelToken;
+    if (cancelToken.isCancelled) return;
+
+    try {
+      await _downloadChapterLocallyInner(task, cancelToken);
+    } finally {
+      _cancelTokens.remove(task.chapterId);
+    }
+  }
+
+  Future<void> _downloadChapterLocallyInner(LocalDownloadTask task, CancelToken cancelToken) async {
     // 1. Resolve chapter pages via 3-Tier ContentResolver (supports local JS scrapers, downloads & server)
     final ch = await IsarService.instance.getChapterByServerId(task.chapterId);
     final manga = ch != null ? await IsarService.instance.getMangaByServerId(ch.mangaId) : null;
@@ -801,6 +847,8 @@ class DownloadManagerService extends ChangeNotifier {
       allowLocalDownload: false,
     );
 
+    if (cancelToken.isCancelled) return;
+
     final rawPages = resolved.pageUrls;
     if (rawPages.isEmpty) {
       throw Exception('No pages found for chapter ${task.chapterName}');
@@ -811,9 +859,6 @@ class DownloadManagerService extends ChangeNotifier {
     if (!await chapterDir.exists()) {
       await chapterDir.create(recursive: true);
     }
-
-    final cancelToken = CancelToken();
-    _cancelTokens[task.chapterId] = cancelToken;
 
     try {
       final totalPages = rawPages.length;
@@ -878,37 +923,12 @@ class DownloadManagerService extends ChangeNotifier {
       // identical to a finished one on the next retry.
       await File('${chapterDir.path}/$kDownloadCompleteMarkerName').writeAsString('$totalPages');
     } finally {
-      _cancelTokens.remove(task.chapterId);
+      // `_cancelTokens` is owned and cleaned up by _downloadChapterLocally, so
+      // that the entry is registered across the page-list resolve too.
     }
   }
 
-  static bool _isValidImageBytes(List<int>? b) {
-    if (b == null || b.length < 12) return false;
-    // JPEG: FF D8
-    if (b[0] == 0xFF && b[1] == 0xD8) return true;
-    // PNG: 89 50 4E 47
-    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return true;
-    // WebP: RIFF ... WEBP
-    if (b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 &&
-        b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50) {
-      return true;
-    }
-    // GIF: GIF87a / GIF89a
-    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x38) return true;
-    // BMP: 42 4D
-    if (b[0] == 0x42 && b[1] == 0x4D) return true;
-    // AVIF / HEIC: ISO-BMFF box, "ftyp" at offset 4
-    if (b[4] == 0x66 && b[5] == 0x74 && b[6] == 0x79 && b[7] == 0x70) return true;
-    // JPEG XL: bare codestream (FF 0A) or container signature box
-    if (b[0] == 0xFF && b[1] == 0x0A) return true;
-    if (b[0] == 0x00 && b[1] == 0x00 && b[2] == 0x00 && b[3] == 0x0C && b[4] == 0x4A && b[5] == 0x58 && b[6] == 0x4C && b[7] == 0x20) {
-      return true;
-    }
-    // Anything else (HTML/JSON/Cloudflare challenge pages, truncated junk)
-    // is NOT an image. The previous "any non-HTML blob over 500 bytes" fallback
-    // let error bodies be saved as pages and the chapter marked downloaded.
-    return false;
-  }
+  static bool _isValidImageBytes(List<int>? b) => looksLikeImageHeader(b);
 
   Future<void> _downloadSinglePage(
     Directory chapterDir,
@@ -1023,26 +1043,24 @@ class DownloadManagerService extends ChangeNotifier {
 
     // Desktop fallback: if Dio was blocked by Cloudflare TLS fingerprint, fetch via curl-impersonate
     if ((pageBytes == null || pageBytes.isEmpty) && !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-      final curlArgs = buildCurlArgs(
+      // Route through the shared helper rather than shelling out directly.
+      //
+      // The raw `Process.run` loop here bypassed `safe_curl`'s semaphore, which
+      // exists precisely to stop this: page concurrency is 5 and
+      // kCurlCandidates has 4 entries, so a burst of failing pages could spawn
+      // 20 concurrent curl processes, and that recurred every 5-page burst. It
+      // also had no `.timeout()`, so a wedged child held its slot for as long
+      // as curl's own --max-time allowed, and `CancelToken` cannot interrupt a
+      // `Process.run` — pausing the queue left them running.
+      final fetched = await runCurlWithSemaphore(
         url: pageUrl,
         maxTimeSeconds: 25,
         headers: headers.map((k, v) => MapEntry(k, v.toString())),
+        timeout: const Duration(seconds: 35),
       );
-      for (final exe in (curlArgs == null ? const <String>[] : kCurlCandidates)) {
-        if (cancelToken?.isCancelled == true) return;
-        try {
-          final args = curlArgs!;
-          final res = await Process.run(exe, args, stdoutEncoding: null);
-          if (res.exitCode == 0) {
-            final b = res.stdout as List<int>;
-            if (_isValidImageBytes(b)) {
-              pageBytes = b;
-              break;
-            }
-          }
-        } catch (e) {
-          LoggerService.instance.logWarning('curl fallback ($exe) failed for $pageUrl: $e', 'Download');
-        }
+      if (cancelToken?.isCancelled == true) return;
+      if (fetched != null && fetched.isNotEmpty && _isValidImageBytes(fetched)) {
+        pageBytes = fetched;
       }
     }
 
