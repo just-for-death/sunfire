@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../constants/app_constants.dart';
 import '../logging/logger_service.dart';
 import 'javascript/js_extension_service.dart';
 import 'javascript/m_client.dart';
@@ -938,6 +939,21 @@ class QuickJsService {
 
         final list = result['list'] as List<dynamic>?;
         if (list != null) {
+          // Belt-and-braces with the in-runtime character cap: this bounds the
+          // Dart-side materialisation, which is what actually holds the objects
+          // in memory. A browse page is at most a few hundred entries; anything
+          // beyond this is a broken or hostile source, not a result.
+          if (list.length > kMaxScraperPageEntries) {
+            await LoggerService.instance.logWarning(
+              'Extension returned ${list.length} entries, above the '
+              '$kMaxScraperPageEntries limit; truncating',
+              'QuickJS',
+            );
+            return list
+                .take(kMaxScraperPageEntries)
+                .map((item) => Map<String, dynamic>.from(item as Map))
+                .toList();
+          }
           return list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
         }
         return [];

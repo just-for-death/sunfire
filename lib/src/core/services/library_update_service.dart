@@ -198,7 +198,7 @@ class LibraryUpdateService extends ChangeNotifier {
 
       if (totalManga > 0) {
         final existingChaptersByManga = await IsarService.instance.getChaptersForMangas(
-          localManga.map((m) => m.serverId != 0 ? m.serverId : m.id).toList(),
+          localManga.map((m) => m.canonicalKey).toList(),
         );
 
         for (int i = 0; i < totalManga; i++) {
@@ -219,7 +219,7 @@ class LibraryUpdateService extends ChangeNotifier {
             if (detail.containsKey('chapters')) {
               final rawChapters = detail['chapters'] as List<dynamic>?;
               if (rawChapters != null && rawChapters.isNotEmpty) {
-                final mId = manga.serverId != 0 ? manga.serverId : manga.id;
+                final mId = manga.canonicalKey;
                 final existing = existingChaptersByManga[mId] ?? const <Chapter>[];
                 final existingUrls = existing.map((c) => c.url).toSet();
                 final existingServerIds = existing.map((c) => c.serverId).toSet();
@@ -291,7 +291,7 @@ class LibraryUpdateService extends ChangeNotifier {
       final libraryMangaList = await IsarService.instance.getLibraryManga();
       final Map<int, String> mangaTitleMap = {
         for (final m in libraryMangaList)
-          (m.serverId > 0 ? m.serverId : m.id): m.title,
+          m.canonicalKey: m.title,
       };
       final Set<int> libraryMangaIds = {
         for (final m in libraryMangaList) ...[
