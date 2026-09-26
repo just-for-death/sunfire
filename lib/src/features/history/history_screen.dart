@@ -50,8 +50,16 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
       final now = DateTime.now();
       final nowCalendar = DateTime(now.year, now.month, now.day);
 
-      // Cache manga lookups to eliminate N+1 queries
-      final mangaIds = chapters.map((c) => c.mangaId).where((id) => id > 0).toSet();
+      // Cache manga lookups to eliminate N+1 queries.
+      //
+      // `id > 0` dropped every local/standalone series, whose `mangaId` is a
+      // NEGATIVE synthetic value — so those entries rendered as
+      // "Manga #-4000123" with no cover, for the whole of History. The hazard is
+      // documented in isar_service and handled twice in manga_detail; history
+      // was the one screen that never got it. `getMangaByServerId` filters the
+      // serverId column, which is where the negative value lives, so no special
+      // case is needed beyond not discarding it.
+      final mangaIds = chapters.map((c) => c.mangaId).where((id) => id != 0).toSet();
       final mangaMap = <int, Manga?>{};
       for (final mId in mangaIds) {
         mangaMap[mId] = await IsarService.instance.getMangaByServerId(mId);
@@ -62,9 +70,13 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
         if (lastRead <= 0) continue; // Only show chapters with genuine read timestamps in History
 
         final manga = mangaMap[ch.mangaId];
-        final readDate = lastRead > 1000000000000
-            ? DateTime.fromMillisecondsSinceEpoch(lastRead)
-            : DateTime.fromMillisecondsSinceEpoch(lastRead * 1000);
+        // The app stores `lastReadAt` in epoch SECONDS. This used to use a
+        // `1e12` threshold, while the canonical `normalizeEpochToSeconds` uses
+        // `1e11` — so a value in the gap was treated as millis here and as
+        // seconds in manga_detail, and this file multiplied a real millis value
+        // by 1000 to produce the year 15858. One helper, one threshold.
+        final lastReadSeconds = normalizeEpochToSeconds(lastRead) ?? 0;
+        final readDate = DateTime.fromMillisecondsSinceEpoch(lastReadSeconds * 1000);
 
         final readCalendar = DateTime(readDate.year, readDate.month, readDate.day);
         final dayDiff = nowCalendar.difference(readCalendar).inDays;
