@@ -317,7 +317,9 @@ class _SunfireAppState extends State<SunfireApp> {
         if (uri != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) => _handleUri(uri));
         }
-      }).catchError((_) {});
+      }).catchError((e) {
+        debugPrint('[app] Failed to get initial link: $e');
+      });
     } catch (ignoredError) { if (kDebugMode) debugPrint('[app] ignored error: $ignoredError'); }
   }
 
