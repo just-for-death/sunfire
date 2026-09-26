@@ -86,3 +86,9 @@ test/build/
 *.part
 *.zip
 release/
+
+# Historical planning docs (executed; see git history)
+UI_IMPROVEMENT_PLAN.md
+READER_UPDATES_DEEP_DIVE.md
+docs/planning/v2-roadmap.md
+docs/planning/ios-background-downloads.md
