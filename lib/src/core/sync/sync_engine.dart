@@ -26,6 +26,15 @@ const int kMaxSyncRetries = 5;
 /// abandoned instead of being retried forever.
 const int kTransientSyncMaxAgeSeconds = 14 * 24 * 60 * 60;
 
+/// Floor on how much of a series' chapter list the server must still return
+/// before we are willing to conclude that the missing chapters were deleted
+/// upstream rather than dropped by a truncated/failed response.
+///
+/// Deliberately conservative and symmetric with the manga-level wipe guard
+/// (`serverCount >= localCountBefore * 0.3`). A series that legitimately lost
+/// most of its chapters in one step will be reconciled on the following sync.
+const double kChapterPruneRatio = 0.3;
+
 /// Whether [e] is a transient network failure (dropped connection, timeout,
 /// DNS hiccup) rather than the server rejecting the mutation.
 ///
@@ -100,6 +109,92 @@ int mergeLastPageRead({
   // with a low page number (often 0 or 1).
   if (server > local) return server;
   return local;
+}
+
+/// Decides which local chapters may be pruned for a series, given the set of
+/// chapter ids the server just reported.
+///
+/// Pure and `@visibleForTesting` so the wipe guard is directly verifiable —
+/// this is the one place in the app that can permanently destroy a series'
+/// offline reading history, so its "when NOT to delete" behaviour matters more
+/// than its "when to delete" behaviour.
+///
+/// Returns only chapters that are safe to remove: never one the server still
+/// reports, never a locally-downloaded or bookmarked chapter, and never
+/// anything at all if the response looks truncated ([seenServerIds] empty, or
+/// holding less than [kChapterPruneRatio] of what we already had).
+@visibleForTesting
+List<Chapter> selectPrunableChapters({
+  required Iterable<Chapter> localChapters,
+  required Set<int> seenServerIds,
+}) {
+  if (seenServerIds.isEmpty) return const [];
+
+  // Only consider real server chapters; a local-scrape chapter has a negative
+  // synthetic serverId and exists solely on this device.
+  final known = localChapters.where((c) => c.serverId > 0).toList();
+  final stale = <Chapter>[
+    for (final c in known)
+      if (!seenServerIds.contains(c.serverId) && !c.isDownloadedLocally && !c.isBookmarked) c,
+  ];
+  if (stale.isEmpty) return const [];
+
+  // Wipe guard: a series that suddenly returns far fewer chapters than we hold
+  // is far more likely to be a truncated/failed response than a mass deletion
+  // upstream. Keep everything and let the next sync reconcile.
+  if (seenServerIds.length < known.length * kChapterPruneRatio) return const [];
+
+  return stale;
+}
+
+/// Returns the first candidate that is non-null and non-blank after trimming,
+/// or null when there is none.
+String? _firstNonEmpty(List<String?> candidates) {
+  for (final c in candidates) {
+    if (c == null) continue;
+    final trimmed = c.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+  }
+  return null;
+}
+
+/// Merges `isBookmarked` from a server chapter node.
+///
+/// Bookmarks were only ever *pushed* ([syncChapterBookmark]); none of the
+/// three pull paths assigned the field, even though every chapter query
+/// already selects `isBookmarked`. A bookmark set on one device therefore
+/// never came back down on another — `manga_detail_screen` and the Reader
+/// both render `chapter.isBookmarked`, so the icon simply vanished.
+///
+/// Skipped while this chapter has an unsynced outbound mutation queued, so a
+/// bookmark that is still waiting to be pushed is not immediately overwritten
+/// by the server's pre-replay value.
+void mergeIsBookmarked(
+  Chapter chapter,
+  Map<String, dynamic> chMap, {
+  required bool hasPendingMutation,
+}) {
+  if (hasPendingMutation) return;
+  if (!chMap.containsKey('isBookmarked')) return;
+  chapter.isBookmarked = parseBoolSafe(chMap['isBookmarked']);
+}
+
+/// Merges `lastReadAt` from a server chapter node, normalising epoch
+/// milliseconds to seconds and never moving the stamp backwards.
+///
+/// `getReadingHistory()` filters on `lastReadAt > 0` and Library's "Last
+/// Read" sort reads the series-level stamp, so a chapter that arrives already
+/// read but without this field is invisible to both.
+void mergeLastReadAt(Chapter chapter, Map<String, dynamic> chMap) {
+  final raw = chMap['lastReadAt'];
+  if (raw == null) return;
+  final parsed = raw is num ? raw.toInt() : int.tryParse(raw.toString());
+  if (parsed == null || parsed <= 0) return;
+  // Server may report millis; local storage is seconds everywhere.
+  final seconds = parsed > 100000000000 ? parsed ~/ 1000 : parsed;
+  if (seconds > (chapter.lastReadAt ?? 0)) {
+    chapter.lastReadAt = seconds;
+  }
 }
 
 class SyncEngine {
@@ -232,10 +327,21 @@ class SyncEngine {
 
     if (existing.isNotEmpty) {
       final record = existing.first;
+      // Never let a coalesce move progress backwards. Two overlapping
+      // debounced page turns (page 20 then page 21) can both read the same
+      // queued record before either writes; without this max() the slower
+      // writer persisted page 20 over page 21 and the replay uploaded stale
+      // progress. Same reason for isRead: a queued "read" must not be undone
+      // by a late "unread" from the same burst.
+      final queued = _readQueuedProgress(record.payloadJson);
+      final incoming = lastPageRead;
+      final bestPage = queued == null ? incoming : (incoming > queued ? incoming : queued);
+      final bestRead = isRead || (queued == null ? false : _readQueuedIsRead(record.payloadJson));
+
       record.payloadJson = jsonEncode({
         'chapterId': chapterServerId,
-        'isRead': isRead,
-        'lastPageRead': lastPageRead,
+        'isRead': bestRead,
+        'lastPageRead': bestPage,
       });
       record.timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       await IsarService.instance.saveSyncRecord(record);
@@ -261,6 +367,34 @@ class SyncEngine {
       ..deviceId = _deviceId ?? 'default_device'
       ..state = SyncRecordState.pending;
     await IsarService.instance.saveSyncRecord(record);
+  }
+
+  /// Reads `lastPageRead` out of a queued progress payload, or null when the
+  /// payload is absent/unparseable.
+  static int? _readQueuedProgress(String? payloadJson) {
+    if (payloadJson == null || payloadJson.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(payloadJson);
+      if (decoded is! Map) return null;
+      final v = decoded['lastPageRead'];
+      if (v is num) return v.toInt();
+      return int.tryParse(v?.toString() ?? '');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reads `isRead` out of a queued progress payload; defaults to false when
+  /// the payload is absent/unparseable.
+  static bool _readQueuedIsRead(String? payloadJson) {
+    if (payloadJson == null || payloadJson.isEmpty) return false;
+    try {
+      final decoded = jsonDecode(payloadJson);
+      if (decoded is! Map) return false;
+      return parseBoolSafe(decoded['isRead']);
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Deletes queued, not-yet-attempted pure progress records for a chapter
@@ -958,8 +1092,16 @@ class SyncEngine {
 
           final sourceMapNode = nodeMap['source'];
           final sourceMap = sourceMapNode is Map ? Map<String, dynamic>.from(sourceMapNode) : null;
-          manga.sourceName =
-              sourceMap?['name']?.toString() ?? sourceMap?['displayName']?.toString() ?? nodeMap['sourceId']?.toString() ?? 'Unknown Source';
+          // `?.toString()` on an EMPTY string yields '' (not null), so a plain
+          // ?? chain short-circuits and stored '' as the source name. The
+          // local-extension cover/URL fallbacks below all guard on
+          // sourceName.isNotEmpty, so they were silently skipped for such a
+          // series. Take the first candidate that is actually non-empty.
+          manga.sourceName = _firstNonEmpty([
+            sourceMap?['name']?.toString(),
+            sourceMap?['displayName']?.toString(),
+            nodeMap['sourceId']?.toString(),
+          ]) ?? 'Unknown Source';
           final sourceLang = sourceMap?['lang']?.toString();
           if (sourceLang != null && sourceLang.trim().isNotEmpty) {
             manga.lang = sourceLang.trim();
@@ -1126,11 +1268,38 @@ class SyncEngine {
             manga.chapterCount = chapterNodes.length;
             final chaptersToSave = <Chapter>[];
 
+            // Prefetch this manga's local chapters ONCE and index by server id.
+            // The loop below used to call getChapterByServerId per chapter
+            // node, which is one sequential Isar round-trip each — a 1000-
+            // chapter series cost 1000 queries per manga per sync, and
+            // triggerSync runs from pull-to-refresh, the reader, the library
+            // updater and the WorkManager task. This is the same rows
+            // IsarService.getChaptersForManga already batches.
+            final localByServerId = <int, Chapter>{};
+            for (final existing in await IsarService.instance.getChaptersForManga(manga.serverId)) {
+              if (existing.serverId != 0) {
+                localByServerId[existing.serverId] = existing;
+              }
+            }
+
+            // Server ids present in this response. Used to prune chapters the
+            // server no longer knows about, guarded by a wipe check below.
+            final seenServerIds = <int>{};
+
             for (final c in chapterNodes) {
               final chMap = c as Map<String, dynamic>;
               final chServerId = parseIntSafe(chMap['id']);
+              if (chServerId != 0) seenServerIds.add(chServerId);
 
-              var chapter = await IsarService.instance.getChapterByServerId(chServerId);
+              var chapter = localByServerId[chServerId];
+              // The batched prefetch is keyed on mangaId == manga.serverId.
+              // If a row carries a stale/zero mangaId (older schema, a
+              // migrated series, a manual edit) it is missed here, and
+              // building a fresh Chapter would silently discard its
+              // read state, bookmark and local download. Fall back to the
+              // direct serverId lookup for that rare case.
+              chapter ??=
+                  await IsarService.instance.getChapterByServerId(chServerId);
               chapter ??= Chapter()..serverId = chServerId;
 
               chapter.mangaId = manga.serverId;
@@ -1150,8 +1319,8 @@ class SyncEngine {
                 chapter.isRead = serverIsRead;
               }
 
-              // lastPageRead merge — highest wins, except a chapter marked
-              // unread elsewhere takes the server's page (see mergeLastPageRead).
+              // lastPageRead merge — the server's page only wins when it
+              // represents strictly more progress (see mergeLastPageRead).
               final serverLastPageRead = parseIntSafe(chMap['lastPageRead']);
               chapter.lastPageRead = mergeLastPageRead(
                 local: chapter.lastPageRead,
@@ -1161,15 +1330,8 @@ class SyncEngine {
                 hasPendingMutation: hasPendingMutation,
               );
 
-              final rawServerLastReadAt = chMap['lastReadAt'] != null
-                  ? int.tryParse(chMap['lastReadAt'].toString())
-                  : null;
-              if (rawServerLastReadAt != null) {
-                final serverLastReadAt = rawServerLastReadAt > 100000000000 ? rawServerLastReadAt ~/ 1000 : rawServerLastReadAt;
-                if (serverLastReadAt > (chapter.lastReadAt ?? 0)) {
-                  chapter.lastReadAt = serverLastReadAt;
-                }
-              }
+              mergeLastReadAt(chapter, chMap);
+              mergeIsBookmarked(chapter, chMap, hasPendingMutation: hasPendingMutation);
 
               final rawUpload = chMap['uploadDate'] ?? chMap['dateUpload'];
               if (rawUpload != null) {
@@ -1201,14 +1363,45 @@ class SyncEngine {
                 chapter.realUrl = chMap['realUrl'] as String;
               }
 
-              // Denormalize manga info into the chapter for offline display
+              // Denormalize manga info into the chapter for offline display.
+              // Guarded on non-empty: this was an unconditional assign, so a
+              // series whose manga row has no cover (server returned only a
+              // proxy URL) lost the cover on every one of its chapters, unlike
+              // the history/recent-update blocks which already guarded.
               chapter.mangaTitle = manga.title;
-              chapter.mangaThumbnailUrl = manga.thumbnailUrl;
+              final seriesThumb = manga.thumbnailUrl;
+              if (seriesThumb != null && seriesThumb.isNotEmpty) {
+                chapter.mangaThumbnailUrl = seriesThumb;
+              }
 
               chaptersToSave.add(chapter);
             }
 
             await IsarService.instance.saveChapters(chaptersToSave);
+
+            // ── Prune chapters the server no longer has ──────────────────
+            // Nothing in the codebase ever deleted a chapter, so a chapter
+            // removed on the server lingered locally forever: `chapterCount`
+            // is overwritten from the server so the count and the row set
+            // silently diverged, the chapter reappeared in the offline
+            // chapter list and stayed in History (getReadingHistory filters
+            // only on library membership), and Isar grew without bound.
+            // See selectPrunableChapters for the wipe guard.
+            if (seenServerIds.isNotEmpty) {
+              final stale = selectPrunableChapters(
+                localChapters: localByServerId.values,
+                seenServerIds: seenServerIds,
+              );
+              if (stale.isNotEmpty) {
+                await IsarService.instance.deleteChapters(stale);
+                await LoggerService.instance.logInfo(
+                  'Pruned ${stale.length} chapter(s) no longer on the server '
+                  '(manga ${manga.serverId}: server ${seenServerIds.length} / '
+                  'local ${localByServerId.length})',
+                  'SyncEngine',
+                );
+              }
+            }
           }
 
           await IsarService.instance.saveManga(manga);
@@ -1242,10 +1435,6 @@ class SyncEngine {
           final mangaServerId = parseIntSafe(chMap['mangaId']);
           final serverIsRead = parseBoolSafe(chMap['isRead']);
           final serverLastPageRead = parseIntSafe(chMap['lastPageRead']);
-          final rawServerLastReadAt = chMap['lastReadAt'] != null ? int.tryParse(chMap['lastReadAt'].toString()) : null;
-          final serverLastReadAt = rawServerLastReadAt != null
-              ? (rawServerLastReadAt > 100000000000 ? rawServerLastReadAt ~/ 1000 : rawServerLastReadAt)
-              : null;
 
           var chapter = await IsarService.instance.getChapterByServerId(chServerId);
           chapter ??= Chapter()..serverId = chServerId;
@@ -1269,9 +1458,8 @@ class SyncEngine {
             serverIsRead: serverIsRead,
             hasPendingMutation: hasPendingMutation,
           );
-          if (serverLastReadAt != null && serverLastReadAt > (chapter.lastReadAt ?? 0)) {
-            chapter.lastReadAt = serverLastReadAt;
-          }
+          mergeLastReadAt(chapter, chMap);
+          mergeIsBookmarked(chapter, chMap, hasPendingMutation: hasPendingMutation);
 
           // Populate denormalized manga info for offline History display
           if (chMap.containsKey('manga') && chMap['manga'] != null) {
@@ -1346,6 +1534,11 @@ class SyncEngine {
         chapter.mangaId = parseIntSafe(map['mangaId'], chapter.mangaId);
         chapter.name = map['name'] as String? ?? chapter.name;
         chapter.chapterNumber = parseDoubleSafe(map['chapterNumber'], chapter.chapterNumber);
+        // pageCount was missing here, and Chapter.applyReadState does
+        // `if (read) lastPageRead = pageCount` — so marking a chapter that
+        // first arrived through the updates feed read wrote lastPageRead = 0
+        // and threw away the resume position.
+        chapter.pageCount = parseIntSafe(map['pageCount'], chapter.pageCount);
         final serverIsRead = parseBoolSafe(map['isRead']);
         final hasPendingMutation = pendingChapterIds.contains(chServerId.toString());
         final localWasRead = chapter.isRead;
@@ -1362,6 +1555,11 @@ class SyncEngine {
           serverIsRead: serverIsRead,
           hasPendingMutation: hasPendingMutation,
         );
+        // Also missing here: without lastReadAt a chapter that arrives already
+        // read is absent from History (lastReadAt > 0) and does not float its
+        // series in Library's "Last Read" sort.
+        mergeLastReadAt(chapter, map);
+        mergeIsBookmarked(chapter, map, hasPendingMutation: hasPendingMutation);
         chapter.isDownloadedOnServer = parseBoolSafe(map['isDownloaded']) || chapter.isDownloadedOnServer;
 
         final rawUpload = map['uploadDate'] ?? map['dateUpload'];
