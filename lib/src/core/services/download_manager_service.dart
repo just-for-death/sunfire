@@ -372,8 +372,13 @@ class DownloadManagerService extends ChangeNotifier {
   Future<void> resumeLocalQueue() async {
     _isQueuePaused = false;
     _waitingForCharger = false;
+    // Only reset EXPLICITLY paused tasks. A task that was `downloading`
+    // when the app backgrounded is either still running (Android FGS) or
+    // will fail and be retried by the queue loop. Resetting it to `queued`
+    // here causes the Downloads screen to flash "Queued 0%" for a chapter
+    // that is actually mid-download.
     for (final task in _localTasks) {
-      if (task.status == LocalDownloadStatus.downloading || task.status == LocalDownloadStatus.paused) {
+      if (task.status == LocalDownloadStatus.paused) {
         task.status = LocalDownloadStatus.queued;
       }
     }
