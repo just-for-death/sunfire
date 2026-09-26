@@ -854,6 +854,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
     }
 
+    if (newState) {
+      // Advance local read activity (History grouping + Library sorting).
+      await SyncEngine.instance.stampLocalReadActivity(ch);
+    }
     if (ch.serverId > 0) {
       SyncEngine.instance.syncChapterProgress(ch.serverId, isRead: newState, lastPageRead: ch.lastPageRead);
     }
@@ -887,6 +891,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(p));
         }
       }
+      await SyncEngine.instance.stampLocalReadActivity(p);
       if (p.serverId > 0) {
         SyncEngine.instance.syncChapterProgress(p.serverId, isRead: true, lastPageRead: p.lastPageRead);
       }
@@ -957,6 +962,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(c));
         }
       }
+      if (read) await SyncEngine.instance.stampLocalReadActivity(c);
       if (c.serverId > 0) {
         SyncEngine.instance.syncChapterProgress(c.serverId, isRead: read, lastPageRead: c.lastPageRead);
       }
