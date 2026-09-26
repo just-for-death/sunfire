@@ -1076,14 +1076,14 @@ class DownloadManagerService extends ChangeNotifier {
         ch.isDownloadedLocally = false;
         await IsarService.instance.saveChapter(ch);
       }
-      if (mId != null && mId > 0) {
+      if (mId != null && mId != 0) {
         final remaining = await IsarService.instance.getChaptersForManga(mId);
-        final hasOther = remaining.any((c) => _downloadedLocalChapterIds.contains(c.serverId > 0 ? c.serverId : c.id));
+        final hasOther = remaining.any((c) => _downloadedLocalChapterIds.contains(c.serverId != 0 ? c.serverId : c.id));
         if (!hasOther) {
           _downloadedLocalMangaIds.remove(mId);
           final m = await IsarService.instance.getMangaByServerId(mId);
           if (m != null) {
-            _downloadedLocalMangaIds.remove(m.serverId);
+            if (m.serverId != 0) _downloadedLocalMangaIds.remove(m.serverId);
             _downloadedLocalMangaIds.remove(m.id);
           }
         }
