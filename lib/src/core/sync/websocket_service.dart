@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, visibleForTesting;
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../logging/logger_service.dart';
@@ -14,11 +14,13 @@ class WebSocketService {
   String? _authToken;
   Timer? _handshakeTimer;
   bool _isConnected = false;
-  int _reconnectDelaySeconds = 5;
+  int _reconnectDelaySeconds = _baseReconnectSeconds();
+
+  static int _baseReconnectSeconds() => reconnectBaseDelay.inSeconds;
   Timer? _reconnectTimer;
   Timer? _pingTimer;
   Timer? _pongWatchdogTimer;
-  DateTime? _lastPongAt;
+  DateTime? _lastInboundAt;
   bool _isConnecting = false;
   bool _isDisposed = false;
 
@@ -55,7 +57,7 @@ class WebSocketService {
       _isDisposed = true;
       _pingTimer?.cancel();
       _pongWatchdogTimer?.cancel();
-      _lastPongAt = null;
+      _lastInboundAt = null;
       _reconnectTimer?.cancel();
       _handshakeTimer?.cancel();
       _subscription?.cancel();
@@ -117,7 +119,27 @@ class WebSocketService {
       _channel!.sink.add(jsonEncode({'type': 'connection_init', 'payload': payload}));
 
       _subscription = _channel!.stream.listen(
-        (message) => _handleMessage(message),
+        // Liveness is recorded HERE, on raw byte arrival, before any decoding.
+        //
+        // It used to be recorded only on a literal `pong` frame, which is wrong
+        // twice over. (1) Nothing in graphql-transport-ws obliges a server to
+        // reply to a client `ping` — the spec defines the direction "server
+        // sends Ping, client must answer Pong" — so against a server that
+        // ignores client pings the watchdog fired every 75s forever, tearing
+        // down a perfectly healthy connection ~1150 times a day, each time
+        // paying a fresh TCP+TLS handshake and re-sending both subscriptions.
+        // (2) Even against a compliant server, any *other* inbound traffic
+        // proved nothing: a server actively streaming libraryUpdateStatus and
+        // downloadStatus events was still declared dead, because those frames
+        // did not touch the timestamp.
+        //
+        // Any frame arriving at all proves the socket is up in both
+        // directions. Only the complete absence of traffic is evidence of a
+        // half-open connection, so that is the only thing worth watchdogging.
+        (message) {
+          _lastInboundAt = DateTime.now();
+          _handleMessage(message);
+        },
         onError: (e) => _handleDisconnect('WebSocket error: $e'),
         onDone: () => _handleDisconnect('WebSocket closed by server'),
       );
@@ -134,10 +156,51 @@ class WebSocketService {
     }
   }
 
+  /// Interval between client-initiated liveness pings.
+  ///
+  /// Mutable rather than `const` so tests can shorten the liveness timings
+  /// instead of sleeping 90s to observe a watchdog trip. Always restore these
+  /// in tearDown.
+  @visibleForTesting
+  static Duration pingInterval = const Duration(seconds: 25);
+
+  /// How often the liveness watchdog re-evaluates the connection.
+  @visibleForTesting
+  static Duration watchdogInterval = const Duration(seconds: 15);
+
+  /// Silence after which the connection is presumed half-open and recycled.
+  ///
+  /// Must comfortably exceed `pingInterval` plus one network round trip, or a
+  /// healthy link trips the watchdog between pings.
+  @visibleForTesting
+  static Duration livenessSilenceTimeout = const Duration(seconds: 75);
+
+  /// The first reconnect delay, doubled (up to [reconnectMaxDelay]) on each
+  /// consecutive failure and reset on a successful `connection_ack`.
+  ///
+  /// Mutable so tests can observe a reconnect without sleeping the production
+  /// 5s. Always restore in tearDown.
+  @visibleForTesting
+  static Duration reconnectBaseDelay = const Duration(seconds: 5);
+
+  /// Ceiling for the exponential reconnect backoff.
+  @visibleForTesting
+  static Duration reconnectMaxDelay = const Duration(seconds: 300);
+
+  /// Doubles the current backoff and returns the new delay.
+  Duration _advanceReconnectDelay() {
+    final next = (_reconnectDelaySeconds * 2).clamp(
+      reconnectBaseDelay.inSeconds,
+      reconnectMaxDelay.inSeconds,
+    );
+    _reconnectDelaySeconds = next;
+    return Duration(seconds: next);
+  }
+
   void _startPingTimer() {
     _pingTimer?.cancel();
-    _lastPongAt = DateTime.now();
-    _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+    _lastInboundAt = DateTime.now();
+    _pingTimer = Timer.periodic(pingInterval, (_) {
       if (_isConnected && _channel != null) {
         try {
           _channel?.sink.add(jsonEncode({'type': 'ping'}));
@@ -145,22 +208,28 @@ class WebSocketService {
       }
     });
 
-    // A server that stops answering pings — or a TCP connection whose socket
+    // A server that stops answering entirely — or a TCP connection whose socket
     // half-closed silently (killed server, network drop without FIN) — never
     // fires onError/onDone, so _isConnected would stick true forever with no
-    // reconnect. Watchdog: if we've pinged and seen no pong for 75s, force a
-    // disconnect so the reconnect loop re-establishes the channel.
+    // reconnect. The watchdog reclaims that: a link that has sent us nothing
+    // at all for livenessSilenceTimeout is not usable, so recycle it.
+    //
+    // Deliberately "no traffic", NOT "no pong": see the note on the stream
+    // listener in connect(). A server that ignores client pings but keeps
+    // streaming subscription events is healthy, and treating it as dead would
+    // reconnect in a loop forever.
     _pongWatchdogTimer?.cancel();
-    _pongWatchdogTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _pongWatchdogTimer = Timer.periodic(watchdogInterval, (_) {
       if (!_isConnected) return;
-      final last = _lastPongAt;
+      final last = _lastInboundAt;
       if (last == null) return;
-      if (DateTime.now().difference(last) > const Duration(seconds: 75)) {
+      if (DateTime.now().difference(last) > livenessSilenceTimeout) {
         LoggerService.instance.logWarning(
-          'WebSocket pong watchdog: no pong for 75s — forcing reconnect.',
+          'WebSocket liveness watchdog: no traffic for '
+          '${livenessSilenceTimeout.inSeconds}s — forcing reconnect.',
           'WebSocket',
         );
-        _handleDisconnect('WebSocket heartbeat timeout (no pong)');
+        _handleDisconnect('WebSocket heartbeat timeout (no inbound traffic)');
       }
     });
   }
@@ -173,16 +242,19 @@ class WebSocketService {
       if (type == 'connection_ack') {
         _isConnected = true;
         _isConnecting = false;
-        _reconnectDelaySeconds = 5;
+        _reconnectDelaySeconds = _baseReconnectSeconds();
         _handshakeTimer?.cancel();
         _startPingTimer();
         LoggerService.instance.logInfo('WebSocket connection_ack received', 'WebSocket');
         _subscribeEvents();
       } else if (type == 'ping') {
+        // Server-initiated ping: the spec requires us to answer. Answering also
+        // counts as inbound traffic, so it refreshes liveness on its own.
         _channel?.sink.add(jsonEncode({'type': 'pong'}));
       } else if (type == 'pong') {
-        // Heartbeat pong received from server — clears the watchdog.
-        _lastPongAt = DateTime.now();
+        // Liveness was already recorded by the stream listener on arrival; no
+        // extra bookkeeping needed here. Branch retained so an explicit pong is
+        // recognised rather than falling through the catch-all.
       } else if (type == 'next' || type == 'data') {
         final payload = data['payload'] as Map<String, dynamic>?;
         if (payload != null && payload.containsKey('data')) {
@@ -269,7 +341,7 @@ class WebSocketService {
     _reconnectTimer?.cancel();
     _handshakeTimer?.cancel();
     _reconnectTimer = Timer(Duration(seconds: _reconnectDelaySeconds), () {
-      _reconnectDelaySeconds = (_reconnectDelaySeconds * 2).clamp(5, 300);
+      _advanceReconnectDelay();
       connect();
     });
   }
@@ -293,7 +365,7 @@ class WebSocketService {
         if (fresh != null && fresh.trim().isNotEmpty) {
           _authToken = fresh.trim();
           // A new token deserves a clean retry, not a backed-off one.
-          _reconnectDelaySeconds = 5;
+          _reconnectDelaySeconds = _baseReconnectSeconds();
           connect();
           return;
         }
@@ -317,8 +389,7 @@ class WebSocketService {
     // Credentials are still bad. Reconnect on the backoff schedule so a
     // transient server-side auth outage can recover, but without the runaway
     // doubling from an immediate retry.
-    _reconnectDelaySeconds = (_reconnectDelaySeconds * 2).clamp(5, 300);
-    _reconnectTimer = Timer(Duration(seconds: _reconnectDelaySeconds), connect);
+    _reconnectTimer = Timer(_advanceReconnectDelay(), connect);
   }
 
   void dispose() {
