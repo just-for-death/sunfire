@@ -591,6 +591,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       final chapters = chaptersByManga[id] ?? <Chapter>[];
       for (final ch in chapters) {
         ch.applyReadState(isRead);
+        // Advance the read stamp for freshly-read chapters so History and
+        // Library "Last Read" sorting pick the action up without a resync.
+        if (isRead) await SyncEngine.instance.stampLocalReadActivity(ch);
         if (ch.serverId > 0) {
           SyncEngine.instance.syncChapterProgress(
             ch.serverId,

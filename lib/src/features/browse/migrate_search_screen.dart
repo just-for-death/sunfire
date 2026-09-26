@@ -714,6 +714,12 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
               tc.fetchedAt = match.fetchedAt;
               updatedTargetChapters.add(tc);
 
+              if (tc.isRead) {
+                // The migrated chapter arrives read, so carry over the read
+                // activity locally too — otherwise it is invisible to History
+                // and the in-progress query until the next full sync.
+                await SyncEngine.instance.stampLocalReadActivity(tc);
+              }
               if (tc.serverId > 0) {
                 await SyncEngine.instance.syncChapterProgress(
                   tc.serverId,

@@ -59,15 +59,19 @@ class LibraryUpdateService extends ChangeNotifier {
     }
     _isUpdating = true;
 
-    // Constraint enforcement for background or automated triggers.
-    // The single-flight flag is already set, so any throw here MUST release it
-    // or every later update is skipped until the app restarts.
-    if (!isManual) {
-      try {
+    // NOTE: every early return below relies on the `finally` at the bottom of
+    // the try to release the single-flight flag. The constraint gates used to
+    // sit *outside* the try and reset `_isUpdating` by hand at five separate
+    // sites — any future early return added there would wedge the service
+    // forever ("Update already in progress"), and the outer catch could
+    // rethrow with the flag still set. They are inside the try now, so the
+    // flag has exactly one release path.
+    try {
+      // Constraint enforcement for background or automated triggers.
+      if (!isManual) {
         final freqHours = SettingsService.instance.libraryUpdateFrequencyHours;
         if (freqHours <= 0) {
           debugPrint('[LibraryUpdateService] Automated updates disabled in settings.');
-          _isUpdating = false;
           return 0;
         }
 
@@ -75,35 +79,27 @@ class LibraryUpdateService extends ChangeNotifier {
         final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
         if (nowSec - lastTime < freqHours * 3600) {
           debugPrint('[LibraryUpdateService] Update frequency interval ($freqHours h) has not elapsed yet.');
-          _isUpdating = false;
           return 0;
         }
 
         final satisfiesNetwork = await _satisfiesNetworkConstraint();
         if (!satisfiesNetwork) {
           debugPrint('[LibraryUpdateService] Skipping update: not connected to Wi-Fi / Ethernet.');
-          _isUpdating = false;
           return 0;
         }
 
         final satisfiesCharging = await _satisfiesChargingConstraint();
         if (!satisfiesCharging) {
           debugPrint('[LibraryUpdateService] Skipping update: charge-only mode and device is not charging.');
-          _isUpdating = false;
           return 0;
         }
-      } catch (_) {
-        _isUpdating = false;
-        rethrow;
       }
-    }
 
-    _progress = 0.05;
-    _statusMessage = 'Taking library snapshot...';
-    _lastFoundCount = 0;
-    notifyListeners();
+      _progress = 0.05;
+      _statusMessage = 'Taking library snapshot...';
+      _lastFoundCount = 0;
+      notifyListeners();
 
-    try {
       await LoggerService.instance.logInfo(
         'Starting library update (isManual: $isManual, triggerServer: $triggerServer)...',
         'LibraryUpdateService',

@@ -532,6 +532,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     await IsarService.instance.saveChapter(ch);
 
     if (ch.serverId > 0) {
+      // Stamp local read activity so History's "Last Read" grouping, the
+      // in-progress query and Library sorting all see this action immediately.
+      if (newState) await SyncEngine.instance.stampLocalReadActivity(ch);
       SyncEngine.instance.syncChapterProgress(ch.serverId, isRead: newState, lastPageRead: ch.lastPageRead);
     }
 
@@ -664,6 +667,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     }
 
     for (final ch in chaptersToUpdate) {
+      await SyncEngine.instance.stampLocalReadActivity(ch);
       if (ch.serverId > 0) {
         SyncEngine.instance.syncChapterProgress(ch.serverId, isRead: true, lastPageRead: ch.lastPageRead);
       }

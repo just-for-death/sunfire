@@ -103,6 +103,14 @@ void main() async {
       final authToken = await ServerAuthHelper.getRawAuthHeader();
       GraphQLClientService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
       WebSocketService.instance.initialize(SettingsService.instance.serverUrl, authToken: authToken);
+      // If the server rejects the socket's credentials (close 4401/4403),
+      // re-read the stored token — a re-login elsewhere in the app may have
+      // already rotated it — and reconnect immediately. Without this the
+      // reconnect loop retried the same dead token forever.
+      WebSocketService.instance.onAuthExpired = () async {
+        final refreshed = await ServerAuthHelper.getRawAuthHeader();
+        return refreshed.trim().isEmpty ? null : refreshed;
+      };
       SyncEngine.instance.initialize();
       await BackgroundService.instance.initialize();
     } catch (e) {

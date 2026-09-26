@@ -22,6 +22,19 @@ class WebSocketService {
   bool _isConnecting = false;
   bool _isDisposed = false;
 
+  /// Close codes `graphql-transport-ws` uses for a rejected auth.
+  static const int _closeUnauthorized = 4401;
+  static const int _closeForbidden = 4403;
+
+  /// Invoked when the server closes the socket because the token was rejected
+  /// (4401/4403) or because `connection_init` was never acknowledged.
+  ///
+  /// Should re-authenticate and return the new token, or return null / throw
+  /// to signal the credentials are genuinely dead. Without it, a stale token
+  /// made the reconnect loop retry forever with exponential backoff, never
+  /// succeeding and never surfacing why — the socket just silently spun.
+  Future<String?> Function()? onAuthExpired;
+
   final _updateStatusController = StreamController<Map<String, dynamic>>.broadcast();
   final _downloadStatusController = StreamController<Map<String, dynamic>>.broadcast();
 
@@ -192,27 +205,48 @@ class WebSocketService {
   }
 
   void _subscribeEvents() {
-    // 1. Subscribe libraryUpdateStatusChanged — the modern field name (the old
-    //    `updateStatusChanged` is deprecated on current Suwayomi builds).
-    _channel?.sink.add(jsonEncode({
-      'id': '1',
-      'type': 'subscribe',
-      'payload': {
-        'query': 'subscription { libraryUpdateStatusChanged(input: { maxUpdates: 10 }) { jobsInfo { isRunning } } }'
-      }
-    }));
+    // A `connection_ack` can race a close (server drops us the instant it
+    // acks, network blips). `sink.add` on a closed sink throws, and that used
+    // to be swallowed by _handleMessage's catch-all and logged as a *parse*
+    // error — leaving _isConnected == true with no subscriptions at all, i.e.
+    // a silently dead channel that looks healthy. Send defensively instead.
+    //
+    // `sink` is a borrowed reference: _handleDisconnect owns teardown of the
+    // real channel, so closing it here would race the reconnect. That makes
+    // close_sinks a false positive for this local.
+    // ignore: close_sinks
+    final sink = _channel?.sink;
+    if (sink == null) {
+      _handleDisconnect('WebSocket closed before subscriptions could be sent');
+      return;
+    }
 
-    // 2. Subscribe downloadStatusChanged (Requires maxUpdates input arg)
-    _channel?.sink.add(jsonEncode({
-      'id': '2',
-      'type': 'subscribe',
-      'payload': {
-        'query': 'subscription { downloadStatusChanged(input: { maxUpdates: 10 }) { state omittedUpdates } }'
-      }
-    }));
+    try {
+      // 1. Subscribe libraryUpdateStatusChanged — the modern field name (the old
+      //    `updateStatusChanged` is deprecated on current Suwayomi builds).
+      sink.add(jsonEncode({
+        'id': '1',
+        'type': 'subscribe',
+        'payload': {
+          'query': 'subscription { libraryUpdateStatusChanged(input: { maxUpdates: 10 }) { jobsInfo { isRunning } } }'
+        }
+      }));
+
+      // 2. Subscribe downloadStatusChanged (Requires maxUpdates input arg)
+      sink.add(jsonEncode({
+        'id': '2',
+        'type': 'subscribe',
+        'payload': {
+          'query': 'subscription { downloadStatusChanged(input: { maxUpdates: 10 }) { state omittedUpdates } }'
+        }
+      }));
+    } catch (e) {
+      _handleDisconnect('WebSocket subscription failed: $e');
+    }
   }
 
   void _handleDisconnect(String reason) {
+    final closeCode = _channel?.closeCode;
     _isConnected = false;
     _isConnecting = false;
     _pingTimer?.cancel();
@@ -224,6 +258,12 @@ class WebSocketService {
 
     if (_isDisposed) return;
 
+    final authRejected = closeCode == _closeUnauthorized || closeCode == _closeForbidden;
+    if (authRejected) {
+      _handleAuthRejected(closeCode);
+      return;
+    }
+
     LoggerService.instance.logWarning('$reason. Reconnecting in ${_reconnectDelaySeconds}s...', 'WebSocket');
 
     _reconnectTimer?.cancel();
@@ -234,8 +274,57 @@ class WebSocketService {
     });
   }
 
+  /// The server rejected our credentials. Re-authenticate once and retry
+  /// immediately; if that fails, stop spinning and fall back to the normal
+  /// backoff so a genuinely dead login does not hammer the server forever.
+  Future<void> _handleAuthRejected(int? closeCode) async {
+    _reconnectTimer?.cancel();
+    _handshakeTimer?.cancel();
+
+    final refresher = onAuthExpired;
+    if (refresher != null) {
+      LoggerService.instance.logWarning(
+        'WebSocket rejected credentials (close $closeCode) — refreshing token.',
+        'WebSocket',
+      );
+      try {
+        final fresh = await refresher();
+        if (_isDisposed || _wsUrl == null) return;
+        if (fresh != null && fresh.trim().isNotEmpty) {
+          _authToken = fresh.trim();
+          // A new token deserves a clean retry, not a backed-off one.
+          _reconnectDelaySeconds = 5;
+          connect();
+          return;
+        }
+        LoggerService.instance.logWarning(
+          'WebSocket token refresh returned no token — backing off.',
+          'WebSocket',
+        );
+      } catch (e) {
+        LoggerService.instance.logWarning(
+          'WebSocket token refresh failed: $e — backing off.',
+          'WebSocket',
+        );
+      }
+    } else {
+      LoggerService.instance.logWarning(
+        'WebSocket rejected credentials (close $closeCode) and no refresher is registered.',
+        'WebSocket',
+      );
+    }
+
+    // Credentials are still bad. Reconnect on the backoff schedule so a
+    // transient server-side auth outage can recover, but without the runaway
+    // doubling from an immediate retry.
+    _reconnectDelaySeconds = (_reconnectDelaySeconds * 2).clamp(5, 300);
+    _reconnectTimer = Timer(Duration(seconds: _reconnectDelaySeconds), connect);
+  }
+
   void dispose() {
     _isDisposed = true;
+    // Drop the callback so a disposed service cannot re-enter app auth code.
+    onAuthExpired = null;
     _pingTimer?.cancel();
     _pongWatchdogTimer?.cancel();
     _reconnectTimer?.cancel();
