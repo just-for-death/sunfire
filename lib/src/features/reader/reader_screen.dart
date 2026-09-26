@@ -92,7 +92,10 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   // Uses composite key to avoid collisions across different manga/sources that
   // might share the same chapter serverId (e.g., local chapters with negative IDs).
   static const int _maxPrefetchedChapters = 3;
-  final Map<String, List<String>> _prefetchedChapters = {};
+  /// A prefetched chapter's page URLs, tagged with the source they were
+  /// resolved for so the reader can refuse a prefetch that belongs to a
+  /// different source than the one it is about to resolve against.
+  final Map<String, ({String sourceName, List<String> urls})> _prefetchedChapters = {};
   final Set<String> _prefetchingChapters = {};
 
   late ReadingMode _readingMode;
@@ -1201,10 +1204,20 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
 
     // Use prefetched pages if already available (instant load on next-chapter nav)
-    // Construct composite key: chapterId|mangaId
     final chForKey = _chapter;
-    final compositeKey = chForKey != null ? '${_chapterTargetId(chForKey)}|${chForKey.mangaId}' : null;
-    List<String>? prefetchedUrls = compositeKey != null ? _prefetchedChapters.remove(compositeKey) : null;
+    final prefetched = chForKey != null ? _prefetchedChapters.remove(_prefetchKeyFor(chForKey)) : null;
+    var prefetchedUrls = prefetched?.urls;
+    // The prefetch was resolved against a specific source. If the source
+    // changed under us (a migration, or a manga whose sourceName was
+    // corrected) those URLs belong to a different site and must not be served.
+    if (prefetchedUrls != null && prefetched != null) {
+      final currentSource = _parentManga?.sourceName;
+      if (currentSource != null && currentSource.isNotEmpty && currentSource != prefetched.sourceName) {
+        debugPrint('[Reader] Discarding prefetch for chapter $chapterId: source changed '
+            '(${prefetched.sourceName} -> $currentSource)');
+        prefetchedUrls = null;
+      }
+    }
 
     ChapterPagesResult resolved;
     if (prefetchedUrls != null && prefetchedUrls.isNotEmpty) {
@@ -1366,21 +1379,37 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   /// Prefetch the next chapter's page URLs into cache and precache image bitmaps into memory
+  /// The single prefetch cache key for [chapter].
+  ///
+  /// Both the write and the read side MUST go through this. They used to build
+  /// the key independently and disagree: the writer produced
+  /// `targetId|mangaId|sourceName` while the reader looked up
+  /// `targetId|mangaId`. The two could never be equal, so the lookup always
+  /// missed and the whole prefetch was dead code — every chapter change paid a
+  /// full scrape, and the `precacheImage` warm-up was pure waste.
+  ///
+  /// The source is deliberately not part of the key (it cannot be known
+  /// synchronously on the read side); it is carried in the value and checked
+  /// there instead.
+  String _prefetchKeyFor(Chapter chapter) => '${_chapterTargetId(chapter)}|${chapter.mangaId}';
+
   Future<void> _prefetchChapter(Chapter chapter) async {
-    final sid = _chapterTargetId(chapter);
-    // Composite key: includes mangaId and sourceName to avoid collisions across
-    // different manga/sources that might share the same chapter serverId.
+    // Capture the generation BEFORE the first await. Capturing it after meant
+    // the guard compared the current generation against itself, so a prefetch
+    // for the previous chapter's target happily wrote into the cache and warmed
+    // the image cache for a chapter the user was no longer reading.
+    final loadGen = _loadGeneration;
+    final compositeKey = _prefetchKeyFor(chapter);
+    if (_prefetchedChapters.containsKey(compositeKey) || _prefetchingChapters.contains(compositeKey)) return;
+
     final manga = await IsarService.instance.getMangaByServerId(chapter.mangaId);
     final sourceName = manga?.sourceName ?? 'unknown';
-    final compositeKey = '$sid|${chapter.mangaId}|$sourceName';
-
-    final loadGen = _loadGeneration; // Capture generation at start
-    if (_prefetchedChapters.containsKey(compositeKey) || _prefetchingChapters.contains(compositeKey)) return;
+    if (loadGen != _loadGeneration) return;
     _prefetchingChapters.add(compositeKey);
     try {
       final url = chapter.url.isNotEmpty ? chapter.url : chapter.realUrl;
       final resolved = await ContentResolverService.instance.resolveChapterPages(
-        chapterServerId: chapter.serverId > 0 ? chapter.serverId : sid,
+        chapterServerId: chapter.serverId > 0 ? chapter.serverId : _chapterTargetId(chapter),
         chapterUrl: url.isNotEmpty ? url : null,
         sourceName: sourceName,
       );
@@ -1395,12 +1424,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
           _prefetchedChapters.remove(oldestKey);
           debugPrint('[Reader] Prefetch cache full, evicted oldest chapter');
         }
-        _prefetchedChapters[compositeKey] = resolved.pageUrls;
-        debugPrint('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter $sid (key: $compositeKey)');
-
         // Precache first 3 image bitmaps into Flutter memory cache for 0ms transition
         // Use the PREFETCHED chapter's effective source for headers, not current chapter's.
         final effectiveSource = resolved.effectiveSourceName ?? sourceName;
+        _prefetchedChapters[compositeKey] = (sourceName: effectiveSource, urls: resolved.pageUrls);
+        debugPrint('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter '
+            '${_chapterTargetId(chapter)} (key: $compositeKey)');
         for (final pUrl in resolved.pageUrls.take(3)) {
           if (mounted && pUrl.startsWith('http')) {
             try {
@@ -1418,7 +1447,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         }
       }
     } catch (e) {
-      debugPrint('[Reader] Prefetch failed for chapter $sid: $e');
+      debugPrint('[Reader] Prefetch failed for chapter ${_chapterTargetId(chapter)}: $e');
     } finally {
       _prefetchingChapters.remove(compositeKey);
     }
@@ -1533,7 +1562,23 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     final isComplete = page >= totalPages;
     final wasRead = chapterSnapshot.isRead;
 
-    if (!shouldPersistProgressPage(page: clampedPage, previousSaved: chapterSnapshot.lastPageRead)) {
+    // Clamp the STORED value, not just the incoming one. `lastPageRead` is not
+    // bounded by the page count: mergeLastPageRead takes the max of local and
+    // server without clamping, so a stored value larger than the chapter's
+    // current page count is entirely reachable (a source whose page count
+    // shrank between resolutions — 30 pages yesterday, 25 today).
+    //
+    // The non-regression rule in shouldPersistProgressPage then rejects EVERY
+    // call, because `page < previousSaved` holds for all of them. The chapter
+    // could never be marked read, unreadCount never decremented, the tracker
+    // never synced, the auto-scrobble never fired, and every re-open started
+    // at page 1 — a permanently wrong library badge from one stale number.
+    //
+    // Once the previous value is out of range it carries no information about
+    // where the user actually is, so it must not veto the update.
+    final previousSaved = totalPages > 0 ? chapterSnapshot.lastPageRead.clamp(0, totalPages) : chapterSnapshot.lastPageRead;
+
+    if (!shouldPersistProgressPage(page: clampedPage, previousSaved: previousSaved)) {
       return;
     }
 

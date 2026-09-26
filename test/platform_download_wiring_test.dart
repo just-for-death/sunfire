@@ -134,7 +134,41 @@ void main() {
     test('downloads channel + notification ids exist', () {
       expect(notif, contains("downloadsChannelId = 'sunfire_downloads'"));
       expect(notif, contains('downloadProgressNotificationId = 4001'));
-      expect(notif, contains('downloadSummaryNotificationId = 4002'));
+      expect(notif, contains('downloadSummaryNotificationId = 4003'));
+    });
+
+    test('every download notification id is distinct', () {
+      // Android keys a notification by (id, tag) and Sunfire posts all of these
+      // with no tag, so a shared id means one silently replaces the other.
+      // `downloadsResumedNotificationId` and `downloadSummaryNotificationId`
+      // were both 4002, which meant the foreground "Downloads resumed" toast
+      // ate the batch-completion summary — the user's only confirmation that an
+      // overnight download succeeded — so they re-run the batch.
+      //
+      // This asserts the property rather than the literal values, so adding a
+      // notification later cannot silently reintroduce a collision.
+      final ids = RegExp(r'static const int (\w+NotificationId) = (\d+);')
+          .allMatches(notif)
+          .map((m) => (name: m.group(1)!, value: int.parse(m.group(2)!)))
+          .toList();
+
+      expect(ids.length, greaterThanOrEqualTo(3),
+          reason: 'expected to find the download notification id constants');
+
+      final downloadIds = ids.where((e) => e.name.toLowerCase().contains('download')).toList();
+      expect(downloadIds.length, greaterThanOrEqualTo(3));
+
+      final seen = <int, String>{};
+      for (final entry in downloadIds) {
+        final previous = seen[entry.value];
+        expect(
+          previous,
+          isNull,
+          reason: '${entry.name} and $previous both use notification id ${entry.value}; '
+              'one will silently replace the other',
+        );
+        seen[entry.value] = entry.name;
+      }
     });
 
     test('Android 13+ runtime permission is requested at startup', () {
