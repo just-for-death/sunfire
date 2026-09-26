@@ -314,7 +314,6 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
                 final isReadServer = parseBoolSafe(chMap['isRead']);
                 final lastPageReadServer = parseIntSafe(chMap['lastPageRead']);
-                final lastReadAtServer = parseIntSafe(chMap['lastReadAt']);
 
                 final ch = Chapter()
                   ..serverId = chServerId
@@ -335,9 +334,21 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   ch.fetchedAt = match.fetchedAt; // PRESERVE authentic fetchedAt (never overwrite with bulk server timestamp)
                   ch.isRead = match.isRead || isReadServer;
                   ch.lastPageRead = math.max(match.lastPageRead, lastPageReadServer);
-                  ch.lastReadAt = (lastReadAtServer > 0)
-                      ? lastReadAtServer
-                      : match.lastReadAt;
+                  // Normalised AND monotonic.
+                  //
+                  // The app stores `lastReadAt` in epoch SECONDS, and this
+                  // screen is the most-used in the app, so an un-normalised or
+                  // rewindable write here is very visible. A millis-reporting
+                  // server produced a timestamp ~1000x in the future, pinning
+                  // the chapter to one end of History and Stats permanently.
+                  // The old guard was `> 0`, not `> match.lastReadAt`, so a
+                  // server value of *yesterday* overwrote a read from an hour
+                  // ago — scrambling History's date grouping. `mergeLastReadAt`
+                  // in the sync engine gets this right; this did not.
+                  final serverLastReadAt = normalizeEpochToSeconds(chMap['lastReadAt']);
+                  ch.lastReadAt = serverLastReadAt == null
+                      ? match.lastReadAt
+                      : math.max(serverLastReadAt, match.lastReadAt ?? 0);
                   ch.isDownloadedLocally = match.isDownloadedLocally;
                   ch.localPath = match.localPath;
                   ch.isBookmarked = match.isBookmarked;
@@ -346,7 +357,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 } else {
                   ch.isRead = isReadServer;
                   ch.lastPageRead = lastPageReadServer;
-                  ch.lastReadAt = lastReadAtServer;
+                  // Never write 0 into a nullable seconds field — History and
+                  // Stats filter on `lastReadAtGreaterThan(0)`.
+                  ch.lastReadAt = normalizeEpochToSeconds(chMap['lastReadAt']);
                   // Genuinely NEW chapter added to an existing library manga
                   if (existingChapters.isNotEmpty && _manga != null && _manga!.inLibrary) {
                     ch.fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
