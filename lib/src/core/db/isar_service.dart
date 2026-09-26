@@ -51,6 +51,34 @@ class IsarService {
 
   bool get isInitialized => _isInitialized;
 
+  bool _uninitialisedWriteWarned = false;
+
+  /// Records that a write was dropped because the database is not open.
+  ///
+  /// The `if (!_isInitialized) return;` guard on every writer means a write
+  /// issued before `initialize()` completes — or after `close()` — resolves
+  /// SUCCESSFULLY having done nothing. Callers reasonably treat that as durable,
+  /// and several do: the downloader marks a chapter downloaded in a `try` whose
+  /// catch is documented as "must never fail the download", and the cover helper
+  /// persists a resolved CDN URL it has just paid a seven-pass cascade to
+  /// discover. Neither can tell the write was dropped.
+  ///
+  /// Not throwing: dozens of these call sites are unguarded, and converting a
+  /// silent no-op into an unhandled async error would trade a data problem for a
+  /// crash surface. Logging once, loudly, is the honest middle — the write is
+  /// still lost, but it is no longer invisible, which is what made it
+  /// undiagnosable.
+  void _warnUninitialisedWrite(String operation) {
+    if (_uninitialisedWriteWarned) return;
+    _uninitialisedWriteWarned = true;
+    LoggerService.instance.logWarning(
+      'IsarService dropped a $operation because the database is not open. Any '
+      'change it carried is LOST and the caller was told it succeeded. This '
+      'means something wrote before IsarService.initialize() completed.',
+      'IsarService',
+    );
+  }
+
   Future<void> initialize() => _initFuture ??= _doInitialize();
 
   Future<void> _doInitialize() async {
@@ -95,7 +123,10 @@ class IsarService {
 
   // ── MANGA CRUD ──────────────────────────────────────────
   Future<void> saveManga(Manga manga) async {
-    if (!_isInitialized) return;
+    if (!_isInitialized) {
+      _warnUninitialisedWrite('saveManga');
+      return;
+    }
     if (manga.serverId == 0) {
       manga.serverId = _generateSyntheticServerId();
     }
@@ -172,7 +203,10 @@ class IsarService {
 
   // ── CHAPTER CRUD ────────────────────────────────────────
   Future<void> saveChapter(Chapter chapter) async {
-    if (!_isInitialized) return;
+    if (!_isInitialized) {
+      _warnUninitialisedWrite('saveChapter');
+      return;
+    }
     if (chapter.serverId == 0) {
       chapter.serverId = _generateSyntheticServerId();
     }
@@ -408,10 +442,18 @@ class IsarService {
   Future<void> cleanupBulkScrapedUpdates() async {
     if (!_isInitialized) return;
     try {
+      // Sorted by FETCHED TIME, not chapter number.
+      //
+      // The caller treats the front of this list as "the newest few" and zeroes
+      // `fetchedAt` on everything after it. Sorting by chapter number meant the
+      // kept set was actually the highest-numbered chapters: usually the same
+      // thing inside a 60-second bucket, but for a re-scrape where one mid-list
+      // chapter was genuinely updated, that is precisely the chapter that got
+      // dropped out of the Updates feed.
       final chaptersWithFetchedAt = await _isar.chapters
           .filter()
           .fetchedAtGreaterThan(0)
-          .sortByChapterNumberDesc()
+          .sortByFetchedAtDesc()
           .findAll();
       if (chaptersWithFetchedAt.isEmpty) return;
 

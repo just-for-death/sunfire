@@ -9,9 +9,9 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../constants/app_constants.dart';
 import '../db/isar_service.dart';
-import '../db/models/manga.dart';
 import '../engine/image_validation.dart';
 import '../engine/quickjs_service.dart';
+import '../logging/logger_service.dart';
 import '../sync/graphql_client_service.dart';
 import 'in_flight_mutex.dart';
 import 'safe_curl.dart';
@@ -102,18 +102,40 @@ class ImageCacheHelper {
     return _memoryCache[url];
   }
 
+  /// Empties the memory and on-disk cover caches.
+  ///
+  /// Each delete is guarded INDIVIDUALLY. One `try` wrapped the whole loop, so a
+  /// single locked or already-removed file aborted every remaining delete in that
+  /// directory AND every later candidate path — leaving the user with a cache
+  /// they had just asked to clear, still partly full, with no indication which
+  /// part failed. Each failure is now reported and the sweep continues.
   static Future<void> clearCache() async {
     _memoryCache.clear();
+    var failures = 0;
     for (final basePath in _candidateCoverPaths) {
       try {
         final dir = Directory(basePath);
-        if (await dir.exists()) {
-          final files = await dir.list().toList();
-          for (final f in files) {
+        if (!await dir.exists()) continue;
+        final files = await dir.list().toList();
+        for (final f in files) {
+          try {
             await f.delete();
+          } catch (e) {
+            failures++;
+            if (kDebugMode) debugPrint('[image_cache_helper] could not delete ${f.path}: $e');
           }
         }
-      } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
+      } catch (e) {
+        failures++;
+        if (kDebugMode) debugPrint('[image_cache_helper] could not clear $basePath: $e');
+      }
+    }
+    if (failures > 0) {
+      LoggerService.instance.logWarning(
+        'Cover cache clear left $failures file(s) behind — the cache is only '
+        'partially empty. This is usually another process holding a file open.',
+        'ImageCacheHelper',
+      );
     }
   }
 
@@ -407,10 +429,18 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
             final extCover = await QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
             if (extCover != null && extCover.isNotEmpty) {
               url = extCover;
-              IsarService.instance.isar.writeTxn(() async {
-                m.thumbnailUrl = extCover;
-                await IsarService.instance.isar.mangas.put(m);
-              });
+              // Awaited, and through the service rather than a raw `isar`
+              // transaction.
+              //
+              // A raw `writeTxn` was fired and forgotten, and it sits OUTSIDE the
+              // enclosing try — so a failure (Isar closed by a concurrent
+              // `clearAll`, disk full, index conflict) rejected after the try had
+              // already exited, as an unhandled async error with no log line.
+              // Nothing was persisted, so every subsequent render re-ran the whole
+              // fetch cascade for the same cover, forever. `saveManga` is
+              // already awaited and guarded everywhere else in this file.
+              m.thumbnailUrl = extCover;
+              await IsarService.instance.saveManga(m);
             }
           }
         }

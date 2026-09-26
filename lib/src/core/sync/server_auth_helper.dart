@@ -99,20 +99,48 @@ class ServerAuthHelper {
     }
   }
 
+  /// Persists [creds], preferring secure storage and falling back to prefs.
+  ///
+  /// The write path had no fallback while the read path had one, which is
+  /// backwards: on a device where `FlutterSecureStorage` fails — the exact case
+  /// the fallback exists for, a restricted or broken keystore — the secure write
+  /// threw, the error was swallowed, and the plaintext cleanup below then ran
+  /// anyway and DELETED any pre-existing fallback copy. The credentials were
+  /// unrecoverable and the caller was told the save succeeded, so the user was
+  /// silently signed out with no explanation.
+  ///
+  /// The plaintext copy is therefore only removed once the secure write has
+  /// actually succeeded. It is still cleared once one does, so a device that
+  /// regains a working keystore does not keep a redundant plaintext duplicate
+  /// around.
   static Future<void> saveCredentials(ServerAuthCredentials creds) async {
     final header = creds.toHeaderValue();
+    var secureWriteSucceeded = false;
     try {
       if (header.isEmpty) {
         await _storage.delete(key: storageKey);
       } else {
         await _storage.write(key: storageKey, value: header);
       }
+      secureWriteSucceeded = true;
     } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
 
-    // Clean up any legacy plaintext credentials in SharedPreferences
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(storageKey);
+      if (secureWriteSucceeded) {
+        // Clean up any legacy plaintext credentials now that the secure copy is
+        // known to exist.
+        await prefs.remove(storageKey);
+      } else if (header.isEmpty) {
+        // Clearing: there is no secure copy to fall back on, so the plaintext
+        // one must go too, or `loadCredentials` would resurrect it.
+        await prefs.remove(storageKey);
+      } else {
+        // Secure storage is unavailable. Mirror the read path's fallback so the
+        // credentials survive at all — plaintext on disk is strictly better than
+        // losing them, and it is what this file already reads from.
+        await prefs.setString(storageKey, header);
+      }
     } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
   }
 
