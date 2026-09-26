@@ -158,8 +158,6 @@ void main() {
         mergeLastPageRead(
           local: 20,
           server: 0,
-          localWasRead: true,
-          serverIsRead: false,
           hasPendingMutation: false,
         ),
         20,
@@ -171,8 +169,6 @@ void main() {
         mergeLastPageRead(
           local: 3,
           server: 9,
-          localWasRead: false,
-          serverIsRead: false,
           hasPendingMutation: false,
         ),
         9,
@@ -184,8 +180,6 @@ void main() {
         mergeLastPageRead(
           local: 4,
           server: 30,
-          localWasRead: false,
-          serverIsRead: false,
           hasPendingMutation: true,
         ),
         4,

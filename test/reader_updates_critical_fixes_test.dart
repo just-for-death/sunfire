@@ -11,8 +11,6 @@ void main() {
       final result = mergeLastPageRead(
         local: 50,
         server: 0,
-        localWasRead: true,
-        serverIsRead: false,
         hasPendingMutation: false,
       );
       expect(result, 50, reason: 'Local progress should not be rewound when server has less progress');
@@ -23,8 +21,6 @@ void main() {
       final result = mergeLastPageRead(
         local: 50,
         server: 60,
-        localWasRead: true,
-        serverIsRead: true,
         hasPendingMutation: false,
       );
       expect(result, 60, reason: 'Should take server progress when it is greater');
@@ -35,8 +31,6 @@ void main() {
       final result = mergeLastPageRead(
         local: 50,
         server: 10,
-        localWasRead: true,
-        serverIsRead: false,
         hasPendingMutation: false,
       );
       expect(result, 50, reason: 'Local progress should win when greater than server');
@@ -47,8 +41,6 @@ void main() {
       final result = mergeLastPageRead(
         local: 5,
         server: 50,
-        localWasRead: false,
-        serverIsRead: true,
         hasPendingMutation: false,
       );
       expect(result, 50);
@@ -59,8 +51,6 @@ void main() {
       final result = mergeLastPageRead(
         local: 10,
         server: 100,
-        localWasRead: true,
-        serverIsRead: true,
         hasPendingMutation: true,
       );
       expect(result, 10);
@@ -70,8 +60,6 @@ void main() {
       final result = mergeLastPageRead(
         local: 10,
         server: 5,
-        localWasRead: false,
-        serverIsRead: false,
         hasPendingMutation: false,
       );
       expect(result, 10);
@@ -82,8 +70,6 @@ void main() {
       final result = mergeLastPageRead(
         local: 1,
         server: 0,
-        localWasRead: true,
-        serverIsRead: false,
         hasPendingMutation: false,
       );
       expect(result, 1, reason: 'Even page 1 should not be rewound to 0');

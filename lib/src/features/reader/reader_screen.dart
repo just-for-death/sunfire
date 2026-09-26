@@ -147,7 +147,18 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    // `hidden` and `detached` are handled alongside `paused`/`inactive` on
+    // purpose. The volume-key feature sets VolumeController.showSystemUI =
+    // false, which is a *global* OS flag, not a per-window one: if it is not
+    // restored before the engine detaches, the user's volume HUD stays hidden
+    // system-wide after the app is killed, and nothing ever puts it back.
+    // `detached` is the terminal state on Android engine-detach and on desktop
+    // window close, and it is NOT preceded by `paused` on every path, so
+    // handling only paused/inactive left that flag set.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
       if (_isAutoScrolling) {
         _stopAutoScroll();
         if (mounted) setState(() => _isAutoScrolling = false);
@@ -156,7 +167,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         try {
           VolumeController.instance.showSystemUI = true;
         } catch (e) {
-          debugPrint('[Reader] Failed to show system UI on pause: $e');
+          debugPrint('[Reader] Failed to restore system UI on $state: $e');
         }
       }
     } else if (state == AppLifecycleState.resumed) {
