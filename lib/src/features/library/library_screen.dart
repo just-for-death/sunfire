@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -49,6 +50,18 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   bool _isBatchMode = false;
   final Set<int> _selectedMangaIds = {};
 
+  // Tab-switch reload coalescing (see _onTabChanged)
+  Timer? _tabReloadTimer;
+  bool _isLoadingIsar = false;
+  bool _reloadQueued = false;
+
+  /// Manga whose cover could not be resolved by QuickJS this session. Retrying
+  /// them is pure cost: the failure is deterministic for a given (source, url)
+  /// pair, and without this the healing loop re-executed JS for every one of
+  /// them on every single Library tab visit. Reset whenever the source or URL
+  /// changes, which is handled because a changed row produces a new key.
+  final Set<String> _coverHealFailed = {};
+
   @override
   void initState() {
     super.initState();
@@ -57,13 +70,26 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   }
 
   void _onTabChanged() {
-    if (MainShell.selectedTabNotifier.value == 0 && mounted) {
+    if (MainShell.selectedTabNotifier.value != 0 || !mounted) return;
+    // Coalesced + single-flight. This reload runs the QuickJS cover-healing
+    // loop, so an undebounced call on every Library tab visit re-executed JS
+    // for every manga whose cover could not be resolved — for the life of the
+    // session, since a failed heal looks identical to a fresh one.
+    _tabReloadTimer?.cancel();
+    _tabReloadTimer = Timer(const Duration(milliseconds: 250), () {
+      _tabReloadTimer = null;
+      if (!mounted) return;
+      if (_isLoadingIsar) {
+        _reloadQueued = true;
+        return;
+      }
       _loadFromIsarOnly();
-    }
+    });
   }
 
   @override
   void dispose() {
+    _tabReloadTimer?.cancel();
     MainShell.selectedTabNotifier.removeListener(_onTabChanged);
     super.dispose();
   }
@@ -130,6 +156,23 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   }
 
   Future<void> _loadFromIsarOnly() async {
+    if (_isLoadingIsar) {
+      _reloadQueued = true;
+      return;
+    }
+    _isLoadingIsar = true;
+    try {
+      await _loadFromIsarOnlyInner();
+    } finally {
+      _isLoadingIsar = false;
+      if (_reloadQueued) {
+        _reloadQueued = false;
+        _loadFromIsarOnly();
+      }
+    }
+  }
+
+  Future<void> _loadFromIsarOnlyInner() async {
     try {
       final list = await IsarService.instance.getLibraryManga();
       final cats = await IsarService.instance.getCategories();
@@ -138,10 +181,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       for (final m in list) {
         if (m.thumbnailUrl == null || m.thumbnailUrl!.isEmpty || m.thumbnailUrl!.contains('/api/v1/manga/')) {
           if (m.sourceName.isNotEmpty && m.url.isNotEmpty) {
+            final healKey = '${m.sourceName}\u0000${m.url}';
+            if (_coverHealFailed.contains(healKey)) continue;
             final direct = await QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
             if (direct != null && direct.isNotEmpty) {
               m.thumbnailUrl = direct;
               hasHealed = true;
+            } else {
+              _coverHealFailed.add(healKey);
             }
           }
         }
@@ -188,10 +235,23 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   }
 
   Future<void> _handleRefresh() async {
+    // Same guard as _backgroundSync. Without it a second pull while the first
+    // is in flight hits SyncEngine's own single-flight check, returns
+    // immediately, re-reads a stale Isar snapshot and then clears _isSyncing in
+    // its finally — so the spinner vanished while the first sync was still
+    // running, and the user saw "refreshed" data that was not.
+    if (_isSyncing) return;
     if (mounted) setState(() => _isSyncing = true);
     try {
       if (GraphQLClientService.instance.isConfigured) {
-        await SyncEngine.instance.triggerSync();
+        // Bounded like _backgroundSync: a full per-manga detail snapshot over
+        // a large library can run for minutes, and RefreshIndicator would spin
+        // the whole time. Bailing out still leaves the results in Isar, which
+        // the next reload picks up.
+        await SyncEngine.instance.triggerSync().timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {},
+        );
       } else {
         // Standalone mode: check local JS extensions for new chapters across library titles
         await _checkStandaloneUpdates();
@@ -232,12 +292,22 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
             final mId = manga.serverId > 0 ? manga.serverId : manga.id;
             final existingChapters = existingChaptersByManga[mId] ?? const <Chapter>[];
             final existingUrls = existingChapters.map((c) => c.url).toSet();
+            // Seeded with every id this manga already uses so the minting below
+            // cannot collide with one. Without this the index-derived id of a
+            // newly prepended chapter lands on the row of the chapter that used
+            // to occupy that slot, and saveChapters' putAll silently replaces
+            // it — wiping its read state, bookmark and local download.
+            final existingServerIds = existingChapters.map((c) => c.serverId).toSet();
             final newChapters = <Chapter>[];
             for (int i = 0; i < rawChapters.length; i++) {
               final chMap = rawChapters[i] as Map<String, dynamic>;
               final chUrl = chMap['url']?.toString() ?? '';
               if (chUrl.isNotEmpty && !existingUrls.contains(chUrl)) {
-                final chServerId = -(mId.abs() * 100000 + i + 1);
+                final chServerId = mintLocalChapterServerId(
+                  mangaId: mId,
+                  index: i,
+                  takenServerIds: existingServerIds,
+                );
                 final ch = Chapter()
                   ..serverId = chServerId
                   ..mangaId = mId
@@ -247,13 +317,20 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                   ..realUrl = chUrl
                   ..mangaTitle = manga.title
                   ..mangaThumbnailUrl = manga.thumbnailUrl
-                  ..fetchedAt = existingChapters.isNotEmpty ? (DateTime.now().millisecondsSinceEpoch ~/ 1000) : 0
                   ..isRead = false
                   ..lastPageRead = 0;
                 newChapters.add(ch);
               }
             }
             if (newChapters.isNotEmpty) {
+              // Shared flood gate. A whole first import stays out of the feed
+              // (getRecentChapters filters fetchedAt > 0); later batches are
+              // capped at the newest few so a bulk refresh cannot make the
+              // Library tile, the notification and the Updates feed disagree.
+              applyFloodCapToNewChapters(
+                newChapters,
+                isFirstImport: existingChapters.isEmpty,
+              );
               await IsarService.instance.saveChapters(newChapters);
               manga.unreadCount = (manga.unreadCount ?? 0) + newChapters.length;
               // Keep the denormalized chapter count in sync too — otherwise the

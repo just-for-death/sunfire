@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
+import '../../core/db/models/manga.dart';
 import '../../core/db/models/sync_record.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
@@ -44,6 +45,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   String? _liveUpdateStatus;
   StreamSubscription? _wsUpdateSub;
   StreamSubscription? _wsDownloadSub;
+  Timer? _reloadTimer;
+  bool _isReloadingFromCache = false;
+  bool _reloadQueued = false;
 
   @override
   void initState() {
@@ -54,7 +58,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       if (!mounted) return;
       final status = event['status']?.toString() ?? event.toString();
       setState(() => _liveUpdateStatus = status);
-      _loadUpdatesFromIsarCache();
+      // Debounced: a single library-update run emits one
+      // libraryUpdateStatusChanged per source plus an updateStatusChanged per
+      // affected chapter, so this fired dozens of times in a row, each one
+      // re-running a 100-row Isar query plus a per-row cover back-fill. See
+      // _scheduleCacheReload.
+      _scheduleCacheReload();
     });
     _wsDownloadSub = WebSocketService.instance.onDownloadStatus.listen((event) {
       if (!mounted) return;
@@ -62,9 +71,30 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     });
   }
 
+  /// Coalesces cache reloads triggered by tab switches and by bursts of
+  /// WebSocket update events into a single read, and never runs two
+  /// concurrently.
+  ///
+  /// The in-flight guard matters because the async read can resolve after a
+  /// newer request has already started; without it, whichever read finished
+  /// last won and the feed could show a stale snapshot.
+  void _scheduleCacheReload({Duration delay = const Duration(milliseconds: 400)}) {
+    _reloadTimer?.cancel();
+    _reloadTimer = Timer(delay, () {
+      _reloadTimer = null;
+      if (_isReloadingFromCache) {
+        // A read is already in flight; make sure one more runs once it ends so
+        // the newest state is not lost.
+        _reloadQueued = true;
+        return;
+      }
+      _loadUpdatesFromIsarCache();
+    });
+  }
+
   void _onTabChanged() {
     if (MainShell.selectedTabNotifier.value == 1 && mounted) {
-      _loadUpdatesFromIsarCache();
+      _scheduleCacheReload(delay: Duration.zero);
     }
   }
 
@@ -94,6 +124,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
   @override
   void dispose() {
+    _reloadTimer?.cancel();
     MainShell.selectedTabNotifier.removeListener(_onTabChanged);
     _wsUpdateSub?.cancel();
     _wsDownloadSub?.cancel();
@@ -132,14 +163,25 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
   /// Builds mangaId → language cache from the local library so update feed items
   /// can be language-badged and filtered (`showLanguageBadges` / `selectedLanguages`).
+  ///
+  /// Rebuilt on every call rather than short-circuited on "already non-empty".
+  /// The map was populated once and never invalidated, so any manga added to the
+  /// library after the first load had no entry and its feed items were badged
+  /// `''` — silently mis-labelled as unknown — and, once the language filter is
+  /// actually enabled, filtered as if their language were unknown. The read is a
+  /// single indexed Isar query over the library and this only runs from the
+  /// (already debounced) cache reload, so it is not worth memoising.
   Future<void> _loadLangMap() async {
     try {
-      if (_langByMangaId.isNotEmpty) return;
       final mangas = await IsarService.instance.getLibraryManga();
+      final next = <int, String>{};
       for (final m in mangas) {
-        if (m.serverId > 0) _langByMangaId[m.serverId] = m.lang;
-        if (m.id > 0) _langByMangaId[m.id] = m.lang;
+        if (m.serverId > 0) next[m.serverId] = m.lang;
+        if (m.id > 0) next[m.id] = m.lang;
       }
+      _langByMangaId
+        ..clear()
+        ..addAll(next);
     } catch (ignoredError) { if (kDebugMode) debugPrint('[updates_screen] ignored error: $ignoredError'); }
   }
 
@@ -195,12 +237,15 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
             final chServerId = parseIntSafe(map['id']);
             final mId = parseIntSafe(map['mangaId']);
 
-            // If a manga was bulk imported or bulk refreshed on server (> 4 chapters in this batch),
-            // show at most the 3 latest chapters in the updates feed to prevent flooding
+            // If a manga was bulk imported or bulk refreshed on server, show at
+            // most the newest few chapters in the updates feed to prevent
+            // flooding. Thresholds are the shared constants so this display cap
+            // cannot drift from the ingestion-time gate in
+            // applyFloodCapToNewChapters / cleanupBulkScrapedUpdates.
             final totalForManga = mangaCounts[mId] ?? 0;
-            final isFlooded = totalForManga > 4;
+            final isFlooded = totalForManga > kFloodThresholdChapters;
             final added = mangaAddedCount[mId] ?? 0;
-            final shouldAddToFeed = !isFlooded || (added < 3);
+            final shouldAddToFeed = !isFlooded || (added < kFloodCapChapters);
             if (shouldAddToFeed) {
               mangaAddedCount[mId] = added + 1;
             }
@@ -419,6 +464,25 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   }
 
   Future<void> _loadUpdatesFromIsarCache() async {
+    if (_isReloadingFromCache) {
+      _reloadQueued = true;
+      return;
+    }
+    _isReloadingFromCache = true;
+    try {
+      await _loadUpdatesFromIsarCacheInner();
+    } finally {
+      _isReloadingFromCache = false;
+      if (_reloadQueued) {
+        _reloadQueued = false;
+        // Something changed while we were reading. Re-read so the feed does
+        // not settle on the older snapshot.
+        _scheduleCacheReload(delay: Duration.zero);
+      }
+    }
+  }
+
+  Future<void> _loadUpdatesFromIsarCacheInner() async {
     try {
       await _loadLangMap();
       final chapters = await IsarService.instance.getRecentChapters(limit: 100);
@@ -434,22 +498,45 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       }
 
       final items = <Map<String, dynamic>>[];
+
+      // ── Batch the cover/title back-fill ──────────────────────────────
+      // This used to issue one getMangaByServerId per feed item that needed
+      // one — up to 100 sequential Isar queries, on every tab visit and on
+      // every single WebSocket updateStatus event. `title` starts out as
+      // 'Manga #<id>' exactly when the chapter stored no title, and `thumb` is
+      // empty exactly when the chapter stored no cover, so the set of manga to
+      // resolve is knowable up front from the chapter rows alone.
+      final needsBackfill = <int>{};
+      for (final ch in chapters) {
+        if (ch.mangaTitle.isEmpty || (ch.mangaThumbnailUrl ?? '').isEmpty) {
+          needsBackfill.add(ch.mangaId);
+        }
+      }
+      final mangaById = <int, Manga>{};
+      if (needsBackfill.isNotEmpty) {
+        final rows = await IsarService.instance.getMangaByServerIds(needsBackfill.toList());
+        for (final m in rows) {
+          if (m.serverId != 0) mangaById[m.serverId] = m;
+        }
+      }
+
       final mangaAddedCount = <int, int>{};
 
       for (final ch in chapters) {
-        // If a manga was bulk imported or refreshed (> 4 chapters in feed),
-        // show at most the 3 latest chapters to prevent flooding
+        // Bulk imported/refreshed series are capped in the feed. Shared
+        // thresholds — see applyFloodCapToNewChapters, which now also applies
+        // the same cap at ingestion so this display layer rarely has to.
         final totalForManga = mangaCounts[ch.mangaId] ?? 0;
-        final isFlooded = totalForManga > 4;
+        final isFlooded = totalForManga > kFloodThresholdChapters;
         final added = mangaAddedCount[ch.mangaId] ?? 0;
-        if (isFlooded && added >= 3) continue;
+        if (isFlooded && added >= kFloodCapChapters) continue;
         mangaAddedCount[ch.mangaId] = added + 1;
 
         String title = ch.mangaTitle.isNotEmpty ? ch.mangaTitle : 'Manga #${ch.mangaId}';
         String thumb = ch.mangaThumbnailUrl ?? '';
 
         if (title == 'Manga #${ch.mangaId}' || thumb.isEmpty) {
-          final manga = await IsarService.instance.getMangaByServerId(ch.mangaId);
+          final manga = mangaById[ch.mangaId];
           if (manga != null) {
             if (title == 'Manga #${ch.mangaId}') title = manga.title;
             if (thumb.isEmpty) thumb = manga.thumbnailUrl ?? '';

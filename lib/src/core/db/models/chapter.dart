@@ -2,6 +2,90 @@ import 'package:isar/isar.dart';
 
 part 'chapter.g.dart';
 
+/// Number of freshly-scraped chapters in one batch above which a series is
+/// treated as "flooded" (a bulk import / bulk refresh).
+const int kFloodThresholdChapters = 4;
+
+/// How many chapters of a flooded series may enter the Updates feed.
+const int kFloodCapChapters = 3;
+
+/// Applies the flood gate to a batch of newly-scraped chapters, in place.
+///
+/// The cap was previously applied only at DISPLAY time, in two places, with a
+/// third unrelated threshold (`> 3`) in `cleanupBulkScrapedUpdates`, and the
+/// two local-scrape ingestion paths disagreed about whether to stamp
+/// `fetchedAt` at all. The result was that one bulk import could make the
+/// Library tile read "~400 unread" and a system notification say "400 new
+/// chapters are now available" while the Updates feed showed 3 — two screens
+/// reporting contradictory facts about the same batch, and the excess chapters
+/// only being reaped at the next cold launch.
+///
+/// [isFirstImport] keeps a series' very first bulk import entirely out of the
+/// feed (`fetchedAt = 0`), which is what the library-scrape path had always
+/// done via a ternary the update service did not have. For later batches the
+/// newest [kFloodCapChapters] keep a real timestamp and the rest are zeroed.
+///
+/// Chapters are still saved either way: the excess stay in the library, keep
+/// their unread status and remain reachable from the series' chapter list.
+/// Zeroing `fetchedAt` only removes them from the Updates feed, which is
+/// `getRecentChapters`' `fetchedAt > 0` filter.
+void applyFloodCapToNewChapters(
+  List<Chapter> newChapters, {
+  required bool isFirstImport,
+}) {
+  if (newChapters.isEmpty) return;
+  final stamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+  if (isFirstImport) {
+    // Whole first import stays out of the feed.
+    for (final ch in newChapters) {
+      ch.fetchedAt = 0;
+    }
+    return;
+  }
+
+  // `newChapters` is built in the source's own order, which is newest-first for
+  // every bundled source. Cap from the front so the newest survive.
+  final keep = newChapters.length > kFloodThresholdChapters
+      ? kFloodCapChapters
+      : newChapters.length;
+  for (var i = 0; i < newChapters.length; i++) {
+    newChapters[i].fetchedAt = i < keep ? stamp : 0;
+  }
+}
+
+/// Mints a synthetic server id for a locally-scraped chapter of [mangaId]
+/// appearing at [index] in the source's chapter list.
+///
+/// Negative on purpose: real Suwayomi chapter ids are positive and share the
+/// unique `serverId` index with them, so a positive synthetic id can alias (and
+/// overwrite) a real server chapter, and would also be picked up by the
+/// `serverId > 0` guards that push local progress to the server.
+///
+/// The base value is derived from the *array index*, which is not stable: a
+/// source that prepends a new chapter shifts every later chapter down one
+/// slot, so the id the newcomer would take is already in use by the chapter
+/// that used to sit there. `Chapter.serverId` is `@Index(unique: true,
+/// replace: true)` and `saveChapters` uses `putAll`, so writing that id would
+/// silently REPLACE the existing row — destroying its read state, bookmark and
+/// local download with no error. Hence the probe loop, and hence [takenServerIds]
+/// must be seeded with every id already in use for this manga and be updated
+/// with each id handed out (both call sites do this).
+///
+/// Returns the first free id at or after the base.
+int mintLocalChapterServerId({
+  required int mangaId,
+  required int index,
+  required Set<int> takenServerIds,
+}) {
+  var candidate = -(mangaId.abs() * 100000 + index + 1);
+  while (takenServerIds.contains(candidate)) {
+    candidate--;
+  }
+  takenServerIds.add(candidate);
+  return candidate;
+}
+
 @collection
 class Chapter {
   Id id = Isar.autoIncrement;

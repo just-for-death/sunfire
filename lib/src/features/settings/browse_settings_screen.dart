@@ -23,6 +23,131 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
   int _maxSourcesInParallel = 6;
   String _localSourcePath = '';
 
+  /// Languages offered in the filter sheet. The consumer
+  /// (`SettingsService.languageMatchesFilter`) compares against a
+  /// lowercased/trimmed language code, so these are stored lowercase.
+  static const List<String> kFilterableLanguages = <String>[
+    'en', 'ja', 'ko', 'zh', 'es', 'fr', 'de', 'it', 'pt', 'ru',
+    'ar', 'hi', 'th', 'vi', 'id', 'tr', 'pl', 'nl', 'uk',
+  ];
+
+  /// Opens the language multi-select.
+  ///
+  /// Implemented as a sheet rather than a checkbox list because the language
+  /// vocabulary comes from whatever the installed sources report, which is not
+  /// knowable here; this offers a fixed common set plus "All" and a free-text
+  /// escape hatch via the custom-code field.
+  Future<void> _pickLanguages(BuildContext context) async {
+    final current = _settings.selectedLanguages;
+    final allSelected = current.isEmpty || current.contains('all');
+
+    final result = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1A1A1F),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final selection = <String>{...current.where((l) => l != 'all').map((l) => l.toLowerCase())};
+            return SafeArea(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.75,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Filter updates by language',
+                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () => Navigator.of(ctx).pop(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Text(
+                        allSelected
+                            ? 'Currently showing all languages. Pick one or more to filter; entries with an unknown language always pass.'
+                            : 'Currently filtering: ${current.join(', ')}',
+                        style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.6)),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          CheckboxListTile(
+                            value: allSelected,
+                            title: const Text('All languages (no filter)'),
+                            onChanged: (_) => Navigator.of(ctx).pop(<String>['all']),
+                          ),
+                          const Divider(height: 1),
+                          for (final lang in kFilterableLanguages)
+                            CheckboxListTile(
+                              value: selection.contains(lang),
+                              title: Text(lang.toUpperCase()),
+                              onChanged: (v) => setSheetState(() {
+                                if (v == true) {
+                                  selection.add(lang);
+                                } else {
+                                  selection.remove(lang);
+                                }
+                              }),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(ctx).pop(<String>['all']),
+                              child: const Text('Reset'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: () {
+                                if (selection.isEmpty) {
+                                  Navigator.of(ctx).pop(<String>['all']);
+                                } else {
+                                  Navigator.of(ctx).pop(selection.toList()..sort());
+                                }
+                              },
+                              child: const Text('Apply'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted || result == null) return;
+    setState(() => _settings.selectedLanguages = result);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -104,6 +229,36 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                       kind: SettingsPropKind.switchTile,
                       boolValue: _settings.showNsfwSources,
                       onBoolChanged: (v) => _settings.showNsfwSources = v,
+                    ),
+                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    // ── Language display ────────────────────────────────────
+                    // Both of these settings had fully-built consumers
+                    // (SettingsService.languageMatchesFilter is applied to the
+                    // Updates feed, and languageBadgeLabel is drawn on Library
+                    // tiles and Updates rows) but no writer anywhere, so the
+                    // filter short-circuited on the 'all' default and badges
+                    // were permanently off. Wired up here.
+                    SettingsPropTile(
+                      title: 'Show language badges',
+                      subtitle: 'Display a language tag on library and update entries',
+                      description: 'Entries whose language is unknown or universal '
+                          '(ALL / MULTI / UNIVERSAL) are never badged.',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.switchTile,
+                      boolValue: _settings.showLanguageBadges,
+                      onBoolChanged: (v) => setState(() => _settings.showLanguageBadges = v),
+                    ),
+                    SettingsPropTile(
+                      title: 'Filter by language',
+                      subtitle: _settings.selectedLanguages.contains('all')
+                          ? 'All languages (no filtering)'
+                          : _settings.selectedLanguages.join(', '),
+                      description: 'Applied to the Updates feed. Entries with an '
+                          'unknown language always pass, so nothing is hidden by '
+                          'accident. Requires "Show language badges" to be useful.',
+                      scope: SettingScope.local,
+                      leading: const Icon(Icons.translate_rounded),
+                      onTap: () => _pickLanguages(context),
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
                     const SectionTitle(title: 'Server Scraper Engine'),
