@@ -738,6 +738,9 @@ class DownloadManagerService extends ChangeNotifier {
         // Interrupted (paused or waiting for connectivity/charger) — keep the
         // queue, drop the notifier, and don't report a finished batch. The
         // connectivity / battery listeners and resume handler restart processing.
+        // Reset batch counters so a later enqueue starts a fresh batch instead
+        // of inflating totals against a stale incomplete run.
+        _purgeBatchCounters();
         await _stopActiveNotifier();
       } else if (pendingQueued) {
         // New items were enqueued while the loop was draining (rare race).
@@ -1099,8 +1102,13 @@ class DownloadManagerService extends ChangeNotifier {
       task.status = LocalDownloadStatus.failed;
       task.error = 'Cancelled';
       if (!wasCompleted && _batchCounted) {
-        // User-cancelled tasks count as failures in the batch summary.
+        // User-cancelled tasks count as failures in the batch summary, but
+        // they are also removed from the batch total so "succeeded/failed/total"
+        // stays consistent. A cancel is not a "failed download" in the sense of
+        // an error — it's a deliberate removal that shouldn't inflate the
+        // denominator.
         _failedInBatch++;
+        if (_batchTotal > 0) _batchTotal--;
       }
       _saveQueueState();
       notifyListeners();
