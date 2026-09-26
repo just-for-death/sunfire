@@ -220,13 +220,13 @@ class TachiBkImportService {
         return s;
       }
     }
-    // Lang-only fallback when name is unknown — still better than nothing.
-    for (final s in serverSources) {
-      final sLang = s.lang.trim().toLowerCase();
-      if (langKey.isNotEmpty && langKey != 'all' && sLang == langKey && sLang == 'en') {
-        return s;
-      }
-    }
+    // No lang-only fallback. Matching on language alone cannot identify a
+    // source: every English entry would be bound to whichever English source
+    // happened to be listed first, and the entry would then be reported as
+    // `ready` — so the plan screen counted it as importable and applyPlan
+    // resolved its URL against a source the series was never on. That is a
+    // silent mis-attribution, which is strictly worse than reporting the entry
+    // as missing and letting the user install the source and retry.
     return null;
   }
 }
