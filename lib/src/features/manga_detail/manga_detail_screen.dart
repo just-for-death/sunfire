@@ -866,7 +866,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
 
     if (newState && _manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
-      MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: ch).catchError((_) => false);
+      MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: ch).catchError((e, st) {
+        LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
+        return false;
+      });
     }
   }
 
@@ -908,7 +911,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         SyncEngine.instance.syncChapterProgress(p.serverId, isRead: true, lastPageRead: p.lastPageRead);
       }
       if (_manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
-        MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: p).catchError((_) => false);
+        MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: p).catchError((e, st) {
+          LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
+          return false;
+        });
       }
     }
     await IsarService.instance.saveChapters(prevs);
@@ -994,7 +1000,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         );
       }
       if (read && _manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
-        MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: c).catchError((_) => false);
+        MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: c).catchError((e, st) {
+          LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
+          return false;
+        });
       }
     }
     await IsarService.instance.saveChapters(targets);

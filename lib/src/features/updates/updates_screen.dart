@@ -685,7 +685,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       if (settings.metronAutoScrobble && ch.mangaId > 0) {
         MetronService.instance
             .scrobbleChapterByMangaId(mangaId: ch.mangaId, chapter: ch)
-            .catchError((_) => false);
+            .catchError((e, st) {
+          LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
+          return false;
+        });
       }
     } catch (e) {
       await LoggerService.instance.logWarning('Marked-read side effects failed for chapter ${ch.id}: $e', 'Updates');
