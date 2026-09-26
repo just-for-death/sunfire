@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../logging/logger_service.dart';
@@ -77,6 +76,9 @@ class QuickJsService {
 
   bool _initialized = false;
   String? _initError;
+
+  /// Whether any extensions have been installed (either from remote repos or local disk).
+  bool get hasInstalledExtensions => _installedJsSources.isNotEmpty;
 
   /// Whether [initialize] completed without a top-level failure. Individual
   /// extension loads are best-effort; check [installedSourceCount] for how much
@@ -186,7 +188,8 @@ class QuickJsService {
   Future<void> initialize() async {
     try {
       await _loadInstalledExtensionsFromDisk();
-      await _loadBundledExtensionsFromAssets();
+      // Auto-install extensions from remote repos on first run if no extensions are installed
+      await _autoInstallExtensionsFromRemoteRepos();
       _initialized = true;
       _initError = null;
     } catch (e, stack) {
@@ -196,74 +199,62 @@ class QuickJsService {
     }
   }
 
-  Future<void> _loadBundledExtensionsFromAssets() async {
+  Future<void> _autoInstallExtensionsFromRemoteRepos() async {
     try {
-      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-      final assetPaths = manifest.listAssets().where((p) => p.startsWith('assets/extensions/') && p.endsWith('.js')).toList();
-      for (final path in assetPaths) {
+      // Check if we already have extensions installed
+      if (_installedJsSources.isNotEmpty) {
+        return; // Already have extensions, skip auto-install
+      }
+
+      // Fetch from official and community repos
+      final repoUrls = [
+        RepoManager.officialIndexUrl,
+        RepoManager.communityIndexUrl,
+      ];
+
+      final repoSources = await RepoManager.instance.fetchCombinedRepoSources(repoUrls);
+      
+      if (repoSources.isEmpty) {
+        await LoggerService.instance.logWarning('No extensions found in remote repos', 'QuickJS');
+        return;
+      }
+
+      // Install all sources from the repos
+      int installedCount = 0;
+      for (final source in repoSources) {
         try {
-          final code = await rootBundle.loadString(path);
-          final fileName = path.split('/').last.replaceAll('.js', '');
-          final cleanKey = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
-          final meta = extractSourceMetadata(code);
-          final displayName = (meta['name'] != null && meta['name'].toString().isNotEmpty)
-              ? meta['name'].toString()
-              : fileName.replaceAll('_', ' ').trim();
-          final existingVer = _installedVersions[cleanKey];
-          final bundledVer = (meta['version'] != null && meta['version'].toString().isNotEmpty)
-              ? meta['version'].toString()
-              : '1.0.0';
-          final shouldOverride = !_installedJsSources.containsKey(cleanKey) ||
-              existingVer == null ||
-              RepoManager.compareVersions(bundledVer, existingVer) > 0;
+          final cleanKey = source.name.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
+          if (_installedJsSources.containsKey(cleanKey)) continue;
 
-          if (shouldOverride) {
-            _installedJsSources[cleanKey] = code;
-            _canonicalDisplayNames[cleanKey] = displayName;
-            _installedVersions[cleanKey] = bundledVer;
-            if (meta['iconUrl'] != null && meta['iconUrl'].toString().isNotEmpty) {
-              _installedIcons[cleanKey] = meta['iconUrl'].toString();
-            }
-            _invalidateRuntime(cleanKey);
-            _invalidateRuntime(displayName);
-            _invalidateRuntime(fileName);
+          // Download the JS code
+          final code = await RepoManager.instance.downloadJsSourceCode(source.sourceCodeUrl, expectedSha256: source.sha256);
+          if (code == null || code.trim().isEmpty) {
+            await LoggerService.instance.logWarning('Failed to download JS for ${source.name}', 'QuickJS');
+            continue;
           }
-        } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
-      }
-      if (assetPaths.isEmpty) {
-        _loadBundledExtensionsFromDiskFallback();
-      }
-    } catch (_) {
-      _loadBundledExtensionsFromDiskFallback();
-    }
-  }
 
-  void _loadBundledExtensionsFromDiskFallback() {
-    try {
-      final extDir = Directory('assets/extensions');
-      if (extDir.existsSync()) {
-        for (final entity in extDir.listSync()) {
-          if (entity is File && entity.path.endsWith('.js')) {
-            final fileName = entity.uri.pathSegments.last.replaceAll('.js', '');
-            final cleanKey = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
-            if (_installedJsSources.containsKey(cleanKey)) continue;
-            final code = entity.readAsStringSync();
-            final meta = extractSourceMetadata(code);
-            final displayName = (meta['name'] != null && meta['name'].toString().isNotEmpty)
-                ? meta['name'].toString()
-                : fileName.replaceAll('_', ' ').trim();
-            _installedJsSources[cleanKey] = code;
-            _canonicalDisplayNames[cleanKey] = displayName;
-            if (meta['version'] != null) {
-              _installedVersions[cleanKey] = meta['version'].toString();
-            }
-            if (meta['iconUrl'] != null && meta['iconUrl'].toString().isNotEmpty) {
-              _installedIcons[cleanKey] = meta['iconUrl'].toString();
-            }
+          // Install the extension
+          _installedJsSources[cleanKey] = code;
+          _canonicalDisplayNames[cleanKey] = source.name;
+          _installedVersions[cleanKey] = source.version;
+          if (source.iconUrl.isNotEmpty) {
+            _installedIcons[cleanKey] = source.iconUrl;
           }
+          _invalidateRuntime(cleanKey);
+          _invalidateRuntime(source.name);
+          installedCount++;
+        } catch (e) {
+          await LoggerService.instance.logWarning('Failed to install extension ${source.name}: $e', 'QuickJS');
         }
       }
-    } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
+
+      if (installedCount > 0) {
+        await _saveInstalledExtensions();
+        await LoggerService.instance.logInfo('Auto-installed $installedCount extensions from remote repos', 'QuickJS');
+      }
+    } catch (e) {
+      await LoggerService.instance.logWarning('Auto-install from remote repos failed: $e', 'QuickJS');
+    }
   }
 
   Future<void> _loadInstalledExtensionsFromDisk() async {
@@ -412,6 +403,33 @@ class QuickJsService {
     } catch (e) {
       await LoggerService.instance.logError('Failed to persist extension $sourceName: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
       return false;
+    }
+  }
+
+  /// Saves all currently installed extensions to disk.
+  /// Used after auto-installing extensions from remote repos.
+  Future<void> _saveInstalledExtensions() async {
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final extDir = Directory('${appDir.path}/extensions');
+      if (!await extDir.exists()) {
+        await extDir.create(recursive: true);
+      }
+      for (final entry in _installedJsSources.entries) {
+        final key = entry.key;
+        final code = entry.value;
+        final file = File('${extDir.path}/$key.js');
+        await file.writeAsString(code);
+
+        final metaFile = File('${extDir.path}/$key.json');
+        await metaFile.writeAsString(jsonEncode({
+          'name': _canonicalDisplayNames[key] ?? key,
+          'version': _installedVersions[key] ?? '1.0.0',
+          'iconUrl': _installedIcons[key] ?? '',
+        }));
+      }
+    } catch (e) {
+      await LoggerService.instance.logError('Failed to save installed extensions: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
     }
   }
 
@@ -752,7 +770,8 @@ class QuickJsService {
   String? getExtensionCode(String sourceName) {
     if (sourceName.isEmpty) return null;
     if (_installedJsSources.isEmpty) {
-      _loadBundledExtensionsFromDiskFallback();
+      // Extensions are loaded from remote repos on first run or from user-installed extensions on disk.
+      // No bundled fallback available.
     }
     final stripped = sourceName.replaceAll('local_js_', '').replaceAll('localjs_', '');
     final cleanName = stripped
@@ -815,7 +834,8 @@ class QuickJsService {
       final match = RegExp(r'''(?:const|var|let)\s+mangayomiSources\s*=\s*(\[\s*\{[\s\S]*?\}\s*\]);?''').firstMatch(jsCode);
       if (match != null) {
         var jsonStr = match.group(1)!;
-        jsonStr = jsonStr.replaceAll(RegExp(r',\s*([\]\}])'), r'$1');
+        // Use replaceAllMapped to avoid replacement string parsing issues with $1
+        jsonStr = jsonStr.replaceAllMapped(RegExp(r',\s*([\]\}])'), (match) => match.group(1)!);
         final decoded = jsonDecode(jsonStr);
         if (decoded is List && decoded.isNotEmpty) {
           final map = Map<String, dynamic>.from(decoded[0] as Map);
