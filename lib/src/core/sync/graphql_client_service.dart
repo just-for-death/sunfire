@@ -344,9 +344,24 @@ class GraphQLClientService {
         await LoggerService.instance.logWarning('GraphQL request failed [$label]: ${e.message}', 'GraphQL');
       }
       return null;
-    } catch (e) {
-      _lastReachableStatus = false;
-      _lastReachableCheck = DateTime.now();
+    } catch (e, stack) {
+      // The server ANSWERED — we are inside the success path of the HTTP
+      // exchange, and reachability was already set true a few lines above.
+      // Reaching this catch means the *body* was unusable: a proxy HTML error
+      // page served with a 200, a non-JSON payload, or a `data` value of an
+      // unexpected shape (our own `as Map<String, dynamic>?` cast can throw).
+      //
+      // Marking the server unreachable here was the mirror image of the 401
+      // problem this file is otherwise careful about: a parse failure is not a
+      // transport failure. It blackholed a perfectly reachable server for the
+      // full 15s window, and — unlike the DioException branch above — logged
+      // absolutely nothing, so it was completely undiagnosable.
+      await LoggerService.instance.logError(
+        'GraphQL response for [$label] was unparseable: $e',
+        exception: e,
+        stackTrace: stack,
+        category: 'GraphQL',
+      );
       return null;
     }
   }

@@ -59,17 +59,46 @@ bool isTransientSyncError(Object e) {
 
 /// New `retryCount` after a failed dispatch. Transient failures leave it
 /// unchanged; everything else (server rejection, GraphQL error) costs one.
+///
+/// The transient path deliberately does not spend the rejection budget — a
+/// dropped connection is not the server saying no — but see
+/// [stateAfterFailure]: that made the 5-retry cap unreachable for every
+/// transport failure, so a permanently-500 endpoint kept a record alive for the
+/// full 14-day window with zero counted attempts.
 @visibleForTesting
 int retryCountAfterFailure(int current, {required bool transient}) => transient ? current : current + 1;
 
+/// Ceiling on attempts for a record whose failures were all classified
+/// transient.
+///
+/// `kMaxSyncRetries` cannot bound this class: `retryCountAfterFailure` leaves
+/// the counter untouched for transient failures, so the only bound was a
+/// wall-clock age check. `_isTransportFailure` treats any 5xx as transport, so a
+/// schema error surfacing as 500, or a misconfigured reverse-proxy rule, made
+/// every queued mutation retry on every sync cycle for two weeks — burning
+/// battery, radio and server capacity, and never surfacing to the user.
+///
+/// This counts *attempts*, not rejections, so it is independent of that
+/// classification and of the device clock.
+const int kMaxTransientSyncAttempts = 40;
+
 /// State a queued record moves to after a failed dispatch.
+///
+/// [attempts] is the total number of failed dispatches, transient or not, and
+/// bounds BOTH classes. [recordAgeSeconds] remains a second, independent bound
+/// for the transient class, but it is no longer the only one: it is derived from
+/// `DateTime.now()`, which is not monotonic, so a device whose clock steps
+/// backwards — or a record written while the clock was ahead — produced a small
+/// or negative age and retried forever.
 @visibleForTesting
 SyncRecordState stateAfterFailure({
   required int retryCount,
   required bool transient,
   required int recordAgeSeconds,
+  int attempts = 0,
 }) {
   if (retryCount >= kMaxSyncRetries) return SyncRecordState.abandoned;
+  if (attempts >= kMaxTransientSyncAttempts) return SyncRecordState.abandoned;
   if (transient && recordAgeSeconds >= kTransientSyncMaxAgeSeconds) return SyncRecordState.abandoned;
   return SyncRecordState.failed;
 }
@@ -947,7 +976,20 @@ class SyncEngine {
                 }
                 success = attempted && allOk;
               } else {
-                success = true;
+                // `parseIntSafe` returns 0 for a missing or non-numeric id, so
+                // a corrupt payload landed here and was reported as SUCCESS.
+                // The record was then deleted by _completeDispatchedRecord —
+                // the mutation was destroyed without ever being sent, and
+                // nothing was logged. The user believes it synced.
+                //
+                // A payload that cannot be interpreted must never be reported
+                // as delivered.
+                success = false;
+                await LoggerService.instance.logWarning(
+                  'Discarding chapter mutation ${record.id}: payload has no usable chapterId '
+                  '(${record.payloadJson})',
+                  'SyncEngine',
+                );
               }
             }
             break;
@@ -1006,7 +1048,21 @@ class SyncEngine {
                     }
                   }
                 }
-                success = true;
+                // Only a real, usable remote id counts as success. The server
+                // answering with a payload we cannot read a positive id from
+                // means the local row was never remapped, so every queued
+                // 'assign' still carries the dead temporary id and the server
+                // will silently drop those assignments forever.
+                final remoteIdParsed = parseIntSafe(created['id']);
+                success = remoteIdParsed > 0;
+                if (!success) {
+                  await LoggerService.instance.logWarning(
+                    'Category create for "$name" returned no usable id '
+                    '(${record.payloadJson}); the local row was not remapped and '
+                    'queued assignments still reference the temporary id',
+                    'SyncEngine',
+                  );
+                }
               }
             } else if (op == 'delete' || record.action == SyncAction.delete) {
               final categoryId = parseIntSafe(payload['categoryId'] ?? record.entityId);
@@ -1068,6 +1124,8 @@ class SyncEngine {
   Future<void> _completeDispatchedRecord(SyncRecord dispatched) async {
     final current = await IsarService.instance.getSyncRecord(dispatched.id);
     if (current == null) return;
+    // The record is done, so its attempt budget is spent.
+    _dispatchAttempts.remove(dispatched.id);
     if (current.payloadJson == dispatched.payloadJson) {
       await IsarService.instance.deleteSyncRecord(dispatched.id);
     } else {
@@ -1078,18 +1136,49 @@ class SyncEngine {
     }
   }
 
+  /// Failed-dispatch attempt count per record id, for this process only.
+  ///
+  /// `SyncRecord.retryCount` deliberately does not move for transient failures,
+  /// because a dropped connection is not the server rejecting the mutation and
+  /// must not spend the rejection budget. The consequence was that a record
+  /// failing only on transport errors had NO counter at all — the sole bound was
+  /// a wall-clock age computed from `DateTime.now()`, which is not monotonic.
+  ///
+  /// In-memory rather than a new persisted column so the Isar schema (and its
+  /// generated file) is untouched. Within a session this is the bound that
+  /// actually stops a poison record: `_isTransportFailure` classifies any 5xx as
+  /// transport, so a schema error or a misconfigured proxy rule previously
+  /// re-attempted the same mutation on every sync cycle, burning battery, radio
+  /// and server capacity, and never surfacing to the user. Across restarts the
+  /// 14-day age bound still applies.
+  final Map<int, int> _dispatchAttempts = {};
+
   /// Applies retry accounting after a failed dispatch. Re-reads the record so
   /// only `retryCount`/`state` are written and a payload coalesced during the
   /// request isn't reverted by saving the stale in-memory copy.
   Future<void> _recordDispatchFailure(SyncRecord dispatched, {required bool transient}) async {
     final current = await IsarService.instance.getSyncRecord(dispatched.id);
-    if (current == null) return;
+    if (current == null) {
+      _dispatchAttempts.remove(dispatched.id);
+      return;
+    }
+    final attempts = (_dispatchAttempts[current.id] ?? 0) + 1;
+    _dispatchAttempts[current.id] = attempts;
     current.retryCount = retryCountAfterFailure(current.retryCount, transient: transient);
-    current.state = stateAfterFailure(
+    final nextState = stateAfterFailure(
       retryCount: current.retryCount,
       transient: transient,
       recordAgeSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000 - current.timestamp,
+      attempts: attempts,
     );
+    if (nextState == SyncRecordState.abandoned && attempts > 0 && transient) {
+      await LoggerService.instance.logWarning(
+        'Abandoning sync record ${current.id} after $attempts attempts '
+        '(all classified transient); it will not be retried again',
+        'SyncEngine',
+      );
+    }
+    current.state = nextState;
     await IsarService.instance.saveSyncRecord(current);
   }
 
