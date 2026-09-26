@@ -13,6 +13,8 @@
 // the user added on the device.
 //
 // Run: fvm flutter test test/epoch_normalization_test.dart
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/db/models/chapter.dart';
 import 'package:sunfire/src/core/sync/sync_engine.dart';
@@ -163,6 +165,65 @@ void main() {
         mergeLastReadAt(ch, {'lastReadAt': millisNow});
       }
       expect(ch.lastReadAt, secondsNow);
+    });
+  });
+
+  group('one threshold, one helper — the 1e12 strays', () {
+    // Nine call sites carried a local `> 1000000000000` check while the helper
+    // used 1e11. For any value in the gap (1e11, 1e12] the two disagree, and
+    // that gap is not exotic: read as MILLIS it spans 1973-04 through 2001-09,
+    // which is exactly the range of upload dates for older series. A 1995
+    // chapter timestamp was therefore read as SECONDS and rendered as the year
+    // 16850, or fell outside the `year >= 1975` sanity check and was discarded
+    // so the chapter showed no date at all.
+    //
+    // A regression test cannot assert the absence of a literal across the whole
+    // tree without being brittle about which files legitimately own the helper,
+    // so it does two things: pins the helper's behaviour across the gap, and
+    // pins that the gap is genuinely ambiguous for a naive threshold.
+
+    test('the helper reads the 1e11-1e12 gap as millis, not seconds', () {
+      // 1995-06-15T00:00:00Z, in millis.
+      final millis1995 = DateTime.utc(1995, 6, 15).millisecondsSinceEpoch;
+      expect(millis1995, inInclusiveRange(100000000000, 1000000000000),
+          reason: 'this test only means something while the value is in the gap');
+
+      expect(normalizeEpochToSeconds(millis1995), millis1995 ~/ 1000);
+      // And the wrong reading, for contrast: what a 1e12 threshold produced.
+      final asSeconds = DateTime.fromMillisecondsSinceEpoch(millis1995 * 1000);
+      expect(asSeconds.year, greaterThan(16000),
+          reason: 'sanity: the misread really does land ~1000 years out');
+    });
+
+    test('the helper agrees with itself at both edges of the gap', () {
+      // Monotonic and unit-correct across the whole plausible range.
+      for (final millis in <int>[
+        100000000001, // just inside the gap, 1973
+        500000000000, // 1985
+        1000000000000, // 2001-09
+        1778025600000, // 2026
+        4102444800000, // 2100
+      ]) {
+        expect(normalizeEpochToSeconds(millis), millis ~/ 1000, reason: 'millis=$millis');
+        final asSeconds = DateTime.fromMillisecondsSinceEpoch(normalizeEpochToSeconds(millis)! * 1000);
+        expect(asSeconds.year, inInclusiveRange(1973, 2100), reason: 'millis=$millis');
+      }
+    });
+
+    test('no timestamp in the codebase keeps a local 1e12 threshold', () {
+      // Source-level assertion. The helper's own doc comment and the constant
+      // definition legitimately mention the number; everything else must route
+      // through `normalizeEpochToSeconds` so there is exactly one answer to
+      // "is this seconds or millis".
+      final offenders = <String>[];
+      for (final entry in Directory('lib').listSync(recursive: true)) {
+        if (entry is! File || !entry.path.endsWith('.dart')) continue;
+        if (entry.path.endsWith('sync_engine.dart')) continue; // owns the helper
+        final content = entry.readAsStringSync();
+        if (content.contains('1000000000000')) offenders.add(entry.path);
+      }
+      expect(offenders, isEmpty,
+          reason: 'these files still branch on a 1e12 threshold instead of the helper');
     });
   });
 }
