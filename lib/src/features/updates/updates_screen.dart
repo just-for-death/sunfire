@@ -332,6 +332,11 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         await IsarService.instance.saveChapters(chaptersToSave);
       }
 
+      // Reached the server. Clear the offline banner on ANY successful round
+      // trip, including one that returned no chapters — "you are up to date" is
+      // a normal response, and the flag was only cleared inside the
+      // `items.isNotEmpty` branch, so it stuck at true forever afterwards.
+      if (mounted) setState(() => _isOffline = false);
       if (items.isNotEmpty && mounted) {
         items.sort((a, b) {
           final fa = a['fetchedAt'] as int? ?? 0;
@@ -705,16 +710,38 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     // negative ids because it filters the serverId column, which is where the
     // synthetic value lives.
     if (mangaId == 0 || delta == 0) return;
+    // Serialise per manga and coalesce deltas.
+    //
+    // This was a bare read-modify-write with no in-flight guard, and its
+    // callers are fire-and-forget (a per-row IconButton) — so double-tapping two
+    // chapters of the same series had both invocations read the same
+    // `unreadCount`, both compute n-1, and the second write was lost. The badge
+    // then drifted by one per race, permanently, with no correction pass
+    // anywhere on this path.
+    _pendingUnreadDeltas[mangaId] = (_pendingUnreadDeltas[mangaId] ?? 0) + delta;
+    if (!_unreadDrainInFlight.add(mangaId)) return;
     try {
-      final manga = await IsarService.instance.getMangaByServerId(mangaId);
-      if (manga == null) return;
-      final updated = (manga.unreadCount ?? 0) + delta;
-      manga.unreadCount = updated > 0 ? updated : 0;
-      await IsarService.instance.saveManga(manga);
-    } catch (e) {
-      await LoggerService.instance.logWarning('Failed to adjust unread count for manga $mangaId: $e', 'Updates');
+      var pending = _pendingUnreadDeltas[mangaId] ?? 0;
+      while (pending != 0) {
+        _pendingUnreadDeltas[mangaId] = 0;
+        pending = _pendingUnreadDeltas[mangaId] ?? 0;
+        if (pending == 0) break;
+        final manga = await IsarService.instance.getMangaByServerId(mangaId);
+        if (manga != null) {
+          manga.unreadCount = ((manga.unreadCount ?? 0) + pending).clamp(0, 1 << 30);
+          await IsarService.instance.saveManga(manga);
+        }
+        pending = _pendingUnreadDeltas[mangaId] ?? 0;
+      }
+    } finally {
+      _unreadDrainInFlight.remove(mangaId);
     }
+    return;
   }
+
+  /// Unapplied unread deltas per manga, and which drains are currently running.
+  final Map<int, int> _pendingUnreadDeltas = {};
+  final Set<int> _unreadDrainInFlight = {};
 
   Future<void> _markAllAsRead() async {
     if (_updatesList.isEmpty) return;
@@ -768,10 +795,22 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       return;
     }
 
+    if (!mounted) return;
+    // Re-derive the selection from the LIVE list.
+    //
+    // `unreadItems` was snapshotted before the confirmation dialog, and the
+    // WebSocket listener schedules a cache reload during that await which
+    // REPLACES `_updatesList` with fresh Chapter instances. So the snapshot
+    // held detached objects: mutating them was invisible to the widget tree
+    // (the feed still showed them unread) while `saveChapters` persisted them
+    // read and the deltas below decremented the live badge — the badge and the
+    // feed disagreed with no resync until a cold start. The snapshot is still
+    // used for the dialog's count text, which is correct.
     final chaptersToUpdate = <Chapter>[];
     setState(() {
-      for (final it in unreadItems) {
+      for (final it in _updatesList) {
         final ch = it['chapter'] as Chapter;
+        if (ch.isRead) continue;
         ch.applyReadState(true);
         chaptersToUpdate.add(ch);
       }
@@ -786,7 +825,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     // from unreadItems above), so each contributes exactly one read marker.
     final deltas = <int, int>{};
     for (final ch in chaptersToUpdate) {
-      if (ch.mangaId <= 0) continue;
+      // `!= 0`, not `> 0`: a local/standalone series' mangaId is a NEGATIVE
+      // synthetic value, so `> 0` silently skipped every local series' badge.
+      if (ch.mangaId == 0) continue;
       deltas[ch.mangaId] = (deltas[ch.mangaId] ?? 0) + 1;
     }
     for (final entry in deltas.entries) {

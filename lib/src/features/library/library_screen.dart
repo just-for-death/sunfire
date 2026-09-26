@@ -36,6 +36,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   List<Manga> _allManga = [];
   List<Category> _categories = [];
   bool _isLoading = false;
+
+  /// Set when a library load threw, so the empty state can distinguish "you have
+  /// no manga" from "we could not read the database".
+  String? _loadError;
   bool _isSearching = false;
   String _searchQuery = '';
   String _sortBy = 'Title';
@@ -140,13 +144,23 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           _categories = cats;
           _clampCategoryIndex();
           _isLoading = false;
+          _loadError = null;
         });
       }
     } catch (e, stack) {
       LoggerService.instance.logError('Library load from Isar failed: $e', exception: e, stackTrace: stack, category: 'Library');
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          // Recorded so the empty state can say "could not load" with a Retry
+          // instead of claiming the library is empty. A transient Isar failure
+          // (locked DB, migration in flight, corrupt index) previously rendered
+          // "Your Library is Empty" and offered "Browse Sources", pushing the
+          // user AWAY from data they already had.
+          _loadError = '$e';
+        });
       }
+      return;
     }
 
     // 2. Background sync (silent — only if server is configured)
@@ -501,7 +515,16 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     });
   }
 
+  /// Leaves batch mode.
+  ///
+  /// Guarded internally because all five call sites invoke this after awaits —
+  /// a per-chapter `stampLocalReadActivity` loop, an `enqueueLocalDownload`
+  /// loop, a `syncMangaLibraryState` round trip — which on a large selection is
+  /// seconds to minutes of wall time during which the route can be popped. The
+  /// sheet pop immediately above one of these call sites was already guarded,
+  /// which is what made the omission visible.
   void _exitBatchMode() {
+    if (!mounted) return;
     HapticFeedback.lightImpact();
     setState(() {
       _selectedMangaIds.clear();
@@ -1032,7 +1055,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       backgroundColor: const Color(0xFF1F1F24),
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) {
+      builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return Padding(
@@ -1093,8 +1116,18 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                               localServerId: newCat.serverId,
                               order: newCat.order,
                             );
+                            // The sheet is swipe-dismissible and
+                            // `whenComplete` disposes this controller the
+                            // moment it closes, so after an await that can
+                            // block for 30s (or unbounded in standalone mode)
+                            // the sheet may be gone. `setSheetState` on an
+                            // unmounted StatefulBuilder and `clear()` on a
+                            // disposed controller are both hard crashes in
+                            // release, not just assert failures.
+                            if (!sheetContext.mounted) return;
                             textController.clear();
                             await _handleRefresh();
+                            if (!sheetContext.mounted) return;
                             setSheetState(() {});
                           }
                         },
@@ -1118,6 +1151,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                               await IsarService.instance.deleteCategory(cat.serverId);
                               await SyncEngine.instance.syncCategoryDelete(cat.serverId);
                               await _handleRefresh();
+                              if (!sheetContext.mounted) return;
                               setSheetState(() {});
                             },
                           ),
@@ -1634,20 +1668,33 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                             icon: _searchQuery.isNotEmpty || _statusFilter != 'All' || _selectedCategoryIndex > 0
                                 ? Icons.filter_alt_off_rounded
                                 : Icons.auto_stories_rounded,
-                            title: _searchQuery.isNotEmpty
-                                ? 'No Results Found'
-                                : (_statusFilter != 'All' || _selectedCategoryIndex > 0)
-                                    ? 'Nothing Matches This Filter'
-                                    : 'Your Library is Empty',
-                            subtitle: _searchQuery.isNotEmpty
-                                ? 'Try adjusting your search query.'
-                                : (_statusFilter != 'All' || _selectedCategoryIndex > 0)
-                                    ? 'Clear status or category filters to see more titles.'
-                                    : 'Browse extensions to find and add manga to your library.',
-                            actionLabel: (_searchQuery.isNotEmpty || _statusFilter != 'All' || _selectedCategoryIndex > 0)
-                                ? 'Clear Filters'
-                                : 'Browse Sources',
+                            title: _loadError != null
+                                ? 'Could not load your library'
+                                : _searchQuery.isNotEmpty
+                                    ? 'No Results Found'
+                                    : (_statusFilter != 'All' || _selectedCategoryIndex > 0)
+                                        ? 'Nothing Matches This Filter'
+                                        : 'Your Library is Empty',
+                            subtitle: _loadError != null
+                                ? 'The local database could not be read. Your data is '
+                                    'probably still there — try again.'
+                                : _searchQuery.isNotEmpty
+                                    ? 'Try adjusting your search query.'
+                                    : (_statusFilter != 'All' || _selectedCategoryIndex > 0)
+                                        ? 'Clear status or category filters to see more titles.'
+                                        : 'Browse extensions to find and add manga to your library.',
+                            actionLabel: _loadError != null
+                                ? 'Retry'
+                                : (_searchQuery.isNotEmpty || _statusFilter != 'All' || _selectedCategoryIndex > 0)
+                                    ? 'Clear Filters'
+                                    : 'Browse Sources',
                             onAction: () {
+                              // A failed load retries; it does not navigate away
+                              // from the data the user already has.
+                              if (_loadError != null) {
+                                _loadFromIsarOnly();
+                                return;
+                              }
                               if (_searchQuery.isNotEmpty || _statusFilter != 'All' || _selectedCategoryIndex > 0) {
                                 setState(() {
                                   _searchQuery = '';

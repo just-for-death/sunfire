@@ -26,6 +26,13 @@ const List<String> kCurlCandidates = <String>[
 /// when many images fail simultaneously and all fall back to curl).
 final _curlSemaphore = _Semaphore(2);
 
+/// Largest response `curl` will read, in bytes (24 MiB).
+///
+/// A manga page is a few hundred KB to a few MB, so this is generous while
+/// still bounding the `Process.run` stdout buffer. Enforced by curl's
+/// `--max-filesize` rather than in Dart, so the bytes are never buffered at all.
+const int kMaxCurlDownloadBytes = 24 * 1024 * 1024;
+
 class _Semaphore {
   _Semaphore(this._count);
   int _count;
@@ -78,6 +85,15 @@ List<String>? buildCurlArgs({
     '=http,https',
     '--max-time',
     '$maxTimeSeconds',
+    // Bound the body curl will accept.
+    //
+    // `Process.run` accumulates the child's entire stdout in a `List<int>` with
+    // no cap of its own, and the URL comes from the scraper — so a hostile or
+    // broken image host returning a 2 GB body inside `--max-time` OOMs the
+    // desktop app. `--max-filesize` makes curl itself refuse to read more,
+    // which also keeps the buffer from ever being allocated.
+    '--max-filesize',
+    '$kMaxCurlDownloadBytes',
   ];
   headers.forEach((k, v) {
     if (skip.contains(k.toLowerCase())) return;
