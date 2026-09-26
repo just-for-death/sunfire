@@ -195,7 +195,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         return;
       }
       VolumeController.instance.showSystemUI = false;
-      VolumeController.instance.getVolume().then((v) => _lastIosVolume = v).catchError((_) => _lastIosVolume ?? 0.0);
+      VolumeController.instance.getVolume().then((v) => _lastIosVolume = v).catchError((e) {
+        _lastIosVolume = 0.0;
+        debugPrint('[Reader] Failed to get initial volume: $e');
+        return 0.0;
+      });
       VolumeController.instance.addListener((volume) {
         if (!_settings.volumeKeyTurn || !mounted) return;
         // Ignore the callback our own _recenterVolume() call below triggers,
@@ -1610,9 +1614,15 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   void _scrobbleToMetronIfLinked(Chapter chapter) {
     if (!_settings.metronAutoScrobble) return;
     if (_parentManga != null && _parentManga!.metronSeriesId != null) {
-      MetronService.instance.scrobbleMangaChapter(manga: _parentManga!, chapter: chapter).catchError((_) => false);
+      MetronService.instance.scrobbleMangaChapter(manga: _parentManga!, chapter: chapter).catchError((e, st) {
+        LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
+        return false;
+      });
     } else if (chapter.mangaId > 0) {
-      MetronService.instance.scrobbleChapterByMangaId(mangaId: chapter.mangaId, chapter: chapter).catchError((_) => false);
+      MetronService.instance.scrobbleChapterByMangaId(mangaId: chapter.mangaId, chapter: chapter).catchError((e, st) {
+        LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
+        return false;
+      });
     }
   }
 
