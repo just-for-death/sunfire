@@ -927,7 +927,18 @@ class SyncEngine {
           rec.payloadJson = jsonEncode(payload);
           changed.add(rec);
         }
-      } catch (ignoredError) { if (kDebugMode) debugPrint('[sync_engine] ignored error: $ignoredError'); }
+      } catch (e) {
+        // NOT debugPrint. `kDebugMode` is a compile-time constant, so in a
+        // release build this was a bare empty catch — and this is the offline
+        // category-id remap, where a dropped payload means every manga assigned
+        // to that category offline stays unassigned PERMANENTLY. The category
+        // exists on the server and nothing references it.
+        LoggerService.instance.logWarning(
+          'Failed to remap a pending category assignment; that manga will stay '
+          'unassigned: $e',
+          'SyncEngine',
+        );
+      }
     }
     return changed;
   }
@@ -1542,9 +1553,20 @@ class SyncEngine {
           );
         }
       }
-    } catch (e) {
-      await LoggerService.instance.logInfo('Server unreachable for library sync, skipping server pull ($e)', 'SyncEngine');
-      return; // Server is offline — immediately return to keep local data untouched and fast!
+    } catch (e, stack) {
+      // logError, not logInfo. "Server is offline" was assumed for ANY
+      // exception here, including a `TypeError` from a single malformed node —
+      // and it was logged at info level, so it vanished from a filtered log and
+      // the rest of the cycle (chapter snapshot, history pull, updates pull)
+      // was skipped with no visible cause. Local data is still left untouched,
+      // which is the important part.
+      await LoggerService.instance.logError(
+        'Library pull failed, skipping the rest of the server sync: $e',
+        exception: e,
+        stackTrace: stack,
+        category: 'SyncEngine',
+      );
+      return; // Keep local data untouched.
     }
 
     if (!serverReachable) return;
