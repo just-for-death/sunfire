@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show immutable, kDebugMode, listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -52,13 +52,32 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _relevantSettings = _SourceRelevantSettings.capture();
     SettingsService.instance.addListener(_onSettingsChanged);
     _fetchServerSources();
     _fetchExtensions();
     _loadLibraryForMigration();
   }
 
+  // ── Settings-change relevance gate ────────────────────────────────────
+  // SettingsService fires notifyListeners() from dozens of sites, most of which
+  // have nothing to do with this screen. Unfiltered, tapping the pin icon on a
+  // single source re-ran _fetchServerSources (a GraphQL fetchSources) AND
+  // _fetchExtensions (RepoManager, which appends a `?_t=<now>` cache-buster and
+  // therefore ALWAYS hits the network) — the whole Sources and Extensions lists
+  // blanked out and repopulated, and on a slow link visibly stalled. Pin state
+  // is already applied optimistically in _toggleSourcePin, so that refetch was
+  // pure waste; any other unrelated preference write (e.g. dragging a reader
+  // slider) did the same while Browse was mounted in the tab stack.
+  //
+  // Snapshot only the inputs the two fetchers actually read and refetch when
+  // one of them really changed.
+  _SourceRelevantSettings _relevantSettings = const _SourceRelevantSettings();
+
   void _onSettingsChanged() {
+    final next = _SourceRelevantSettings.capture();
+    if (next == _relevantSettings) return;
+    _relevantSettings = next;
     if (mounted) {
       _fetchServerSources();
       _fetchExtensions();
@@ -716,12 +735,31 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final filtered = _sourcesList.where((s) {
       final name = (s['name'] as String).toLowerCase();
       final lang = (s['lang'] as String).toUpperCase();
-      final isEnglish = lang == 'EN' || lang.startsWith('EN') || lang == 'ALL' || lang == 'MULTI' || lang == 'UNIVERSAL' || lang.isEmpty;
+      // "English" is exactly English. It used to also swallow '', 'ALL',
+      // 'MULTI' and 'UNIVERSAL', so filtering by EN showed unknown-language
+      // and multi-language sources too — and since those got absorbed rather
+      // than excluded, EN filtering hid nothing and read as a no-op. Those
+      // three are "not a real language" per SettingsService.languageBadgeLabel,
+      // so they belong in their own bucket; ''/unknown is reachable via the
+      // Unknown option. QuickJsService.getSourceLang can genuinely return ''.
+      final isEnglish = lang == 'EN' || lang.startsWith('EN');
+      final isMultiLang = lang == 'ALL' || lang == 'MULTI' || lang == 'UNIVERSAL';
+      final isUnknownLang = lang.isEmpty;
 
       final matchesSearch = _sourceSearchQuery.isEmpty || name.contains(_sourceSearchQuery.toLowerCase());
-      final matchesLang = _selectedLangFilter.toUpperCase() == 'ALL'
-          ? true
-          : (_selectedLangFilter.toUpperCase() == 'EN' ? isEnglish : lang.contains(_selectedLangFilter.toUpperCase()));
+      final selected = _selectedLangFilter.toUpperCase();
+      final bool matchesLang;
+      if (selected == 'ALL') {
+        matchesLang = true;
+      } else if (selected == 'EN') {
+        matchesLang = isEnglish;
+      } else if (selected == 'MULTI') {
+        matchesLang = isMultiLang || isUnknownLang;
+      } else if (selected == 'UNKNOWN') {
+        matchesLang = isUnknownLang;
+      } else {
+        matchesLang = lang.contains(selected);
+      }
       if (!matchesSearch || !matchesLang) return false;
 
       final isLocal = s['isLocalJs'] as bool? ?? false;
@@ -772,6 +810,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   PopupMenuItem(value: 'ALL', child: Text('All Languages')),
                   PopupMenuItem(value: 'EN', child: Text('English (EN)')),
                   PopupMenuItem(value: 'JA', child: Text('Japanese (JA)')),
+                  // Previously unreachable: 'ALL'/'MULTI'/'UNIVERSAL' and
+                  // empty-language sources were folded into the English bucket
+                  // instead of being selectable, so they could never be
+                  // filtered for on their own.
+                  PopupMenuItem(value: 'MULTI', child: Text('Multi / Unknown')),
+                  PopupMenuItem(value: 'UNKNOWN', child: Text('Unknown only')),
                 ],
               ),
             ],
@@ -1764,4 +1808,38 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
 
 
+}
+
+/// The exact set of persisted settings that `_fetchServerSources` and
+/// `_fetchExtensions` read. Used as a relevance gate on
+/// `SettingsService.notifyListeners` so an unrelated preference write cannot
+/// blank out and refetch the whole Sources + Extensions lists.
+@immutable
+class _SourceRelevantSettings {
+  const _SourceRelevantSettings({
+    this.serverUrl = '',
+    this.showNsfwSources = false,
+    this.customRepos = const <String>[],
+  });
+
+  factory _SourceRelevantSettings.capture() => _SourceRelevantSettings(
+    serverUrl: SettingsService.instance.serverUrl,
+    showNsfwSources: SettingsService.instance.showNsfwSources,
+    customRepos: List<String>.unmodifiable(SettingsService.instance.customRepos),
+  );
+
+  final String serverUrl;
+  final bool showNsfwSources;
+  final List<String> customRepos;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _SourceRelevantSettings &&
+          other.serverUrl == serverUrl &&
+          other.showNsfwSources == showNsfwSources &&
+          listEquals(other.customRepos, customRepos);
+
+  @override
+  int get hashCode => Object.hash(serverUrl, showNsfwSources, Object.hashAll(customRepos));
 }

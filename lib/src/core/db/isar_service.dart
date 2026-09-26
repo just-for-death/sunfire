@@ -142,6 +142,26 @@ class IsarService {
     return await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
   }
 
+  /// Batched form of [getMangaByServerId] for callers that need to resolve
+  /// many ids at once (e.g. back-filling titles/covers for a feed of chapters
+  /// that span many series). Returns only the rows that exist — absent ids are
+  /// simply missing from the result, exactly as a null from the single lookup.
+  ///
+  /// Chunked for the same reason as [getChaptersForMangas]: one giant `anyOf`
+  /// filter over thousands of ids is slow to compile and run.
+  Future<List<Manga>> getMangaByServerIds(List<int> serverIds) async {
+    if (!_isInitialized || serverIds.isEmpty) return [];
+    final ids = serverIds.where((id) => id != 0).toSet().toList();
+    if (ids.isEmpty) return [];
+    final out = <Manga>[];
+    for (final chunk in chunkList(ids, kChapterQueryChunkSize)) {
+      out.addAll(
+        await _isar.mangas.filter().anyOf(chunk, (q, id) => q.serverIdEqualTo(id)).findAll(),
+      );
+    }
+    return out;
+  }
+
   /// Returns the count of manga currently marked as inLibrary in Isar.
   /// Used by the wipe guard to detect suspicious server-side library wipes.
   Future<int> getMangaCount() async {
@@ -274,8 +294,14 @@ class IsarService {
 
   /// Returns chapters sorted by fetchedAt DESC — the offline Updates feed.
   /// Filters to manga currently marked inLibrary == true and chapters with
-  /// valid fetchedAt > 0. No per-manga cap here — the display layer groups
-  /// by date and the server already limits bulk imports to 3 per manga.
+  /// valid fetchedAt > 0.
+  ///
+  /// No per-manga cap here. The cap is client-side, and now applied in three
+  /// places that share the same thresholds: at ingestion by
+  /// `applyFloodCapToNewChapters` (which zeroes `fetchedAt` on the excess, so
+  /// those chapters are filtered out right here), at display time in
+  /// `updates_screen.dart`, and as a one-time repair by
+  /// `cleanupBulkScrapedUpdates`. The server imposes no such limit.
   Future<List<Chapter>> getRecentChapters({int limit = 300}) async {
     if (!_isInitialized) return [];
     try {
@@ -362,9 +388,13 @@ class IsarService {
         }
 
         for (final bucketList in timeBuckets.values) {
-          if (bucketList.length > 3) {
-            // Keep top 3 by chapterNumber (list already sorted Desc), reset older ones
-            for (int i = 3; i < bucketList.length; i++) {
+          if (bucketList.length > kFloodThresholdChapters) {
+            // Keep the newest few (list already sorted Desc); zero the rest.
+            // Same thresholds as the ingestion-time gate — see
+            // applyFloodCapToNewChapters. This remains useful as a one-time
+            // repair for floods that predate the ingestion gate, and for
+            // rows written by paths that bypass it.
+            for (int i = kFloodCapChapters; i < bucketList.length; i++) {
               bucketList[i].fetchedAt = 0;
               toReset.add(bucketList[i]);
             }
