@@ -24,10 +24,47 @@ const String kDownloadCompleteMarkerName = '.download_complete';
 Future<bool> isDownloadFolderComplete(Directory chapterDir, {int? expectedPageCount}) async {
   final marker = File('${chapterDir.path}/$kDownloadCompleteMarkerName');
   if (!await marker.exists()) return false;
-  if (expectedPageCount == null) return true;
+  if (expectedPageCount == null) {
+    // Self-healing: read the marked count from the marker file itself and
+    // validate against the actual image files on disk. This catches:
+    // - chapters whose source page count changed (shrink/grow)
+    // - folders where the marker was written but some files were lost
+    // - torn writes that passed the downloader's check but are corrupt
+    final raw = (await marker.readAsString()).trim();
+    final markedCount = int.tryParse(raw);
+    if (markedCount == null) return false;
+    final files = chapterDir.listSync().whereType<File>().where((f) {
+      final name = f.path.toLowerCase();
+      return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.endsWith('.webp') || name.endsWith('.gif') || name.endsWith('.bmp');
+    }).toList();
+    var validCount = 0;
+    for (final f in files) {
+      try {
+        final bytes = f.readAsBytesSync();
+        if (bytes.length > 500 && _isValidImageBytes(bytes)) {
+          validCount++;
+        }
+      } catch (_) {}
+    }
+    return validCount == markedCount;
+  }
   final raw = (await marker.readAsString()).trim();
   final markedCount = int.tryParse(raw);
   return markedCount != null && markedCount == expectedPageCount;
+}
+
+bool _isValidImageBytes(List<int> b) {
+  if (b.length < 12) return false;
+  // JPEG: FF D8
+  if (b[0] == 0xFF && b[1] == 0xD8) return true;
+  // PNG: 89 50 4E 47
+  if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return true;
+  // WebP: RIFF ... WEBP
+  if (b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 &&
+      b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50) {
+    return true;
+  }
+  return false;
 }
 
 /// Natural numeric sort for downloaded page files (e.g. ch10_p2.jpg before ch10_p10.jpg).

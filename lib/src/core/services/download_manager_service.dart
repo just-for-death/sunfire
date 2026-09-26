@@ -833,8 +833,22 @@ class DownloadManagerService extends ChangeNotifier {
                 name.endsWith('.bmp');
           })
           .toList();
-      if (existingFiles.length < totalPages) {
-        throw Exception('Incomplete download: only ${existingFiles.length}/$totalPages pages saved');
+      // Validate each file is a real image, not just a file with the right
+      // extension. A torn write or zero-byte placeholder would otherwise pass
+      // the extension check and count toward the total.
+      var validCount = 0;
+      for (final f in existingFiles) {
+        try {
+          final bytes = f.readAsBytesSync();
+          if (bytes.length > 500 && _isValidImageBytes(bytes)) {
+            validCount++;
+          }
+        } catch (_) {
+          // Unreadable — don't count.
+        }
+      }
+      if (validCount < totalPages) {
+        throw Exception('Incomplete download: only $validCount/$totalPages valid pages saved');
       }
       // Only now — with every page verified present — write the completion
       // marker. This is what the resolver/reader/startup scan check before
@@ -884,8 +898,17 @@ class DownloadManagerService extends ChangeNotifier {
   }) async {
     if (cancelToken?.isCancelled == true) return;
     final file = File('${chapterDir.path}/page_${(index + 1).toString().padLeft(3, '0')}.jpg');
-    if (await file.exists() && await file.length() > 500) {
-      return;
+    // Resume guard: accept an existing file ONLY if it is a valid, non-trivial
+    // image. A truncated JPEG from a killed writeAsBytes would still start
+    // with FF D8 and be > 500 bytes, so the old `length() > 500` check would
+    // silently accept a half-page. Full validation here prevents that.
+    if (await file.exists()) {
+      final bytes = await file.readAsBytes();
+      if (bytes.length > 500 && _isValidImageBytes(bytes)) {
+        return;
+      }
+      // Corrupt/truncated — overwrite it.
+      await file.delete();
     }
     final baseHeaders = QuickJsService.getImageHeaders(effectiveSource, pageUrl);
     final cookieHeaders = MClient.getCookiesPref(pageUrl);
