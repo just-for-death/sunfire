@@ -429,6 +429,15 @@ class DownloadManagerService extends ChangeNotifier {
     await _migrateLegacyDownloadFolders();
     await _scanDownloadedLocalChapters();
     await _loadQueuePausedFlag();
+    // Reconcile a crashed resume: if the flag says paused but NO tasks are
+    // paused (all are queued/downloading), the process died between
+    // _saveQueueState() and _persistQueuePausedFlag() in resumeLocalQueue().
+    // Trust the task states and clear the stale flag so the queue auto-resumes.
+    if (_isQueuePaused && !_localTasks.any((t) => t.status == LocalDownloadStatus.paused)) {
+      debugPrint('[DownloadManager] Stale paused flag detected (tasks all queued/active) — reconciling');
+      _isQueuePaused = false;
+      await _persistQueuePausedFlag();
+    }
     // Auto-resume only when the user didn't explicitly pause the queue. A
     // paused queue must survive app restarts — otherwise Pause would only
     // last until the next launch.
