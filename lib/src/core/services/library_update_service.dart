@@ -164,7 +164,12 @@ class LibraryUpdateService extends ChangeNotifier {
           final finishedJobs = extractCount(jobsInfo?['finishedJobs']);
           final activeJobs = isRunning ? (totalJobs - finishedJobs).clamp(0, totalJobs) : 0;
 
-          _progress = 0.15 + (i / 30.0) * 0.45;
+          // Scaled by the ACTUAL poll budget. This was hardcoded to 30.0 while
+          // the loop bound is `serverUpdatePollTimeoutSeconds / 1.5`, so any
+          // setting other than the 45s default made the bar stop short of
+          // 0.6 (shorter timeout) or claim completion before the server was
+          // done (longer timeout).
+          _progress = 0.15 + (i / maxPolls) * 0.45;
           _statusMessage = activeJobs > 0
               ? 'Server updating ($activeJobs job${activeJobs == 1 ? '' : 's'} in progress)...'
               : 'Server finished update jobs...';
@@ -227,12 +232,14 @@ class LibraryUpdateService extends ChangeNotifier {
                     // Synthetic ids must be NEGATIVE: positive ids share the
                     // unique serverId index with real Suwayomi chapters and can
                     // overwrite/alias them (and get progress pushed to the wrong
-                    // server chapter via the serverId > 0 sync guard).
-                    int chServerId = -(mId.abs() * 100000 + cIdx + 1);
-                    while (existingServerIds.contains(chServerId)) {
-                      chServerId++;
-                    }
-                    existingServerIds.add(chServerId);
+                    // server chapter via the serverId > 0 sync guard). The base
+                    // is index-derived, so it also needs the collision probe —
+                    // see mintLocalChapterServerId.
+                    final chServerId = mintLocalChapterServerId(
+                      mangaId: mId,
+                      index: cIdx,
+                      takenServerIds: existingServerIds,
+                    );
                     final ch = Chapter()
                       ..serverId = chServerId
                       ..mangaId = mId
@@ -242,7 +249,6 @@ class LibraryUpdateService extends ChangeNotifier {
                       ..realUrl = chUrl
                       ..mangaTitle = manga.title
                       ..mangaThumbnailUrl = manga.thumbnailUrl
-                      ..fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000
                       ..isRead = false
                       ..lastPageRead = 0;
                     newChaptersToSave.add(ch);
@@ -250,6 +256,17 @@ class LibraryUpdateService extends ChangeNotifier {
                 }
 
                 if (newChaptersToSave.isNotEmpty) {
+                  // Shared flood gate, identical to the library-screen path.
+                  // This used to stamp fetchedAt unconditionally, so a bulk
+                  // first import of a long series flooded the Updates feed
+                  // while the display-layer cap showed only 3 — and the
+                  // Library unread tile plus the notification then contradicted
+                  // the feed about the same batch. See
+                  // applyFloodCapToNewChapters.
+                  applyFloodCapToNewChapters(
+                    newChaptersToSave,
+                    isFirstImport: existing.isEmpty,
+                  );
                   await IsarService.instance.saveChapters(newChaptersToSave);
                   final freshManga = manga.serverId != 0
                       ? (await IsarService.instance.getMangaByServerId(manga.serverId) ?? manga)
