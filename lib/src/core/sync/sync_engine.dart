@@ -36,6 +36,13 @@ const int kTransientSyncMaxAgeSeconds = 14 * 24 * 60 * 60;
 /// most of its chapters in one step will be reconciled on the following sync.
 const double kChapterPruneRatio = 0.3;
 
+/// Floor for accepting a server category list as a replacement for the local
+/// one. Mirrors [kChapterPruneRatio]: a response holding far fewer categories
+/// than we already have is far more likely to be truncated than a mass deletion
+/// upstream. The category pull had no such guard, so a short response ran the
+/// `replaceAll` delete and erased the user's shelf.
+const double kCategoryPullRatio = 0.5;
+
 /// Whether [e] is a transient network failure (dropped connection, timeout,
 /// DNS hiccup) rather than the server rejecting the mutation.
 ///
@@ -1019,9 +1026,37 @@ class SyncEngine {
             if (op == 'create' || record.action == SyncAction.create) {
               final name = payload['name']?.toString() ?? '';
               final localServerId = parseIntSafe(payload['localServerId']);
-              final res = await GraphQLClientService.instance.createCategory(name);
-              final created = res?['createCategory']?['category'];
-              if (created is Map) {
+
+              // Adopt an existing same-named category instead of blindly
+              // creating a second one.
+              //
+              // `createCategory` is not idempotent, and `query()` returns null
+              // for a transport failure indistinguishably from a rejection. So
+              // if the server committed the create but the response was lost,
+              // this record was recorded as a transient failure and retried on
+              // the next cycle — creating a DUPLICATE. The local row was then
+              // remapped to the second id and the first orphan stayed on the
+              // server, which the next pull wrote back locally as a real
+              // category. The user ended up with two identically named tabs,
+              // one of which nothing referenced.
+              //
+              // Probing by name first makes the create effectively idempotent.
+              Map<String, dynamic>? created;
+              final existing = await GraphQLClientService.instance.fetchCategories();
+              if (existing != null && existing['categories'] is Map) {
+                final nodes = (existing['categories'] as Map)['nodes'];
+                if (nodes is List) {
+                  for (final n in nodes.whereType<Map<String, dynamic>>()) {
+                    final existingName = (n['name'] as String? ?? '').trim().toLowerCase();
+                    if (existingName.isNotEmpty && existingName == name.trim().toLowerCase()) {
+                      created = n;
+                      break;
+                    }
+                  }
+                }
+              }
+              created ??= (await GraphQLClientService.instance.createCategory(name))?['createCategory']?['category'] as Map<String, dynamic>?;
+              if (created != null) {
                 final remoteId = parseIntSafe(created['id']);
                 if (remoteId > 0 && localServerId != remoteId) {
                   final cats = await IsarService.instance.getCategories();
@@ -1171,12 +1206,18 @@ class SyncEngine {
       recordAgeSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000 - current.timestamp,
       attempts: attempts,
     );
-    if (nextState == SyncRecordState.abandoned && attempts > 0 && transient) {
-      await LoggerService.instance.logWarning(
-        'Abandoning sync record ${current.id} after $attempts attempts '
-        '(all classified transient); it will not be retried again',
-        'SyncEngine',
-      );
+    if (nextState == SyncRecordState.abandoned) {
+      // An abandoned record is never dispatched again, so its attempt entry is
+      // dead weight. Without this the map grows by one entry per poisoned
+      // record for the life of the process.
+      _dispatchAttempts.remove(current.id);
+      if (attempts > 0 && transient) {
+        await LoggerService.instance.logWarning(
+          'Abandoning sync record ${current.id} after $attempts attempts '
+          '(all classified transient); it will not be retried again',
+          'SyncEngine',
+        );
+      }
     }
     current.state = nextState;
     await IsarService.instance.saveSyncRecord(current);
@@ -1256,11 +1297,41 @@ class SyncEngine {
           final map = n as Map<String, dynamic>;
           final cat = Category()
             ..serverId = parseIntSafe(map['id'])
-            ..name = map['name'] as String? ?? 'Default'
+            // Trimmed, like every local write. The dedupe check further down
+            // compares trim+lowercase, so an untrimmed pull produced a category
+            // that matched nothing and rendered as a second, identical tab.
+            ..name = (map['name'] as String? ?? 'Default').trim()
             ..order = parseIntSafe(map['order'])
             ..isDefault = parseBoolSafe(map['default']);
           categories.add(cat);
         }
+
+        // Wipe guard, which this path did not have at all.
+        //
+        // `saveCategories` defaults to `replaceAll: true`, which deletes every
+        // local category whose serverId is absent from this list. The manga
+        // path has a 30% ratio check and the chapter path has one too; here
+        // there was nothing beyond `categories.isNotEmpty`, so a truncated or
+        // malformed response erased the user's category shelf — and
+        // `Manga.categoryIds` on the affected series then pointed at deleted
+        // rows, so the assignments were silently lost on every device.
+        //
+        // Two independent checks: the response must be structurally complete,
+        // and it must not have shrunk catastrophically relative to what we hold.
+        final snapshotComplete = isCompleteSnapshot(data);
+        final existingServerLinked = (await IsarService.instance.getCategories())
+            .where((c) => c.serverId > 0)
+            .length;
+        if (!snapshotComplete || (existingServerLinked > 0 && categories.length < existingServerLinked * kCategoryPullRatio)) {
+          await LoggerService.instance.logWarning(
+            'Category pull looks incomplete '
+            '(complete=$snapshotComplete, ${categories.length} returned vs $existingServerLinked held); '
+            'keeping local categories rather than replacing them',
+            'SyncEngine',
+          );
+          return;
+        }
+
         await IsarService.instance.saveCategories(categories);
       }
     } catch (e, stack) {

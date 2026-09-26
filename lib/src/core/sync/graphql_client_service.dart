@@ -979,6 +979,7 @@ class GraphQLClientService {
     const queryStr = '''
       {
         categories {
+          totalCount
           nodes {
             id
             name
@@ -988,7 +989,20 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(queryStr, label: 'fetchCategories');
+    final data = await query(queryStr, label: 'fetchCategories');
+    if (data == null || data['categories'] is! Map) return data;
+    // This query is not paginated, so reaching here means the server answered
+    // in full. Stamping it lets `_syncCategories` distinguish "the user deleted
+    // a category" from "the response was short" before running the
+    // `replaceAll` delete — the category path had no completeness guard at all,
+    // so a truncated response erased the user's shelf and orphaned every
+    // `Manga.categoryIds` entry pointing at it.
+    final catMap = data['categories'] as Map<String, dynamic>;
+    final nodes = catMap['nodes'];
+    final total = parseIntSafe(catMap['totalCount']);
+    final list = nodes is List ? nodes : const <dynamic>[];
+    data[kSnapshotCompleteKey] = total > 0 ? list.length >= total : list.isNotEmpty;
+    return data;
   }
 
   Future<Map<String, dynamic>?> fetchTrackers() async {
