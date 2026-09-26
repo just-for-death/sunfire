@@ -34,11 +34,66 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
 
-  /// Per-batch id for new-chapter notifications. Android requires unique ids
-  /// per notification (`Notification.Builder` conflict otherwise), so a single
-  /// shared id (previously 1001) meant a second notification silently replaced
-  /// the first. The counter wraps below the reserved download ids (4001+).
+  /// Whether the OS will actually display a notification.
+  ///
+  /// Null until the Android permission request has been answered. Assumed true
+  /// elsewhere, because iOS and desktop have no equivalent gate here and because
+  /// an unknown answer should not suppress notification logic.
+  bool? _notificationsAllowed;
+
+  ReceivePort? _notificationTapPort;
+
+  /// Whether notifications can be shown, as far as this service can tell.
+  ///
+  /// False only after an explicit denial. Callers can surface this so a user
+  /// whose notifications are silently not appearing has a way to find out.
+  bool get notificationsAllowed => _notificationsAllowed ?? true;
+
+  /// Lets the UI ask the OS again.
+  ///
+  /// A no-op where the platform has no explicit gate, so callers do not need to
+  /// branch on platform.
+  Future<bool> requestNotificationPermission() async {
+    if (kIsWeb || !Platform.isAndroid) {
+      _notificationsAllowed = true;
+      return true;
+    }
+    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (androidPlugin == null) {
+      _notificationsAllowed = true;
+      return true;
+    }
+    _notificationsAllowed = await androidPlugin.requestNotificationsPermission() ?? true;
+    return _notificationsAllowed!;
+  }
+
+  /// New-chapter notification ids currently on screen, oldest first.
+  ///
+  /// Android requires a unique id per notification (`Notification.Builder`
+  /// conflicts otherwise), so a single shared id meant a second notification
+  /// silently replaced the first.
+  ///
+  /// The bookkeeping behind those ids was also wrong: a monotonically
+  /// increasing id from 1001 to 3999 with nothing ever
+  /// cancelling the previous notification. On a channel created with sound,
+  /// vibration and a badge, the shade therefore accumulated up to ~2999 separate,
+  /// individually swipeable "New Chapters" cards — and the counter only stopped
+  /// because it wrapped, at which point it began silently replacing live ones.
+  ///
+  /// A bounded stack is the right shape for a stream of "N new chapters"
+  /// alerts: the newest is what matters, and a handful of recent ones give the
+  /// user something to look back at without the shade becoming a log. The
+  /// Downloaded app caps its own lists the same way. Bounded well below the
+  /// reserved download id range (4001+).
+  final List<int> _newChapterNotificationIds = [];
   int _nextNewChapterNotificationId = 1001;
+  static const int _kMaxNewChapterNotifications = 5;
+
+  /// Wraps well below the reserved 4001+ download range, and far enough above
+  /// [1001] that an id is never reused while it is still on screen: at a cap of
+  /// [_kMaxNewChapterNotifications] the previous holder of any given id was
+  /// cancelled thousands of notifications ago.
+  static const int _kNewChapterNotificationIdCeiling = 3000;
 
   static const String channelId = 'sunfire_new_chapters';
   static const String channelName = 'New Chapters';
@@ -101,10 +156,17 @@ class NotificationService {
       );
 
       // Make background-isolate taps (app killed) reach the main isolate.
-      // Re-register defensively — the port may still hold an old listener from
-      // a previous initialize() call in the same process.
+      //
+      // The previous port is closed first. `_isInitialized` is set only after
+      // this try block, so anything thrown above left the service uninitialised
+      // and every later notification re-ran this — creating a fresh
+      // `ReceivePort` each time and orphaning the last one, never closed, its
+      // subscription never cancelled. Four lazy-init call sites plus the
+      // WorkManager isolate made that a per-notification leak.
       IsolateNameServer.removePortNameMapping(_notificationTapPortName);
+      _notificationTapPort?.close();
       final port = ReceivePort();
+      _notificationTapPort = port;
       port.listen((payload) {
         if (payload is String) {
           debugPrint('[NotificationService] Background tap forwarded: $payload');
@@ -148,8 +210,15 @@ class NotificationService {
             ),
           );
 
-          // Request notification permission for Android 13+
-          await androidPlugin.requestNotificationsPermission();
+          // Request notification permission for Android 13+.
+          //
+          // The result was discarded, never stored, and never re-checked. If the
+          // user denied — or chose "don't ask again", after which the system
+          // stops showing the dialog entirely — every `showXxx` still ran and
+          // then failed inside the plugin, where the catch only debugPrints. The
+          // app therefore showed zero notifications with no indication why and
+          // no in-app path to fix it.
+          _notificationsAllowed = await androidPlugin.requestNotificationsPermission() ?? true;
         }
       }
 
@@ -227,11 +296,24 @@ class NotificationService {
     );
 
     try {
-      // Unique id per batch so successive notifications don't overwrite each
-      // other on Android. Reserve the 4001+ range for download notifications.
-      final notificationId = _nextNewChapterNotificationId;
-      _nextNewChapterNotificationId =
-          _nextNewChapterNotificationId >= 3999 ? 1001 : _nextNewChapterNotificationId + 1;
+      // A fresh id per batch, so successive notifications do not overwrite each
+      // other on Android, and the stack is trimmed to a bounded window so the
+      // shade does not accumulate thousands of stale cards.
+      final notificationId = _nextNewChapterNotificationId++;
+      if (_nextNewChapterNotificationId >= _kNewChapterNotificationIdCeiling) {
+        _nextNewChapterNotificationId = 1001;
+      }
+      _newChapterNotificationIds.add(notificationId);
+      while (_newChapterNotificationIds.length > _kMaxNewChapterNotifications) {
+        final oldest = _newChapterNotificationIds.removeAt(0);
+        try {
+          await _plugin.cancel(id: oldest);
+        } catch (e) {
+          // A notification the OS has already dropped is not a failure worth
+          // surfacing; the post below is what matters.
+          debugPrint('[NotificationService] Could not clear an old new-chapters notification: $e');
+        }
+      }
       await _plugin.show(
         id: notificationId,
         title: title,

@@ -42,6 +42,10 @@ class MetronApiClient {
               BaseOptions(
                 baseUrl: baseUrl ?? defaultBaseUrl,
                 connectTimeout: const Duration(seconds: 30),
+                // A POST body write had no bound of its own. The Suwayomi client
+                // sets all three for the same reason: without it a half-open
+                // connection can hold a request open indefinitely.
+                sendTimeout: const Duration(seconds: 30),
                 receiveTimeout: const Duration(seconds: 30),
                 headers: {
                   'Accept': 'application/json',
@@ -141,10 +145,45 @@ class MetronApiClient {
             }
           }
 
+          // HTTP 401 means the token is dead — expired, revoked, or the account's
+          // API key rotated. Nothing cleared it: `saveToken(null)` is only
+          // reachable from a user action, and the client kept reporting
+          // `isConfigured == true`. So every scrobble kept firing, kept failing,
+          // and paid the client-side spacing each time, producing a `logError` per
+          // attempt indefinitely.
+          //
+          // The Suwayomi GraphQL client latches an auth-error notifier for exactly
+          // this; the equivalent here is to drop the token on the first 401 and
+          // say so, so `isConfigured` goes false and the UI can prompt instead of
+          // silently failing forever.
+          if (err.response?.statusCode == 401) {
+            LoggerService.instance.logWarning(
+              'Metron rejected the stored API token (HTTP 401). Clearing it — '
+              'tracking will stay off until a new token is entered.',
+              'Metron',
+            );
+            _reportUnauthorized();
+          }
+
           handler.next(err);
         },
       ),
     );
+  }
+
+  /// Invoked once, on the first HTTP 401, so the owner can clear the dead token.
+  ///
+  /// Fires at most once per client lifetime: a second 401 is a configuration
+  /// problem the user has to fix, and repeatedly clearing an already-empty token
+  /// would just be noise.
+  void Function()? onUnauthorized;
+
+  bool _reportedUnauthorized = false;
+
+  void _reportUnauthorized() {
+    if (_reportedUnauthorized) return;
+    _reportedUnauthorized = true;
+    onUnauthorized?.call();
   }
 
   void _scheduleNextSpacing(Completer<void>? ownGate) {

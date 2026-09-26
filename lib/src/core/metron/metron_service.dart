@@ -32,7 +32,19 @@ class MetronService extends ChangeNotifier {
 
   static const Duration _cacheTtl = Duration(minutes: 10);
 
-  MetronService._({MetronApiClient? client}) : _client = client ?? MetronApiClient();
+  MetronService._({MetronApiClient? client}) : _client = client ?? MetronApiClient() {
+    // A 401 means the token is dead. Clear it so `isConfigured` goes false and
+    // the UI can prompt, instead of the client silently re-firing scrobbles
+    // that can only fail. Without this the token stayed in secure storage
+    // indefinitely — nothing else ever cleared it except a manual user action.
+    _client.onUnauthorized = _handleUnauthorized;
+  }
+
+  Future<void> _handleUnauthorized() async {
+    if (!isConfigured) return;
+    await saveToken(null);
+    _issueMapCache.clear();
+  }
 
   @visibleForTesting
   factory MetronService.withClient(MetronApiClient client) => MetronService._(client: client);
