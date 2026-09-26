@@ -94,10 +94,14 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
       // serverId column, which is where the negative value lives, so no special
       // case is needed beyond not discarding it.
       final mangaIds = chapters.map((c) => c.mangaId).where((id) => id != 0).toSet();
-      final mangaMap = <int, Manga?>{};
-      for (final mId in mangaIds) {
-        mangaMap[mId] = await IsarService.instance.getMangaByServerId(mId);
-      }
+      // ONE query, not one per series. The loop this replaced deduped repeats
+      // but was still a sequential N+1, and the comment above it claimed
+      // otherwise — a 200-series history meant 200 awaited Isar queries before
+      // the list could render, on every tab switch and every pull-to-refresh.
+      final mangaMap = <int, Manga?>{
+        for (final m in await IsarService.instance.getMangaByServerIds(mangaIds.toList()))
+          m.serverId: m,
+      };
 
       for (final ch in chapters) {
         final lastRead = ch.lastReadAt ?? 0;

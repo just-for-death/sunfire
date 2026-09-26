@@ -3,6 +3,7 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../logging/logger_service.dart';
 
+import 'epoch_seconds.dart';
 import 'list_chunks.dart';
 import 'models/category.dart';
 import 'models/chapter.dart';
@@ -198,6 +199,27 @@ class IsarService {
   /// Callers are responsible for the wipe guard: an over-eager pass here is
   /// the only thing that can destroy a series' offline reading history, so
   /// never call this with a list derived from a partial or failed response.
+  /// Deletes chapter rows by their Isar primary key, with no `serverId` filter.
+  ///
+  /// Narrowly scoped on purpose. [deleteChapters] refuses anything with a
+  /// non-positive `serverId`, which is correct for the sync engine — it must not
+  /// reap local-scrape rows — but it makes it unusable for the detail screen's
+  /// dedupe, where the rows being removed are duplicates the app itself just
+  /// collapsed and many of which carry negative synthetic ids.
+  ///
+  /// The caller is responsible for scoping [isarIds]: it must pass only rows it
+  /// owns. Nothing in the sync path calls this.
+  Future<void> deleteChapterRows(List<int> isarIds) async {
+    if (!_isInitialized || isarIds.isEmpty) return;
+    // Isar auto-increment ids start at 1, so a 0 or negative entry means the
+    // caller handed us a row that was never persisted.
+    final ids = isarIds.where((id) => id > 0).toSet().toList();
+    if (ids.isEmpty) return;
+    await _isar.writeTxn(() async {
+      await _isar.chapters.deleteAll(ids);
+    });
+  }
+
   Future<void> deleteChapters(List<Chapter> chapters) async {
     if (!_isInitialized || chapters.isEmpty) return;
     // Never touch a chapter that has no persisted identity, and never a
@@ -226,11 +248,6 @@ class IsarService {
     return await _isar.chapters.filter().mangaIdEqualTo(mangaId).sortByChapterNumberDesc().findAll();
   }
 
-  /// Batched form of [getChaptersForManga] for callers that need chapters for
-  /// every manga in a list (library refresh, unread-count recompute, batch
-  /// actions). A chunked `anyOf` query plus an in-memory group-by avoids
-  /// issuing one Isar query per manga, which is the dominant cost on large
-  /// libraries.
   /// Batched form of [getChapterByServerId], keyed by `serverId`.
   ///
   /// Exists because the updates feed merges up to 100 server chapters per fetch
@@ -255,6 +272,11 @@ class IsarService {
     return out;
   }
 
+  /// Batched form of [getChaptersForManga] for callers that need chapters for
+  /// every manga in a list (library refresh, unread-count recompute, batch
+  /// actions). A chunked `anyOf` query plus an in-memory group-by avoids
+  /// issuing one Isar query per manga, which is the dominant cost on large
+  /// libraries.
   Future<Map<int, List<Chapter>>> getChaptersForMangas(List<int> mangaIds) async {
     if (!_isInitialized || mangaIds.isEmpty) return {};
     final ids = mangaIds.toSet().toList();
@@ -414,7 +436,7 @@ class IsarService {
         final Map<int, List<Chapter>> timeBuckets = {};
         for (final ch in list) {
           final rawFt = ch.fetchedAt ?? 0;
-          final ftSec = rawFt > 100000000000 ? (rawFt ~/ 1000) : rawFt;
+          final ftSec = normalizeEpochToSeconds(rawFt) ?? 0;
           final bucket = ftSec ~/ 60;
           timeBuckets.putIfAbsent(bucket, () => []).add(ch);
         }

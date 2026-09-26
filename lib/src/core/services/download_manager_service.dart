@@ -519,7 +519,6 @@ class DownloadManagerService extends ChangeNotifier {
   Future<void> initialize() async {
     await _loadQueueState();
     await _migrateLegacyDownloadFolders();
-    await _scanDownloadedLocalChapters();
     await _loadQueuePausedFlag();
     // Reconcile server download cache from local DB so the "Downloaded" filter
     // reflects the server's actual state (from last sync), not optimistic
@@ -540,6 +539,39 @@ class DownloadManagerService extends ChangeNotifier {
     if (!_isQueuePaused) {
       await resumeLocalQueue();
     }
+
+    // Deliberately LAST, and deliberately not awaited.
+    //
+    // `main.dart` awaits `initialize()` before `runApp`, so anything here is
+    // paid on the UI isolate before the first frame. This scan validates every
+    // page header of every downloaded chapter, which is ~8000 open/read/stat
+    // round-trips for a 200-chapter library at 40 pages each — on EVERY cold
+    // start, just to populate two id sets.
+    //
+    // It cannot be made cheaper without weakening the check. An earlier attempt
+    // trusted the marker whenever the file count matched and no page was newer
+    // than the marker, reasoning that the marker is only written after the pages
+    // were verified. That reasoning is wrong: a page that was ALREADY invalid
+    // when the marker was written — an older install predating the validator, or
+    // content replaced externally — satisfies both cheap conditions and was
+    // reported complete. `download_folder_validation_test.dart` exists because
+    // that attempt passed review and shipped in the same commit that added it.
+    //
+    // So the check stays strict and the work moves off the critical path.
+    //
+    // Deferring is safe because the only consumers of the resulting id sets are
+    // UI badges — the library's Downloaded filter, the chapter row icons, the
+    // auto-download-ahead exclusion. Offline page resolution does NOT use them:
+    // `ContentResolverService` validates the folder itself with the same
+    // `isDownloadFolderComplete` call before trusting it, so a chapter tapped in
+    // the first second still resolves from disk. The only visible effect of the
+    // window is a badge that fills in once `notifyListeners()` fires at the end
+    // of the scan — strictly better than a multi-second blank launch.
+    //
+    // Not awaited. `_scanDownloadedLocalChapters` reaches its first `await`
+    // immediately, so this hands control straight back and the work interleaves
+    // with the opening frames instead of preceding them.
+    unawaited(_scanDownloadedLocalChapters());
   }
 
   /// One-time upgrade step for the completion-marker scheme. Folders written
@@ -613,6 +645,7 @@ class DownloadManagerService extends ChangeNotifier {
               // finished — see kDownloadCompleteMarkerName. A folder left
               // behind by a failed/killed/cancelled download has no marker
               // and must not be reported as "downloaded" to the UI or reader.
+              //
               if (id != null && await isDownloadFolderComplete(entity)) {
                 _downloadedLocalChapterIds.add(id);
                 final ch = await IsarService.instance.getChapterByServerId(id);
@@ -1056,6 +1089,15 @@ class DownloadManagerService extends ChangeNotifier {
   }) async {
     if (cancelToken?.isCancelled == true) return;
     final file = File('${chapterDir.path}/page_${(index + 1).toString().padLeft(3, '0')}.jpg');
+    // Sweep a partial write left by a kill. It is invisible to the completion
+    // check (`.part` is not a page extension) and to the resume guard, so
+    // without this it would sit in the folder forever, wasting disk.
+    try {
+      final stalePartial = File('${file.path}.part');
+      if (await stalePartial.exists()) await stalePartial.delete();
+    } catch (e) {
+      debugPrint('[DownloadManager] Could not clear stale partial page: $e');
+    }
     // Resume guard: accept an existing file ONLY if it is a valid, non-trivial
     // image. A truncated JPEG from a killed writeAsBytes would still start
     // with FF D8 and be > 500 bytes, so the old `length() > 500` check would
@@ -1184,7 +1226,25 @@ class DownloadManagerService extends ChangeNotifier {
     if (cancelToken?.isCancelled == true) return;
 
     if (pageBytes != null && pageBytes.isNotEmpty && _isValidImageBytes(pageBytes)) {
-      await file.writeAsBytes(pageBytes);
+      // Temp file + rename, not a direct write.
+      //
+      // `writeAsBytes` truncates in place, so a process kill (low-memory kill,
+      // background-task eviction, battery pull) mid-write left a PARTIAL page on
+      // disk. It was then accepted forever: the resume guard validates with
+      // `looksLikeImageHeader`, which is a PREFIX probe and cannot tell a
+      // truncated page from a whole one that starts with the same bytes, and the
+      // completion marker was already written from a count taken when every page
+      // was intact. The user got a permanently half-rendered page with no
+      // in-app way to force a re-download, and re-opening the chapter served
+      // the same truncated bytes.
+      //
+      // `rename` is atomic within a filesystem on POSIX and NTFS, so a page
+      // either does not exist or is whole. Detection is replaced by prevention,
+      // which is the only thing that actually works against a header-only
+      // validator.
+      final tmp = File('${file.path}.part');
+      await tmp.writeAsBytes(pageBytes);
+      await tmp.rename(file.path);
     }
   }
 
