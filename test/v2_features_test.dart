@@ -88,11 +88,15 @@ void main() {
   });
 
   group('TachiBkImportService.planImport', () {
+    final backupSources = const [
+      TachiBkSource(id: 1, name: 'MangaDex', lang: 'en'),
+      TachiBkSource(id: 99, name: 'Missing Source', lang: 'es'),
+      TachiBkSource(id: 7, name: 'Absent Extension', lang: 'en'),
+      TachiBkSource(id: 8, name: 'Fehlende Erweiterung', lang: 'de'),
+    ];
+
     final backup = TachiBkBackup(
-      sources: const [
-        TachiBkSource(id: 1, name: 'MangaDex', lang: 'en'),
-        TachiBkSource(id: 99, name: 'Missing Source', lang: 'es'),
-      ],
+      sources: backupSources,
       categories: const ['Favorites', 'Reading'],
       manga: const [
         TachiBkManga(
@@ -127,6 +131,28 @@ void main() {
           favorite: false,
           categories: ['Reading'],
         ),
+        // Source 7 exists in the backup but is NOT installed on the server.
+        // Epsilon is English, which is exactly the case the old lang-only
+        // fallback mis-handled by binding it to the first English source.
+        TachiBkManga(
+          sourceId: 7,
+          url: '/manga/epsilon',
+          title: 'Epsilon',
+          lang: 'en',
+          favorite: true,
+          categories: [],
+        ),
+        // Zeta: unknown source AND non-English. The old fallback required
+        // lang == 'en', so this one was skipped by accident rather than by
+        // design — the test pins that both behave the same way.
+        TachiBkManga(
+          sourceId: 8,
+          url: '/manga/zeta',
+          title: 'Zeta',
+          lang: 'de',
+          favorite: true,
+          categories: [],
+        ),
       ],
     );
 
@@ -138,12 +164,16 @@ void main() {
     test('matches installed sources by name+lang and flags missing ones', () {
       final plan = TachiBkImportService.planImport(backup, serverSources);
 
-      expect(plan.entries, hasLength(4));
+      expect(plan.entries, hasLength(6));
       // Alpha and Gamma match a server source and are in the library.
       expect(plan.readyEntries, hasLength(2));
-      // Beta has no matching source; Delta is favorited=false (not in library).
-      expect(plan.skippedEntries, hasLength(2));
-      expect(plan.skippedEntries.map((e) => e.manga.title), containsAll(['Beta', 'Delta']));
+      // Beta, Epsilon and Zeta have no matching source; Delta is
+      // favorite=false (not in the library).
+      expect(plan.skippedEntries, hasLength(4));
+      expect(
+        plan.skippedEntries.map((e) => e.manga.title),
+        containsAll(['Beta', 'Delta', 'Epsilon', 'Zeta']),
+      );
       expect(plan.readyEntries.every((e) => e.matchedSource?.id == '1:111'), isTrue);
     });
 
@@ -168,7 +198,78 @@ void main() {
         backup,
         const [ServerSourceInfo(id: '9:9', name: 'md', displayName: 'MangaDex', lang: 'en')],
       );
-      expect(plan.readyEntries, hasLength(2));
+      // Alpha and Gamma (plus Epsilon? no — Epsilon's backup source name is
+      // 'Absent Extension', which still has no match here).
+      expect(plan.readyEntries.map((e) => e.manga.title), ['Alpha', 'Gamma']);
+    });
+
+    // ── Source mis-attribution during restore ────────────────────────────
+    //
+    // A lang-only fallback used to run when neither the name nor the
+    // displayName matched. Its condition required the server source's lang to
+    // equal the backup entry's lang AND to be literally 'en', so it could only
+    // ever fire for English — and then it returned the FIRST English source on
+    // the server, whatever that happened to be.
+    //
+    // The consequence was silent mis-attribution, which is worse than a skip:
+    // the entry was marked `ready`, so the plan screen showed it as importable
+    // and counted it in "N importable". applyPlan then resolved the manga URL
+    // against a source the user never had that series on. The restore either
+    // failed with a confusing "could not resolve on <wrong source>" message, or
+    // — for aggregator sources that do serve many sites — added the WRONG
+    // series to the library. Either way the user was told the restore
+    // succeeded for an entry that was silently pointed at the wrong source.
+    //
+    // An unmatched source must be reported as missing so the user sees it.
+
+    test('an unmatched source is never guessed from language alone', () {
+      final plan = TachiBkImportService.planImport(
+        backup,
+        const [
+          ServerSourceInfo(id: '1:111', name: 'MangaDex', displayName: 'MangaDex', lang: 'en'),
+          ServerSourceInfo(id: '2:222', name: 'Totally Different', displayName: 'Totally Different', lang: 'en'),
+        ],
+      );
+
+      // Gamma is lang 'en' with source name 'MangaDex' -> exact match, fine.
+      // Epsilon is lang 'en' with a source name that exists nowhere on the
+      // server. It must NOT be silently bound to 'MangaDex'.
+      final epsilon = plan.entries.firstWhere((e) => e.manga.title == 'Epsilon');
+      expect(epsilon.status, TachiBkPlanEntryStatus.sourceMissing,
+          reason: 'a lang-only match is a guess, not a match');
+      expect(epsilon.matchedSource, isNull);
+    });
+
+    test('an unmatched non-English source is reported missing, not re-homed', () {
+      final plan = TachiBkImportService.planImport(
+        backup,
+        const [
+          ServerSourceInfo(id: '1:111', name: 'MangaDex', displayName: 'MangaDex', lang: 'en'),
+        ],
+      );
+
+      for (final title in ['Epsilon', 'Zeta']) {
+        final entry = plan.entries.firstWhere((e) => e.manga.title == title);
+        expect(entry.status, TachiBkPlanEntryStatus.sourceMissing, reason: title);
+        expect(entry.matchedSource, isNull, reason: title);
+      }
+    });
+
+    test('a lang-only match never binds an entry to a different source', () {
+      // Every importable entry must be bound to the source it actually came
+      // from. This is the invariant the old fallback violated.
+      final plan = TachiBkImportService.planImport(backup, serverSources);
+      for (final entry in plan.readyEntries) {
+        final expectedName = backup.sources
+            .firstWhere((s) => s.id == entry.manga.sourceId)
+            .name
+            .toLowerCase();
+        expect(
+          entry.matchedSource!.name.toLowerCase(),
+          expectedName,
+          reason: '${entry.manga.title} was bound to the wrong source',
+        );
+      }
     });
   });
 
