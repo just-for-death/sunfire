@@ -54,6 +54,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     super.initState();
     _loadUpdates();
     MainShell.selectedTabNotifier.addListener(_onTabChanged);
+    // showLanguageBadges and selectedLanguages are both read during build (via
+    // _languageBadgeLabel and _filteredUpdates) and both are written from the
+    // Browse settings page, which sits under the "More" tab. Without this the
+    // feed kept rendering the old filtering until something unrelated forced a
+    // rebuild.
+    SettingsService.instance.addListener(_onSettingsChanged);
     _wsUpdateSub = WebSocketService.instance.onUpdateStatus.listen((event) {
       if (!mounted) return;
       final status = event['status']?.toString() ?? event.toString();
@@ -92,6 +98,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     });
   }
 
+  void _onSettingsChanged() {
+    if (mounted) setState(() {});
+  }
+
   void _onTabChanged() {
     if (MainShell.selectedTabNotifier.value == 1 && mounted) {
       _scheduleCacheReload(delay: Duration.zero);
@@ -125,6 +135,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   @override
   void dispose() {
     _reloadTimer?.cancel();
+    SettingsService.instance.removeListener(_onSettingsChanged);
     MainShell.selectedTabNotifier.removeListener(_onTabChanged);
     _wsUpdateSub?.cancel();
     _wsDownloadSub?.cancel();
@@ -571,6 +582,16 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  /// Pull-to-refresh: re-read the local cache, then pull the latest update
+  /// chapters from the server. Bounded, and never triggers a library-wide
+  /// re-scrape — see the RefreshIndicator for why.
+  Future<void> _refreshFeed() async {
+    await _loadUpdatesFromIsarCache();
+    if (!mounted) return;
+    if (!GraphQLClientService.instance.isConfigured) return;
+    await _fetchServerUpdatesInBackground();
   }
 
   Future<void> _checkServerForUpdates() async {
@@ -1282,7 +1303,21 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           constraints: const BoxConstraints(maxWidth: 960),
           child: RefreshIndicator(
             color: primaryColor,
-            onRefresh: _checkServerForUpdates,
+            // A pull gesture means "refresh this feed", not "re-scrape the
+            // whole library". This used to call _checkServerForUpdates, which
+            // with isManual: true bypasses every constraint gate and runs the
+            // entire pipeline: it makes Suwayomi re-scrape every source, polls
+            // for up to serverUpdatePollTimeoutSeconds, triggers a full
+            // SyncEngine snapshot (one fetchMangaDetails per library title), and
+            // then serially re-scrapes every local-JS title through QuickJS —
+            // with no overall timeout, so the spinner could run for minutes.
+            //
+            // Now it re-reads the local cache and pulls the latest update
+            // chapters (a single fetchUpdatesChapters(first: 100)) — the same
+            // lightweight path the screen already uses on first load. The
+            // expensive library-wide check remains on the AppBar button, which
+            // is where an explicit "check for updates" belongs.
+            onRefresh: _refreshFeed,
             child: _isLoading
                 ? Center(child: CircularProgressIndicator(color: primaryColor))
                 : ListenableBuilder(
