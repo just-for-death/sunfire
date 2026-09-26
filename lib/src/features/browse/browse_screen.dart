@@ -94,6 +94,35 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   String _selectedSourceFilter = 'All'; // 'All', 'Local JS', 'Server', 'Pinned'
 
   Future<void> _fetchServerSources() async {
+    // Everything is wrapped so `_isLoadingSources` can never stick true.
+    //
+    // The `try` used to start at the server fetch, so a throw from
+    // `getRawAuthHeader()` or from any of the six QuickJsService lookups above
+    // propagated out of the method with the flag still set — and the sources tab
+    // then rendered a bare `CircularProgressIndicator` with no AppBar action, no
+    // RefreshIndicator (that lives inside the branch not being taken) and no
+    // retry. An unescapable spinner, same shape as the one this fixes elsewhere.
+    try {
+      await _fetchServerSourcesInner();
+    } catch (e, st) {
+      LoggerService.instance.logError(
+        'Failed to load sources: $e',
+        exception: e,
+        stackTrace: st,
+        category: 'Browse',
+      );
+      if (mounted) {
+        setState(() {
+          _isLoadingSources = false;
+          _sourcesLoadError = '$e';
+        });
+      }
+    }
+  }
+
+  String? _sourcesLoadError;
+
+  Future<void> _fetchServerSourcesInner() async {
     final currentServerUrl = SettingsService.instance.serverUrl;
     if (currentServerUrl.isNotEmpty) {
       if (!GraphQLClientService.instance.isConfigured || GraphQLClientService.instance.baseUrl != currentServerUrl) {
@@ -337,12 +366,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         mangas = await IsarService.instance.getLibraryManga();
       }
 
+      if (!mounted) return;
       setState(() {
         _libraryMangaList = mangas;
         _isLoadingLibrary = false;
       });
     } catch (_) {
-      setState(() => _isLoadingLibrary = false);
+      if (mounted) setState(() => _isLoadingLibrary = false);
     }
   }
 
@@ -484,7 +514,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       }
 
       if (!isUpdate) {
-        setState(() {
+        // The trust dialog above is awaited with no mounted check, and the
+        // guard exists on the UNINSTALL branch but was missing here. The file
+        // already has `_setStateIfMounted` for exactly this.
+        _setStateIfMounted(() {
           ext['isInstalled'] = !isInstalled;
         });
       }
@@ -730,6 +763,47 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
     if (_isLoadingSources) {
       return Center(child: CircularProgressIndicator(color: primaryColor));
+    }
+
+    // A load that threw gets a retry rather than an empty tab the user cannot
+    // tell apart from "you have no sources installed".
+    if (_sourcesLoadError != null && _sourcesList.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded, size: 44, color: Colors.grey.shade600),
+              const SizedBox(height: 12),
+              const Text(
+                'Could not load sources',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _sourcesLoadError!,
+                textAlign: TextAlign.center,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _isLoadingSources = true;
+                    _sourcesLoadError = null;
+                  });
+                  _fetchServerSources();
+                },
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     final filtered = _sourcesList.where((s) {

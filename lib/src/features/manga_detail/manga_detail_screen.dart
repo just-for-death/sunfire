@@ -188,15 +188,24 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
     // 1. Check local Isar DB first to display immediate cached state only if valid
     _manga = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
+    // The generation token used to guard only `setState`, ~340 lines later, so a
+    // stale pass still wrote `_manga`/`_chapters` AND persisted them via
+    // saveManga/saveChapters before bailing. The corruption was therefore
+    // durable, not just visual: the next unrelated setState rendered the stale
+    // snapshot, and a subsequent row action mutated a Chapter that was not the
+    // one on screen. Checked before every field write from here on.
+    if (loadGen != _loadGeneration) return;
     if (_manga == null) {
       // The route may address a LOCAL standalone manga by its Isar auto-increment
       // id (such manga carry synthetic negative serverIds). Only accept a
       // local-id hit that is actually standalone — never one with a real
       // (positive) serverId, which would mean we collided with a different series.
       final byLocal = await IsarService.instance.getManga(widget.mangaServerId);
+      if (loadGen != _loadGeneration) return;
       if (byLocal != null && byLocal.serverId < 0) _manga = byLocal;
     }
     _chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+    if (loadGen != _loadGeneration) return;
     final hasValidCachedChapters = _chapters.isNotEmpty && _chapters.every((c) => c.url.isNotEmpty);
     if (_manga != null && hasValidCachedChapters && mounted && loadGen == _loadGeneration) {
       setState(() => _isLoading = false);
@@ -213,21 +222,40 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     if (resolvedAsServerManga && !isLocalExtension && GraphQLClientService.instance.isConfigured) {
       try {
         var detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
+        if (loadGen != _loadGeneration) return;
 
         // If chapters are empty on server, scrape online from source directly!
+        //
+        // A missing or non-list `chapters` node is NOT a reason to abandon the
+        // load. It used to `return`, which skipped the only two places that
+        // clear `_isLoading` — stranding the screen on a bare spinner whose
+        // AppBar has no actions, no overflow menu and no RefreshIndicator (that
+        // lives inside the body being replaced). An unescapable dead end, and
+        // most likely on exactly the first open of a series, when there is no
+        // valid cache to fall back on. Treated as "no chapters" so the normal
+        // refetch runs and the manga metadata is still applied.
         final rawChNodes = detailsData?['manga']?['chapters']?['nodes'];
-        if (rawChNodes is! List) return;
-        if (rawChNodes.isEmpty) {
+        final chNodes = rawChNodes is List ? rawChNodes : const <dynamic>[];
+        if (chNodes.isEmpty) {
           await GraphQLClientService.instance.fetchMangaAndChapters(widget.mangaServerId);
+          if (loadGen != _loadGeneration) return;
           detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
+          if (loadGen != _loadGeneration) return;
         }
 
         if (detailsData != null && detailsData.containsKey('manga') && detailsData['manga'] != null) {
           // Guard the cast: a schema change or non-object value must not crash
-          // the whole detail load.
+          // the whole detail load — and must not strand the spinner either.
           final rawManga = detailsData['manga'];
-          if (rawManga is! Map<String, dynamic> && rawManga is! Map) return;
-          final mMap = rawManga is Map<String, dynamic> ? rawManga : Map<String, dynamic>.from(rawManga as Map);
+          if (rawManga is! Map) {
+            LoggerService.instance.logWarning(
+              'Manga details for ${widget.mangaServerId} had a non-object manga node; '
+              'keeping the locally cached state',
+              'MangaDetail',
+            );
+            return;
+          }
+          final mMap = rawManga is Map<String, dynamic> ? rawManga : Map<String, dynamic>.from(rawManga);
           _manga ??= Manga()..serverId = widget.mangaServerId;
           _manga!.title = mMap['title'] as String? ?? _manga!.title;
           _manga!.author = mMap['author'] as String?;
@@ -376,6 +404,19 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         }
       } catch (e) {
         await LoggerService.instance.logWarning('Failed to fetch server chapters: $e', 'MangaDetail');
+      } finally {
+        // Liveness guarantee, independent of every `return` above.
+        //
+        // `_isLoading` was cleared in exactly two places, so any early exit
+        // between them left the screen permanently on a spinner with no way out.
+        // Two `return`s did exactly that. A future third one would too, and the
+        // comment above cannot be relied on to stop it — this can.
+        //
+        // Guarded on the generation: a superseded load must not clear the flag
+        // that its replacement owns, or the spinner returns mid-load.
+        if (mounted && loadGen == _loadGeneration && _isLoading) {
+          setState(() => _isLoading = false);
+        }
       }
     }
 
@@ -544,7 +585,19 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final map = <String, Chapter>{};
     final mangaTitleLower = _manga?.title.trim().toLowerCase() ?? '';
 
-    for (final ch in list) {
+    // Indexed, so an unparseable chapter name can fall back to its POSITION
+    // rather than a hardcoded 0.
+    //
+    // The loop used to pass 0 unconditionally, and the fallback in
+    // `chapterSortNumberFromParts` is `fallbackIndex + 1` — so every unnumbered
+    // chapter got `chapterNumber == 1.0` and therefore the identical dedupe key
+    // `num_1.00`. A source returning eight link-less extras ("Extra",
+    // "Side Story", "Omake", "Prologue") collapsed them into ONE row, with the
+    // chapter count badges reporting 1. The `nameKey` fallback that was
+    // supposed to prevent this was unreachable, because `numKey` was gated on
+    // `>= 0` and a `double` defaulted to 0.0 is never < 0.
+    for (var index = 0; index < list.length; index++) {
+      final ch = list[index];
       var cleanName = ch.name.trim();
 
       // Strip redundant leading manga title prefix if present in chapter title
@@ -558,7 +611,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       if (cleanName.isEmpty) cleanName = ch.name.trim();
       ch.name = cleanName;
 
-      final extractedNum = _extractChapterNumber(cleanName, 0, list.length);
+      final extractedNum = _extractChapterNumber(cleanName, index, list.length);
       if (extractedNum >= 0) {
         ch.chapterNumber = extractedNum;
       }
@@ -566,7 +619,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       final scanlatorPart = (ch.scanlator != null && ch.scanlator!.trim().isNotEmpty)
           ? ch.scanlator!.trim().toLowerCase()
           : '';
-      final numKey = ch.chapterNumber >= 0
+      // `> 0`, not `>= 0`: a chapter number of 0 carries no information, so it
+      // must fall through to `nameKey` rather than collapsing every such
+      // chapter onto `num_0.00`.
+      final numKey = ch.chapterNumber > 0
           ? 'num_${ch.chapterNumber.toStringAsFixed(2)}${scanlatorPart.isNotEmpty ? '_$scanlatorPart' : ''}'
           : null;
       final urlKey = ch.url.isNotEmpty ? 'url_${ch.url.toLowerCase().trim()}' : null;
@@ -768,14 +824,23 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     // the primary flow: open a local series, read a chapter, press back.
     //
     // Never overwrite a good `_manga` with null.
+    //
+    // Participates in the same generation protocol as `_loadMangaDetails`. It
+    // used to not bump the token at all, so a post-reader reload and a detail
+    // refresh could interleave and clobber each other's `_manga`/`_chapters`
+    // with no way to tell which pass was newer.
+    final loadGen = ++_loadGeneration;
     final byServerId = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
+    if (loadGen != _loadGeneration) return;
     if (byServerId != null) {
       _manga = byServerId;
     } else if (_manga == null) {
       final byLocal = await IsarService.instance.getManga(widget.mangaServerId);
+      if (loadGen != _loadGeneration) return;
       if (byLocal != null && byLocal.serverId < 0) _manga = byLocal;
     }
     final chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+    if (loadGen != _loadGeneration) return;
     if (chapters.isNotEmpty || _chapters.isEmpty) _chapters = chapters;
     if (mounted) {
       setState(() {});

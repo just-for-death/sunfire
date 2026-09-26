@@ -261,7 +261,16 @@ class WebSocketService {
       if (type == 'connection_ack') {
         _isConnected = true;
         _isConnecting = false;
-        _reconnectDelaySeconds = _baseReconnectSeconds();
+        // Reset the backoff only after the connection has actually STAYED up.
+        //
+        // Resetting on the ack alone meant a server that completed the
+        // graphql-transport-ws handshake and then immediately closed — an
+        // idle-timeout misconfiguration, a load balancer that doesn't speak the
+        // subprotocol — was retried at the 5s base rate forever. The backoff
+        // never escalated and nothing surfaced to the user, so a flapping
+        // server was hammered indefinitely.
+        _connectedAt = DateTime.now();
+        _backoffResetOnStableAck = true;
         _handshakeTimer?.cancel();
         _startPingTimer();
         LoggerService.instance.logInfo('WebSocket connection_ack received', 'WebSocket');
@@ -377,6 +386,25 @@ class WebSocketService {
 
     LoggerService.instance.logWarning('$reason. Reconnecting in ${_reconnectDelaySeconds}s...', 'WebSocket');
 
+    // Apply the deferred backoff reset here, where a disconnect is actually
+    // happening, rather than on the ack — which may arrive microseconds before
+    // the socket dies again.
+    if (_backoffResetOnStableAck) {
+      _backoffResetOnStableAck = false;
+      if (_connectedAt != null &&
+          DateTime.now().difference(_connectedAt!) >= _stableConnectionDuration) {
+        _reconnectDelaySeconds = _baseReconnectSeconds();
+      } else {
+        LoggerService.instance.logWarning(
+          'WebSocket connection did not stay up for '
+          '${_stableConnectionDuration.inSeconds}s — keeping the escalated backoff '
+          'instead of retrying at the base rate',
+          'WebSocket',
+        );
+      }
+    }
+    _connectedAt = null;
+
     _reconnectTimer?.cancel();
     _handshakeTimer?.cancel();
     _reconnectTimer = Timer(Duration(seconds: _reconnectDelaySeconds), () {
@@ -384,6 +412,12 @@ class WebSocketService {
       connect();
     });
   }
+
+  /// How long a connection must survive before its success resets the backoff.
+  static const Duration _stableConnectionDuration = Duration(seconds: 60);
+
+  DateTime? _connectedAt;
+  bool _backoffResetOnStableAck = false;
 
   /// The server rejected our credentials. Re-authenticate once and retry
   /// immediately; if that fails, stop spinning and fall back to the normal
