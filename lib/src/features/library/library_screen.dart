@@ -292,7 +292,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final libraryManga = await IsarService.instance.getLibraryManga();
     // One batched query up front instead of one per manga inside the loop.
     final existingChaptersByManga = await IsarService.instance.getChaptersForMangas(
-      libraryManga.map((m) => m.serverId > 0 ? m.serverId : m.id).toList(),
+      libraryManga.map((m) => m.canonicalKey).toList(),
     );
     for (final manga in libraryManga) {
       if (manga.sourceName.isEmpty || manga.url.isEmpty) continue;
@@ -304,7 +304,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         if (detail.containsKey('chapters')) {
           final rawChapters = detail['chapters'] as List<dynamic>?;
           if (rawChapters != null && rawChapters.isNotEmpty) {
-            final mId = manga.serverId > 0 ? manga.serverId : manga.id;
+            final mId = manga.canonicalKey;
             final existingChapters = existingChaptersByManga[mId] ?? const <Chapter>[];
             final existingUrls = existingChapters.map((c) => c.url).toSet();
             // Seeded with every id this manga already uses so the minting below
@@ -371,7 +371,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       final downloadedMangaIds = DownloadManagerService.instance.downloadedMangaIds;
       final serverDownloadedIds = DownloadManagerService.instance.downloadedServerMangaIds;
       list = list.where((m) {
-        final key = m.serverId > 0 ? m.serverId : m.id;
+        final key = m.canonicalKey;
         return downloadedMangaIds.contains(key) || serverDownloadedIds.contains(key);
       }).toList();
     } else if (_statusFilter == 'Completed') {
@@ -397,7 +397,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         final artist = (m.artist ?? '').toLowerCase();
         final genres = m.genres.map((g) => g.toLowerCase()).toList();
         final status = (m.status ?? '').toLowerCase();
-        final isDownloaded = downloadedMangaIds.contains(m.serverId > 0 ? m.serverId : m.id) || serverDownloadedIds.contains(m.serverId > 0 ? m.serverId : m.id);
+        final isDownloaded = downloadedMangaIds.contains(m.canonicalKey) || serverDownloadedIds.contains(m.canonicalKey);
 
         for (final token in tokens) {
           if (token.isEmpty) continue;
@@ -487,14 +487,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     // filter changed since items were picked), which made the old
     // `length == length` check toggle the wrong way.
     final allVisibleSelected = currentList.isNotEmpty &&
-        currentList.every((m) => _selectedMangaIds.contains(m.serverId > 0 ? m.serverId : m.id));
+        currentList.every((m) => _selectedMangaIds.contains(m.canonicalKey));
     setState(() {
       if (allVisibleSelected) {
         _selectedMangaIds.clear();
         _isBatchMode = false;
         BatchModeService.instance.disable();
       } else {
-        _selectedMangaIds.addAll(currentList.map((m) => m.serverId > 0 ? m.serverId : m.id));
+        _selectedMangaIds.addAll(currentList.map((m) => m.canonicalKey));
         _isBatchMode = true;
         BatchModeService.instance.enable();
       }
@@ -1714,7 +1714,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   }
 
   Widget _buildMangaCard(Manga manga, {bool isCompact = false, bool isCoverOnly = false, bool isTablet = false}) {
-    final mId = manga.serverId > 0 ? manga.serverId : manga.id;
+    final mId = manga.canonicalKey;
     final isSelected = _selectedMangaIds.contains(mId);
     final primaryColor = Theme.of(context).colorScheme.primary;
     final isDownloaded = DownloadManagerService.instance.downloadedMangaIds.contains(mId);
@@ -1918,7 +1918,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   }
 
   Widget _buildMangaListItem(Manga manga) {
-    final mId = manga.serverId > 0 ? manga.serverId : manga.id;
+    final mId = manga.canonicalKey;
     final isSelected = _selectedMangaIds.contains(mId);
     final primaryColor = Theme.of(context).colorScheme.primary;
     final isDownloaded = DownloadManagerService.instance.downloadedMangaIds.contains(mId);

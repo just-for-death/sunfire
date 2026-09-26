@@ -9,6 +9,24 @@ class Manga {
   @Index(unique: true, replace: true)
   int serverId = 0;
 
+  /// The one canonical key for this manga everywhere in the app.
+  ///
+  /// Always [serverId]. For a local-only entry that is a negative synthetic
+  /// value (minted on first save); for a server-linked entry it is the
+  /// Suwayomi id. It is never zero for a persisted row.
+  ///
+  /// It must never be the local Isar auto-increment [id]. Both id spaces are
+  /// small integers, so keying a query on a local id matches whichever *other*
+  /// series happens to have that serverId — which silently returned a stranger
+  /// series' chapters, let batch mark-read write to them, and pushed those
+  /// chapters to the server as if they belonged to the target series.
+  ///
+  /// Use this instead of the `serverId > 0 ? serverId : id` pattern, which
+  /// switched id space for local entries and reintroduced exactly that
+  /// collision.
+  @ignore
+  int get canonicalKey => serverId;
+
   String title = '';
   String? artist;
   String? author;
