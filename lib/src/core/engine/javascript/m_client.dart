@@ -76,7 +76,9 @@ class MClient {
       final root = _extractRootDomain(host);
       if (_cookies.containsKey(host) || _cookies.containsKey(root)) return true;
       for (final key in _cookies.keys) {
-        if (host.endsWith(key) || key.endsWith(root)) return true;
+        // Label-boundary match only — see getCookiesPref. Without the '.'
+        // check, `notexample.com` counted as having a cookie for `example.com`.
+        if (host == key || host.endsWith('.$key')) return true;
       }
     } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
     return false;
@@ -123,7 +125,15 @@ class MClient {
       String? cookie = _cookies[host] ?? _cookies[rootHost];
       if (cookie == null) {
         for (final entry in _cookies.entries) {
-          if (host.endsWith(entry.key) || entry.key.endsWith(rootHost)) {
+          // Exact match, or a genuine subdomain of the stored host.
+          //
+          // A bare `host.endsWith(key)` has no label boundary, so a cookie
+          // stored for `example.com` was also sent to `notexample.com` and
+          // `evil-example.com` — registrable domains an attacker controls.
+          // Combined with a scraper's ability to aim a request at any host,
+          // that hands over the session. RFC 6265 wants an exact host match or
+          // a `.`-prefixed suffix; nothing else.
+          if (host == entry.key || host.endsWith('.${entry.key}')) {
             cookie = entry.value;
             break;
           }
