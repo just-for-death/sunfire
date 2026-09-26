@@ -146,9 +146,11 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     final isServerSourced = manga['origin'] == 'server';
     int id = parseIntSafe(manga['id']);
     if (id <= 0 && link.isNotEmpty) {
-      id = (link.hashCode ^ sourceName.hashCode).abs();
+      // Stable content hash, not `String.hashCode` — see the note in
+      // `stableLocalMangaServerId`.
+      id = stableLocalMangaServerId(sourceName: sourceName, url: link, title: title).abs();
     } else if (id <= 0 && title.isNotEmpty) {
-      id = (title.hashCode ^ sourceName.hashCode).abs();
+      id = stableLocalMangaServerId(sourceName: sourceName, url: link, title: title).abs();
     }
     if (!isServerSourced && id > 0) id = -id;
 

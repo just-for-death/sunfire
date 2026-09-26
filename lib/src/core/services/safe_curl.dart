@@ -11,6 +11,8 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint;
 
+import '../engine/image_validation.dart';
+
 /// Executables tried in order. `curl` and `/usr/bin/curl` are the same binary
 /// on nearly every system, so only one plain-curl entry is kept.
 const List<String> kCurlCandidates = <String>[
@@ -126,25 +128,10 @@ Future<Uint8List?> runCurlWithSemaphore({
   }
 }
 
-bool _isMagicImage(List<int> bytes) {
-  if (bytes.length < 4) return false;
-  // JPEG
-  if (bytes[0] == 0xFF && bytes[1] == 0xD8) return true;
-  // PNG
-  if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return true;
-  // GIF
-  if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) return true;
-  // WebP
-  if (bytes.length >= 12 &&
-      bytes[0] == 0x52 &&
-      bytes[1] == 0x49 &&
-      bytes[2] == 0x46 &&
-      bytes[3] == 0x46 &&
-      bytes[8] == 0x57 &&
-      bytes[9] == 0x45 &&
-      bytes[10] == 0x42 &&
-      bytes[11] == 0x50) {
-    return true;
-  }
-  return false;
-}
+/// Delegates to the shared validator.
+///
+/// This was a private copy that accepted a bare `GIF` prefix and required only
+/// two bytes for JPEG, while the downloader's copy required `GIF8` and checked
+/// more formats. Three different answers to "is this an image" for the same
+/// bytes meant a payload one layer accepted could be rejected by another.
+bool _isMagicImage(List<int> bytes) => looksLikeImageHeader(bytes);

@@ -45,3 +45,11 @@ const int kMaxExtensionDownloadBytes = 2 * 1024 * 1024;
 /// unbounded Dart collections. A scraper returning millions of page entries
 /// OOMs the process before the UI ever shows a spinner.
 const int kMaxScraperPageEntries = 2000;
+
+/// Character ceiling applied to a scraper's serialised result, inside the
+/// runtime.
+///
+/// Roughly 8 MB of JSON, which is far above any real page list (a 500-page
+/// chapter is a few tens of KB) while still bounding the peak on both sides of
+/// the bridge. The Dart side additionally enforces [kMaxScraperPageEntries].
+const int kMaxScraperPayloadChars = 8 * 1024 * 1024;

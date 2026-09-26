@@ -396,6 +396,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           if (rawChList is List && rawChList.isNotEmpty) {
             final chList = rawChList;
             final fetched = <Chapter>[];
+            // Declared before the loop: the mint below needs the occupied set so
+            // it can probe, and `mintLocalChapterServerId` records into it.
+            final existingChapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+            final existingServerIds = existingChapters.map((c) => c.serverId).toSet();
             for (var i = 0; i < chList.length; i++) {
               final rawCMap = chList[i];
               if (rawCMap is! Map) continue;
@@ -405,9 +409,21 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               final rawChNum = (cMap['chapterNumber'] as num?)?.toDouble();
               final chNum = (rawChNum != null && rawChNum > 0) ? rawChNum : _extractChapterNumber(chName, i, chList.length);
 
-              // Negative synthetic id — positive ids would share the unique
-              // serverId index with real Suwayomi chapters (overwrite/alias).
-              final chServerId = -((widget.mangaServerId.abs() * 100000) + i + 1);
+              // Minted through the canonical helper rather than inline.
+              //
+              // The old inline formula plus a `ch.serverId++` collision probe
+              // walked a NEGATIVE id toward zero — into the positive namespace
+              // that belongs to real Suwayomi chapters. Enough colliding slots
+              // and the id crossed zero, aliasing a real server chapter in the
+              // `unique: true, replace: true` index and silently replacing its
+              // read state, bookmark and download flag. The canonical helper
+              // probes with `--`, i.e. away from zero, and clamps so it can
+              // never return a positive value.
+              final chServerId = mintLocalChapterServerId(
+                mangaId: widget.mangaServerId,
+                index: i,
+                takenServerIds: existingServerIds,
+              );
 
               final rawDate = cMap['dateUpload'] ?? cMap['uploadDate'] ?? cMap['date'] ?? cMap['releaseDate'];
               final rawDateStr = rawDate?.toString().trim();
@@ -427,9 +443,6 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 ..fetchedAt = 0;
               fetched.add(ch);
             }
-            final existingChapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
-            final existingServerIds = existingChapters.map((c) => c.serverId).toSet();
-
             // Transfer read progress from existing chapters to freshly scraped ones
             // so we don't wipe reading history when the chapter list refreshes
             if (existingChapters.isNotEmpty) {
@@ -466,11 +479,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   if (ch.url.isEmpty && match.url.isNotEmpty) ch.url = match.url;
                   if (ch.realUrl.isEmpty && match.realUrl.isNotEmpty) ch.realUrl = match.realUrl;
                 } else {
-                  // Ensure newly minted chapter serverId does not collide with existing ones
-                  while (existingServerIds.contains(ch.serverId)) {
-                    ch.serverId++;
-                  }
-                  existingServerIds.add(ch.serverId);
+                  // The id is already collision-free: it was minted through
+                  // `mintLocalChapterServerId`, which probed and recorded it in
+                  // `existingServerIds` above. The old local `++` probe here
+                  // was both redundant and dangerous — see the mint comment.
                   // Genuinely NEW chapter added to an existing library manga (manga already had chapters)
                   if (existingChapters.isNotEmpty && _manga != null && _manga!.inLibrary) {
                     ch.fetchedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
