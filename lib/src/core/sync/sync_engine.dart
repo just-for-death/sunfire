@@ -277,6 +277,52 @@ class SyncEngine {
     }
   }
 
+  /// Records local read activity for a chapter marked read/unread **outside**
+  /// the Reader.
+  ///
+  /// The Reader stamps `Chapter.lastReadAt` and the parent `Manga.lastReadAt`
+  /// itself before calling [syncChapterProgress]. Every other mark-read entry
+  /// point (Library, Manga Detail, Updates, source migration) only pushed the
+  /// read flag, so the local chapter kept a stale or NULL `lastReadAt`.
+  /// Consequences, all observable:
+  ///  - History's "Last Read" grouping skipped the chapter,
+  ///  - the in-progress query (`lastReadAt > 0`) excluded it,
+  ///  - Library "Last Read" sorting did not float the series to the top,
+  /// and a later pull could resurrect the older server timestamp over the
+  /// action the user just took.
+  ///
+  /// Un-marking does not move the timestamp backwards: a chapter that is
+  /// marked unread keeps its previous `lastReadAt` so it still appears in
+  /// History, but only a fresh read activity (newer stamp) advances it.
+  Future<void> stampLocalReadActivity(Chapter chapter) async {
+    // Epoch SECONDS — Chapter.lastReadAt / Manga.lastReadAt are seconds
+    // everywhere (see reader_screen). Mixing in millis breaks sorting.
+    final stamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    if ((chapter.lastReadAt ?? 0) < stamp) {
+      chapter.lastReadAt = stamp;
+      await IsarService.instance.saveChapter(chapter);
+    }
+
+    // Keep the series-level stamp in sync for Library "Last Read" sorting.
+    final mangaId = chapter.mangaId;
+    if (mangaId <= 0) return;
+    try {
+      final manga = await IsarService.instance.getMangaByServerId(mangaId);
+      if (manga == null) return;
+      if ((manga.lastReadAt ?? 0) < stamp) {
+        manga.lastReadAt = stamp;
+        await IsarService.instance.saveManga(manga);
+      }
+    } catch (e) {
+      // A missing/renumbered manga must not fail the read toggle.
+      await LoggerService.instance.logWarning(
+        'Failed to stamp series lastReadAt for manga $mangaId: $e',
+        'SyncEngine',
+      );
+    }
+  }
+
   Future<void> syncChapterBookmark(int chapterServerId, bool isBookmarked) async {
     if (chapterServerId <= 0) return;
 
