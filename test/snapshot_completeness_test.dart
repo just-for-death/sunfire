@@ -189,4 +189,50 @@ void main() {
       expect(safe(complete: true, force: false, local: 100, server: 0), isFalse);
     });
   });
+
+  group('isCategoryPullAcceptable', () {
+    // `saveCategories` defaults to `replaceAll: true`, which deletes every local
+    // category whose serverId is absent from the incoming list. So accepting a
+    // short response erases the user's shelf — and every `Manga.categoryIds`
+    // entry pointing at a deleted row, on every device, permanently.
+    //
+    // The guard was originally inline in `_syncCategories` only, so the Settings
+    // screen's refresh — which calls the same destructive method — had none of
+    // it. These tests pin the shared decision both call sites now apply.
+
+    bool ok({bool complete = true, int incoming = 10, int existing = 10}) =>
+        isCategoryPullAcceptable(
+          snapshotComplete: complete,
+          incoming: incoming,
+          existingServerLinked: existing,
+        );
+
+    test('a complete response at or above the ratio is accepted', () {
+      expect(ok(incoming: 10, existing: 10), isTrue);
+      expect(ok(incoming: 5, existing: 10), isTrue, reason: 'exactly 50% is allowed');
+    });
+
+    test('an INCOMPLETE snapshot is refused', () {
+      // Not overridable by anything. A partial view cannot be reasoned about:
+      // there is no way to tell which categories are absent because the server
+      // dropped them from which are absent because the response was truncated.
+      expect(ok(complete: false, incoming: 100, existing: 10), isFalse);
+    });
+
+    test('a catastrophic shrink is refused', () {
+      expect(ok(incoming: 2, existing: 10), isFalse);
+      expect(ok(incoming: 1, existing: 100), isFalse);
+    });
+
+    test('nothing held locally means nothing to lose', () {
+      expect(ok(existing: 0, incoming: 1), isTrue);
+    });
+
+    test('an empty local shelf plus a truncated response is still refused', () {
+      // The guard is about not deleting, and with an empty shelf there is nothing
+      // to delete — but an incomplete stamp still means the response cannot be
+      // trusted, so it is reported as unacceptable rather than special-cased.
+      expect(ok(complete: false, existing: 0, incoming: 3), isFalse);
+    });
+  });
 }

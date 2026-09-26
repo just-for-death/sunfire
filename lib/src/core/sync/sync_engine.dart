@@ -95,6 +95,37 @@ int retryCountAfterFailure(int current, {required bool transient}) => transient 
 /// classification and of the device clock.
 const int kMaxTransientSyncAttempts = 40;
 
+/// Whether a server category list may replace the local one.
+///
+/// [snapshotComplete] is a hard requirement and is NOT overridable. An
+/// incomplete snapshot is a partial VIEW of the shelf, and nothing in it can be
+/// reasoned about, because there is no way to tell which categories are absent
+/// because the server dropped them from which are absent because the response
+/// was truncated. `saveCategories` defaults to `replaceAll: true`, which deletes
+/// every local category whose id is missing from the list, so accepting a short
+/// response erases the user's shelf — and every `Manga.categoryIds` entry
+/// pointing at a deleted row, on every device, permanently.
+///
+/// The ratio is the secondary, weaker heuristic for "the server was reset".
+///
+/// Extracted so that EVERY caller gets it. The guard was originally inline in
+/// `_syncCategories` only, so the Settings screen's category refresh — which
+/// calls the same destructive `saveCategories` — had none of it, and was one
+/// short response away from wiping the shelf.
+///
+/// Public rather than test-only because it is production policy that two
+/// separate call sites must apply; `@visibleForTesting` would have flagged the
+/// second one as a misuse instead of the first as a bug.
+bool isCategoryPullAcceptable({
+  required bool snapshotComplete,
+  required int incoming,
+  required int existingServerLinked,
+}) {
+  if (!snapshotComplete) return false;
+  if (existingServerLinked <= 0) return true;
+  return incoming >= existingServerLinked * kCategoryPullRatio;
+}
+
 /// Whether local library entries the server did not report may be soft-deleted.
 ///
 /// Two independent conditions, and the order matters.
@@ -1354,7 +1385,11 @@ class SyncEngine {
         final existingServerLinked = (await IsarService.instance.getCategories())
             .where((c) => c.serverId > 0)
             .length;
-        if (!snapshotComplete || (existingServerLinked > 0 && categories.length < existingServerLinked * kCategoryPullRatio)) {
+        if (!isCategoryPullAcceptable(
+          snapshotComplete: snapshotComplete,
+          incoming: categories.length,
+          existingServerLinked: existingServerLinked,
+        )) {
           await LoggerService.instance.logWarning(
             'Category pull looks incomplete '
             '(complete=$snapshotComplete, ${categories.length} returned vs $existingServerLinked held); '
