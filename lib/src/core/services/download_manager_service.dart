@@ -371,6 +371,7 @@ class DownloadManagerService extends ChangeNotifier {
 
   Future<void> resumeLocalQueue() async {
     _isQueuePaused = false;
+    _waitingForCharger = false;
     for (final task in _localTasks) {
       if (task.status == LocalDownloadStatus.downloading || task.status == LocalDownloadStatus.paused) {
         task.status = LocalDownloadStatus.queued;
