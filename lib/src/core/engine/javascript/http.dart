@@ -3,8 +3,10 @@ import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_interceptor/http_interceptor.dart';
 import '../../../constants/app_constants.dart';
+import '../../logging/logger_service.dart';
 import '../../services/settings_service.dart';
 import 'm_client.dart';
+import 'request_guard.dart';
 
 class JsHttpClient {
   final JavascriptRuntime runtime;
@@ -171,6 +173,31 @@ class Client {
       }
 
       final uri = Uri.parse(urlStr);
+
+      // Trust boundary. This client is injected as a global into the QuickJS
+      // context and the full response body is handed back to the script, so it
+      // is a read primitive with an exfiltration channel, granted to code the
+      // app auto-installs from a repo index with no user review.
+      //
+      // A scraper is supposed to talk to the manga site it was written for.
+      // Without this check it could equally read the cloud metadata endpoint,
+      // loopback, or any host on the user's LAN — a NAS, a router admin panel,
+      // a Jellyfin, or the user's own FlareSolverr — and POST the contents
+      // somewhere public. Everything below is reachable by anyone who can get
+      // an extension published.
+      final blocked = blockedRequestReason(uri);
+      if (blocked != null) {
+        LoggerService.instance.logWarning(
+          'Blocked extension HTTP request to $urlStr: $blocked',
+          'JsHttpClient',
+        );
+        return jsonEncode({
+          'body': '',
+          'statusCode': 0,
+          'error': 'blocked: $blocked',
+        });
+      }
+
       http.Response response;
 
       final timeoutSecs = SettingsService.instance.networkTimeoutSeconds;
