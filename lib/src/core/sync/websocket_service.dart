@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, visibleForTesting;
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -104,8 +105,12 @@ class WebSocketService {
         protocols: ['graphql-transport-ws'],
         customClient: createServerTrustingHttpClient(() => _wsUrl),
       );
-      _channel!.ready.catchError((e) {
-        _handleDisconnect('WebSocket connect error: $e');
+      // Bind the failure callback to THIS channel. A `ready` future that
+      // rejects after the socket has been replaced must not tear down the
+      // replacement.
+      final myChannel = _channel;
+      myChannel!.ready.catchError((e) {
+        _handleDisconnect('WebSocket connect error: $e', source: myChannel);
       });
 
       final payload = <String, dynamic>{};
@@ -140,8 +145,8 @@ class WebSocketService {
           _lastInboundAt = DateTime.now();
           _handleMessage(message);
         },
-        onError: (e) => _handleDisconnect('WebSocket error: $e'),
-        onDone: () => _handleDisconnect('WebSocket closed by server'),
+        onError: (e) => _handleDisconnect('WebSocket error: $e', source: myChannel),
+        onDone: () => _handleDisconnect('WebSocket closed by server', source: myChannel),
       );
 
       _handshakeTimer?.cancel();
@@ -187,15 +192,29 @@ class WebSocketService {
   @visibleForTesting
   static Duration reconnectMaxDelay = const Duration(seconds: 300);
 
-  /// Doubles the current backoff and returns the new delay.
+  /// Doubles the current backoff and returns the new delay, with jitter.
+  ///
+  /// The delay was a deterministic function of the failure count alone, so after
+  /// a server restart every paired device — and every client sharing that
+  /// server — reconnected at exactly 5s, 10s, 20s, 40s… A synchronised
+  /// thundering herd against the server that is trying to recover. Jitter is
+  /// additive and bounded to a quarter of the delay, so the backoff still
+  /// escalates and still honours the ceiling.
   Duration _advanceReconnectDelay() {
     final next = (_reconnectDelaySeconds * 2).clamp(
       reconnectBaseDelay.inSeconds,
       reconnectMaxDelay.inSeconds,
     );
     _reconnectDelaySeconds = next;
-    return Duration(seconds: next);
+    final spread = (next ~/ 4).clamp(1, 30);
+    final jitter = next > 1 ? _reconnectJitter.nextInt(spread) : 0;
+    return Duration(seconds: next + jitter);
   }
+
+  /// Injectable so tests can make jitter deterministic.
+  static final Random _reconnectJitter = Random();
+
+
 
   void _startPingTimer() {
     _pingTimer?.cancel();
@@ -317,7 +336,27 @@ class WebSocketService {
     }
   }
 
-  void _handleDisconnect(String reason) {
+  /// Tears down the connection and schedules a reconnect.
+  ///
+  /// [source] is the channel whose failure triggered this. It must be passed
+  /// because this is a method on the *service*, not bound to a socket: without
+  /// the check below, a stale callback destroys whatever is current. Switching
+  /// server URL or refreshing a token while a connect is still in flight made
+  /// the old socket's `ready` future reject, which called this with the NEW
+  /// `_channel`/`_subscription` and killed a perfectly healthy connection — the
+  /// UI then showed "connecting" and spun on the 5s backoff until the process
+  /// restarted. The close code read here also belonged to the wrong channel, so
+  /// a 4401 on the old socket was attributed to the new one.
+  void _handleDisconnect(String reason, {WebSocketChannel? source}) {
+    // Stale callback: this socket has already been replaced. Acting would tear
+    // down the live connection.
+    if (source != null && !identical(source, _channel)) {
+      LoggerService.instance.logInfo(
+        'Ignoring disconnect from a superseded WebSocket ($reason)',
+        'WebSocket',
+      );
+      return;
+    }
     final closeCode = _channel?.closeCode;
     _isConnected = false;
     _isConnecting = false;
@@ -404,5 +443,14 @@ class WebSocketService {
     try {
       _channel?.sink.close();
     } catch (ignoredError) { if (kDebugMode) debugPrint('[websocket_service] ignored error: $ignoredError'); }
+    // Clear the observable state. Without this, `isConnected` kept returning
+    // true after disposal, so any UI bound to it displayed a live connection
+    // that no longer existed, and `_channel`/`_subscription`/`_wsUrl` stayed
+    // populated so a later connect() tried to revive a disposed service.
+    _isConnected = false;
+    _isConnecting = false;
+    _channel = null;
+    _subscription = null;
+    _wsUrl = null;
   }
 }
