@@ -427,9 +427,11 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       boolValue: _settings.downloadOnlyOnWifi,
                       onBoolChanged: (v) {
                         _settings.downloadOnlyOnWifi = v;
-                        if (!v && !DownloadManagerService.instance.isQueuePaused) {
-                          DownloadManagerService.instance.resumeLocalQueue();
-                        }
+                        // BOTH directions. Enabling this used to do nothing
+                        // until the running chapter happened to finish, so
+                        // turning it on while on cellular kept burning mobile
+                        // data for up to ~12 minutes with no way to stop it.
+                        DownloadManagerService.instance.applyResourceGates();
                       },
                     ),
                     SettingsPropTile(
@@ -440,9 +442,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       boolValue: _settings.downloadOnlyWhileCharging,
                       onBoolChanged: (v) {
                         _settings.downloadOnlyWhileCharging = v;
-                        if (!v && !DownloadManagerService.instance.isQueuePaused) {
-                          DownloadManagerService.instance.resumeLocalQueue();
-                        }
+                        DownloadManagerService.instance.applyResourceGates();
                       },
                     ),
                   ],
