@@ -50,8 +50,14 @@ class NotificationService {
   static const String downloadsChannelDescription = 'Progress and completion of chapter downloads';
 
   static const int downloadProgressNotificationId = 4001;
+  // These two used to share 4002. Android keys notifications by (id, tag), so
+  // whichever posted last silently replaced the other: the foreground
+  // "Downloads resumed" toast ate the batch-completion summary — the only
+  // confirmation the user gets that an overnight download worked — and
+  // conversely a resume notice replaced the last summary. Neither was ever
+  // cancelled, so they also outlived the event that raised them.
   static const int downloadsResumedNotificationId = 4002;
-  static const int downloadSummaryNotificationId = 4002;
+  static const int downloadSummaryNotificationId = 4003;
 
   /// Stream of notification payloads tapped by user (e.g. '/updates')
   final StreamController<String?> _selectNotificationStream = StreamController<String?>.broadcast();
