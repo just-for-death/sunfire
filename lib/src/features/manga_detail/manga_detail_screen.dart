@@ -93,7 +93,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     if (raw is num) {
       final val = raw.toInt();
       if (val <= 0) return null;
-      return val > 1000000000000 ? val ~/ 1000 : val;
+      return normalizeEpochToSeconds(val);
     }
     final str = raw.toString().trim();
     if (str.isEmpty || str == '0' || str == 'null') return null;
@@ -101,7 +101,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final parsedInt = int.tryParse(str);
     if (parsedInt != null) {
       if (parsedInt <= 0) return null;
-      return parsedInt > 1000000000000 ? parsedInt ~/ 1000 : parsedInt;
+      return normalizeEpochToSeconds(parsedInt);
     }
 
     final parsedDt = DateTime.tryParse(str);
@@ -144,7 +144,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       // If it's pure digits (unix timestamp string in ms or s, e.g. 1778025600000), format nicely
       final numericVal = int.tryParse(raw);
       if (numericVal != null && numericVal > 0) {
-        final ms = numericVal > 1000000000000 ? numericVal : numericVal * 1000;
+        final ms = (normalizeEpochToSeconds(numericVal) ?? 0) * 1000;
         final dt = DateTime.fromMillisecondsSinceEpoch(ms);
         if (dt.year >= 1975) {
           return DateFormat.yMMMd().format(dt);
@@ -156,7 +156,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
     // 2. Fallback to uploadDate timestamp (e.g. from Suwayomi sync)
     if (ch.uploadDate != null && ch.uploadDate! > 0) {
-      final ms = ch.uploadDate! > 1000000000000 ? ch.uploadDate! : ch.uploadDate! * 1000;
+      final ms = (normalizeEpochToSeconds(ch.uploadDate) ?? 0) * 1000;
       final dt = DateTime.fromMillisecondsSinceEpoch(ms);
       if (dt.year >= 1975 && !dt.isAfter(DateTime.now().add(const Duration(days: 2)))) {
         final now = DateTime.now();

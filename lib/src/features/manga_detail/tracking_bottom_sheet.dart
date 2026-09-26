@@ -8,6 +8,7 @@ import '../../core/db/models/manga.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/sync_engine.dart';
 import '../settings/tracking_settings_screen.dart';
 
 class TrackingBottomSheet extends StatefulWidget {
@@ -319,7 +320,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     if (str.isEmpty || str == '0' || str == 'null') return null;
     final parsed = int.tryParse(str);
     if (parsed == null || parsed <= 0) return null;
-    final ms = parsed < 1000000000000 ? parsed * 1000 : parsed;
+    final ms = (normalizeEpochToSeconds(parsed) ?? 0) * 1000;
     return ms.toString();
   }
 
