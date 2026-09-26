@@ -18,6 +18,7 @@ import 'features/library/library_screen.dart';
 import 'features/manga_detail/manga_detail_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/reader/reader_screen.dart';
+import 'features/settings/about_screen.dart';
 import 'features/settings/advanced_settings_screen.dart';
 import 'features/settings/appearance_settings_screen.dart';
 import 'features/settings/backup_settings_screen.dart';
@@ -217,6 +218,13 @@ GoRouter buildAppRouter({
             pageBuilder: (context, state) => sunfireTransitionPage(
               state: state,
               child: const AdvancedSettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/about',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const AboutScreen(),
             ),
           ),
           GoRoute(

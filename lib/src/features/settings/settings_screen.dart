@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/widgets/sunfire_badge.dart';
+import 'about_screen.dart';
 import 'advanced_settings_screen.dart';
 import 'appearance_settings_screen.dart';
 import 'backup_settings_screen.dart';
@@ -330,11 +331,19 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
       destination: (context) => const AdvancedSettingsScreen(),
     ),
     _SettingSearchItem(
+      title: 'About Sunfire',
+      subtitle: 'Version, licenses, credits, privacy policy & check for updates',
+      category: 'Advanced',
+      icon: Icons.info_outline_rounded,
+      keywords: ['version', 'build', 'about', 'platform', 'os', 'info', 'license', 'credits', 'privacy'],
+      destination: (context) => const AboutScreen(),
+    ),
+    _SettingSearchItem(
       title: 'Sunfire Client Version',
       subtitle: 'Installed app version, build number, and host platform details',
       category: 'Advanced',
-      icon: Icons.info_outline_rounded,
-      keywords: ['version', 'build', 'about', 'platform', 'os', 'info'],
+      icon: Icons.badge_outlined,
+      keywords: ['version', 'build', 'platform', 'os', 'system information', 'device'],
       destination: (context) => const AdvancedSettingsScreen(),
     ),
     _SettingSearchItem(
@@ -602,6 +611,15 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       subtitle: 'Diagnostic logs, FlareSolverr proxy, system information',
                       tags: ['LOCAL'],
                       onTap: () => context.push('/settings/advanced'),
+                    ),
+
+                    // 11. ABOUT
+                    _buildTile(
+                      icon: Icons.info_outline_rounded,
+                      title: 'About',
+                      subtitle: 'Version, update check, license, credits & privacy policy',
+                      tags: ['LOCAL'],
+                      onTap: () => context.push('/settings/about'),
                     ),
                   ],
                 ),
