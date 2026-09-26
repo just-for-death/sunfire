@@ -711,6 +711,8 @@ class DownloadManagerService extends ChangeNotifier {
             task.error = e.toString();
             _failedInBatch++;
             await LoggerService.instance.logError('Failed to download chapter ${task.chapterId}: $e', exception: e, stackTrace: stack, category: 'DownloadManager');
+            // Clean up the partial download folder so it doesn't leak disk space.
+            await _cleanupIncompleteDownload(task.chapterId);
           }
         }
         await _saveQueueState();
@@ -1107,6 +1109,7 @@ class DownloadManagerService extends ChangeNotifier {
     }
     _localTasks.removeWhere((t) => t.chapterId == chapterId);
     await _saveQueueState();
+    await _cleanupIncompleteDownload(chapterId);
     notifyListeners();
   }
 
