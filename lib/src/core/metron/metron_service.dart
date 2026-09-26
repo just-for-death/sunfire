@@ -329,9 +329,25 @@ class MetronService extends ChangeNotifier {
     required Chapter chapter,
     DateTime? readDate,
   }) async {
-    final manga = await IsarService.instance.getMangaByServerId(mangaId) ??
-        await IsarService.instance.getManga(mangaId);
-    if (manga == null) return false;
+    // Server-id lookup ONLY. The `?? getManga(mangaId)` fallback this replaces
+    // mixed two id spaces: `getManga` reads the Isar LOCAL auto-increment primary
+    // key, while `mangaId` here is always `chapter.mangaId` — which is the parent
+    // manga's `serverId` and nothing else (both call sites pass `ch.mangaId`).
+    //
+    // Both spaces are small integers starting at 1, so a collision is expected
+    // rather than exotic. When the server-id lookup legitimately missed — a
+    // local-scrape series, whose synthetic id is negative and has no Metron
+    // mapping anyway — the fallback then resolved whichever UNRELATED series
+    // happened to own that local primary key, and scrobbled its
+    // `metronSeriesId` and title to Metron. That is a write to a third party's
+    // account that cannot be undone from here, and it happened on a routine
+    // mark-as-read.
+    //
+    // A miss now means "no Metron series to scrobble", which is the truth.
+    final manga = await IsarService.instance.getMangaByServerId(mangaId);
+    if (manga == null || manga.metronSeriesId == null || manga.metronSeriesId == 0) {
+      return false;
+    }
     return await scrobbleMangaChapter(manga: manga, chapter: chapter, readDate: readDate);
   }
 

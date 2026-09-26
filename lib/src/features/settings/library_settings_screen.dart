@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/category.dart';
+import '../../core/logging/logger_service.dart';
 import '../../core/services/library_update_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/background_service.dart';
@@ -74,13 +75,46 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
             final cMap = n as Map<String, dynamic>;
             final cat = Category()
               ..serverId = parseIntSafe(cMap['id'])
-              ..name = cMap['name'] as String? ?? 'Category'
-              ..order = parseIntSafe(cMap['order']);
+              // Trimmed, and `isDefault` carried across. The name trim matches
+              // every other category write, so the dedupe in the shelf matches
+              // what is stored; the missing `isDefault` meant this refresh's
+              // `putAll` silently reset it to false on every row.
+              ..name = (cMap['name'] as String? ?? 'Category').trim()
+              ..order = parseIntSafe(cMap['order'])
+              ..isDefault = parseBoolSafe(cMap['default']);
             serverCats.add(cat);
           }
-          await IsarService.instance.saveCategories(serverCats);
-          if (mounted) {
-            setState(() => _categories = serverCats);
+
+          // The same wipe guard the sync path applies.
+          //
+          // `saveCategories` defaults to `replaceAll: true`, which deletes every
+          // local category whose id is absent from the incoming list. This call
+          // site had only a non-empty check, so a short or truncated response —
+          // which `isCompleteSnapshot` exists precisely to detect, and which
+          // `fetchCategories` already stamps for exactly this consumer — erased
+          // the user's category shelf, and every `Manga.categoryIds` entry
+          // pointing at a deleted row, on this device and every other one.
+          //
+          // Hoisted into `isCategoryPullAcceptable` so the next caller cannot
+          // forget it.
+          final existingServerLinked =
+              (await IsarService.instance.getCategories()).where((c) => c.serverId > 0).length;
+          if (!isCategoryPullAcceptable(
+            snapshotComplete: isCompleteSnapshot(data),
+            incoming: serverCats.length,
+            existingServerLinked: existingServerLinked,
+          )) {
+            await LoggerService.instance.logWarning(
+              'Settings category refresh looks incomplete '
+              '(${serverCats.length} returned vs $existingServerLinked held); '
+              'keeping local categories rather than replacing them',
+              'LibrarySettings',
+            );
+          } else {
+            await IsarService.instance.saveCategories(serverCats);
+            if (mounted) {
+              setState(() => _categories = serverCats);
+            }
           }
         }
       } catch (ignoredError) { if (kDebugMode) debugPrint('[library_settings_screen] ignored error: $ignoredError'); }

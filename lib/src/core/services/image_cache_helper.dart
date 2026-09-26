@@ -13,81 +13,14 @@ import '../db/models/manga.dart';
 import '../engine/image_validation.dart';
 import '../engine/quickjs_service.dart';
 import '../sync/graphql_client_service.dart';
+import 'in_flight_mutex.dart';
 import 'safe_curl.dart';
 import 'server_tls_trust.dart';
 
-/// Per-URL lock to prevent duplicate concurrent fetches
-class _UrlLock {
-  final Map<String, _LockEntry> _locks = {};
-
-  Future<T> run<T>(String key, Future<T> Function() computation) async {
-    final entry = _locks.putIfAbsent(key, () => _LockEntry());
-    return entry.run(computation);
-  }
-
-  void release(String key) {
-    _locks.remove(key);
-  }
-}
-
-class _LockEntry {
-  Future<void>? _current;
-  Object? _result;
-  Object? _error;
-  bool _completed = false;
-  final List<Completer<void>> _waiters = [];
-
-  Future<T> run<T>(Future<T> Function() computation) async {
-    if (_completed) {
-      if (_error != null) throw _error!;
-      return _result as T;
-    }
-
-    if (_current != null) {
-      // Wait for current operation to complete
-      final completer = Completer<void>();
-      _waiters.add(completer);
-      try {
-        await completer.future;
-        if (_error != null) throw _error!;
-        return _result as T;
-      } finally {
-        _waiters.removeWhere((w) => w.isCompleted);
-      }
-    }
-
-    // Start new computation
-    final completer = Completer<void>();
-    _current = computation().then((_) {
-      _completed = true;
-      completer.complete();
-      _notifyWaiters();
-    }).catchError((e, st) {
-      _error = e;
-      _completed = true;
-      completer.completeError(e, st);
-    });
-
-    try {
-      final result = await computation();
-      _result = result;
-      completer.complete();
-      return _result as T;
-    } catch (e, st) {
-      _error = e;
-      completer.completeError(e, st);
-      rethrow;
-    }
-  }
-
-  void _notifyWaiters() {
-    for (final w in _waiters) {
-      if (!w.isCompleted) w.complete();
-    }
-  }
-}
-
-final _urlLocks = _UrlLock();
+/// De-duplicates concurrent cover fetches. See [InFlightMutex] for why this is
+// a pure in-flight mutex and not a cache — the real caches are `_memoryCache`
+// (200-entry LRU) and the on-disk cover files.
+final _urlLocks = InFlightMutex<Uint8List?>();
 
 class ImageCacheHelper {
   static final List<String> _candidateCoverPaths = [];
