@@ -794,7 +794,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       final unreadNotDownloaded = chapters.where((c) {
         if (c.isRead) return false;
         if (c.isDownloaded) return false;
-        final cId = c.serverId > 0 ? c.serverId : c.id;
+        final cId = c.serverId != 0 ? c.serverId : c.id;
         if (DownloadManagerService.instance.isChapterDownloadedLocally(cId)) return false;
         return true;
       }).toList();
@@ -804,7 +804,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           : unreadNotDownloaded.take(maxPerManga).toList();
 
       for (final ch in toQueue) {
-        final cId = ch.serverId > 0 ? ch.serverId : ch.id;
+        final cId = ch.serverId != 0 ? ch.serverId : ch.id;
         await DownloadManagerService.instance.enqueueLocalDownload(
           chapterId: cId,
           mangaId: mangaId,

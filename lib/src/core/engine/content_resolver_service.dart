@@ -96,7 +96,7 @@ class ContentResolverService {
     var effectiveChapterUrl = chapterUrl;
 
     // ── PRIORITY 1: LOCAL DOWNLOADS (Instant Offline Storage) ─────────────
-    if (allowLocalDownload && chapterServerId > 0) {
+    if (allowLocalDownload && chapterServerId != 0) {
       try {
         final appDir = await getApplicationDocumentsDirectory();
         final chapterDir = Directory('${appDir.path}/downloads/$chapterServerId');
