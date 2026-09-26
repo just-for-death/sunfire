@@ -57,6 +57,10 @@ const String kTrackProgressMutation = r'''
 class GraphQLClientService {
   static GraphQLClientService? _instance;
   late Dio _dio;
+
+  /// Whether [_dio] has been assigned yet. `late` fields throw on first read,
+  /// so this distinguishes "no client yet" from "client failed to close".
+  bool _dioInitialized = false;
   String? _baseUrl;
 
   GraphQLClientService._();
@@ -115,15 +119,24 @@ class GraphQLClientService {
         headers['Authorization'] = 'Bearer $token';
       }
     }
-    try {
-      _dio.close(force: true);
-    } catch (ignoredError) { if (kDebugMode) debugPrint('[graphql_client_service] ignored error: $ignoredError'); }
+    // Close the previous client, if there is one. Guarded rather than left to a
+    // try/catch: `_dio` is `late`, so on the very first initialize() it throws
+    // LateInitializationError, and swallowing that printed a confusing
+    // "ignored error: LateInitializationError" on startup — inside the
+    // connect/reconnect path, which is exactly where someone is reading logs
+    // because something is already going wrong.
+    if (_dioInitialized) {
+      try {
+        _dio.close(force: true);
+      } catch (ignoredError) { if (kDebugMode) debugPrint('[graphql_client_service] ignored error: $ignoredError'); }
+    }
     _dio = Dio(BaseOptions(
       baseUrl: '$_baseUrl/api/graphql',
       connectTimeout: const Duration(seconds: 45),
       receiveTimeout: const Duration(seconds: 90),
       headers: headers,
     ));
+    _dioInitialized = true;
     // Accept a self-signed cert for the configured server only (same rule as
     // image loading and downloads) — without this, HTTPS servers with a
     // private cert work for images/downloads but every sync request fails.
@@ -145,13 +158,38 @@ class GraphQLClientService {
   /// use this after a null result to tell "the network dropped" apart from
   /// "the server understood and rejected the request" (GraphQL/4xx errors
   /// leave the status reachable). False before any request has been made.
+  ///
+  /// A 401/403 is emphatically NOT one of those: the server answered, which is
+  /// the strongest possible proof the transport path works. See
+  /// [_isServerUsable] for the separate question this getter deliberately does
+  /// not answer.
   bool get isKnownUnreachable => _lastReachableCheck != null && !_lastReachableStatus;
+
+  /// Whether the server is worth sending real work to right now.
+  ///
+  /// Two independent conditions, deliberately not collapsed into a single flag:
+  /// the transport path has to work, *and* our credentials have to be accepted.
+  ///
+  /// This is the getter the ~12 sync call sites should gate on, NOT
+  /// [isKnownUnreachable]. Collapsing the two (which is what the 401/403 branch
+  /// of [checkServerReachable] used to do) made `isKnownUnreachable` lie, and
+  /// lied in the direction that cost the most:
+  ///
+  ///  - A 401 marked the reachability cache "unreachable", so for the next 15s
+  ///    [query] took its fast-fail branch and returned null *without sending
+  ///    anything*. Since `clearAuthError()` lives past that branch, the auth
+  ///    error could never clear itself: a 15s request blackout that a successful
+  ///    re-auth could not end. Recovering required `initialize()`.
+  ///  - Callers using `isKnownUnreachable` to classify a failure could no longer
+  ///    distinguish a dropped connection from a server that understood us and
+  ///    said no — the exact distinction the getter exists to make.
+  bool get _isServerUsable => _lastReachableStatus && !authErrorNotifier.value;
 
   Future<bool> checkServerReachable({bool force = false}) async {
     if (!isConfigured) return false;
     final now = DateTime.now();
     if (!force && _lastReachableCheck != null && now.difference(_lastReachableCheck!) < const Duration(seconds: 8)) {
-      return _lastReachableStatus;
+      return _isServerUsable;
     }
     try {
       final res = await _dio.post(
@@ -162,24 +200,64 @@ class GraphQLClientService {
           receiveTimeout: const Duration(milliseconds: 3000),
         ),
       );
+      // Only reached for 2xx under Dio's default `validateStatus`; a 401/403
+      // arrives as a thrown DioException instead. Kept so the handling stays
+      // correct if a permissive validateStatus is ever configured.
       if (res.statusCode == 401 || res.statusCode == 403) {
-        // Server is up but rejects our credentials — surface a reconnect prompt.
-        _lastReachableStatus = false;
-        notifyAuthError();
+        _recordAuthRejection();
       } else {
         _lastReachableStatus = (res.statusCode == 200);
+      }
+    } on DioException catch (e) {
+      // This is where a 401/403 actually lands: Dio throws
+      // DioExceptionType.badResponse for any non-2xx, so the status check above
+      // never saw one. The old code had a bare `catch (_)` here that lumped a
+      // credential rejection in with connection refused, which cost two things:
+      //
+      //  - The "Server rejected your login (401/403). Reconnect" prompt was
+      //    never raised by a probe, because notifyAuthError() lived in a branch
+      //    that could not execute. On a cold start with a dead token the app
+      //    stayed silent until some unrelated request happened to 401.
+      //  - Reachability was poisoned, and because this probe and query()'s
+      //    fast-fail share the same flag, every request for the next 15s
+      //    returned null WITHOUT being sent — including the one that would have
+      //    proven fixed credentials work. clearAuthError() sits past that
+      //    fast-fail, so the state could not self-heal; only initialize() broke
+      //    the jam.
+      //
+      // A server that answers 401/403 did answer, so the transport path is
+      // proven good and has to be recorded as reachable.
+      final code = e.response?.statusCode ?? 0;
+      if (code == 401 || code == 403) {
+        _recordAuthRejection();
+      } else {
+        _lastReachableStatus = false;
       }
     } catch (_) {
       _lastReachableStatus = false;
     }
     _lastReachableCheck = now;
-    return _lastReachableStatus;
+    return _isServerUsable;
+  }
+
+  /// A probe came back 401/403: the transport works, the credentials do not.
+  ///
+  /// Records the server as REACHABLE (it answered) and raises the auth error.
+  /// [_isServerUsable] is what reports it as unusable for sync.
+  void _recordAuthRejection() {
+    _lastReachableStatus = true;
+    notifyAuthError();
   }
 
   Future<Map<String, dynamic>?> query(String document, {Map<String, dynamic>? variables, String? label}) async {
     if (!isConfigured) return null;
 
-    // Fast-fail if server was recently determined offline
+    // Fast-fail if the transport path was recently proven broken. This tracks
+    // reachability ONLY, never auth: a 401 leaves the status reachable, so
+    // credentials going bad still lets requests through and report their real
+    // 401 instead of being masked as a silent null. (It used to be reachable in
+    // the other direction, where a 401 latched here and blackholed every
+    // request for 15s without sending any of them.)
     final now = DateTime.now();
     if (!_lastReachableStatus && _lastReachableCheck != null && now.difference(_lastReachableCheck!) < const Duration(seconds: 15)) {
       return null;

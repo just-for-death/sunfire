@@ -996,15 +996,24 @@ class SyncEngine {
         } else {
           // GraphQLClientService.query() swallows every failure and returns
           // null, so a dropped connection lands here, not in the catch below.
-          // If the client now considers the server unreachable, the mutation
-          // wasn't rejected — don't spend one of its retries on it. An active
-          // auth error (401/403) is NOT transient: counting it against the
-          // retry budget abandons the record in a bounded number of cycles
-          // instead of re-attempting it for 14 days with a bad credential.
+          // `isKnownUnreachable` is the right discriminator and needs no auth
+          // guard: it tracks the transport only. A 401/403 is answered by the
+          // server, so it leaves that status reachable and falls through to
+          // transient: false, which is what we want — counting an auth failure
+          // against the retry budget abandons the record in a bounded number of
+          // cycles instead of re-attempting it for 14 days with a bad
+          // credential.
+          //
+          // Do NOT re-add `&& !hasAuthError` here. It used to paper over
+          // checkServerReachable marking a 401'd server unreachable, and now
+          // that distinction is correct it actively backfires: a real network
+          // drop arriving while a *stale* auth error is still latched would be
+          // read as permanent and burn the record's retry budget on something
+          // that would have succeeded on the next attempt.
           final client = GraphQLClientService.instance;
           await _recordDispatchFailure(
             record,
-            transient: client.isKnownUnreachable && !client.hasAuthError,
+            transient: client.isKnownUnreachable,
           );
         }
       } catch (e, stack) {
