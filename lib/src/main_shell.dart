@@ -148,7 +148,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 t.status == LocalDownloadStatus.downloading ||
                 t.status == LocalDownloadStatus.paused)
             .length;
-        NotificationService.instance.showDownloadsResumedNotification(queuedCount: pending);
+        // Only notify if there are pending tasks AND the queue is not explicitly
+        // paused. An explicitly paused queue (user hit FGS "Stop") will not
+        // resume on foreground, so the "resumed" claim would be false.
+        if (pending > 0 && !DownloadManagerService.instance.isQueuePaused) {
+          NotificationService.instance.showDownloadsResumedNotification(queuedCount: pending);
+        }
       }
       // Resume the queue on foreground, but never override an explicit user
       // "Pause" (persisted across restarts).
