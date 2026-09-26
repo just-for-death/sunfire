@@ -13,6 +13,7 @@ import '../engine/quickjs_service.dart';
 import '../engine/repo_manager.dart';
 import '../engine/source_migration_service.dart';
 import '../logging/logger_service.dart';
+import '../services/download_manager_service.dart';
 import '../services/image_cache_helper.dart';
 import '../services/settings_service.dart';
 import '../services/wakelock_coordinator.dart';
@@ -1714,6 +1715,9 @@ class SyncEngine {
       }
 
       await IsarService.instance.saveChapters(chaptersToSave);
+      // Reconcile the server-download cache so the "Downloaded" filter
+      // reflects the server's actual state from this sync.
+      await DownloadManagerService.instance.rebuildServerDownloadCache();
       await LoggerService.instance.logInfo('Cached ${chaptersToSave.length} recent update chapters to Isar', 'SyncEngine');
     } catch (e) {
       await LoggerService.instance.logError('Recent updates sync error: $e', category: 'SyncEngine');
