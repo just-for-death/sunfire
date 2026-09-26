@@ -155,6 +155,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       setState(() {
         _sourcesList = localJsSources;
         _isLoadingSources = false;
+        // A later failure can arrive from the server fetch below; the local
+        // sources loaded fine, so clear any earlier error first.
+        _sourcesLoadError = null;
       });
     }
 
@@ -207,6 +210,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       setState(() {
         _sourcesList = merged;
         _isLoadingSources = false;
+        // Cleared on success. It was only ever nulled by the error panel's own
+        // Retry button, so a pull-to-refresh failure left the flag set
+        // permanently. The error panel is masked by `_sourcesList.isEmpty` and
+        // that list is never empty on a loaded device, so the failure was
+        // completely invisible — and one `_sourcesList = []` away from showing a
+        // stale error over a working list.
+        _sourcesLoadError = null;
       });
     }
   }

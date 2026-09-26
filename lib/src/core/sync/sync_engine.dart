@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting, debugPrint, kDebugMode;
 import 'package:isar/isar.dart';
 import 'package:uuid/uuid.dart';
+import '../db/epoch_seconds.dart';
 import '../db/isar_service.dart';
 import '../db/models/category.dart';
 import '../db/models/chapter.dart';
@@ -13,11 +14,16 @@ import '../engine/quickjs_service.dart';
 import '../engine/repo_manager.dart';
 import '../engine/source_migration_service.dart';
 import '../logging/logger_service.dart';
+
 import '../services/download_manager_service.dart';
 import '../services/image_cache_helper.dart';
 import '../services/settings_service.dart';
 import '../services/wakelock_coordinator.dart';
 import 'graphql_client_service.dart';
+
+// Re-exported so the many existing `sync_engine.dart` importers of this helper
+// keep working, and so the DB layer can reach it without a circular import.
+export '../db/epoch_seconds.dart';
 
 /// A queued mutation is abandoned after this many *counted* failures.
 const int kMaxSyncRetries = 5;
@@ -276,34 +282,6 @@ void mergeIsBookmarked(
 /// `getReadingHistory()` filters on `lastReadAt > 0` and Library's "Last
 /// Read" sort reads the series-level stamp, so a chapter that arrives already
 /// read but without this field is invisible to both.
-/// Normalises a server-reported epoch timestamp to the SECONDS unit that every
-/// timestamp in local storage uses, or null when [raw] carries no usable value.
-///
-/// The app stores `lastReadAt`, `fetchedAt` and `inLibraryAt` in epoch seconds
-/// (all local writers use `millisecondsSinceEpoch ~/ 1000`). A JS/Node
-/// GraphQL server, however, is just as likely to send `Date.now()` — epoch
-/// MILLISECONDS. Taking such a value verbatim does not error; it silently
-/// produces a timestamp ~1000x in the future, which then sorts permanently to
-/// one end of any date-ordered list and never interleaves with locally-written
-/// values. `inLibraryAt` was stored exactly that way from the server payload,
-/// so any library synced from a millis-reporting server sorted its synced
-/// entries away from the ones the user added here.
-///
-/// The threshold is the standard "1e11 seconds is year 5138" line: any plausible
-/// seconds value is below it, any plausible millis value is far above it. Values
-/// at or below zero, and anything unparseable, are rejected outright so a
-/// null/empty/"null" payload field can never be stored as a real timestamp.
-///
-/// Public rather than test-only because callers outside this file need it: the
-/// Library's "Recent" sort normalises on read, so rows written before the
-/// sync-side fix self-correct instead of pinning to one end of the list.
-int? normalizeEpochToSeconds(Object? raw) {
-  if (raw == null) return null;
-  final parsed = raw is num ? raw.toInt() : int.tryParse(raw.toString().trim());
-  if (parsed == null || parsed <= 0) return null;
-  return parsed > 100000000000 ? parsed ~/ 1000 : parsed;
-}
-
 @visibleForTesting
 void mergeLastReadAt(Chapter chapter, Map<String, dynamic> chMap) {
   final seconds = normalizeEpochToSeconds(chMap['lastReadAt']);
