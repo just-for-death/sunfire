@@ -734,8 +734,24 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   }
 
   Future<void> _loadLocalDataOnly() async {
-    _manga = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
-    _chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+    // Same two-step resolution as the main loader. This used to assign the
+    // getMangaByServerId result unconditionally, and standalone series are
+    // routed by their LOCAL Isar id — which getMangaByServerId never matches,
+    // because it filters the unique serverId index and refuses to fall back by
+    // design. So `_manga` became null for every standalone/Local-JS series, and
+    // `build()` force-unwraps it (`final manga = _manga!;`) — a hard crash on
+    // the primary flow: open a local series, read a chapter, press back.
+    //
+    // Never overwrite a good `_manga` with null.
+    final byServerId = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
+    if (byServerId != null) {
+      _manga = byServerId;
+    } else if (_manga == null) {
+      final byLocal = await IsarService.instance.getManga(widget.mangaServerId);
+      if (byLocal != null && byLocal.serverId < 0) _manga = byLocal;
+    }
+    final chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+    if (chapters.isNotEmpty || _chapters.isEmpty) _chapters = chapters;
     if (mounted) {
       setState(() {});
     }
@@ -1364,7 +1380,45 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       );
     }
 
-    final manga = _manga!;
+    final manga = _manga;
+    if (manga == null) {
+      // Defensive. The loader resolves a standalone series through its local
+      // Isar id, and any future path that leaves `_manga` null would otherwise
+      // crash here rather than degrade. An unresolvable series is a real state
+      // (deleted locally, or routed with a stale id), not a programming error.
+      return Scaffold(
+        appBar: AppBar(title: const Text('Not found')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.withValues(alpha: 0.6)),
+                const SizedBox(height: 12),
+                const Text(
+                  'This series is no longer in your library.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'It may have been removed on another device, or its local entry was deleted.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => context.canPop() ? context.pop() : context.go('/library'),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: const Text('Back to library'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     var sortedChapters = _visibleChapters();
 
     if (_sortAscending) {
