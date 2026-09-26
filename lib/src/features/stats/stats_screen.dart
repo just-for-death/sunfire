@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
+import '../../core/sync/sync_engine.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -68,9 +69,10 @@ class _StatsScreenState extends State<StatsScreen> {
       for (final ch in historyChapters) {
         final ts = ch.lastReadAt ?? 0;
         if (ts > 0) {
-          final dt = ts > 1000000000000
-              ? DateTime.fromMillisecondsSinceEpoch(ts)
-              : DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+          // Normalised, not a local `1e12` threshold. The app stores seconds;
+          // a millis-reporting source must be converted once, here, through the
+          // same helper every other reader uses. See [normalizeEpochToSeconds].
+          final dt = DateTime.fromMillisecondsSinceEpoch((normalizeEpochToSeconds(ts) ?? 0) * 1000);
           uniqueDays.add(DateTime(dt.year, dt.month, dt.day));
         }
       }

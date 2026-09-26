@@ -1770,7 +1770,7 @@ class SyncEngine {
                 }
                 final upVal = int.tryParse(rawStr);
                 if (upVal != null && upVal > 0) {
-                  chapter.uploadDate = upVal > 1000000000000 ? upVal ~/ 1000 : upVal;
+                  chapter.uploadDate = normalizeEpochToSeconds(upVal) ?? 0;
                 }
               }
 
@@ -2001,7 +2001,7 @@ class SyncEngine {
           }
           final upVal = int.tryParse(rawStr);
           if (upVal != null && upVal > 0) {
-            chapter.uploadDate = upVal > 1000000000000 ? upVal ~/ 1000 : upVal;
+            chapter.uploadDate = normalizeEpochToSeconds(upVal) ?? 0;
           }
         }
 
@@ -2009,7 +2009,7 @@ class SyncEngine {
         if (rawFetchedAt != null) {
           final ftVal = int.tryParse(rawFetchedAt.toString());
           if (ftVal != null && ftVal > 0) {
-            chapter.fetchedAt = ftVal > 1000000000000 ? ftVal ~/ 1000 : ftVal;
+            chapter.fetchedAt = normalizeEpochToSeconds(ftVal) ?? 0;
           }
         }
 
