@@ -1156,9 +1156,22 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
               final freshUrl = (match.first['url'] ?? match.first['link'] ?? '').toString();
               if (freshUrl.isNotEmpty) {
                 chapterUrlToResolve = freshUrl;
-                _chapter!.url = freshUrl;
-                _chapter!.realUrl = freshUrl;
-                await IsarService.instance.saveChapter(_chapter!);
+                // Write through a captured local, never `_chapter!`.
+                //
+                // The generation guard above sits BEFORE this block, but the
+                // `saveChapter` await below re-opens the window: a stale
+                // continuation resuming after the user switched chapters would
+                // read the NEW `_chapter` and persist the OLD chapter's
+                // resolved URL onto it. That chapter then resolved against a
+                // foreign URL and could never load again — permanent Isar
+                // corruption requiring a re-scrape of the whole series.
+                final target = targetChapter;
+                target.url = freshUrl;
+                target.realUrl = freshUrl;
+                await IsarService.instance.saveChapter(target);
+                // Re-check after the await: nothing below may act on a
+                // generation that has already been superseded.
+                if (loadGen != _loadGeneration) return;
               }
             }
           }
@@ -1190,6 +1203,13 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         }
       }
     }
+    // Guarded, unlike every other write in this load path. `_sourceName` drives
+    // the image Referer/auth headers via
+    // `QuickJsService.getImageHeaders(_sourceName ?? '', url)`, so a stale value
+    // left here by a superseded load makes EVERY image in the currently
+    // displayed chapter 403 — the whole chapter renders as "Failed to Load"
+    // until the user navigates away and back.
+    if (loadGen != _loadGeneration) return;
     _sourceName = sourceName;
 
     // Pre-warm FlareSolverr session for this source immediately before resolving,
@@ -1545,12 +1565,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     if (chapterSnapshot == null) return;
     _progressDebounceTimer?.cancel();
     _progressDebounceTimer = Timer(const Duration(milliseconds: 500), () {
-      _updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot);
+      unawaited(_updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot));
     });
   }
 
   /// Internal progress update using a snapshot to prevent cross-chapter pollution.
-  void _updateProgressWithSnapshot(int page, Chapter chapterSnapshot, int totalPagesSnapshot) {
+  Future<void> _updateProgressWithSnapshot(int page, Chapter chapterSnapshot, int totalPagesSnapshot) async {
     // Privacy & Security: If Incognito Mode is enabled, do not persist reading progress or sync to server
     if (_settings.incognitoMode) return;
     // No pages loaded (still loading, timed out, or the source returned an
@@ -1595,38 +1615,60 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       }
     }
     chapterSnapshot.lastReadAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    IsarService.instance.saveChapter(chapterSnapshot);
-
-    // Keep series last-read stamp for library sorting.
-    final mangaId = chapterSnapshot.mangaId;
-    if (mangaId > 0) {
-      final stampSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      if (_parentManga != null && (_parentManga!.serverId == mangaId || _parentManga!.id == mangaId)) {
-        _parentManga!.lastReadAt = stampSeconds;
-        IsarService.instance.saveManga(_parentManga!);
-      } else {
-        IsarService.instance.getMangaByServerId(mangaId).then((manga) {
-          if (manga != null) {
-            manga.lastReadAt = stampSeconds;
-            IsarService.instance.saveManga(manga);
-          }
-        });
-      }
+    // Awaited and logged. This is the data the whole feature exists to save,
+    // and it was fire-and-forget: an Isar write failure (disk full, corrupt DB)
+    // was completely invisible, so the chapter silently lost its position, was
+    // never marked read, and the tracker scrobble was skipped. The dispose()
+    // flush fires during route teardown and races engine shutdown, which is
+    // exactly where it is least likely to be noticed.
+    try {
+      await IsarService.instance.saveChapter(chapterSnapshot);
+    } catch (e, st) {
+      await LoggerService.instance.logError(
+        'Failed to persist reading progress for chapter ${chapterSnapshot.serverId}',
+        exception: e,
+        stackTrace: st,
+        category: 'Reader',
+      );
     }
 
-    // If chapter just became read, update parent manga unread count immediately
+    // Keep series last-read stamp for library sorting, and decrement the unread
+    // badge — as ONE awaited critical section on a single Manga instance.
+    //
+    // These were two independent `getMangaByServerId(...).then(...)` chains.
+    // That method has no instance cache, so each returned a DISTINCT Manga for
+    // the same row, and both were full-object `put`s: the second clobbered the
+    // first's field. Either `lastReadAt` regressed to the value read before the
+    // other write landed (the series dropping back down the "Recently read"
+    // sort) or the unread decrement was lost. The read was also launched after
+    // the unawaited write, with no ordering guarantee between the two txns.
+    final mangaId = chapterSnapshot.mangaId;
     // `!= 0`, not `> 0`: a local/standalone manga's canonical id is a NEGATIVE
     // synthetic value, so the `> 0` gate skipped every local series and their
     // unread badge never decremented — and nothing would ever correct it,
     // because a full sync only covers server-linked manga. getMangaByServerId
     // filters the serverId column, which holds that negative value fine.
-    if (!wasRead && chapterSnapshot.isRead && chapterSnapshot.mangaId != 0) {
-      IsarService.instance.getMangaByServerId(chapterSnapshot.mangaId).then((manga) {
-        if (manga != null && (manga.unreadCount ?? 0) > 0) {
-          manga.unreadCount = manga.unreadCount! - 1;
-          IsarService.instance.saveManga(manga);
+    if (mangaId != 0 && (_parentManga != null || wasRead != chapterSnapshot.isRead)) {
+      final stampSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final justBecameRead = !wasRead && chapterSnapshot.isRead;
+      try {
+        final parent = _parentManga ??
+            await IsarService.instance.getMangaByServerId(mangaId);
+        if (parent != null && (parent.serverId == mangaId || parent.id == mangaId)) {
+          parent.lastReadAt = stampSeconds;
+          if (justBecameRead && (parent.unreadCount ?? 0) > 0) {
+            parent.unreadCount = parent.unreadCount! - 1;
+          }
+          await IsarService.instance.saveManga(parent);
         }
-      });
+      } catch (e, st) {
+        await LoggerService.instance.logError(
+          'Failed to update series read state for manga $mangaId',
+          exception: e,
+          stackTrace: st,
+          category: 'Reader',
+        );
+      }
     }
 
     if (chapterSnapshot.serverId > 0) {
@@ -1658,7 +1700,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     final chapterSnapshot = _chapter;
     final totalPagesSnapshot = _pageUrls.length;
     if (chapterSnapshot == null || totalPagesSnapshot == 0) return;
-    _updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot);
+    unawaited(_updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot));
   }
 
   void _scrobbleToMetronIfLinked(Chapter chapter) {

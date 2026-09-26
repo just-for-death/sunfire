@@ -935,7 +935,12 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
     await IsarService.instance.saveChapters(prevs);
     await _refreshUnreadCount();
-    setState(() {});
+    // Guarded: the loop above awaits once per chapter, so on a long series this
+    // is seconds of wall time during which the user can hit back. This State has
+    // no AutomaticKeepAliveClientMixin, so it really is disposed on pop and an
+    // unguarded setState here is a red screen. (The `if (mounted)` on the very
+    // next line was the tell.)
+    if (mounted) setState(() {});
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Marked ${prevs.length} previous chapters as read')),
