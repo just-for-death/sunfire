@@ -725,7 +725,15 @@ class RepoManager {
   /// is only applied if the repo declares a sha256 for it and the source URL is
   /// https. Without that, nothing but the (unsigned) repo index vouches for the
   /// code, and running unreviewed remote JS with no user present is not safe.
-  Future<int> updateInstalledExtensions(List<String> repoUrls, {bool requireIntegrity = false}) async {
+  /// Updates installed extensions from [repoUrls].
+  ///
+  /// [requireIntegrity] defaults to TRUE. It used to default to false, so the
+  /// one existing caller had to opt in explicitly and the next caller would
+  /// have silently got unsigned, non-HTTPS remote-JS execution and auto-install
+  /// — i.e. arbitrary code with LAN read access and no integrity anchor. The
+  /// safe value must be the default; a caller that genuinely wants to relax it
+  /// has to say so.
+  Future<int> updateInstalledExtensions(List<String> repoUrls, {bool requireIntegrity = true}) async {
     if (repoUrls.isEmpty) return 0;
     int updatedCount = 0;
     try {
