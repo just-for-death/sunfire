@@ -76,7 +76,6 @@ flutter:
     - assets/icons/
     - assets/icons/launcher/
     - assets/icons/sources/
-    - assets/extensions/
 
 flutter_gen:
   output: lib/src/constants/gen/

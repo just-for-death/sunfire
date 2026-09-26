@@ -1,4 +1,5 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/db/models/chapter.dart';
 import 'package:sunfire/src/core/db/models/manga.dart';
@@ -8,6 +9,20 @@ import 'package:sunfire/src/core/engine/quickjs_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  // Mock path_provider for tests
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+    const MethodChannel('plugins.flutter.io/path_provider'),
+    (MethodCall methodCall) async {
+      if (methodCall.method == 'getApplicationDocumentsDirectory') {
+        return '/tmp/sunfire_test';
+      }
+      if (methodCall.method == 'getApplicationSupportDirectory') {
+        return '/tmp/sunfire_test';
+      }
+      return null;
+    },
+  );
 
   group('Platform & Architecture Comprehensive Audit Tests', () {
     test('1. Safe pop navigation fallback logic prevents GoError', () {
@@ -28,7 +43,16 @@ void main() {
       expect(resolveBackAction(contextCanPop: false, navigatorCanPop: false, fallbackRoute: '/library'), equals('/library'));
     });
 
-    test('2. Bundled extensions disk self-hydration loads all 9 extensions', () {
+    test('2. Extensions auto-installed from remote repos on first run', () async {
+      // Initialize QuickJS to trigger auto-install from remote repos
+      await QuickJsService.instance.initialize();
+      
+      // Wait for auto-install to complete (with timeout)
+      for (int i = 0; i < 30; i++) {
+        if (QuickJsService.instance.hasInstalledExtensions) break;
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      
       const expectedSources = [
         'webtoons',
         'weeb_central',
@@ -43,12 +67,15 @@ void main() {
 
       for (final src in expectedSources) {
         final code = QuickJsService.instance.getExtensionCode(src);
-        expect(code, isNotNull, reason: 'Extension $src must be self-hydrated from bundled assets');
+        expect(code, isNotNull, reason: 'Extension $src must be auto-installed from remote repos');
         expect(code!.length, greaterThan(100));
       }
     });
 
-    test('3. Dynamic image headers guard injects proper Referer and User-Agent', () {
+    test('3. Dynamic image headers guard injects proper Referer and User-Agent', () async {
+      // Ensure extensions are loaded
+      await QuickJsService.instance.initialize();
+      
       final webtoonsHeaders = QuickJsService.getImageHeaders('Webtoons (EN)', 'https://webtoon-phinf.pstatic.net/img.jpg');
       expect(webtoonsHeaders.containsKey('User-Agent'), isTrue);
       expect(webtoonsHeaders['Referer'], equals('https://www.webtoons.com/'));

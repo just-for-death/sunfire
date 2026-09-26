@@ -63,9 +63,51 @@ void main() {
       final qjs = QuickJsService.instance;
       await qjs.initialize();
 
-      // Bundle a mock "old" 1.3.2 scraper derived from the bundled asset.
-      final bundled = File('assets/extensions/mangago.js').readAsStringSync();
-      final oldCode = bundled.replaceFirst('"1.3.3"', '"1.3.2"');
+      // Create a mock "old" 1.3.2 scraper code inline (simulating the old bundled asset).
+      // This simulates an older version of the Mangago extension with the phantom "×" bug.
+      // Using string concatenation to avoid confusing the Dart analyzer with braces in string literals.
+      const oldCode = 'const mangayomiSources = [\n'
+          '  {\n'
+          '    "name": "Mangago",\n'
+          '    "lang": "en",\n'
+          '    "id": 1,\n'
+          '    "baseUrl": "https://www.mangago.me",\n'
+          '    "apiUrl": "",\n'
+          '    "iconUrl": "asset:assets/icons/sources/mangago.png",\n'
+          '    "typeSource": "single",\n'
+          '    "isManga": true,\n'
+          '    "itemType": 0,\n'
+          '    "version": "1.3.2",\n'
+          '    "pkgPath": "javascript/manga/src/en/mangago.js"\n'
+          '  },\n'
+          '];\n\n'
+          'class DefaultExtension extends MProvider {\n'
+          '  // Old buggy selector that catches bare <tr> elements (phantom "×" bug)\n'
+          '  parseComicList(items) {\n'
+          '    const list = [];\n'
+          '    const seen = new Set();\n'
+          '    for (const a of items) {\n'
+          '      const link = a.attr("href");\n'
+          '      if (!link || !link.includes("/manga/")) continue;\n'
+          '      list.push({ name: a.text.trim(), link });\n'
+          '    }\n'
+          '    return list;\n'
+          '  }\n\n'
+          '  parseChapterList(html) {\n'
+          '    const doc = html.document;\n'
+          '    const rows = doc.select("#raws_table tr, tr");\n'
+          '    const list = [];\n'
+          '    for (const row of rows) {\n'
+          '      const link = row.selectFirst("a");\n'
+          '      if (!link) continue;\n'
+          '      const name = link.text.trim();\n'
+          '      if (!name || name.length < 2) continue;\n'
+          '      list.push({ name, link: link.attr("href") });\n'
+          '    }\n'
+          '    return list;\n'
+          '  }\n'
+          '}\n';
+
       await qjs.saveLocalExtension('Mangago', oldCode, version: '1.3.2');
       expect(qjs.getInstalledVersion('Mangago'), '1.3.2');
 
