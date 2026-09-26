@@ -13,11 +13,6 @@ import 'core/services/settings_service.dart';
 import 'core/sync/graphql_client_service.dart';
 import 'core/sync/sync_engine.dart';
 import 'core/sync/websocket_service.dart';
-import 'features/browse/browse_screen.dart';
-import 'features/history/history_screen.dart';
-import 'features/library/library_screen.dart';
-import 'features/settings/settings_screen.dart';
-import 'features/updates/updates_screen.dart';
 
 /// Phone vs iPad/iPad-mini split. Widths at or above this use the sidebar rail.
 const double sunfireTabletMinWidth = 720.0;
@@ -32,7 +27,9 @@ const double sunfireSidebarExpandedLayoutMinWidth = 180.0;
 bool usesTabletShell(double width) => width >= sunfireTabletMinWidth;
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  const MainShell({super.key, required this.child});
+
+  final Widget child;
 
   static final ValueNotifier<int> selectedTabNotifier = ValueNotifier<int>(0);
 
@@ -46,16 +43,15 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
-  late final PageController _pageController;
-  bool _isSyncing = false;
   late bool _isSidebarExpanded;
+  bool _isSyncing = false;
 
-  final List<Widget> _screens = const [
-    LibraryScreen(),
-    UpdatesScreen(),
-    HistoryScreen(),
-    BrowseScreen(),
-    SettingsScreen(),
+  static const List<String> _tabPaths = [
+    '/library',
+    '/updates',
+    '/history',
+    '/browse',
+    '/settings',
   ];
 
   @override
@@ -88,7 +84,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     }
     MainShell.selectedTabNotifier.value = _currentIndex;
     _isSidebarExpanded = SettingsService.instance.tabletSidebarExpanded;
-    _pageController = PageController(initialPage: _currentIndex);
     MainShell.selectedTabNotifier.addListener(_onExternalTabChange);
     WidgetsBinding.instance.addObserver(this);
     GraphQLClientService.instance.authErrorNotifier.addListener(_onAuthErrorChanged);
@@ -124,12 +119,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final target = MainShell.selectedTabNotifier.value;
     if (_currentIndex != target && mounted) {
       setState(() => _currentIndex = target);
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          target,
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-        );
+      // Navigate via GoRouter to keep URL in sync
+      if (target >= 0 && target < _tabPaths.length) {
+        context.go(_tabPaths[target]);
       }
     }
   }
@@ -139,7 +131,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     MainShell.selectedTabNotifier.removeListener(_onExternalTabChange);
     WidgetsBinding.instance.removeObserver(this);
     GraphQLClientService.instance.authErrorNotifier.removeListener(_onAuthErrorChanged);
-    _pageController.dispose();
     super.dispose();
   }
 
@@ -185,12 +176,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       }
       setState(() => _currentIndex = index);
       MainShell.selectedTabNotifier.value = index;
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          index,
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-        );
+      // Navigate via GoRouter to keep URL in sync
+      if (index >= 0 && index < _tabPaths.length) {
+        context.go(_tabPaths[index]);
       }
     }
   }
@@ -242,17 +230,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                         ],
                       ),
                       clipBehavior: Clip.antiAlias,
-                      child: PageView(
-                        controller: _pageController,
-                        physics: const NeverScrollableScrollPhysics(),
-                        onPageChanged: (index) {
-                          if (_currentIndex != index) {
-                            setState(() => _currentIndex = index);
-                            MainShell.selectedTabNotifier.value = index;
-                          }
-                        },
-                        children: _screens,
-                      ),
+                      child: widget.child,
                     ),
                   ),
                 ),
@@ -261,17 +239,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           )
         : Scaffold(
             extendBody: true,
-            body: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: (index) {
-                if (_currentIndex != index) {
-                  setState(() => _currentIndex = index);
-                  MainShell.selectedTabNotifier.value = index;
-                }
-              },
-              children: _screens,
-            ),
+            body: widget.child,
             bottomNavigationBar: ValueListenableBuilder<bool>(
               valueListenable: BatchModeService.instance.isBatchMode,
               builder: (context, isBatch, child) {

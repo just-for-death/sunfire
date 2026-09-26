@@ -60,9 +60,23 @@ class MetronApiClient {
                 : 'Bearer $token';
           }
 
-          // 2. Throttle outbound requests
-          if (_lastRequestCompleter != null && !_lastRequestCompleter!.isCompleted) {
-            await _lastRequestCompleter!.future;
+          // 2. Throttle outbound requests.
+          //
+          // The gate is installed HERE, at request time, and the gate we wait
+          // on is the one that was current when we arrived. Previously the
+          // gate was only installed on response, so a burst of concurrent
+          // calls (search + detail fired together) all observed a null gate
+          // and went out simultaneously — spacing only applied to requests
+          // that arrived after a response, letting a burst through and
+          // risking the 20 req/min limit. Installing first and waiting
+          // second serialises the whole burst.
+          final previousGate = _lastRequestCompleter;
+          final ownGate = Completer<void>();
+          _lastRequestCompleter = ownGate;
+          options.extra['metronSpacingGate'] = ownGate;
+
+          if (previousGate != null && !previousGate.isCompleted) {
+            await previousGate.future;
           }
 
           // 3. Proactive Rate-Limit Guard: If burst remaining is 0 or 1, delay until reset
@@ -85,11 +99,15 @@ class MetronApiClient {
           });
           _rateLimitState = MetronRateLimitState.fromHeaders(headersMap);
 
-          _scheduleNextSpacing();
+          _scheduleNextSpacing(
+            response.requestOptions.extra['metronSpacingGate'] as Completer<void>?,
+          );
           handler.next(response);
         },
         onError: (DioException err, handler) async {
-          _scheduleNextSpacing();
+          _scheduleNextSpacing(
+            err.requestOptions.extra['metronSpacingGate'] as Completer<void>?,
+          );
 
           // Handle HTTP 429 Too Many Requests. The retry re-enters this same
           // interceptor (via _dio.fetch), so a server that keeps answering 429
@@ -129,16 +147,28 @@ class MetronApiClient {
     );
   }
 
-  void _scheduleNextSpacing() {
-    // Complete the CAPTURED completer, never the (possibly replaced) current
-    // one. Under concurrency (e.g. search + detail fired together) a late
-    // response could otherwise replace _lastRequestCompleter before this
-    // timer fires, leaving any request awaiting the older completer hung
-    // forever with no spacing ever applied.
-    final completer = Completer<void>();
-    _lastRequestCompleter = completer;
+  void _scheduleNextSpacing(Completer<void>? ownGate) {
+    // Complete the gate that belongs to *this* request, taken from the request
+    // options rather than from `_lastRequestCompleter` (which a newer, still
+    // queued request has already replaced).
+    //
+    // Completing the current field instead would let a concurrent burst
+    // release itself early — request 2 would observe request 3's gate already
+    // scheduled and go out immediately, collapsing the spacing. Completing
+    // the captured gate keeps each queued request waiting its own turn.
+    final gate = ownGate;
+    if (gate == null) {
+      // Defensive: a response with no gate (e.g. a synthetic retry) still has
+      // to unblock whoever is queued behind it.
+      final current = _lastRequestCompleter;
+      if (current == null) return;
+      Future.delayed(_minRequestSpacing, () {
+        if (!current.isCompleted) current.complete();
+      });
+      return;
+    }
     Future.delayed(_minRequestSpacing, () {
-      if (!completer.isCompleted) completer.complete();
+      if (!gate.isCompleted) gate.complete();
     });
   }
 

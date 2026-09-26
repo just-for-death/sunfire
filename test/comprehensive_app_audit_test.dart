@@ -271,7 +271,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(const MaterialApp(home: MainShell()));
+      await tester.pumpWidget(const MaterialApp(home: MainShell(child: SizedBox.shrink())));
       await tester.pumpAndSettle();
 
       // Tablet side navigation rail shows icon and labels
