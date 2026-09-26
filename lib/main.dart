@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -8,7 +7,6 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'src/app.dart';
 import 'src/core/db/isar_service.dart';
 import 'src/core/engine/image_transport_service.dart';
-import 'src/core/engine/javascript/m_client.dart';
 import 'src/core/engine/quickjs_service.dart';
 import 'src/core/engine/source_preferences.dart';
 import 'src/core/logging/logger_service.dart';
@@ -118,14 +116,10 @@ void main() async {
     }
   }
 
-  // Load saved FlareSolverr / Byparr URL into MClient so Cloudflare-protected
-  // sources work immediately on startup.
-  try {
-    final savedCfProxy = SettingsService.instance.cfProxyUrl;
-    if (savedCfProxy.isNotEmpty) {
-      MClient.cfProxyUrl = savedCfProxy;
-    }
-  } catch (ignoredError) { if (kDebugMode) debugPrint('[main] ignored error: $ignoredError'); }
+  // NOTE: the saved FlareSolverr / Byparr URL is applied to MClient by
+  // SettingsService.initialize() above. Doing it here instead meant the
+  // WorkManager background isolate — which never runs this file — silently
+  // bypassed the Cloudflare bypass and failed on protected sources.
 
   // Android foreground service that keeps the download queue alive while the
   // app is backgrounded. No-op on other platforms. Initialised BEFORE the
