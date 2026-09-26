@@ -553,7 +553,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                             border: Border.all(color: primaryColor.withValues(alpha: 0.4), width: 0.6),
                           ),
                           child: Text(
-                            'v3.0.0',
+                            'v4.0.0',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
