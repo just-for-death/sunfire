@@ -1,3 +1,4 @@
+
 import 'package:isar/isar.dart';
 
 part 'chapter.g.dart';

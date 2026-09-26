@@ -577,10 +577,27 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                       final isServerSourced = manga['origin'] == 'server';
                                       final rawId = manga['id'];
                                       int id = rawId is int ? rawId : (int.tryParse(rawId?.toString() ?? '0') ?? 0);
-                                      if (id <= 0 && link.isNotEmpty) {
-                                        id = (link.hashCode ^ widget.sourceName.hashCode).abs();
-                                      } else if (id <= 0 && title.isNotEmpty) {
-                                        id = (title.hashCode ^ widget.sourceName.hashCode).abs();
+                                      if (id <= 0) {
+                                        // MUST be a stable content hash.
+                                        //
+                                        // This used to be
+                                        // `(link.hashCode ^ sourceName.hashCode).abs()`,
+                                        // and Dart seeds `String.hashCode` per
+                                        // isolate — it changes between process
+                                        // runs. Persisted into
+                                        // `Manga.serverId`, which is a
+                                        // `unique: true, replace: true` index,
+                                        // that meant every cold start gave the
+                                        // same series a new identity:
+                                        // getMangaByServerId missed, a duplicate
+                                        // row was inserted, and the old
+                                        // identity's chapters were orphaned with
+                                        // their read state and downloads.
+                                        id = stableLocalMangaServerId(
+                                          sourceName: widget.sourceName,
+                                          url: link,
+                                          title: title,
+                                        ).abs();
                                       }
                                       if (!isServerSourced && id > 0) id = -id;
 

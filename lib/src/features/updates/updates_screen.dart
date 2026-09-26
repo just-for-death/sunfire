@@ -187,8 +187,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       final mangas = await IsarService.instance.getLibraryManga();
       final next = <int, String>{};
       for (final m in mangas) {
-        if (m.serverId > 0) next[m.serverId] = m.lang;
-        if (m.id > 0) next[m.id] = m.lang;
+        // canonicalKey only. Keying on the local Isar id as well let a chapter
+        // pick up ANOTHER series' language badge whenever the two ids collided.
+        if (m.canonicalKey != 0) next[m.canonicalKey] = m.lang;
       }
       _langByMangaId
         ..clear()

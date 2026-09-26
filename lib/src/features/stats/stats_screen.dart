@@ -39,7 +39,14 @@ class _StatsScreenState extends State<StatsScreen> {
       final genres = <String, int>{};
       final sources = <String, int>{};
 
-      final libraryMangaIds = mangas.expand((m) => [m.serverId, m.id]).where((id) => id > 0).toSet();
+      // canonicalKey only. Including the local Isar id put a second id space
+      // into a serverId-keyed set, so chapters of a NON-library series whose
+      // serverId collided with a library manga's local id were counted here —
+      // inflating total chapters, read chapters and the reading streak.
+      final libraryMangaIds = mangas
+          .map((m) => m.canonicalKey)
+          .where((id) => id != 0)
+          .toSet();
       final libChapters = allChapters.where((c) => libraryMangaIds.contains(c.mangaId)).toList();
 
       final allChCount = libChapters.length;
