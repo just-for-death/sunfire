@@ -175,11 +175,7 @@ flutter build ipa
 | Android | ✅ Primary target |
 | iOS / iPadOS | ✅ |
 | Linux (desktop) | ✅ |
-| macOS / Windows | ❌ Not configured — PRs welcome |
-| Web | ❌ Not buildable |
 
-Web is blocked by architecture, not oversight: the Isar database and the
-QuickJS runtime are both native (`dart:ffi`) and have no web implementation.
 Linux builds are supported and are the easiest way to run the test suite.
 
 ---
