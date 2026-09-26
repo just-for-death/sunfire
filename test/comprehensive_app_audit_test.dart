@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/app.dart';
 import 'package:sunfire/src/core/db/models/chapter.dart';
@@ -14,6 +15,20 @@ import 'package:sunfire/src/main_shell.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  // Mock path_provider for tests
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+    const MethodChannel('plugins.flutter.io/path_provider'),
+    (MethodCall methodCall) async {
+      if (methodCall.method == 'getApplicationDocumentsDirectory') {
+        return '/tmp/sunfire_test';
+      }
+      if (methodCall.method == 'getApplicationSupportDirectory') {
+        return '/tmp/sunfire_test';
+      }
+      return null;
+    },
+  );
 
   group('FULL SYSTEM AUDIT: Core Models, Data Persistence & Offline Protection', () {
     test('1. Manga Model: ID mapping, library flags, and remote URLs', () {
@@ -359,7 +374,10 @@ void main() {
       expect(unread.chapterNumber, equals(3.0));
     });
 
-    test('18. Webtoons Referer and Dynamic Image Headers Guard', () {
+    test('18. Webtoons Referer and Dynamic Image Headers Guard', () async {
+      // Initialize QuickJS to load extensions from remote repos
+      await QuickJsService.instance.initialize();
+      
       final headers = QuickJsService.getImageHeaders('Webtoons (EN)', 'https://webtoon-phinf.pstatic.net/20240101_1/sample.jpg');
       expect(headers.containsKey('Referer'), isTrue);
       expect(headers['Referer'], equals('https://www.webtoons.com/'));
