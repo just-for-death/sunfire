@@ -957,6 +957,21 @@ class SyncEngine {
           (record.state != SyncRecordState.pending && record.state != SyncRecordState.failed)) {
         continue;
       }
+
+      // Incognito also has to cover the REPLAY path, not just enqueue.
+      //
+      // The guard lives at enqueue time, so a chapter read offline BEFORE the
+      // user turned Incognito on was still sitting in the queue and got pushed
+      // on the next flush — the opposite of what turning it on is for. Skip
+      // read-progress records while it is on; they stay queued and replay if
+      // the user turns it back off. Non-progress mutations (category edits,
+      // library membership, tracker updates the user made deliberately) are
+      // not reading history and still go through.
+      if (SettingsService.instance.incognitoMode &&
+          record.entityType == SyncEntityType.chapter &&
+          record.action == SyncAction.update) {
+        continue;
+      }
       try {
         final payload = jsonDecode(record.payloadJson) as Map<String, dynamic>;
         bool success = false;
@@ -1383,7 +1398,19 @@ class SyncEngine {
           // the server value verbatim, so a millis-reporting server produced a
           // date ~1000 years in the future and the Library's "Recent" sort
           // pinned those entries to one end forever.
-          manga.inLibraryAt = normalizeEpochToSeconds(nodeMap['inLibraryAt']);
+          // Only overwrite with a USABLE value. `normalizeEpochToSeconds`
+          // returns null for 0, null, "null" or anything unparseable, and
+          // Suwayomi legitimately reports 0 for a manga added outside the
+          // normal path. Assigning unconditionally therefore wiped a good
+          // timestamp on every sync where the field was absent, dropping the
+          // series to the very end of the Library "Recent" sort permanently.
+          // `mergeLastReadAt` no-ops on an unusable value for the same reason.
+          final inLibraryAt = normalizeEpochToSeconds(nodeMap['inLibraryAt']);
+          if (inLibraryAt != null) {
+            manga.inLibraryAt = inLibraryAt;
+          } else {
+            manga.inLibraryAt ??= nowUnix;
+          }
           manga.unreadCount = parseIntSafe(nodeMap['unreadCount']);
           manga.lastFetchedAt = nowUnix;
 
@@ -1904,7 +1931,15 @@ class SyncEngine {
         // series in Library's "Last Read" sort.
         mergeLastReadAt(chapter, map);
         mergeIsBookmarked(chapter, map, hasPendingMutation: hasPendingMutation);
-        chapter.isDownloadedOnServer = parseBoolSafe(map['isDownloaded']) || chapter.isDownloadedOnServer;
+        // Assigned, not OR-ed. As a monotonic OR the flag could never be
+        // cleared, so a chapter deleted from the server's download folder stayed
+        // "Downloaded" forever — while the comment two lines below claimed this
+        // pass reconciles it. `rebuildServerDownloadCache` rebuilds its in-memory
+        // sets from the same flag, so it could not correct the OR either.
+        // Absent from the response means "not reported", so keep the local value.
+        if (map.containsKey('isDownloaded')) {
+          chapter.isDownloadedOnServer = parseBoolSafe(map['isDownloaded']);
+        }
 
         final rawUpload = map['uploadDate'] ?? map['dateUpload'];
         if (rawUpload != null) {

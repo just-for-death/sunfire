@@ -4,6 +4,7 @@
 // background-interrupt notification copy, language badge/filter helpers, and
 // the failed-sync retry no-op when the database is unavailable.
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -273,8 +274,46 @@ void main() {
     });
   });
 
-  group('RepoManager.verifySha256 (extension integrity)', () {
-    final content = 'const baseUrl = "https://example.test";';
+  group('extension integrity policy', () {
+    // Pinned as a source-level assertion rather than through a live fetch, so
+    // the security default is verified deterministically and cannot rot with a
+    // CDN edge or a network outage.
+    //
+    // `updateInstalledExtensions` used to default `requireIntegrity` to FALSE.
+    // The single existing caller passed `true` explicitly, so nothing was broken
+    // — but the next caller would have silently received unsigned, non-HTTPS
+    // remote-JS execution and auto-install, i.e. arbitrary code running with LAN
+    // read access and no integrity anchor. A safe default has to be the default.
+    final source = File('lib/src/core/engine/repo_manager.dart').readAsStringSync();
+
+    test('unattended extension updates require integrity by default', () {
+      expect(
+        source,
+        contains('updateInstalledExtensions(List<String> repoUrls, {bool requireIntegrity = true})'),
+        reason: 'requireIntegrity must default to true so a new caller cannot opt '
+            'into unsigned remote code execution by accident',
+      );
+    });
+
+    test('downloaded extension size is bounded', () {
+      // A hostile or compromised repo can name an arbitrarily large "extension".
+      // Dio buffers the whole body into a Dart String with no ceiling, so one
+      // index entry was enough to OOM the app with no exploit required.
+      expect(source, contains('kMaxExtensionDownloadBytes'),
+          reason: 'the download must be rejected above the size limit');
+    });
+
+    test('the JS sandbox is bounded', () {
+      final jsSource = File('lib/src/core/engine/javascript/js_extension_service.dart').readAsStringSync();
+      // `timeout` installs QuickJS's interrupt handler; 0 means "no handler", so
+      // one `while(true){}` in a downloaded scraper blocked the FFI call forever
+      // and every Dart-side timeout in the pipeline could not fire.
+      expect(jsSource, contains('timeout: kJsExecutionTimeoutMs'));
+      expect(jsSource, contains('memoryLimit: kJsMemoryLimitBytes'));
+    });
+  });
+
+  group('RepoManager.verifySha256 (extension integrity)', () {    final content = 'const baseUrl = "https://example.test";';
     final digest = sha256.convert(utf8.encode(content)).toString();
 
     test('accepts a matching digest, case-insensitively', () {
