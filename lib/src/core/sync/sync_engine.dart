@@ -187,13 +187,40 @@ void mergeIsBookmarked(
 /// `getReadingHistory()` filters on `lastReadAt > 0` and Library's "Last
 /// Read" sort reads the series-level stamp, so a chapter that arrives already
 /// read but without this field is invisible to both.
+/// Normalises a server-reported epoch timestamp to the SECONDS unit that every
+/// timestamp in local storage uses, or null when [raw] carries no usable value.
+///
+/// The app stores `lastReadAt`, `fetchedAt` and `inLibraryAt` in epoch seconds
+/// (all local writers use `millisecondsSinceEpoch ~/ 1000`). A JS/Node
+/// GraphQL server, however, is just as likely to send `Date.now()` — epoch
+/// MILLISECONDS. Taking such a value verbatim does not error; it silently
+/// produces a timestamp ~1000x in the future, which then sorts permanently to
+/// one end of any date-ordered list and never interleaves with locally-written
+/// values. `inLibraryAt` was stored exactly that way from the server payload,
+/// so any library synced from a millis-reporting server sorted its synced
+/// entries away from the ones the user added here.
+///
+/// The threshold is the standard "1e11 seconds is year 5138" line: any plausible
+/// seconds value is below it, any plausible millis value is far above it. Values
+/// at or below zero, and anything unparseable, are rejected outright so a
+/// null/empty/"null" payload field can never be stored as a real timestamp.
+///
+/// Public rather than test-only because callers outside this file need it: the
+/// Library's "Recent" sort normalises on read, so rows written before the
+/// sync-side fix self-correct instead of pinning to one end of the list.
+int? normalizeEpochToSeconds(Object? raw) {
+  if (raw == null) return null;
+  final parsed = raw is num ? raw.toInt() : int.tryParse(raw.toString().trim());
+  if (parsed == null || parsed <= 0) return null;
+  return parsed > 100000000000 ? parsed ~/ 1000 : parsed;
+}
+
+@visibleForTesting
 void mergeLastReadAt(Chapter chapter, Map<String, dynamic> chMap) {
-  final raw = chMap['lastReadAt'];
-  if (raw == null) return;
-  final parsed = raw is num ? raw.toInt() : int.tryParse(raw.toString());
-  if (parsed == null || parsed <= 0) return;
-  // Server may report millis; local storage is seconds everywhere.
-  final seconds = parsed > 100000000000 ? parsed ~/ 1000 : parsed;
+  final seconds = normalizeEpochToSeconds(chMap['lastReadAt']);
+  if (seconds == null) return;
+  // Never move the stamp backwards: a server that has not yet seen an offline
+  // read would otherwise erase local history ordering on every pull.
   if (seconds > (chapter.lastReadAt ?? 0)) {
     chapter.lastReadAt = seconds;
   }
@@ -1062,8 +1089,20 @@ class SyncEngine {
             currentLibraryManga: libraryManga,
           );
 
-          if (report.totalReplicatedManga > 0) {
-            await IsarService.instance.saveMangas(libraryManga);
+          // NOTE: deliberately NOT re-saving `libraryManga` here.
+          // syncAndReplicateServerSources already persists exactly the rows it
+          // mutates (it calls saveMangas(modifiedManga) itself). The blanket
+          // re-save that used to sit here was therefore pure redundancy — and
+          // actively harmful, because `libraryManga` is a snapshot read BEFORE
+          // downloadAndInstallMatchingSources, fetchCombinedRepoSources and the
+          // whole replication ran, each of which can take seconds. Any change
+          // made to a library manga in that window (marking a chapter read
+          // rewrites unreadCount, LibraryUpdateService saves updated rows)
+          // was silently reverted by this write, and on a large library it
+          // dirtied every row to persist nothing. `report` is read for its
+          // log-only fields inside the service.
+          if (kDebugMode) {
+            debugPrint('[sync_engine] source replication remapped ${report.totalReplicatedManga} manga');
           }
         }
       }
@@ -1134,7 +1173,11 @@ class SyncEngine {
             manga.description = nodeMap['description']?.toString();
           }
           manga.inLibrary = true;
-          manga.inLibraryAt = nodeMap['inLibraryAt'] != null ? int.tryParse(nodeMap['inLibraryAt'].toString()) : null;
+          // Normalised to seconds like every other local timestamp. This took
+          // the server value verbatim, so a millis-reporting server produced a
+          // date ~1000 years in the future and the Library's "Recent" sort
+          // pinned those entries to one end forever.
+          manga.inLibraryAt = normalizeEpochToSeconds(nodeMap['inLibraryAt']);
           manga.unreadCount = parseIntSafe(nodeMap['unreadCount']);
           manga.lastFetchedAt = nowUnix;
 
@@ -1267,7 +1310,17 @@ class SyncEngine {
     // ── STEP 5: Pull recent update chapters (new fetched chapters) ────────
     await _syncRecentUpdateChapters(serverUrl: serverUrl);
 
-    await IsarService.instance.setMeta('last_sync_unix', nowUnix.toString());
+    // There is deliberately NO local `last_sync_unix` meta write here. One
+    // existed, was written at the end of every full sync, and was never read by
+    // anything -- which advertised an incremental-sync capability the app does
+    // not have. It could not simply be wired up: skipping the per-manga
+    // `fetchMangaDetails` snapshot when the library looks unchanged would also
+    // skip cross-device read state, which changes independently of library
+    // membership, and `fetchLibrary` does not select a `dateModified` to compare
+    // against. Implementing this soundly needs a server-side change first.
+    //
+    // The server-side per-device marker is kept: the web UI and other tooling
+    // read it, and unlike the local one it is not misleading.
     try {
       await GraphQLClientService.instance.setGlobalMeta('lastSync_$_deviceId', nowUnix.toString());
     } catch (e) {

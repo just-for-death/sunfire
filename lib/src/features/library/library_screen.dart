@@ -67,6 +67,20 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     super.initState();
     _loadFromIsarThenSync();
     MainShell.selectedTabNotifier.addListener(_onTabChanged);
+    // This screen reads six display settings straight out of `build()`
+    // (showCategoryTabs, libraryDisplayMode, gridColumnCount,
+    // showUnreadBadges, showDownloadedBadges, showLanguageBadges) with no
+    // listener, so it only refreshed them as a side effect of the tab switch:
+    // Settings lives under the "More" tab, so navigating there set the tab
+    // notifier to 4 and coming back fired _onTabChanged. That is a coincidence
+    // of the navigation graph, not a guarantee — any settings write that
+    // happened while this tab stayed selected was silently ignored until some
+    // unrelated rebuild. Listening makes the dependency explicit.
+    _settings.addListener(_onSettingsChanged);
+  }
+
+  void _onSettingsChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onTabChanged() {
@@ -90,6 +104,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   @override
   void dispose() {
     _tabReloadTimer?.cancel();
+    _settings.removeListener(_onSettingsChanged);
     MainShell.selectedTabNotifier.removeListener(_onTabChanged);
     super.dispose();
   }
@@ -424,7 +439,13 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       } else if (_sortBy == 'Unread') {
         cmp = (a.unreadCount ?? 0).compareTo(b.unreadCount ?? 0);
       } else if (_sortBy == 'Recent') {
-        cmp = (a.inLibraryAt ?? 0).compareTo(b.inLibraryAt ?? 0);
+        // Normalised on read as well as on write. Rows written before the
+        // sync-side fix can still hold a millis value, and comparing those
+        // against seconds values would pin the affected entries to one end of
+        // the list indefinitely — sorting them correctly is also a cheap,
+        // self-healing way to make existing data behave.
+        cmp = (normalizeEpochToSeconds(a.inLibraryAt) ?? 0)
+            .compareTo(normalizeEpochToSeconds(b.inLibraryAt) ?? 0);
       } else if (_sortBy == 'Last Read') {
         cmp = (a.lastReadAt ?? 0).compareTo(b.lastReadAt ?? 0);
       } else if (_sortBy == 'Chapters') {
