@@ -17,6 +17,12 @@ class SettingsService extends ChangeNotifier {
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
+    // Apply the Cloudflare bypass proxy here, not only in the cfProxyUrl
+    // setter. The WorkManager background isolate calls initialize() and never
+    // runs main.dart's startup wiring, so background library updates and
+    // source scrapes were hitting Cloudflare-protected sites directly and
+    // failing while the foreground app worked.
+    MClient.cfProxyUrl = cfProxyUrl;
     await _migrateOnboardingReposIntoCustomRepos();
     for (final url in customRepos) {
       final normalized = RepoManager.normalizeRepoUrl(url);

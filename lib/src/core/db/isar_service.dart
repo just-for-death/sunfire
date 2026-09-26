@@ -172,6 +172,24 @@ class IsarService {
     });
   }
 
+  /// Deletes the given chapters outright.
+  ///
+  /// Used by the sync engine to prune chapters the server no longer reports.
+  /// Callers are responsible for the wipe guard: an over-eager pass here is
+  /// the only thing that can destroy a series' offline reading history, so
+  /// never call this with a list derived from a partial or failed response.
+  Future<void> deleteChapters(List<Chapter> chapters) async {
+    if (!_isInitialized || chapters.isEmpty) return;
+    // Never touch a chapter that has no persisted identity, and never a
+    // local-scrape chapter (negative synthetic serverId) — those exist only
+    // on this device and are not the sync engine's to reap.
+    final deletable = chapters.where((c) => c.serverId > 0).toList();
+    if (deletable.isEmpty) return;
+    await _isar.writeTxn(() async {
+      await _isar.chapters.deleteAll(deletable.map((c) => c.id).toList());
+    });
+  }
+
   Future<List<Chapter>> getAllChapters() async {
     if (!_isInitialized) return [];
     return await _isar.chapters.where().findAll();
