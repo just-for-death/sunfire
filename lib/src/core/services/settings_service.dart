@@ -131,6 +131,16 @@ class SettingsService extends ChangeNotifier {
   }
 
   // ── READER SETTINGS (MIHON PARITY) ───────────────────────
+  /// Suppresses reading-history recording and progress tracking.
+  ///
+  /// Scope is *reading progress only*, matching the settings UI wording
+  /// ("Pause reading history recording and suppress unread progress updates").
+  /// Bookmarks, library membership, downloads and categories are deliberate
+  /// user-created organisation and are intentionally NOT suppressed — a user
+  /// reading privately still expects the things they deliberately saved to
+  /// persist. Enforced centrally by `SyncEngine.commitChapterReadState` and
+  /// `SyncEngine.syncChapterProgress`; do not add ad-hoc checks at call sites,
+  /// which is how eleven of the twelve mutation paths used to bypass it.
   bool get incognitoMode => _prefs?.getBool('incognito_mode') ?? false;
   set incognitoMode(bool value) {
     _prefs?.setBool('incognito_mode', value);

@@ -664,6 +664,16 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   }
 
   Future<void> _markChunkRead(List<int> ids, Map<int, List<Chapter>> chaptersByManga, bool isRead) async {
+    // Centralised Incognito guard (see commitChapterReadState). Previously this
+    // bulk path wrote to Isar and pushed to the server with Incognito on.
+    if (SettingsService.instance.incognitoMode) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Incognito Mode is on — reading state is not saved')),
+        );
+      }
+      return;
+    }
     for (final id in ids) {
       final chapters = chaptersByManga[id] ?? <Chapter>[];
       for (final ch in chapters) {
@@ -672,10 +682,12 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         // Library "Last Read" sorting pick the action up without a resync.
         if (isRead) await SyncEngine.instance.stampLocalReadActivity(ch);
         if (ch.serverId > 0) {
-          SyncEngine.instance.syncChapterProgress(
-            ch.serverId,
-            isRead: isRead,
-            lastPageRead: ch.lastPageRead,
+          unawaited(
+            SyncEngine.instance.syncChapterProgress(
+              ch.serverId,
+              isRead: isRead,
+              lastPageRead: ch.lastPageRead,
+            ),
           );
         }
       }

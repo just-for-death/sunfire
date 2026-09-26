@@ -614,16 +614,19 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   Future<void> _toggleChapterRead(Map<String, dynamic> item) async {
     final ch = item['chapter'] as Chapter;
     final newState = !ch.isRead;
-    setState(() => ch.applyReadState(newState));
-
-    await IsarService.instance.saveChapter(ch);
-
-    if (ch.serverId > 0) {
-      // Stamp local read activity so History's "Last Read" grouping, the
-      // in-progress query and Library sorting all see this action immediately.
-      if (newState) await SyncEngine.instance.stampLocalReadActivity(ch);
-      SyncEngine.instance.syncChapterProgress(ch.serverId, isRead: newState, lastPageRead: ch.lastPageRead);
+    // Centralised so the Incognito guard is applied here exactly as it is in
+    // the reader — previously this path wrote to Isar and pushed to the server
+    // with Incognito on.
+    final wrote = await SyncEngine.instance.commitChapterReadState(ch, isRead: newState);
+    if (!wrote) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Incognito Mode is on — reading state is not saved')),
+        );
+      }
+      return;
     }
+    if (mounted) setState(() {});
 
     // Keep the library unread badge in sync — the reader and manga-detail
     // paths both do this, and without it toggling read state here leaves the
@@ -723,6 +726,18 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
     if (confirmed != true) return;
 
+    // Centralised Incognito guard (see commitChapterReadState). Previously this
+    // bulk path wrote every chapter read to Isar and pushed every one to the
+    // server even with Incognito on.
+    if (SettingsService.instance.incognitoMode) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Incognito Mode is on — reading state is not saved')),
+        );
+      }
+      return;
+    }
+
     final chaptersToUpdate = <Chapter>[];
     setState(() {
       for (final it in unreadItems) {
@@ -756,7 +771,13 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     for (final ch in chaptersToUpdate) {
       await SyncEngine.instance.stampLocalReadActivity(ch);
       if (ch.serverId > 0) {
-        SyncEngine.instance.syncChapterProgress(ch.serverId, isRead: true, lastPageRead: ch.lastPageRead);
+        unawaited(
+          SyncEngine.instance.syncChapterProgress(
+            ch.serverId,
+            isRead: true,
+            lastPageRead: ch.lastPageRead,
+          ),
+        );
       }
     }
 
