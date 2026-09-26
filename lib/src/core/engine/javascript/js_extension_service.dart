@@ -26,7 +26,27 @@ class JsExtensionService {
 
   void _init() {
     if (_isInitialized || _isDisposed) return;
-    runtime = QuickJsRuntime2(stackSize: 1024 * 1024 * 4);
+    // The extension source is REMOTE, downloaded code that runs unsandboxed on
+    // the UI isolate. Two limits are not optional here:
+    //
+    // `timeout` installs QuickJS's interrupt handler (it is passed straight to
+    // jsNewRuntime, and 0 means "no handler"). Without it, a single
+    // `while(true){}` in a scraper — or in its top level, getHeaders, or
+    // getPageList — blocks the FFI call forever. The Dart-side timeouts
+    // elsewhere in this codebase (20s in the content resolver, 35s on the
+    // source lock, 180s on handlePromise) are all scheduled on the same isolate,
+    // so none of them can fire: the process wedges and the user has to
+    // force-kill, losing unsaved reader state. `stackSize` alone does not help
+    // — it bounds recursion, and a tight loop consumes no stack.
+    //
+    // `memoryLimit` caps the JS heap. Without it a scraper can grow an array
+    // until the OS kills the app, which surfaces as a random crash on a
+    // low-memory device rather than as a scraper fault.
+    runtime = QuickJsRuntime2(
+      stackSize: 1024 * 1024 * 4,
+      timeout: kJsExecutionTimeoutMs,
+      memoryLimit: kJsMemoryLimitBytes,
+    );
     runtime.enableHandlePromises();
 
     final baseUrl = (sourceMeta['baseUrl'] ?? sourceMeta['apiUrl'] ?? '').toString();
