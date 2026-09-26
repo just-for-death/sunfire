@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+import 'package:flutter/cupertino.dart' show CupertinoSliverRefreshControl;
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -41,6 +42,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   Manga? _manga;
   List<Chapter> _chapters = [];
   bool _isLoading = true;
+
+  /// True during a refresh that deliberately leaves existing content on screen.
+  /// Separate from [_isLoading] precisely so a manual refresh does not blank the
+  /// body — see [_loadMangaDetails].
+  bool _isRefreshing = false;
   bool _sortAscending = false;
   bool _isDescExpanded = false;
 
@@ -181,8 +187,27 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     _loadMangaDetails();
   }
 
-  Future<void> _loadMangaDetails() async {
-    if (mounted) setState(() => _isLoading = true);
+  /// Reloads the series.
+  ///
+  /// [keepContent] is for a MANUAL refresh when there is already something on
+  /// screen. The only flag `_isLoading` gates is the full-screen spinner in
+  /// `build()`, so a refresh used to replace the entire body — cover, chapters,
+  /// and the AppBar actions — with a bare spinner, taking away the very controls
+  /// the user might reach for next while it spun. It now leaves the content up
+  /// and shows the refresh in place instead.
+  Future<void> _loadMangaDetails({bool keepContent = false}) async {
+    if (keepContent) {
+      if (_isRefreshing) return;
+      if (mounted) setState(() => _isRefreshing = true);
+    } else if (mounted) {
+      // Mutually exclusive with `_isRefreshing`: a full load supersedes any
+      // in-place refresh, and vice versa. Every settle below clears both, so
+      // neither can be left stuck by the other being taken.
+      setState(() {
+        _isLoading = true;
+        _isRefreshing = false;
+      });
+    }
     final loadGen = ++_loadGeneration;
     final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
 
@@ -414,8 +439,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         //
         // Guarded on the generation: a superseded load must not clear the flag
         // that its replacement owns, or the spinner returns mid-load.
-        if (mounted && loadGen == _loadGeneration && _isLoading) {
-          setState(() => _isLoading = false);
+        if (mounted && loadGen == _loadGeneration) {
+          setState(() {
+            _isLoading = false;
+            _isRefreshing = false;
+          });
         }
       }
     }
@@ -574,10 +602,44 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
 
     // Merge and deduplicate chapters cleanly
-    _chapters = _mergeAndDeduplicateChapters(_chapters);
+    final mergedChapters = _mergeAndDeduplicateChapters(_chapters);
+    // Persisted, not just applied in memory.
+    //
+    // `_mergeAndDeduplicateChapters` rewrites `name` and derives
+    // `chapterNumber` on every entry, and it DROPS the duplicates. Both the
+    // `saveChapters` calls above and the reload in `_loadLocalDataOnly` happen
+    // outside it, so the recomputed numbers lived only in this pass: after any
+    // local reload the pre-dedupe values came back, and since the sort reads
+    // `chapterNumber` the chapter order visibly flipped between loads. Two loads
+    // of the same series could present different orderings.
+    //
+    // Unconditionally, not only when the length changed: the name strip and the
+    // number derivation both run on every entry every time, and the length only
+    // changes when a duplicate actually collapses. The rewrite is idempotent —
+    // once stored, re-deriving from the already-stripped name yields the same
+    // value — so this converges after the first pass and is one `putAll` per
+    // detail open, which this screen already does elsewhere.
+    try {
+      await IsarService.instance.saveChapters(mergedChapters);
+    } catch (e, st) {
+      // The in-memory merge is still applied, so the list is correct on screen
+      // even if the write fails; only the ordering can regress on a later load.
+      await LoggerService.instance.logError(
+        'Failed to persist the merged chapter list for ${widget.mangaServerId}; '
+        'the series may re-order itself on the next load',
+        exception: e,
+        stackTrace: st,
+        category: 'MangaDetail',
+      );
+    }
+    if (loadGen != _loadGeneration) return;
+    _chapters = mergedChapters;
 
     if (mounted && loadGen == _loadGeneration) {
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _isRefreshing = false;
+      });
     }
   }
 
@@ -911,7 +973,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       title: hasFilter ? 'No Matching Chapters' : 'No Chapters Found',
       subtitle: hasFilter
           ? 'Clear the chapter filter or search to see all chapters.'
-          : 'Pull to refresh or check the source connection.',
+          : 'Pull down to refresh, or check the source connection.',
       actionLabel: hasFilter ? 'Clear Filter' : null,
       onAction: hasFilter
           ? () => setState(() {
@@ -1927,6 +1989,18 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       scrollCacheExtent: ScrollCacheExtent.pixels(1000),
       slivers: [
+        // The refresh gesture the empty state tells the user to use. There was
+        // none anywhere in this screen, so "pull to refresh" was advice that
+        // could not be followed — and the only refresh (the overflow menu) blanked
+        // the whole body while it ran, removing the controls needed to recover.
+        //
+        // `CupertinoSliverRefreshControl` rather than wrapping in a
+        // `RefreshIndicator` because the body is a CustomScrollView, and this
+        // sliver composes with the existing slivers without restructuring them.
+        if (!isSelecting)
+          CupertinoSliverRefreshControl(
+            onRefresh: () => _loadMangaDetails(keepContent: _manga != null),
+          ),
         if (!isSelecting)
           SliverAppBar(
             expandedHeight: 320,
@@ -1959,7 +2033,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       await _showCategoryPickerDialog();
                       break;
                     case 'refresh':
-                      await _loadMangaDetails();
+                      await _loadMangaDetails(keepContent: _manga != null);
                       break;
                     case 'browser':
                       await _openInBrowser(manga.url);
