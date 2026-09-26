@@ -427,7 +427,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       boolValue: _settings.downloadOnlyOnWifi,
                       onBoolChanged: (v) {
                         _settings.downloadOnlyOnWifi = v;
-                        if (!v) {
+                        if (!v && !DownloadManagerService.instance.isQueuePaused) {
                           DownloadManagerService.instance.resumeLocalQueue();
                         }
                       },
@@ -438,7 +438,12 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       scope: SettingScope.local,
                       kind: SettingsPropKind.switchTile,
                       boolValue: _settings.downloadOnlyWhileCharging,
-                      onBoolChanged: (v) => _settings.downloadOnlyWhileCharging = v,
+                      onBoolChanged: (v) {
+                        _settings.downloadOnlyWhileCharging = v;
+                        if (!v && !DownloadManagerService.instance.isQueuePaused) {
+                          DownloadManagerService.instance.resumeLocalQueue();
+                        }
+                      },
                     ),
                   ],
                 ),
