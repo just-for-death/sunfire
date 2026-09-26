@@ -15,12 +15,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/db/models/chapter.dart';
 import 'package:sunfire/src/core/sync/sync_engine.dart';
 
-Chapter _ch(int serverId, {bool downloaded = false, bool bookmarked = false}) =>
+Chapter _ch(
+  int serverId, {
+  bool downloaded = false,
+  bool bookmarked = false,
+  bool read = false,
+  int? lastReadAt,
+  int lastPageRead = 0,
+}) =>
     Chapter()
       ..serverId = serverId
       ..mangaId = 1
       ..isDownloadedLocally = downloaded
-      ..isBookmarked = bookmarked;
+      ..isBookmarked = bookmarked
+      ..isRead = read
+      ..lastReadAt = lastReadAt
+      ..lastPageRead = lastPageRead;
 
 List<Chapter> _series(int count) => [for (var i = 1; i <= count; i++) _ch(i)];
 
@@ -53,6 +63,80 @@ void main() {
       final stale = selectPrunableChapters(localChapters: local, seenServerIds: seen);
 
       expect(stale, hasLength(60));
+    });
+  });
+
+  group('selectPrunableChapters — READING HISTORY IS IRREPLACEABLE', () {
+    // The wipe guard's protection list was `isDownloadedLocally` +
+    // `isBookmarked` only. It did not consider whether the user had READ the
+    // chapter — which is the one state that cannot be recovered, because
+    // `mergeLastReadAt` is write-only-forward: once the row is hard-deleted
+    // there is nothing left for a later sync to merge into.
+    //
+    // Trigger: the user reads chapters 1-5 offline. The server then rebuilds
+    // its chapter ids (a routine re-scan reassigns them). The rows for 1-5
+    // are read, not downloaded, not bookmarked, so they fell straight into
+    // the prunable set and were hard-deleted. History, Stats and
+    // Continue-Reading lost those entries permanently.
+    //
+    // Read state is a few bytes. Deleting a chapter row to save them is a bad
+    // trade in every direction.
+
+    test('a chapter the user has read is never pruned', () {
+      final local = [
+        _ch(1, read: true, lastReadAt: 1700000000),
+        _ch(2, read: true, lastReadAt: 1700000100),
+        _ch(3),
+        _ch(4),
+      ];
+      // Server reports only 3 and 4 — 1 and 2 vanished after an id rebuild.
+      final seen = <int>{3, 4};
+
+      final stale = selectPrunableChapters(localChapters: local, seenServerIds: seen);
+
+      expect(
+        stale.map((c) => c.serverId),
+        isEmpty,
+        reason: 'read state is unrecoverable; a stale server id must not delete it',
+      );
+    });
+
+    test('a chapter with read progress is kept even when not yet marked read', () {
+      // Half-read chapters (lastPageRead set, isRead false) are the common
+      // mid-chapter state. They must survive too.
+      final local = [
+        _ch(1, read: false, lastPageRead: 7, lastReadAt: 1700000000),
+        _ch(2),
+      ];
+      final seen = <int>{2};
+
+      final stale = selectPrunableChapters(localChapters: local, seenServerIds: seen);
+
+      expect(stale, isEmpty, reason: 'mid-chapter progress is real reading history');
+    });
+
+    test('unread, undownloaded, unbookmarked chapters are still pruned', () {
+      // The fix must not disable pruning entirely — the original bug this
+      // function exists for (chapters removed on the server lingering forever)
+      // has to stay fixed.
+      final local = [_ch(1), _ch(2), _ch(3), _ch(4)];
+      final seen = <int>{1, 2};
+
+      final stale = selectPrunableChapters(localChapters: local, seenServerIds: seen);
+
+      expect(stale.map((c) => c.serverId).toList()..sort(), [3, 4]);
+    });
+
+    test('a read chapter is still counted as known, so the ratio guard holds', () {
+      // Read chapters must still be part of `known`, otherwise pruning them
+      // from the denominator would let a truncated response pass the ratio
+      // check by hiding them.
+      final local = [for (var i = 1; i <= 10; i++) _ch(i, read: true)];
+      final seen = <int>{for (var i = 1; i <= 3; i++) i};
+
+      final stale = selectPrunableChapters(localChapters: local, seenServerIds: seen);
+
+      expect(stale, isEmpty, reason: '3/10 is below the ratio floor regardless of read state');
     });
   });
 
