@@ -88,10 +88,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   DateTime? _lastPrevPageNavAt;
   DateTime? _lastNextPageNavAt;
 
-  // Prefetch cache: chapterServerId → resolved page URLs
+  // Prefetch cache: composite key (chapterId|mangaId) → resolved page URLs
+  // Uses composite key to avoid collisions across different manga/sources that
+  // might share the same chapter serverId (e.g., local chapters with negative IDs).
   static const int _maxPrefetchedChapters = 3;
-  final Map<int, List<String>> _prefetchedChapters = {};
-  final Set<int> _prefetchingChapters = {};
+  final Map<String, List<String>> _prefetchedChapters = {};
+  final Set<String> _prefetchingChapters = {};
 
   late ReadingMode _readingMode;
   Manga? _parentManga;
@@ -139,7 +141,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _safeSetWakelock(true);
     }
     _scrollController.addListener(_onVerticalScroll);
-    if (!kIsWeb && (Platform.isIOS || Platform.isMacOS || Platform.isAndroid)) {
+    if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
       _initVolumeKeyListener();
     }
     _loadChapterAndPages(widget.chapterServerId);
@@ -185,6 +187,13 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   void _initVolumeKeyListener() {
     try {
+      // On Android, _handleKeyEvent consumes volume keys (LogicalKeyboardKey.audioVolumeUp/Down)
+      // so the VolumeController listener would cause DOUBLE page turns.
+      // Only install the listener on iOS/macOS where we need the volume-level-based detection.
+      if (Platform.isAndroid) {
+        VolumeController.instance.showSystemUI = false;
+        return;
+      }
       VolumeController.instance.showSystemUI = false;
       VolumeController.instance.getVolume().then((v) => _lastIosVolume = v).catchError((_) => _lastIosVolume ?? 0.0);
       VolumeController.instance.addListener((volume) {
@@ -912,7 +921,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _autoScrollTicker?.stop();
     _autoScrollTicker?.dispose();
     _autoScrollTicker = null;
-    if (!kIsWeb && (Platform.isIOS || Platform.isMacOS || Platform.isAndroid)) {
+    if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
       try {
         VolumeController.instance.removeListener();
         VolumeController.instance.showSystemUI = true;
@@ -1188,7 +1197,10 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
 
     // Use prefetched pages if already available (instant load on next-chapter nav)
-    List<String>? prefetchedUrls = _prefetchedChapters.remove(chapterId);
+    // Construct composite key: chapterId|mangaId
+    final chForKey = _chapter;
+    final compositeKey = chForKey != null ? '${_chapterTargetId(chForKey)}|${chForKey.mangaId}' : null;
+    List<String>? prefetchedUrls = compositeKey != null ? _prefetchedChapters.remove(compositeKey) : null;
 
     ChapterPagesResult resolved;
     if (prefetchedUrls != null && prefetchedUrls.isNotEmpty) {
@@ -1352,19 +1364,26 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   /// Prefetch the next chapter's page URLs into cache and precache image bitmaps into memory
   Future<void> _prefetchChapter(Chapter chapter) async {
     final sid = _chapterTargetId(chapter);
+    // Composite key: includes mangaId and sourceName to avoid collisions across
+    // different manga/sources that might share the same chapter serverId.
+    final manga = await IsarService.instance.getMangaByServerId(chapter.mangaId);
+    final sourceName = manga?.sourceName ?? 'unknown';
+    final compositeKey = '$sid|${chapter.mangaId}|$sourceName';
+
     final loadGen = _loadGeneration; // Capture generation at start
-    if (_prefetchedChapters.containsKey(sid) || _prefetchingChapters.contains(sid)) return;
-    _prefetchingChapters.add(sid);
+    if (_prefetchedChapters.containsKey(compositeKey) || _prefetchingChapters.contains(compositeKey)) return;
+    _prefetchingChapters.add(compositeKey);
     try {
-      final manga = await IsarService.instance.getMangaByServerId(chapter.mangaId);
       final url = chapter.url.isNotEmpty ? chapter.url : chapter.realUrl;
       final resolved = await ContentResolverService.instance.resolveChapterPages(
         chapterServerId: chapter.serverId > 0 ? chapter.serverId : sid,
         chapterUrl: url.isNotEmpty ? url : null,
-        sourceName: manga?.sourceName,
+        sourceName: sourceName,
       );
       // Guard against stale prefetch: if generation changed, discard results
       if (loadGen != _loadGeneration) return;
+      // Also guard against dispose: don't pollute cache after widget is gone
+      if (!mounted) return;
       if (resolved.pageUrls.isNotEmpty) {
         // Enforce max cache size: evict oldest if over limit
         while (_prefetchedChapters.length >= _maxPrefetchedChapters) {
@@ -1372,14 +1391,16 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
           _prefetchedChapters.remove(oldestKey);
           debugPrint('[Reader] Prefetch cache full, evicted oldest chapter');
         }
-        _prefetchedChapters[sid] = resolved.pageUrls;
-        debugPrint('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter $sid');
+        _prefetchedChapters[compositeKey] = resolved.pageUrls;
+        debugPrint('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter $sid (key: $compositeKey)');
 
         // Precache first 3 image bitmaps into Flutter memory cache for 0ms transition
+        // Use the PREFETCHED chapter's effective source for headers, not current chapter's.
+        final effectiveSource = resolved.effectiveSourceName ?? sourceName;
         for (final pUrl in resolved.pageUrls.take(3)) {
           if (mounted && pUrl.startsWith('http')) {
             try {
-              final headers = QuickJsService.getImageHeaders(_sourceName ?? '', pUrl);
+              final headers = QuickJsService.getImageHeaders(effectiveSource, pUrl);
               precacheImage(
                 NetworkImage(pUrl, headers: headers),
                 context,
@@ -1395,7 +1416,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     } catch (e) {
       debugPrint('[Reader] Prefetch failed for chapter $sid: $e');
     } finally {
-      _prefetchingChapters.remove(sid);
+      _prefetchingChapters.remove(compositeKey);
     }
   }
 
@@ -1483,53 +1504,52 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   void _debouncedUpdateProgress(int page) {
+    // Snapshot the chapter and its page count at debounce time so a rapid
+    // chapter switch doesn't cause the debounced callback to write progress
+    // to the WRONG chapter (stale _chapter/_pageUrls with old page number).
+    final chapterSnapshot = _chapter;
+    final totalPagesSnapshot = _pageUrls.length;
+    if (chapterSnapshot == null) return;
     _progressDebounceTimer?.cancel();
     _progressDebounceTimer = Timer(const Duration(milliseconds: 500), () {
-      _updateProgress(page);
+      _updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot);
     });
   }
 
-  void _updateProgress(int page) {
-    if (_chapter == null) return;
-    // No pages loaded (still loading, timed out, or the source returned an
-    // empty list): there is no progress to record. Without this guard the
-    // `page >= totalPages` completion check below degenerates to `1 >= 1` for
-    // chapters whose pageCount is still 0, so simply backing out of a chapter
-    // that failed to load marked it READ (scrobbling, server sync, and
-    // "delete finished chapter" rules all fired).
-    if (_pageUrls.isEmpty) return;
+  /// Internal progress update using a snapshot to prevent cross-chapter pollution.
+  void _updateProgressWithSnapshot(int page, Chapter chapterSnapshot, int totalPagesSnapshot) {
     // Privacy & Security: If Incognito Mode is enabled, do not persist reading progress or sync to server
     if (_settings.incognitoMode) return;
+    // No pages loaded (still loading, timed out, or the source returned an
+    // empty list): there is no progress to record.
+    if (totalPagesSnapshot == 0) return;
 
-    final totalPages = _pageUrls.length;
+    final totalPages = totalPagesSnapshot;
     final clampedPage = totalPages > 0 ? page.clamp(1, totalPages) : page;
     final isComplete = page >= totalPages;
-    final wasRead = _chapter!.isRead;
+    final wasRead = chapterSnapshot.isRead;
 
-    if (!shouldPersistProgressPage(page: clampedPage, previousSaved: _chapter!.lastPageRead)) {
+    if (!shouldPersistProgressPage(page: clampedPage, previousSaved: chapterSnapshot.lastPageRead)) {
       return;
     }
 
-    _chapter!.lastPageRead = clampedPage;
-    if (_pageUrls.isNotEmpty && _chapter!.pageCount != _pageUrls.length) {
-      _chapter!.pageCount = _pageUrls.length;
+    chapterSnapshot.lastPageRead = clampedPage;
+    if (chapterSnapshot.pageCount != totalPages) {
+      chapterSnapshot.pageCount = totalPages;
     }
     if (isComplete) {
-      _chapter!.isRead = true;
+      chapterSnapshot.isRead = true;
       if (_settings.deleteFinishedChaptersWhileReading == 'Immediately') {
-        if (!_chapter!.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-          DownloadManagerService.instance.deleteLocalDownload(_chapterTargetId(_chapter!));
+        if (!chapterSnapshot.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
+          DownloadManagerService.instance.deleteLocalDownload(_chapterTargetId(chapterSnapshot));
         }
       }
     }
-    _chapter!.lastReadAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    IsarService.instance.saveChapter(_chapter!);
+    chapterSnapshot.lastReadAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    IsarService.instance.saveChapter(chapterSnapshot);
 
-    // Keep series last-read stamp for library sorting. Stored in the same
-    // epoch-SECONDS unit as Chapter.lastReadAt and the server's chapter
-    // lastReadAt — a mixed ms/seconds value would break "Last Read" sorting
-    // and any future chapter-vs-manga comparison.
-    final mangaId = _chapter!.mangaId;
+    // Keep series last-read stamp for library sorting.
+    final mangaId = chapterSnapshot.mangaId;
     if (mangaId > 0) {
       final stampSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       if (_parentManga != null && (_parentManga!.serverId == mangaId || _parentManga!.id == mangaId)) {
@@ -1546,8 +1566,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
 
     // If chapter just became read, update parent manga unread count immediately
-    if (!wasRead && _chapter!.isRead && _chapter!.mangaId > 0) {
-      IsarService.instance.getMangaByServerId(_chapter!.mangaId).then((manga) {
+    if (!wasRead && chapterSnapshot.isRead && chapterSnapshot.mangaId > 0) {
+      IsarService.instance.getMangaByServerId(chapterSnapshot.mangaId).then((manga) {
         if (manga != null && (manga.unreadCount ?? 0) > 0) {
           manga.unreadCount = manga.unreadCount! - 1;
           IsarService.instance.saveManga(manga);
@@ -1555,10 +1575,10 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       });
     }
 
-    if (_chapter!.serverId > 0) {
+    if (chapterSnapshot.serverId > 0) {
       SyncEngine.instance.syncChapterProgress(
-        _chapter!.serverId,
-        isRead: _chapter!.isRead,
+        chapterSnapshot.serverId,
+        isRead: chapterSnapshot.isRead,
         lastPageRead: clampedPage,
       );
     }
@@ -1567,15 +1587,24 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     // The previous `|| isComplete` re-scrobbled/re-synced on every save at
     // the last page (mark-read, dispose, chapter-switch flush) even after the
     // chapter was already read, producing duplicate scrobbles per chapter.
-    if (!wasRead && _chapter!.isRead) {
-      if (_chapter!.mangaId > 0) {
-        _scrobbleToMetronIfLinked(_chapter!);
-        final chapterNum = _chapter!.chapterNumber > 0
-            ? _chapter!.chapterNumber
+    if (!wasRead && chapterSnapshot.isRead) {
+      if (chapterSnapshot.mangaId > 0) {
+        _scrobbleToMetronIfLinked(chapterSnapshot);
+        final chapterNum = chapterSnapshot.chapterNumber > 0
+            ? chapterSnapshot.chapterNumber
             : clampedPage.toDouble();
-        SyncEngine.instance.syncMangaTrackerProgress(_chapter!.mangaId, chapterNum);
+        SyncEngine.instance.syncMangaTrackerProgress(chapterSnapshot.mangaId, chapterNum);
       }
     }
+  }
+
+  void _updateProgress(int page) {
+    // Public API: capture snapshot and delegate to internal method.
+    // This prevents cross-chapter pollution when called from debounced callbacks.
+    final chapterSnapshot = _chapter;
+    final totalPagesSnapshot = _pageUrls.length;
+    if (chapterSnapshot == null || totalPagesSnapshot == 0) return;
+    _updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot);
   }
 
   void _scrobbleToMetronIfLinked(Chapter chapter) {
@@ -1734,6 +1763,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   void _goToNextPage() {
+    if (_pageUrls.isEmpty) return; // No pages loaded; don't auto-advance to next chapter
     final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
     if (isPaged) {
       if (_currentPage < _pageUrls.length && _pageController.hasClients) {
@@ -1770,6 +1800,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   void _goToPrevPage() {
+    if (_pageUrls.isEmpty) return;
     final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
     if (isPaged) {
       if (_currentPage > 1 && _pageController.hasClients) {
