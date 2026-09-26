@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../constants/app_constants.dart';
 import '../db/isar_service.dart';
 import '../db/models/manga.dart';
+import '../engine/image_validation.dart';
 import '../engine/quickjs_service.dart';
 import '../sync/graphql_client_service.dart';
 import 'safe_curl.dart';
@@ -210,25 +211,14 @@ class ImageCacheHelper {
     return _urlLocks.run(effectiveUrl, () => _doFetch(effectiveUrl, sourceName, mangaServerId));
   }
 
-  static bool _isValidImageBytes(List<int> b) {
-    if (b.length < 12) return false;
-    // JPEG: FF D8
-    if (b[0] == 0xFF && b[1] == 0xD8) return true;
-    // PNG: 89 50 4E 47
-    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return true;
-    // WebP: RIFF ... WEBP
-    if (b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 &&
-        b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50) {
-      return true;
-    }
-    // GIF: GIF87a / GIF89a
-    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return true;
-    // BMP: 42 4D
-    if (b[0] == 0x42 && b[1] == 0x4D) return true;
-    // Reject HTML/XML/JSON error responses (<, {, [)
-    if (b[0] == 60 || b[0] == 123 || b[0] == 91) return false;
-    return b.length > 500;
-  }
+  /// Delegates to the shared validator.
+  ///
+  /// This was a third private copy, and it still carried the
+  /// "any non-HTML blob over 500 bytes" fallback that was removed from the
+  /// downloader — so a Cloudflare challenge body that did not begin with
+  /// `<`/`{`/`[` was accepted as a cover and cached to disk. It also never
+  /// gained the AVIF/HEIC or JPEG XL branches. One implementation now.
+  static bool _isValidImageBytes(List<int> b) => looksLikeImageHeader(b);
 
   static Future<Uint8List?> _attemptHttpFetch(String url, Map<String, String> headers) async {
     HttpClient? client;

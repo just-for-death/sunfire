@@ -666,6 +666,23 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   static const int _batchChunkSize = 50;
 
   Future<void> _batchMarkRead(bool isRead) async {
+    // Hoisted out of the chunk loop.
+    //
+    // The guard used to live inside `_markChunkRead`, so it fired once per
+    // chunk and then `_batchMarkRead` overwrote that message with "Marked all
+    // as read" regardless. With Incognito on and 50 titles selected, the user
+    // was told the library was cleared when not a single badge had changed —
+    // and worse, they could conclude Incognito was protecting them and later
+    // turn it off assuming it never mattered. Matches the pattern
+    // `updates_screen._markAllAsRead` already uses.
+    if (SettingsService.instance.incognitoMode) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Incognito Mode is on — reading state is not saved')),
+        );
+      }
+      return;
+    }
     final selectedIds = List<int>.from(_selectedMangaIds);
     final chaptersByManga = <int, List<Chapter>>{};
     for (var i = 0; i < selectedIds.length; i += _batchChunkSize) {
@@ -685,16 +702,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   }
 
   Future<void> _markChunkRead(List<int> ids, Map<int, List<Chapter>> chaptersByManga, bool isRead) async {
-    // Centralised Incognito guard (see commitChapterReadState). Previously this
-    // bulk path wrote to Isar and pushed to the server with Incognito on.
-    if (SettingsService.instance.incognitoMode) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Incognito Mode is on — reading state is not saved')),
-        );
-      }
-      return;
-    }
+    // Defence in depth: `_batchMarkRead` already bails before the loop, but
+    // this method must stay safe for any other caller.
+    if (SettingsService.instance.incognitoMode) return;
     for (final id in ids) {
       final chapters = chaptersByManga[id] ?? <Chapter>[];
       for (final ch in chapters) {

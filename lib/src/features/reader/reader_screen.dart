@@ -18,6 +18,7 @@ import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
+import '../../core/engine/image_validation.dart';
 import '../../core/engine/javascript/m_client.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
@@ -682,7 +683,16 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
     final stream = provider.resolve(ImageConfiguration(size: Size(width, width * 2)));
     late final ImageStreamListener listener;
+    var released = false;
     void release() {
+      // Idempotent. An ImageStream can deliver onError and then onImage for the
+      // same key (Flutter's completer transitions loading -> error, and a
+      // subsequent resolve of the same key creates a new completer). A second
+      // call would remove a NEWER probe's dedup entry for this url, after
+      // which a rebuild could stack a second listener — reintroducing exactly
+      // the leak this guard exists to prevent.
+      if (released) return;
+      released = true;
       _heightProbesInFlight.remove(url);
       stream.removeListener(listener);
     }
@@ -2368,20 +2378,25 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     );
   }
 
-  bool _isMagicImage(List<int> bytes) {
-    if (bytes.length < 4) return false;
-    // JPEG: FF D8 FF
-    if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return true;
-    // PNG: 89 50 4E 47
-    if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return true;
-    // GIF: 47 49 46 38
-    if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) return true;
-    // WebP: RIFF ... WEBP
-    if (bytes.length >= 12 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) return true;
-    return false;
-  }
+  /// Delegates to the shared validator.
+  ///
+  /// This private copy required a third JPEG byte, accepted a bare `GIF`
+  /// prefix, and knew nothing about AVIF/HEIC or JPEG XL — so the reader, the
+  /// downloader and the resolver gave three different answers for the same
+  /// bytes. That is the exact drift the shared module exists to end.
+  bool _isMagicImage(List<int> bytes) => looksLikeImageHeader(bytes);
 
   Future<void> _recoverImage(String url, int index, {bool manual = false}) async {
+    // Every other async write in this file is gated on `_loadGeneration`;
+    // this one was gated only on `mounted`. A chapter switch clears the caches
+    // while up to five desktop prefetches plus four lookahead fetches are still
+    // in flight with 15-30s timeouts, and each one landed in
+    // `_recoveredImageBytes` for a URL that is not in the new `_pageUrls` —
+    // which the eviction logic then classified as evictable. So rapid chapter
+    // switching filled the 40-entry (~20MB) cache with the PREVIOUS chapter's
+    // pages, evicting the current chapter's useful entries and forcing visible
+    // re-fetch and image flicker exactly when the user was paging fastest.
+    final gen = _loadGeneration;
     if (manual) {
       _failedImageUrls.remove(url);
     } else if (_failedImageUrls.contains(url)) {
@@ -2404,6 +2419,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
           timeout: const Duration(seconds: 30),
         );
         if (bytes != null && bytes.length > 200 && _isMagicImage(bytes)) {
+          // Drop the result entirely if the reader moved on — caching it would
+          // evict the current chapter's pages.
+          if (gen != _loadGeneration) return;
           if (mounted) {
             setState(() {
               _storeRecoveredImage(url, bytes);
@@ -2462,6 +2480,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         }
 
         if (res != null && res.statusCode == 200 && res.bodyBytes.isNotEmpty && _isMagicImage(res.bodyBytes)) {
+          if (gen != _loadGeneration) return;
           if (mounted) {
             setState(() {
               _storeRecoveredImage(url, res!.bodyBytes);

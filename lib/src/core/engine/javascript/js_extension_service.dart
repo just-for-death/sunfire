@@ -96,7 +96,23 @@ class MProvider {
 async function jsonStringify(fn) {
     try {
         const res = await fn();
-        return JSON.stringify(res !== undefined ? res : null);
+        const encoded = JSON.stringify(res !== undefined ? res : null);
+        // Cap inside the runtime.
+        //
+        // This string is built inside QuickJS and then jsonDecode'd into
+        // unbounded Dart collections, so a scraper returning millions of page
+        // entries OOMs the process before any UI is shown. Truncating here
+        // bounds the peak on both sides, and the Dart side enforces the real
+        // limit; this is the cheap first line of defence.
+        const limit = $kMaxScraperPayloadChars;
+        if (encoded != null && encoded.length > limit) {
+            return JSON.stringify({
+                "__error__": "Extension returned " + encoded.length +
+                    " characters, above the " + limit + " character limit. " +
+                    "The source is returning far more data than a chapter page list."
+            });
+        }
+        return encoded;
     } catch (err) {
         return JSON.stringify({ "__error__": err ? (err.stack || err.message || err.toString()) : "Unknown error" });
     }

@@ -1727,7 +1727,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         if (allSelected) {
                           selectedMangaIds.clear();
                         } else {
-                          selectedMangaIds.addAll(mangas.map((m) => m.serverId > 0 ? m.serverId : m.id));
+                          selectedMangaIds.addAll(mangas.map((m) => m.canonicalKey));
                         }
                       });
                     },
@@ -1742,7 +1742,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   itemCount: mangas.length,
                   itemBuilder: (context, index) {
                     final manga = mangas[index];
-                    final mTargetId = manga.serverId > 0 ? manga.serverId : manga.id;
+                    final mTargetId = manga.canonicalKey;
                     final isSelected = selectedMangaIds.contains(mTargetId);
 
                     return CheckboxListTile(
@@ -1782,7 +1782,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     ),
                     onPressed: () async {
                       Navigator.pop(dialogCtx);
-                      final selectedList = mangas.where((m) => selectedMangaIds.contains(m.serverId > 0 ? m.serverId : m.id)).toList();
+                      final selectedList = mangas.where((m) => selectedMangaIds.contains(m.canonicalKey)).toList();
                       for (final manga in selectedList) {
                         if (!mounted) break;
                         final migrated = await Navigator.push<bool>(

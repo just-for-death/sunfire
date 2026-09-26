@@ -73,13 +73,46 @@ void applyFloodCapToNewChapters(
 /// must be seeded with every id already in use for this manga and be updated
 /// with each id handed out (both call sites do this).
 ///
-/// Returns the first free id at or after the base.
+/// Largest `mangaId.abs()` this will multiply by [_kChapterIdStride].
+///
+/// Dart ints are 64-bit and wrap silently. The product plus any sane `index`
+/// must stay under 2^63, so the base is clamped well below that regardless of
+/// what the caller passes.
+///
+/// This is a hard invariant guard, not a nicety: the caller normally passes a
+/// `stableLocalMangaServerId` (40 bits), but this function is public and a
+/// wider id — or any other large integer — would otherwise wrap to a POSITIVE
+/// value. A positive synthetic chapter id aliases a real server chapter in the
+/// `unique: true, replace: true` index, is pushed to the server as bogus reading
+/// progress, and is picked up by the sync engine's chapter prune.
+const int _kMaxMangaIdForChapterStride = 90000000000; // 9e10; 9e10 * 1e5 = 9e15
+
+/// Per-chapter id stride. Wide enough that a series' chapters occupy a
+/// contiguous band, narrow enough to keep [mintLocalChapterServerId] far away
+/// from Int64 overflow.
+const int _kChapterIdStride = 100000;
+
+/// Returns the first free NEGATIVE id in [mangaId]'s band.
+///
+/// Negative on purpose: real Suwayomi chapter ids are positive and share the
+/// unique `serverId` index with them, so a positive synthetic id can alias (and
+/// overwrite) a real server chapter, and would also be picked up by the
+/// `serverId > 0` guards that push local progress to the server and by
+/// `deleteChapters` in the sync prune.
+///
+/// Probing moves AWAY from zero (`--`). A `++` probe walks a negative id toward
+/// the positive namespace and eventually crosses it.
 int mintLocalChapterServerId({
   required int mangaId,
   required int index,
   required Set<int> takenServerIds,
 }) {
-  var candidate = -(mangaId.abs() * 100000 + index + 1);
+  final base = mangaId.abs() % _kMaxMangaIdForChapterStride;
+  final offset = index.abs() % _kChapterIdStride;
+  var candidate = -(base * _kChapterIdStride + offset + 1);
+  // Belt and braces: if the clamp above is ever mis-tuned, never hand back a
+  // value that could alias the server namespace.
+  if (candidate >= 0) candidate = -1 - (takenServerIds.length);
   while (takenServerIds.contains(candidate)) {
     candidate--;
   }

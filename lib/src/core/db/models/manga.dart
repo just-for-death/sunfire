@@ -93,22 +93,31 @@ class Manga {
 /// the library with duplicates of the same title.
 ///
 /// sha256 over the source name and the series URL is deterministic, and two
-/// distinct series cannot realistically collide within 52 bits. Case and
-/// whitespace are normalised so the same series browsed twice agrees.
+/// distinct series cannot realistically collide. Case and whitespace are
+/// normalised so the same series browsed twice agrees.
 ///
 /// The result is always negative: positive ids are the server's namespace, and
 /// every writer treats a negative `serverId` as "local-only, never push this".
+///
+/// WIDTH IS LOAD-BEARING — do not widen this. `mintLocalChapterServerId`
+/// derives per-chapter ids as `mangaId.abs() * 100000 + index`, and Dart ints
+/// are 64-bit, so the product must stay under 2^63. At 52 bits (4.5e15) the
+/// product is 4.5e20 and wraps: only the bottom 2% of the range is safe, so ~98%
+/// of local series would have been handed POSITIVE chapter ids — which alias
+/// real server chapters in the unique index, get pushed to the server as bogus
+/// progress, and become eligible for the sync prune. 40 bits keeps the product
+/// at ~1.1e17, an ~84x margin, and is still collision-free at any library size a
+/// person can actually accumulate.
 int stableLocalMangaServerId({required String sourceName, required String url, required String title}) {
   final normalisedUrl = url.trim();
   final identity = '$sourceName|${normalisedUrl.isNotEmpty ? normalisedUrl : title.trim()}'.toLowerCase();
   final digest = sha256.convert(utf8.encode(identity)).bytes;
-  // 7 bytes = 56 bits, masked to 52 so the value stays comfortably inside
-  // JS-safe integer range and well clear of Int64 overflow when negated.
+  // 5 bytes = 40 bits. See the width note above before changing this.
   var value = 0;
-  for (var i = 0; i < 7; i++) {
+  for (var i = 0; i < 5; i++) {
     value = (value << 8) | digest[i];
   }
-  value &= 0x000FFFFFFFFFFFFF;
+  value &= 0xFFFFFFFFFF; // 40 bits
   if (value == 0) value = 1;
   return -value;
 }

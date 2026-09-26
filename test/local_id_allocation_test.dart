@@ -144,6 +144,100 @@ void main() {
       expect(ids, hasLength(5 * 20), reason: 'a cross-manga id collision would reduce the count');
     });
 
+    // ── The regression this section exists for ────────────────────────────
+    //
+    // `stableLocalMangaServerId` originally returned a 52-bit value, and the
+    // mint multiplies `mangaId.abs() * 100000`. Dart ints are 64-bit and wrap
+    // silently, so 4.5e15 * 1e5 = 4.5e20 overflowed and the result came out
+    // POSITIVE. Only the bottom 2% of the 52-bit range is safe, so ~98% of
+    // locally-scraped series were handed positive chapter ids — which alias real
+    // server chapters in the unique index, get pushed to the server as bogus
+    // progress, and are picked up by the sync prune.
+    //
+    // The earlier assertions in this file only ever passed small ids (1, 2, 7,
+    // 10, 42, 999), so they all passed while the real input domain was broken.
+
+    test('stays negative for a REAL hashed local manga id', () {
+      for (var i = 0; i < 500; i++) {
+        final mangaId = stableLocalMangaServerId(
+          sourceName: 'MangaDex',
+          url: '/title/$i',
+          title: 'Series $i',
+        );
+        final chapterId = mintLocalChapterServerId(
+          mangaId: mangaId,
+          index: i,
+          takenServerIds: <int>{},
+        );
+        expect(chapterId, lessThan(0), reason: 'mangaId=$mangaId index=$i produced a positive chapter id');
+      }
+    });
+
+    test('the manga id width leaves headroom for the stride multiply', () {
+      // Pins the arithmetic relationship the two functions depend on. If the
+      // hash is ever widened, this fails before the overflow does.
+      const stride = 100000;
+      for (var i = 0; i < 200; i++) {
+        final id = stableLocalMangaServerId(sourceName: 'S', url: '/w/$i', title: 'T').abs();
+        expect(id * stride, lessThan(1 << 62), reason: 'id=$i leaves no headroom for the stride');
+      }
+    });
+
+    test('never returns a positive id for any input, however large', () {
+      // Defence in depth: the clamp must hold even for an id far outside the
+      // range the hash produces.
+      for (final mangaId in <int>[
+        0,
+        1,
+        -1,
+        90000000000,
+        -90000000000,
+        90000000001,
+        4503599627370495, // the old 52-bit maximum
+        -4503599627370495,
+        9007199254740991, // 2^53 - 1, JS's max safe integer
+        9223372036854775807, // Int64 max
+      ]) {
+        for (var i = 0; i < 5; i++) {
+          final minted = mintLocalChapterServerId(
+            mangaId: mangaId,
+            index: i,
+            takenServerIds: <int>{},
+          );
+          expect(minted, lessThan(0), reason: 'mangaId=$mangaId index=$i');
+        }
+      }
+    });
+
+    test('probing moves away from zero, never across it', () {
+      // The detail screen used to probe with `ch.serverId++`, which walks a
+      // NEGATIVE id toward the positive namespace that belongs to real server
+      // chapters. Enough colliding slots and it crossed zero.
+      final taken = <int>{};
+      final first = mintLocalChapterServerId(mangaId: 5, index: 0, takenServerIds: taken);
+      final probed = <int>[];
+      for (var i = 0; i < 200; i++) {
+        probed.add(mintLocalChapterServerId(mangaId: 5, index: 0, takenServerIds: taken));
+      }
+      expect(probed.every((id) => id < 0), isTrue, reason: 'a probe crossed zero');
+      // Monotonically decreasing: each probe lands below the last.
+      for (var i = 1; i < probed.length; i++) {
+        expect(probed[i], lessThan(probed[i - 1]), reason: 'probe $i did not move away from zero');
+      }
+      expect(first, greaterThan(probed.last));
+    });
+
+    test('a large index is clamped into the band, not into another series', () {
+      final taken = <int>{};
+      final a = mintLocalChapterServerId(mangaId: 3, index: 0, takenServerIds: taken);
+      final b = mintLocalChapterServerId(mangaId: 3, index: 100000000, takenServerIds: taken);
+      // The index is reduced modulo the stride so it cannot spill into the next
+      // manga's band and collide with it.
+      expect(b, lessThan(0));
+      expect((a.abs() ~/ 100000) == (b.abs() ~/ 100000), isTrue,
+          reason: 'a huge index escaped the series band');
+    });
+
     test('a manga id that was previously used by the old formula is probed past', () {
       // Seed with the id the removed `-(mangaId * 10000 + i + 1)` formula would
       // have produced for a DIFFERENT manga, and confirm the canonical mint

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
+import '../../constants/app_constants.dart';
 import '../logging/logger_service.dart';
 import 'quickjs_service.dart';
 import 'source_icon_helper.dart';
@@ -409,6 +410,21 @@ class RepoManager {
       );
       final code = response.data;
       if (code == null || code.trim().isEmpty) return null;
+
+      // Size cap. This is executable code that gets compiled and run on the UI
+      // isolate, and Dio buffers the whole body into a Dart String with no
+      // ceiling — so a compromised or hostile repo index naming a 500 MB
+      // "extension" is enough to OOM the app, needing no exploit. Real scrapers
+      // are tens of KB. Checked before the hash so an oversized body is
+      // rejected without spending a sha256 over hundreds of megabytes.
+      if (code.length > kMaxExtensionDownloadBytes) {
+        await LoggerService.instance.logWarning(
+          'Refusing $jsUrl: ${code.length} characters exceeds the '
+          '$kMaxExtensionDownloadBytes byte extension limit',
+          'RepoManager',
+        );
+        return null;
+      }
 
       final expected = (expectedSha256 ?? '').trim().toLowerCase();
       if (!verifySha256(code, expected)) {

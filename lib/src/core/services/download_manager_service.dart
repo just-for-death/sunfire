@@ -310,6 +310,24 @@ class DownloadManagerService extends ChangeNotifier {
     }
 
     // A gate was just tightened: stop the in-flight chapter now.
+    //
+    // Bumping `_pauseEpoch` is essential, not incidental. The queue loop's
+    // catch distinguishes "aborted on purpose" from "genuinely failed" purely
+    // by comparing the epoch captured before the download. A Dio cancellation
+    // surfaces as a `DioException`, so `task.error` is `e.toString()` and never
+    // the literal 'Cancelled' — meaning without the bump this fell through to
+    // the generic failure branch: the chapter was marked Failed, counted in
+    // `_failedInBatch`, and `downloads/<id>/` was recursively DELETED. Toggling
+    // a Wi-Fi/charging switch would destroy the chapter the user was midway
+    // through, which is the opposite of what the gate is for.
+    _pauseEpoch++;
+    for (final task in _localTasks) {
+      if (task.status == LocalDownloadStatus.downloading) {
+        task.status = LocalDownloadStatus.queued;
+      }
+    }
+    // Only set the charger banner when the CHARGER is the blocker — otherwise
+    // the Downloads screen told users on mobile data to plug in a charger.
     _waitingForCharger = !chargingOk;
     for (final token in List<CancelToken>.from(_cancelTokens.values)) {
       try {
@@ -549,14 +567,25 @@ class DownloadManagerService extends ChangeNotifier {
           final id = segments.isEmpty ? null : int.tryParse(segments.last);
           if (id == null || queuedIds.contains(id)) continue;
           if (await isDownloadFolderComplete(entity)) continue;
+          // Count with the SAME predicate the validator uses.
+          //
+          // This used to count by extension only, and the migration is behind a
+          // one-shot flag, so a bad count was permanent for the install. Two
+          // ways it disagreed with `isDownloadFolderComplete`:
+          //  - the extension list omitted .avif and .jxl, which
+          //    `kImagePageExtensions` accepts, so an AVIF chapter was
+          //    undercounted and could never validate;
+          //  - the validator also requires >500 bytes and a recognised magic
+          //    header, so any truncated or pre-tightening page was counted here
+          //    and rejected there.
+          // Either way `validCount != markedCount` forever: the chapter silently
+          // stopped registering as downloaded, the library "Downloaded" filter
+          // dropped it, and the reader always went back online.
           var images = 0;
           await for (final f in entity.list()) {
             if (f is! File) continue;
-            final n = f.path.toLowerCase();
-            if (n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.png') ||
-                n.endsWith('.webp') || n.endsWith('.gif') || n.endsWith('.bmp')) {
-              images++;
-            }
+            if (!isImagePagePath(f.path)) continue;
+            if (await looksLikeImageFile(f)) images++;
           }
           if (images > 0) {
             await File('${entity.path}/$kDownloadCompleteMarkerName').writeAsString('$images');
@@ -999,7 +1028,17 @@ class DownloadManagerService extends ChangeNotifier {
       // trusting this folder as "downloaded"; without it a partial folder
       // from this same failed/cancelled attempt would otherwise look
       // identical to a finished one on the next retry.
-      await File('${chapterDir.path}/$kDownloadCompleteMarkerName').writeAsString('$totalPages');
+      //
+      // The marker records what was actually MEASURED on disk, not
+      // `totalPages`. The validator re-derives the count by enumerating every
+      // image file in the folder, and this run supports resume — so the folder
+      // can hold stale `page_0xx` files from a longer earlier download. Writing
+      // `totalPages` while the folder holds more meant `validCount != markedCount`
+      // forever: a fully downloaded, verified chapter was permanently
+      // "not downloaded", dropped out of the library filter, and sent the
+      // reader back online. Writing the measured count keeps the two in
+      // agreement by construction.
+      await File('${chapterDir.path}/$kDownloadCompleteMarkerName').writeAsString('$validCount');
     } finally {
       // `_cancelTokens` is owned and cleaned up by _downloadChapterLocally, so
       // that the entry is registered across the page-list resolve too.

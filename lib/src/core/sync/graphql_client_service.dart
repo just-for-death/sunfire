@@ -1001,7 +1001,15 @@ class GraphQLClientService {
     final nodes = catMap['nodes'];
     final total = parseIntSafe(catMap['totalCount']);
     final list = nodes is List ? nodes : const <dynamic>[];
-    data[kSnapshotCompleteKey] = total > 0 ? list.length >= total : list.isNotEmpty;
+    if (total > 0) {
+      data[kSnapshotCompleteKey] = list.length >= total;
+    }
+    // If the server omitted `totalCount`, deliberately leave the key UNSET.
+    // `isCompleteSnapshot` defaults to false for an unmarked map, so the caller
+    // keeps its local categories. Marking a non-empty-but-possibly-truncated
+    // list "complete" would let the `replaceAll` delete run — which is the
+    // catastrophe the guard exists to prevent. Failing safe here costs one
+    // sync cycle of category refresh; guessing wrong costs the user's shelf.
     return data;
   }
 

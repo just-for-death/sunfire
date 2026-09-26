@@ -191,7 +191,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: MangaCoverImage(
-                                    mangaServerId: widget.manga.serverId > 0 ? widget.manga.serverId : widget.manga.id,
+                                    mangaServerId: widget.manga.canonicalKey,
                                     thumbnailUrl: widget.manga.thumbnailUrl,
                                     sourceName: widget.manga.sourceName,
                                     width: 48,
@@ -460,12 +460,25 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
       }
 
       if (targetMangaId <= 0 && targetLink.isNotEmpty) {
-        targetMangaId = (targetLink.hashCode ^ targetSourceName.hashCode).abs();
+        // MUST be a stable content hash: `String.hashCode` is seeded per
+        // isolate, so persisting it as `Manga.serverId` gave the same series a
+        // new identity on every cold start — a duplicate row each time, with
+        // the previous identity's chapters (read state, bookmarks, downloads)
+        // orphaned.
+        targetMangaId = stableLocalMangaServerId(
+          sourceName: targetSourceName,
+          url: targetLink,
+          title: targetTitle,
+        ).abs();
       } else if (targetMangaId <= 0 && targetTitle.isNotEmpty) {
         // Empty link: derive from title so serverId is never 0 — serverId is a
         // unique-indexed field and a 0 would `replace` any other record that
         // still holds the default value (Isar unique + replace:true).
-        targetMangaId = (targetTitle.hashCode ^ targetSourceName.hashCode).abs();
+        targetMangaId = stableLocalMangaServerId(
+          sourceName: targetSourceName,
+          url: targetLink,
+          title: targetTitle,
+        ).abs();
       }
 
       Manga? targetMangaEntity;
@@ -610,7 +623,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
       }
 
       // 4. Ensure target chapters are populated for local JS extensions
-      final tgtMangaId = targetMangaEntity.serverId != 0 ? targetMangaEntity.serverId : targetMangaEntity.id;
+      final tgtMangaId = targetMangaEntity.canonicalKey;
       var targetChapters = await IsarService.instance.getChaptersForManga(tgtMangaId);
 
       if (targetChapters.isEmpty && targetSourceName.isNotEmpty && QuickJsService.instance.hasExtension(targetSourceName)) {
@@ -692,7 +705,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
 
       // 5. Transfer Chapter Reading Progress & History
       if (copyHistory) {
-        final srcMangaId = widget.manga.serverId != 0 ? widget.manga.serverId : widget.manga.id;
+        final srcMangaId = widget.manga.canonicalKey;
         final sourceChapters = await IsarService.instance.getChaptersForManga(srcMangaId);
 
         if (sourceChapters.isNotEmpty && targetChapters.isNotEmpty) {
@@ -797,7 +810,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
       // 6. Delete Original Manga from Library if requested
       if (deleteOriginal) {
         // Fetch fresh copy to avoid mutating widget parameter directly
-        final originalManga = await IsarService.instance.getMangaByServerId(widget.manga.serverId > 0 ? widget.manga.serverId : widget.manga.id);
+        final originalManga = await IsarService.instance.getMangaByServerId(widget.manga.canonicalKey);
         if (originalManga != null) {
           originalManga.inLibrary = false;
           await IsarService.instance.saveManga(originalManga);
