@@ -1570,7 +1570,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
 
     // If chapter just became read, update parent manga unread count immediately
-    if (!wasRead && chapterSnapshot.isRead && chapterSnapshot.mangaId > 0) {
+    // `!= 0`, not `> 0`: a local/standalone manga's canonical id is a NEGATIVE
+    // synthetic value, so the `> 0` gate skipped every local series and their
+    // unread badge never decremented — and nothing would ever correct it,
+    // because a full sync only covers server-linked manga. getMangaByServerId
+    // filters the serverId column, which holds that negative value fine.
+    if (!wasRead && chapterSnapshot.isRead && chapterSnapshot.mangaId != 0) {
       IsarService.instance.getMangaByServerId(chapterSnapshot.mangaId).then((manga) {
         if (manga != null && (manga.unreadCount ?? 0) > 0) {
           manga.unreadCount = manga.unreadCount! - 1;

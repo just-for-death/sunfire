@@ -541,6 +541,13 @@ class SyncEngine {
   /// marked unread keeps its previous `lastReadAt` so it still appears in
   /// History, but only a fresh read activity (newer stamp) advances it.
   Future<void> stampLocalReadActivity(Chapter chapter) async {
+    // Public read-state writer, so it has to be safe by construction rather
+    // than relying on every call site to remember. commitChapterReadState and
+    // syncChapterProgress both guard; this one did not, which made it a loaded
+    // gun — the source-migration flow used it to write a full read history
+    // with Incognito on, and nothing about that path was guarded.
+    if (SettingsService.instance.incognitoMode) return;
+
     // Epoch SECONDS — Chapter.lastReadAt / Manga.lastReadAt are seconds
     // everywhere (see reader_screen). Mixing in millis breaks sorting.
     final stamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -807,6 +814,11 @@ class SyncEngine {
   /// Online: fetch track records and push immediately. Offline: queue a
   /// manga-level progress record replayed on the next flush.
   Future<void> syncMangaTrackerProgress(int mangaServerId, double chapterNumber) async {
+    // Defence in depth, mirroring syncChapterProgress: this pushes straight to
+    // MAL/AniList and, offline, enqueues a durable SyncRecord that would
+    // replay long after the user turned Incognito back off.
+    if (SettingsService.instance.incognitoMode) return;
+
     if (mangaServerId <= 0 || chapterNumber < 0) return;
 
     if (GraphQLClientService.instance.isConfigured) {

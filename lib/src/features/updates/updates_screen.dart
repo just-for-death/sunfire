@@ -698,7 +698,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   /// Adjusts the parent manga's unread counter without re-querying every
   /// chapter, mirroring the reader's incremental update.
   Future<void> _adjustMangaUnreadCount(int mangaId, {required int delta}) async {
-    if (mangaId <= 0 || delta == 0) return;
+    // `mangaId == 0`, not `<= 0`: a local/standalone manga's canonical id is a
+    // negative synthetic value, so the old gate skipped every local series and
+    // their unread badge drifted permanently. getMangaByServerId resolves
+    // negative ids because it filters the serverId column, which is where the
+    // synthetic value lives.
+    if (mangaId == 0 || delta == 0) return;
     try {
       final manga = await IsarService.instance.getMangaByServerId(mangaId);
       if (manga == null) return;

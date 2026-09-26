@@ -1046,8 +1046,17 @@ class QuickJsService {
       if (pages.isNotEmpty) return pages;
     } catch (e) {
       _invalidateRuntime(sourceName);
-      // In unit test runner if C symbol lookup fails
-      if (e.toString().contains('Failed to lookup symbol') || e.toString().contains('jsNewRuntime')) {
+      // Test-only shim: if the QuickJS C symbols cannot be resolved (unit test
+      // runner), fall back to scraping image-looking URLs out of the source.
+      //
+      // This MUST stay behind kDebugMode. Unguarded, a device where the native
+      // library failed to load — wrong ABI, a packaging regression, a stripped
+      // build — would render whatever image-like strings happened to be in the
+      // scraper's text as real chapter pages, and mask a hard engine failure
+      // as a successful resolve. The sibling fallback in getMangaDetailsLocal
+      // is already gated this way.
+      if (kDebugMode &&
+          (e.toString().contains('Failed to lookup symbol') || e.toString().contains('jsNewRuntime'))) {
         final mockPagesMatch = RegExp(r'''["'](https?://[^"']+)["']''').allMatches(jsCode);
         if (mockPagesMatch.isNotEmpty) {
           final matchedUrls = mockPagesMatch.map((m) => m.group(1)!).where((u) => u.contains('png') || u.contains('jpg') || u.contains('webp') || u.contains('image')).toList();
