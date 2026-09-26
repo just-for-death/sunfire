@@ -855,221 +855,242 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final bottomPadding = isTablet ? 36.0 : 120.0;
     final horizontalPadding = isTablet ? 24.0 : 16.0;
 
-    return RefreshIndicator(
-      color: primaryColor,
-      onRefresh: _fetchServerSources,
-      child: ListView(
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-        padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 12.0, bottom: bottomPadding),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search sources...',
-                    prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
-                    filled: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                  ),
-                  onChanged: (val) => setState(() => _sourceSearchQuery = val),
+    // Lazily-built row list.
+    //
+    // This was an eager `ListView(children: [...])` that constructed every source
+    // tile up front, and each tile is expensive: its own `Theme.of`, a
+    // RepaintBoundary, an InkWell, a ClipRRect, an icon image and two badges. A
+    // Keiyoushi install is 300-600 sources, and `TabBarView` builds all three tabs
+    // eagerly — so the whole list was rebuilt on every build of BrowseScreen,
+    // including the one triggered by any settings change.
+    //
+    // Chrome (the search header, section labels, spacers, the empty state) is
+    // cheap, so it is still built eagerly; only the tiles are resolved by index,
+    // and only for the rows actually on screen.
+    final rows = <Object>[
+      <Widget>[
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search sources...',
+                  prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
+                  filled: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                 ),
+                onChanged: (val) => setState(() => _sourceSearchQuery = val),
+              ),
+            ),
+            const SizedBox(width: 8),
+            PopupMenuButton<String>(
+              icon: Icon(Icons.filter_list_rounded, color: primaryColor),
+              onSelected: (lang) => setState(() => _selectedLangFilter = lang),
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'ALL', child: Text('All Languages')),
+                PopupMenuItem(value: 'EN', child: Text('English (EN)')),
+                PopupMenuItem(value: 'JA', child: Text('Japanese (JA)')),
+                // Previously unreachable: 'ALL'/'MULTI'/'UNIVERSAL' and
+                // empty-language sources were folded into the English bucket
+                // instead of being selectable, so they could never be
+                // filtered for on their own.
+                PopupMenuItem(value: 'MULTI', child: Text('Multi / Unknown')),
+                PopupMenuItem(value: 'UNKNOWN', child: Text('Unknown only')),
+              ],
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 10),
+
+        // ── SOURCE TYPE FILTER ROW ──
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              ChoiceChip(
+                label: const Text('All'),
+                selected: _selectedSourceFilter == 'All',
+                selectedColor: primaryColor,
+                backgroundColor: const Color(0x1F2A2A32),
+                showCheckmark: false,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                labelStyle: TextStyle(
+                  color: _selectedSourceFilter == 'All' ? Colors.white : Colors.grey[400],
+                  fontWeight: _selectedSourceFilter == 'All' ? FontWeight.bold : FontWeight.w500,
+                  fontSize: 13,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: _selectedSourceFilter == 'All' ? primaryColor : const Color(0x2BFFFFFF),
+                    width: _selectedSourceFilter == 'All' ? 1.2 : 0.8,
+                  ),
+                ),
+                onSelected: (_) => setState(() => _selectedSourceFilter = 'All'),
               ),
               const SizedBox(width: 8),
-              PopupMenuButton<String>(
-                icon: Icon(Icons.filter_list_rounded, color: primaryColor),
-                onSelected: (lang) => setState(() => _selectedLangFilter = lang),
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'ALL', child: Text('All Languages')),
-                  PopupMenuItem(value: 'EN', child: Text('English (EN)')),
-                  PopupMenuItem(value: 'JA', child: Text('Japanese (JA)')),
-                  // Previously unreachable: 'ALL'/'MULTI'/'UNIVERSAL' and
-                  // empty-language sources were folded into the English bucket
-                  // instead of being selectable, so they could never be
-                  // filtered for on their own.
-                  PopupMenuItem(value: 'MULTI', child: Text('Multi / Unknown')),
-                  PopupMenuItem(value: 'UNKNOWN', child: Text('Unknown only')),
-                ],
+              ChoiceChip(
+                avatar: const Icon(Icons.flash_on_rounded, size: 15, color: Colors.tealAccent),
+                label: const Text('Local JS'),
+                selected: _selectedSourceFilter == 'Local JS',
+                selectedColor: Colors.teal.shade800,
+                backgroundColor: const Color(0x1F2A2A32),
+                showCheckmark: false,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                labelStyle: TextStyle(
+                  color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : Colors.grey[400],
+                  fontWeight: _selectedSourceFilter == 'Local JS' ? FontWeight.bold : FontWeight.w500,
+                  fontSize: 13,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : const Color(0x2BFFFFFF),
+                    width: _selectedSourceFilter == 'Local JS' ? 1.2 : 0.8,
+                  ),
+                ),
+                onSelected: (_) => setState(() => _selectedSourceFilter = 'Local JS'),
+              ),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                avatar: const Icon(Icons.cloud_queue_rounded, size: 15, color: Colors.lightBlueAccent),
+                label: const Text('Server (Suwayomi)'),
+                selected: _selectedSourceFilter == 'Server',
+                selectedColor: Colors.blue.shade800,
+                backgroundColor: const Color(0x1F2A2A32),
+                showCheckmark: false,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                labelStyle: TextStyle(
+                  color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : Colors.grey[400],
+                  fontWeight: _selectedSourceFilter == 'Server' ? FontWeight.bold : FontWeight.w500,
+                  fontSize: 13,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : const Color(0x2BFFFFFF),
+                    width: _selectedSourceFilter == 'Server' ? 1.2 : 0.8,
+                  ),
+                ),
+                onSelected: (_) => setState(() => _selectedSourceFilter = 'Server'),
+              ),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                avatar: const Icon(Icons.push_pin_rounded, size: 15, color: Colors.amberAccent),
+                label: const Text('Pinned'),
+                selected: _selectedSourceFilter == 'Pinned',
+                selectedColor: Colors.amber.shade900,
+                backgroundColor: const Color(0x1F2A2A32),
+                showCheckmark: false,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                labelStyle: TextStyle(
+                  color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : Colors.grey[400],
+                  fontWeight: _selectedSourceFilter == 'Pinned' ? FontWeight.bold : FontWeight.w500,
+                  fontSize: 13,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : const Color(0x2BFFFFFF),
+                    width: _selectedSourceFilter == 'Pinned' ? 1.2 : 0.8,
+                  ),
+                ),
+                onSelected: (_) => setState(() => _selectedSourceFilter = 'Pinned'),
               ),
             ],
           ),
-
-          const SizedBox(height: 10),
-
-          // ── SOURCE TYPE FILTER ROW ──
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                ChoiceChip(
-                  label: const Text('All'),
-                  selected: _selectedSourceFilter == 'All',
-                  selectedColor: primaryColor,
-                  backgroundColor: const Color(0x1F2A2A32),
-                  showCheckmark: false,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  labelStyle: TextStyle(
-                    color: _selectedSourceFilter == 'All' ? Colors.white : Colors.grey[400],
-                    fontWeight: _selectedSourceFilter == 'All' ? FontWeight.bold : FontWeight.w500,
-                    fontSize: 13,
+        ),
+        const SizedBox(height: 12),
+      ],
+    ];
+    if (pinned.isNotEmpty) {
+      rows
+        ..add(Text('PINNED SOURCES', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)))
+        ..add(const SizedBox(height: 8))
+        ..addAll(pinned)
+        ..add(const Divider(height: 24, color: Color(0x1AFFFFFF)));
+    }
+    if (localJsUnpinned.isNotEmpty && _selectedSourceFilter != 'Server') {
+      rows
+        ..add(const Text('LOCAL EXTENSIONS (ON-DEVICE)', style: TextStyle(color: Colors.tealAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)))
+        ..add(const SizedBox(height: 8))
+        ..addAll(localJsUnpinned)
+        ..add(const SizedBox(height: 16));
+    }
+    if (serverUnpinned.isNotEmpty && _selectedSourceFilter != 'Local JS') {
+      rows
+        ..add(const Text('SERVER SOURCES (SUWAYOMI)', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)))
+        ..add(const SizedBox(height: 8))
+        ..addAll(serverUnpinned);
+    }
+    if (filtered.isEmpty) {
+      rows.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 36.0, horizontal: 16.0),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _selectedSourceFilter == 'Server' ? Icons.cloud_off_rounded : Icons.search_off_rounded,
+                    size: 48,
+                    color: Colors.grey.withAlpha(120),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: _selectedSourceFilter == 'All' ? primaryColor : const Color(0x2BFFFFFF),
-                      width: _selectedSourceFilter == 'All' ? 1.2 : 0.8,
-                    ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _selectedSourceFilter == 'Server'
+                        ? 'No server sources found'
+                        : 'No sources found',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  onSelected: (_) => setState(() => _selectedSourceFilter = 'All'),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  avatar: const Icon(Icons.flash_on_rounded, size: 15, color: Colors.tealAccent),
-                  label: const Text('Local JS'),
-                  selected: _selectedSourceFilter == 'Local JS',
-                  selectedColor: Colors.teal.shade800,
-                  backgroundColor: const Color(0x1F2A2A32),
-                  showCheckmark: false,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  labelStyle: TextStyle(
-                    color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : Colors.grey[400],
-                    fontWeight: _selectedSourceFilter == 'Local JS' ? FontWeight.bold : FontWeight.w500,
-                    fontSize: 13,
+                  const SizedBox(height: 6),
+                  Text(
+                    _selectedSourceFilter == 'Server'
+                        ? 'Make sure your Suwayomi server is connected in Settings and has extensions installed.'
+                        : 'Try changing your search query or language filter.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : const Color(0x2BFFFFFF),
-                      width: _selectedSourceFilter == 'Local JS' ? 1.2 : 0.8,
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: primaryColor,
+                      side: BorderSide(color: primaryColor.withAlpha(100)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
+                    onPressed: () {
+                      _fetchServerSources();
+                      _fetchExtensions();
+                    },
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Refresh Sources'),
                   ),
-                  onSelected: (_) => setState(() => _selectedSourceFilter = 'Local JS'),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  avatar: const Icon(Icons.cloud_queue_rounded, size: 15, color: Colors.lightBlueAccent),
-                  label: const Text('Server (Suwayomi)'),
-                  selected: _selectedSourceFilter == 'Server',
-                  selectedColor: Colors.blue.shade800,
-                  backgroundColor: const Color(0x1F2A2A32),
-                  showCheckmark: false,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  labelStyle: TextStyle(
-                    color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : Colors.grey[400],
-                    fontWeight: _selectedSourceFilter == 'Server' ? FontWeight.bold : FontWeight.w500,
-                    fontSize: 13,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : const Color(0x2BFFFFFF),
-                      width: _selectedSourceFilter == 'Server' ? 1.2 : 0.8,
-                    ),
-                  ),
-                  onSelected: (_) => setState(() => _selectedSourceFilter = 'Server'),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  avatar: const Icon(Icons.push_pin_rounded, size: 15, color: Colors.amberAccent),
-                  label: const Text('Pinned'),
-                  selected: _selectedSourceFilter == 'Pinned',
-                  selectedColor: Colors.amber.shade900,
-                  backgroundColor: const Color(0x1F2A2A32),
-                  showCheckmark: false,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  labelStyle: TextStyle(
-                    color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : Colors.grey[400],
-                    fontWeight: _selectedSourceFilter == 'Pinned' ? FontWeight.bold : FontWeight.w500,
-                    fontSize: 13,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : const Color(0x2BFFFFFF),
-                      width: _selectedSourceFilter == 'Pinned' ? 1.2 : 0.8,
-                    ),
-                  ),
-                  onSelected: (_) => setState(() => _selectedSourceFilter = 'Pinned'),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          if (pinned.isNotEmpty) ...[
-            Text('PINNED SOURCES', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-            const SizedBox(height: 8),
-            ...pinned.map((s) => _buildSourceItemTile(s)),
-            const Divider(height: 24, color: Color(0x1AFFFFFF)),
-          ],
-
-          if (localJsUnpinned.isNotEmpty && _selectedSourceFilter != 'Server') ...[
-            const Text(
-              'LOCAL EXTENSIONS (ON-DEVICE)',
-              style: TextStyle(color: Colors.tealAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8),
-            ),
-            const SizedBox(height: 8),
-            ...localJsUnpinned.map((s) => _buildSourceItemTile(s)),
-            const SizedBox(height: 16),
-          ],
-
-          if (serverUnpinned.isNotEmpty && _selectedSourceFilter != 'Local JS') ...[
-            const Text(
-              'SERVER SOURCES (SUWAYOMI)',
-              style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8),
-            ),
-            const SizedBox(height: 8),
-            ...serverUnpinned.map((s) => _buildSourceItemTile(s)),
-          ],
-
-          if (filtered.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 36.0, horizontal: 16.0),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _selectedSourceFilter == 'Server' ? Icons.cloud_off_rounded : Icons.search_off_rounded,
-                      size: 48,
-                      color: Colors.grey.withAlpha(120),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _selectedSourceFilter == 'Server'
-                          ? 'No server sources found'
-                          : 'No sources found',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _selectedSourceFilter == 'Server'
-                          ? 'Make sure your Suwayomi server is connected in Settings and has extensions installed.'
-                          : 'Try changing your search query or language filter.',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                    const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: primaryColor,
-                        side: BorderSide(color: primaryColor.withAlpha(100)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () {
-                        _fetchServerSources();
-                        _fetchExtensions();
-                      },
-                      icon: const Icon(Icons.refresh_rounded, size: 18),
-                      label: const Text('Refresh Sources'),
-                    ),
-                  ],
-                ),
+                ],
               ),
             ),
-        ],
+          ),
+      );
+    }
+
+    return RefreshIndicator(
+      color: primaryColor,
+      onRefresh: _fetchServerSources,
+      child: ListView.builder(
+        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+        padding: EdgeInsets.only(left: horizontalPadding, right: horizontalPadding, top: 12.0, bottom: bottomPadding),
+        itemCount: rows.length,
+        itemBuilder: (context, index) {
+          final row = rows[index];
+          if (row is List<Widget>) {
+            return Column(mainAxisSize: MainAxisSize.min, children: row);
+          }
+          if (row is Map<String, dynamic>) {
+            return _buildSourceItemTile(row);
+          }
+          return row as Widget;
+        },
       ),
     );
   }
@@ -1233,6 +1254,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       return true;
     }).toList();
 
+    // Deliberately not cached. This runs on every keystroke, and it was flagged
+    // as a hot spot — but the list is ~330 entries and this is one filter pass
+    // plus one O(n log n) sort of short strings, i.e. tens of microseconds. The
+    // actual cost on this screen was the eagerly-built source tile list, which is
+    // now a `ListView.builder`. Caching the sort would need invalidation on both
+    // wholesale `_extensionList` replacement and in-place `isInstalled`
+    // mutation, and a missed invalidation would show extensions in the wrong
+    // order — a worse outcome than the microseconds it saves.
     final sortedList = List<Map<String, dynamic>>.from(filtered);
     sortedList.sort((a, b) {
       final aInstalled = a['isInstalled'] as bool;
