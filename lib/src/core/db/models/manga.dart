@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:isar/isar.dart';
 
 part 'manga.g.dart';
@@ -76,4 +79,36 @@ class Manga {
   String? metronIssuesJson;
 
   Manga();
+}
+
+/// A stable, collision-resistant negative id for a locally-scraped series.
+///
+/// `String.hashCode` is NOT stable across process runs — Dart seeds it per
+/// isolate — so it cannot back anything persisted. It used to back
+/// `Manga.serverId`, which is `@Index(unique: true, replace: true)`: every cold
+/// start gave the same series a brand-new identity, `getMangaByServerId` then
+/// missed, a duplicate row was inserted, and the previous identity's chapters
+/// (keyed on the old id) were orphaned along with their read state, bookmarks
+/// and downloads. Re-browsing a local source a few times a week quietly filled
+/// the library with duplicates of the same title.
+///
+/// sha256 over the source name and the series URL is deterministic, and two
+/// distinct series cannot realistically collide within 52 bits. Case and
+/// whitespace are normalised so the same series browsed twice agrees.
+///
+/// The result is always negative: positive ids are the server's namespace, and
+/// every writer treats a negative `serverId` as "local-only, never push this".
+int stableLocalMangaServerId({required String sourceName, required String url, required String title}) {
+  final normalisedUrl = url.trim();
+  final identity = '$sourceName|${normalisedUrl.isNotEmpty ? normalisedUrl : title.trim()}'.toLowerCase();
+  final digest = sha256.convert(utf8.encode(identity)).bytes;
+  // 7 bytes = 56 bits, masked to 52 so the value stays comfortably inside
+  // JS-safe integer range and well clear of Int64 overflow when negated.
+  var value = 0;
+  for (var i = 0; i < 7; i++) {
+    value = (value << 8) | digest[i];
+  }
+  value &= 0x000FFFFFFFFFFFFF;
+  if (value == 0) value = 1;
+  return -value;
 }

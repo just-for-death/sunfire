@@ -270,10 +270,14 @@ class IsarService {
       // leave their local chapter records behind, which must not show in History.
       final libraryManga = await getLibraryManga();
       final libraryIds = <int>{
-        for (final m in libraryManga) ...[
-          if (m.serverId != 0) m.serverId,
-          m.id,
-        ],
+        for (final m in libraryManga)
+          // m.canonicalKey only. Adding m.id (the local Isar auto-increment)
+          // put a second id space into a serverId-keyed set, and since both
+          // spaces are small integers, a NON-library series whose serverId
+          // collided with some library manga's local id surfaced in the
+          // Updates feed, History and Continue Reading. The delete path had
+          // this exact arm removed already; the three read paths had not.
+          if (m.canonicalKey != 0) m.canonicalKey,
       };
       if (libraryIds.isEmpty) return [];
 
@@ -307,10 +311,14 @@ class IsarService {
     try {
       final libraryManga = await getLibraryManga();
       final libraryIds = <int>{
-        for (final m in libraryManga) ...[
-          if (m.serverId != 0) m.serverId,
-          m.id,
-        ],
+        for (final m in libraryManga)
+          // m.canonicalKey only. Adding m.id (the local Isar auto-increment)
+          // put a second id space into a serverId-keyed set, and since both
+          // spaces are small integers, a NON-library series whose serverId
+          // collided with some library manga's local id surfaced in the
+          // Updates feed, History and Continue Reading. The delete path had
+          // this exact arm removed already; the three read paths had not.
+          if (m.canonicalKey != 0) m.canonicalKey,
       };
 
       if (libraryIds.isEmpty) return [];
@@ -425,10 +433,14 @@ class IsarService {
     try {
       final libraryManga = await getLibraryManga();
       final libraryIds = <int>{
-        for (final m in libraryManga) ...[
-          if (m.serverId != 0) m.serverId,
-          m.id,
-        ],
+        for (final m in libraryManga)
+          // m.canonicalKey only. Adding m.id (the local Isar auto-increment)
+          // put a second id space into a serverId-keyed set, and since both
+          // spaces are small integers, a NON-library series whose serverId
+          // collided with some library manga's local id surfaced in the
+          // Updates feed, History and Continue Reading. The delete path had
+          // this exact arm removed already; the three read paths had not.
+          if (m.canonicalKey != 0) m.canonicalKey,
       };
       if (libraryIds.isEmpty) return [];
 

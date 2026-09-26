@@ -642,13 +642,31 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
 
           final chList = (details['chapters'] ?? details['chapterList'] ?? details['epList'] ?? details['episodes']) as List<dynamic>? ?? [];
           final toSave = <Chapter>[];
+          // Seed the collision probe with every chapter id already in use for
+          // this series. The raw formula this replaces
+          // (`-(mangaId * 10000 + i + 1)`) overlapped the canonical
+          // `mintLocalChapterServerId` range (`-(mangaId * 100000 + i + 1)`)
+          // ACROSS different series: migrating series 10 to a local extension
+          // produced -100001, and a later scrape of series 1 minted the same
+          // -100001. `Chapter.serverId` is `unique: true, replace: true`, so
+          // that silently REPLACED the migrated row — its isRead, lastPageRead,
+          // bookmark, download flag and local path all overwritten by a fresh
+          // unread chapter, with no error anywhere.
+          final takenServerIds = <int>{
+            for (final existing in await IsarService.instance.getChaptersForManga(tgtMangaId))
+              existing.serverId,
+          };
           for (var i = 0; i < chList.length; i++) {
             final entry = chList[i];
             if (entry is! Map) continue;
             final cMap = Map<String, dynamic>.from(entry);
             final cUrl = (cMap['url'] ?? cMap['link'] ?? '').toString();
             final ch = Chapter()
-              ..serverId = -(tgtMangaId.abs() * 10000 + i + 1)
+              ..serverId = mintLocalChapterServerId(
+                mangaId: tgtMangaId,
+                index: i,
+                takenServerIds: takenServerIds,
+              )
               ..mangaId = tgtMangaId
               ..name = cMap['name']?.toString() ?? 'Chapter ${i + 1}'
               ..chapterNumber = (cMap['chapterNumber'] as num?)?.toDouble() ?? (i + 1).toDouble()
