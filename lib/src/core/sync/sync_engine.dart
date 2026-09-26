@@ -1303,10 +1303,28 @@ class SyncEngine {
         // ── WIPE GUARD: Never cascade a server wipe to local Isar ─────────
         // If server returned far fewer manga than Isar has, something is wrong
         // (server was wiped/reset). Skip marking local entries as removed.
+        //
+        // The 30% ratio is a heuristic for "the server was reset", and it is not
+        // sufficient on its own: a page timing out mid-pagination returns
+        // however many pages did succeed, and for any library above ~3x the
+        // page size that still clears the floor. 500 manga, page 3 times out ->
+        // 400 returned -> 400 >= 150 -> the missing 100 are removed from the
+        // user's library, with no error surfaced. So a truncated response is
+        // refused outright, independent of the ratio.
+        final snapshotComplete = isCompleteSnapshot(libData);
+        if (!snapshotComplete && !forceLibraryRemovals) {
+          await LoggerService.instance.logWarning(
+            'Library pull returned an incomplete snapshot '
+            '(${serverMangas.length} of $localCountBefore local entries); '
+            'skipping the removal cascade so a failed page cannot empty the library',
+            'SyncEngine',
+          );
+        }
         final serverCount = serverMangas.length;
         final removalSafe = forceLibraryRemovals ||
-            localCountBefore == 0 ||
-            (serverCount > 0 && serverCount >= localCountBefore * 0.3); // server has at least 30% of what we had
+            (snapshotComplete &&
+                (localCountBefore == 0 ||
+                    (serverCount > 0 && serverCount >= localCountBefore * 0.3))); // server has at least 30% of what we had
 
         if (removalSafe && serverCount > 0) {
           // Only soft-delete local entries that the server genuinely removed
@@ -1445,6 +1463,22 @@ class SyncEngine {
             // server no longer knows about, guarded by a wipe check below.
             final seenServerIds = <int>{};
 
+            // A truncated chapter page means "we could not read the rest", not
+            // "the server deleted these". Without this, a 600-chapter series
+            // whose second page times out yields 500 ids, and the prune deletes
+            // the other 100 rows outright — taking their read state,
+            // lastReadAt and bookmarks with them. The ratio guard inside
+            // selectPrunableChapters does not catch it: 500 clears the floor
+            // against 600.
+            final chapterSnapshotComplete = isCompleteSnapshot(data);
+            if (!chapterSnapshotComplete) {
+              await LoggerService.instance.logWarning(
+                'Chapter snapshot for manga ${manga.serverId} is incomplete; '
+                'skipping the prune so a failed page cannot destroy local chapters',
+                'SyncEngine',
+              );
+            }
+
             for (final c in chapterNodes) {
               final chMap = c as Map<String, dynamic>;
               final chServerId = parseIntSafe(chMap['id']);
@@ -1543,7 +1577,7 @@ class SyncEngine {
             // chapter list and stayed in History (getReadingHistory filters
             // only on library membership), and Isar grew without bound.
             // See selectPrunableChapters for the wipe guard.
-            if (seenServerIds.isNotEmpty) {
+            if (seenServerIds.isNotEmpty && chapterSnapshotComplete) {
               final stale = selectPrunableChapters(
                 localChapters: localByServerId.values,
                 seenServerIds: seenServerIds,

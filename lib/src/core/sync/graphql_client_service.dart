@@ -54,6 +54,30 @@ const String kTrackProgressMutation = r'''
       }
     ''';
 
+/// Sentinel key marking a paginated response as a COMPLETE server snapshot.
+///
+/// The guard philosophy in this codebase is strong at the network boundary —
+/// reachability is separated from authentication, a 401 is never treated as a
+/// transport drop — and absent at the completeness boundary. Every destructive
+/// sync operation is driven by "whatever the server returned this cycle", and
+/// nothing distinguished a complete response from a partial one.
+///
+/// That made one timed-out page indistinguishable from a mass deletion.
+/// `fetchLibrary` returns 400 of 500 manga when page 3 fails; the caller's
+/// ratio guard compares that against the local count, and because 400 still
+/// clears the floor, the missing 100 get soft-removed from the user's library.
+/// The same shape hard-deleted chapter rows along with their read state.
+///
+/// Every paginated fetcher stamps this key, and every destructive caller must
+/// consult [isCompleteSnapshot] before removing anything.
+const String kSnapshotCompleteKey = '__complete';
+
+/// Whether [data] is a paginated response that reached a genuine end.
+///
+/// Defaults to false for an unmarked map, so a new paginated fetcher that
+/// forgets to stamp this fails safe — keeping local data — rather than open.
+bool isCompleteSnapshot(Map<String, dynamic>? data) => data?[kSnapshotCompleteKey] == true;
+
 class GraphQLClientService {
   static GraphQLClientService? _instance;
   late Dio _dio;
@@ -561,16 +585,26 @@ class GraphQLClientService {
     int offset = 0;
     int? totalCount;
     final List<dynamic> allNodes = [];
+    // Whether pagination ran to a genuine end. A page failing after the first
+    // is NOT a short library — it is a transport failure, and the caller must
+    // not treat the pages it did get as the complete server state.
+    var complete = false;
 
     while (true) {
       final res = await query(pageQuery, variables: {'first': pageSize, 'offset': offset}, label: 'fetchLibrary');
       if (res == null || !res.containsKey('mangas')) {
         if (allNodes.isNotEmpty) {
+          await LoggerService.instance.logWarning(
+            'fetchLibrary: page at offset $offset failed after ${allNodes.length} nodes; '
+            'reporting an INCOMPLETE snapshot',
+            'GraphQL',
+          );
           return {
             'mangas': {
               'totalCount': totalCount ?? allNodes.length,
               'nodes': allNodes,
-            }
+            },
+            kSnapshotCompleteKey: false,
           };
         }
         return null;
@@ -588,6 +622,7 @@ class GraphQLClientService {
       // ratio). The `offset` progress check guards against offset-ignoring
       // servers that would otherwise loop forever.
       if (nodes.length < pageSize || (totalCount > 0 && allNodes.length >= totalCount)) {
+        complete = true;
         break;
       }
       if (offset == allNodes.length) {
@@ -604,7 +639,8 @@ class GraphQLClientService {
       'mangas': {
         'totalCount': totalCount,
         'nodes': allNodes,
-      }
+      },
+      kSnapshotCompleteKey: complete,
     };
   }
 
@@ -662,6 +698,10 @@ class GraphQLClientService {
     const pageSize = 500;
     final allNodes = <dynamic>[];
     var offset = 0;
+    // See kSnapshotCompleteKey: a page failing after the first must not be
+    // mistaken for "the server deleted these chapters", because the caller
+    // hard-deletes chapters the server no longer reports.
+    var chaptersComplete = false;
     while (true) {
       final pageQueryStr = '''
         query {
@@ -677,11 +717,19 @@ class GraphQLClientService {
         // Suwayomi builds): fall back to the single combined query. Best-effort
         // — such servers may still truncate very long series.
         if (offset == 0) return _fetchMangaDetailsLegacy(mangaServerId);
+        await LoggerService.instance.logWarning(
+          'fetchMangaDetails: chapter page at offset $offset failed for manga $mangaServerId '
+          'after ${allNodes.length} nodes; reporting an INCOMPLETE snapshot',
+          'GraphQL',
+        );
         break;
       }
       final chapterMap = pageRes['chapters'] as Map<String, dynamic>;
       final pageNodes = chapterMap['nodes'] as List? ?? const [];
-      if (pageNodes.isEmpty) break;
+      if (pageNodes.isEmpty) {
+        chaptersComplete = true;
+        break;
+      }
       final prevCount = allNodes.length;
       allNodes.addAll(pageNodes);
       final pageInfo = chapterMap['pageInfo'] as Map<String, dynamic>?;
@@ -689,18 +737,29 @@ class GraphQLClientService {
           ? pageInfo['hasNextPage'] == true
           : pageNodes.length >= pageSize;
       offset += pageNodes.length;
-      if (!hasNextPage || pageNodes.length < pageSize) break;
+      if (!hasNextPage || pageNodes.length < pageSize) {
+        chaptersComplete = true;
+        break;
+      }
       // A misbehaving server may ignore `offset` and return the same page
       // forever with hasNextPage: true. Cap the loop so a broken server can't
-      // hang sync or balloon `allNodes` into an OOM.
-      if (allNodes.length == prevCount || allNodes.length > 25000) break;
+      // hang sync or balloon `allNodes` into an OOM. Not "complete" — we never
+      // reached a proven end.
+      if (allNodes.length == prevCount || allNodes.length > 25000) {
+        await LoggerService.instance.logWarning(
+          'fetchMangaDetails: chapter pagination did not terminate cleanly for manga '
+          '$mangaServerId at ${allNodes.length} nodes; reporting an INCOMPLETE snapshot',
+          'GraphQL',
+        );
+        break;
+      }
     }
 
     // Reassemble data['manga']['chapters']['nodes'] — the shape all callers
     // (detail screen, full chapter snapshot) consume.
     final mangaMap = Map<String, dynamic>.from(mangaRes['manga'] as Map<String, dynamic>);
     mangaMap['chapters'] = {'nodes': allNodes};
-    return {'manga': mangaMap};
+    return {'manga': mangaMap, kSnapshotCompleteKey: chaptersComplete};
   }
 
   /// Single-query fallback used when the root paginated `chapters` query (or
