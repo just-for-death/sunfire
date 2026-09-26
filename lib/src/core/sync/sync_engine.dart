@@ -138,7 +138,11 @@ List<Chapter> selectPrunableChapters({
   final known = localChapters.where((c) => c.serverId > 0).toList();
   final stale = <Chapter>[
     for (final c in known)
-      if (!seenServerIds.contains(c.serverId) && !c.isDownloadedLocally && !c.isBookmarked) c,
+      if (!seenServerIds.contains(c.serverId) &&
+          !c.isDownloadedLocally &&
+          !c.isBookmarked &&
+          !hasReadingHistory(c))
+        c,
   ];
   if (stale.isEmpty) return const [];
 
@@ -149,6 +153,26 @@ List<Chapter> selectPrunableChapters({
 
   return stale;
 }
+
+/// True when [chapter] carries any local evidence that the user read it.
+///
+/// This is the one piece of chapter state that cannot be recovered once the row
+/// is gone. `mergeLastReadAt` is write-only-forward, so after a hard delete
+/// there is nothing left for a later sync to merge into and the entry is lost
+/// from History, Stats and Continue-Reading permanently.
+///
+/// The trigger is routine rather than exotic: a server-side re-scan reassigns
+/// chapter ids, the old ids stop being reported, and the rows behind them are
+/// read-but-not-downloaded and not bookmarked — so they fell straight into the
+/// prunable set. Reclaiming a few bytes is never worth destroying a user's
+/// reading history, so a chapter is prunable only when it has no read state at
+/// all.
+///
+/// A half-read chapter counts: `isRead == false` with `lastPageRead > 0` is the
+/// normal mid-chapter state and the position is just as irreplaceable.
+@visibleForTesting
+bool hasReadingHistory(Chapter chapter) =>
+    chapter.isRead || chapter.lastPageRead > 0 || (chapter.lastReadAt ?? 0) > 0;
 
 /// Returns the first candidate that is non-null and non-blank after trimming,
 /// or null when there is none.
