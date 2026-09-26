@@ -429,6 +429,10 @@ class DownloadManagerService extends ChangeNotifier {
     await _migrateLegacyDownloadFolders();
     await _scanDownloadedLocalChapters();
     await _loadQueuePausedFlag();
+    // Reconcile server download cache from local DB so the "Downloaded" filter
+    // reflects the server's actual state (from last sync), not optimistic
+    // enqueue markers that may have been queued but failed/404'd.
+    await rebuildServerDownloadCache();
     // Reconcile a crashed resume: if the flag says paused but NO tasks are
     // paused (all are queued/downloading), the process died between
     // _saveQueueState() and _persistQueuePausedFlag() in resumeLocalQueue().
@@ -1160,25 +1164,21 @@ class DownloadManagerService extends ChangeNotifier {
   }
 
   // ── SERVER DOWNLOAD PROXY ──────────────────────────────────
+  /// Enqueues a chapter for download on the Suwayomi server. Does NOT mark
+  /// it as downloaded locally — the server enqueue is just a queue request.
+  /// The "Downloaded" state is reconciled from the server during the next
+  /// sync (which updates `chapter.isDownloadedOnServer`), and the local
+  /// cache is rebuilt from the DB on startup.
   Future<void> enqueueServerDownload(int chapterId) async {
     if (GraphQLClientService.instance.isConfigured) {
-      final res = await GraphQLClientService.instance.enqueueChapterDownload(chapterId);
-      if (res != null) {
-        _downloadedServerChapterIds.add(chapterId);
-        await _rebuildServerMangaIds();
-        notifyListeners();
-      }
+      await GraphQLClientService.instance.enqueueChapterDownload(chapterId);
     }
   }
 
+  /// Batch enqueue for server downloads. No optimistic local marking.
   Future<void> enqueueServerDownloads(List<int> chapterIds) async {
     if (GraphQLClientService.instance.isConfigured) {
-      final res = await GraphQLClientService.instance.enqueueChapterDownloads(chapterIds);
-      if (res != null) {
-        _downloadedServerChapterIds.addAll(chapterIds);
-        await _rebuildServerMangaIds();
-        notifyListeners();
-      }
+      await GraphQLClientService.instance.enqueueChapterDownloads(chapterIds);
     }
   }
 
@@ -1189,6 +1189,20 @@ class DownloadManagerService extends ChangeNotifier {
       await _rebuildServerMangaIds();
       notifyListeners();
     }
+  }
+
+  /// Rebuilds the server-downloaded chapter/manga sets from the local DB.
+  /// Call on startup and after sync to reconcile with the server's truth.
+  Future<void> rebuildServerDownloadCache() async {
+    _downloadedServerChapterIds.clear();
+    _downloadedServerMangaIds.clear();
+    final chapters = await IsarService.instance.getAllChapters();
+    for (final ch in chapters) {
+      if (ch.isDownloadedOnServer) {
+        _downloadedServerChapterIds.add(ch.serverId);
+      }
+    }
+    await _rebuildServerMangaIds();
   }
 
   @override
