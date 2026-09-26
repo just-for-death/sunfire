@@ -26,17 +26,53 @@ void callbackDispatcher() {
     try {
       WidgetsFlutterBinding.ensureInitialized();
 
-      // Minimal bootstrap — only what is needed for sync with timeout guard
+      // Logger first, on its own, so every later failure has somewhere to go.
+      await LoggerService.instance.initialize();
+
+      // Settings and Isar SEQUENTIALLY, before anything that reads or writes
+      // them.
+      //
+      // These were in a `Future.wait`, so `onboardingCompleted` on the very next
+      // line could be read while `SettingsService.initialize()` had not yet
+      // assigned `_prefs`. That getter then falls through its `??` chain to
+      // `false`, the task returned `true`, and WorkManager recorded SUCCESS —
+      // so a fully on-boarded user silently got no background library update and
+      // no notification, and would not be retried for another `freqHours` (up to
+      // a week). Nothing distinguished it from "no new chapters".
+      //
+      // `Future.wait(...).timeout()` also does not cancel its futures, so a
+      // timeout left the rest of the bootstrap running unattended underneath a
+      // task that had already given up.
+      await SettingsService.instance.initialize();
+      await IsarService.instance.initialize();
+
+      // The remainder is genuinely independent, so it can still go in parallel —
+      // with a timeout, which is now a genuine "we could not start in time"
+      // rather than a way to observe half-initialised state.
       await Future.wait([
-        LoggerService.instance.initialize(),
-        IsarService.instance.initialize(),
-        SettingsService.instance.initialize(),
         QuickJsService.instance.initialize(),
         ImageCacheHelper.initialize(),
         NotificationService.instance.initialize(),
       ]).timeout(const Duration(seconds: 20));
 
-      if (!SettingsService.instance.onboardingCompleted) return true;
+      // Belt and braces: the sequential awaits above have completed, so these
+      // cannot be false for a real user. If they somehow are, the task did NOT
+      // do its work, so it must not report success.
+      if (!SettingsService.instance.onboardingCompleted) {
+        await LoggerService.instance.logInfo(
+          'Background sync skipped: onboarding is not marked complete',
+          'BackgroundService',
+        );
+        return true; // Genuinely nothing to do for a new install.
+      }
+      if (!IsarService.instance.isInitialized) {
+        await LoggerService.instance.logWarning(
+          'Background sync skipped: the local database did not initialise, so '
+          'there is nothing to reconcile against',
+          'BackgroundService',
+        );
+        return false; // Retry, do not record a no-op as success.
+      }
 
       final authToken = await ServerAuthHelper.getRawAuthHeader();
       GraphQLClientService.instance.initialize(
