@@ -986,7 +986,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               primaryColor: primaryColor,
               icon: Icons.local_fire_department_rounded,
               title: RepoManager.officialRepoTitle,
-              subtitle: '9 maintained sources (same as bundled extensions)',
+              subtitle: '9 maintained sources, installed on first run',
               onAdd: () => _addPresetRepo(RepoManager.officialRepoTitle, RepoManager.officialIndexUrl),
             ),
           if (!_containsRepo(RepoManager.communityIndexUrl))

@@ -85,11 +85,12 @@ class QuickJsService {
   /// actually loaded.
   bool get isInitialized => _initialized;
 
-  /// Set when [initialize] fails at the top level (e.g. neither the disk nor
-  /// the bundled extension loader could run). Null when all good.
+  /// Set when [initialize] fails at the top level (e.g. neither the on-disk
+  /// sources nor the remote-repo auto-install could run). Null when all good.
   String? get initializationError => _initError;
 
-  /// Number of JS extension sources currently registered (installed + bundled).
+  /// Number of JS extension sources currently registered from the on-disk
+  /// install directory (populated by auto-install on first run).
   int get installedSourceCount => _installedJsSources.length;
 
   QuickJsService._();
