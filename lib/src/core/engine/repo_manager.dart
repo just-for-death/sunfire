@@ -78,7 +78,7 @@ class RepoSourceItem {
 
     return RepoSourceItem(
       name: nameStr,
-      lang: json['lang'] as String? ?? 'all',
+      lang: _resolveLang(json),
       sourceCodeUrl: url,
       iconUrl: icon,
       version: json['version'] as String? ?? '1.0.0',
@@ -87,6 +87,29 @@ class RepoSourceItem {
       isNsfw: isNsfw,
       sha256: (json['sha256'] ?? json['hash'] ?? json['sourceCodeHash'] ?? '').toString().trim(),
     );
+  }
+
+  /// Resolves the single scraper language for an index entry.
+  ///
+  /// `lang` is the canonical field, but some catalogs only ship the plural
+  /// `langs` array. Falling straight through to the `'all'` default there is
+  /// not a cosmetic mismatch: Browse classifies `'all'` as a *multi-language*
+  /// source, so an English scraper declared only as
+  /// `"langs": ["en", "fr", ...]` silently disappears the moment the user
+  /// filters Browse by English. A one-element `langs` is therefore treated as
+  /// the scraper language, and anything genuinely multi keeps `'all'` so the
+  /// filter can still offer it.
+  static String _resolveLang(Map<String, dynamic> json) {
+    final direct = json['lang'];
+    if (direct is String && direct.trim().isNotEmpty) return direct.trim();
+
+    final plural = json['langs'];
+    if (plural is List) {
+      final codes = plural.whereType<String>().map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
+      if (codes.length == 1) return codes.first;
+    }
+
+    return 'all';
   }
 }
 
@@ -101,7 +124,9 @@ class RepoManager {
   final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 30)));
   final List<Map<String, String>> _userRepos = [];
 
-  /// First-party Sunfire companion catalog (same 9 sources bundled in the app).
+  /// First-party Sunfire companion catalog. Nothing is bundled in the app
+  /// binary: on first run the official and community indexes are fetched and
+  /// the sources are installed to the app documents directory.
   static const officialIndexUrl =
       'https://raw.githubusercontent.com/just-for-death/mangayomi-extensions/main/index.json';
   static const officialRepoTitle = 'Sunfire Official';
@@ -424,7 +449,7 @@ class RepoManager {
         final cleanServerName = SourceMigrationService.instance.normalizeSourceName(serverName);
         if (cleanServerName.isEmpty) return null;
 
-        // If already installed (e.g. from bundled assets), preserve patched local version
+        // If already installed on disk, preserve the local (possibly patched) version
         if (QuickJsService.instance.isSourceInstalledLocally(serverName)) {
           return (installedName: serverName, serverName: serverName);
         }
