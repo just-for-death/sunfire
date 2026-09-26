@@ -73,9 +73,20 @@ bool looksLikeImageHeader(List<int>? b) {
       b[4] == 0x4A && b[5] == 0x58 && b[6] == 0x4C && b[7] == 0x20) {
     return true;
   }
-  // Anything else (HTML/JSON/Cloudflare challenge pages, truncated junk) is NOT
-  // an image. The old "any non-HTML blob over 500 bytes" fallback let error
+  // Anything else (HTML/JSON/Cloudflare challenge pages, wrong-format stubs) is
+  // NOT an image. The old "any non-HTML blob over 500 bytes" fallback let error
   // bodies be saved as pages and the chapter marked downloaded.
+  //
+  // LIMIT, stated plainly: this is a PREFIX probe, so it cannot detect
+  // truncation of a file that starts validly. A JPEG cut off after its SOI and
+  // APP0 but before its scan data still matches the FF D8 branch, and so does
+  // one cut off just before EOI. Detecting that requires reading to the end,
+  // which defeats the point of not reading whole files. Truncated pages are
+  // therefore prevented at the source — the downloader writes each page to a
+  // temp file and renames, which is atomic — rather than detected after the
+  // fact. What this function reliably rejects is wrong CONTENT saved under an
+  // image name, which is the common case: a Cloudflare challenge body, an HTML
+  // error page, a JSON payload.
   return false;
 }
 
@@ -116,16 +127,19 @@ const int kImageHeaderProbeBytes = 16;
 ///
 /// When [expectedPageCount] is null the marked count is validated against the
 /// files actually on disk, which catches a source whose page count changed, a
-/// folder where files were lost, and a torn write. That path reads only header
-/// prefixes and yields to the event loop between files, so a large offline
-/// library no longer blocks the first frame.
+/// folder where files were lost, and a torn write.
+///
 Future<bool> isDownloadFolderComplete(Directory chapterDir, {int? expectedPageCount}) async {
   final marker = File('${chapterDir.path}/$kDownloadCompleteMarkerName');
   if (!await marker.exists()) return false;
 
   final raw = (await marker.readAsString()).trim();
   final markedCount = int.tryParse(raw);
-  if (markedCount == null) return false;
+  // `<= 0`, not `== null`. A marker of 0 used to pass and then match an empty
+  // directory, so a folder whose marker was never legitimately written — the
+  // downloader only marks a run that got as far as writing pages — reported as a
+  // complete download.
+  if (markedCount == null || markedCount <= 0) return false;
 
   if (expectedPageCount != null) {
     return markedCount == expectedPageCount;

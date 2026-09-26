@@ -121,6 +121,13 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   /// How long a failed prefetch suppresses re-attempts for the same chapter.
   static const Duration _kPrefetchFailureCooldown = Duration(minutes: 1);
 
+  /// Ceiling on a single prefetch resolve.
+  ///
+  /// Shorter than the main path's 30s: this is speculative work for a chapter
+  /// the user has not opened yet, so it should never compete with the page they
+  /// are actually reading.
+  static const Duration _kPrefetchTimeout = Duration(seconds: 20);
+
   late ReadingMode _readingMode;
   Manga? _parentManga;
   late ReaderThemeMode _readerTheme;
@@ -1007,6 +1014,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _recoveringUrls.clear();
     _failedImageUrls.clear();
     _prefetchedChapters.clear();
+    _prefetchAttemptedAt.clear();
+    _prefetchingChapters.clear();
     _scrollController.removeListener(_onVerticalScroll);
     _scrollController.dispose();
     _pageController.dispose();
@@ -1482,11 +1491,27 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _prefetchingChapters.add(compositeKey);
     try {
       final url = chapter.url.isNotEmpty ? chapter.url : chapter.realUrl;
-      final resolved = await ContentResolverService.instance.resolveChapterPages(
-        chapterServerId: chapter.serverId > 0 ? chapter.serverId : _chapterTargetId(chapter),
-        chapterUrl: url.isNotEmpty ? url : null,
-        sourceName: sourceName,
-      );
+      // Bounded, like the main resolve path. Without it a source that accepts
+      // the connection and never responds hung here forever: the key stayed in
+      // `_prefetchingChapters` for the rest of the session, which blocks the
+      // in-flight guard, and `_prefetchAttemptedAt` was never written because
+      // both write sites sit past this await, so the failure cooldown could not
+      // engage either. Net effect: one hung source permanently disabled prefetch
+      // for that chapter, and every next-chapter navigation paid a full scrape
+      // with no recovery until the app restarted.
+      final resolved = await ContentResolverService.instance
+          .resolveChapterPages(
+            chapterServerId: chapter.serverId > 0 ? chapter.serverId : _chapterTargetId(chapter),
+            chapterUrl: url.isNotEmpty ? url : null,
+            sourceName: sourceName,
+          )
+          .timeout(
+            _kPrefetchTimeout,
+            onTimeout: () => ChapterPagesResult(
+              pageUrls: const <String>[],
+              source: ContentSourceType.fallback,
+            ),
+          );
       // Guard against stale prefetch: if generation changed, discard results
       if (loadGen != _loadGeneration) return;
       // Also guard against dispose: don't pollute cache after widget is gone

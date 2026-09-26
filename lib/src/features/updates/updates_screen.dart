@@ -29,6 +29,24 @@ class UpdatesScreen extends StatefulWidget {
   State<UpdatesScreen> createState() => _UpdatesScreenState();
 }
 
+/// Snapshots the accumulated unread delta for [mangaId] and resets it to 0.
+///
+/// The read-then-clear ORDER is the whole point, which is why it is a named
+/// function with a test rather than two inline statements. Written inline once,
+/// the two got swapped — clear, then read — and because there is no `await`
+/// between them the read was structurally guaranteed to return 0. Every
+/// unread-badge update from the Updates screen was then discarded, and
+/// `saveManga` below was unreachable: a worse outcome than the plain
+/// read-modify-write it replaced, and invisible to a 700-test suite.
+///
+/// Returns 0 when there is nothing pending.
+@visibleForTesting
+int takePendingUnreadDelta(Map<int, int> pending, int mangaId) {
+  final value = pending[mangaId] ?? 0;
+  pending[mangaId] = 0;
+  return value;
+}
+
 class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
@@ -144,7 +162,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
   String _formatDateHeader(int? fetchedAt) {
     if (fetchedAt == null || fetchedAt <= 0) return 'Recent';
-    final int millis = fetchedAt > 100000000000 ? fetchedAt : fetchedAt * 1000;
+    final int millis = (normalizeEpochToSeconds(fetchedAt) ?? 0) * 1000;
     final date = DateTime.fromMillisecondsSinceEpoch(millis);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -237,7 +255,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       if (tsStr != null) {
         final ts = int.tryParse(tsStr);
         if (ts != null) {
-          final dt = DateTime.fromMillisecondsSinceEpoch(ts > 100000000000 ? ts : ts * 1000);
+          final dt = DateTime.fromMillisecondsSinceEpoch((normalizeEpochToSeconds(ts) ?? 0) * 1000);
           setState(() {
             _lastUpdateText = 'Last update: ${DateFormat('MM/dd/yyyy, hh:mm a').format(dt)}';
           });
@@ -283,7 +301,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
             final isDownloaded = parseBoolSafe(map['isDownloaded']);
             final rawFetchedAt = map['fetchedAt'] != null ? int.tryParse(map['fetchedAt'].toString()) : null;
-            final fetchedAt = rawFetchedAt != null && rawFetchedAt > 100000000000 ? (rawFetchedAt ~/ 1000) : rawFetchedAt;
+            final fetchedAt = rawFetchedAt == null ? null : normalizeEpochToSeconds(rawFetchedAt);
 
             String title = 'Manga';
             String thumb = '';
@@ -748,24 +766,48 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     // then drifted by one per race, permanently, with no correction pass
     // anywhere on this path.
     _pendingUnreadDeltas[mangaId] = (_pendingUnreadDeltas[mangaId] ?? 0) + delta;
+    await _drainUnreadDeltas(mangaId);
+  }
+
+  /// Applies the accumulated unread deltas for [mangaId] to Isar.
+  ///
+  /// Serialised per manga: only the first caller for a given id runs, everyone
+  /// else has already added their delta to the accumulator and returns. Each
+  /// round snapshots the accumulator and clears it BEFORE awaiting, so a delta
+  /// that arrives mid-write starts a fresh batch and is picked up by the next
+  /// loop iteration — applied exactly once, never lost, never double-counted.
+  Future<void> _drainUnreadDeltas(int mangaId) async {
     if (!_unreadDrainInFlight.add(mangaId)) return;
     try {
-      var pending = _pendingUnreadDeltas[mangaId] ?? 0;
+      var pending = takePendingUnreadDelta(_pendingUnreadDeltas, mangaId);
       while (pending != 0) {
-        _pendingUnreadDeltas[mangaId] = 0;
-        pending = _pendingUnreadDeltas[mangaId] ?? 0;
-        if (pending == 0) break;
-        final manga = await IsarService.instance.getMangaByServerId(mangaId);
-        if (manga != null) {
-          manga.unreadCount = ((manga.unreadCount ?? 0) + pending).clamp(0, 1 << 30);
-          await IsarService.instance.saveManga(manga);
+        try {
+          final manga = await IsarService.instance.getMangaByServerId(mangaId);
+          if (manga != null) {
+            manga.unreadCount = ((manga.unreadCount ?? 0) + pending).clamp(0, 1 << 30);
+            await IsarService.instance.saveManga(manga);
+          }
+        } catch (e) {
+          // Put the batch back so a transient Isar failure is not silently
+          // discarded — this is the same class of loss the drain exists to
+          // prevent, so it must not introduce its own.
+          _pendingUnreadDeltas[mangaId] = (_pendingUnreadDeltas[mangaId] ?? 0) + pending;
+          await LoggerService.instance.logWarning(
+            'Failed to apply unread-count delta of $pending for manga $mangaId: $e',
+            'Updates',
+          );
+          break;
         }
-        pending = _pendingUnreadDeltas[mangaId] ?? 0;
+        pending = takePendingUnreadDelta(_pendingUnreadDeltas, mangaId);
       }
     } finally {
       _unreadDrainInFlight.remove(mangaId);
+      // A delta that landed after the loop's last read but before the lock was
+      // released would otherwise sit unapplied with nobody left to drain it.
+      if (takePendingUnreadDelta(_pendingUnreadDeltas, mangaId) != 0) {
+        unawaited(_drainUnreadDeltas(mangaId));
+      }
     }
-    return;
   }
 
   /// Unapplied unread deltas per manga, and which drains are currently running.

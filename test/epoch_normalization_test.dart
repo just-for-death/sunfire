@@ -210,20 +210,41 @@ void main() {
       }
     });
 
-    test('no timestamp in the codebase keeps a local 1e12 threshold', () {
-      // Source-level assertion. The helper's own doc comment and the constant
-      // definition legitimately mention the number; everything else must route
-      // through `normalizeEpochToSeconds` so there is exactly one answer to
-      // "is this seconds or millis".
+    test('the helper lives in a leaf module, so every layer can reach it', () {
+      // It was in `sync_engine.dart`, which the DB layer cannot import back
+      // without a cycle — and the result was a second hand-rolled threshold in
+      // `isar_service.dart`. That is the exact drift this exists to prevent, so
+      // the location itself is pinned.
+      final leaf = File('lib/src/core/db/epoch_seconds.dart');
+      expect(leaf.existsSync(), isTrue, reason: 'the helper must have its own leaf module');
+      expect(leaf.readAsStringSync(), contains('int? normalizeEpochToSeconds('));
+
+      // And the engine still re-exports it, so the existing importers compile.
+      expect(
+        File('lib/src/core/sync/sync_engine.dart').readAsStringSync(),
+        contains("export '../db/epoch_seconds.dart';"),
+        reason: 'existing sync_engine importers of the helper must keep working',
+      );
+    });
+
+    test('no file outside the helper branches on EITHER threshold literal', () {
+      // Both literals have now been the source of a real disagreement with the
+      // helper: nine sites carried 1e12, and the DB layer carried 1e11 because
+      // it could not import the engine. A source-level assertion is the only
+      // thing that catches a new one appearing.
       final offenders = <String>[];
       for (final entry in Directory('lib').listSync(recursive: true)) {
         if (entry is! File || !entry.path.endsWith('.dart')) continue;
-        if (entry.path.endsWith('sync_engine.dart')) continue; // owns the helper
+        // The helper's own definition and doc comment legitimately mention them.
+        if (entry.path.endsWith('epoch_seconds.dart')) continue;
         final content = entry.readAsStringSync();
-        if (content.contains('1000000000000')) offenders.add(entry.path);
+        if (content.contains('1000000000000') || content.contains('100000000000')) {
+          offenders.add(entry.path);
+        }
       }
       expect(offenders, isEmpty,
-          reason: 'these files still branch on a 1e12 threshold instead of the helper');
+          reason: 'these files still branch on a literal epoch threshold instead '
+              'of routing through normalizeEpochToSeconds');
     });
   });
 }

@@ -602,7 +602,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
 
     // Merge and deduplicate chapters cleanly
-    final mergedChapters = _mergeAndDeduplicateChapters(_chapters);
+    final chaptersBeforeMerge = _chapters;
+    final mergedChapters = _mergeAndDeduplicateChapters(chaptersBeforeMerge);
     // Persisted, not just applied in memory.
     //
     // `_mergeAndDeduplicateChapters` rewrites `name` and derives
@@ -619,8 +620,26 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     // once stored, re-deriving from the already-stripped name yields the same
     // value — so this converges after the first pass and is one `putAll` per
     // detail open, which this screen already does elsewhere.
+    if (loadGen != _loadGeneration) return;
     try {
       await IsarService.instance.saveChapters(mergedChapters);
+
+      // The survivors alone are not enough. `saveChapters` is a `putAll`, so it
+      // upserts and never deletes — the collapsed duplicates stayed in Isar and
+      // sprang straight back on the next raw load, which is what
+      // `_loadLocalDataOnly` does on every return from the reader. So the
+      // dedupe appeared to work, then undid itself, and the chapter-order flip
+      // this was meant to fix returned with it.
+      if (mergedChapters.length != chaptersBeforeMerge.length) {
+        final survivingIsarIds = mergedChapters.map((c) => c.id).where((id) => id > 0).toSet();
+        final droppedIsarIds = chaptersBeforeMerge
+            .map((c) => c.id)
+            .where((id) => id > 0 && !survivingIsarIds.contains(id))
+            .toList();
+        if (droppedIsarIds.isNotEmpty) {
+          await IsarService.instance.deleteChapterRows(droppedIsarIds);
+        }
+      }
     } catch (e, st) {
       // The in-memory merge is still applied, so the list is correct on screen
       // even if the write fails; only the ordering can regress on a later load.
@@ -892,20 +911,46 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     // refresh could interleave and clobber each other's `_manga`/`_chapters`
     // with no way to tell which pass was newer.
     final loadGen = ++_loadGeneration;
-    final byServerId = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
-    if (loadGen != _loadGeneration) return;
-    if (byServerId != null) {
-      _manga = byServerId;
-    } else if (_manga == null) {
-      final byLocal = await IsarService.instance.getManga(widget.mangaServerId);
+    try {
+      final byServerId = await IsarService.instance.getMangaByServerId(widget.mangaServerId);
       if (loadGen != _loadGeneration) return;
-      if (byLocal != null && byLocal.serverId < 0) _manga = byLocal;
-    }
-    final chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
-    if (loadGen != _loadGeneration) return;
-    if (chapters.isNotEmpty || _chapters.isEmpty) _chapters = chapters;
-    if (mounted) {
-      setState(() {});
+      if (byServerId != null) {
+        _manga = byServerId;
+      } else if (_manga == null) {
+        final byLocal = await IsarService.instance.getManga(widget.mangaServerId);
+        if (loadGen != _loadGeneration) return;
+        if (byLocal != null && byLocal.serverId < 0) _manga = byLocal;
+      }
+      final chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
+      if (loadGen != _loadGeneration) return;
+      if (chapters.isNotEmpty || _chapters.isEmpty) _chapters = chapters;
+      if (mounted) {
+        setState(() {});
+      }
+    } finally {
+      // Both flags are cleared unconditionally, NOT gated on this pass still
+      // owning the generation.
+      //
+      // This method bumps `_loadGeneration` without touching either flag, so
+      // gating on the token here reproduced the exact trap the gate was meant to
+      // avoid: a pull-to-refresh in flight, followed by a tap that calls this
+      // (returning from the reader or the migrate screen), means the refresh's
+      // own `finally` sees a bumped generation and declines to clear
+      // `_isRefreshing` — leaving it true for the life of this State. Every
+      // later refresh then hit `if (_isRefreshing) return;` and silently did
+      // nothing: no spinner, no error, no reload, until the user left the
+      // series and came back.
+      //
+      // Clearing unconditionally is safe because neither flag is owned by a
+      // specific pass: `_isLoading` is set only when there is no content, and
+      // `_isRefreshing` only when there is, and whichever load is current will
+      // re-set the one it needs.
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isRefreshing = false;
+        });
+      }
     }
   }
 
@@ -1710,7 +1755,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     IconButton(
                       icon: const Icon(Icons.refresh_rounded),
                       tooltip: 'Refresh',
-                      onPressed: _loadMangaDetails,
+                      // `keepContent` matters here exactly as it does in the
+                      // overflow menu. Tearing this off with no argument gave
+                      // `keepContent: false`, so the tablet refresh button was
+                      // the one path that still replaced the whole layout — both
+                      // panes, the cover and the chapter list — with a bare
+                      // spinner, which is the defect the flag was added for.
+                      onPressed: () => _loadMangaDetails(keepContent: _manga != null),
                     ),
                     IconButton(
                       icon: const Icon(Icons.public_rounded),
@@ -1959,15 +2010,25 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               Expanded(
                 child: sortedChapters.isEmpty
                     ? _chapterEmptyState()
-                    : ListView.builder(
-                        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-                        itemCount: sortedChapters.length,
-                        itemBuilder: (context, index) {
-                          final ch = sortedChapters[index];
-                          final isSelected = _selectedChapterIds.contains(_targetChapterId(ch));
-                          return _buildChapterListTile(ch, isSelected, isSelecting, primaryColor);
-                        },
+                    : RefreshIndicator(
+                        // The tablet pane had no refresh gesture at all, while
+                        // the shared empty state — shown here — told the user to
+                        // pull down to refresh. On any device at or above the
+                        // tablet breakpoint that instruction could not be
+                        // followed, and the only alternative was the button that
+                        // blanked both panes.
+                        color: primaryColor,
+                        onRefresh: () => _loadMangaDetails(keepContent: _manga != null),
+                        child: ListView.builder(
+                          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                          itemCount: sortedChapters.length,
+                          itemBuilder: (context, index) {
+                            final ch = sortedChapters[index];
+                            final isSelected = _selectedChapterIds.contains(_targetChapterId(ch));
+                            return _buildChapterListTile(ch, isSelected, isSelecting, primaryColor);
+                          },
+                        ),
                       ),
               ),
             ],
@@ -1989,18 +2050,6 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       scrollCacheExtent: ScrollCacheExtent.pixels(1000),
       slivers: [
-        // The refresh gesture the empty state tells the user to use. There was
-        // none anywhere in this screen, so "pull to refresh" was advice that
-        // could not be followed — and the only refresh (the overflow menu) blanked
-        // the whole body while it ran, removing the controls needed to recover.
-        //
-        // `CupertinoSliverRefreshControl` rather than wrapping in a
-        // `RefreshIndicator` because the body is a CustomScrollView, and this
-        // sliver composes with the existing slivers without restructuring them.
-        if (!isSelecting)
-          CupertinoSliverRefreshControl(
-            onRefresh: () => _loadMangaDetails(keepContent: _manga != null),
-          ),
         if (!isSelecting)
           SliverAppBar(
             expandedHeight: 320,
@@ -2176,6 +2225,22 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 ],
               ),
             ),
+          ),
+        // The refresh gesture the empty state tells the user to use. There was
+        // none anywhere in this screen, so "pull to refresh" was advice that
+        // could not be followed — and the only refresh (the overflow menu) blanked
+        // the whole body while it ran, removing the controls needed to recover.
+        //
+        // AFTER the SliverAppBar, not before it. `CupertinoSliverRefreshControl`
+        // is documented to sit between the app bar sliver and the content:
+        // placed first, the pull gesture drags the 320px hero app bar down with
+        // the finger instead of revealing an indicator below a stationary one,
+        // and the `refreshIndicatorExtent` it holds open for the whole
+        // `onRefresh` future shoves the entire page — app bar included — down by
+        // 60px and snaps it back at the end.
+        if (!isSelecting)
+          CupertinoSliverRefreshControl(
+            onRefresh: () => _loadMangaDetails(keepContent: _manga != null),
           ),
 
         SliverToBoxAdapter(
