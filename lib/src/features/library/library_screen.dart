@@ -35,7 +35,12 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   int _selectedCategoryIndex = 0;
   List<Manga> _allManga = [];
   List<Category> _categories = [];
-  bool _isLoading = false;
+  // Starts TRUE. It was declared false and never set true outside the loader, so
+  // the very first frame of the tab unconditionally rendered the "Your Library
+  // is Empty" panel with a "Browse Sources" button — a false claim, on every
+  // cold start, for a user with a full library, for at least one frame. Both
+  // exits of `_loadFromIsarThenSync` clear it, including the catch.
+  bool _isLoading = true;
 
   /// Set when a library load threw, so the empty state can distinguish "you have
   /// no manga" from "we could not read the database".

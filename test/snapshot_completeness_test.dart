@@ -127,4 +127,66 @@ void main() {
       );
     });
   });
+
+  group('isLibraryRemovalSafe', () {
+    // The library removal cascade SOFT-DELETES (`inLibrary = false`) every
+    // server-linked manga the server did not report. Two guards stand in front
+    // of it, and this is the third case the tests below pin: what force-reconcile
+    // is and is not allowed to override.
+
+    bool safe({
+      bool complete = true,
+      bool force = false,
+      int local = 100,
+      int server = 100,
+    }) =>
+        isLibraryRemovalSafe(
+          snapshotComplete: complete,
+          force: force,
+          localCountBefore: local,
+          serverCount: server,
+        );
+
+    test('a complete snapshot above the ratio removes normally', () {
+      expect(safe(local: 100, server: 100), isTrue);
+      expect(safe(local: 100, server: 30), isTrue, reason: 'exactly 30% is allowed');
+    });
+
+    test('a catastrophic shrink without force is refused', () {
+      // "The server was reset" heuristic: 5 of 100 is far more likely to be a
+      // truncated or emptied server than 95 genuine deletions.
+      expect(safe(local: 100, server: 5), isFalse);
+      expect(safe(local: 100, server: 0), isFalse);
+    });
+
+    test('an INCOMPLETE snapshot is refused even with force', () {
+      // The defect. Force-reconcile is documented in Settings as applying server
+      // removals "even if the wipe-guard would skip them", which is the ratio
+      // guard. Completeness is a different question: an incomplete snapshot is a
+      // partial VIEW of the library, and there is no way to tell which titles
+      // are absent because the server dropped them from which are absent
+      // because a page failed. Bypassing it meant one flaky page plus a
+      // force-reconcile soft-deleted most of the user's library.
+      expect(safe(complete: false, force: true, local: 100, server: 100), isFalse);
+      expect(safe(complete: false, force: true, local: 500, server: 400), isFalse,
+          reason: 'the exact shape of a mid-pagination timeout');
+      expect(safe(complete: false, force: false), isFalse);
+    });
+
+    test('force DOES override the ratio guard', () {
+      // That is the documented purpose of the button, and it still works.
+      expect(safe(complete: true, force: true, local: 100, server: 2), isTrue);
+    });
+
+    test('an empty local library is always safe', () {
+      // Nothing to lose.
+      expect(safe(local: 0, server: 0), isTrue);
+    });
+
+    test('a complete but empty server with a non-empty library is refused', () {
+      // This one IS legitimately "the user cleared the server", but the
+      // existing wipe-guard deliberately declines to act on it; unchanged here.
+      expect(safe(complete: true, force: false, local: 100, server: 0), isFalse);
+    });
+  });
 }

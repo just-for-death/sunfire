@@ -89,6 +89,34 @@ int retryCountAfterFailure(int current, {required bool transient}) => transient 
 /// classification and of the device clock.
 const int kMaxTransientSyncAttempts = 40;
 
+/// Whether local library entries the server did not report may be soft-deleted.
+///
+/// Two independent conditions, and the order matters.
+///
+/// [snapshotComplete] is NOT overridable by [force]. Force-reconcile is
+/// documented in Settings as applying server removals "even if the wipe-guard
+/// would skip them" — that is the 30% ratio heuristic for "the server was
+/// reset". Completeness is a different question: an incomplete snapshot is a
+/// partial VIEW of the library, and nothing in it can be reasoned about, because
+/// there is no way to tell which titles are absent because the server dropped
+/// them and which are absent because a page failed. Bypassing it meant one
+/// flaky page plus a force-reconcile soft-deleted most of the user's library.
+///
+/// The ratio is also not sufficient on its own: 500 manga with page 3 timing out
+/// returns 400, and 400 comfortably clears 30% of 500.
+@visibleForTesting
+bool isLibraryRemovalSafe({
+  required bool snapshotComplete,
+  required bool force,
+  required int localCountBefore,
+  required int serverCount,
+}) {
+  if (!snapshotComplete) return false;
+  if (force) return true;
+  if (localCountBefore == 0) return true;
+  return serverCount > 0 && serverCount >= localCountBefore * 0.3;
+}
+
 /// State a queued record moves to after a failed dispatch.
 ///
 /// [attempts] is the total number of failed dispatches, transient or not, and
@@ -1510,7 +1538,7 @@ class SyncEngine {
         // user's library, with no error surfaced. So a truncated response is
         // refused outright, independent of the ratio.
         final snapshotComplete = isCompleteSnapshot(libData);
-        if (!snapshotComplete && !forceLibraryRemovals) {
+        if (!snapshotComplete) {
           await LoggerService.instance.logWarning(
             'Library pull returned an incomplete snapshot '
             '(${serverMangas.length} of $localCountBefore local entries); '
@@ -1519,10 +1547,12 @@ class SyncEngine {
           );
         }
         final serverCount = serverMangas.length;
-        final removalSafe = forceLibraryRemovals ||
-            (snapshotComplete &&
-                (localCountBefore == 0 ||
-                    (serverCount > 0 && serverCount >= localCountBefore * 0.3))); // server has at least 30% of what we had
+        final removalSafe = isLibraryRemovalSafe(
+          snapshotComplete: snapshotComplete,
+          force: forceLibraryRemovals,
+          localCountBefore: localCountBefore,
+          serverCount: serverCount,
+        );
 
         if (removalSafe && serverCount > 0) {
           // Only soft-delete local entries that the server genuinely removed

@@ -901,8 +901,19 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
     await IsarService.instance.saveChapters(chaptersToReset);
 
+    // Guarded, and assigned rather than cleared in place.
+    //
+    // This ran `setState` after two awaits (the dialog, then the Isar write) with
+    // no check, while the `if (mounted)` sat on the very next line — an omission
+    // rather than a judgement call, since `setState` after unmount is a
+    // null-check crash in release, not an assert.
+    //
+    // `_updatesList.clear()` also mutated the list in place, so an in-flight
+    // background fetch — which has no re-entrancy guard — merged its results
+    // into the list the user had just emptied and repopulated it.
+    if (!mounted) return;
     setState(() {
-      _updatesList.clear();
+      _updatesList = [];
     });
 
     if (mounted) {
