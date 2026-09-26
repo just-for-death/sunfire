@@ -49,20 +49,55 @@ void main() async {
     // One-time startup cleanup: removes excess bulk-scraped standalone chapters.
     // This MUST NOT be called on every screen load — only here at startup.
     unawaited(IsarService.instance.cleanupBulkScrapedUpdates());
-  } catch (e) {
-    debugPrint('IsarService init error: $e');
+  } catch (e, st) {
+    // The most consequential of the three: a failed Isar init means the local
+    // library, reading history, bookmarks and download flags are all unreadable,
+    // and the app presents as an empty install. Previously invisible in release.
+    await LoggerService.instance.logError(
+      'IsarService failed to initialise — local library, history and download '
+      'state are unavailable',
+      exception: e,
+      stackTrace: st,
+      category: 'Startup',
+    );
   }
 
   try {
     await SettingsService.instance.initialize();
-  } catch (e) {
-    debugPrint('SettingsService init error: $e');
+  } catch (e, st) {
+    // Logged, not debugPrint'd.
+    //
+    // `debugPrint` is stripped in release, so a SharedPreferences failure was
+    // completely invisible. Every settings read and write goes through the
+    // `_prefs?.` null guard, so with `_prefs` left null the app did not throw —
+    // it silently reverted to defaults: server URL empty, incognito off, every
+    // stored preference gone, and every toggle a no-op that snapped straight
+    // back. The user saw an app that had forgotten all their configuration with
+    // no way to tell that from installing it fresh, and no diagnostic to send.
+    //
+    // LoggerService is initialised above and also keeps an in-memory log, so
+    // this is safe to call even when its own file init failed.
+    await LoggerService.instance.logError(
+      'SettingsService failed to initialise — the app is running with DEFAULT '
+      'settings and any change the user makes now will be silently discarded',
+      exception: e,
+      stackTrace: st,
+      category: 'Startup',
+    );
   }
 
   try {
     await MetronService.instance.initialize();
-  } catch (e) {
-    debugPrint('MetronService init error: $e');
+  } catch (e, st) {
+    // Release-visible for the same reason as the settings init above: a silent
+    // Metron failure means tracking-linked scrobbles stop working with no
+    // indication that anything is wrong.
+    await LoggerService.instance.logError(
+      'MetronService failed to initialise — tracker integration is unavailable',
+      exception: e,
+      stackTrace: st,
+      category: 'Startup',
+    );
   }
 
   try {

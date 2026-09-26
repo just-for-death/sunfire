@@ -99,6 +99,28 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   final Map<String, ({String sourceName, List<String> urls})> _prefetchedChapters = {};
   final Set<String> _prefetchingChapters = {};
 
+  /// Prefetch attempts that produced nothing, keyed like [prefetchedChapters],
+  /// valued with the epoch second of the attempt.
+  ///
+  /// The dedup above covered only the in-flight and the succeeded cases. A
+  /// prefetch that resolved to zero pages, or that threw, left no trace — and
+  /// both call sites fire on every position change, so once the reader was past
+  /// 65% of the chapter the full `resolveChapterPages` round trip was re-issued
+  /// on EVERY scroll frame, for the rest of the chapter. A source that is
+  /// genuinely page-less (a paywalled chapter, a login wall) therefore burned
+  /// continuous network for minutes at a time.
+  ///
+  /// A time-bounded negative cache rather than a permanent one: the failure is
+  /// frequently transient (the session cookie was not yet warm, the source was
+  /// briefly down), and a permanent mark would make the next-chapter navigation
+  /// as slow as if nothing had been prefetched. One minute is long enough to
+  /// cover the scrolling that triggers the storm, and short enough that coming
+  /// back to the chapter re-attempts.
+  final Map<String, int> _prefetchAttemptedAt = {};
+
+  /// How long a failed prefetch suppresses re-attempts for the same chapter.
+  static const Duration _kPrefetchFailureCooldown = Duration(minutes: 1);
+
   late ReadingMode _readingMode;
   Manga? _parentManga;
   late ReaderThemeMode _readerTheme;
@@ -1306,6 +1328,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
     // Clear prefetch cache on chapter change to prevent stale data and limit memory
     _prefetchedChapters.clear();
+    _prefetchAttemptedAt.clear();
+    _prefetchingChapters.clear();
     debugPrint('[Reader] Cleared prefetch cache on chapter load');
 
     _sourceName = resolved.effectiveSourceName ?? sourceName;
@@ -1446,6 +1470,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     final loadGen = _loadGeneration;
     final compositeKey = _prefetchKeyFor(chapter);
     if (_prefetchedChapters.containsKey(compositeKey) || _prefetchingChapters.contains(compositeKey)) return;
+    final lastAttempt = _prefetchAttemptedAt[compositeKey];
+    if (lastAttempt != null &&
+        DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(lastAttempt * 1000)) < _kPrefetchFailureCooldown) {
+      return;
+    }
 
     final manga = await IsarService.instance.getMangaByServerId(chapter.mangaId);
     final sourceName = manga?.sourceName ?? 'unknown';
@@ -1462,6 +1491,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       if (loadGen != _loadGeneration) return;
       // Also guard against dispose: don't pollute cache after widget is gone
       if (!mounted) return;
+      if (resolved.pageUrls.isEmpty) {
+        // Nothing to cache, so this would otherwise re-fire on every frame.
+        _prefetchAttemptedAt[compositeKey] = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        debugPrint('[Reader] Prefetch for chapter ${_prefetchKeyFor(chapter)} resolved to no pages; '
+            'suppressing re-attempts for ${_kPrefetchFailureCooldown.inSeconds}s');
+      }
       if (resolved.pageUrls.isNotEmpty) {
         // Enforce max cache size: evict oldest if over limit
         while (_prefetchedChapters.length >= _maxPrefetchedChapters) {
@@ -1473,6 +1508,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         // Use the PREFETCHED chapter's effective source for headers, not current chapter's.
         final effectiveSource = resolved.effectiveSourceName ?? sourceName;
         _prefetchedChapters[compositeKey] = (sourceName: effectiveSource, urls: resolved.pageUrls);
+        // Succeeded — drop any prior failure mark so a later legitimate
+        // re-prefetch is not suppressed.
+        _prefetchAttemptedAt.remove(compositeKey);
         debugPrint('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter '
             '${_chapterTargetId(chapter)} (key: $compositeKey)');
         for (final pUrl in resolved.pageUrls.take(3)) {
@@ -1492,6 +1530,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         }
       }
     } catch (e) {
+      _prefetchAttemptedAt[compositeKey] = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       debugPrint('[Reader] Prefetch failed for chapter ${_chapterTargetId(chapter)}: $e');
     } finally {
       _prefetchingChapters.remove(compositeKey);

@@ -204,7 +204,26 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     return SettingsService.languageBadgeLabel(lang);
   }
 
-  Future<void> _fetchServerUpdatesInBackground() async {
+  /// The in-flight server fetch, so concurrent callers share one.
+  ///
+  /// There are two entry points — the initial load and every pull-to-refresh —
+  /// with no re-entrancy guard, so two fast pulls ran two concurrent full
+  /// fetches. Both then persisted their chapters and both merged into
+  /// `_updatesList`, so the last writer won and the merge was applied to a list
+  /// the other pass had already replaced. Sharing the future also means the
+  /// refresh indicator waits for the pass that will actually populate the list,
+  /// rather than completing instantly.
+  Future<void>? _serverFetchInFlight;
+
+  Future<void> _fetchServerUpdatesInBackground() {
+    final existing = _serverFetchInFlight;
+    if (existing != null) return existing;
+    final started = _runServerUpdatesFetch();
+    _serverFetchInFlight = started;
+    return started;
+  }
+
+  Future<void> _runServerUpdatesFetch() async {
     try {
       final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
       final items = <Map<String, dynamic>>[];
@@ -315,8 +334,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
       // Persist fetched chapters into Isar so cache stays synchronized with server
       if (chaptersToSave.isNotEmpty) {
+        // One batched query, not one per chapter. This loop ran up to 100
+        // SEQUENTIAL Isar queries on every pull-to-refresh and every background
+        // sync — the N+1 was on the hot path of the screen the app opens to find
+        // out whether anything updated.
+        final existingByServerId = await IsarService.instance
+            .getChaptersByServerIds(chaptersToSave.map((c) => c.serverId).toList());
         for (final ch in chaptersToSave) {
-          final existing = await IsarService.instance.getChapterByServerId(ch.serverId);
+          final existing = existingByServerId[ch.serverId];
           if (existing != null) {
             ch.id = existing.id;
             ch.isRead = ch.isRead || existing.isRead;
@@ -357,6 +382,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       }
     } catch (_) {
       if (mounted) setState(() => _isOffline = true);
+    } finally {
+      // Cleared before the future completes, so the next caller gets a fresh
+      // pass rather than joining this one.
+      _serverFetchInFlight = null;
     }
   }
 
