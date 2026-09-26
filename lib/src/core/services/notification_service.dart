@@ -50,6 +50,7 @@ class NotificationService {
   static const String downloadsChannelDescription = 'Progress and completion of chapter downloads';
 
   static const int downloadProgressNotificationId = 4001;
+  static const int downloadsResumedNotificationId = 4002;
   static const int downloadSummaryNotificationId = 4002;
 
   /// Stream of notification payloads tapped by user (e.g. '/updates')
@@ -436,7 +437,7 @@ class NotificationService {
 
     try {
       await _plugin.show(
-        id: downloadProgressNotificationId,
+        id: downloadsResumedNotificationId,
         title: title,
         body: body,
         notificationDetails: details,
