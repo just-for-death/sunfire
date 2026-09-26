@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:path_provider/path_provider.dart';
 import '../logging/logger_service.dart';
 import 'quickjs_service.dart';
@@ -285,25 +284,55 @@ class RepoManager {
       // junk. Only a structurally valid index is promoted to the cache.
       final decoded = jsonDecode(raw);
       final List<dynamic> list = _coerceSourceList(decoded);
-      // A failed cache write must never discard the freshly fetched index —
-      // the source of truth is the network response, not the cache.
-      try {
-        await cacheFile.writeAsString(raw);
-      } catch (_) {
-        LoggerService.instance.logWarning('Repo index cache write failed for $normalizedUrl', 'RepoManager');
-      }
-      return list.whereType<Map<String, dynamic>>().map((item) => RepoSourceItem.fromJson(item, normalizedUrl)).toList();
-    } catch (_) {
-      if (await cacheFile.exists()) {
+      final items = list
+          .whereType<Map<String, dynamic>>()
+          .map((item) => RepoSourceItem.fromJson(item, normalizedUrl))
+          .toList();
+
+      // A syntactically valid response is not necessarily an index. A gateway
+      // or proxy happily answers 200 with `{"message":"Not Found"}`,
+      // `{"error":"maintenance"}` or `{}`, and _coerceSourceList returns []
+      // for those *without throwing*. Promoting one to the cache overwrote a
+      // perfectly good index, after which the user saw "No extensions found"
+      // and stayed broken offline with no error anywhere.
+      //
+      // Only promote a response that actually looks like a source list.
+      if (items.isNotEmpty) {
+        // A failed cache write must never discard the freshly fetched index —
+        // the source of truth is the network response, not the cache.
         try {
-          final cached = await cacheFile.readAsString();
-          final decoded = jsonDecode(cached);
-          final List<dynamic> list = _coerceSourceList(decoded);
-          return list.whereType<Map<String, dynamic>>().map((item) => RepoSourceItem.fromJson(item, normalizedUrl)).toList();
-        } catch (ignoredError) { if (kDebugMode) debugPrint('[repo_manager] ignored error: $ignoredError'); }
+          await cacheFile.writeAsString(raw);
+        } catch (_) {
+          LoggerService.instance.logWarning('Repo index cache write failed for $normalizedUrl', 'RepoManager');
+        }
+        return items;
       }
-      return [];
+
+      // Valid JSON, but not an index. Fall through to the cache rather than
+      // reporting "no sources", so a transient gateway response cannot make
+      // the user's extension list disappear.
+      LoggerService.instance.logWarning(
+        'Repo index at $normalizedUrl decoded to no usable sources '
+        '(top-level ${decoded.runtimeType}); falling back to the cached index',
+        'RepoManager',
+      );
+    } catch (e) {
+      LoggerService.instance.logWarning('Repo index fetch failed for $normalizedUrl: $e', 'RepoManager');
     }
+
+    // Shared fallback: whatever went wrong above, a previously good index on
+    // disk is strictly better than reporting zero sources.
+    if (await cacheFile.exists()) {
+      try {
+        final cached = await cacheFile.readAsString();
+        final decoded = jsonDecode(cached);
+        final List<dynamic> list = _coerceSourceList(decoded);
+        return list.whereType<Map<String, dynamic>>().map((item) => RepoSourceItem.fromJson(item, normalizedUrl)).toList();
+      } catch (ignoredError) {
+        LoggerService.instance.logWarning('Cached repo index at $normalizedUrl is unreadable: $ignoredError', 'RepoManager');
+      }
+    }
+    return [];
   }
 
   /// Normalizes the many index encodings repos use ([{...}] , {sources: [...]},

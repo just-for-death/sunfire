@@ -253,7 +253,14 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     setState(() => _isScrobbling = true);
 
     try {
-      final mId = _localManga?.id ?? widget.mangaServerId;
+      // Key on the manga's canonical id, never its local Isar id.
+      // getChaptersForManga is keyed on chapter.mangaId, which is always the
+      // parent's serverId (negative synthetic for local-only series). Querying
+      // by the local auto-increment id instead returns whichever *other*
+      // series has that serverId, and _scrobbleAllReadChapters then pushes
+      // their chapter numbers to MAL/AniList — permanently corrupting tracker
+      // progress for an unrelated series, with a success snackbar.
+      final mId = _localManga?.canonicalKey ?? widget.mangaServerId;
       var chapters = await IsarService.instance.getChaptersForManga(mId);
       if (chapters.isEmpty && widget.mangaServerId != mId) {
         chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);

@@ -9,6 +9,7 @@ import '../../core/engine/quickjs_service.dart';
 import '../../core/engine/source_migration_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/image_cache_helper.dart';
+import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 
@@ -703,10 +704,29 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
               }
             }
 
-            if (match != null && (match.isRead || match.lastPageRead > 0 || match.isBookmarked || match.isDownloadedLocally)) {
-              tc.isRead = match.isRead;
-              tc.lastPageRead = match.lastPageRead;
-              tc.lastReadAt = match.lastReadAt;
+            // Incognito suppresses reading history, so migrating a series must
+            // not resurrect it. Without this the target chapters get isRead,
+            // lastPageRead and lastReadAt written straight to Isar and the
+            // parent is stamped via stampLocalReadActivity — the private read
+            // then appears in History, in the in-progress query, and floats
+            // the series to the top of Library "Last Read" sorting. The
+            // network push was already blocked, so the user ended up with read
+            // state that existed locally but never synced: exactly the
+            // half-broken outcome the central guards exist to prevent.
+            //
+            // Bookmarks and download state are not reading history, so they
+            // still copy.
+            final copyingHistory = !SettingsService.instance.incognitoMode;
+
+            if (match != null &&
+                (match.isBookmarked ||
+                    match.isDownloadedLocally ||
+                    (copyingHistory && (match.isRead || match.lastPageRead > 0)))) {
+              if (copyingHistory) {
+                tc.isRead = match.isRead;
+                tc.lastPageRead = match.lastPageRead;
+                tc.lastReadAt = match.lastReadAt;
+              }
               tc.isBookmarked = match.isBookmarked;
               // NOTE: download state is deliberately NOT copied — the source
               // chapters' downloaded files belong to the source URLs, not the
