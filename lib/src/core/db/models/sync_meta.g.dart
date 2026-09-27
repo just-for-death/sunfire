@@ -53,7 +53,7 @@ const SyncMetaSchema = CollectionSchema(
   getId: _syncMetaGetId,
   getLinks: _syncMetaGetLinks,
   attach: _syncMetaAttach,
-  version: '3.1.0+1',
+  version: '3.3.2',
 );
 
 int _syncMetaEstimateSize(

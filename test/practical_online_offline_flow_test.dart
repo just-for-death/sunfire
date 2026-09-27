@@ -327,7 +327,7 @@ void main() {
 
       final sources = await GraphQLClientService.instance.fetchSources();
       final nodes = sources!['sources']['nodes'] as List;
-      expect(nodes.first.containsKey('isNsfw') || nodes.first.containsKey('name'), isTrue);
+      expect(((nodes.first as Map).containsKey('isNsfw') as bool) || ((nodes.first as Map).containsKey('name') as bool), isTrue);
       print('✓ bookmark/trackers/sources wired for manga=$mangaId chapter=$chId');
     });
   });

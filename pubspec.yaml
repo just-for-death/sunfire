@@ -26,8 +26,8 @@ dependencies:
     sdk: flutter
   go_router: ^14.6.2
   intl: ^0.20.2
-  isar: ^3.1.0+1
-  isar_flutter_libs: ^3.1.0+1
+  isar_community: ^3.3.2
+  isar_community_flutter_libs: ^3.3.2
   package_info_plus: ^8.1.2
   path: ^1.9.0
   path_provider: ^2.1.5
@@ -59,7 +59,7 @@ dev_dependencies:
     sdk: flutter
   flutter_test:
     sdk: flutter
-  isar_generator: ^3.1.0+1
+  isar_community_generator: ^3.3.2
   mocktail: ^1.0.4
 
 dependency_overrides:
@@ -68,7 +68,7 @@ dependency_overrides:
 flutter:
   uses-material-design: true
   generate: true
-  # CocoaPods until isar / flutter_qjs / flutter_secure_storage / etc. ship Package.swift.
+  # CocoaPods until isar_community / flutter_qjs / flutter_secure_storage / etc. ship Package.swift.
   # Flutter 3.44+ defaults to SwiftPM and otherwise warns that those plugins will error later.
   config:
     enable-swift-package-manager: false

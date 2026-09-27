@@ -13,7 +13,7 @@ workflows:
     max_build_duration: 60
     instance_type: linux_x2
     environment:
-      flutter: stable
+      flutter: 3.47.0
       java: 17
       vars:
         LANG: en_US.UTF-8
@@ -57,7 +57,7 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
-      flutter: stable
+      flutter: 3.47.0
       xcode: latest
       cocoapods: default
       vars:
@@ -113,7 +113,7 @@ workflows:
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:
-      flutter: stable
+      flutter: 3.47.0
       xcode: latest
       java: 17
       cocoapods: default

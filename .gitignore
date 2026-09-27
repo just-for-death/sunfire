@@ -61,6 +61,8 @@ android/.gradle/
 
 # Android signing material — NEVER commit (keystores + credentials)
 android/key.properties
+fastlane/play-service-account.json
+fastlane/report.xml
 **/*.jks
 **/*.keystore
 **/*.p12

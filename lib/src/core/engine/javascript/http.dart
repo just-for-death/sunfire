@@ -126,9 +126,9 @@ class Client {
     String urlStr = '';
     dynamic reqBody;
     try {
-      final List<dynamic> params = args is String ? jsonDecode(args) : args;
+      final List<dynamic> params = (args is String ? jsonDecode(args as String) : args) as List<dynamic>;
       urlStr = params[2].toString().trim();
-      final Map<String, dynamic> rawHeaders = params[3] is Map ? Map<String, dynamic>.from(params[3]) : {};
+      final Map<String, dynamic> rawHeaders = params[3] is Map ? Map<String, dynamic>.from(params[3] as Map) : {};
       reqBody = params.length > 4 ? params[4] : null;
       final dynamic body = reqBody;
 

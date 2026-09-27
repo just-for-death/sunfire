@@ -40,7 +40,7 @@ class JsDomSelector {
   void init() {
     runtime.onMessage('get_doc_element', (dynamic args) {
       final input = args[0];
-      final type = args[1];
+      final type = args[1] as String;
       final doc = _getCachedDoc(input);
       final element = switch (type) {
         'body' => doc.body,
@@ -53,7 +53,7 @@ class JsDomSelector {
 
     runtime.onMessage('get_doc_string', (dynamic args) {
       final input = args[0];
-      final type = args[1];
+      final type = args[1] as String;
       final doc = _getCachedDoc(input);
       final res = switch (type) {
         'text' => doc.text,
@@ -63,8 +63,8 @@ class JsDomSelector {
     });
 
     runtime.onMessage('get_element_string', (dynamic args) {
-      final type = args[0];
-      final key = args[1];
+      final type = args[0] as String;
+      final key = args[1] as int;
       final element = _elements[key];
       final res = switch (type) {
         'text' => element?.text,
@@ -83,7 +83,7 @@ class JsDomSelector {
 
     runtime.onMessage('doc_select_first', (dynamic args) {
       final input = args[0];
-      final selector = args[1];
+      final selector = args[1] as String;
       final doc = _getCachedDoc(input);
       var element = doc.selectFirst(selector);
       if (element == null) {
@@ -95,8 +95,8 @@ class JsDomSelector {
     });
 
     runtime.onMessage('ele_selectFirst', (dynamic args) {
-      final selector = args[0];
-      final key = args[1];
+      final selector = args[0] as String;
+      final key = args[1] as int;
       final ele = _elements[key];
       var element = ele?.selectFirst(selector);
       if (element == null && ele != null) {
@@ -108,8 +108,8 @@ class JsDomSelector {
     });
 
     runtime.onMessage('ele_element_sibling', (dynamic args) {
-      final type = args[0];
-      final key = args[1];
+      final type = args[0] as String;
+      final key = args[1] as int;
       final ele = _elements[key];
       final element = switch (type) {
         'nextElementSibling' => ele?.nextElementSibling,
@@ -119,57 +119,57 @@ class JsDomSelector {
     });
 
     runtime.onMessage('ele_attr', (dynamic args) {
-      final attr = args[0];
-      final key = args[1];
+      final attr = args[0] as String;
+      final key = args[1] as int;
       return _elements[key]?.attr(attr) ?? "";
     });
 
     runtime.onMessage('doc_attr', (dynamic args) {
       final input = args[0];
-      final attr = args[1];
+      final attr = args[1] as String;
       return _getCachedDoc(input).attr(attr) ?? "";
     });
 
     runtime.onMessage('ele_has_attr', (dynamic args) {
-      final attr = args[0];
-      final key = args[1];
+      final attr = args[0] as String;
+      final key = args[1] as int;
       return _elements[key]?.hasAtr(attr) ?? false;
     });
 
     runtime.onMessage('doc_has_attr', (dynamic args) {
       final input = args[0];
-      final attr = args[1];
+      final attr = args[1] as String;
       return _getCachedDoc(input).hasAtr(attr);
     });
 
     runtime.onMessage('doc_xpath_first', (dynamic args) {
       final input = args[0];
-      final xpath = args[1];
+      final xpath = args[1] as String;
       return _getCachedDoc(input).xpathFirst(xpath) ?? "";
     });
 
     runtime.onMessage('xpathFirst', (dynamic args) {
-      final xpath = args[0];
-      final key = args[1];
+      final xpath = args[0] as String;
+      final key = args[1] as int;
       return _elements[key]?.xpathFirst(xpath) ?? "";
     });
 
     runtime.onMessage('doc_xpath', (dynamic args) {
       final input = args[0];
-      final xpath = args[1];
+      final xpath = args[1] as String;
       return jsonEncode(_getCachedDoc(input).xpath(xpath));
     });
 
     runtime.onMessage('xpath', (dynamic args) {
-      final xpath = args[0];
-      final key = args[1];
+      final xpath = args[0] as String;
+      final key = args[1] as int;
       return jsonEncode(_elements[key]?.xpath(xpath));
     });
 
     runtime.onMessage('doc_get_elements_by', (dynamic args) {
       final input = args[0];
-      final type = args[1];
-      final name = args[2];
+      final type = args[1] as String;
+      final name = args[2] as String;
       final doc = _getCachedDoc(input);
       final elements = switch (type) {
         'children' => doc.children,
@@ -177,7 +177,7 @@ class JsDomSelector {
         _ => doc.getElementsByClassName(name),
       };
       List<int> elementKeys = [];
-      for (var element in elements) {
+      for (final element in elements) {
         final k = _storeElement(element);
         if (k != null) elementKeys.add(k);
       }
@@ -185,9 +185,9 @@ class JsDomSelector {
     });
 
     runtime.onMessage('ele_get_elements_by', (dynamic args) {
-      final type = args[0];
-      final name = args[1];
-      final key = args[2];
+      final type = args[0] as String;
+      final name = args[1] as String;
+      final key = args[2] as int;
       final element = _elements[key];
       final elements = switch (type) {
         'children' => element?.children,
@@ -195,8 +195,8 @@ class JsDomSelector {
         _ => element?.getElementsByClassName(name),
       };
       List<int> elementKeys = [];
-      for (var el in elements ?? []) {
-        final k = _storeElement(el);
+      for (final el in elements ?? <Element>[]) {
+        final k = _storeElement(el as Element?);
         if (k != null) elementKeys.add(k);
       }
       return jsonEncode(elementKeys);
@@ -204,13 +204,13 @@ class JsDomSelector {
 
     runtime.onMessage('doc_get_element_by_id', (dynamic args) {
       final input = args[0];
-      final id = args[1];
+      final id = args[1] as String;
       return _storeElement(_getCachedDoc(input).getElementById(id));
     });
 
     runtime.onMessage('doc_select', (dynamic args) {
       final input = args[0];
-      final selector = args[1];
+      final selector = args[1] as String;
       final doc = _getCachedDoc(input);
       var elements = doc.select(selector);
       if (elements == null || elements.isEmpty) {
@@ -219,16 +219,16 @@ class JsDomSelector {
         } catch (ignoredError) { if (kDebugMode) debugPrint('[dom_selector] ignored error: $ignoredError'); }
       }
       List<int> elementKeys = [];
-      for (var element in elements ?? []) {
-        final k = _storeElement(element);
+      for (final element in elements ?? <Element>[]) {
+        final k = _storeElement(element as Element?);
         if (k != null) elementKeys.add(k);
       }
       return jsonEncode(elementKeys);
     });
 
     runtime.onMessage('ele_select', (dynamic args) {
-      final selector = args[0];
-      final key = args[1];
+      final selector = args[0] as String;
+      final key = args[1] as int;
       final ele = _elements[key];
       var elements = ele?.select(selector);
       if (elements == null || elements.isEmpty) {
@@ -237,8 +237,8 @@ class JsDomSelector {
         } catch (ignoredError) { if (kDebugMode) debugPrint('[dom_selector] ignored error: $ignoredError'); }
       }
       List<int> elementKeys = [];
-      for (var element in elements ?? []) {
-        final k = _storeElement(element);
+      for (final element in elements ?? <Element>[]) {
+        final k = _storeElement(element as Element?);
         if (k != null) elementKeys.add(k);
       }
       return jsonEncode(elementKeys);

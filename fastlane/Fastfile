@@ -1,0 +1,21 @@
+# Sunfire Fastlane — Android metadata only.
+# Canonical releases are built on Codemagic (see codemagic.yaml).
+# These lanes validate metadata and optionally upload via supply.
+default_platform(:android)
+
+platform :android do
+  desc "Validate Play metadata"
+  lane :validate do
+    # Ensures metadata/ parses; no credentials needed.
+    sh("ls metadata/android/en-US")
+  end
+
+  desc "Upload metadata + APK to Play (requires SUPPLY_JSON_KEY)"
+  lane :deploy do
+    supply(
+      track: "internal",
+      skip_upload_apk: false,
+      skip_upload_metadata: false
+    )
+  end
+end

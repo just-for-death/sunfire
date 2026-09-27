@@ -96,7 +96,7 @@ void main() {
           }
           final link = list.first['link'] ?? list.first['url'];
 
-          final details = await service.getDetail(link).timeout(const Duration(seconds: 40));
+          final details = await service.getDetail(link as String).timeout(const Duration(seconds: 40));
           final chapters = details['chapters'] as List<dynamic>? ?? [];
           if (chapters.isEmpty) {
             summary.add('$name: FAIL (no chapters)');
@@ -107,7 +107,7 @@ void main() {
           final chLink = chapter['url'];
           print('  Chapter: ${chapter['name']} -> $chLink');
 
-          final pages = await service.getPageList(chLink).timeout(const Duration(seconds: 40));
+          final pages = await service.getPageList(chLink as String).timeout(const Duration(seconds: 40));
           if (pages.isEmpty) {
             summary.add('$name: FAIL (no pages)');
             continue;

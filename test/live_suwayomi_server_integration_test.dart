@@ -80,7 +80,7 @@ void main() {
       if (extensionsData != null && extensionsData['extensions']?['nodes'] != null) {
         final list = extensionsData['extensions']['nodes'] as List;
         if (list.isNotEmpty) {
-          testId = list.first['pkgName'] ?? testId;
+          testId = (list.first['pkgName'] as String? ?? testId);
         }
       }
 

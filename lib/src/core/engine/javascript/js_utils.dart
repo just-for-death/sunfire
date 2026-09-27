@@ -15,7 +15,7 @@ class JsUtils {
     // logs. Forward it to debugPrint so it shows up like any other trace.
     runtime.onMessage('log', (dynamic args) {
       try {
-        final List<dynamic> params = args is String ? jsonDecode(args) : args;
+        final List<dynamic> params = (args is String ? jsonDecode(args as String) : args) as List<dynamic>;
         debugPrint('[JS] ${params.join(' ')}');
       } catch (ignoredError) { if (kDebugMode) debugPrint('[js_utils] ignored error: $ignoredError'); }
       return null;
