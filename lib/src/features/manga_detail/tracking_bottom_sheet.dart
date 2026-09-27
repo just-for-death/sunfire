@@ -130,6 +130,18 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
 
     if (trackerId == kMetronTrackerId) {
       // Search Metron
+      // No token -> no request. The card already shows "token not
+      // configured" with a Configure shortcut; firing an anonymous search
+      // would 401 and log an ERROR + stack trace per attempt for nothing.
+      if (!MetronService.instance.isConfigured) {
+        if (mounted && searchGen == _searchGeneration) {
+          setState(() {
+            _searchResults = [];
+            _isSearching = false;
+          });
+        }
+        return;
+      }
       try {
         final query = _searchQuery.isEmpty ? widget.mangaTitle : _searchQuery;
         final res = await MetronService.instance.searchSeries(query: query);

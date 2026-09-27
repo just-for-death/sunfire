@@ -157,12 +157,21 @@ class MetronApiClient {
           // say so, so `isConfigured` goes false and the UI can prompt instead of
           // silently failing forever.
           if (err.response?.statusCode == 401) {
-            LoggerService.instance.logWarning(
-              'Metron rejected the stored API token (HTTP 401). Clearing it — '
-              'tracking will stay off until a new token is entered.',
-              'Metron',
-            );
-            _reportUnauthorized();
+            // Only a request that actually carried a token can kill it. An
+            // anonymous 401 (no token configured) is expected, not an event —
+            // warning here would claim a "stored token" was rejected when none
+            // was ever sent, and the sheet already prompts for configuration.
+            final hadToken = _apiToken != null && _apiToken!.isNotEmpty;
+            if (hadToken) {
+              LoggerService.instance.logWarning(
+                'Metron rejected the stored API token (HTTP 401). Clearing it — '
+                'tracking will stay off until a new token is entered.',
+                'Metron',
+              );
+              _reportUnauthorized();
+            } else if (kDebugMode) {
+              debugPrint('[Metron] anonymous request rejected (401) — no token configured');
+            }
           }
 
           handler.next(err);

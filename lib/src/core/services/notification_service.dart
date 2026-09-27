@@ -175,10 +175,17 @@ class NotificationService {
       });
       IsolateNameServer.registerPortWithName(port.sendPort, _notificationTapPortName);
 
-      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
-      if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
-        _initialPayload = launchDetails.notificationResponse?.payload ?? '/updates';
-        debugPrint('[NotificationService] App launched from notification: $_initialPayload');
+      // Not implemented on all platforms (Linux throws UnimplementedError).
+      // Must not poison _isInitialized: otherwise every showXxx re-runs this
+      // whole method, leaking a ReceivePort per notification on Linux.
+      try {
+        final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+        if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
+          _initialPayload = launchDetails.notificationResponse?.payload ?? '/updates';
+          debugPrint('[NotificationService] App launched from notification: $_initialPayload');
+        }
+      } catch (e) {
+        debugPrint('[NotificationService] launch details unavailable: $e');
       }
 
       // Create high-priority notification channel for Android
