@@ -137,7 +137,13 @@ GoRouter buildAppRouter({
       ShellRoute(
         pageBuilder: (context, state, child) {
           // Single MainShell instance; the router owns which tab is active.
-          return NoTransitionPage(child: MainShell(child: child));
+          // The reader is fullscreen: same shell (lifecycle observers keep
+          // running) but without the sidebar rail / bottom bar chrome.
+          final path = state.uri.path;
+          final fullscreen = path == '/reader' || path.startsWith('/reader/');
+          return NoTransitionPage(
+            child: MainShell(child: child, isFullscreen: fullscreen),
+          );
         },
         routes: [
           for (final tab in sunfireTabRoutes)
