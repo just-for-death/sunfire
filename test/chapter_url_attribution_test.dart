@@ -33,6 +33,24 @@ void main() {
       );
     });
 
+    test('handles relative stored manga page paths', () {
+      // The tap flow stores links as-is, often `/comic/<slug>`.
+      expect(
+        chapterUrlBelongsToMangaPage(
+          '/comic/absolute-superman-2024',
+          'https://readcomicsonline.ru/comic/absolute-superman-2024/16',
+        ),
+        isTrue,
+      );
+      expect(
+        chapterUrlBelongsToMangaPage(
+          '/comic/absolute-superman-2024',
+          'https://readcomicsonline.ru/comic/absolute-batman-2024/annual2025',
+        ),
+        isFalse,
+      );
+    });
+
     test('is case-insensitive on host and slug', () {
       expect(
         chapterUrlBelongsToMangaPage(

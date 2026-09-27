@@ -445,15 +445,20 @@ class IsarService {
   /// the scraped series, so Updates showed "Absolute Superman" with an
   /// "Absolute Batman" chapter. Only synthetic (negative serverId) rows are
   /// eligible; real server chapters are never touched.
+  ///
+  /// NOTE on id spaces: Chapter.mangaId lives in *serverId space*
+  /// (Manga.canonicalKey == serverId — see library_update_service and the
+  /// server pulls), NOT Isar auto-increment id space. Parents must be keyed
+  /// by serverId or every lookup misses.
   Future<void> cleanupMisattributedLocalChapters() async {
     if (!_isInitialized) return;
     try {
-      final localManga = await _isar.mangas
-          .filter()
-          .serverIdLessThan(0)
-          .findAll();
-      if (localManga.isEmpty) return;
-      final mangaById = <int, Manga>{for (final m in localManga) m.id: m};
+      final allManga = await _isar.mangas.where().findAll();
+      if (allManga.isEmpty) return;
+      final mangaByServerId = <int, Manga>{
+        for (final m in allManga)
+          if (m.serverId != 0) m.serverId: m,
+      };
       final chapters = await _isar.chapters
           .filter()
           .serverIdLessThan(0)
@@ -461,8 +466,18 @@ class IsarService {
       final strayIds = <int>[];
       for (final ch in chapters) {
         if (ch.url.isEmpty) continue;
-        final parent = mangaById[ch.mangaId];
-        if (parent == null || parent.url.isEmpty) continue;
+        final parent = mangaByServerId[ch.mangaId];
+        if (parent == null) {
+          // Orphaned synthetic row (parent manga row gone). Only reap when
+          // the url is provably a series page (RCO /comic/<slug> shape) —
+          // never on guesswork.
+          final segs = Uri.tryParse(ch.url)?.pathSegments.where((s) => s.isNotEmpty).toList() ?? const [];
+          if (segs.length >= 2 && segs[0].toLowerCase() == 'comic') {
+            strayIds.add(ch.id);
+          }
+          continue;
+        }
+        if (parent.url.isEmpty) continue;
         if (!chapterUrlBelongsToMangaPage(parent.url, ch.url)) {
           strayIds.add(ch.id);
         }
