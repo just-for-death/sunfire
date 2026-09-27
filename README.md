@@ -166,6 +166,23 @@ flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build
 flutter build ipa
 ```
 
+### Release signing (Android, local-only by design)
+
+Installable APKs are signed on this machine with a persistent key, so every
+update carries the same certificate and installs over the previous version —
+no uninstall. The key (`android/sunfire-release.jks`) and
+`android/key.properties` are gitignored and must never be committed or
+uploaded anywhere; backups live in `~/Documents/BACKUP/`. Lose the keystore
+and no future build can update the installed app again.
+
+CI has no access to the key and its artifacts are debug-signed: never install
+a CI APK over a release-signed app. Verify any APK before distributing:
+
+```bash
+apksigner verify --print-certs app-release.apk
+# must show SHA-256: 455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775
+```
+
 ---
 
 ## Platform support
