@@ -778,8 +778,11 @@ void main() {
 
       test('40. Dynamic Scraper Installation & Execution from External Repo', () async {
         final sources = await RepoManager.instance.fetchRepoSources('https://m2k3a.github.io/mangayomi-extensions/index.json');
+        // Entries may point at non-JS payloads (e.g. Dart multisrc scrapers);
+        // downloadJsSourceCode only serves .js. Pick a real JS scraper so this
+        // tests installation, not the guard.
         final targetSource = sources.firstWhere(
-          (s) => s.isJs && s.lang == 'en',
+          (s) => s.isJs && s.lang == 'en' && s.sourceCodeUrl.toLowerCase().split('?').first.endsWith('.js'),
         );
 
         final jsCode = await RepoManager.instance.downloadJsSourceCode(targetSource.sourceCodeUrl);

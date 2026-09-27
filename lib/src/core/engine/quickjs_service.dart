@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../constants/app_constants.dart';
 import '../logging/logger_service.dart';
+import 'chapter_url_attribution.dart';
 import 'javascript/js_extension_service.dart';
 import 'javascript/m_client.dart';
 import 'repo_manager.dart';
@@ -187,11 +188,21 @@ class QuickJsService {
   void invalidateSourceRuntime(String sourceName) => _invalidateRuntime(sourceName);
 
 
+  /// When true, [initialize] loads disk state but does NOT fetch remote
+  /// catalogs. Set by main.dart before onboarding completes: installing 261
+  /// community extensions (with network traffic) before the user has chosen
+  /// server vs standalone is a surprise. Onboarding completion calls
+  /// [ensureAutoInstalled]. Defaults to false so tests and background isolates
+  /// keep the old eager behavior.
+  bool deferAutoInstall = false;
+
   Future<void> initialize() async {
     try {
       await _loadInstalledExtensionsFromDisk();
       // Auto-install extensions from remote repos on first run if no extensions are installed
-      await _autoInstallExtensionsFromRemoteRepos();
+      if (!deferAutoInstall) {
+        await _autoInstallExtensionsFromRemoteRepos();
+      }
       _initialized = true;
       _initError = null;
     } catch (e, stack) {
@@ -199,6 +210,13 @@ class QuickJsService {
       _initError = e.toString();
       await LoggerService.instance.logError('Failed to initialize QuickJS: $e', exception: e, stackTrace: stack, category: 'QuickJS');
     }
+  }
+
+  /// Runs the first-run remote auto-install if nothing is installed yet.
+  /// Safe to call repeatedly: no-ops when extensions already exist.
+  Future<void> ensureAutoInstalled() async {
+    await _loadInstalledExtensionsFromDisk();
+    await _autoInstallExtensionsFromRemoteRepos();
   }
 
   Future<void> _autoInstallExtensionsFromRemoteRepos() async {
@@ -225,6 +243,13 @@ class QuickJsService {
       int installedCount = 0;
       for (final source in repoSources) {
         try {
+          // Some third-party index entries carry no JS payload (empty
+          // sourceCodeUrl/pkgPath). Attempting them produced 404s like
+          // `.../main/javascript/` ("Olympus Scanlation"). Skip quietly.
+          if (source.sourceCodeUrl.trim().isEmpty) {
+            if (kDebugMode) debugPrint('[QuickJS] Skipping index entry without JS url: ${source.name}');
+            continue;
+          }
           final cleanKey = source.name.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
           if (_installedJsSources.containsKey(cleanKey)) continue;
 
@@ -1049,9 +1074,26 @@ class QuickJsService {
     }
 
     try {
-      return await withRuntime<Map<String, dynamic>>(sourceName, jsCode, (service) async {
+      final detail = await withRuntime<Map<String, dynamic>>(sourceName, jsCode, (service) async {
         return await service.getDetail(targetUrl);
       });
+      // Drop chapters that belong to a different series page (related-comic
+      // links picked up by over-broad selectors). See
+      // chapterUrlBelongsToMangaPage: conservative, only rejects provable
+      // same-host mismatches.
+      final rawChapters = detail['chapters'];
+      if (rawChapters is List && rawChapters.isNotEmpty) {
+        final before = rawChapters.length;
+        rawChapters.removeWhere((c) {
+          final url = (c is Map ? (c['url'] ?? c['link']) : null)?.toString() ?? '';
+          return !chapterUrlBelongsToMangaPage(targetUrl, url);
+        });
+        final dropped = before - rawChapters.length;
+        if (dropped > 0 && kDebugMode) {
+          debugPrint('[quickjs_service] dropped $dropped foreign chapters for $sourceName ($targetUrl)');
+        }
+      }
+      return detail;
     } catch (e) {
       await LoggerService.instance.logError('Local getDetail failed for $sourceName ($targetUrl): $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
       return {};
