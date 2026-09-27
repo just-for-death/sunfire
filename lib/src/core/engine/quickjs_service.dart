@@ -850,7 +850,10 @@ class QuickJsService {
 
     // 1. Try standard JSON decode of mangayomiSources array
     try {
-      final match = RegExp(r'''(?:const|var|let)\s+mangayomiSources\s*=\s*(\[\s*\{[\s\S]*?\}\s*\]);?''').firstMatch(jsCode);
+      // The header may use a JS trailing comma after the last property
+      // (",\n  },") which is invalid JSON. `,?` lets the capture end at
+      // the header instead of bleeding into the class body below it.
+      final match = RegExp(r'''(?:const|var|let)\s+mangayomiSources\s*=\s*(\[\s*\{[\s\S]*?\}\s*,?\s*\]);?''').firstMatch(jsCode);
       if (match != null) {
         var jsonStr = match.group(1)!;
         // Use replaceAllMapped to avoid replacement string parsing issues with $1
