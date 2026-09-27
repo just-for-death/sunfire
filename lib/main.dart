@@ -49,6 +49,9 @@ void main() async {
     // One-time startup cleanup: removes excess bulk-scraped standalone chapters.
     // This MUST NOT be called on every screen load — only here at startup.
     unawaited(IsarService.instance.cleanupBulkScrapedUpdates());
+    // One-time repair for chapters scraped from a different series' page
+    // (over-broad selectors, e.g. RCO's old `a[href*='/comic/']` catch-all).
+    unawaited(IsarService.instance.cleanupMisattributedLocalChapters());
   } catch (e, st) {
     // The most consequential of the three: a failed Isar init means the local
     // library, reading history, bookmarks and download flags are all unreadable,
@@ -112,6 +115,11 @@ void main() async {
     debugPrint('ImageCacheHelper init error: $e');
   }
 
+  // No remote catalog traffic before the user finishes onboarding: with
+  // zero extensions installed, initialize() would otherwise download 261
+  // community scrapers on first launch. Onboarding completion calls
+  // ensureAutoInstalled() once the user has chosen server vs standalone.
+  QuickJsService.instance.deferAutoInstall = !SettingsService.instance.onboardingCompleted;
   try {
     await QuickJsService.instance.initialize();
   } catch (e) {

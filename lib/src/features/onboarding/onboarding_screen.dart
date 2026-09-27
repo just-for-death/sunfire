@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../core/db/isar_service.dart';
 import '../../core/engine/javascript/m_client.dart';
+import '../../core/engine/quickjs_service.dart';
 import '../../core/engine/repo_manager.dart';
 import '../../core/engine/source_migration_service.dart';
 import '../../core/logging/logger_service.dart';
@@ -462,6 +463,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       selectedRepos: _userRepoUrls,
     );
     SettingsService.instance.onboardingCompleted = true;
+    // First-run extension catalogs were deferred at startup (no repo traffic
+    // before the user chooses server vs standalone). Install now that the
+    // choice is made — fire-and-forget so onboarding never blocks on it.
+    unawaited(QuickJsService.instance.ensureAutoInstalled());
     if (cleanUrl != null) {
       SettingsService.instance.serverUrl = cleanUrl;
     }

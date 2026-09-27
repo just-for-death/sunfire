@@ -606,7 +606,11 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                         child: InkWell(
                                           borderRadius: BorderRadius.circular(16),
                                           onTap: () async {
-                                            if (id > 0) {
+                                            // Local extension results carry synthetic NEGATIVE
+                                            // ids (line 602 above); id == 0 means unresolvable.
+                                            // This used to be `id > 0`, which silently
+                                            // swallowed every tap on every extension result.
+                                            if (id != 0) {
                                               var existing = await IsarService.instance.getMangaByServerId(id);
                                               if (existing == null) {
                                                 final newManga = Manga()

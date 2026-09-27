@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:isar_community/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import '../engine/chapter_url_attribution.dart';
 import '../logging/logger_service.dart';
 
 import 'epoch_seconds.dart';
@@ -433,6 +434,48 @@ class IsarService {
     } catch (e, stack) {
       LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'Database');
       return [];
+    }
+  }
+
+  /// One-time repair for misattributed local chapters: rows whose url belongs
+  /// to a DIFFERENT series page than their parent manga (see
+  /// chapterUrlBelongsToMangaPage). Written by over-broad chapter selectors
+  /// before the fetchMangaDetailsLocal filter existed — e.g. RCO's old
+  /// `a[href*='/comic/']` catch-all saved related-comic links as chapters of
+  /// the scraped series, so Updates showed "Absolute Superman" with an
+  /// "Absolute Batman" chapter. Only synthetic (negative serverId) rows are
+  /// eligible; real server chapters are never touched.
+  Future<void> cleanupMisattributedLocalChapters() async {
+    if (!_isInitialized) return;
+    try {
+      final localManga = await _isar.mangas
+          .filter()
+          .serverIdLessThan(0)
+          .findAll();
+      if (localManga.isEmpty) return;
+      final mangaById = <int, Manga>{for (final m in localManga) m.id: m};
+      final chapters = await _isar.chapters
+          .filter()
+          .serverIdLessThan(0)
+          .findAll();
+      final strayIds = <int>[];
+      for (final ch in chapters) {
+        if (ch.url.isEmpty) continue;
+        final parent = mangaById[ch.mangaId];
+        if (parent == null || parent.url.isEmpty) continue;
+        if (!chapterUrlBelongsToMangaPage(parent.url, ch.url)) {
+          strayIds.add(ch.id);
+        }
+      }
+      if (strayIds.isNotEmpty) {
+        await deleteChapterRows(strayIds);
+        await LoggerService.instance.logInfo(
+          'Cleaned up ${strayIds.length} misattributed local chapters (wrong series url)',
+          'Database',
+        );
+      }
+    } catch (e) {
+      debugPrint('[IsarService] cleanupMisattributedLocalChapters error: $e');
     }
   }
 

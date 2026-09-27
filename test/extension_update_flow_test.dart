@@ -1,6 +1,6 @@
 // ignore_for_file: avoid_print
 // End-to-end verification of the extension update pipeline:
-//   1. The official repo index exposes the newest Mangago (1.3.3) to the app.
+//   1. The official repo index exposes the newest Mangago (1.3.5) to the app.
 //   2. updateInstalledExtensions safely upgrades an older local install and
 //      replaces the scraper code with the server-side fix (phantom "×" removal).
 //   3. (Live, guarded) The running Suwayomi accepts the app's updateExtension
@@ -44,22 +44,22 @@ void main() {
   });
 
   group('EXTENSION UPDATE FLOW', () {
-    test('official repo index exposes Mangago v1.3.3 to the app', () async {
+    test('official repo index exposes Mangago v1.3.5 to the app', () async {
       final sources = await RepoManager.instance.fetchRepoSources(RepoManager.officialIndexUrl);
       final mangago =
           sources.where((s) => s.name.trim().toLowerCase() == 'mangago').toList();
       expect(mangago, isNotEmpty, reason: 'Mangago must be listed in the official index');
-      expect(mangago.first.version, '1.3.3');
+      expect(mangago.first.version, '1.3.5');
       expect(mangago.first.sourceCodeUrl, contains('mangago.js'));
 
       final combined = await RepoManager.instance.fetchCombinedRepoSources([RepoManager.officialIndexUrl]);
       final best =
           combined.where((s) => s.name.trim().toLowerCase() == 'mangago').toList();
       expect(best, isNotEmpty);
-      expect(best.first.version, '1.3.3');
+      expect(best.first.version, '1.3.5');
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    test('local install safely upgrades Mangago 1.3.2 -> 1.3.3', () async {
+    test('local install safely upgrades Mangago 1.3.2 -> 1.3.5', () async {
       final qjs = QuickJsService.instance;
       await qjs.initialize();
 
@@ -115,7 +115,7 @@ void main() {
       final updated = await RepoManager.instance
           .updateInstalledExtensions([RepoManager.officialIndexUrl]);
 
-      expect(qjs.getInstalledVersion('Mangago'), '1.3.3',
+      expect(qjs.getInstalledVersion('Mangago'), '1.3.5',
           reason: 'updater must pull the newer scraper from the official index');
       final freshCode = qjs.getExtensionCode('Mangago');
       expect(freshCode, isNotNull);

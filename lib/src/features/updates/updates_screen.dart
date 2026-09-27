@@ -80,8 +80,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     SettingsService.instance.addListener(_onSettingsChanged);
     _wsUpdateSub = WebSocketService.instance.onUpdateStatus.listen((event) {
       if (!mounted) return;
-      final status = event['status']?.toString() ?? event.toString();
-      setState(() => _liveUpdateStatus = status);
+      // Structural events (e.g. libraryUpdateStatusChanged carrying
+      // `{jobsInfo: {isRunning: true}}`) have no human-readable status.
+      // Stringifying the whole map leaked `{jobsInfo: ...}` into the Updates
+      // header. Only show real status strings.
+      final raw = event['status'];
+      if (raw is String && raw.trim().isNotEmpty) {
+        setState(() => _liveUpdateStatus = raw);
+      }
       // Debounced: a single library-update run emits one
       // libraryUpdateStatusChanged per source plus an updateStatusChanged per
       // affected chapter, so this fired dozens of times in a row, each one
