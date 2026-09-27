@@ -398,6 +398,13 @@ class RepoManager {
   }
 
   Future<String?> downloadJsSourceCode(String jsUrl, {String? expectedSha256}) async {
+    // Choke point for every JS download (auto-install, migration, updates).
+    // Third-party indexes contain entries with no JS payload; without this the
+    // Dio GET fires at garbage like `<repo>/javascript/` and logs a 404 WARN.
+    final trimmed = jsUrl.trim();
+    if (trimmed.isEmpty || !trimmed.toLowerCase().split('?').first.endsWith('.js')) {
+      return null;
+    }
     try {
       final sep = jsUrl.contains('?') ? '&' : '?';
       final freshUrl = '$jsUrl${sep}_t=${DateTime.now().millisecondsSinceEpoch}';
