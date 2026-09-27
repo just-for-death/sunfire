@@ -738,7 +738,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       if (settings.metronAutoScrobble && ch.mangaId > 0) {
         MetronService.instance
             .scrobbleChapterByMangaId(mangaId: ch.mangaId, chapter: ch)
-            .catchError((e, st) {
+            .catchError((Object e, StackTrace st) {
           LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
           return false;
         });

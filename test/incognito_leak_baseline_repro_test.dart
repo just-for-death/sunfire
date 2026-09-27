@@ -23,7 +23,7 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sunfire/src/core/db/isar_service.dart';
 import 'package:sunfire/src/core/db/models/category.dart';
@@ -35,19 +35,44 @@ import 'package:sunfire/src/core/services/settings_service.dart';
 import 'package:sunfire/src/core/sync/sync_engine.dart';
 
 String? _findIsarNative() {
-  for (final root in [
-    Directory('${Platform.environment['HOME']}/.pub-cache/hosted/pub.dev'),
-    Directory('${Platform.environment['HOME']}/.pub-cache'),
-  ]) {
-    if (!root.existsSync()) continue;
-    for (final d in root.listSync().whereType<Directory>()) {
-      if (!d.path.contains('isar_flutter_libs')) continue;
-      final f = File('${d.path}/linux/libisar.so');
-      if (f.existsSync()) return f.path;
+  // Prefer isar_community_flutter_libs (3.3.2); fall back to legacy isar_flutter_libs.
+  String? legacy;
+  // 1) pub-cache hosted layout: .pub-cache/hosted/pub.dev/isar_community_flutter_libs-*/linux/libisar.so
+  final hosted = Directory('${Platform.environment['HOME']}/.pub-cache/hosted/pub.dev');
+  if (hosted.existsSync()) {
+    for (final d in hosted.listSync().whereType<Directory>()) {
+      final isCommunity = d.path.contains('isar_community_flutter_libs');
+      final isLegacy = d.path.contains('isar_flutter_libs') && !isCommunity;
+      if (isCommunity || isLegacy) {
+        final f = File('${d.path}/linux/libisar.so');
+        if (f.existsSync()) {
+          if (isCommunity) return f.path;
+          legacy ??= f.path;
+        }
+      }
     }
   }
-  final buildLib = File('${Directory.current.path}/build/linux/x64/debug/bundle/lib/libisar.so');
-  return buildLib.existsSync() ? buildLib.path : null;
+  // 2) legacy flat pub-cache layout.
+  final rootDir = Directory('${Platform.environment['HOME']}/.pub-cache');
+  if (rootDir.existsSync()) {
+    for (final d in rootDir.listSync().whereType<Directory>()) {
+      final isCommunity = d.path.contains('isar_community_flutter_libs');
+      final isLegacy = d.path.contains('isar_flutter_libs') && !isCommunity;
+      if (isCommunity || isLegacy) {
+        final f = File('${d.path}/linux/libisar.so');
+        if (f.existsSync()) {
+          if (isCommunity) return f.path;
+          legacy ??= f.path;
+        }
+      }
+    }
+  }
+  // 3) flutter test build output (rebuilt via `flutter build linux --debug`).
+  final buildLib = File(
+    '${Directory.current.path}/build/linux/x64/debug/bundle/lib/libisar.so',
+  );
+  if (buildLib.existsSync()) return buildLib.path;
+  return legacy;
 }
 
 void main() {

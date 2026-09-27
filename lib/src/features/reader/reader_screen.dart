@@ -1795,12 +1795,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   void _scrobbleToMetronIfLinked(Chapter chapter) {
     if (!_settings.metronAutoScrobble) return;
     if (_parentManga != null && _parentManga!.metronSeriesId != null) {
-      MetronService.instance.scrobbleMangaChapter(manga: _parentManga!, chapter: chapter).catchError((e, st) {
+      MetronService.instance.scrobbleMangaChapter(manga: _parentManga!, chapter: chapter).catchError((Object e, StackTrace st) {
         LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
         return false;
       });
     } else if (chapter.mangaId > 0) {
-      MetronService.instance.scrobbleChapterByMangaId(mangaId: chapter.mangaId, chapter: chapter).catchError((e, st) {
+      MetronService.instance.scrobbleChapterByMangaId(mangaId: chapter.mangaId, chapter: chapter).catchError((Object e, StackTrace st) {
         LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
         return false;
       });

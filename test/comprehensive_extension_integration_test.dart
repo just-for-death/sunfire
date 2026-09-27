@@ -144,7 +144,7 @@ void main() {
           final mangaUrl = firstManga['link'] ?? firstManga['url'];
           
           if (mangaUrl != null) {
-            final details = await quickJs.fetchMangaDetailsLocal('Mangago', mangaUrl);
+            final details = await quickJs.fetchMangaDetailsLocal('Mangago', mangaUrl as String);
             
             expect(details, isNotEmpty);
             expect(details['name'], isNotEmpty);
@@ -163,7 +163,7 @@ void main() {
           final mangaUrl = firstManga['link'] ?? firstManga['url'];
           
           if (mangaUrl != null) {
-            final details = await quickJs.fetchMangaDetailsLocal('Mangago', mangaUrl);
+            final details = await quickJs.fetchMangaDetailsLocal('Mangago', mangaUrl as String);
             final chapters = details['chapters'] as List?;
             
             if (chapters != null && chapters.isNotEmpty) {
@@ -171,7 +171,7 @@ void main() {
               final chapterUrl = firstChapter['url'];
               
               if (chapterUrl != null) {
-                final pages = await quickJs.fetchChapterPagesLocal('Mangago', chapterUrl);
+                final pages = await quickJs.fetchChapterPagesLocal('Mangago', chapterUrl as String);
                 
                 expect(pages, isNotEmpty);
                 expect(pages.length, greaterThan(0));
@@ -266,7 +266,7 @@ void main() {
           final mangaUrl = firstManga['link'] ?? firstManga['url'];
           
           if (mangaUrl != null) {
-            final details = await quickJs.fetchMangaDetailsLocal('Mangapill', mangaUrl);
+            final details = await quickJs.fetchMangaDetailsLocal('Mangapill', mangaUrl as String);
             
             expect(details, isNotEmpty);
             expect(details['name'], isNotEmpty);
@@ -284,7 +284,7 @@ void main() {
           final mangaUrl = firstManga['link'] ?? firstManga['url'];
           
           if (mangaUrl != null) {
-            final details = await quickJs.fetchMangaDetailsLocal('Mangapill', mangaUrl);
+            final details = await quickJs.fetchMangaDetailsLocal('Mangapill', mangaUrl as String);
             final chapters = details['chapters'] as List?;
             
             if (chapters != null && chapters.isNotEmpty) {
@@ -292,7 +292,7 @@ void main() {
               final chapterUrl = firstChapter['url'];
               
               if (chapterUrl != null) {
-                final pages = await quickJs.fetchChapterPagesLocal('Mangapill', chapterUrl);
+                final pages = await quickJs.fetchChapterPagesLocal('Mangapill', chapterUrl as String);
                 
                 expect(pages, isNotEmpty);
                 expect(pages.length, greaterThan(0));
@@ -354,7 +354,7 @@ void main() {
           final galleryUrl = firstGallery['link'] ?? firstGallery['url'];
           
           if (galleryUrl != null) {
-            final details = await quickJs.fetchMangaDetailsLocal('nHentai', galleryUrl);
+            final details = await quickJs.fetchMangaDetailsLocal('nHentai', galleryUrl as String);
             
             expect(details, isNotEmpty);
             expect(details['name'], isNotEmpty);
@@ -372,7 +372,7 @@ void main() {
           final galleryUrl = firstGallery['link'] ?? firstGallery['url'];
           
           if (galleryUrl != null) {
-            final details = await quickJs.fetchMangaDetailsLocal('nHentai', galleryUrl);
+            final details = await quickJs.fetchMangaDetailsLocal('nHentai', galleryUrl as String);
             final chapters = details['chapters'] as List?;
             
             if (chapters != null && chapters.isNotEmpty) {
@@ -380,7 +380,7 @@ void main() {
               final chapterUrl = firstChapter['url'];
               
               if (chapterUrl != null) {
-                final pages = await quickJs.fetchChapterPagesLocal('nHentai', chapterUrl);
+                final pages = await quickJs.fetchChapterPagesLocal('nHentai', chapterUrl as String);
                 
                 expect(pages, isNotEmpty);
                 expect(pages.length, greaterThan(0));
@@ -438,7 +438,7 @@ void main() {
           final webtoonUrl = firstWebtoon['link'] ?? firstWebtoon['url'];
           
           if (webtoonUrl != null) {
-            final details = await quickJs.fetchMangaDetailsLocal('Webtoons', webtoonUrl);
+            final details = await quickJs.fetchMangaDetailsLocal('Webtoons', webtoonUrl as String);
             
             expect(details, isNotEmpty);
             expect(details['name'], isNotEmpty);
@@ -456,7 +456,7 @@ void main() {
           final webtoonUrl = firstWebtoon['link'] ?? firstWebtoon['url'];
           
           if (webtoonUrl != null) {
-            final details = await quickJs.fetchMangaDetailsLocal('Webtoons', webtoonUrl);
+            final details = await quickJs.fetchMangaDetailsLocal('Webtoons', webtoonUrl as String);
             final chapters = details['chapters'] as List?;
             
             if (chapters != null && chapters.isNotEmpty) {
@@ -464,7 +464,7 @@ void main() {
               final chapterUrl = firstChapter['url'];
               
               if (chapterUrl != null) {
-                final pages = await quickJs.fetchChapterPagesLocal('Webtoons', chapterUrl);
+                final pages = await quickJs.fetchChapterPagesLocal('Webtoons', chapterUrl as String);
                 
                 expect(pages, isNotEmpty);
                 expect(pages.length, greaterThan(0));
@@ -516,7 +516,7 @@ void main() {
           final mangaUrl = firstManga['link'] ?? firstManga['url'];
           
           if (mangaUrl != null) {
-            final details = await quickJs.fetchMangaDetailsLocal('Weeb Central', mangaUrl);
+            final details = await quickJs.fetchMangaDetailsLocal('Weeb Central', mangaUrl as String);
             
             expect(details, isNotEmpty);
             expect(details['name'], isNotEmpty);
@@ -534,7 +534,7 @@ void main() {
           final mangaUrl = firstManga['link'] ?? firstManga['url'];
           
           if (mangaUrl != null) {
-            final details = await quickJs.fetchMangaDetailsLocal('Weeb Central', mangaUrl);
+            final details = await quickJs.fetchMangaDetailsLocal('Weeb Central', mangaUrl as String);
             final chapters = details['chapters'] as List?;
             
             if (chapters != null && chapters.isNotEmpty) {
@@ -542,7 +542,7 @@ void main() {
               final chapterUrl = firstChapter['url'];
               
               if (chapterUrl != null) {
-                final pages = await quickJs.fetchChapterPagesLocal('Weeb Central', chapterUrl);
+                final pages = await quickJs.fetchChapterPagesLocal('Weeb Central', chapterUrl as String);
                 
                 expect(pages, isNotEmpty);
                 expect(pages.length, greaterThan(0));

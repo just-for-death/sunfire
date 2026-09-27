@@ -187,7 +187,7 @@ const ChapterSchema = CollectionSchema(
   getId: _chapterGetId,
   getLinks: _chapterGetLinks,
   attach: _chapterAttach,
-  version: '3.1.0+1',
+  version: '3.3.2',
 );
 
 int _chapterEstimateSize(
