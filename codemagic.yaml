@@ -1,15 +1,22 @@
 # ==============================================================================
 # Codemagic CI/CD for Sunfire Manga Reader — v4.0.0
-# Supports: Android (Universal & Split APKs) & iOS (Unsigned Sideload IPA)
+#
+# Signing model (local-only by design): the persistent Android release key
+# lives on the release machine (gitignored, never committed) and CI has no
+# access to it — so CI MUST NOT emit installable APKs. Every CI-built APK
+# would carry a random debug certificate and force an uninstall to update.
+# CI therefore only VERIFIES (analyze + test + debug compile); installable
+# release APKs are built locally (see README "Release signing").
+# Release cert SHA-256: 455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775
 # ==============================================================================
 
 workflows:
 
   # ────────────────────────────────────────────────────────────────────────────
-  # WORKFLOW 1: ANDROID RELEASE (Linux x2 — Fast & Lightweight)
+  # WORKFLOW 1: ANDROID VERIFY (Linux x2 — analyze + test + debug compile)
   # ────────────────────────────────────────────────────────────────────────────
   android-release:
-    name: Android Release (Universal & Split APKs) - v4.0.0
+    name: Android Verify (Analyze, Test, Debug Build) - v4.0.0
     max_build_duration: 60
     instance_type: linux_x2
     environment:
@@ -20,11 +27,9 @@ workflows:
         LC_ALL: en_US.UTF-8
     # NOTE: release signing uses a LOCAL-ONLY key (android/sunfire-release.jks
     # + android/key.properties, both gitignored, never committed). CI has no
-    # access to it by design, so CI artifacts are debug-signed and MUST NOT be
-    # installed over a release-signed app (Android would demand an uninstall).
-    # Installable release APKs are built locally: see README "Release signing".
-    # Release cert SHA-256 (verify with apksigner verify --print-certs <apk>):
-    #   455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775
+    # access to it by design, so this workflow collects NO APK artifacts:
+    # without the release key any APK would be wrongly signed. Installable
+    # release APKs are built locally: see README "Release signing".
     cache:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
@@ -66,25 +71,21 @@ workflows:
           done
       - name: Get Flutter packages
         script: flutter pub get
-      - name: Build Android Universal APK
+      - name: Analyze
+        script: flutter analyze
+      - name: Build Linux debug for native test libs (best-effort)
         script: |
-          set -e
-          VERSION=$(grep '^version:' "$CM_BUILD_DIR/pubspec.yaml" | sed -e 's/version: //' -e 's/["'\'']//g' -e 's/+.*//' -e 's/ //g')
-          mkdir -p "$CM_BUILD_DIR/release"
-          flutter build apk --release --android-skip-build-dependency-validation --obfuscate --split-debug-info="$CM_BUILD_DIR/symbols"
-          mv build/app/outputs/flutter-apk/app-release.apk "$CM_BUILD_DIR/release/Sunfire-v${VERSION}-universal.apk"
-      - name: Build Android Split-per-ABI APKs
+          # QuickJS-backed tests load libflutter_qjs_plugin.so from a Linux
+          # debug build when present and skip gracefully when absent.
+          flutter build linux --debug || echo "⚠️ Linux debug build unavailable; native tests will skip."
+      - name: Test
+        script: flutter test
+      - name: Debug compile check (no artifacts)
         script: |
-          set -e
-          VERSION=$(grep '^version:' "$CM_BUILD_DIR/pubspec.yaml" | sed -e 's/version: //' -e 's/["'\'']//g' -e 's/+.*//' -e 's/ //g')
-          flutter build apk --release --split-per-abi --android-skip-build-dependency-validation --obfuscate --split-debug-info="$CM_BUILD_DIR/symbols"
-          cd build/app/outputs/flutter-apk
-          [ -f app-arm64-v8a-release.apk ] && mv app-arm64-v8a-release.apk "$CM_BUILD_DIR/release/Sunfire-v${VERSION}-arm64-v8a.apk"
-          [ -f app-armeabi-v7a-release.apk ] && mv app-armeabi-v7a-release.apk "$CM_BUILD_DIR/release/Sunfire-v${VERSION}-armeabi-v7a.apk"
-          [ -f app-x86_64-release.apk ] && mv app-x86_64-release.apk "$CM_BUILD_DIR/release/Sunfire-v${VERSION}-x86_64.apk"
-          ls -lh "$CM_BUILD_DIR/release/"
-    artifacts:
-      - release/Sunfire-*.apk
+          # Proves the Android native build compiles. The APK is deliberately
+          # NOT collected: without the release key it would be a wrongly-signed
+          # artifact. See the header comment.
+          flutter build apk --debug --android-skip-build-dependency-validation
 
   # ────────────────────────────────────────────────────────────────────────────
   # WORKFLOW 2: iOS RELEASE (Mac Mini M2 — AltStore / TrollStore / Sideloadly)
@@ -144,9 +145,12 @@ workflows:
 
   # ────────────────────────────────────────────────────────────────────────────
   # WORKFLOW 3: ALL PLATFORMS (Unified CI — Triggered on Tags and Main)
+  # Verifies everything, then builds the unsigned sideload IPA only.
+  # No APK artifacts: without the local-only release key any APK would be
+  # wrongly signed (see the header comment).
   # ────────────────────────────────────────────────────────────────────────────
   all-release:
-    name: Multi-Platform Release (APK & IPA) - v4.0.0
+    name: Multi-Platform Verify + iOS IPA - v4.0.0
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:
@@ -210,21 +214,16 @@ workflows:
         script: |
           flutter config --no-enable-swift-package-manager
           flutter pub get
-      - name: Build Android Universal & Split APKs
+      - name: Analyze
+        script: flutter analyze
+      - name: Test
+        script: flutter test
+      - name: Debug compile check (no artifacts)
         script: |
-          set -e
-          VERSION=$(grep '^version:' "$CM_BUILD_DIR/pubspec.yaml" | sed -e 's/version: //' -e 's/["'\'']//g' -e 's/+.*//' -e 's/ //g')
-          mkdir -p "$CM_BUILD_DIR/release"
-          flutter build apk --release --android-skip-build-dependency-validation --obfuscate --split-debug-info="$CM_BUILD_DIR/symbols"
-          mv build/app/outputs/flutter-apk/app-release.apk "$CM_BUILD_DIR/release/Sunfire-v${VERSION}-universal.apk"
-          cd "$CM_BUILD_DIR"
-          flutter build apk --release --split-per-abi --android-skip-build-dependency-validation --obfuscate --split-debug-info="$CM_BUILD_DIR/symbols"
-          cd build/app/outputs/flutter-apk
-          [ -f app-arm64-v8a-release.apk ] && mv app-arm64-v8a-release.apk "$CM_BUILD_DIR/release/Sunfire-v${VERSION}-arm64-v8a.apk"
-          [ -f app-armeabi-v7a-release.apk ] && mv app-armeabi-v7a-release.apk "$CM_BUILD_DIR/release/Sunfire-v${VERSION}-armeabi-v7a.apk"
-          [ -f app-x86_64-release.apk ] && mv app-x86_64-release.apk "$CM_BUILD_DIR/release/Sunfire-v${VERSION}-x86_64.apk"
-          cd "$CM_BUILD_DIR"
-          ls -lh "$CM_BUILD_DIR/release/"
+          # Proves the Android native build compiles. The APK is deliberately
+          # NOT collected: without the release key it would be a wrongly-signed
+          # artifact. See the header comment.
+          flutter build apk --debug --android-skip-build-dependency-validation
       - name: Build iOS unsigned xcarchive & IPA
         script: |
           set -e
@@ -246,5 +245,4 @@ workflows:
           fi
           ls -lh "$CM_BUILD_DIR/release/"
     artifacts:
-      - release/Sunfire-*.apk
       - release/Sunfire-*.ipa
