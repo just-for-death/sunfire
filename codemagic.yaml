@@ -34,6 +34,25 @@ workflows:
       - name: Set up Android SDK local.properties
         script: |
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+      - name: Pre-install Android NDK (retried)
+        script: |
+          # flutter_qjs pins no ndkVersion, so AGP falls back to its default
+          # NDK r27 (27.0.12077973) and auto-installs it on first Gradle run.
+          # That single-shot download has arrived corrupt before (ZipException
+          # -> InstallFailedException), killing the whole build. Install it
+          # explicitly with retries so one bad download cannot fail the build.
+          set -e
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          yes | sdkmanager --sdk_root="$SDK_ROOT" --licenses > /dev/null || true
+          for i in 1 2 3; do
+            if sdkmanager --sdk_root="$SDK_ROOT" --install "ndk;27.0.12077973"; then
+              break
+            fi
+            echo "sdkmanager NDK attempt $i failed, clearing partial download and retrying..."
+            rm -rf "$SDK_ROOT/.temp" "$SDK_ROOT/ndk/27.0.12077973"
+            sleep 5
+            if [ "$i" = 3 ]; then exit 1; fi
+          done
       - name: Get Flutter packages
         script: flutter pub get
       - name: Build Android Universal APK
@@ -148,6 +167,23 @@ workflows:
       - name: Set up Android SDK local.properties
         script: |
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+      - name: Pre-install Android NDK (retried)
+        script: |
+          # Same AGP-default-NDK pin as android-release: install r27 up front
+          # with retries instead of letting Gradle's single-shot auto-install
+          # fail the build on a corrupt download.
+          set -e
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          yes | sdkmanager --sdk_root="$SDK_ROOT" --licenses > /dev/null || true
+          for i in 1 2 3; do
+            if sdkmanager --sdk_root="$SDK_ROOT" --install "ndk;27.0.12077973"; then
+              break
+            fi
+            echo "sdkmanager NDK attempt $i failed, clearing partial download and retrying..."
+            rm -rf "$SDK_ROOT/.temp" "$SDK_ROOT/ndk/27.0.12077973"
+            sleep 5
+            if [ "$i" = 3 ]; then exit 1; fi
+          done
       - name: Get Flutter packages
         script: |
           flutter config --no-enable-swift-package-manager
