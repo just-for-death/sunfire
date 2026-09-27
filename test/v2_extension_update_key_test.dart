@@ -40,11 +40,16 @@ void main() {
       const MethodChannel('plugins.flutter.io/path_provider'),
       (MethodCall methodCall) async => _tempRoot,
     );
+    // Isolate from real ~/Documents/extensions: the loader scans HOME dirs
+    // on Linux and installed community extensions (e.g. MangaDex) would
+    // overwrite fixture versions on reload.
+    QuickJsService.testOnlyExtensionDirs = [_extDir];
     final dir = Directory(_tempRoot);
     if (dir.existsSync()) dir.deleteSync(recursive: true);
   });
 
   tearDownAll(() {
+    QuickJsService.testOnlyExtensionDirs = null;
     final dir = Directory(_tempRoot);
     if (dir.existsSync()) dir.deleteSync(recursive: true);
   });

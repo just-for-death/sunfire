@@ -386,19 +386,23 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       // a normal response, and the flag was only cleared inside the
       // `items.isNotEmpty` branch, so it stuck at true forever afterwards.
       if (mounted) setState(() => _isOffline = false);
-      if (items.isNotEmpty && mounted) {
-        items.sort((a, b) {
-          final fa = a['fetchedAt'] as int? ?? 0;
-          final fb = b['fetchedAt'] as int? ?? 0;
-          return fb.compareTo(fa);
-        });
-
-        // Merge server items INTO local list, preserving local-only chapters
-        // and chapters with pending mutations.
+      if (mounted) {
+        // Server-authoritative feed: when connected, Updates mirrors the
+        // server and nothing else. Merge first (preserves queued read states
+        // and local url/bookmark backfills for rows the server returned),
+        // then drop everything the server did not return — local-only
+        // scrapes and stale local rows must not linger in a mirror, and an
+        // empty server response legitimately means an empty feed.
         final mergedList = await _mergeServerItemsIntoLocal(_updatesList, items);
+        final serverIds = <int>{
+          for (final it in items) (it['chapter'] as Chapter).serverId,
+        };
+        final mirrored = mergedList
+            .where((it) => serverIds.contains((it['chapter'] as Chapter).serverId))
+            .toList();
         if (mounted) {
           setState(() {
-            _updatesList = mergedList;
+            _updatesList = mirrored;
             _isLoading = false;
             _isOffline = false;
           });

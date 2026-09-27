@@ -460,16 +460,16 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                           icon: const Icon(Icons.remove_rounded, size: 18),
                           onPressed: () {
                             HapticFeedback.selectionClick();
-                            setState(() => _autoScrollSpeed = (_autoScrollSpeed - 10.0).clamp(10.0, 1000.0));
+                            setState(() => _autoScrollSpeed = (_autoScrollSpeed - 10.0).clamp(10.0, 2000.0));
                             setSheetState(() {});
                           },
                         ),
                         Expanded(
                           child: Slider(
-                            value: _autoScrollSpeed.clamp(10.0, 1000.0),
+                            value: _autoScrollSpeed.clamp(10.0, 2000.0),
                             min: 10.0,
-                            max: 1000.0,
-                            divisions: 99,
+                            max: 2000.0,
+                            divisions: 199,
                             activeColor: primaryColor,
                             label: '${_autoScrollSpeed.round()} px/s',
                             onChanged: (val) {
@@ -487,7 +487,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                           icon: const Icon(Icons.add_rounded, size: 18),
                           onPressed: () {
                             HapticFeedback.selectionClick();
-                            setState(() => _autoScrollSpeed = (_autoScrollSpeed + 10.0).clamp(10.0, 1000.0));
+                            setState(() => _autoScrollSpeed = (_autoScrollSpeed + 10.0).clamp(10.0, 2000.0));
                             setSheetState(() {});
                           },
                         ),
@@ -506,6 +506,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                         _buildSpeedChip('Faster (250 px/s)', 250.0, primaryColor, setSheetState),
                         _buildSpeedChip('Turbo (500 px/s)', 500.0, primaryColor, setSheetState),
                         _buildSpeedChip('Hyper (800 px/s)', 800.0, primaryColor, setSheetState),
+                        _buildSpeedChip('Warp (1200 px/s)', 1200.0, primaryColor, setSheetState),
+                        _buildSpeedChip('Light (1600 px/s)', 1600.0, primaryColor, setSheetState),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -948,12 +950,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       }
     } else if (key == LogicalKeyboardKey.equal || key == LogicalKeyboardKey.numpadAdd) {
       if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) {
-        setState(() => _autoScrollSpeed = (_autoScrollSpeed + 10.0).clamp(10.0, 1000.0));
+        setState(() => _autoScrollSpeed = (_autoScrollSpeed + 10.0).clamp(10.0, 2000.0));
         return KeyEventResult.handled;
       }
     } else if (key == LogicalKeyboardKey.minus || key == LogicalKeyboardKey.numpadSubtract) {
       if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) {
-        setState(() => _autoScrollSpeed = (_autoScrollSpeed - 10.0).clamp(10.0, 1000.0));
+        setState(() => _autoScrollSpeed = (_autoScrollSpeed - 10.0).clamp(10.0, 2000.0));
         return KeyEventResult.handled;
       }
     }
@@ -3620,7 +3622,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                                           HapticFeedback.selectionClick();
                                           setState(() {
                                             final step = _autoScrollSpeed >= 300 ? 50.0 : (_autoScrollSpeed >= 100 ? 25.0 : 10.0);
-                                            _autoScrollSpeed = (_autoScrollSpeed - step).clamp(10.0, 1000.0);
+                                            _autoScrollSpeed = (_autoScrollSpeed - step).clamp(10.0, 2000.0);
                                           });
                                         },
                                         child: const Padding(
@@ -3634,7 +3636,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
                                           HapticFeedback.selectionClick();
                                           setState(() {
                                             final step = _autoScrollSpeed >= 300 ? 50.0 : (_autoScrollSpeed >= 100 ? 25.0 : 10.0);
-                                            _autoScrollSpeed = (_autoScrollSpeed + step).clamp(10.0, 1000.0);
+                                            _autoScrollSpeed = (_autoScrollSpeed + step).clamp(10.0, 2000.0);
                                           });
                                         },
                                         child: const Padding(
