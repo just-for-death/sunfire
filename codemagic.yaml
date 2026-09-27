@@ -43,9 +43,20 @@ workflows:
           # explicitly with retries so one bad download cannot fail the build.
           set -e
           SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          yes | sdkmanager --sdk_root="$SDK_ROOT" --licenses > /dev/null || true
+          # sdkmanager is not on PATH on all builder images (notably macOS):
+          # resolve it under the SDK root explicitly.
+          SDKMANAGER=""
+          for candidate in "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$SDK_ROOT/tools/bin/sdkmanager"; do
+            if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
+          done
+          if [ -z "$SDKMANAGER" ]; then
+            echo "❌ sdkmanager not found under $SDK_ROOT/cmdline-tools." >&2
+            ls "$SDK_ROOT" >&2 || true
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses > /dev/null || true
           for i in 1 2 3; do
-            if sdkmanager --sdk_root="$SDK_ROOT" --install "ndk;27.0.12077973"; then
+            if "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "ndk;27.0.12077973"; then
               break
             fi
             echo "sdkmanager NDK attempt $i failed, clearing partial download and retrying..."
@@ -174,9 +185,20 @@ workflows:
           # fail the build on a corrupt download.
           set -e
           SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          yes | sdkmanager --sdk_root="$SDK_ROOT" --licenses > /dev/null || true
+          # sdkmanager is not on PATH on all builder images (notably macOS):
+          # resolve it under the SDK root explicitly.
+          SDKMANAGER=""
+          for candidate in "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$SDK_ROOT/tools/bin/sdkmanager"; do
+            if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
+          done
+          if [ -z "$SDKMANAGER" ]; then
+            echo "❌ sdkmanager not found under $SDK_ROOT/cmdline-tools." >&2
+            ls "$SDK_ROOT" >&2 || true
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses > /dev/null || true
           for i in 1 2 3; do
-            if sdkmanager --sdk_root="$SDK_ROOT" --install "ndk;27.0.12077973"; then
+            if "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "ndk;27.0.12077973"; then
               break
             fi
             echo "sdkmanager NDK attempt $i failed, clearing partial download and retrying..."
