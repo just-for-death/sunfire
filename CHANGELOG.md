@@ -28,9 +28,19 @@ talks to your server all changed.
   the app binary, so a new source reaches users without an app update.
 - **Public `hasInstalledExtensions` seam** on `QuickJsService` so the
   auto-install path is directly testable.
+- **First-run catalog install waits for onboarding.** No extension repo
+  traffic happens before the user chooses server vs standalone; onboarding
+  completion triggers the install for both paths.
 
 ### Changed
 
+- **Updates tab mirrors the server when connected.** A successful server
+  fetch makes the feed exactly the server's rows (queued read states and
+  local backfills preserved per row); local-only scrapes and stale rows no
+  longer linger. Offline or unconfigured keeps the local cache feed.
+- **Auto-scroll range is now 10–2000 px/s** (was capped at 1000), with new
+  Warp (1200) and Light (1600) presets in the reader sheet and Reader
+  settings.
 - **Removed bundled extensions.** The duplicated `assets/extensions/` tree is
   gone, along with its `pubspec.yaml` entry and the now-obsolete
   `scripts/sync_bundled_extensions.sh`. The remote catalog is the single
@@ -118,6 +128,19 @@ talks to your server all changed.
 - The Web browser URL-scheme fallback prepends `https://` to a bare domain.
 - JSON metadata extraction in `QuickJsService` uses `replaceAllMapped`, so
   multiple placeholders in one string are all substituted.
+- **Browse grid taps open extension results.** Local (negative-ID) results
+  were silently ignored by the tap gate; any nonzero ID now opens details.
+- **Updates header no longer leaks raw sync payloads** (`{jobsInfo: …}`).
+  Only human-readable statuses display.
+- **Cross-series chapters are filtered and repaired.** Over-broad selectors
+  saved related-comic links as chapters of the scraped series; new ones are
+  dropped at the fetch seam and a startup pass removed the bad rows.
+- Source metadata parsing tolerates trailing commas in headers instead of
+  failing into the fallback path.
+- Metron 401s only warn when a token was actually sent; the tracking sheet
+  no longer searches without a configured token. Notification init survives
+  platforms without launch-details support (Linux) instead of re-running
+  init on every notification.
 
 ### Removed
 
