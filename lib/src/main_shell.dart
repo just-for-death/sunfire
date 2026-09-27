@@ -27,9 +27,14 @@ const double sunfireSidebarExpandedLayoutMinWidth = 180.0;
 bool usesTabletShell(double width) => width >= sunfireTabletMinWidth;
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, required this.child});
+  const MainShell({super.key, required this.child, this.isFullscreen = false});
 
   final Widget child;
+
+  /// Fullscreen routes (the reader) render without the tablet sidebar rail
+  /// or the phone bottom bar. Lifecycle observers, sync triggers and the
+  /// exit-confirm gate keep running — only the chrome is suppressed.
+  final bool isFullscreen;
 
   static final ValueNotifier<int> selectedTabNotifier = ValueNotifier<int>(0);
 
@@ -218,12 +223,21 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = usesTabletShell(screenWidth);
     final primaryColor = Theme.of(context).colorScheme.primary;
+    // Fullscreen (reader): no sidebar rail, no bottom bar, no content
+    // padding — edge-to-edge reading surface on phone and tablet alike.
+    // Lifecycle observers and the exit-confirm gate below keep running.
+    final fullscreen = widget.isFullscreen;
 
     final scaffold = isTablet
-        ? Scaffold(
-            backgroundColor: const Color(0xFF0E0E14),
-            body: Row(
-              children: [
+        ? (fullscreen
+            ? Scaffold(
+                backgroundColor: const Color(0xFF0E0E14),
+                body: widget.child,
+              )
+            : Scaffold(
+                backgroundColor: const Color(0xFF0E0E14),
+                body: Row(
+                  children: [
                 _buildTabletSidebar(context, primaryColor),
                 Expanded(
                   child: Padding(
@@ -247,11 +261,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 ),
               ],
             ),
-          )
+          ))
         : Scaffold(
             extendBody: true,
             body: widget.child,
-            bottomNavigationBar: ValueListenableBuilder<bool>(
+            // Fullscreen (reader): edge-to-edge, no bottom bar.
+            bottomNavigationBar: fullscreen ? null : ValueListenableBuilder<bool>(
               valueListenable: BatchModeService.instance.isBatchMode,
               builder: (context, isBatch, child) {
                 if (isBatch) return const SizedBox.shrink();
