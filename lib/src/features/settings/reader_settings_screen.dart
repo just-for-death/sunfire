@@ -269,6 +269,8 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                         _buildPresetChip('⚡ Faster (250 px/s)', 250.0),
                         _buildPresetChip('🚀 Turbo (500 px/s)', 500.0),
                         _buildPresetChip('💨 Hyper (800 px/s)', 800.0),
+                        _buildPresetChip('🌀 Warp (1200 px/s)', 1200.0),
+                        _buildPresetChip('💡 Light (1600 px/s)', 1600.0),
                       ],
                     ),
                   ],
@@ -290,15 +292,15 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                       tooltip: '-10 px/s',
                       onPressed: () {
                         HapticFeedback.selectionClick();
-                        _settings.defaultAutoScrollSpeed = (_settings.defaultAutoScrollSpeed - 10.0).clamp(10.0, 1000.0);
+                        _settings.defaultAutoScrollSpeed = (_settings.defaultAutoScrollSpeed - 10.0).clamp(10.0, 2000.0);
                       },
                     ),
                     Expanded(
                       child: Slider(
-                        value: _settings.defaultAutoScrollSpeed.clamp(10.0, 1000.0),
+                        value: _settings.defaultAutoScrollSpeed.clamp(10.0, 2000.0),
                         min: 10.0,
-                        max: 1000.0,
-                        divisions: 99,
+                        max: 2000.0,
+                        divisions: 199,
                         activeColor: primaryColor,
                         label: '${_settings.defaultAutoScrollSpeed.round()} px/s',
                         onChanged: (val) => _settings.defaultAutoScrollSpeed = val,
@@ -314,7 +316,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                       tooltip: '+10 px/s',
                       onPressed: () {
                         HapticFeedback.selectionClick();
-                        _settings.defaultAutoScrollSpeed = (_settings.defaultAutoScrollSpeed + 10.0).clamp(10.0, 1000.0);
+                        _settings.defaultAutoScrollSpeed = (_settings.defaultAutoScrollSpeed + 10.0).clamp(10.0, 2000.0);
                       },
                     ),
                   ],

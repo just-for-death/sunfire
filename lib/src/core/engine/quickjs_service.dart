@@ -196,6 +196,13 @@ class QuickJsService {
   /// keep the old eager behavior.
   bool deferAutoInstall = false;
 
+  /// Test-only override for the extensions scan. When set,
+  /// [_loadInstalledExtensionsFromDisk] reads exactly these directories and
+  /// never the real HOME locations — otherwise a developer's installed
+  /// extensions leak into mocked-path_provider tests. Always reset to null
+  /// in tearDown.
+  static List<String>? testOnlyExtensionDirs;
+
   Future<void> initialize() async {
     try {
       await _loadInstalledExtensionsFromDisk();
@@ -285,6 +292,21 @@ class QuickJsService {
   }
 
   Future<void> _loadInstalledExtensionsFromDisk() async {
+    // Test isolation: the loader also scans real HOME dirs on Linux, so a
+    // developer's installed extensions leak into any test that mocks
+    // path_provider (v2_extension_update_key_test saw a real MangaDex
+    // overwrite the fixture version). Tests set this to scope the scan.
+    if (testOnlyExtensionDirs != null) {
+      for (final dirPath in testOnlyExtensionDirs!) {
+        try {
+          final extDir = Directory(dirPath);
+          if (await extDir.exists()) {
+            await _loadExtensionsFromDir(extDir);
+          }
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
+      }
+      return;
+    }
     final candidateDirs = <String>[];
     try {
       final appDir = await getApplicationDocumentsDirectory();
@@ -308,42 +330,48 @@ class QuickJsService {
       try {
         final extDir = Directory(dirPath);
         if (await extDir.exists()) {
-          final files = await extDir.list().toList();
-          for (final f in files) {
-            if (f is File && f.path.endsWith('.js')) {
-              final fileName = f.uri.pathSegments.last.replaceAll('.js', '');
-              final code = await f.readAsString();
-              if (code.contains('package:mangayomi') || code.contains('import \'package:')) {
-                // Ignore Dart bytecode or old Dart extensions that were mistakenly named .js
-                continue;
-              }
-              final cleanKey = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
-              final displayName = fileName.replaceAll('_', ' ').trim();
-              _installedJsSources[cleanKey] = code;
-              _canonicalDisplayNames[cleanKey] = displayName;
-
-              // Read companion metadata json if available
-              final metaFile = File('$dirPath/$fileName.json');
-              if (await metaFile.exists()) {
-                try {
-                  final metaJson = jsonDecode(await metaFile.readAsString());
-                  if (metaJson is Map) {
-                    if (metaJson['name'] != null && metaJson['name'].toString().trim().isNotEmpty) {
-                      _canonicalDisplayNames[cleanKey] = metaJson['name'].toString().trim();
-                    }
-                    if (metaJson['version'] != null) {
-                      _installedVersions[cleanKey] = metaJson['version'].toString();
-                    }
-                    if (metaJson['iconUrl'] != null) {
-                      _installedIcons[cleanKey] = metaJson['iconUrl'].toString();
-                    }
-                  }
-                } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
-              }
-            }
-          }
+          await _loadExtensionsFromDir(extDir);
         }
       } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
+    }
+  }
+
+  /// Loads every `.js` scraper from one extensions directory.
+  Future<void> _loadExtensionsFromDir(Directory extDir) async {
+    final dirPath = extDir.path;
+    final files = await extDir.list().toList();
+    for (final f in files) {
+      if (f is File && f.path.endsWith('.js')) {
+        final fileName = f.uri.pathSegments.last.replaceAll('.js', '');
+        final code = await f.readAsString();
+        if (code.contains('package:mangayomi') || code.contains('import \'package:')) {
+          // Ignore Dart bytecode or old Dart extensions that were mistakenly named .js
+          continue;
+        }
+        final cleanKey = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
+        final displayName = fileName.replaceAll('_', ' ').trim();
+        _installedJsSources[cleanKey] = code;
+        _canonicalDisplayNames[cleanKey] = displayName;
+
+        // Read companion metadata json if available
+        final metaFile = File('$dirPath/$fileName.json');
+        if (await metaFile.exists()) {
+          try {
+            final metaJson = jsonDecode(await metaFile.readAsString());
+            if (metaJson is Map) {
+              if (metaJson['name'] != null && metaJson['name'].toString().trim().isNotEmpty) {
+                _canonicalDisplayNames[cleanKey] = metaJson['name'].toString().trim();
+              }
+              if (metaJson['version'] != null) {
+                _installedVersions[cleanKey] = metaJson['version'].toString();
+              }
+              if (metaJson['iconUrl'] != null) {
+                _installedIcons[cleanKey] = metaJson['iconUrl'].toString();
+              }
+            }
+          } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
+        }
+      }
     }
   }
 
