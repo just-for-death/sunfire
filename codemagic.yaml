@@ -18,6 +18,20 @@ workflows:
       vars:
         LANG: en_US.UTF-8
         LC_ALL: en_US.UTF-8
+        # Refuse to produce a debug-signed "release": every APK from CI must
+        # carry the persistent release key so updates install over the
+        # previous version instead of forcing an uninstall.
+        REQUIRE_RELEASE_SIGNING: 'true'
+      # Required secret env vars (Codemagic UI → Environment variables):
+      #   SUNFIRE_KEYSTORE_BASE64 — base64 of android/sunfire-release.jks
+      #   SUNFIRE_KEYSTORE_PASSWORD, SUNFIRE_KEY_ALIAS, SUNFIRE_KEY_PASSWORD
+      # The Inject-keystore step below materializes android/key.properties
+      # from them and fails loudly if they are missing.
+      # Release cert SHA-256 (verify with:
+      # apksigner verify --print-certs <apk>):
+      #   455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775
+      # If an APK shows any other digest, it was NOT signed with the release
+      # key and will force users through an uninstall to update.
     cache:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
@@ -27,6 +41,24 @@ workflows:
       - name: Set up Android SDK local.properties
         script: |
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+      - name: Inject release keystore from CI secrets
+        script: |
+          set -e
+          if [ -z "$SUNFIRE_KEYSTORE_BASE64" ] || [ -z "$SUNFIRE_KEYSTORE_PASSWORD" ]; then
+            echo "❌ Missing release-signing secrets. In Codemagic: Teams → your team →" >&2
+            echo "   Environment variables, add SUNFIRE_KEYSTORE_BASE64 (base64 of" >&2
+            echo "   android/sunfire-release.jks), SUNFIRE_KEYSTORE_PASSWORD," >&2
+            echo "   SUNFIRE_KEY_ALIAS and SUNFIRE_KEY_PASSWORD." >&2
+            exit 1
+          fi
+          echo "$SUNFIRE_KEYSTORE_BASE64" | base64 -d > "$CM_BUILD_DIR/android/sunfire-release.jks"
+          cat > "$CM_BUILD_DIR/android/key.properties" <<EOF
+          storePassword=$SUNFIRE_KEYSTORE_PASSWORD
+          keyPassword=${SUNFIRE_KEY_PASSWORD:-$SUNFIRE_KEYSTORE_PASSWORD}
+          keyAlias=${SUNFIRE_KEY_ALIAS:-sunfire}
+          storeFile=../sunfire-release.jks
+          EOF
+          echo "✅ Release keystore injected."
       - name: Get Flutter packages
         script: flutter pub get
       - name: Build Android Universal APK
@@ -120,6 +152,9 @@ workflows:
       vars:
         LANG: en_US.UTF-8
         LC_ALL: en_US.UTF-8
+        # Same release-signing gate as android-release: CI APKs must carry
+        # the persistent key (see SUNFIRE_KEYSTORE_* secrets documented there).
+        REQUIRE_RELEASE_SIGNING: 'true'
     triggering:
       events:
         - tag
@@ -141,6 +176,21 @@ workflows:
       - name: Set up Android SDK local.properties
         script: |
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+      - name: Inject release keystore from CI secrets
+        script: |
+          set -e
+          if [ -z "$SUNFIRE_KEYSTORE_BASE64" ] || [ -z "$SUNFIRE_KEYSTORE_PASSWORD" ]; then
+            echo "❌ Missing release-signing secrets (SUNFIRE_KEYSTORE_BASE64 / SUNFIRE_KEYSTORE_PASSWORD / SUNFIRE_KEY_ALIAS / SUNFIRE_KEY_PASSWORD)." >&2
+            exit 1
+          fi
+          echo "$SUNFIRE_KEYSTORE_BASE64" | base64 -d > "$CM_BUILD_DIR/android/sunfire-release.jks"
+          cat > "$CM_BUILD_DIR/android/key.properties" <<EOF
+          storePassword=$SUNFIRE_KEYSTORE_PASSWORD
+          keyPassword=${SUNFIRE_KEY_PASSWORD:-$SUNFIRE_KEYSTORE_PASSWORD}
+          keyAlias=${SUNFIRE_KEY_ALIAS:-sunfire}
+          storeFile=../sunfire-release.jks
+          EOF
+          echo "✅ Release keystore injected."
       - name: Get Flutter packages
         script: |
           flutter config --no-enable-swift-package-manager
