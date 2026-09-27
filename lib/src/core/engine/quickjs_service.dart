@@ -105,6 +105,23 @@ class QuickJsService {
   /// Check whether QuickJS C-FFI bindings are functional on the current host.
   bool get isSupported => !kIsWeb;
 
+  /// Whether QuickJS native library is available and working.
+  /// On Android, this can fail if the flutter_qjs plugin doesn't bundle native libraries.
+  bool get isAvailable {
+    if (!isSupported) return false;
+    if (!_initialized) return false;
+    if (_initError != null) return false;
+    return true;
+  }
+
+  /// User-friendly error message when QuickJS is not available.
+  String? get availabilityError {
+    if (!isSupported) return 'QuickJS is not supported on this platform (web).';
+    if (!_initialized) return 'QuickJS has not been initialized yet.';
+    if (_initError != null) return 'QuickJS failed to initialize: $_initError';
+    return null;
+  }
+
   _AsyncLock _getLockFor(String sourceName) {
     return _sourceLocks.putIfAbsent(sourceName, () => _AsyncLock());
   }

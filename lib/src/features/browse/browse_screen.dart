@@ -1,4 +1,6 @@
-import 'package:flutter/foundation.dart' show immutable, kDebugMode, listEquals;
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show immutable, kDebugMode, listEquals, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -491,6 +493,25 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final name = ext['name'] as String;
     final isInstalled = ext['isInstalled'] as bool;
     final isJs = ext['isJs'] as bool? ?? false;
+
+    // Prevent installing/updating JS extensions when QuickJS is not available
+    if (isJs && (!isInstalled || isUpdate)) {
+      final quickJsError = QuickJsService.instance.availabilityError;
+      final isAndroid = !kIsWeb && Platform.isAndroid;
+      if (quickJsError != null && isAndroid) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Cannot install extension: QuickJS engine unavailable ($quickJsError)'),
+              backgroundColor: Colors.redAccent,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     final sourceCodeUrl = ext['sourceCodeUrl'] as String? ?? '';
     final version = ext['version'] as String? ?? '1.0.0';
     String? customStatusMessage;
@@ -1245,6 +1266,15 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   Widget _buildExtensionsTab() {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
+    // Check QuickJS availability — on Android the flutter_qjs plugin may not
+    // bundle native libraries, causing silent failures. Show a clear error
+    // instead of a confusing empty/broken state.
+    final quickJsError = QuickJsService.instance.availabilityError;
+    final isAndroid = !kIsWeb && Platform.isAndroid;
+    if (quickJsError != null && isAndroid) {
+      return _buildQuickJsUnavailableView(primaryColor, quickJsError);
+    }
+
     final filtered = _extensionList.where((ext) {
       final name = (ext['name'] as String).toLowerCase();
       final matchesSearch = _extensionSearchQuery.isEmpty || name.contains(_extensionSearchQuery.toLowerCase());
@@ -1917,6 +1947,62 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       },
     );
   }
+
+  /// Shows a clear error when QuickJS is not available on Android.
+  /// This happens when the flutter_qjs plugin doesn't bundle native libraries.
+  Widget _buildQuickJsUnavailableView(Color primaryColor, String error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 56,
+              color: Colors.redAccent.withAlpha(200),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'QuickJS Engine Unavailable',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'The JavaScript extension engine could not be initialized on this device.\n\n'
+              'Error: $error\n\n'
+              'This is typically caused by the flutter_qjs plugin not bundling '
+              'native libraries for Android. Extensions cannot be installed or used '
+              'until this is resolved.\n\n'
+              'Workarounds:\n'
+              '• Connect to a Suwayomi server to use server-side extensions\n'
+              '• Use the web version if available\n'
+              '• Report this issue on GitHub',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: Colors.grey, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              icon: const Icon(Icons.bug_report_rounded, color: Colors.white, size: 18),
+              label: const Text('Report Issue', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please report this issue at github.com/just-for-death/sunfire/issues')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
 
 

@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -67,6 +70,17 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   }
 
   Future<void> _fetchFiltersAndManga() async {
+    // Check QuickJS availability before attempting to use local extensions
+    final quickJsError = QuickJsService.instance.availabilityError;
+    final isAndroid = !kIsWeb && Platform.isAndroid;
+    if (quickJsError != null && isAndroid && widget.sourceId.startsWith('local_js_')) {
+      setState(() {
+        _isLoading = false;
+        _mangaList = [];
+      });
+      return;
+    }
+
     _dynamicFilters = await QuickJsService.instance.fetchSourceFiltersLocal(widget.sourceName);
     _hasDynamicFilters = _dynamicFilters.isNotEmpty;
     _fetchSourceManga();
@@ -80,6 +94,19 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   }
 
   Future<void> _fetchSourceManga() async {
+    // Check QuickJS availability for local JS extensions
+    final quickJsError = QuickJsService.instance.availabilityError;
+    final isAndroid = !kIsWeb && Platform.isAndroid;
+    if (quickJsError != null && isAndroid && widget.sourceId.startsWith('local_js_')) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _mangaList = [];
+        });
+      }
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _currentPage = 1;
@@ -535,13 +562,68 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
               child: _isLoading
                   ? Center(child: CircularProgressIndicator(color: primaryColor))
                   : _mangaList.isEmpty
-                      ? EmptyStateWidget(
-                          icon: Icons.wifi_off_rounded,
-                          title: 'No Manga Found',
-                          subtitle: 'Source timed out or no results match your query.',
-                          actionLabel: 'Retry',
-                          onAction: _fetchSourceManga,
-                        )
+                      ? (() {
+                          final quickJsError = QuickJsService.instance.availabilityError;
+                          final isAndroid = !kIsWeb && Platform.isAndroid;
+                          if (quickJsError != null && isAndroid && widget.sourceId.startsWith('local_js_')) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24.0),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.error_outline_rounded,
+                                      size: 56,
+                                      color: Colors.redAccent.withAlpha(200),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      'QuickJS Engine Unavailable',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'The JavaScript extension engine could not be initialized.\n\n'
+                                      'Error: $quickJsError\n\n'
+                                      'This extension requires the QuickJS engine to scrape manga data. '
+                                      'On Android, this is typically caused by the flutter_qjs plugin '
+                                      'not bundling native libraries.\n\n'
+                                      'Workarounds:\n'
+                                      '\u2022 Connect to a Suwayomi server to use server-side sources\n'
+                                      '\u2022 Report this issue on GitHub',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(fontSize: 13, color: Colors.grey, height: 1.5),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: primaryColor,
+                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      ),
+                                      icon: const Icon(Icons.bug_report_rounded, color: Colors.white, size: 18),
+                                      label: const Text('Report Issue', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      onPressed: () {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Please report this issue at github.com/just-for-death/sunfire/issues')),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                          return EmptyStateWidget(
+                            icon: Icons.wifi_off_rounded,
+                            title: 'No Manga Found',
+                            subtitle: 'Source timed out or no results match your query.',
+                            actionLabel: 'Retry',
+                            onAction: _fetchSourceManga,
+                          );
+                        })()
                       : LayoutBuilder(
                           builder: (context, constraints) {
                             final isTablet = constraints.maxWidth >= 720;
