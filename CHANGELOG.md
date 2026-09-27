@@ -7,7 +7,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
-## [4.0.0] — Unreleased
+## [4.0.0] — 2026-09-27
 
 The first release under the remote-extension architecture. This is a
 substantial internal rework; the user-visible surface is mostly the same, but

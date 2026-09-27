@@ -91,7 +91,7 @@ const SyncRecordSchema = CollectionSchema(
   getId: _syncRecordGetId,
   getLinks: _syncRecordGetLinks,
   attach: _syncRecordAttach,
-  version: '3.1.0+1',
+  version: '3.3.2',
 );
 
 int _syncRecordEstimateSize(

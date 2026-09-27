@@ -320,7 +320,7 @@ class GraphQLClientService {
           // with an `errors` payload) must surface the reconnect prompt just
           // like an HTTP 401/403 does. Without this, bad credentials silently
           // null-out every mutation while the UI claims the server is fine.
-          if (_looksLikeAuthError(errorMsg)) {
+          if (_looksLikeAuthError(errorMsg.toString())) {
             notifyAuthError();
           }
           return null;
