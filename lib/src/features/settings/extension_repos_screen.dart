@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../../core/engine/repo_manager.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
-import '../../core/sync/server_compat_models.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'widgets/section_title.dart';

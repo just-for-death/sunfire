@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/sync/graphql_client_service.dart';
-import '../../core/sync/source_filters.dart';
 
 /// Opens a server-side filter sheet (ISS-079 / B4). Returns applied changes
 /// (empty list = reset / none), or null if cancelled.

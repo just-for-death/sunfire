@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/sync/graphql_client_service.dart';
-import '../../core/sync/server_compat_models.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
@@ -225,7 +224,7 @@ unawaited(
 
     if (!mounted) return;
     setState(() => _restoring = true);
-    showDialog<void>(
+    unawaited(showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const AlertDialog(
@@ -237,7 +236,7 @@ unawaited(
           ],
         ),
       ),
-    );
+    ));
 
     BackupValidationResult? validation;
     try {
@@ -322,7 +321,7 @@ unawaited(
     }
 
     final progressNotifier = ValueNotifier<String>('Starting restore…');
-    showDialog<void>(
+    unawaited(showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => ValueListenableBuilder<String>(
@@ -337,7 +336,7 @@ unawaited(
           ),
         ),
       ),
-    );
+    ));
 
     BackupRestoreStatusInfo? status;
     try {

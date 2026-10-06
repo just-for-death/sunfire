@@ -7,14 +7,14 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/engine/javascript/m_client.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
-import '../../core/sync/server_session_service.dart';
-import 'server_login_sheet.dart';
 import '../../core/sync/server_auth_helper.dart';
+import '../../core/sync/server_session_service.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/widgets/dialog_controllers.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/proxy_url_display.dart';
+import 'server_login_sheet.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -1077,9 +1077,10 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     ),
                     trailing: const Icon(Icons.sync_rounded),
                     onTap: () async {
+                      final messenger = ScaffoldMessenger.of(context);
                       final result = await GraphQLClientService.instance.startSyncYomi();
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      messenger.showSnackBar(
                         SnackBar(content: Text(result == null ? 'SyncYomi start failed' : 'SyncYomi: $result')),
                       );
                       await _refreshKoSync();

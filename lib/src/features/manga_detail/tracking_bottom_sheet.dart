@@ -9,7 +9,6 @@ import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
-import '../../core/sync/server_compat_models.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../settings/tracking_settings_screen.dart';
@@ -427,7 +426,15 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     bool isPrivate = record['private'] == true;
     final supportsPrivate = info?.supportsPrivateTracking == true;
     final serverScores = info?.scores ?? const <String>[];
-    // Prefer server score strings when the tracker publishes them.
+    // Prefer server score strings when the tracker publishes them (passed
+    // verbatim as `scoreString` on save). Preselect the record's existing
+    // score when it matches a published string.
+    final rawScoreStr = record['score']?.toString().trim() ?? '';
+    String? selectedServerScore = serverScores.contains(rawScoreStr)
+        ? rawScoreStr
+        : (currentScore > 0 && serverScores.contains(currentScore.toInt().toString())
+            ? currentScore.toInt().toString()
+            : null);
     // Suwayomi store dates as epoch ms, but be defensive: some legacy rows /
     // other clients may carry seconds. Normalize to ms for display and save.
     String? startEpochStr = _normalizeTrackEpoch(record['startDate']);
@@ -538,14 +545,40 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
 
                     const SizedBox(height: 16),
 
-                    // ── SCORE (0 - 10) ──────────────────────────────────
-                    const Text('SCORE (0 - 10)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    // ── SCORE ─────────────────────────────────────────────
+                    // Server-published score strings win when the tracker
+                    // provides them (saved verbatim); otherwise the numeric
+                    // 0–10 picker is kept.
+                    Text(
+                      serverScores.isNotEmpty ? 'SCORE' : 'SCORE (0 - 10)',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
+                    ),
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(color: SunfireTheme.tileSurface(dialogCtx), borderRadius: BorderRadius.circular(12), border: Border.all(color: SunfireTheme.tileBorder(dialogCtx))),
                       child: DropdownButtonHideUnderline(
-                        child: DropdownButton<double>(
+                        child: serverScores.isNotEmpty
+                            ? DropdownButton<String?>(
+                                value: selectedServerScore,
+                                dropdownColor: cs.surfaceContainerHigh,
+                                isExpanded: true,
+                                items: [
+                                  const DropdownMenuItem<String?>(
+                                    value: null,
+                                    child: Text('No Score (-)', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                  for (final s in serverScores)
+                                    DropdownMenuItem<String?>(
+                                      value: s,
+                                      child: Text(s, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    ),
+                                ],
+                                onChanged: (val) {
+                                  setDialogState(() => selectedServerScore = val);
+                                },
+                              )
+                            : DropdownButton<double>(
                           // Server scores can be fractional (e.g. 6.5) while the
                           // picker only offers integer steps; snap the displayed
                           // value to an existing item so DropdownButton's
@@ -707,7 +740,9 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         recordId: recordId,
                         lastChapterRead: currentChapter,
                         status: currentStatus,
-                        scoreString: currentScore > 0 ? (currentScore.truncateToDouble() == currentScore ? currentScore.toInt().toString() : currentScore.toString()) : null,
+                        scoreString: serverScores.isNotEmpty
+                            ? selectedServerScore
+                            : (currentScore > 0 ? (currentScore.truncateToDouble() == currentScore ? currentScore.toInt().toString() : currentScore.toString()) : null),
                         startDate: startEpochStr,
                         finishDate: finishEpochStr,
                         isPrivate: supportsPrivate ? isPrivate : null,

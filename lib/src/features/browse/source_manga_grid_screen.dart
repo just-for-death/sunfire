@@ -13,11 +13,10 @@ import '../../core/logging/logger_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
-import '../../core/sync/source_filters.dart';
-import 'source_server_filters_sheet.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
+import 'source_server_filters_sheet.dart';
 
 class SourceMangaGridScreen extends StatefulWidget {
   final String sourceId;
