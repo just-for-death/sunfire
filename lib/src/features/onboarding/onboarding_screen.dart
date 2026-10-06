@@ -17,6 +17,8 @@ import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/server_auth_helper.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/websocket_service.dart';
+import '../../ui/design_system/sunfire_theme.dart';
+import '../shared/friendly_network_error.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -106,6 +108,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         headers: {'Content-Type': 'application/json'},
         body: '{"cmd":"sessions.list"}',
       ).timeout(const Duration(seconds: 5));
+      if (!mounted) return;
       setState(() {
         _isTestingFlareSolverr = false;
         _flareSolverrStatus = res.statusCode == 200
@@ -113,9 +116,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             : '❌ HTTP ${res.statusCode} from proxy';
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isTestingFlareSolverr = false;
-        _flareSolverrStatus = '❌ Reachability failed: $e';
+        _flareSolverrStatus =
+            '❌ Reachability failed: ${friendlyNetworkError(e, tag: 'Onboarding')}';
       });
     }
   }
@@ -173,29 +178,36 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         final version = data['aboutServer']['version'] ?? 'v1.x';
         WebSocketService.instance.initialize(url, authToken: auth);
 
+        if (!mounted) return;
         setState(() {
           _connectionSuccess = true;
           _connectionStatus = '✓ Successfully connected to Suwayomi $version';
         });
 
-        await Future.delayed(const Duration(milliseconds: 400));
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        if (!mounted) return;
         _pageController.nextPage(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
       } else {
+        if (!mounted) return;
         setState(() {
           _connectionStatus = '⚠️ Could not verify server version. Check URL and credentials.';
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _connectionStatus = '❌ Could not connect: $e';
+        _connectionStatus =
+            '❌ Could not connect: ${friendlyNetworkError(e, tag: 'Onboarding')}';
       });
     } finally {
-      setState(() {
-        _isConnecting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+        });
+      }
     }
   }
 
@@ -262,6 +274,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           userRepoUrls: _userRepoUrls,
         );
 
+        if (!mounted) return;
         setState(() {
           _matchedSourcesCount = installedCount;
           _sourcesStatusText = '✓ Installed $installedCount local extensions (Ready to browse)';
@@ -294,21 +307,39 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           }
         }
 
+        if (!mounted) return;
         setState(() {
           _sourcesStatusText =
               'Installing local JS scrapers for ${serverSources.length} server sources...';
         });
 
-        final installedSources = await RepoManager.instance.downloadAndInstallMatchingSources(
-          serverSourceNames: serverSources.map((s) => s.name).toList(),
-          userRepoUrls: _userRepoUrls,
-        );
+        // Bound source install so an unbounded repo fetch cannot starve the
+        // library sync that actually populates Isar (ISS-059).
+        List<String> installedSources = const [];
+        try {
+          installedSources = await RepoManager.instance
+              .downloadAndInstallMatchingSources(
+                serverSourceNames: serverSources.map((s) => s.name).toList(),
+                userRepoUrls: _userRepoUrls,
+              )
+              .timeout(const Duration(seconds: 90));
+        } on TimeoutException catch (e) {
+          if (kDebugMode) {
+            debugPrint('[onboarding_screen] source install timed out: $e');
+          }
+          unawaited(LoggerService.instance.logWarning(
+            'Source install timed out during onboarding; continuing to library sync',
+            'Onboarding',
+          ));
+          installedSources = QuickJsService.instance.getInstalledExtensionNames();
+        }
 
         final migrationResult = SourceMigrationService.instance.migrateServerSources(
           serverSourceNames: serverSources.map((s) => s.name).toList(),
           availableJsExtensions: installedSources,
         );
 
+        if (!mounted) return;
         setState(() {
           _matchedSourcesCount = migrationResult.matchedSources.length;
           _sourcesStatusText =
@@ -318,7 +349,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           _libraryStatusText = 'Fetching complete library manga and caching chapters in Isar DB...';
         });
 
-        await Future.delayed(const Duration(milliseconds: 400));
+        await Future<void>.delayed(const Duration(milliseconds: 400));
 
         // ── STEP 2: HYDRATE LIBRARY & CHAPTERS ──
         if (GraphQLClientService.instance.isConfigured) {
@@ -334,6 +365,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           _totalHydratedManga = libraryItems.length;
         }
 
+        if (!mounted) return;
         setState(() {
           _libraryStatusText =
               '✓ Cached $_totalHydratedManga library titles into local DB (100% Offline Ready)';
@@ -343,14 +375,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         });
       }
 
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
     } on TimeoutException catch (e, st) {
       // Timeout is a recoverable error — we still have local-first capability
-      LoggerService.instance.logWarning('Initial hydration timed out', 'Onboarding');
+      unawaited(LoggerService.instance.logWarning('Initial hydration timed out', 'Onboarding'));
       if (!mounted) return;
       _showHydrationError(
         'Hydration timed out',
@@ -359,7 +392,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
     } on FormatException catch (e, st) {
       // Malformed data from server — likely version mismatch or API change
-      LoggerService.instance.logError('Initial hydration format error', exception: e, stackTrace: st, category: 'Onboarding');
+      unawaited(LoggerService.instance.logError('Initial hydration format error', exception: e, stackTrace: st, category: 'Onboarding'));
       if (!mounted) return;
       _showHydrationError(
         'Server response format error',
@@ -368,7 +401,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
     } on SocketException catch (e, st) {
       // Network-level failure
-      LoggerService.instance.logError('Initial hydration network error', exception: e, stackTrace: st, category: 'Onboarding');
+      unawaited(LoggerService.instance.logError('Initial hydration network error', exception: e, stackTrace: st, category: 'Onboarding'));
       if (!mounted) return;
       _showHydrationError(
         'Network error',
@@ -377,7 +410,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
     } catch (e, st) {
       // Unexpected error — log full details but don't crash the onboarding
-      LoggerService.instance.logError('Initial hydration unexpected error', exception: e, stackTrace: st, category: 'Onboarding');
+      unawaited(LoggerService.instance.logError('Initial hydration unexpected error', exception: e, stackTrace: st, category: 'Onboarding'));
       if (!mounted) return;
       _showHydrationError(
         'Unexpected error during setup',
@@ -396,7 +429,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   /// Shows an error dialog during hydration and offers to continue in local-first mode
   void _showHydrationError(String title, String message, Object error, StackTrace stackTrace) {
     if (!mounted) return;
-    showDialog<void>(
+    unawaited(showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
@@ -423,7 +456,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   /// Continues onboarding in local-first mode after an error
@@ -435,7 +468,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _historyStatusText = '✓ Ready for on-device reading';
       _hydrationStep = 4;
     });
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future<void>.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         _pageController.nextPage(
           duration: const Duration(milliseconds: 300),
@@ -478,7 +511,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (cleanUrl != null) {
       GraphQLClientService.instance.initialize(cleanUrl, authToken: auth);
       WebSocketService.instance.initialize(cleanUrl, authToken: auth);
-      SyncEngine.instance.initialize();
+      unawaited(SyncEngine.instance.initialize());
       await BackgroundService.instance.initialize();
     } else {
       GraphQLClientService.instance.initialize('');
@@ -492,8 +525,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D11),
+      backgroundColor: cs.surface,
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
@@ -518,7 +552,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // ── STEP 1: WELCOME ─────────────────────────────────────────
   Widget _buildWelcomeStep() {
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final cs = Theme.of(context).colorScheme;
+    final primaryColor = cs.primary;
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
       child: Column(
@@ -542,22 +577,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Icon(Icons.wb_sunny_rounded, size: 68, color: primaryColor),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'Sunfire',
             style: TextStyle(
               fontSize: 38,
               fontWeight: FontWeight.w900,
               letterSpacing: -0.5,
-              color: Colors.white,
+              color: cs.onSurface,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'The Local-First Manga Reader',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.white70,
+              color: cs.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 16),
@@ -575,7 +610,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: const Color(0xFF191924),
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: primaryColor.withValues(alpha: 0.5), width: 1.2),
                 boxShadow: [
@@ -597,23 +632,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     child: Icon(Icons.bolt_rounded, color: primaryColor, size: 28),
                   ),
                   const SizedBox(width: 16),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Standalone Mode',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface),
                         ),
                         SizedBox(height: 4),
                         Text(
                           'Zero server required. Install extensions directly and read 100% on-device.',
-                          style: TextStyle(fontSize: 12, color: Colors.white60, height: 1.3),
+                          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, height: 1.3),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.white54),
+                  Icon(Icons.arrow_forward_ios_rounded, size: 16, color: cs.onSurfaceVariant),
                 ],
               ),
             ),
@@ -633,38 +668,38 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: const Color(0xFF14141C),
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                border: Border.all(color: SunfireTheme.tileBorder(context)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.06),
+                      color: SunfireTheme.overlayFill(context),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.cloud_sync_rounded, color: Colors.lightBlueAccent, size: 28),
                   ),
                   const SizedBox(width: 16),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Link Suwayomi Server',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface),
                         ),
                         SizedBox(height: 4),
                         Text(
                           'Import your existing server library, reading history & categories.',
-                          style: TextStyle(fontSize: 12, color: Colors.white60, height: 1.3),
+                          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, height: 1.3),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.white38),
+                  Icon(Icons.arrow_forward_ios_rounded, size: 16, color: cs.onSurfaceVariant),
                 ],
               ),
             ),
@@ -677,7 +712,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // ── STEP 2: SERVER CONNECTION ──────────────────────────────
   Widget _buildServerStep() {
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final cs = Theme.of(context).colorScheme;
+    final primaryColor = cs.primary;
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
       child: Column(
@@ -688,7 +724,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white70),
+                icon: Icon(Icons.arrow_back_rounded, color: cs.onSurfaceVariant),
                 onPressed: () => _pageController.previousPage(
                   duration: const Duration(milliseconds: 250),
                   curve: Curves.easeInOut,
@@ -697,12 +733,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               const SizedBox(width: 4),
               Icon(Icons.cloud_sync_rounded, color: primaryColor, size: 26),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Link Suwayomi Server',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface),
                 ),
               ),
             ],
@@ -715,20 +751,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 24),
           TextField(
             controller: _serverUrlController,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: cs.onSurface),
             decoration: InputDecoration(
               labelText: 'Server URL',
-              labelStyle: const TextStyle(color: Colors.grey),
+              labelStyle: TextStyle(color: Colors.grey),
               hintText: 'http://192.168.1.50:4567 or https://manga.example.com',
-              hintStyle: const TextStyle(color: Colors.white24),
+              hintStyle: TextStyle(color: cs.onSurfaceVariant),
               filled: true,
-              fillColor: const Color(0xFF1B1B22),
+              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
               prefixIcon: const Icon(Icons.dns_rounded, color: Colors.grey),
             ),
           ),
           const SizedBox(height: 18),
-          const Text('Authentication', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.white70)),
+          Text('Authentication', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: cs.onSurfaceVariant)),
           const SizedBox(height: 8),
           SegmentedButton<ServerAuthType>(
             segments: const [
@@ -746,14 +782,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           if (_authType == ServerAuthType.basic) ...[
             TextField(
               controller: _serverUsernameController,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: cs.onSurface),
               decoration: InputDecoration(
                 labelText: 'Username',
-                labelStyle: const TextStyle(color: Colors.grey),
+                labelStyle: TextStyle(color: Colors.grey),
                 hintText: 'admin',
-                hintStyle: const TextStyle(color: Colors.white24),
+                hintStyle: TextStyle(color: cs.onSurfaceVariant),
                 filled: true,
-                fillColor: const Color(0xFF1B1B22),
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.person_rounded, color: Colors.grey),
               ),
@@ -761,15 +797,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             const SizedBox(height: 10),
             TextField(
               controller: _serverPasswordController,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: cs.onSurface),
               obscureText: _obscurePassword,
               decoration: InputDecoration(
                 labelText: 'Password',
-                labelStyle: const TextStyle(color: Colors.grey),
+                labelStyle: TextStyle(color: Colors.grey),
                 hintText: '••••••••',
-                hintStyle: const TextStyle(color: Colors.white24),
+                hintStyle: TextStyle(color: cs.onSurfaceVariant),
                 filled: true,
-                fillColor: const Color(0xFF1B1B22),
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.lock_rounded, color: Colors.grey),
                 suffixIcon: IconButton(
@@ -781,15 +817,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ] else if (_authType == ServerAuthType.bearer) ...[
             TextField(
               controller: _serverTokenController,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: cs.onSurface),
               obscureText: _obscurePassword,
               decoration: InputDecoration(
                 labelText: 'Bearer Token / API Key',
-                labelStyle: const TextStyle(color: Colors.grey),
+                labelStyle: TextStyle(color: Colors.grey),
                 hintText: 'e.g. eyJhbGciOi...',
-                hintStyle: const TextStyle(color: Colors.white24),
+                hintStyle: TextStyle(color: cs.onSurfaceVariant),
                 filled: true,
-                fillColor: const Color(0xFF1B1B22),
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.key_rounded, color: Colors.grey),
                 suffixIcon: IconButton(
@@ -804,14 +840,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFF14141C),
+              color: Theme.of(context).colorScheme.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              border: Border.all(color: SunfireTheme.hairline(context)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
                     Icon(Icons.shield_outlined, color: Colors.amberAccent, size: 20),
                     SizedBox(width: 8),
@@ -820,7 +856,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         'FlareSolverr Proxy (Optional)',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: cs.onSurface),
                       ),
                     ),
                   ],
@@ -833,14 +869,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: _flareSolverrController,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  style: TextStyle(color: cs.onSurface, fontSize: 13),
                   decoration: InputDecoration(
                     labelText: 'Proxy Endpoint',
-                    labelStyle: const TextStyle(color: Colors.grey, fontSize: 12),
+                    labelStyle: TextStyle(color: Colors.grey, fontSize: 12),
                     hintText: 'http://192.168.1.50:8191/v1',
-                    hintStyle: const TextStyle(color: Colors.white24),
+                    hintStyle: TextStyle(color: cs.onSurfaceVariant),
                     filled: true,
-                    fillColor: const Color(0xFF1B1B22),
+                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                     suffixIcon: TextButton(
@@ -902,14 +938,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             onPressed: _isConnecting ? null : _testAndConnectServer,
             child: _isConnecting
-                ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                : const Text('Connect & Import Server', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                ? SizedBox(height: 22, width: 22, child: CircularProgressIndicator(color: cs.onSurface, strokeWidth: 2.5))
+                : Text('Connect & Import Server', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onPrimary)),
           ),
           const SizedBox(height: 12),
           TextButton(
             onPressed: _startStandaloneSetup,
-            child: const Center(
-              child: Text('Skip server setup (Use Pure Standalone Mode)', style: TextStyle(color: Colors.white60, fontSize: 13)),
+            child: Center(
+              child: Text('Skip server setup (Use Pure Standalone Mode)', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
             ),
           ),
         ],
@@ -924,6 +960,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     required String subtitle,
     required VoidCallback onAdd,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -940,8 +977,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: cs.onSurface)),
+                Text(subtitle, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
               ],
             ),
           ),
@@ -956,7 +993,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // ── STEP 3: REPOSITORIES ────────────────────────────────────
   Widget _buildReposStep() {
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final cs = Theme.of(context).colorScheme;
+    final primaryColor = cs.primary;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
       child: Column(
@@ -970,12 +1008,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             children: [
               Icon(Icons.extension_rounded, color: primaryColor, size: 28),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Extension Repositories',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface),
                 ),
               ),
             ],
@@ -1007,12 +1045,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Expanded(
                 child: TextField(
                   controller: _newRepoUrlController,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  style: TextStyle(color: cs.onSurface, fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'https://.../index.json',
-                    hintStyle: const TextStyle(color: Colors.white24),
+                    hintStyle: TextStyle(color: cs.onSurfaceVariant),
                     filled: true,
-                    fillColor: const Color(0xFF1B1B22),
+                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
@@ -1025,7 +1063,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: _addNewRepo,
-                icon: const Icon(Icons.add, color: Colors.white),
+                icon: Icon(Icons.add, color: cs.onSurface),
               ),
             ],
           ),
@@ -1037,9 +1075,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF17171F),
+                    color: Theme.of(context).colorScheme.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                    border: Border.all(color: SunfireTheme.hairline(context)),
                   ),
                   child: Row(
                     children: [
@@ -1049,7 +1087,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         child: Column(
                            crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                            Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: cs.onSurface)),
                             Text(url, style: const TextStyle(color: Colors.grey, fontSize: 11), overflow: TextOverflow.ellipsis),
                           ],
                         ),
@@ -1068,14 +1106,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF14141C),
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                border: Border.all(color: SunfireTheme.hairline(context)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
                       Icon(Icons.shield_outlined, color: Colors.amberAccent, size: 18),
                       SizedBox(width: 8),
@@ -1084,7 +1122,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           'FlareSolverr Proxy (Optional)',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white),
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: cs.onSurface),
                         ),
                       ),
                     ],
@@ -1094,14 +1132,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _flareSolverrController,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    style: TextStyle(color: cs.onSurface, fontSize: 12),
                     decoration: InputDecoration(
                       labelText: 'Proxy Endpoint',
                       labelStyle: const TextStyle(color: Colors.grey, fontSize: 11),
                       hintText: 'http://192.168.1.50:8191/v1',
-                      hintStyle: const TextStyle(color: Colors.white24),
+                      hintStyle: TextStyle(color: cs.onSurfaceVariant),
                       filled: true,
-                      fillColor: const Color(0xFF1B1B22),
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                       suffixIcon: TextButton(
@@ -1136,7 +1174,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(54, 54),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  side: const BorderSide(color: Color(0x2BFFFFFF)),
+                  side: BorderSide(color: SunfireTheme.tileBorder(context)),
                 ),
                 onPressed: () {
                   _pageController.previousPage(
@@ -1144,7 +1182,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     curve: Curves.easeInOut,
                   );
                 },
-                child: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                child: Icon(Icons.arrow_back_rounded, color: cs.onSurface),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1159,9 +1197,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeInOut,
                     );
-                    _runInitialHydration();
+                    unawaited(_runInitialHydration());
                   },
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Flexible(
@@ -1169,11 +1207,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           'Start Setup & Hydration',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface),
                         ),
                       ),
                       SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                      Icon(Icons.arrow_forward_rounded, color: cs.onSurface, size: 20),
                     ],
                   ),
                 ),
@@ -1187,7 +1225,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // ── STEP 4: LIVE HYDRATION DASHBOARD ────────────────────────
   Widget _buildHydrationStep() {
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final cs = Theme.of(context).colorScheme;
+    final primaryColor = cs.primary;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
       child: Column(
@@ -1205,11 +1244,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: Icon(Icons.sync_alt_rounded, color: primaryColor, size: 24),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Replicating State', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                    Text('Replicating State', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface)),
                     Text('Building 100% offline local database', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Colors.grey)),
                   ],
                 ),
@@ -1263,17 +1302,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     required bool isCompleted,
     required Color primaryColor,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF16161E),
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isActive
               ? primaryColor.withValues(alpha: 0.6)
               : isCompleted
                   ? Colors.green.withValues(alpha: 0.3)
-                  : Colors.white.withValues(alpha: 0.04),
+                  : SunfireTheme.overlayFill(context),
         ),
       ),
       child: Row(
@@ -1293,9 +1333,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: cs.onSurface)),
                 const SizedBox(height: 3),
-                Text(subtitle, style: TextStyle(fontSize: 12, color: isActive ? Colors.white70 : Colors.grey)),
+                Text(subtitle, style: TextStyle(fontSize: 12, color: isActive ? cs.onSurfaceVariant : Colors.grey)),
               ],
             ),
           ),
@@ -1306,7 +1346,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // ── STEP 5: COMPLETION & GATEKEEPER ─────────────────────────
   Widget _buildCompletionStep() {
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final cs = Theme.of(context).colorScheme;
+    final primaryColor = cs.primary;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 24.0),
       child: Column(
@@ -1321,12 +1362,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: const Icon(Icons.check_rounded, size: 64, color: Colors.greenAccent),
           ),
           const SizedBox(height: 28),
-          const Text(
+          Text(
             'You are All Set!',
             style: TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.w900,
-              color: Colors.white,
+              color: cs.onSurface,
               letterSpacing: -0.5,
             ),
           ),
@@ -1336,25 +1377,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ? '$_matchedSourcesCount on-device JS scrapers activated. Your local library is ready!'
                 : '$_matchedSourcesCount on-device JS scrapers activated with $_totalHydratedManga titles ready in your library.',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 15, color: Colors.white70),
+            style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF16161F),
+              color: Theme.of(context).colorScheme.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(14),
             ),
             child: Column(
               children: [
-                const Row(
+                Row(
                   children: [
                     Icon(Icons.bolt_rounded, color: Colors.amber, size: 20),
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         '100% On-Device Engine: Browse, download, and read manga offline anytime.',
-                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                       ),
                     ),
                   ],
@@ -1373,7 +1414,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _isStandalone
                             ? 'Cloud Sync Available: You can connect a Suwayomi server anytime in Settings.'
                             : 'Automatic Cloud Sync: Reading progress pushes to your server when connected.',
-                        style: const TextStyle(fontSize: 12, color: Colors.white70),
+                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                       ),
                     ),
                   ],
@@ -1390,12 +1431,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               elevation: 4,
             ),
             onPressed: _finishOnboarding,
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Start Reading', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text('Start Reading', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onPrimary)),
                 SizedBox(width: 8),
-                Icon(Icons.rocket_launch_rounded, color: Colors.white),
+                Icon(Icons.rocket_launch_rounded, color: cs.onSurface),
               ],
             ),
           ),

@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
+import '../../core/engine/content_resolver_service.dart' show preferServerScrape;
 import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
@@ -23,9 +24,11 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../features/reader/chapter_number_utils.dart';
-import '../../main_shell.dart';
+import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
 import '../browse/global_search_screen.dart';
 import '../browse/migrate_search_screen.dart';
+import 'manga_detail_layout.dart';
 import 'tracking_bottom_sheet.dart';
 
 class MangaDetailScreen extends StatefulWidget {
@@ -144,8 +147,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     if (raw != null && raw.isNotEmpty && raw != '0' && raw != 'null') {
       // If the extension returned an ISO-8601 string with timestamp (e.g. 2026-05-26T20:56:45.293Z),
       // extract the clean date component: 2026-05-26
+      // Route it through the Date Format setting (UIS-P3-3).
       if (raw.contains('T') && raw.length >= 10 && RegExp(r'^\d{4}-\d{2}-\d{2}T').hasMatch(raw)) {
-        return raw.split('T')[0];
+        final iso = DateTime.tryParse(raw);
+        return iso != null ? _settings.formatDate(iso.toLocal()) : raw.split('T')[0];
       }
       // If it's pure digits (unix timestamp string in ms or s, e.g. 1778025600000), format nicely
       final numericVal = int.tryParse(raw);
@@ -153,7 +158,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         final ms = (normalizeEpochToSeconds(numericVal) ?? 0) * 1000;
         final dt = DateTime.fromMillisecondsSinceEpoch(ms);
         if (dt.year >= 1975) {
-          return DateFormat.yMMMd().format(dt);
+          return _settings.formatDate(dt);
         }
       }
       // Return the extension site's authentic published date as-is (e.g. "May 6, 2026", "26 Aug 2026", "Nov 14, 2024", "2025-07-19")
@@ -184,7 +189,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   void initState() {
     super.initState();
     _sortAscending = _settings.chapterSortAscending;
-    _loadMangaDetails();
+    unawaited(_loadMangaDetails());
   }
 
   /// Reloads the series.
@@ -244,7 +249,14 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final resolvedAsServerManga = _manga != null
         ? (_manga!.serverId > 0 && _manga!.serverId == widget.mangaServerId)
         : widget.mangaServerId > 0;
-    if (resolvedAsServerManga && !isLocalExtension && GraphQLClientService.instance.isConfigured) {
+    // ISS-073 B3: server-linked manga scrape through the server first, even
+    // when a matching local JS extension is installed.
+    final serverFirst = resolvedAsServerManga &&
+        preferServerScrape(
+          serverId: widget.mangaServerId,
+          serverConfigured: GraphQLClientService.instance.isConfigured,
+        );
+    if (serverFirst) {
       try {
         var detailsData = await GraphQLClientService.instance.fetchMangaDetails(widget.mangaServerId);
         if (loadGen != _loadGeneration) return;
@@ -273,11 +285,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           // the whole detail load — and must not strand the spinner either.
           final rawManga = detailsData['manga'];
           if (rawManga is! Map) {
-            LoggerService.instance.logWarning(
+            unawaited(LoggerService.instance.logWarning(
               'Manga details for ${widget.mangaServerId} had a non-object manga node; '
               'keeping the locally cached state',
               'MangaDetail',
-            );
+            ));
             return;
           }
           final mMap = rawManga is Map<String, dynamic> ? rawManga : Map<String, dynamic>.from(rawManga);
@@ -453,7 +465,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     //    - Chapters list is empty or has blank names/URLs
     final chaptersNeedEnrichment = _chapters.isEmpty ||
         _chapters.every((c) => c.name.trim().isEmpty || c.url.trim().isEmpty);
-    if ((isLocalExtension || chaptersNeedEnrichment) && _manga != null && _manga!.sourceName.isNotEmpty) {
+    if (((isLocalExtension && !serverFirst) || chaptersNeedEnrichment) && _manga != null && _manga!.sourceName.isNotEmpty) {
       try {
         final localData = await QuickJsService.instance.fetchMangaDetailsLocal(
           _manga!.sourceName,
@@ -805,9 +817,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     // add/remove diff instead of a full replace — a replace would wipe server
     // categories this client doesn't currently know about.
     final previousCatIds = List<int>.from(_manga!.categoryIds);
-    await showModalBottomSheet(
+    await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (sheetContext) {
         return StatefulBuilder(
@@ -839,7 +851,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         final isChecked = selectedCatIds.contains(cat.serverId);
                         return CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          title: Tooltip(message: cat.name, child: Text(cat.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
                           value: isChecked,
                           activeColor: Theme.of(context).colorScheme.primary,
                           onChanged: (val) {
@@ -884,7 +896,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         );
                       }
                     },
-                    child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: Text('Save', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -972,7 +984,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   void _openReader(int chapterServerId) async {
     await context.push('/reader/$chapterServerId');
     if (mounted) {
-      _loadLocalDataOnly();
+      unawaited(_loadLocalDataOnly());
     }
   }
 
@@ -995,17 +1007,17 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     if (!mounted) return;
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) => MigrateSearchScreen(manga: manga, sources: sources),
       ),
     );
-    if (mounted) _loadLocalDataOnly();
+    if (mounted) unawaited(_loadLocalDataOnly());
   }
 
   void _onGenreTap(String genre) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) => GlobalSearchScreen(initialQuery: genre),
       ),
     );
@@ -1074,15 +1086,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
     if (newState && _settings.deleteChapterAfterMarkedRead && ch.isDownloaded) {
       if (!ch.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-        DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(ch));
+        unawaited(DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(ch)));
       }
     }
 
     if (newState && _manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
-      MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: ch).catchError((Object e, StackTrace st) {
-        LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
+      unawaited(MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: ch).catchError((Object e, StackTrace st) {
+        unawaited(LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron'));
         return false;
-      });
+      }));
     }
   }
 
@@ -1092,7 +1104,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     await IsarService.instance.saveChapter(ch);
 
     if (ch.serverId > 0) {
-      SyncEngine.instance.syncChapterBookmark(ch.serverId, newState);
+      unawaited(SyncEngine.instance.syncChapterBookmark(ch.serverId, newState));
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1116,18 +1128,18 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       p.applyReadState(true);
       if (_settings.deleteChapterAfterMarkedRead && p.isDownloaded) {
         if (!p.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-          DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(p));
+          unawaited(DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(p)));
         }
       }
       await SyncEngine.instance.stampLocalReadActivity(p);
       if (p.serverId > 0) {
-        SyncEngine.instance.syncChapterProgress(p.serverId, isRead: true, lastPageRead: p.lastPageRead);
+        unawaited(SyncEngine.instance.syncChapterProgress(p.serverId, isRead: true, lastPageRead: p.lastPageRead));
       }
       if (_manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
-        MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: p).catchError((Object e, StackTrace st) {
-          LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
+        unawaited(MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: p).catchError((Object e, StackTrace st) {
+          unawaited(LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron'));
           return false;
-        });
+        }));
       }
     }
     await IsarService.instance.saveChapters(prevs);
@@ -1204,7 +1216,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       c.applyReadState(read);
       if (read && _settings.deleteChapterAfterMarkedRead && c.isDownloaded) {
         if (!c.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-          DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(c));
+          unawaited(DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(c)));
         }
       }
       if (read) await SyncEngine.instance.stampLocalReadActivity(c);
@@ -1218,10 +1230,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         );
       }
       if (read && _manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
-        MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: c).catchError((Object e, StackTrace st) {
-          LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
+        unawaited(MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: c).catchError((Object e, StackTrace st) {
+          unawaited(LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron'));
           return false;
-        });
+        }));
       }
     }
     await IsarService.instance.saveChapters(targets);
@@ -1297,10 +1309,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final allChapters = List<Chapter>.from(_chapters)
       ..sort((a, b) => a.chapterNumber.compareTo(b.chapterNumber));
     bool downloadToLocal = true;
-
-    showModalBottomSheet(
+unawaited(
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
         return StatefulBuilder(
@@ -1345,7 +1357,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           },
         );
       },
-    );
+    ));
   }
 
   Widget _buildDownloadOptionTile(String title, int count, List<Chapter> sourceList, Color primaryColor, bool downloadToLocal) {
@@ -1441,10 +1453,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final targetChId = _targetChapterId(ch);
     final isDownloadedLocally = DownloadManagerService.instance.isChapterDownloadedLocally(targetChId);
     final isDownloadedOnServer = (ch.serverId > 0 && DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId)) || ch.isDownloaded;
-
-    showModalBottomSheet(
+unawaited(
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (sheetContext) {
         return Padding(
@@ -1499,7 +1511,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 onTap: () {
                   Navigator.pop(sheetContext);
                   final target = ch.url.isNotEmpty ? ch.url : (_manga?.url ?? '');
-                  _openInBrowser(target);
+                  unawaited(_openInBrowser(target));
                 },
               ),
 
@@ -1568,7 +1580,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           ),
         );
       },
-    );
+    ));
   }
 
   @override
@@ -1653,7 +1665,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       child: Scaffold(
       appBar: isSelecting
           ? AppBar(
-              backgroundColor: const Color(0xFF1F1F24),
+              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
               leading: IconButton(
                 icon: const Icon(Icons.close_rounded),
                 onPressed: () => setState(() => _selectedChapterIds.clear()),
@@ -1691,13 +1703,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               ],
             )
           : null,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth >= sunfireDetailTwoPaneMinWidth) {
-            return _buildTabletLayout(context, manga, sortedChapters, primaryColor, isSelecting);
-          }
-          return _buildPhoneLayout(context, manga, sortedChapters, primaryColor, isSelecting);
-        },
+      // UIS-P2-D: info left + persistent chapter list right only on
+      // landscape tablets; portrait / phones keep the single-pane scroll.
+      body: MangaDetailAdaptiveLayout(
+        twoPaneBuilder: (context) =>
+            _buildTabletLayout(context, manga, sortedChapters, primaryColor, isSelecting),
+        singlePaneBuilder: (context) =>
+            _buildPhoneLayout(context, manga, sortedChapters, primaryColor, isSelecting),
       ),
     ),
   );
@@ -1710,6 +1722,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     Color primaryColor,
     bool isSelecting,
   ) {
+    final cs = Theme.of(context).colorScheme;
     return SafeArea(
       bottom: false,
       child: Row(
@@ -1719,8 +1732,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         SizedBox(
           width: 380,
           child: Container(
-            decoration: const BoxDecoration(
-              border: Border(right: BorderSide(color: Color(0x1AFFFFFF), width: 1)),
+            decoration: BoxDecoration(
+              border: Border(right: BorderSide(color: SunfireTheme.hairline(context), width: 1)),
             ),
             child: ListView(
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
@@ -1736,7 +1749,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     IconButton(
                       icon: Icon(
                         manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        color: manga.inLibrary ? Colors.redAccent : Colors.white,
+                        color: manga.inLibrary ? Colors.redAccent : cs.onSurface,
                       ),
                       tooltip: manga.inLibrary ? 'In Library (Tap to remove)' : 'Add to Library',
                       onPressed: _toggleInLibrary,
@@ -1796,9 +1809,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     if (manga.author != null && manga.author!.isNotEmpty)
-                      Text(manga.author!, style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+                      Text(manga.author!, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w600)),
                     if (manga.author != null && manga.author!.isNotEmpty)
-                      const Text(' • ', style: TextStyle(color: Colors.white70)),
+                      Text(' • ', style: TextStyle(color: cs.onSurfaceVariant)),
                     Text(manga.sourceName, style: TextStyle(color: primaryColor, fontSize: 13, fontWeight: FontWeight.bold)),
                   ],
                 ),
@@ -1813,7 +1826,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     SunfireBadge(
                       label: '${sortedChapters.length} CHAPTERS',
                       color: Colors.grey,
-                      textColor: Colors.white70,
+                      textColor: cs.onSurfaceVariant,
                     ),
                   ],
                 ),
@@ -1824,7 +1837,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: manga.inLibrary ? const Color(0x33FF3D00) : primaryColor,
-                          foregroundColor: manga.inLibrary ? Colors.redAccent : Colors.white,
+                          foregroundColor: manga.inLibrary ? Colors.redAccent : cs.onPrimary,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
@@ -1841,8 +1854,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: Color(0x2BFFFFFF)),
+                          foregroundColor: cs.onSurface,
+                          side: BorderSide(color: SunfireTheme.tileBorder(context)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
@@ -1859,8 +1872,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     final hasReadAny = _chapters.any((c) => c.isRead || c.lastPageRead > 0);
                     return ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0x33FFFFFF),
-                        foregroundColor: Colors.white,
+                        backgroundColor: SunfireTheme.overlayFill(context),
+                        foregroundColor: cs.onSurface,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
@@ -1890,7 +1903,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 ],
                 Text(
                   manga.description ?? 'No synopsis available for this manga.',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13, height: 1.4),
                 ),
               ],
             ),
@@ -1953,10 +1966,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 4.0),
                   child: TextField(
                     autofocus: true,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(color: cs.onSurface, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Search chapters (e.g. 10 or Prologue)...',
-                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                      hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                       prefixIcon: Icon(Icons.search_rounded, color: primaryColor, size: 20),
                       suffixIcon: _chapterSearch.isNotEmpty
                           ? IconButton(
@@ -1965,7 +1978,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                             )
                           : null,
                       filled: true,
-                      fillColor: const Color(0xFF1F1F24),
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     ),
@@ -1986,16 +1999,16 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                           label: Text(filter),
                           selected: isSel,
                           selectedColor: primaryColor.withValues(alpha: 0.25),
-                          backgroundColor: const Color(0x1F2A2A32),
+                          backgroundColor: SunfireTheme.tileSurface(context),
                           labelStyle: TextStyle(
-                            color: isSel ? primaryColor : Colors.white70,
+                            color: isSel ? primaryColor : cs.onSurfaceVariant,
                             fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                             fontSize: 12,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                             side: BorderSide(
-                              color: isSel ? primaryColor : const Color(0x2BFFFFFF),
+                              color: isSel ? primaryColor : SunfireTheme.tileBorder(context),
                               width: 0.8,
                             ),
                           ),
@@ -2006,7 +2019,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   ),
                 ),
               ),
-              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              Divider(height: 1, color: SunfireTheme.hairline(context)),
               Expanded(
                 child: sortedChapters.isEmpty
                     ? _chapterEmptyState()
@@ -2046,6 +2059,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     Color primaryColor,
     bool isSelecting,
   ) {
+    final cs = Theme.of(context).colorScheme;
     return CustomScrollView(
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       scrollCacheExtent: ScrollCacheExtent.pixels(1000),
@@ -2054,28 +2068,28 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           SliverAppBar(
             expandedHeight: 320,
             pinned: true,
-            backgroundColor: const Color(0xFF121216),
+            backgroundColor: Theme.of(context).colorScheme.surface,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              icon: Icon(Icons.arrow_back_rounded, color: cs.onSurface),
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
               IconButton(
                 icon: Icon(
                   manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                  color: manga.inLibrary ? Colors.redAccent : Colors.white,
+                  color: manga.inLibrary ? Colors.redAccent : cs.onSurface,
                 ),
                 tooltip: manga.inLibrary ? 'In Library (Tap to remove)' : 'Add to Library',
                 onPressed: _toggleInLibrary,
               ),
               IconButton(
-                icon: const Icon(Icons.download_rounded, color: Colors.white),
+                icon: Icon(Icons.download_rounded, color: cs.onSurface),
                 tooltip: 'Download Chapters',
                 onPressed: _showBatchDownloadModal,
               ),
               PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
-                color: const Color(0xFF1F1F26),
+                icon: Icon(Icons.more_vert_rounded, color: cs.onSurface),
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
                 onSelected: (value) async {
                   switch (value) {
                     case 'categories':
@@ -2122,14 +2136,18 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   ),
                   // 2. Gradient surface blend
                   Container(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Color(0x80000000),
-                          Color(0xB3121216),
-                          Color(0xFF121216),
+                          // Top scrim behind the app-bar icons: dark scrim in
+                          // dark themes, a surface wash in Light (ISS-047).
+                          cs.brightness == Brightness.dark
+                              ? const Color(0x80000000)
+                              : cs.surface.withValues(alpha: 0.5),
+                          Theme.of(context).colorScheme.surface.withValues(alpha: 0.7),
+                          Theme.of(context).colorScheme.surface,
                         ],
-                        stops: [0.0, 0.55, 1.0],
+                        stops: const [0.0, 0.55, 1.0],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
@@ -2149,10 +2167,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                           height: 130,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0x33FFFFFF), width: 1.2),
+                            border: Border.all(color: SunfireTheme.tileBorder(context), width: 1.2),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.6),
+                                color: Colors.black.withValues(alpha: cs.brightness == Brightness.dark ? 0.6 : 0.25),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               ),
@@ -2179,10 +2197,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                                 manga.title,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 19,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                                  color: cs.onSurface,
                                   height: 1.2,
                                   letterSpacing: -0.3,
                                 ),
@@ -2191,7 +2209,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                               if (manga.author != null && manga.author!.isNotEmpty)
                                 Text(
                                   manga.author!,
-                                  style: const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.w500),
+                                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5, fontWeight: FontWeight.w500),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -2212,7 +2230,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                                   SunfireBadge(
                                     label: '${sortedChapters.length} CH',
                                     color: Colors.grey,
-                                    textColor: Colors.white70,
+                                    textColor: cs.onSurfaceVariant,
                                   ),
                                 ],
                               ),
@@ -2255,7 +2273,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: manga.inLibrary ? const Color(0x33FF3D00) : primaryColor,
-                          foregroundColor: manga.inLibrary ? Colors.redAccent : Colors.white,
+                          foregroundColor: manga.inLibrary ? Colors.redAccent : cs.onPrimary,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
@@ -2272,8 +2290,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: Color(0x2BFFFFFF)),
+                          foregroundColor: cs.onSurface,
+                          side: BorderSide(color: SunfireTheme.tileBorder(context)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
@@ -2294,7 +2312,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         gradient: LinearGradient(
                           colors: [
                             primaryColor.withValues(alpha: 0.25),
-                            const Color(0x1F2A2A32),
+                            SunfireTheme.tileSurface(context),
                           ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -2305,7 +2323,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
-                          foregroundColor: Colors.white,
+                          foregroundColor: cs.onSurface,
                           minimumSize: const Size.fromHeight(48),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
@@ -2313,7 +2331,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: 24),
                         label: Text(
                           hasReadAny ? 'Continue Reading' : 'Start Reading',
-                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: -0.2),
+                          style: TextStyle(color: cs.onSurface, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: -0.2),
                         ),
                       ),
                     );
@@ -2339,9 +2357,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0x1F2A2A32),
+                      color: SunfireTheme.tileSurface(context),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
+                      border: Border.all(color: SunfireTheme.tileBorder(context), width: 0.8),
                     ),
                     child: AnimatedSize(
                       duration: const Duration(milliseconds: 250),
@@ -2353,7 +2371,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                             manga.description ?? 'No synopsis available for this manga.',
                             maxLines: _isDescExpanded ? null : 3,
                             overflow: _isDescExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white70, fontSize: 13.5, height: 1.45),
+                            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13.5, height: 1.45),
                           ),
                           if (manga.description != null && manga.description!.length > 100) ...[
                             const SizedBox(height: 8),
@@ -2417,10 +2435,10 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                   const SizedBox(height: 8),
                   TextField(
                     autofocus: true,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(color: cs.onSurface, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Search chapters (e.g. 10 or Prologue)...',
-                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                      hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                       prefixIcon: Icon(Icons.search_rounded, color: primaryColor, size: 20),
                       suffixIcon: _chapterSearch.isNotEmpty
                           ? IconButton(
@@ -2429,7 +2447,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                             )
                           : null,
                       filled: true,
-                      fillColor: const Color(0xFF1F1F24),
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     ),
@@ -2448,16 +2466,16 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                           label: Text(filter),
                           selected: isSel,
                           selectedColor: primaryColor.withValues(alpha: 0.25),
-                          backgroundColor: const Color(0x1F2A2A32),
+                          backgroundColor: SunfireTheme.tileSurface(context),
                           labelStyle: TextStyle(
-                            color: isSel ? primaryColor : Colors.white70,
+                            color: isSel ? primaryColor : cs.onSurfaceVariant,
                             fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                             fontSize: 12,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                             side: BorderSide(
-                              color: isSel ? primaryColor : const Color(0x2BFFFFFF),
+                              color: isSel ? primaryColor : SunfireTheme.tileBorder(context),
                               width: 0.8,
                             ),
                           ),
@@ -2479,7 +2497,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 120.0),
+            padding: EdgeInsets.only(left: 16.0, right: 16.0, bottom: SunfireBreakpoints.scrollBottomPadding(context)),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
@@ -2501,16 +2519,17 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     bool isSelecting,
     Color primaryColor,
   ) {
+    final cs = Theme.of(context).colorScheme;
     final targetChId = _targetChapterId(ch);
     return RepaintBoundary(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4.0),
         child: Material(
-          color: isSelected ? primaryColor.withAlpha(30) : const Color(0x1F2A2A32),
+          color: isSelected ? primaryColor.withAlpha(30) : SunfireTheme.tileSurface(context),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
             side: BorderSide(
-              color: isSelected ? primaryColor : const Color(0x1AFFFFFF),
+              color: isSelected ? primaryColor : SunfireTheme.hairline(context),
               width: isSelected ? 1.4 : 0.8,
             ),
           ),
@@ -2557,7 +2576,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13.5,
-                color: ch.isRead ? Colors.grey : Colors.white,
+                color: ch.isRead ? Colors.grey : cs.onSurface,
               ),
             ),
             subtitle: Builder(
@@ -2586,7 +2605,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                         child: LinearProgressIndicator(
                           value: (ch.lastPageRead / ch.pageCount).clamp(0.0, 1.0),
                           minHeight: 3,
-                          backgroundColor: const Color(0x33FFFFFF),
+                          backgroundColor: SunfireTheme.overlayFill(context),
                           valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                         ),
                       ),
@@ -2610,13 +2629,13 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     visualDensity: VisualDensity.compact,
                     onPressed: () {
-                      DownloadManagerService.instance.enqueueLocalDownload(
+                      unawaited(DownloadManagerService.instance.enqueueLocalDownload(
                         chapterId: targetChId,
                         mangaId: _targetMangaId(),
                         chapterName: ch.name,
                         mangaTitle: _manga?.title ?? 'Manga',
                         chapterNumber: ch.chapterNumber,
-                      );
+                      ));
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Queued ${ch.name} for local download')));
                       setState(() {});
                     },

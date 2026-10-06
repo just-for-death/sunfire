@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
@@ -7,9 +8,25 @@ import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/services/image_cache_helper.dart';
+import '../../core/services/settings_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../main_shell.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
+
+/// History group label for a read date (UIS-10). Today / Yesterday / Past Week,
+/// then Settings > General > Date Format. Grouping compares adjacent labels;
+/// formatDate is 1:1 per calendar day, so it stays correct.
+@visibleForTesting
+String historyDateHeader(DateTime readDate, DateTime now) {
+  final nowCalendar = DateTime(now.year, now.month, now.day);
+  final readCalendar = DateTime(readDate.year, readDate.month, readDate.day);
+  final dayDiff = nowCalendar.difference(readCalendar).inDays;
+  if (dayDiff == 0) return 'Today';
+  if (dayDiff == 1) return 'Yesterday';
+  if (dayDiff < 7) return 'Past Week';
+  return SettingsService.instance.formatDate(readDate);
+}
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -31,19 +48,30 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
   @override
   void initState() {
     super.initState();
-    _loadHistory();
+    unawaited(_loadHistory());
     MainShell.selectedTabNotifier.addListener(_onTabChanged);
+    SettingsService.instance.addListener(_onSettingsChanged);
+  }
+
+  late String _lastDateFormat = SettingsService.instance.dateFormat;
+
+  void _onSettingsChanged() {
+    final fmt = SettingsService.instance.dateFormat;
+    if (fmt == _lastDateFormat || !mounted) return;
+    _lastDateFormat = fmt;
+    unawaited(_loadHistory());
   }
 
   void _onTabChanged() {
     if (MainShell.selectedTabNotifier.value == 2 && mounted) {
-      _loadHistory();
+      unawaited(_loadHistory());
     }
   }
 
   @override
   void dispose() {
     MainShell.selectedTabNotifier.removeListener(_onTabChanged);
+    SettingsService.instance.removeListener(_onSettingsChanged);
     super.dispose();
   }
 
@@ -82,7 +110,6 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
       final chapters = await IsarService.instance.getReadingHistory();
       final items = <Map<String, dynamic>>[];
       final now = DateTime.now();
-      final nowCalendar = DateTime(now.year, now.month, now.day);
 
       // Cache manga lookups to eliminate N+1 queries.
       //
@@ -104,8 +131,9 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
       };
 
       for (final ch in chapters) {
+        // ISS-060: include lastReadAt==0 reads (isRead / progress). getReadingHistory
+        // already filtered to chapters with any read evidence.
         final lastRead = ch.lastReadAt ?? 0;
-        if (lastRead <= 0) continue; // Only show chapters with genuine read timestamps in History
 
         final manga = mangaMap[ch.mangaId];
         // The app stores `lastReadAt` in epoch SECONDS. This used to use a
@@ -114,21 +142,12 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
         // seconds in manga_detail, and this file multiplied a real millis value
         // by 1000 to produce the year 15858. One helper, one threshold.
         final lastReadSeconds = normalizeEpochToSeconds(lastRead) ?? 0;
-        final readDate = DateTime.fromMillisecondsSinceEpoch(lastReadSeconds * 1000);
-
-        final readCalendar = DateTime(readDate.year, readDate.month, readDate.day);
-        final dayDiff = nowCalendar.difference(readCalendar).inDays;
-
-        String dateHeader;
-        if (dayDiff == 0) {
-          dateHeader = 'Today';
-        } else if (dayDiff == 1) {
-          dateHeader = 'Yesterday';
-        } else if (dayDiff < 7) {
-          dateHeader = 'Past Week';
-        } else {
-          dateHeader = '${readDate.year}-${readDate.month.toString().padLeft(2, '0')}-${readDate.day.toString().padLeft(2, '0')}';
-        }
+        final dateHeader = lastReadSeconds > 0
+            ? historyDateHeader(
+                DateTime.fromMillisecondsSinceEpoch(lastReadSeconds * 1000),
+                now,
+              )
+            : 'Earlier';
 
         items.add({
           'chapter': ch,
@@ -160,7 +179,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F24),
+        // UIS-ISS-012: theme surface (was hard-coded dark hex)
         title: const Text('Clear Reading History?'),
         content: const Text('This will clear all entries from your reading history feed.'),
         actions: [
@@ -196,7 +215,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
   Widget build(BuildContext context) {
     super.build(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final isTablet = MediaQuery.of(context).size.width >= 720;
+    final isTablet = MediaQuery.of(context).size.width >= SunfireBreakpoints.narrowTabletMaxWidth;
 
     return Scaffold(
       appBar: AppBar(
@@ -205,7 +224,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
         actions: [
           if (_historyItems.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.delete_sweep_outlined, color: Colors.white70),
+              icon: Icon(Icons.delete_sweep_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
               tooltip: 'Clear History',
               onPressed: _clearHistory,
             ),
@@ -256,10 +275,10 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                             physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                             scrollCacheExtent: ScrollCacheExtent.pixels(800),
                             padding: EdgeInsets.only(
-                              left: MediaQuery.of(context).size.width >= 720 ? 24.0 : 16.0,
-                              right: MediaQuery.of(context).size.width >= 720 ? 24.0 : 16.0,
+                              left: isTablet ? 24.0 : 16.0,
+                              right: isTablet ? 24.0 : 16.0,
                               top: 12.0,
-                              bottom: MediaQuery.of(context).size.width >= 720 ? 36.0 : 120.0,
+                              bottom: SunfireBreakpoints.scrollBottomPadding(context),
                             ),
                       itemCount: _historyItems.length,
                       itemBuilder: (context, index) {
@@ -305,13 +324,13 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 onTap: () async {
                                   await context.push('/reader/${ch.serverId != 0 ? ch.serverId : ch.id}');
-                                  if (mounted) _loadHistory();
+                                  if (mounted) unawaited(_loadHistory());
                                 },
                                onLongPress: () async {
                                  final remove = await showDialog<bool>(
                                    context: context,
                                    builder: (dCtx) => AlertDialog(
-                                     backgroundColor: const Color(0xFF1F1F24),
+                                     // UIS-ISS-012: theme surface (was hard-coded dark hex)
                                      title: const Text('Remove from History?'),
                                      content: Text('Remove "${ch.name}" from your reading history?'),
                                      actions: [
@@ -327,7 +346,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                    if (remove == true) {
                                    ch.clearHistoryTimestamp();
                                    await IsarService.instance.saveChapter(ch);
-                                   _loadHistory();
+                                   unawaited(_loadHistory());
                                  }
                                },
                                leading: GestureDetector(
@@ -335,7 +354,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                    if (manga != null) {
                                      final targetId = manga.canonicalKey;
                                      await context.push('/manga/$targetId');
-                                     if (mounted) _loadHistory();
+                                     if (mounted) unawaited(_loadHistory());
                                    }
                                  },
                                  child: Container(
@@ -382,7 +401,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                  tooltip: 'Resume reading',
                                  onPressed: () async {
                                    await context.push('/reader/${ch.serverId != 0 ? ch.serverId : ch.id}');
-                                   if (mounted) _loadHistory();
+                                   if (mounted) unawaited(_loadHistory());
                                  },
                                ),
                              ),

@@ -12,6 +12,7 @@ import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../ui/widgets/dialog_title.dart';
 
 /// Coerce a source map's display/name field to a non-null String. Extension
 /// lists come from mixed origins (GraphQL nodes, repo JSON, GQL metadata) and
@@ -69,7 +70,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
   void initState() {
     super.initState();
     _searchController = TextEditingController(text: widget.manga.title);
-    _performSearchAcrossSources();
+    unawaited(_performSearchAcrossSources());
   }
 
   @override
@@ -154,21 +155,21 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
     bool copyCategories = true;
     bool copyTracking = true;
     bool deleteOriginal = true;
-
-    showDialog(
+unawaited(
+    showDialog<void>(
       context: context,
       builder: (dialogCtx) {
         return StatefulBuilder(
           builder: (dialogCtx, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F1F24),
+              // UIS-ISS-012: theme surface (was hard-coded dark hex)
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              title: const Row(
-                children: [
-                  Icon(Icons.swap_horiz_rounded, color: Colors.blueAccent, size: 24),
-                  SizedBox(width: 10),
-                  Text('Migrate Manga', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-                ],
+              title: const DialogTitle(
+                icon: Icons.swap_horiz_rounded,
+                iconColor: Colors.blueAccent,
+                gap: 10,
+                text: 'Migrate Manga',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
               ),
               content: SizedBox(
                 width: double.maxFinite,
@@ -325,7 +326,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
           },
         );
       },
-    );
+    ));
   }
 
   Future<void> _executeMigration(
@@ -352,15 +353,15 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
         int.tryParse(targetManga['id'].toString()) != null &&
         parseIntSafe(targetManga['id']) > 0;
     var targetMangaId = parseIntSafe(targetManga['id']);
-
+unawaited(
     // Show loading progress overlay
-    showDialog(
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => PopScope(
         canPop: false,
         child: AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
+          // UIS-ISS-012: theme surface (was hard-coded dark hex)
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           content: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -379,7 +380,7 @@ class _MigrateSearchScreenState extends State<MigrateSearchScreen> {
           ),
         ),
       ),
-    );
+    ));
 
     bool migrationSuccess = false;
     try {

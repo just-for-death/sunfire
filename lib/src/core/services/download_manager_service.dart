@@ -92,7 +92,7 @@ class DownloadManagerService extends ChangeNotifier {
   final Set<int> _downloadedServerMangaIds = {};
   final Set<int> _downloadedLocalMangaIds = {};
   final Map<int, CancelToken> _cancelTokens = {};
-  StreamSubscription? _connectivitySubscription;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   bool _isProcessingLocalQueue = false;
   // Bumped every time pauseLocalQueue() runs. Lets the in-flight download's
@@ -118,7 +118,7 @@ class DownloadManagerService extends ChangeNotifier {
       _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
         final allowed = isNetworkAllowed(results);
         if (allowed && !_isQueuePaused && !_isProcessingLocalQueue && _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
-          _processLocalQueue();
+          unawaited(_processLocalQueue());
         }
       });
     } catch (e) {
@@ -126,7 +126,7 @@ class DownloadManagerService extends ChangeNotifier {
     }
   }
 
-  StreamSubscription? _batterySubscription;
+  StreamSubscription<BatteryState>? _batterySubscription;
 
   void _initBatteryListener() {
     try {
@@ -135,7 +135,7 @@ class DownloadManagerService extends ChangeNotifier {
         // Only resume from a charge-gate — an explicit user pause is never overridden.
         if (charging && !_isQueuePaused && !_isProcessingLocalQueue &&
             _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
-          _processLocalQueue();
+          unawaited(_processLocalQueue());
         }
       });
     } catch (e) {
@@ -158,7 +158,9 @@ class DownloadManagerService extends ChangeNotifier {
         // Shared trust rule (configured server host + loopback only; NO
         // blanket acceptance of LAN ranges) — see server_tls_trust.dart.
         (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient =
-            () => createServerTrustingHttpClient(() => SettingsService.instance.serverUrl);
+            () => createServerTrustingHttpClient(
+              () => SettingsService.instance.serverUrl,
+            );
       }
     } catch (ignoredError) { if (kDebugMode) debugPrint('[download_manager_service] ignored error: $ignoredError'); }
   }
@@ -169,6 +171,10 @@ class DownloadManagerService extends ChangeNotifier {
   /// startup/foreground auto-resume would silently re-start a queue the user
   /// stopped on purpose (e.g. to save mobile data), making Pause meaningless.
   static const String _queuePausedPrefKey = 'sunfire_download_queue_v1_paused';
+
+  /// Persisted batch state for completion notifications across interruptions.
+  /// Contains: total, completed, failed, counted.
+  static const String _batchStatePrefKey = 'sunfire_download_queue_v1_batch';
 
   List<LocalDownloadTask> get localTasks => List.unmodifiable(_localTasks);
   Set<int> get downloadedLocalChapterIds => _downloadedLocalChapterIds;
@@ -221,6 +227,84 @@ class DownloadManagerService extends ChangeNotifier {
     });
     return _pendingSave;
   }
+
+  Future<void> _saveBatchState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_batchStatePrefKey, jsonEncode({
+        'total': _batchTotal,
+        'completed': _completedInBatch,
+        'failed': _failedInBatch,
+        'counted': _batchCounted,
+      }));
+    } catch (e) {
+      debugPrint('[DownloadManager] Error saving batch state: $e');
+    }
+  }
+
+  Future<void> _loadBatchState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_batchStatePrefKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        _batchTotal = decoded['total'] as int? ?? 0;
+        _completedInBatch = decoded['completed'] as int? ?? 0;
+        _failedInBatch = decoded['failed'] as int? ?? 0;
+        _batchCounted = decoded['counted'] as bool? ?? false;
+      }
+    } catch (e) {
+      debugPrint('[DownloadManager] Error loading batch state: $e');
+    }
+  }
+
+  Future<void> _clearBatchState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_batchStatePrefKey);
+    } catch (e) {
+      debugPrint('[DownloadManager] Error clearing batch state: $e');
+    }
+  }
+
+  /// Pref key used by [_saveBatchState]/[_loadBatchState] (UIX-24 tests).
+  @visibleForTesting
+  static const String debugBatchStatePrefKey = _batchStatePrefKey;
+
+  /// Test seam: set in-memory batch counters without running the queue.
+  @visibleForTesting
+  void debugSetBatchCounters({
+    required int total,
+    required int completed,
+    required int failed,
+    required bool counted,
+  }) {
+    _batchTotal = total;
+    _completedInBatch = completed;
+    _failedInBatch = failed;
+    _batchCounted = counted;
+  }
+
+  /// Test seam: read current in-memory batch counters.
+  @visibleForTesting
+  ({int total, int completed, int failed, bool counted}) get debugBatchCounters => (
+        total: _batchTotal,
+        completed: _completedInBatch,
+        failed: _failedInBatch,
+        counted: _batchCounted,
+      );
+
+  /// Test seam: persist current counters via [_saveBatchState].
+  @visibleForTesting
+  Future<void> debugSaveBatchState() => _saveBatchState();
+
+  /// Test seam: restore counters via [_loadBatchState].
+  @visibleForTesting
+  Future<void> debugLoadBatchState() => _loadBatchState();
+
+  /// Test seam: clear the prefs key via [_clearBatchState].
+  @visibleForTesting
+  Future<void> debugClearBatchState() => _clearBatchState();
 
   Future<void> _writeQueueState() async {
     try {
@@ -304,7 +388,7 @@ class DownloadManagerService extends ChangeNotifier {
       if (!_isProcessingLocalQueue &&
           _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
         _waitingForCharger = false;
-        _processLocalQueue();
+        unawaited(_processLocalQueue());
       }
       return;
     }
@@ -359,6 +443,7 @@ class DownloadManagerService extends ChangeNotifier {
     _batchTotal = countRetryableTasks(_localTasks);
     _completedInBatch = 0;
     _failedInBatch = 0;
+    unawaited(_saveBatchState());
   }
 
   /// Tasks a queue run will actually attempt (queued + paused + downloading).
@@ -375,6 +460,7 @@ class DownloadManagerService extends ChangeNotifier {
     _completedInBatch = 0;
     _failedInBatch = 0;
     _batchCounted = false;
+    unawaited(_clearBatchState());
   }
 
   /// Reflects the current live queue in the Android foreground-service
@@ -430,7 +516,7 @@ class DownloadManagerService extends ChangeNotifier {
   /// service when background downloads are disabled mid-queue.
   void stopBackgroundNotifier() {
     if (DownloadForegroundTask.isSupported) {
-      DownloadForegroundTask.instance.stop();
+      unawaited(DownloadForegroundTask.instance.stop());
     }
   }
 
@@ -472,7 +558,7 @@ class DownloadManagerService extends ChangeNotifier {
     await _saveQueueState();
     await _persistQueuePausedFlag();
     if (!_isProcessingLocalQueue && _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
-      _processLocalQueue();
+      unawaited(_processLocalQueue());
     }
     notifyListeners();
   }
@@ -482,7 +568,7 @@ class DownloadManagerService extends ChangeNotifier {
   /// pause: an explicitly paused queue stays paused until the user resumes it.
   void resumeLocalQueueAfterForeground() {
     if (_isQueuePaused) return;
-    resumeLocalQueue();
+    unawaited(resumeLocalQueue());
   }
 
   bool _interruptedByBackground = false;
@@ -518,8 +604,17 @@ class DownloadManagerService extends ChangeNotifier {
 
   Future<void> initialize() async {
     await _loadQueueState();
+    await _loadBatchState();
     await _migrateLegacyDownloadFolders();
     await _loadQueuePausedFlag();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey(_legacyLastFullScanPrefKey)) {
+        await prefs.remove(_legacyLastFullScanPrefKey);
+      }
+    } catch (_) {
+      // Best-effort cleanup of an unused key; never block initialization.
+    }
     // Reconcile server download cache from local DB so the "Downloaded" filter
     // reflects the server's actual state (from last sync), not optimistic
     // enqueue markers that may have been queued but failed/404'd.
@@ -626,45 +721,57 @@ class DownloadManagerService extends ChangeNotifier {
       }
       await prefs.setBool(doneKey, true);
     } catch (e) {
-      LoggerService.instance.logError('Legacy download marker migration failed: $e', category: 'DownloadManager');
+      unawaited(LoggerService.instance.logError('Legacy download marker migration failed: $e', category: 'DownloaManager'));
     }
+  }
+
+  /// Pref written by a WIP "incremental" scan that only validated folders
+  /// modified in the last 7 days on its periodic full scan, so older downloads
+  /// lost their Downloaded badge. The scan is no longer time-windowed; the key
+  /// is only removed once in [initialize].
+  static const String _legacyLastFullScanPrefKey = 'sunfire_download_last_full_scan';
+
+  /// Ids of every chapter folder directly under [downloadsDir] that passes
+  /// [isDownloadFolderComplete], whatever its modification time.
+  ///
+  /// Only finished folders count — see kDownloadCompleteMarkerName. A folder
+  /// left behind by a failed/killed/cancelled download has no marker and must
+  /// not be reported as "downloaded" to the UI or reader.
+  @visibleForTesting
+  static Future<Set<int>> scanCompleteChapterFolders(Directory downloadsDir) async {
+    final ids = <int>{};
+    if (!await downloadsDir.exists()) return ids;
+    await for (final entity in downloadsDir.list(followLinks: false)) {
+      if (entity is! Directory) continue;
+      final segments = entity.uri.pathSegments.where((s) => s.isNotEmpty).toList();
+      final id = segments.isEmpty ? null : int.tryParse(segments.last);
+      if (id != null && await isDownloadFolderComplete(entity)) {
+        ids.add(id);
+      }
+    }
+    return ids;
   }
 
   Future<void> _scanDownloadedLocalChapters() async {
     try {
       final appDir = await getApplicationDocumentsDirectory();
       final downloadsDir = Directory('${appDir.path}/downloads');
-      if (await downloadsDir.exists()) {
-        final entities = await downloadsDir.list().toList();
-        for (final entity in entities) {
-          if (entity is Directory) {
-            final segments = entity.uri.pathSegments.where((s) => s.isNotEmpty).toList();
-            if (segments.isNotEmpty) {
-              final id = int.tryParse(segments.last);
-              // Only count this folder as a real downloaded chapter if it
-              // finished — see kDownloadCompleteMarkerName. A folder left
-              // behind by a failed/killed/cancelled download has no marker
-              // and must not be reported as "downloaded" to the UI or reader.
-              //
-              if (id != null && await isDownloadFolderComplete(entity)) {
-                _downloadedLocalChapterIds.add(id);
-                final ch = await IsarService.instance.getChapterByServerId(id);
-                if (ch != null && ch.mangaId > 0) {
-                  _downloadedLocalMangaIds.add(ch.mangaId);
-                  final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
-                  if (m != null) {
-                    if (m.serverId > 0) _downloadedLocalMangaIds.add(m.serverId);
-                    _downloadedLocalMangaIds.add(m.id);
-                  }
-                }
-              }
-            }
+      final ids = await scanCompleteChapterFolders(downloadsDir);
+      for (final id in ids) {
+        _downloadedLocalChapterIds.add(id);
+        final ch = await IsarService.instance.getChapterByServerId(id);
+        if (ch != null && ch.mangaId > 0) {
+          _downloadedLocalMangaIds.add(ch.mangaId);
+          final m = await IsarService.instance.getMangaByServerId(ch.mangaId);
+          if (m != null) {
+            if (m.serverId > 0) _downloadedLocalMangaIds.add(m.serverId);
+            _downloadedLocalMangaIds.add(m.id);
           }
         }
       }
       notifyListeners();
     } catch (e) {
-      LoggerService.instance.logError('_scanDownloadedLocalChapters error: $e', category: 'DownloadManager');
+      unawaited(LoggerService.instance.logError('_scanDownloadedLocalChapters error: $e', category: 'DownloaManager'));
     }
   }
 
@@ -742,11 +849,12 @@ class DownloadManagerService extends ChangeNotifier {
       } else {
         _batchTotal++;
       }
+      unawaited(_saveBatchState());
     }
     await _saveQueueState();
     notifyListeners();
-
-    _processLocalQueue();
+unawaited(
+    _processLocalQueue());
   }
 
   // Download in reading order: ascending chapter number, grouped by manga.
@@ -767,7 +875,10 @@ class DownloadManagerService extends ChangeNotifier {
     return sorted;
   }
 
-  Future<void> _processLocalQueue() async {
+  /// One download-queue run; its log lines share a correlation id (UIX-18).
+  Future<void> _processLocalQueue() => LoggerService.withCorrelationAsync(_processLocalQueueImpl);
+
+  Future<void> _processLocalQueueImpl() async {
     if (_isProcessingLocalQueue || _isQueuePaused) return;
     _isProcessingLocalQueue = true;
     _beginBatch();
@@ -776,7 +887,7 @@ class DownloadManagerService extends ChangeNotifier {
     // background isolate's staleness guard doesn't kill a healthy service.
     _notifierHeartbeat?.cancel();
     _notifierHeartbeat = Timer.periodic(DownloadForegroundTask.heartbeatInterval, (_) {
-      _refreshActiveNotifier();
+      unawaited(_refreshActiveNotifier());
     });
 
     var stoppedForNetwork = false;
@@ -787,8 +898,8 @@ class DownloadManagerService extends ChangeNotifier {
         // The gates used to run first, so a single dropped connectivity sample
         // arriving just after the last chapter completed set
         // `stoppedForNetwork = true` and broke out — and the `finally` branch
-        // for that flag purges the batch counters without ever calling
-        // `_finishBatch`. A 40-chapter batch that fully succeeded reported
+        // for that flag skipped `_finishBatch` (it also purged the batch
+        // counters until UIX-15). A 40-chapter batch that fully succeeded reported
         // nothing, so the user re-ran it. Checking for work first means "no
         // work left" can never be misread as "blocked by a gate".
         final queued = sortQueuedTasks(_localTasks);
@@ -861,6 +972,7 @@ class DownloadManagerService extends ChangeNotifier {
             task.status = LocalDownloadStatus.failed;
             task.error = e.toString();
             _failedInBatch++;
+            unawaited(_saveBatchState());
             await LoggerService.instance.logError('Failed to download chapter ${task.chapterId}: $e', exception: e, stackTrace: stack, category: 'DownloadManager');
             // Clean up the partial download folder so it doesn't leak disk space.
             await _cleanupIncompleteDownload(task.chapterId);
@@ -873,6 +985,7 @@ class DownloadManagerService extends ChangeNotifier {
           task.status = LocalDownloadStatus.completed;
           task.progress = 1.0;
           _completedInBatch++;
+          unawaited(_saveBatchState());
           _downloadedLocalChapterIds.add(task.chapterId);
           _downloadedLocalMangaIds.add(task.mangaId);
           // Bookkeeping only — never allowed to fail the download.
@@ -911,15 +1024,15 @@ class DownloadManagerService extends ChangeNotifier {
         // Interrupted (paused or waiting for connectivity/charger) — keep the
         // queue, drop the notifier, and don't report a finished batch. The
         // connectivity / battery listeners and resume handler restart processing.
-        // Reset batch counters so a later enqueue starts a fresh batch instead
-        // of inflating totals against a stale incomplete run.
-        _purgeBatchCounters();
+        // Batch counters survive BOTH a user pause and a network/charger gate
+        // (UIX-15, Jane decision): the queue resumes on its own, so a batch of
+        // 5 interrupted after 2 still reports "5 of 5" when it finishes.
         await _stopActiveNotifier();
       } else if (pendingQueued) {
         // New items were enqueued while the loop was draining (rare race).
         // Re-enter so they are processed instead of left stranded.
         _waitingForCharger = false;
-        _processLocalQueue();
+        unawaited(_processLocalQueue());
       } else {
         _waitingForCharger = false;
         await _finishBatch();
@@ -1026,32 +1139,21 @@ class DownloadManagerService extends ChangeNotifier {
           notifyListeners();
         }));
       }
-      final existingFiles = chapterDir
-          .listSync()
-          .whereType<File>()
-          .where((f) {
-            final name = f.path.toLowerCase();
-            return name.endsWith('.jpg') ||
-                name.endsWith('.jpeg') ||
-                name.endsWith('.png') ||
-                name.endsWith('.webp') ||
-                name.endsWith('.gif') ||
-                name.endsWith('.bmp');
-          })
+      // UIX-11: async listing + header-only probe. Reading every page in full
+      // with `readAsBytesSync` on the UI isolate (tens of MB per chapter)
+      // janked the UI during background downloads; the check only ever needed
+      // the first bytes and the length.
+      final existingFiles = await chapterDir
+          .list()
+          .where((e) => e is File && hasDownloadPageExtension(e.path))
+          .cast<File>()
           .toList();
       // Validate each file is a real image, not just a file with the right
       // extension. A torn write or zero-byte placeholder would otherwise pass
       // the extension check and count toward the total.
       var validCount = 0;
       for (final f in existingFiles) {
-        try {
-          final bytes = f.readAsBytesSync();
-          if (bytes.length > 500 && _isValidImageBytes(bytes)) {
-            validCount++;
-          }
-        } catch (_) {
-          // Unreadable — don't count.
-        }
+        if (await looksLikeValidPageFile(f)) validCount++;
       }
       if (validCount < totalPages) {
         throw Exception('Incomplete download: only $validCount/$totalPages valid pages saved');
@@ -1080,6 +1182,38 @@ class DownloadManagerService extends ChangeNotifier {
 
   static bool _isValidImageBytes(List<int>? b) => looksLikeImageHeader(b);
 
+  /// Page-file extensions counted by the completion check.
+  @visibleForTesting
+  static bool hasDownloadPageExtension(String path) {
+    final name = path.toLowerCase();
+    return name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png') ||
+        name.endsWith('.webp') ||
+        name.endsWith('.gif') ||
+        name.endsWith('.bmp');
+  }
+
+  /// Header-only, async validity probe for a saved page (UIX-11): the file
+  /// must be larger than 500 bytes and start with a recognised image header.
+  /// Same semantics as the old full read, which was also only a prefix probe
+  /// (see `looksLikeImageHeader`), without loading the whole file.
+  @visibleForTesting
+  static Future<bool> looksLikeValidPageFile(File f) async {
+    RandomAccessFile? raf;
+    try {
+      if (await f.length() <= 500) return false;
+      raf = await f.open();
+      return _isValidImageBytes(await raf.read(16));
+    } catch (_) {
+      return false; // Unreadable: don't count.
+    } finally {
+      try {
+        await raf?.close();
+      } catch (_) {}
+    }
+  }
+
   Future<void> _downloadSinglePage(
     Directory chapterDir,
     String effectiveSource,
@@ -1103,8 +1237,7 @@ class DownloadManagerService extends ChangeNotifier {
     // with FF D8 and be > 500 bytes, so the old `length() > 500` check would
     // silently accept a half-page. Full validation here prevents that.
     if (await file.exists()) {
-      final bytes = await file.readAsBytes();
-      if (bytes.length > 500 && _isValidImageBytes(bytes)) {
+      if (await looksLikeValidPageFile(file)) {
         return;
       }
       // Corrupt/truncated — overwrite it.
@@ -1132,10 +1265,10 @@ class DownloadManagerService extends ChangeNotifier {
       if (_isValidImageBytes(response.data)) {
         pageBytes = response.data;
       } else {
-        LoggerService.instance.logWarning('Download pass 1 returned invalid bytes for $pageUrl', 'Download');
+        unawaited(LoggerService.instance.logWarning('Download pass 1 returned invalid bytes for $pageUrl', 'ownload'));
       }
     } catch (e) {
-      LoggerService.instance.logWarning('Download pass 1 (standard) failed for $pageUrl: $e', 'Download');
+      unawaited(LoggerService.instance.logWarning('Download pass 1 (standard) failed for $pageUrl: $e', 'ownload'));
     }
 
     // Pass 2: Retry with Referer stripped (anti-hotlink bypass)
@@ -1150,10 +1283,10 @@ class DownloadManagerService extends ChangeNotifier {
         if (_isValidImageBytes(r2.data)) {
           pageBytes = r2.data;
         } else {
-          LoggerService.instance.logWarning('Download pass 2 returned invalid bytes for $pageUrl', 'Download');
+          unawaited(LoggerService.instance.logWarning('Download pass 2 returned invalid bytes for $pageUrl', 'ownload'));
         }
       } catch (e) {
-        LoggerService.instance.logWarning('Download pass 2 (no Referer) failed for $pageUrl: $e', 'Download');
+        unawaited(LoggerService.instance.logWarning('Download pass 2 (no Referer) failed for $pageUrl: $e', 'ownload'));
       }
     }
 
@@ -1170,10 +1303,10 @@ class DownloadManagerService extends ChangeNotifier {
         if (_isValidImageBytes(r3.data)) {
           pageBytes = r3.data;
         } else {
-          LoggerService.instance.logWarning('Download pass 3 returned invalid bytes for $pageUrl', 'Download');
+          unawaited(LoggerService.instance.logWarning('Download pass 3 returned invalid bytes for $pageUrl', 'ownload'));
         }
       } catch (e) {
-        LoggerService.instance.logWarning('Download pass 3 (origin Referer) failed for $pageUrl: $e', 'Download');
+        unawaited(LoggerService.instance.logWarning('Download pass 3 (origin Referer) failed for $pageUrl: $e', 'ownload'));
       }
     }
 
@@ -1191,10 +1324,10 @@ class DownloadManagerService extends ChangeNotifier {
         if (_isValidImageBytes(r4.data)) {
           pageBytes = r4.data;
         } else {
-          LoggerService.instance.logWarning('Download pass 4 returned invalid bytes for $pageUrl', 'Download');
+          unawaited(LoggerService.instance.logWarning('Download pass 4 returned invalid bytes for $pageUrl', 'ownload'));
         }
       } catch (e) {
-        LoggerService.instance.logWarning('Download pass 4 (browser UA) failed for $pageUrl: $e', 'Download');
+        unawaited(LoggerService.instance.logWarning('Download pass 4 (browser UA) failed for $pageUrl: $e', 'ownload'));
       }
     }
 
@@ -1294,7 +1427,7 @@ class DownloadManagerService extends ChangeNotifier {
       }
       notifyListeners();
     } catch (e) {
-      LoggerService.instance.logError('deleteLocalDownload error: $e', category: 'DownloadManager');
+      unawaited(LoggerService.instance.logError('deleteLocalDownload error: $e', category: 'DownloaManager'));
     }
   }
 
@@ -1312,11 +1445,12 @@ class DownloadManagerService extends ChangeNotifier {
         // an error — it's a deliberate removal that shouldn't inflate the
         // denominator.
         _failedInBatch++;
+        unawaited(_saveBatchState());
         if (_batchTotal > 0) _batchTotal--;
       }
-      _saveQueueState();
+      unawaited(_saveQueueState());
       notifyListeners();
-      _cleanupIncompleteDownload(chapterId);
+      unawaited(_cleanupIncompleteDownload(chapterId));
     }
   }
 
@@ -1372,7 +1506,7 @@ class DownloadManagerService extends ChangeNotifier {
 
   void clearCompletedDownloads() {
     _localTasks.removeWhere((t) => t.status == LocalDownloadStatus.completed);
-    _saveQueueState();
+    unawaited(_saveQueueState());
     notifyListeners();
   }
 
@@ -1420,8 +1554,8 @@ class DownloadManagerService extends ChangeNotifier {
 
   @override
   void dispose() {
-    _connectivitySubscription?.cancel();
-    _batterySubscription?.cancel();
+    unawaited(_connectivitySubscription?.cancel());
+    unawaited(_batterySubscription?.cancel());
     _notifierHeartbeat?.cancel();
     _notifierHeartbeat = null;
     for (final token in _cancelTokens.values) {
@@ -1430,7 +1564,7 @@ class DownloadManagerService extends ChangeNotifier {
       } catch (ignoredError) { if (kDebugMode) debugPrint('[download_manager_service] ignored error: $ignoredError'); }
     }
     _cancelTokens.clear();
-    _stopActiveNotifier();
+    unawaited(_stopActiveNotifier());
     super.dispose();
   }
 }

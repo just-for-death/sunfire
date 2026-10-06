@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
+
 import '../../constants/app_constants.dart';
 import '../logging/logger_service.dart';
 import 'quickjs_service.dart';
@@ -274,7 +277,7 @@ class RepoManager {
       final sep = normalizedUrl.contains('?') ? '&' : '?';
       final freshUrl = '$normalizedUrl${sep}_t=${DateTime.now().millisecondsSinceEpoch}';
       final response = await _dio
-          .get(freshUrl)
+          .get<dynamic>(freshUrl)
           .timeout(const Duration(seconds: 10));
       final raw = response.data is String
           ? response.data as String
@@ -304,21 +307,20 @@ class RepoManager {
         try {
           await cacheFile.writeAsString(raw);
         } catch (_) {
-          LoggerService.instance.logWarning('Repo index cache write failed for $normalizedUrl', 'RepoManager');
+          unawaited(LoggerService.instance.logWarning('Repo index cache write failed for $normalizedUrl', 'RepoManager'));
         }
         return items;
       }
-
       // Valid JSON, but not an index. Fall through to the cache rather than
       // reporting "no sources", so a transient gateway response cannot make
       // the user's extension list disappear.
-      LoggerService.instance.logWarning(
+      unawaited(LoggerService.instance.logWarning(
         'Repo index at $normalizedUrl decoded to no usable sources '
         '(top-level ${decoded.runtimeType}); falling back to the cached index',
         'RepoManager',
-      );
+      ));
     } catch (e) {
-      LoggerService.instance.logWarning('Repo index fetch failed for $normalizedUrl: $e', 'RepoManager');
+      unawaited(LoggerService.instance.logWarning('Repo index fetch failed for $normalizedUrl: $e', 'RepoManager'));
     }
 
     // Shared fallback: whatever went wrong above, a previously good index on
@@ -330,7 +332,7 @@ class RepoManager {
         final List<dynamic> list = _coerceSourceList(decoded);
         return list.whereType<Map<String, dynamic>>().map((item) => RepoSourceItem.fromJson(item, normalizedUrl)).toList();
       } catch (ignoredError) {
-        LoggerService.instance.logWarning('Cached repo index at $normalizedUrl is unreadable: $ignoredError', 'RepoManager');
+        unawaited(LoggerService.instance.logWarning('Cached repo index at $normalizedUrl is unreadable: $ignoredError', 'RepoManager'));
       }
     }
     return [];

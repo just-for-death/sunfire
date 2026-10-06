@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'core/services/batch_mode_service.dart';
 import 'core/services/download_manager_service.dart';
@@ -11,11 +11,15 @@ import 'core/services/library_update_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/sync/graphql_client_service.dart';
+import 'core/sync/server_session_service.dart';
+import 'features/settings/server_login_sheet.dart';
 import 'core/sync/sync_engine.dart';
 import 'core/sync/websocket_service.dart';
-
-/// Phone vs iPad/iPad-mini split. Widths at or above this use the sidebar rail.
-const double sunfireTabletMinWidth = 720.0;
+import 'ui/shell/nav_chrome.dart';
+import 'ui/shell/rail_extras.dart';
+import 'ui/shell/sunfire_breakpoints.dart';
+import 'ui/shell/tablet_ui_prefs.dart';
+import 'ui/widgets/dialog_title.dart';
 
 /// Manga detail two-pane (cover + chapter list). Wider than the shell rail breakpoint.
 const double sunfireDetailTwoPaneMinWidth = 840.0;
@@ -23,8 +27,6 @@ const double sunfireDetailTwoPaneMinWidth = 840.0;
 /// Inner sidebar width at which labels/header Row are shown. Below this, compact
 /// icons are used so expand/collapse animation cannot overflow (~36px Row).
 const double sunfireSidebarExpandedLayoutMinWidth = 180.0;
-
-bool usesTabletShell(double width) => width >= sunfireTabletMinWidth;
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key, required this.child, this.isFullscreen = false});
@@ -38,8 +40,21 @@ class MainShell extends StatefulWidget {
 
   static final ValueNotifier<int> selectedTabNotifier = ValueNotifier<int>(0);
 
+  /// Cheap unread-updates badge for nav chrome (UIS-P3-2).
+  /// Updated by [UpdatesScreen] when the feed loads or read-state changes —
+  /// no DB work in [MainShell.build].
+  static final ValueNotifier<int> updatesBadgeNotifier = ValueNotifier<int>(0);
+
   static void switchToTab(int index) {
     selectedTabNotifier.value = index;
+  }
+
+  /// Publishes the Updates-tab unread count to the nav badge.
+  static void setUpdatesBadge(int count) {
+    final next = count < 0 ? 0 : count;
+    if (updatesBadgeNotifier.value != next) {
+      updatesBadgeNotifier.value = next;
+    }
   }
 
   @override
@@ -47,9 +62,14 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
+  /// UIS-14: shell chrome colours come from the active scheme (Light works).
+  ColorScheme get _cs => Theme.of(context).colorScheme;
+
   int _currentIndex = 0;
   late bool _isSidebarExpanded;
   bool _isSyncing = false;
+  /// UIS-20 / ISS-010: from PackageInfo; null while loading (chip hidden).
+  String? _appVersionLabel;
 
   static const List<String> _tabPaths = [
     '/library',
@@ -90,8 +110,36 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     MainShell.selectedTabNotifier.value = _currentIndex;
     _isSidebarExpanded = SettingsService.instance.tabletSidebarExpanded;
     MainShell.selectedTabNotifier.addListener(_onExternalTabChange);
+    MainShell.updatesBadgeNotifier.addListener(_onUpdatesBadgeChanged);
+    SettingsService.instance.addListener(_onSettingsChanged);
+    TabletUiPrefs.listenable.addListener(_onTabletUiModeChanged);
+    unawaited(TabletUiPrefs.load());
     WidgetsBinding.instance.addObserver(this);
     GraphQLClientService.instance.authErrorNotifier.addListener(_onAuthErrorChanged);
+    ServerSessionService.instance.needsLoginNotifier.addListener(_onNeedsLoginChanged);
+    unawaited(_loadAppVersion());
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted || info.version.isEmpty) return;
+      setState(() => _appVersionLabel = 'v${info.version}');
+    } catch (_) {
+      // Leave chip hidden if PackageInfo unavailable (tests / desktop).
+    }
+  }
+
+  void _onSettingsChanged() {
+    if (!mounted) return;
+    final expanded = SettingsService.instance.tabletSidebarExpanded;
+    // Rebuild on tablet chrome pref changes so bar↔rail updates live (UIS-P2-A).
+    setState(() => _isSidebarExpanded = expanded);
+  }
+
+  void _onTabletUiModeChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   bool _authBannerShown = false;
@@ -120,6 +168,29 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     });
   }
 
+  bool _loginPromptShown = false;
+
+  /// Session refresh failed — prompt for UI_LOGIN / SIMPLE_LOGIN credentials (B2).
+  void _onNeedsLoginChanged() {
+    if (!ServerSessionService.instance.needsLoginNotifier.value) {
+      _loginPromptShown = false;
+      return;
+    }
+    if (_loginPromptShown || !mounted) return;
+    _loginPromptShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final mode = ServerSessionService.instance.mode ??
+          loginModeForAuthMode(
+            // Fall back to UI login when mode unknown but renew failed.
+            'UI_LOGIN',
+          );
+      await showServerLoginSheet(context, mode: mode ?? ServerLoginMode.uiLogin);
+      _loginPromptShown = false;
+    });
+  }
+
+
   void _onExternalTabChange() {
     final target = MainShell.selectedTabNotifier.value;
     if (_currentIndex != target && mounted) {
@@ -131,11 +202,19 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     }
   }
 
+  void _onUpdatesBadgeChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     MainShell.selectedTabNotifier.removeListener(_onExternalTabChange);
+    MainShell.updatesBadgeNotifier.removeListener(_onUpdatesBadgeChanged);
+    SettingsService.instance.removeListener(_onSettingsChanged);
+    TabletUiPrefs.listenable.removeListener(_onTabletUiModeChanged);
     WidgetsBinding.instance.removeObserver(this);
     GraphQLClientService.instance.authErrorNotifier.removeListener(_onAuthErrorChanged);
+    ServerSessionService.instance.needsLoginNotifier.removeListener(_onNeedsLoginChanged);
     super.dispose();
   }
 
@@ -157,7 +236,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         // paused. An explicitly paused queue (user hit FGS "Stop") will not
         // resume on foreground, so the "resumed" claim would be false.
         if (pending > 0 && !DownloadManagerService.instance.isQueuePaused) {
-          NotificationService.instance.showDownloadsResumedNotification(queuedCount: pending);
+          unawaited(NotificationService.instance.showDownloadsResumedNotification(queuedCount: pending));
         }
       }
       // Resume the queue on foreground, but never override an explicit user
@@ -165,10 +244,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       DownloadManagerService.instance.resumeLocalQueueAfterForeground();
       WebSocketService.instance.connect();
       if (GraphQLClientService.instance.isConfigured && !_isSyncing) {
-        SyncEngine.instance.triggerSync();
+        unawaited(SyncEngine.instance.triggerSync());
       }
       if (!LibraryUpdateService.instance.isUpdating) {
-        LibraryUpdateService.instance.checkForNewChapters(isManual: false);
+        unawaited(LibraryUpdateService.instance.checkForNewChapters(isManual: false));
       }
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
@@ -186,9 +265,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void _handleTabSelect(int index) {
     if (_currentIndex != index) {
       if (Theme.of(context).platform == TargetPlatform.iOS) {
-        HapticFeedback.lightImpact();
+        unawaited(HapticFeedback.lightImpact());
       } else {
-        HapticFeedback.selectionClick();
+        unawaited(HapticFeedback.selectionClick());
       }
       setState(() => _currentIndex = index);
       MainShell.selectedTabNotifier.value = index;
@@ -200,7 +279,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   void _toggleSidebar() {
-    HapticFeedback.selectionClick();
+    unawaited(HapticFeedback.selectionClick());
     setState(() {
       _isSidebarExpanded = !_isSidebarExpanded;
       SettingsService.instance.tabletSidebarExpanded = _isSidebarExpanded;
@@ -209,7 +288,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
   Future<void> _handleQuickSync() async {
     if (_isSyncing) return;
-    HapticFeedback.mediumImpact();
+    unawaited(HapticFeedback.mediumImpact());
     setState(() => _isSyncing = true);
     try {
       await SyncEngine.instance.triggerSync();
@@ -218,107 +297,233 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     }
   }
 
+  /// iOS (Apple mobile) keeps Sunfire's glass identity; Android and desktop
+  /// use Material 3 chrome. Mirrors the Catalyst platform split, molded to
+  /// Sunfire's 5 tabs and extras (fullscreen reader, batch-mode hiding).
+  /// Uses the theme platform (not `dart:io`) so tests can select iOS vs
+  /// Android via `debugDefaultTargetPlatformOverride`.
+  bool _useGlassChrome(BuildContext context) => isAppleMobile(context);
+
+  bool _reduceEffects(BuildContext context) =>
+      MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+
+  /// Compact overflow mode: first 4 tabs + a "More" sheet (Settings,
+  /// Downloads, Stats). Same pattern as Catalyst's compact phone nav —
+  /// narrow windows and large accessibility text would otherwise overflow
+  /// the 5-up bar.
+  bool _useCompactNav(BuildContext context) =>
+      SunfireBreakpoints.isCompactNav(context);
+
+  Future<void> _showMoreOverflow() async {
+    final activeDownloads = DownloadManagerService.instance.localTasks
+        .where((t) =>
+            t.status == LocalDownloadStatus.downloading ||
+            t.status == LocalDownloadStatus.queued)
+        .length;
+    final picked = await NavOverflowSheet.show(
+      context,
+      destinations: const [
+        SunfireNavDestination(
+          label: 'Settings',
+          icon: Icons.settings_outlined,
+          activeIcon: Icons.settings_rounded,
+        ),
+      ],
+      selectedIndex: _currentIndex == 4 ? 0 : -1,
+      extraActions: [
+        NavOverflowAction(
+          label: 'Downloads',
+          icon: Icons.download_rounded,
+          badgeCount: activeDownloads > 0 ? activeDownloads : null,
+          onTap: () => context.push('/downloads'),
+        ),
+        NavOverflowAction(
+          label: 'Reading Stats',
+          icon: Icons.insights_rounded,
+          onTap: () => context.push('/stats'),
+        ),
+      ],
+    );
+    if (picked != null && picked == 0 && mounted) {
+      _handleTabSelect(4);
+    }
+  }
+
+  /// Phone / narrow-window bottom chrome, hidden during batch mode and in
+  /// fullscreen (reader). iOS gets the glass pill, Android/desktop the
+  /// Material 3 bar.
+  Widget? _buildPhoneChrome(
+    BuildContext context,
+    List<SunfireNavDestination> destinations,
+    bool compact,
+    bool useGlass,
+  ) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: BatchModeService.instance.isBatchMode,
+      builder: (context, isBatch, child) {
+        if (isBatch) return const SizedBox.shrink();
+        return child!;
+      },
+      child: useGlass
+          ? IOSGlassTabBar(
+              destinations: destinations,
+              selectedIndex: _currentIndex,
+              onSelect: _handleTabSelect,
+              compact: compact,
+              onMore: _showMoreOverflow,
+            )
+          : AndroidPhoneNavBar(
+              destinations: destinations,
+              selectedIndex: _currentIndex,
+              onSelect: _handleTabSelect,
+              compact: compact,
+              onMore: _showMoreOverflow,
+            ),
+    );
+  }
+
+  /// Wide tablet / desktop shell with a side rail.
+  ///
+  /// - iPad → Sunfire's floating frosted-glass sidebar + rounded content
+  ///   card (kept as-is; it already matches the glass-sidebar concept).
+  /// - Android / desktop → Material 3 [NavigationRail] + plain content
+  ///   (Catalyst Android-tablet pattern).
+  Widget _buildWideShell(
+    BuildContext context,
+    Color primaryColor,
+    List<SunfireNavDestination> destinations,
+    bool useGlass,
+  ) {
+    if (useGlass) {
+      return _buildIPadGlassShell(context, primaryColor);
+    }
+    final width = MediaQuery.sizeOf(context).width;
+    // UIS-P2-B: "Expanded Sidebar" drives NavigationRail.extended on
+    // Android/desktop too, whenever the window has room for labels.
+    final extended =
+        _isSidebarExpanded && width >= sunfireRailExtendedMinWidth;
+    return Scaffold(
+      body: Row(
+        children: [
+          AndroidTabletRail(
+            destinations: destinations,
+            selectedIndex: _currentIndex,
+            onSelect: _handleTabSelect,
+            extended: extended,
+            leading: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: extended
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    extended
+                        ? Icons.view_sidebar_rounded
+                        : Icons.view_sidebar_outlined,
+                  ),
+                  tooltip: extended ? 'Collapse sidebar' : 'Expand sidebar',
+                  onPressed: _toggleSidebar,
+                ),
+                const SizedBox(height: 8),
+                // Kotatsu-style rail header FAB.
+                SunfireContinueReadingButton(
+                  extended: extended,
+                  onOpen: (route) => context.push(route),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+            trailing: ListenableBuilder(
+              listenable: DownloadManagerService.instance,
+              builder: (c, _) => SunfireRailTrailing(
+                extended: extended,
+                activeDownloads: DownloadManagerService.instance.localTasks
+                    .where((t) =>
+                        t.status == LocalDownloadStatus.downloading ||
+                        t.status == LocalDownloadStatus.queued)
+                    .length,
+                onDownloads: () => context.push('/downloads'),
+                onStats: () => context.push('/stats'),
+              ),
+            ),
+          ),
+          const VerticalDivider(width: 1, thickness: 1),
+          Expanded(child: widget.child),
+        ],
+      ),
+    );
+  }
+
+  /// iPad glass shell: the pre-existing floating frosted sidebar + rounded
+  /// content card, extracted unchanged so the iPad identity is preserved.
+  Widget _buildIPadGlassShell(
+      BuildContext context, Color primaryColor) {
+    return Scaffold(
+      backgroundColor: _cs.surface,
+      body: Row(
+        children: [
+          _buildTabletSidebar(context, primaryColor),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(
+                  top: 8.0, bottom: 8.0, right: 8.0, left: 4.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: _cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _cs.shadow.withValues(
+                          alpha: _cs.brightness == Brightness.dark ? 0.40 : 0.12),
+                      blurRadius: 24,
+                      offset: const Offset(-3, 0),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: widget.child,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = usesTabletShell(screenWidth);
     final primaryColor = Theme.of(context).colorScheme.primary;
     // Fullscreen (reader): no sidebar rail, no bottom bar, no content
     // padding — edge-to-edge reading surface on phone and tablet alike.
     // Lifecycle observers and the exit-confirm gate below keep running.
     final fullscreen = widget.isFullscreen;
+    final useGlass = _useGlassChrome(context);
+    // UIS-P3-2: badge from MainShell.updatesBadgeNotifier (set by UpdatesScreen).
+    final badge = MainShell.updatesBadgeNotifier.value;
+    final destinations = sunfireNavDestinations(
+      updatesBadge: badge > 0 ? badge : null,
+    );
 
-    final scaffold = isTablet
-        ? (fullscreen
-            ? Scaffold(
-                backgroundColor: const Color(0xFF0E0E14),
-                body: widget.child,
-              )
-            : Scaffold(
-                backgroundColor: const Color(0xFF0E0E14),
-                body: Row(
-                  children: [
-                _buildTabletSidebar(context, primaryColor),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 8.0, bottom: 8.0, right: 8.0, left: 4.0),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF15151E),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.40),
-                            blurRadius: 24,
-                            offset: const Offset(-3, 0),
-                          ),
-                        ],
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: widget.child,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ))
-        : Scaffold(
-            extendBody: true,
-            body: widget.child,
-            // Fullscreen (reader): edge-to-edge, no bottom bar.
-            bottomNavigationBar: fullscreen ? null : ValueListenableBuilder<bool>(
-              valueListenable: BatchModeService.instance.isBatchMode,
-              builder: (context, isBatch, child) {
-                if (isBatch) return const SizedBox.shrink();
-                return child!;
-              },
-              child: SafeArea(
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 460),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(32),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.55),
-                            blurRadius: 28,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(32),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xCC181820),
-                              borderRadius: BorderRadius.circular(32),
-                              border: Border.all(color: const Color(0x22FFFFFF), width: 0.8),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                _buildMobileNavItem(0, Icons.auto_stories_rounded, Icons.auto_stories_outlined, 'Library'),
-                                _buildMobileNavItem(1, Icons.notifications_rounded, Icons.notifications_outlined, 'Updates'),
-                                _buildMobileNavItem(2, Icons.history_rounded, Icons.history_outlined, 'History'),
-                                _buildMobileNavItem(3, Icons.explore_rounded, Icons.explore_outlined, 'Browse'),
-                                _buildMobileNavItem(4, Icons.settings_rounded, Icons.settings_outlined, 'Settings'),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
+    final Widget scaffold;
+    if (fullscreen) {
+      // Fullscreen (reader): edge-to-edge, no chrome of any kind.
+      scaffold = Scaffold(
+        backgroundColor: Colors.black,
+        body: widget.child,
+      );
+    } else if (SunfireBreakpoints.usesSideRail(context)) {
+      scaffold = _buildWideShell(
+          context, primaryColor, destinations, useGlass);
+    } else {
+      final compact = _useCompactNav(context);
+      scaffold = Scaffold(
+        extendBody: true,
+        body: widget.child,
+        bottomNavigationBar: _buildPhoneChrome(
+            context, destinations, compact, useGlass),
+      );
+    }
 
     return PopScope(
       canPop: !SettingsService.instance.confirmExit && _currentIndex == 0,
@@ -332,25 +537,24 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           final shouldExit = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
-              backgroundColor: const Color(0xFF1F1F26),
+              backgroundColor: _cs.surfaceContainerHigh,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Row(
-                children: [
-                  Icon(Icons.exit_to_app_rounded, color: Colors.amberAccent),
-                  SizedBox(width: 8),
-                  Text('Exit Sunfire', style: TextStyle(fontWeight: FontWeight.bold)),
-                ],
+              title: const DialogTitle(
+                icon: Icons.exit_to_app_rounded,
+                iconColor: Colors.amberAccent,
+                text: 'Exit Sunfire',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
               content: const Text('Are you sure you want to exit the application?'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(false),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                  child: Text('Cancel', style: TextStyle(color: _cs.onSurfaceVariant)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF5722),
-                    foregroundColor: Colors.white,
+                    backgroundColor: _cs.primary,
+                    foregroundColor: _cs.onPrimary,
                   ),
                   onPressed: () => Navigator.of(ctx).pop(true),
                   child: const Text('Exit'),
@@ -359,7 +563,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             ),
           );
           if (shouldExit == true) {
-            SystemNavigator.pop();
+            unawaited(SystemNavigator.pop());
           }
         }
       },
@@ -384,15 +588,22 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             final isExpanded = constraints.maxWidth >= sunfireSidebarExpandedLayoutMinWidth;
             return ClipRRect(
           borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+          // UIS-P2-C: same static-tint fallback as the glass tab bar
+          // (UIS-17) when the platform asks to reduce effects.
+          child: IOSGlassTabBar.maybeBlur(
+            reduceEffects: _reduceEffects(context),
+            sigma: 28,
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xD0111119),
+                color: _cs.surfaceContainer
+                    .withValues(alpha: _reduceEffects(context) ? 0.96 : 0.8),
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: _cs.outlineVariant.withValues(alpha: 0.3), width: 0.8),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.50),
+                    color: _cs.shadow.withValues(
+                        alpha: _cs.brightness == Brightness.dark ? 0.50 : 0.12),
                     blurRadius: 30,
                     offset: const Offset(6, 0),
                   ),
@@ -412,7 +623,17 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     children: [
                       const SizedBox(height: 16),
                       _buildSidebarHeader(primaryColor, isExpanded),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
+                      // UIS-P2-B: Kotatsu-style "Continue reading" header action.
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: isExpanded ? 12.0 : 0.0),
+                        child: SunfireContinueReadingButton(
+                          extended: isExpanded,
+                          onOpen: (route) => context.push(route),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       Expanded(
                         child: ListView(
                           physics: const BouncingScrollPhysics(),
@@ -428,7 +649,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w700,
-                                    color: Colors.white.withValues(alpha: 0.28),
+                                    color: _cs.onSurfaceVariant.withValues(alpha: 0.7),
                                     letterSpacing: 1.5,
                                   ),
                                 ),
@@ -452,7 +673,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w700,
-                                    color: Colors.white.withValues(alpha: 0.28),
+                                    color: _cs.onSurfaceVariant.withValues(alpha: 0.7),
                                     letterSpacing: 1.5,
                                   ),
                                 ),
@@ -540,7 +761,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     ),
                   ],
                 ),
-                child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 22),
+                child: Icon(Icons.local_fire_department_rounded, color: _cs.onPrimary, size: 22),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -548,45 +769,46 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
+                    Text(
                       'Sunfire',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: _cs.onSurface,
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
                         letterSpacing: -0.4,
                       ),
                     ),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: primaryColor.withValues(alpha: 0.4), width: 0.6),
-                          ),
-                          child: Text(
-                            'v4.0.0',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.3,
+                    if (_appVersionLabel != null)
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: primaryColor.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: primaryColor.withValues(alpha: 0.4), width: 0.6),
+                            ),
+                            child: Text(
+                              _appVersionLabel!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: primaryColor,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.3,
+                              ),
                             ),
                           ),
-                        ),
-                        ),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.view_sidebar_rounded, color: Colors.white60, size: 20),
+                icon: Icon(Icons.view_sidebar_rounded, color: _cs.onSurfaceVariant, size: 20),
                 tooltip: 'Collapse sidebar',
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
@@ -601,7 +823,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       return Column(
         children: [
           IconButton(
-            icon: const Icon(Icons.view_sidebar_outlined, color: Colors.white70, size: 22),
+            icon: Icon(Icons.view_sidebar_outlined, color: _cs.onSurfaceVariant, size: 22),
             tooltip: 'Expand sidebar',
             onPressed: _toggleSidebar,
           ),
@@ -626,7 +848,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   ),
                 ],
               ),
-              child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 22),
+              child: Icon(Icons.local_fire_department_rounded, color: _cs.onPrimary, size: 22),
             ),
           ),
         ],
@@ -676,7 +898,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               children: [
                 Icon(
                   isSelected ? selectedIcon : unselectedIcon,
-                  color: isSelected ? primaryColor : Colors.white.withValues(alpha: 0.55),
+                  color: isSelected ? primaryColor : _cs.onSurfaceVariant,
                   size: 20,
                 ),
                 const SizedBox(width: 12),
@@ -684,7 +906,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   child: Text(
                     label,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.65),
+                      color: isSelected ? _cs.onSurface : _cs.onSurfaceVariant,
                       fontSize: 13.5,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                       letterSpacing: -0.2,
@@ -735,7 +957,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   child: Center(
                     child: Icon(
                       isSelected ? selectedIcon : unselectedIcon,
-                      color: isSelected ? primaryColor : Colors.white.withValues(alpha: 0.55),
+                      color: isSelected ? primaryColor : _cs.onSurfaceVariant,
                       size: 21,
                     ),
                   ),
@@ -763,13 +985,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           child: Row(
             children: [
-              Icon(icon, color: Colors.white54, size: 19),
+              Icon(icon, color: _cs.onSurfaceVariant, size: 19),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    color: Colors.white70,
+                  style: TextStyle(
+                    color: _cs.onSurfaceVariant,
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
@@ -784,11 +1006,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   ),
                   child: Text(
                     '$badgeCount',
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: _cs.onPrimary, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 )
               else
-                const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 18),
+                Icon(Icons.chevron_right_rounded, color: _cs.onSurfaceVariant.withValues(alpha: 0.6), size: 18),
             ],
           ),
         ),
@@ -819,7 +1041,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    Icon(icon, color: Colors.white60, size: 21),
+                    Icon(icon, color: _cs.onSurfaceVariant, size: 21),
                     if (badgeCount != null && badgeCount > 0)
                       Positioned(
                         top: 6,
@@ -834,8 +1056,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                           child: Center(
                             child: Text(
                               '$badgeCount',
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: _cs.onPrimary,
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
                                 height: 1,
@@ -857,7 +1079,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   Widget _buildBottomServerCard(Color primaryColor, bool isExpanded) {
     final isConfigured = GraphQLClientService.instance.isConfigured;
     final serverUrl = SettingsService.instance.serverUrl;
-    final statusColor = isConfigured ? const Color(0xFF4ADE80) : Colors.tealAccent;
+    final statusColor = isConfigured ? _cs.tertiary : _cs.primary;
 
     if (isExpanded) {
       return Column(
@@ -873,9 +1095,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
                   decoration: BoxDecoration(
-                    color: const Color(0x18FFFFFF),
+                    color: _cs.surfaceContainerHighest.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0x16FFFFFF), width: 0.8),
+                    border: Border.all(
+                        color: _cs.outlineVariant.withValues(alpha: 0.3), width: 0.8),
                   ),
                   child: Row(
                     children: [
@@ -898,8 +1121,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                           children: [
                             Text(
                               isConfigured ? 'Suwayomi Server' : 'Standalone Mode',
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: _cs.onSurface,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -911,7 +1134,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.45),
+                                color: _cs.onSurfaceVariant,
                                 fontSize: 10.5,
                               ),
                             ),
@@ -927,7 +1150,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                             duration: const Duration(seconds: 1),
                             child: Icon(
                               Icons.sync_rounded,
-                              color: _isSyncing ? primaryColor : Colors.white.withValues(alpha: 0.55),
+                              color: _isSyncing ? primaryColor : _cs.onSurfaceVariant,
                               size: 19,
                             ),
                           ),
@@ -957,12 +1180,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   decoration: BoxDecoration(
                     color: _isSyncing
                         ? primaryColor.withValues(alpha: 0.18)
-                        : const Color(0x12FFFFFF),
+                        : _cs.surfaceContainerHighest.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(13),
                     border: Border.all(
                       color: _isSyncing
                           ? primaryColor.withValues(alpha: 0.4)
-                          : const Color(0x14FFFFFF),
+                          : _cs.outlineVariant.withValues(alpha: 0.3),
                       width: 1,
                     ),
                   ),
@@ -972,7 +1195,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                       duration: const Duration(seconds: 1),
                       child: Icon(
                         Icons.sync_rounded,
-                        color: _isSyncing ? primaryColor : Colors.white.withValues(alpha: 0.55),
+                        color: _isSyncing ? primaryColor : _cs.onSurfaceVariant,
                         size: 20,
                       ),
                     ),
@@ -998,65 +1221,4 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     }
   }
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // ── MOBILE PHONE NAV ITEM ───────────────────────────────────────────────────
-  // ════════════════════════════════════════════════════════════════════════════
-  Widget _buildMobileNavItem(int index, IconData selectedIcon, IconData unselectedIcon, String label) {
-    final isSelected = _currentIndex == index;
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
-    return Expanded(
-      child: Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () => _handleTabSelect(index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.symmetric(horizontal: isSelected ? 10 : 6, vertical: 8),
-          decoration: isSelected
-              ? BoxDecoration(
-                  color: primaryColor,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: primaryColor.withAlpha(80),
-                      blurRadius: 12,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                )
-              : null,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                isSelected ? selectedIcon : unselectedIcon,
-                color: isSelected ? Colors.white : Colors.grey.shade400,
-                size: 22,
-              ),
-              if (isSelected) ...[
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    ),
-    );
-  }
 }

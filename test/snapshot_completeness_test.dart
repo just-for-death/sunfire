@@ -44,14 +44,14 @@ void main() {
   group('isCompleteSnapshot', () {
     test('recognises a complete snapshot', () {
       expect(
-        isCompleteSnapshot({'mangas': {'nodes': []}, kSnapshotCompleteKey: true}),
+        isCompleteSnapshot({'mangas': {'nodes': <dynamic>[]}, kSnapshotCompleteKey: true}),
         isTrue,
       );
     });
 
     test('rejects a truncated snapshot', () {
       expect(
-        isCompleteSnapshot({'mangas': {'nodes': []}, kSnapshotCompleteKey: false}),
+        isCompleteSnapshot({'mangas': {'nodes': <dynamic>[]}, kSnapshotCompleteKey: false}),
         isFalse,
       );
     });
@@ -60,7 +60,7 @@ void main() {
       // Fail-safe direction. If a new paginated fetcher forgets to stamp the
       // key, the destructive paths must keep local data rather than trust a
       // response that may be half-read.
-      expect(isCompleteSnapshot({'mangas': {'nodes': []}}), isFalse);
+      expect(isCompleteSnapshot({'mangas': {'nodes': <dynamic>[]}}), isFalse);
       expect(isCompleteSnapshot(const {}), isFalse);
     });
 

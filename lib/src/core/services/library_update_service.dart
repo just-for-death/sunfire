@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
@@ -6,8 +7,10 @@ import '../db/isar_service.dart';
 import '../db/models/chapter.dart';
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
+import '../sync/download_status_merge.dart';
 import '../sync/graphql_client_service.dart';
 import '../sync/sync_engine.dart';
+import '../sync/websocket_service.dart';
 import 'battery_state_service.dart';
 import 'notification_service.dart';
 import 'settings_service.dart';
@@ -20,11 +23,19 @@ class LibraryUpdateService extends ChangeNotifier {
   double _progress = 0.0;
   String _statusMessage = '';
   int _lastFoundCount = 0;
+  int _skippedCategoriesCount = 0;
+  int _skippedMangasCount = 0;
 
   bool get isUpdating => _isUpdating;
   double get progress => _progress;
   String get statusMessage => _statusMessage;
   int get lastFoundCount => _lastFoundCount;
+
+  /// Categories skipped by the server updater (includeInUpdate=EXCLUDE / empty).
+  int get skippedCategoriesCount => _skippedCategoriesCount;
+
+  /// Manga skipped by the server updater (per-category / strategy filters).
+  int get skippedMangasCount => _skippedMangasCount;
 
   /// Checks whether connection satisfies user's Wi-Fi / wired network constraint.
   Future<bool> _satisfiesNetworkConstraint() async {
@@ -49,9 +60,18 @@ class LibraryUpdateService extends ChangeNotifier {
 
   /// Unified library update: handles both live Suwayomi server jobs and local QuickJS scraping.
   /// Detects genuinely newly fetched chapters and triggers native notifications.
+  /// Library update task. Its log lines share one correlation id (UIX-18).
   Future<int> checkForNewChapters({
     bool isManual = false,
     bool triggerServer = true,
+  }) =>
+      LoggerService.withCorrelationAsync(
+        () => _checkForNewChaptersImpl(isManual: isManual, triggerServer: triggerServer),
+      );
+
+  Future<int> _checkForNewChaptersImpl({
+    required bool isManual,
+    required bool triggerServer,
   }) async {
     if (_isUpdating) {
       debugPrint('[LibraryUpdateService] Update already in progress, skipping.');
@@ -98,6 +118,8 @@ class LibraryUpdateService extends ChangeNotifier {
       _progress = 0.05;
       _statusMessage = 'Taking library snapshot...';
       _lastFoundCount = 0;
+      _skippedCategoriesCount = 0;
+      _skippedMangasCount = 0;
       notifyListeners();
 
       await LoggerService.instance.logInfo(
@@ -130,70 +152,119 @@ class LibraryUpdateService extends ChangeNotifier {
       final serverAvailable = GraphQLClientService.instance.isConfigured &&
           await GraphQLClientService.instance.checkServerReachable();
 
-      if (serverAvailable && triggerServer) {
+      // Avoid stacking updateLibrary on top of an in-flight SyncEngine cycle
+      // (resume used to fire both and amplify the sync storm — ISS-058).
+      final syncBusy = SyncEngine.instance.isSyncing;
+      if (serverAvailable && triggerServer && syncBusy) {
+        await LoggerService.instance.logInfo(
+          'Skipping server updateLibrary — SyncEngine cycle already running',
+          'LibraryUpdateService',
+        );
+      } else if (serverAvailable && triggerServer) {
         _statusMessage = 'Triggering server library update...';
         _progress = 0.15;
         notifyListeners();
 
         await GraphQLClientService.instance.triggerServerLibraryUpdate();
 
-        // Poll libraryUpdateStatus until server jobs finish (configurable timeout)
-        final maxPolls = (SettingsService.instance.serverUpdatePollTimeoutSeconds / 1.5).ceil().clamp(5, 120);
-        for (int i = 0; i < maxPolls; i++) {
-          await Future.delayed(const Duration(milliseconds: 1500));
-          final status = await GraphQLClientService.instance.fetchServerUpdateStatus();
-          final jobsInfo = (status?['libraryUpdateStatus'] as Map<String, dynamic>?)?['jobsInfo'] as Map<String, dynamic>?;
+        // ISS-068: prefer libraryUpdateStatusChanged WS progress; poll as fallback.
+        final timeoutSec = SettingsService.instance.serverUpdatePollTimeoutSeconds;
+        final deadline = DateTime.now().add(Duration(seconds: timeoutSec));
+        final completedMangaIds = <int>{};
+        var sawWsEvent = false;
+        var lastIsRunning = true;
 
-          int extractCount(dynamic jobObj) {
-            if (jobObj is int) return jobObj;
-            if (jobObj is num) return jobObj.toInt();
-            if (jobObj is Map) {
-              final mangas = jobObj['mangas'];
-              if (mangas is Map) {
-                final nodes = mangas['nodes'];
-                if (nodes is List) return nodes.length;
-              }
-              if (jobObj['nodes'] is List) return (jobObj['nodes'] as List).length;
-            }
-            if (jobObj is List) return jobObj.length;
-            return 0;
-          }
-
-          final isRunning = jobsInfo?['isRunning'] == true;
-          final totalJobs = extractCount(jobsInfo?['totalJobs']);
-          final finishedJobs = extractCount(jobsInfo?['finishedJobs']);
-          final activeJobs = isRunning ? (totalJobs - finishedJobs).clamp(0, totalJobs) : 0;
-
-          // Scaled by the ACTUAL poll budget. This was hardcoded to 30.0 while
-          // the loop bound is `serverUpdatePollTimeoutSeconds / 1.5`, so any
-          // setting other than the 45s default made the bar stop short of
-          // 0.6 (shorter timeout) or claim completion before the server was
-          // done (longer timeout).
-          _progress = 0.15 + (i / maxPolls) * 0.45;
+        void applyJobs({
+          required bool isRunning,
+          required int finishedJobs,
+          required int totalJobs,
+          int skippedCategoriesCount = 0,
+          int skippedMangasCount = 0,
+        }) {
+          lastIsRunning = isRunning;
+          _skippedCategoriesCount = skippedCategoriesCount;
+          _skippedMangasCount = skippedMangasCount;
+          final activeJobs =
+              isRunning ? (totalJobs - finishedJobs).clamp(0, totalJobs > 0 ? totalJobs : 0) : 0;
+          final ratio = totalJobs > 0 ? (finishedJobs / totalJobs).clamp(0.0, 1.0) : 0.0;
+          _progress = 0.15 + ratio * 0.45;
           _statusMessage = activeJobs > 0
-              ? 'Server updating ($activeJobs job${activeJobs == 1 ? '' : 's'} in progress)...'
+              ? 'Server updating ($finishedJobs/$totalJobs)...'
               : 'Server finished update jobs...';
           notifyListeners();
+        }
 
-          if (activeJobs == 0) break;
+        final wsSub = WebSocketService.instance.onUpdateStatus.listen((event) {
+          sawWsEvent = true;
+          final parsed = parseLibraryUpdateEvent(event);
+          completedMangaIds.addAll(parsed.completedMangaIds);
+          applyJobs(
+            isRunning: parsed.isRunning,
+            finishedJobs: parsed.finishedJobs,
+            totalJobs: parsed.totalJobs,
+            skippedCategoriesCount: parsed.skippedCategoriesCount,
+            skippedMangasCount: parsed.skippedMangasCount,
+          );
+        });
+
+        try {
+          while (DateTime.now().isBefore(deadline)) {
+            if (sawWsEvent && !lastIsRunning) break;
+
+            // Fallback / supplement: poll every 1.5s when WS is quiet.
+            await Future<void>.delayed(const Duration(milliseconds: 1500));
+            if (sawWsEvent && !lastIsRunning) break;
+
+            final status = await GraphQLClientService.instance.fetchServerUpdateStatus();
+            final jobsInfo = (status?['libraryUpdateStatus'] as Map<String, dynamic>?)?['jobsInfo']
+                as Map<String, dynamic>?;
+            int extractCount(dynamic jobObj) {
+              if (jobObj is int) return jobObj;
+              if (jobObj is num) return jobObj.toInt();
+              return 0;
+            }
+            final isRunning = jobsInfo?['isRunning'] == true;
+            final totalJobs = extractCount(jobsInfo?['totalJobs']);
+            final finishedJobs = extractCount(jobsInfo?['finishedJobs']);
+            final skippedCategories = extractCount(jobsInfo?['skippedCategoriesCount']);
+            final skippedMangas = extractCount(jobsInfo?['skippedMangasCount']);
+            if (!sawWsEvent) {
+              applyJobs(
+                isRunning: isRunning,
+                finishedJobs: finishedJobs,
+                totalJobs: totalJobs,
+                skippedCategoriesCount: skippedCategories,
+                skippedMangasCount: skippedMangas,
+              );
+            }
+            if (!isRunning && finishedJobs >= totalJobs) break;
+          }
+        } finally {
+          await wsSub.cancel();
         }
 
         _statusMessage = 'Syncing chapters from server...';
         _progress = 0.65;
         notifyListeners();
 
-        // Pull updated chapters and manga down to Isar
+        // Targeted refresh for manga that completed on the server (ISS-068),
+        // then a normal sync to pull results into Isar.
+        for (final mangaId in completedMangaIds) {
+          try {
+            await GraphQLClientService.instance.fetchMangaAndChapters(mangaId);
+          } catch (_) {}
+        }
         await SyncEngine.instance.triggerSync();
       }
 
-      // Standalone or local mode, plus any local/migrated manga even when server is active
+      // Standalone/local titles only when a server is configured. Scraping
+      // server-linked manga locally (just because a JS ext exists) caused
+      // Cloudflare 403 storms and phantom chapters (ISS-058).
       final libraryManga = await IsarService.instance.getLibraryManga();
-      final localManga = libraryManga.where((m) =>
-          !GraphQLClientService.instance.isConfigured ||
-          m.sourceName.startsWith('local_js_') ||
-          m.serverId <= 0 ||
-          QuickJsService.instance.hasExtension(m.sourceName)
-      ).toList();
+      final localManga = libraryManga.where((m) {
+        if (!GraphQLClientService.instance.isConfigured) return true;
+        return m.sourceName.startsWith('local_js_') || m.serverId <= 0;
+      }).toList();
       final int totalManga = localManga.length;
 
       if (totalManga > 0) {
@@ -343,7 +414,7 @@ class LibraryUpdateService extends ChangeNotifier {
           : 'Library is up to date';
       notifyListeners();
 
-      await Future.delayed(const Duration(milliseconds: 600));
+      await Future<void>.delayed(const Duration(milliseconds: 600));
       return _lastFoundCount;
     } catch (e, st) {
       await LoggerService.instance.logError(

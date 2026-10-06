@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +7,7 @@ import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
 
 class GlobalSearchScreen extends StatefulWidget {
   final String initialQuery;
@@ -26,7 +28,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   void initState() {
     super.initState();
     _searchController = TextEditingController(text: widget.initialQuery);
-    _loadSourcesAndSearch();
+    unawaited(_loadSourcesAndSearch());
   }
 
   @override
@@ -79,7 +81,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     }
 
     if (_searchController.text.trim().isNotEmpty) {
-      _executeGlobalSearch(_searchController.text.trim());
+      unawaited(_executeGlobalSearch(_searchController.text.trim()));
     }
   }
 
@@ -171,7 +173,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         }
       }
       if (mounted) {
-        context.push('/manga/$id');
+        unawaited(context.push('/mnga/$id'));
       }
     }
   }
@@ -203,7 +205,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                 ? const Center(child: Text('No results across sources.', style: TextStyle(color: Colors.grey)))
                 : ListView(
                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                    padding: const EdgeInsets.only(bottom: 120),
+                    padding: EdgeInsets.only(bottom: SunfireBreakpoints.scrollBottomPadding(context)),
                     children: _resultsBySource.entries.map((entry) {
                       final sourceName = entry.key;
                       final mangas = entry.value;
@@ -246,7 +248,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                                             child: Container(
                                               width: 110,
                                               height: 150,
-                                              color: const Color(0xFF1F1F24),
+                                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                               child: thumb.isNotEmpty
                                                   ? Image.network(
                                                       thumb,

@@ -10,7 +10,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/engine/repo_manager.dart';
 import '../../core/logging/logger_service.dart';
+import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
 
@@ -60,7 +62,7 @@ class AppReleaseInfo {
         isPrerelease: decoded['prerelease'] == true,
       );
     } catch (e) {
-      LoggerService.instance.logWarning('Malformed release payload: $e', 'About');
+      unawaited(LoggerService.instance.logWarning('Malformed release payload: $e', 'About'));
       return null;
     }
   }
@@ -107,10 +109,35 @@ class _AboutScreenState extends State<AboutScreen> {
   _UpdateCheckState _updateState = _UpdateCheckState.idle;
   AppReleaseInfo? _release;
 
+  ServerVersionBundle? _serverBundle;
+  bool _serverBundleLoading = false;
+
   @override
   void initState() {
     super.initState();
-    _loadAppInfo();
+    unawaited(_loadAppInfo());
+    unawaited(_loadServerBundle());
+  }
+
+  Future<void> _loadServerBundle() async {
+    if (!GraphQLClientService.instance.isConfigured) {
+      if (mounted) setState(() => _serverBundle = null);
+      return;
+    }
+    if (mounted) setState(() => _serverBundleLoading = true);
+    try {
+      final bundle = await GraphQLClientService.instance.fetchServerVersionBundle(
+        includeUpdateCheck: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        _serverBundle = bundle;
+        _serverBundleLoading = false;
+      });
+    } catch (e) {
+      unawaited(LoggerService.instance.logWarning('Server version bundle failed: $e', _logCategory));
+      if (mounted) setState(() => _serverBundleLoading = false);
+    }
   }
 
   Future<void> _loadAppInfo() async {
@@ -130,7 +157,7 @@ class _AboutScreenState extends State<AboutScreen> {
       buildNumber = info.buildNumber;
       if (info.packageName.isNotEmpty) packageName = info.packageName;
     } catch (e) {
-      LoggerService.instance.logWarning('PackageInfo unavailable: $e', _logCategory);
+      unawaited(LoggerService.instance.logWarning('PackageInfo unavailable: $e', _logCategory));
     }
     if (!mounted) return;
     setState(() {
@@ -165,7 +192,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
       if (response.statusCode != 200) {
         // 403 here is almost always GitHub's unauthenticated rate limiter.
-        LoggerService.instance.logWarning('Update check HTTP ${response.statusCode}', _logCategory);
+        unawaited(LoggerService.instance.logWarning('Update check HTTP ${response.statusCode}', _logCategory));
         if (mounted) setState(() => _updateState = _UpdateCheckState.failed);
         return;
       }
@@ -175,18 +202,17 @@ class _AboutScreenState extends State<AboutScreen> {
         if (mounted) setState(() => _updateState = _UpdateCheckState.failed);
         return;
       }
-
-      LoggerService.instance.logInfo(
+      unawaited(LoggerService.instance.logInfo(
         'Update check: installed $_versionDisplay, latest ${release.version}',
         _logCategory,
-      );
+      ));
       if (!mounted) return;
       setState(() {
         _release = release;
         _updateState = release.isNewerThan(_version) ? _UpdateCheckState.available : _UpdateCheckState.upToDate;
       });
     } catch (e) {
-      LoggerService.instance.logWarning('Update check failed: $e', _logCategory);
+      unawaited(LoggerService.instance.logWarning('Update check failed: $e', _logCategory));
       if (mounted) setState(() => _updateState = _UpdateCheckState.failed);
     }
   }
@@ -200,7 +226,7 @@ class _AboutScreenState extends State<AboutScreen> {
         _snack('No app available to open this link');
       }
     } catch (e) {
-      LoggerService.instance.logWarning('Failed to launch $url: $e', _logCategory);
+      unawaited(LoggerService.instance.logWarning('Failed to launch $url: $e', _logCategory));
       _snack('Could not open link');
     }
   }
@@ -236,8 +262,71 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   void _copyDiagnostics() {
-    Clipboard.setData(ClipboardData(text: _diagnosticReport));
+    unawaited(Clipboard.setData(ClipboardData(text: _diagnosticReport)));
     _snack('Diagnostics copied to clipboard');
+  }
+
+  Widget _buildServerVersionSection(Color primary) {
+    if (_serverBundleLoading && _serverBundle == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: LinearProgressIndicator(minHeight: 2),
+      );
+    }
+    final bundle = _serverBundle;
+    final version = bundle?.serverVersion;
+    final buildType = bundle?.buildType;
+    final web = bundle?.webUI;
+    final updates = bundle?.serverUpdates ?? const <ServerUpdateInfo>[];
+    final preview = (buildType ?? '').toUpperCase().contains('PREVIEW');
+    final line = serverVersionSummaryLabel(
+      version: version,
+      buildType: buildType,
+      webUIChannel: web?.channel,
+      webUITag: web?.tag,
+    );
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListTile(
+          key: const Key('about_server_version_tile'),
+          leading: Icon(Icons.dns_rounded, color: primary),
+          title: Text(line),
+          subtitle: preview
+              ? Text(
+                  'Preview builds change schema often — expect occasional mismatches.',
+                  style: TextStyle(color: cs.tertiary, fontSize: 12),
+                )
+              : (version == null
+                  ? const Text('Could not read server version', style: TextStyle(fontSize: 12))
+                  : null),
+          trailing: IconButton(
+            tooltip: 'Refresh server version',
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => unawaited(_loadServerBundle()),
+          ),
+        ),
+        if (updates.isNotEmpty)
+          ...updates.map((u) {
+            final label = u.channel.isEmpty ? u.tag : '${u.channel}: ${u.tag}';
+            return ListTile(
+              key: Key('about_server_update_${u.channel}_${u.tag}'),
+              leading: Icon(Icons.system_update_alt_rounded, color: cs.secondary),
+              title: Text('Server update available — $label'),
+              subtitle: u.url.isEmpty ? null : Text(u.url, maxLines: 1, overflow: TextOverflow.ellipsis),
+              onTap: u.url.isEmpty ? null : () => unawaited(_openUrl(u.url)),
+            );
+          }),
+        if (bundle != null && !bundle.hasServerUpdate && version != null)
+          ListTile(
+            key: const Key('about_server_up_to_date'),
+            dense: true,
+            leading: Icon(Icons.check_circle_outline_rounded, color: cs.primary, size: 22),
+            title: const Text('Server is up to date', style: TextStyle(fontSize: 13)),
+          ),
+      ],
+    );
   }
 
   @override
@@ -248,13 +337,17 @@ class _AboutScreenState extends State<AboutScreen> {
     return SettingsSubpageScaffold(
       title: 'About',
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 48),
+        padding: EdgeInsets.only(bottom: SunfireBreakpoints.scrollBottomPadding(context, extra: 32)),
         children: [
           _buildHeader(primary),
           const SectionTitle(title: 'What is Sunfire?'),
           _buildDescription(),
           const SectionTitle(title: 'Version'),
           _buildUpdateSection(primary),
+          if (GraphQLClientService.instance.isConfigured) ...[
+            const SectionTitle(title: 'Connected server'),
+            _buildServerVersionSection(primary),
+          ],
           const SectionTitle(title: 'Project'),
           _buildProjectLinks(),
           const SectionTitle(title: 'Legal'),
@@ -439,7 +532,7 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   void _openReleases() {
-    _openUrl(_release?.url ?? SunfireProject.releases);
+    unawaited(_openUrl(_release?.url ?? SunfireProject.releases));
   }
 
   Widget _buildProjectLinks() {

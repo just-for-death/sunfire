@@ -7,6 +7,8 @@ import 'package:sunfire/src/core/db/models/sync_record.dart';
 import 'package:sunfire/src/core/engine/javascript/js_extension_service.dart';
 import 'package:sunfire/src/core/engine/quickjs_service.dart';
 
+import 'support/quickjs_test_loader.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -44,13 +46,14 @@ void main() {
     });
 
     test('2. Extensions auto-installed from remote repos on first run', () async {
-      // Initialize QuickJS to trigger auto-install from remote repos
+      // Needs the QuickJS native plugin and network (remote repo index).
+      expect(tryLoadQuickJsPluginGlobally(), isTrue);
       await QuickJsService.instance.initialize();
       
       // Wait for auto-install to complete (with timeout)
       for (int i = 0; i < 30; i++) {
         if (QuickJsService.instance.hasInstalledExtensions) break;
-        await Future.delayed(const Duration(milliseconds: 500));
+        await Future<void>.delayed(const Duration(milliseconds: 500));
       }
       
       const expectedSources = [
@@ -70,10 +73,11 @@ void main() {
         expect(code, isNotNull, reason: 'Extension $src must be auto-installed from remote repos');
         expect(code!.length, greaterThan(100));
       }
-    });
+    }, tags: ['native', 'network'], skip: quickJsSkipReason());
 
     test('3. Dynamic image headers guard injects proper Referer and User-Agent', () async {
-      // Ensure extensions are loaded
+      // Needs the QuickJS native plugin (flutter build linux --debug).
+      expect(tryLoadQuickJsPluginGlobally(), isTrue);
       await QuickJsService.instance.initialize();
       
       final webtoonsHeaders = QuickJsService.getImageHeaders('Webtoons (EN)', 'https://webtoon-phinf.pstatic.net/img.jpg');
@@ -87,7 +91,7 @@ void main() {
       final freakHeaders = QuickJsService.getImageHeaders('MangaFreak', 'https://images.mangafreak.me/manga.jpg');
       expect(freakHeaders.containsKey('User-Agent'), isTrue);
       expect(freakHeaders['Referer'], equals('https://ww3.mangafreak.me/'));
-    });
+    }, tags: ['native'], skip: quickJsSkipReason());
 
     test('4. Extension version alignment between files and index metadata', () {
       int compareVersions(String v1, String v2) {

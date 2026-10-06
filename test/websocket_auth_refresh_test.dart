@@ -64,7 +64,7 @@ class _FakeWsServer {
             authHeaders.add(payload?['Authorization'] as String?);
             _acceptedController.add(null);
             if (rejectWithUnauthorized) {
-              socket.close(_closeCodeUnauthorized, 'Unauthorized');
+              unawaited(socket.close(_closeCodeUnauthorized, 'Unauthorized'));
             } else {
               socket.add(jsonEncode({'type': 'connection_ack'}));
             }
@@ -148,12 +148,12 @@ void main() {
     expect(server.authHeaders, hasLength(1));
 
     // Give the refresher a chance to run and the backoff timer to be armed.
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future<void>.delayed(const Duration(milliseconds: 600));
     expect(calls, greaterThanOrEqualTo(1));
 
     // The dead token must not be replayed: the backoff is 10s, so within this
     // window we should still be at a single connection attempt.
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future<void>.delayed(const Duration(milliseconds: 600));
     expect(server.authHeaders, hasLength(1), reason: 'retried the known-bad token');
   }, timeout: const Timeout(Duration(seconds: 30)));
 
@@ -164,7 +164,7 @@ void main() {
     ws.initialize(server.url, authToken: 'stale-token');
 
     await server._accepted.first.timeout(const Duration(seconds: 10));
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future<void>.delayed(const Duration(milliseconds: 800));
     expect(server.authHeaders, hasLength(1));
   }, timeout: const Timeout(Duration(seconds: 30)));
 
@@ -175,7 +175,7 @@ void main() {
     ws.initialize(server.url, authToken: 'stale-token');
 
     await server._accepted.first.timeout(const Duration(seconds: 10));
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future<void>.delayed(const Duration(milliseconds: 800));
 
     // Still alive and not reconnected immediately.
     expect(server.authHeaders, hasLength(1));
@@ -188,7 +188,7 @@ void main() {
     addTearDown(() => server2.close());
 
     ws.initialize(server2.url, authToken: 'good-token');
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future<void>.delayed(const Duration(milliseconds: 800));
 
     final types = received.map((m) => m['type']).toList();
     final subs = received.where((m) => m['type'] == 'subscribe').toList();
@@ -202,7 +202,7 @@ void main() {
     addTearDown(() => server2.close());
 
     ws.initialize(server2.url, authToken: 'good-token');
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future<void>.delayed(const Duration(milliseconds: 800));
 
     // The 10s handshake timer has not fired yet, but the service must already
     // refuse to call itself connected — otherwise a half-open socket would

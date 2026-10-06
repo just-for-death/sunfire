@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -83,7 +84,7 @@ class _ImportTachibkScreenState extends State<ImportTachibkScreen> {
         });
       }
     } catch (e, st) {
-      LoggerService.instance.logError('TachiBk parse failed', exception: e, stackTrace: st, category: 'TachiBkImport');
+      unawaited(LoggerService.instance.logError('TachiBk parse failed', exception: e, stackTrace: st, category: 'TachikImport'));
       if (mounted) {
         setState(() {
           _parsing = false;
@@ -105,7 +106,7 @@ class _ImportTachibkScreenState extends State<ImportTachibkScreen> {
         _applying = false;
         _applied = true;
       });
-
+unawaited(
       showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
@@ -136,12 +137,12 @@ class _ImportTachibkScreenState extends State<ImportTachibkScreen> {
             ),
           ],
         ),
-      );
+      ));
     } catch (e, st) {
-      LoggerService.instance.logError('TachiBk import failed', exception: e, stackTrace: st, category: 'TachiBkImport');
+      unawaited(LoggerService.instance.logError('TachiBk import failed', exception: e, stackTrace: st, category: 'TachikImport'));
       if (!mounted) return;
       setState(() => _applying = false);
-      showDialog<void>(
+      unawaited(showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Restore failed'),
@@ -153,7 +154,7 @@ class _ImportTachibkScreenState extends State<ImportTachibkScreen> {
             ),
           ],
         ),
-      );
+      ));
     }
   }
 

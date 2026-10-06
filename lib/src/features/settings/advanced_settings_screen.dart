@@ -13,6 +13,9 @@ import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/widgets/dialog_title.dart';
+import '../../ui/widgets/proxy_url_display.dart';
+import '../shared/friendly_network_error.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
 
@@ -28,12 +31,12 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
   int _chapterCount = 0;
   int _categoryCount = 0;
   bool _isLoadingStats = true;
-  String _versionStr = 'v4.0.0';
+  String _versionStr = '';
 
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    unawaited(_loadStats());
   }
 
   Future<void> _loadStats() async {
@@ -42,7 +45,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
       final manga = await IsarService.instance.getAllManga();
       final chapters = await IsarService.instance.getAllChapters();
       final cats = await IsarService.instance.getCategories();
-      String versionDisplay = 'v4.0.0';
+      String versionDisplay = '';
       try {
         final info = await PackageInfo.fromPlatform();
         if (info.version.isNotEmpty) {
@@ -67,118 +70,24 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
   }
 
   void _showLogsModal() {
-    showModalBottomSheet(
+    unawaited(showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF141419),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => const _LiveLogViewerSheet(),
-    );
+    ));
   }
 
   void _showCfProxyDialog() {
-    final controller = TextEditingController(text: SettingsService.instance.cfProxyUrl);
-    String testStatus = '';
-    bool testing = false;
-
-    showDialog(
+    // UIS-12/13: the dialog owns (and disposes) its controller and uses the
+    // theme's dialog surface instead of a hard-coded dark background.
+    unawaited(showDialog<void>(
       context: context,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1E26),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.shield_outlined, color: Colors.amberAccent),
-              SizedBox(width: 8),
-              Text('FlareSolverr Proxy', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Bypasses Cloudflare Turnstile challenges for protected sources and extensions.',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  labelText: 'Endpoint URL',
-                  hintText: 'http://192.168.1.50:8191/v1',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              if (testStatus.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  testStatus,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: testStatus.startsWith('✅') ? Colors.greenAccent : Colors.redAccent,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: testing
-                  ? null
-                  : () async {
-                      final text = controller.text.trim();
-                      if (text.isEmpty) {
-                        setDialogState(() => testStatus = '⚠️ Please enter a FlareSolverr endpoint URL.');
-                        return;
-                      }
-                      setDialogState(() {
-                        testing = true;
-                        testStatus = 'Testing reachability...';
-                      });
-                      final url = MClient.normalizeProxyUrl(text);
-                      try {
-                        final res = await http.post(
-                          Uri.parse(url),
-                          headers: {'Content-Type': 'application/json'},
-                          body: '{"cmd":"sessions.list"}',
-                        ).timeout(const Duration(seconds: 5));
-                        setDialogState(() {
-                          testing = false;
-                          testStatus = res.statusCode == 200 ? '✅ Online (HTTP ${res.statusCode})' : '❌ Responded with HTTP ${res.statusCode}';
-                        });
-                      } catch (e) {
-                        setDialogState(() {
-                          testing = false;
-                          testStatus = '❌ Reachability failed: $e';
-                        });
-                      }
-                    },
-              child: const Text('Test'),
-            ),
-            TextButton(
-              onPressed: () {
-                controller.clear();
-              },
-              child: const Text('Clear'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(dialogCtx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                SettingsService.instance.cfProxyUrl = controller.text.trim();
-                setState(() {});
-                Navigator.pop(dialogCtx);
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    ).then((_) => controller.dispose());
+      builder: (_) => const _CfProxyDialog(),
+    ).then((_) {
+      if (mounted) setState(() {});
+    }));
   }
 
   @override
@@ -229,7 +138,6 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
               final ok = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  backgroundColor: const Color(0xFF1F1F24),
                   title: const Text('Force reconcile?'),
                   content: const Text(
                     'Titles that exist only on this device but not on the Suwayomi server will be removed from your library. Downloaded files are not deleted.',
@@ -281,14 +189,17 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
             subtitle: Text(
               SettingsService.instance.cfProxyUrl.isEmpty
                   ? 'Disabled (direct connection)'
-                  : SettingsService.instance.cfProxyUrl,
+                  : maskProxyUrlForDisplay(SettingsService.instance.cfProxyUrl),
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
             trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
             onTap: _showCfProxyDialog,
           ),
 
-          const Divider(height: 1, color: Color(0x1AFFFFFF)),
+          const Divider(height: 1),
+
+          // Certificate pinning UI hidden for this release (UIX-06, decision A):
+          // the old check gave no protection. Re-add only with real pinning.
 
           // ── 2. CACHE & STORAGE ──
           const SectionTitle(title: 'Disk & Memory Cache'),
@@ -317,7 +228,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
             },
           ),
 
-          const Divider(height: 1, color: Color(0x1AFFFFFF)),
+          const Divider(height: 1),
 
           // ── 3. DATABASE STATS ──
           const SectionTitle(title: 'Local Database (Isar)'),
@@ -330,7 +241,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
                 : Text('$_mangaCount manga entries • $_chapterCount cached chapters • $_categoryCount categories', style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ),
 
-          const Divider(height: 1, color: Color(0x1AFFFFFF)),
+          const Divider(height: 1),
 
           // ── 4. SYSTEM INFORMATION ──
           const SectionTitle(title: 'System Information'),
@@ -392,7 +303,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
 
   @override
   void dispose() {
-    _subscription?.cancel();
+    unawaited(_subscription?.cancel());
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -456,7 +367,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
                 tooltip: 'Copy all logs',
                 onPressed: () {
                   final text = filtered.map((e) => e.format()).join('\n');
-                  Clipboard.setData(ClipboardData(text: text));
+                  unawaited(Clipboard.setData(ClipboardData(text: text)));
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Copied logs to clipboard!')),
                   );
@@ -485,7 +396,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
                     )
                   : null,
               filled: true,
-              fillColor: const Color(0xFF1F1F24),
+              fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
@@ -552,6 +463,163 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// FlareSolverr proxy editor (UIS-11/12/13). Owns its [TextEditingController]
+/// so it is disposed with the dialog, after the exit animation.
+class _CfProxyDialog extends StatefulWidget {
+  const _CfProxyDialog();
+
+  @override
+  State<_CfProxyDialog> createState() => _CfProxyDialogState();
+}
+
+class _CfProxyDialogState extends State<_CfProxyDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: SettingsService.instance.cfProxyUrl);
+  String _testStatus = '';
+  bool _testOk = false;
+  bool _testing = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _test() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      setState(() {
+        _testOk = false;
+        _testStatus = '⚠️ Please enter a FlareSolverr endpoint URL.';
+      });
+      return;
+    }
+    setState(() {
+      _testing = true;
+      _testOk = false;
+      _testStatus = 'Testing reachability...';
+    });
+    final url = MClient.normalizeProxyUrl(text);
+    try {
+      final res = await http
+          .post(
+            Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: '{"cmd":"sessions.list"}',
+          )
+          .timeout(const Duration(seconds: 5));
+      if (!mounted) return;
+      setState(() {
+        _testing = false;
+        _testOk = res.statusCode == 200;
+        _testStatus = _testOk
+            ? '✅ Online (HTTP ${res.statusCode})'
+            : '❌ Responded with HTTP ${res.statusCode}';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _testing = false;
+        _testOk = false;
+        _testStatus =
+            '❌ Reachability failed: ${friendlyNetworkError(e, tag: 'AdvancedSettings')}';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: DialogTitle(
+        icon: Icons.shield_outlined,
+        iconColor: cs.primary,
+        text: 'FlareSolverr Proxy',
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bypasses Cloudflare Turnstile challenges for protected sources and extensions.',
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _controller,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'Endpoint URL',
+                hintText: 'http://192.168.1.50:8191/v1',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // ISS-021 (1): UIX-10 keeps the URL in secure storage only.
+            Text(
+              'Saved in secure storage. If secure storage is unavailable on this device, the URL is kept for this session only.',
+              style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
+            ),
+            if (_testStatus.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                _testStatus,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _testing
+                      ? cs.onSurfaceVariant
+                      : (_testOk ? cs.tertiary : cs.error),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        Row(
+          children: [
+            // Destructive-ish "Clear" sits apart from Save (UIS-13). It only
+            // clears the field; nothing is persisted until Save.
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: cs.error),
+              onPressed: _controller.clear,
+              child: const Text('Clear'),
+            ),
+            const Spacer(),
+            Flexible(
+              flex: 4,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  TextButton(
+                    onPressed: _testing ? null : _test,
+                    child: const Text('Test'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      SettingsService.instance.cfProxyUrl = _controller.text.trim();
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

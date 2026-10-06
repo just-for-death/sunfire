@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../db/isar_service.dart';
@@ -241,11 +242,11 @@ class SourceMigrationService {
         }
       }
     }
-
+unawaited(
     LoggerService.instance.logInfo(
       'Server-to-Local Source Migration: ${matched.length}/${serverSourceNames.length} sources matched to on-device JS scrapers ($remappedCount library items remapped)',
       'SourceMigration',
-    );
+    ));
 
     return MigrationResult(
       matchedSources: matched,
@@ -379,11 +380,11 @@ class SourceMigrationService {
         newlyAddedFallbacks.add(srv.name);
       }
     }
-
+unawaited(
     LoggerService.instance.logInfo(
       'Continuous Source Replication: ${newlyInstalled.length} local scrapers auto-installed, ${newlyAddedFallbacks.length} server fallbacks registered, $remappedMangaCount manga remapped',
       'SourceReplication',
-    );
+    ));
 
     return ReplicationReport(
       newlyInstalledLocalScrapers: newlyInstalled,

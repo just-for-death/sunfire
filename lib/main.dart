@@ -19,14 +19,15 @@ import 'src/core/sync/background_service.dart';
 import 'src/core/sync/download_foreground_task.dart';
 import 'src/core/sync/graphql_client_service.dart';
 import 'src/core/sync/server_auth_helper.dart';
+import 'src/core/sync/server_session_service.dart';
 import 'src/core/sync/sync_engine.dart';
 import 'src/core/sync/websocket_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+unawaited(
   // Modern Edge-to-Edge System Navigation Styling for Android & iOS
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -152,7 +153,10 @@ void main() async {
         final refreshed = await ServerAuthHelper.getRawAuthHeader();
         return refreshed.trim().isEmpty ? null : refreshed;
       };
-      SyncEngine.instance.initialize();
+      // ISS-078: re-attach a persisted UI_LOGIN / SIMPLE_LOGIN session (JWT
+      // refresh on 401 / near expiry; WS reconnects with the new token).
+      await ServerSessionService.instance.restore();
+      unawaited(SyncEngine.instance.initialize());
       await BackgroundService.instance.initialize();
     } catch (e) {
       debugPrint('SyncEngine/Network init error: $e');
@@ -190,6 +194,6 @@ void main() async {
 /// Handles messages from the foreground-service background isolate.
 void _onForegroundTaskData(Object data) {
   if (data is Map<String, dynamic> && data['action'] == 'pause') {
-    DownloadManagerService.instance.pauseLocalQueue();
+    unawaited(DownloadManagerService.instance.pauseLocalQueue());
   }
 }

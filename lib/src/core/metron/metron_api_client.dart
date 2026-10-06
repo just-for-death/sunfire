@@ -86,11 +86,11 @@ class MetronApiClient {
           // 3. Proactive Rate-Limit Guard: If burst remaining is 0 or 1, delay until reset
           if (_rateLimitState.burstRemaining <= 1 && _rateLimitState.burstResetSeconds > 0) {
             final waitSeconds = _rateLimitState.burstResetSeconds.clamp(1, 60);
-            LoggerService.instance.logWarning(
+            unawaited(LoggerService.instance.logWarning(
               'Metron burst rate-limit near exhaustion (${_rateLimitState.burstRemaining} remaining). Waiting ${waitSeconds}s...',
               'Metron',
-            );
-            await Future.delayed(Duration(seconds: waitSeconds));
+            ));
+            await Future<void>.delayed(Duration(seconds: waitSeconds));
           }
 
           handler.next(options);
@@ -120,25 +120,25 @@ class MetronApiClient {
           if (err.response?.statusCode == 429) {
             final attempts = ((err.requestOptions.extra['_metron429Retries'] as num?) ?? 0) + 1;
             if (attempts > 3) {
-              LoggerService.instance.logWarning(
+              unawaited(LoggerService.instance.logWarning(
                 'Metron HTTP 429 retried $attempts times without success — giving up on this request.',
                 'Metron',
-              );
+              ));
               return handler.next(err);
             }
             err.requestOptions.extra['_metron429Retries'] = attempts;
             final retryAfterRaw = err.response?.headers.value('retry-after');
             final retrySeconds = int.tryParse(retryAfterRaw ?? '') ??
                 (_rateLimitState.burstResetSeconds > 0 ? _rateLimitState.burstResetSeconds : 5);
-
+unawaited(
             LoggerService.instance.logWarning(
               'Metron HTTP 429 received. Backing off for ${retrySeconds}s before retry (attempt $attempts/3).',
               'Metron',
-            );
+            ));
 
-            await Future.delayed(Duration(seconds: retrySeconds));
+            await Future<void>.delayed(Duration(seconds: retrySeconds));
             try {
-              final retryResponse = await _dio.fetch(err.requestOptions);
+              final retryResponse = await _dio.fetch<dynamic>(err.requestOptions);
               return handler.resolve(retryResponse);
             } catch (retryErr) {
               return handler.next(err);
@@ -163,11 +163,11 @@ class MetronApiClient {
             // was ever sent, and the sheet already prompts for configuration.
             final hadToken = _apiToken != null && _apiToken!.isNotEmpty;
             if (hadToken) {
-              LoggerService.instance.logWarning(
+              unawaited(LoggerService.instance.logWarning(
                 'Metron rejected the stored API token (HTTP 401). Clearing it — '
                 'tracking will stay off until a new token is entered.',
                 'Metron',
-              );
+              ));
               _reportUnauthorized();
             } else if (kDebugMode) {
               debugPrint('[Metron] anonymous request rejected (401) — no token configured');
@@ -210,12 +210,12 @@ class MetronApiClient {
       // to unblock whoever is queued behind it.
       final current = _lastRequestCompleter;
       if (current == null) return;
-      Future.delayed(_minRequestSpacing, () {
+      Future<void>.delayed(_minRequestSpacing, () {
         if (!current.isCompleted) current.complete();
       });
       return;
     }
-    Future.delayed(_minRequestSpacing, () {
+    Future<void>.delayed(_minRequestSpacing, () {
       if (!gate.isCompleted) gate.complete();
     });
   }

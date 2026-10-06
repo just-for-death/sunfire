@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../ui/shell/sunfire_breakpoints.dart';
 
 class SettingsSubpageScaffold extends StatelessWidget {
   const SettingsSubpageScaffold({
@@ -27,7 +28,7 @@ class SettingsSubpageScaffold extends StatelessWidget {
       );
     }
 
-    final isTablet = MediaQuery.of(context).size.width >= 720;
+    final isTablet = MediaQuery.of(context).size.width >= SunfireBreakpoints.narrowTabletMaxWidth;
 
     return Scaffold(
       appBar: AppBar(

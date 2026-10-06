@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -12,7 +13,11 @@ import '../../core/logging/logger_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/source_filters.dart';
+import 'source_server_filters_sheet.dart';
 import '../../core/widgets/empty_state_widget.dart';
+import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
 
 class SourceMangaGridScreen extends StatefulWidget {
   final String sourceId;
@@ -49,13 +54,20 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   List<dynamic> _dynamicFilters = [];
   bool _hasDynamicFilters = false;
   bool _isFilterApplied = false;
+  List<SourceFilterChange> _serverFilterChanges = const [];
+  bool _hasServerFilters = false;
+
+  bool get _isServerSource =>
+      GraphQLClientService.instance.isConfigured &&
+      !widget.sourceId.startsWith('local_js_') &&
+      int.tryParse(widget.sourceId) != null;
 
   @override
   void initState() {
     super.initState();
     _isLatestMode = widget.isLatest;
     _scrollController.addListener(_onScroll);
-    _fetchFiltersAndManga();
+    unawaited(_fetchFiltersAndManga());
   }
   
   void _onScroll() {
@@ -65,7 +77,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
         !_isLoading &&
         !_isLoadingMore &&
         _hasNextPage) {
-      _loadMoreManga();
+      unawaited(_loadMoreManga());
     }
   }
 
@@ -83,7 +95,15 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
 
     _dynamicFilters = await QuickJsService.instance.fetchSourceFiltersLocal(widget.sourceName);
     _hasDynamicFilters = _dynamicFilters.isNotEmpty;
-    _fetchSourceManga();
+    if (_isServerSource) {
+      try {
+        final pack = await GraphQLClientService.instance.fetchSourceFiltersAndPreferences(widget.sourceId);
+        _hasServerFilters = pack?.filters.any((f) => f.isInteractive) ?? false;
+      } catch (_) {
+        _hasServerFilters = false;
+      }
+    }
+    unawaited(_fetchSourceManga());
   }
 
   @override
@@ -91,6 +111,20 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _openServerFilters() async {
+    final changes = await showSourceServerFiltersSheet(
+      context,
+      sourceId: widget.sourceId,
+      initialChanges: _serverFilterChanges,
+    );
+    if (!mounted || changes == null) return;
+    setState(() {
+      _serverFilterChanges = changes;
+      _isFilterApplied = changes.isNotEmpty;
+    });
+    unawaited(_fetchSourceManga());
   }
 
   Future<void> _fetchSourceManga() async {
@@ -124,6 +158,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
         selectedStatus: _selectedStatus,
         selectedType: _selectedType,
         dynamicFilters: (_hasDynamicFilters && (_isFilterApplied || _searchQuery.trim().isNotEmpty)) ? _dynamicFilters : null,
+        filters: _serverFilterChanges.isEmpty ? null : _serverFilterChanges,
       );
       if (_mangaList.length < 10) {
         _hasNextPage = false;
@@ -152,6 +187,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
         selectedStatus: _selectedStatus,
         selectedType: _selectedType,
         dynamicFilters: (_hasDynamicFilters && (_isFilterApplied || _searchQuery.trim().isNotEmpty)) ? _dynamicFilters : null,
+        filters: _serverFilterChanges.isEmpty ? null : _serverFilterChanges,
       );
 
       if (mounted) {
@@ -194,10 +230,10 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
 
   void _showFilterSheet() {
     final primaryColor = Theme.of(context).colorScheme.primary;
-
-    showModalBottomSheet(
+unawaited(
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
+      // UIS-ISS-012: theme surface (was hard-coded dark hex)
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       isScrollControlled: true,
       builder: (sheetContext) {
@@ -250,7 +286,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                  label: Text((valObj['name'] ?? valObj['value'] ?? '').toString()),
                                  selected: isSelected,
                                  selectedColor: primaryColor,
-                                 backgroundColor: const Color(0x1F2A2A32),
+                                 backgroundColor: SunfireTheme.tileSurface(context),
                                  labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
                                  onSelected: (_) {
                                    setSheetState(() => _dynamicFilters[i]['state'] = idx);
@@ -271,7 +307,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                            label: Text(s),
                            selected: isSelected,
                            selectedColor: primaryColor,
-                           backgroundColor: const Color(0x1F2A2A32),
+                           backgroundColor: SunfireTheme.tileSurface(context),
                            labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
                            onSelected: (_) {
                              setSheetState(() => _selectedSort = s);
@@ -290,7 +326,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                            label: Text(st),
                            selected: isSelected,
                            selectedColor: primaryColor,
-                           backgroundColor: const Color(0x1F2A2A32),
+                           backgroundColor: SunfireTheme.tileSurface(context),
                            labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
                            onSelected: (_) {
                              setSheetState(() => _selectedStatus = st);
@@ -318,7 +354,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                           // Legacy filters apply via the same _isFilterApplied flag
                         }
                       });
-                      _fetchSourceManga();
+                      unawaited(_fetchSourceManga());
                     },
                     child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                   ),
@@ -328,17 +364,17 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
           },
         );
       },
-    );
+    ));
   }
 
   void _showSourceSettings() {
     final primaryColor = Theme.of(context).colorScheme.primary;
-
-    showDialog(
+unawaited(
+    showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
+          // UIS-ISS-012: theme surface (was hard-coded dark hex)
           title: Text('${widget.sourceName} Settings', style: const TextStyle(fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -366,7 +402,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
           ],
         );
       },
-    );
+    ));
   }
 
   bool _isSearchExpanded = false;
@@ -392,7 +428,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                     _searchQuery = val;
                     _currentPage = 1;
                   });
-                  _fetchSourceManga();
+                  unawaited(_fetchSourceManga());
                 },
               )
             : Text(widget.sourceName, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -406,7 +442,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                 _searchQuery = '';
                 _currentPage = 1;
               });
-              _fetchSourceManga();
+              unawaited(_fetchSourceManga());
             } else {
               if (context.canPop()) {
                 context.pop();
@@ -435,13 +471,19 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                   _searchQuery = '';
                   _currentPage = 1;
                 });
-                _fetchSourceManga();
+                unawaited(_fetchSourceManga());
               },
             ),
           IconButton(
             icon: const Icon(Icons.tune_rounded),
             tooltip: 'Filter source',
-            onPressed: _showFilterSheet,
+            onPressed: () {
+              if (_hasServerFilters) {
+                unawaited(_openServerFilters());
+              } else {
+                _showFilterSheet();
+              }
+            },
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
@@ -462,9 +504,9 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                   child: Container(
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
-                      color: const Color(0x1F2A2A32),
+                      color: SunfireTheme.tileSurface(context),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
+                      border: Border.all(color: SunfireTheme.tileBorder(context), width: 0.8),
                     ),
                     child: Row(
                       children: [
@@ -476,7 +518,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                   _isLatestMode = false;
                                   _currentPage = 1;
                                 });
-                                _fetchSourceManga();
+                                unawaited(_fetchSourceManga());
                               }
                             },
                             child: AnimatedContainer(
@@ -518,7 +560,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                   _isLatestMode = true;
                                   _currentPage = 1;
                                 });
-                                _fetchSourceManga();
+                                unawaited(_fetchSourceManga());
                               }
                             },
                             child: AnimatedContainer(
@@ -626,7 +668,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                         })()
                       : LayoutBuilder(
                           builder: (context, constraints) {
-                            final isTablet = constraints.maxWidth >= 720;
+                            final isTablet = constraints.maxWidth >= SunfireBreakpoints.narrowTabletMaxWidth;
                             final targetWidth = isTablet ? 175.0 : 120.0;
                             final dynamicColumns = (constraints.maxWidth / targetWidth).floor().clamp(2, 5);
                             final horizontalPad = isTablet ? 24.0 : 16.0;
@@ -637,7 +679,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                   child: GridView.builder(
                                     controller: _scrollController,
                                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                                    padding: EdgeInsets.symmetric(horizontal: horizontalPad, vertical: 12),
+                                    padding: EdgeInsets.only(left: horizontalPad, right: horizontalPad, top: 12, bottom: SunfireBreakpoints.scrollBottomPadding(context)),
                                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: dynamicColumns,
                                       childAspectRatio: 0.68,
@@ -717,7 +759,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                                 }
                                               }
                                               if (context.mounted) {
-                                                context.push('/manga/$id');
+                                                unawaited(context.push('/manga/$id'));
                                               }
                                             }
                                           },
@@ -729,13 +771,13 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                                                 child: Container(
                                                   decoration: BoxDecoration(
                                                     borderRadius: BorderRadius.circular(16),
-                                                    color: const Color(0xFF16161E),
-                                                    border: Border.all(color: const Color(0x1FFFFFFF), width: 0.8),
-                                                    boxShadow: const [
+                                                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                                    border: Border.all(color: SunfireTheme.tileBorder(context), width: 0.8),
+                                                    boxShadow: [
                                                       BoxShadow(
-                                                        color: Color(0x33000000),
+                                                        color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.2),
                                                         blurRadius: 8,
-                                                        offset: Offset(0, 3),
+                                                        offset: const Offset(0, 3),
                                                       ),
                                                     ],
                                                   ),
@@ -793,10 +835,10 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
 
   void _showMangaQuickActions(int mangaId, String title, String? thumb, {required bool isServerSourced}) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-
-    showModalBottomSheet(
+unawaited(
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
+      // UIS-ISS-012: theme surface (was hard-coded dark hex)
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (sheetContext) {
         return Padding(
@@ -883,13 +925,13 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
                 title: const Text('View Manga Details', style: TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  context.push('/manga/$mangaId');
+                  unawaited(context.push('/manga/$mangaId'));
                 },
               ),
             ],
           ),
         );
       },
-    );
+    ));
   }
 }

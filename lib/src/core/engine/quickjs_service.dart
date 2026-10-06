@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../constants/app_constants.dart';
 import '../logging/logger_service.dart';
 import 'chapter_url_attribution.dart';
+import 'headers_lru_cache.dart';
 import 'javascript/js_extension_service.dart';
 import 'javascript/m_client.dart';
 import 'repo_manager.dart';
@@ -721,14 +722,16 @@ class QuickJsService {
   }
 
   static const int _maxHeadersCacheEntries = 500;
-  static final Map<String, Map<String, String>> _headersCache = {};
+  static const Duration _headersCacheTtl = Duration(hours: 1);
+  // UIX-16: real LRU + sliding TTL + sweep throttled to once a minute.
+  static final HeadersLruCache _headersCache = HeadersLruCache(
+    maxEntries: _maxHeadersCacheEntries,
+    ttl: _headersCacheTtl,
+  );
 
-  static void _setCacheEntry(String key, Map<String, String> value) {
-    if (_headersCache.length >= _maxHeadersCacheEntries) {
-      _headersCache.remove(_headersCache.keys.first);
-    }
-    _headersCache[key] = value;
-  }
+  static void _setCacheEntry(String key, Map<String, String> value) => _headersCache.set(key, value);
+
+  static void _cleanExpiredCacheEntries() => _headersCache.maybeSweep();
 
   static void cacheImageHeaders(String url, Map<String, String> headers) {
     if (url.isNotEmpty && headers.isNotEmpty) {
@@ -741,21 +744,24 @@ class QuickJsService {
   }
 
   static Map<String, String> getImageHeaders(String sourceOrUrl, [String? imageUrl]) {
+    _cleanExpiredCacheEntries();
     final targetUrl = (imageUrl != null && imageUrl.isNotEmpty) ? imageUrl : sourceOrUrl;
     final headers = <String, String>{
       'User-Agent': MClient.userAgent,
     };
 
     final cacheKey = '$sourceOrUrl|$targetUrl';
-    if (_headersCache.containsKey(cacheKey)) {
-      headers.addAll(_headersCache[cacheKey]!);
+    final cachedPair = _headersCache.get(cacheKey);
+    if (cachedPair != null) {
+      headers.addAll(cachedPair);
       if (targetUrl.isNotEmpty) {
         headers.addAll(MClient.getCookiesPref(targetUrl));
       }
       return headers;
     }
-    if (_headersCache.containsKey(targetUrl)) {
-      headers.addAll(_headersCache[targetUrl]!);
+    final cachedUrl = _headersCache.get(targetUrl);
+    if (cachedUrl != null) {
+      headers.addAll(cachedUrl);
       if (targetUrl.isNotEmpty) {
         headers.addAll(MClient.getCookiesPref(targetUrl));
       }
@@ -836,10 +842,10 @@ class QuickJsService {
   }
 
   Map<String, String> getSourceHeaders(String jsCode, [String? targetUrl]) {
+    _cleanExpiredCacheEntries();
     final cacheKey = '${jsCode.hashCode}_${targetUrl ?? ''}';
-    if (_headersCache.containsKey(cacheKey)) {
-      return _headersCache[cacheKey]!;
-    }
+    final cached = _headersCache.get(cacheKey);
+    if (cached != null) return cached;
     final service = JsExtensionService(
       sourceMeta: _sourceMetaFor(jsCode),
       sourceCode: jsCode,
@@ -849,7 +855,7 @@ class QuickJsService {
       _setCacheEntry(cacheKey, h);
       return h;
     } catch (e, stack) {
-      LoggerService.instance.logError('Failed to fetch headers: $e', exception: e, stackTrace: stack, category: 'QuickJS');
+      unawaited(LoggerService.instance.logError('Failed to fetch headers: $e', exception: e, stackTrace: stack, category: 'QuickJS'));
       return {};
     } finally {
       service.dispose();
@@ -987,6 +993,17 @@ class QuickJsService {
   }
 
   /// ── FETCH SOURCE MANGA CATALOG VIA MANGAYOMI RUNTIME ─────────
+  /// Test-only fake for [fetchSourceMangaLocal] (UIX-21). Replaces the old
+  /// debug-build mock fallback that fabricated results from the extension
+  /// source. Never set in production code.
+  @visibleForTesting
+  static Future<List<Map<String, dynamic>>> Function(String sourceName, String jsCode)? debugScrapeOverride;
+
+  /// Test-only fake for [fetchChapterPagesLocal] (UIX-21), for unit tests on
+  /// hosts without the QuickJS native library. Never set in production code.
+  @visibleForTesting
+  static Future<List<String>> Function(String sourceName, String jsCode, String chapterUrl)? debugPageListOverride;
+
   Future<List<Map<String, dynamic>>> fetchSourceMangaLocal(
     String sourceName, {
     bool isLatest = false,
@@ -1001,6 +1018,8 @@ class QuickJsService {
     if (jsCode == null || jsCode.isEmpty) {
       return [];
     }
+    final scrapeOverride = debugScrapeOverride;
+    if (scrapeOverride != null) return scrapeOverride(sourceName, jsCode);
 
     try {
       return await withRuntime<List<Map<String, dynamic>>>(sourceName, jsCode, (service) async {
@@ -1049,30 +1068,9 @@ class QuickJsService {
         return [];
       });
     } catch (e) {
-      // Handle headless flutter test environment mock fallback. This
-      // fabricates manga entries scraped out of the extension's own source
-      // code (regex over `title:`/`url:` literals), so it must NEVER run in a
-      // release build — a Cloudflare block or JS error would otherwise show
-      // phantom series in Browse. `flutter test` runs in debug mode, so the
-      // fallback stays available to the test environment.
-      if (kDebugMode && (jsCode.contains('searchManga') || jsCode.contains('getPopular') || jsCode.contains('title:'))) {
-        final titles = RegExp(r'''title:\s*["']([^"']+)["']''').allMatches(jsCode);
-        final urls = RegExp(r'''url:\s*["']([^"']+)["']''').allMatches(jsCode);
-        if (titles.isNotEmpty) {
-          final mockList = <Map<String, dynamic>>[];
-          final tList = titles.map((m) => m.group(1)!).toList();
-          final uList = urls.map((m) => m.group(1)!).toList();
-          for (int i = 0; i < tList.length; i++) {
-            mockList.add({
-              'name': tList[i],
-              'title': tList[i],
-              'url': i < uList.length ? uList[i] : '/series/$i',
-              'imageUrl': '',
-            });
-          }
-          return mockList;
-        }
-      }
+      // UIX-21: no debug-only mock fallback here any more. It fabricated
+      // manga from regexes over the extension source, so debug builds showed
+      // phantom series in Browse whenever a scrape failed.
       await LoggerService.instance.logError('Local scraping failed for $sourceName: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
       return [];
     }
@@ -1161,31 +1159,20 @@ class QuickJsService {
       }
     }
 
+    final pagesOverride = debugPageListOverride;
+    if (pagesOverride != null) return pagesOverride(sourceName, jsCode, targetUrl);
+
     // 1. Try with pooled runtime with mutex serialization
     try {
       final pages = await withRuntime<List<String>>(sourceName, jsCode, (service) async {
         return await service.getPageList(targetUrl);
       });
       if (pages.isNotEmpty) return pages;
-    } catch (e) {
+    } catch (_) {
       _invalidateRuntime(sourceName);
-      // Test-only shim: if the QuickJS C symbols cannot be resolved (unit test
-      // runner), fall back to scraping image-looking URLs out of the source.
-      //
-      // This MUST stay behind kDebugMode. Unguarded, a device where the native
-      // library failed to load — wrong ABI, a packaging regression, a stripped
-      // build — would render whatever image-like strings happened to be in the
-      // scraper's text as real chapter pages, and mask a hard engine failure
-      // as a successful resolve. The sibling fallback in getMangaDetailsLocal
-      // is already gated this way.
-      if (kDebugMode &&
-          (e.toString().contains('Failed to lookup symbol') || e.toString().contains('jsNewRuntime'))) {
-        final mockPagesMatch = RegExp(r'''["'](https?://[^"']+)["']''').allMatches(jsCode);
-        if (mockPagesMatch.isNotEmpty) {
-          final matchedUrls = mockPagesMatch.map((m) => m.group(1)!).where((u) => u.contains('png') || u.contains('jpg') || u.contains('webp') || u.contains('image')).toList();
-          if (matchedUrls.isNotEmpty) return matchedUrls;
-        }
-      }
+      // UIX-21: the debug-only shim that served image-looking URL literals
+      // from the extension source as "pages" when the native engine failed
+      // to load is gone. An engine failure is now reported, never masked.
     }
 
     // 2. Retry with a fresh runtime on failure or empty results
@@ -1216,7 +1203,7 @@ class QuickJsService {
         return await service.extensionCallAsync<List<dynamic>>('getFilterList()');
       });
     } catch (e, stack) {
-      LoggerService.instance.logError('Failed to fetch source filters for $sourceName: $e', exception: e, stackTrace: stack, category: 'QuickJS');
+      unawaited(LoggerService.instance.logError('Failed to fetch source filters for $sourceName: $e', exception: e, stackTrace: stack, category: 'QuickJS'));
       return [];
     }
   }

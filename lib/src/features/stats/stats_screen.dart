@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -25,7 +27,7 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    unawaited(_loadStats());
   }
 
   Future<void> _loadStats() async {
@@ -40,18 +42,13 @@ class _StatsScreenState extends State<StatsScreen> {
       final genres = <String, int>{};
       final sources = <String, int>{};
 
-      // canonicalKey only. Including the local Isar id put a second id space
-      // into a serverId-keyed set, so chapters of a NON-library series whose
-      // serverId collided with a library manga's local id were counted here —
-      // inflating total chapters, read chapters and the reading streak.
-      final libraryMangaIds = mangas
-          .map((m) => m.canonicalKey)
-          .where((id) => id != 0)
-          .toSet();
-      final libChapters = allChapters.where((c) => libraryMangaIds.contains(c.mangaId)).toList();
-
-      final allChCount = libChapters.length;
-      final readChCount = libChapters.where((c) => c.isRead).length;
+      // ISS-060: Stats read totals include every chapter with read evidence,
+      // including non-library manga (History already surfaces them). Library
+      // size (_totalManga / genres / sources) stays library-scoped.
+      final allChCount = allChapters.length;
+      final readChCount = allChapters
+          .where((c) => c.isRead || c.lastPageRead > 0 || (c.lastReadAt ?? 0) > 0)
+          .length;
 
       for (final m in mangas) {
         for (final g in m.genres) {
@@ -118,7 +115,7 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final isTablet = MediaQuery.of(context).size.width >= 720;
+    final isTablet = MediaQuery.of(context).size.width >= SunfireBreakpoints.narrowTabletMaxWidth;
 
     return Scaffold(
       appBar: AppBar(
@@ -140,7 +137,7 @@ class _StatsScreenState extends State<StatsScreen> {
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: primaryColor))
           : ListView(
-              padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 120.0),
+              padding: EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: SunfireBreakpoints.scrollBottomPadding(context)),
               children: [
                 // ── SUMMARY CARDS ──
                 Row(

@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_interceptor/http_interceptor.dart';
+
 import '../../../constants/app_constants.dart';
 import '../../logging/logger_service.dart';
 import '../../services/settings_service.dart';
@@ -30,15 +33,15 @@ class JsHttpClient {
   void Function()? onAllRequestsFinished;
 
   Future<String> _safeHandle(Future<String> Function() action) async {
-    if (_isDisposed) return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}, 'error': 'disposed'});
+    if (_isDisposed) return jsonEncode({'body': '', 'statusCode': 500, 'headers': <String, dynamic>{}, 'error': 'disposed'});
     _activeHttpRequests++;
     try {
       final res = await action();
-      if (_isDisposed) return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}, 'error': 'disposed'});
+      if (_isDisposed) return jsonEncode({'body': '', 'statusCode': 500, 'headers': <String, dynamic>{}, 'error': 'disposed'});
       return res;
     } catch (e) {
       if (_isDisposed || e.toString().contains('JSValue released')) {
-        return jsonEncode({'body': '', 'statusCode': 500, 'headers': {}, 'error': 'disposed'});
+        return jsonEncode({'body': '', 'statusCode': 500, 'headers': <String, dynamic>{}, 'error': 'disposed'});
       }
       rethrow;
     } finally {
@@ -126,7 +129,7 @@ class Client {
     String urlStr = '';
     dynamic reqBody;
     try {
-      final List<dynamic> params = (args is String ? jsonDecode(args as String) : args) as List<dynamic>;
+      final List<dynamic> params = (args is String ? jsonDecode(args) : args) as List<dynamic>;
       urlStr = params[2].toString().trim();
       final Map<String, dynamic> rawHeaders = params[3] is Map ? Map<String, dynamic>.from(params[3] as Map) : {};
       reqBody = params.length > 4 ? params[4] : null;
@@ -187,10 +190,10 @@ class Client {
       // an extension published.
       final blocked = blockedRequestReason(uri);
       if (blocked != null) {
-        LoggerService.instance.logWarning(
+        unawaited(LoggerService.instance.logWarning(
           'Blocked extension HTTP request to $urlStr: $blocked',
           'JsHttpClient',
-        );
+        ));
         return jsonEncode({
           'body': '',
           'statusCode': 0,
@@ -275,7 +278,7 @@ class Client {
         return jsonEncode({
           'body': '',
           'statusCode': 500,
-          'headers': {},
+          'headers': <String, dynamic>{},
           'error': 'disposed'
         });
       }
@@ -290,7 +293,7 @@ class Client {
           return jsonEncode({
             'body': '',
             'statusCode': 500,
-            'headers': {},
+            'headers': <String, dynamic>{},
             'error': 'disposed'
           });
         }
@@ -301,7 +304,7 @@ class Client {
       return jsonEncode({
         'body': '',
         'statusCode': 500,
-        'headers': {},
+        'headers': <String, dynamic>{},
         'error': e.toString()
       });
     }

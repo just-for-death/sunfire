@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/engine/quickjs_service.dart';
 import '../../core/engine/source_preferences.dart';
 import '../../core/services/image_cache_helper.dart';
+import '../../ui/widgets/dialog_controllers.dart';
 
 class SourceConfigurationScreen extends StatefulWidget {
   final String sourceName;
@@ -29,7 +31,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPreferences();
+    unawaited(_loadPreferences());
   }
 
   Future<void> _loadPreferences() async {
@@ -39,6 +41,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
     _defaultBaseUrl = QuickJsService.instance.getSourceBaseUrl(widget.sourceName);
     _installedVersion = QuickJsService.instance.getInstalledVersion(widget.sourceName);
 
+    if (!mounted) return;
     setState(() {
       _customBaseUrl = prefs.getString('pref_source_${sourceKey}_base_url') ?? _defaultBaseUrl ?? '';
       _imageQuality = prefs.getString('pref_source_${sourceKey}_quality') ?? 'Original';
@@ -65,11 +68,11 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
     required ValueChanged<String> onSelected,
   }) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
+          // UIS-ISS-012: theme surface (was hard-coded dark hex)
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           content: Column(
@@ -80,7 +83,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
                 title: Text(
                   opt,
                   style: TextStyle(
-                    color: isSelected ? primaryColor : Colors.white,
+                    color: isSelected ? primaryColor : Theme.of(context).colorScheme.onSurface,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
@@ -94,25 +97,25 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
           ),
         );
       },
-    );
+    ));
   }
 
   void _showEditBaseUrlDialog() {
     final controller = TextEditingController(text: _customBaseUrl);
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
+          // UIS-ISS-012: theme surface (was hard-coded dark hex)
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Custom Source Mirror', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Override the default endpoint with a community mirror or proxy if blocked in your region.',
-                style: TextStyle(fontSize: 13, color: Colors.white70),
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -132,7 +135,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
               TextButton(
                 onPressed: () {
                   setState(() => _customBaseUrl = _defaultBaseUrl!);
-                  _savePreference('base_url', _defaultBaseUrl!);
+                  unawaited(_savePreference('base_url', _defaultBaseUrl!));
                   Navigator.pop(context);
                 },
                 child: const Text('Reset Default'),
@@ -145,7 +148,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
               onPressed: () {
                 final trimmed = controller.text.trim();
                 setState(() => _customBaseUrl = trimmed);
-                _savePreference('base_url', trimmed);
+                unawaited(_savePreference('base_url', trimmed));
                 Navigator.pop(context);
               },
               child: const Text('Save'),
@@ -153,7 +156,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
           ],
         );
       },
-    );
+    ).then((_) => disposeAfterDialog([controller])));
   }
 
   @override
@@ -180,9 +183,11 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E24),
+              color: Theme.of(context).colorScheme.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,7 +197,11 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
                   children: [
                     Text(
                       widget.sourceName,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                     if (_installedVersion.isNotEmpty)
                       Container(
@@ -228,14 +237,14 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
             trailing: const Icon(Icons.edit_outlined, size: 20, color: Colors.grey),
             onTap: _showEditBaseUrlDialog,
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
               'Applied to local QuickJS scrapers for this source (mirror / region unblock).',
-              style: TextStyle(fontSize: 11.5, color: Colors.white54),
+              style: TextStyle(fontSize: 11.5, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ),
-          const Divider(color: Colors.white10),
+          const Divider(),
           ListTile(
             title: const Text('Image Quality', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             subtitle: Text('$_imageQuality · preference stored; sources may ignore', style: const TextStyle(color: Colors.grey, fontSize: 13)),
@@ -247,12 +256,12 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
                 currentValue: _imageQuality,
                 onSelected: (val) {
                   setState(() => _imageQuality = val);
-                  _savePreference('quality', val);
+                  unawaited(_savePreference('quality', val));
                 },
               );
             },
           ),
-          const Divider(color: Colors.white10),
+          const Divider(),
           ListTile(
             title: const Text('Network Bypass Mode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             subtitle: Text('$_networkMode · use FlareSolverr in Settings for Cloudflare', style: const TextStyle(color: Colors.grey, fontSize: 13)),
@@ -268,12 +277,12 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
                 currentValue: _networkMode,
                 onSelected: (val) {
                   setState(() => _networkMode = val);
-                  _savePreference('network_mode', val);
+                  unawaited(_savePreference('network_mode', val));
                 },
               );
             },
           ),
-          const Divider(color: Colors.white10),
+          const Divider(),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
 import 'source_configuration_screen.dart';
 
 class ExtensionDetailsScreen extends StatefulWidget {
@@ -34,7 +35,7 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 20.0, bottom: 120.0),
+        padding: EdgeInsets.only(left: 16.0, right: 16.0, top: 20.0, bottom: SunfireBreakpoints.scrollBottomPadding(context)),
         children: [
           Center(
             child: Container(
@@ -118,7 +119,7 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
+                        MaterialPageRoute<void>(
                           builder: (context) => SourceConfigurationScreen(sourceName: name),
                         ),
                       );

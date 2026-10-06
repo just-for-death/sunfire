@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:isar_community/isar.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,6 +12,7 @@ import 'models/chapter.dart';
 import 'models/manga.dart';
 import 'models/sync_meta.dart';
 import 'models/sync_record.dart';
+import 'write_gate.dart';
 
 /// Max manga ids per `anyOf` chapter query in [IsarService.getChaptersForMangas].
 const int kChapterQueryChunkSize = 200;
@@ -19,7 +21,6 @@ class IsarService {
   static IsarService? _instance;
   late Isar _isar;
   bool _isInitialized = false;
-  Future<void>? _initFuture;
   static int _syntheticIdCounter = 0;
 
   static int _generateSyntheticServerId() {
@@ -54,33 +55,33 @@ class IsarService {
 
   bool _uninitialisedWriteWarned = false;
 
+  /// UIX-09 write gate. Writers issued while `initialize()` is in flight wait
+  /// for it and then run (so `await saveX()` really means committed). Writes
+  /// issued before `initialize()` was ever called, or after it failed, are
+  /// dropped with a once-per-session warning instead of being queued forever.
+  late final WriteGate _writeGate = WriteGate(
+    isOpen: () => _isInitialized,
+    onDrop: _warnDroppedWrite,
+  );
+
   /// Records that a write was dropped because the database is not open.
   ///
-  /// The `if (!_isInitialized) return;` guard on every writer means a write
-  /// issued before `initialize()` completes — or after `close()` — resolves
-  /// SUCCESSFULLY having done nothing. Callers reasonably treat that as durable,
-  /// and several do: the downloader marks a chapter downloaded in a `try` whose
-  /// catch is documented as "must never fail the download", and the cover helper
-  /// persists a resolved CDN URL it has just paid a seven-pass cascade to
-  /// discover. Neither can tell the write was dropped.
-  ///
-  /// Not throwing: dozens of these call sites are unguarded, and converting a
-  /// silent no-op into an unhandled async error would trade a data problem for a
-  /// crash surface. Logging once, loudly, is the honest middle — the write is
-  /// still lost, but it is no longer invisible, which is what made it
-  /// undiagnosable.
-  void _warnUninitialisedWrite(String operation) {
+  /// Callers treat a completed write as durable (the downloader marks a
+  /// chapter downloaded, the cover helper persists a resolved CDN URL), so a
+  /// drop must at least be visible in the log. Logged once per session.
+  void _warnDroppedWrite(String operation) {
     if (_uninitialisedWriteWarned) return;
     _uninitialisedWriteWarned = true;
-    LoggerService.instance.logWarning(
-      'IsarService dropped a $operation because the database is not open. Any '
-      'change it carried is LOST and the caller was told it succeeded. This '
-      'means something wrote before IsarService.initialize() completed.',
+    unawaited(LoggerService.instance.logWarning(
+      'IsarService dropped a $operation: database is not open '
+      '(initialize() not called or failed). Further drops are not logged.',
       'IsarService',
-    );
+    ));
   }
 
-  Future<void> initialize() => _initFuture ??= _doInitialize();
+  /// Opens the database. Concurrent callers share one in-flight open; a failed
+  /// open is not cached, so calling again retries.
+  Future<void> initialize() => _writeGate.initialize(_doInitialize);
 
   Future<void> _doInitialize() async {
     if (_isInitialized) return;
@@ -112,39 +113,46 @@ class IsarService {
     return meta?.value;
   }
 
-  Future<void> setMeta(String key, String value) async {
-    if (!_isInitialized) return;
-    await _isar.writeTxn(() async {
-      final meta = SyncMeta()
-        ..key = key
-        ..value = value;
-      await _isar.syncMetas.put(meta);
-    });
+  Future<void> setMeta(String key, String value) =>
+      _executeWrite('setMeta', () async {
+        await _isar.writeTxn(() async {
+          final meta = SyncMeta()
+            ..key = key
+            ..value = value;
+          await _isar.syncMetas.put(meta);
+        });
+      });
+
+  /// Runs a write once the database is open (awaiting an in-flight
+  /// `initialize()`), or drops it with a logged warning if the database was
+  /// never opened / failed to open. See [WriteGate].
+  Future<void> _executeWrite(String operation, Future<void> Function() writeOperation) async {
+    await _writeGate.run(operation, writeOperation);
   }
 
   // ── MANGA CRUD ──────────────────────────────────────────
   Future<void> saveManga(Manga manga) async {
-    if (!_isInitialized) {
-      _warnUninitialisedWrite('saveManga');
-      return;
-    }
-    if (manga.serverId == 0) {
-      manga.serverId = _generateSyntheticServerId();
-    }
-    await _isar.writeTxn(() async {
-      await _isar.mangas.put(manga);
+    await _executeWrite('saveManga', () async {
+      if (manga.serverId == 0) {
+        manga.serverId = _generateSyntheticServerId();
+      }
+      await _isar.writeTxn(() async {
+        await _isar.mangas.put(manga);
+      });
     });
   }
 
   Future<void> saveMangas(List<Manga> mangas) async {
-    if (!_isInitialized || mangas.isEmpty) return;
-    for (int i = 0; i < mangas.length; i++) {
-      if (mangas[i].serverId == 0) {
-        mangas[i].serverId = _generateSyntheticServerId();
+    if (mangas.isEmpty) return;
+    await _executeWrite('saveMangas', () async {
+      for (int i = 0; i < mangas.length; i++) {
+        if (mangas[i].serverId == 0) {
+          mangas[i].serverId = _generateSyntheticServerId();
+        }
       }
-    }
-    await _isar.writeTxn(() async {
-      await _isar.mangas.putAll(mangas);
+      await _isar.writeTxn(() async {
+        await _isar.mangas.putAll(mangas);
+      });
     });
   }
 
@@ -189,7 +197,7 @@ class IsarService {
     final out = <Manga>[];
     for (final chunk in chunkList(ids, kChapterQueryChunkSize)) {
       out.addAll(
-        await _isar.mangas.filter().anyOf(chunk, (q, id) => q.serverIdEqualTo(id)).findAll(),
+        await _isar.mangas.filter().anyOf<int, QAfterFilterCondition>(chunk, (q, id) => q.serverIdEqualTo(id)).findAll(),
       );
     }
     return out;
@@ -204,27 +212,27 @@ class IsarService {
 
   // ── CHAPTER CRUD ────────────────────────────────────────
   Future<void> saveChapter(Chapter chapter) async {
-    if (!_isInitialized) {
-      _warnUninitialisedWrite('saveChapter');
-      return;
-    }
-    if (chapter.serverId == 0) {
-      chapter.serverId = _generateSyntheticServerId();
-    }
-    await _isar.writeTxn(() async {
-      await _isar.chapters.put(chapter);
+    await _executeWrite('saveChapter', () async {
+      if (chapter.serverId == 0) {
+        chapter.serverId = _generateSyntheticServerId();
+      }
+      await _isar.writeTxn(() async {
+        await _isar.chapters.put(chapter);
+      });
     });
   }
 
   Future<void> saveChapters(List<Chapter> chapters) async {
-    if (!_isInitialized || chapters.isEmpty) return;
-    for (int i = 0; i < chapters.length; i++) {
-      if (chapters[i].serverId == 0) {
-        chapters[i].serverId = _generateSyntheticServerId();
+    if (chapters.isEmpty) return;
+    await _executeWrite('saveChapters', () async {
+      for (int i = 0; i < chapters.length; i++) {
+        if (chapters[i].serverId == 0) {
+          chapters[i].serverId = _generateSyntheticServerId();
+        }
       }
-    }
-    await _isar.writeTxn(() async {
-      await _isar.chapters.putAll(chapters);
+      await _isar.writeTxn(() async {
+        await _isar.chapters.putAll(chapters);
+      });
     });
   }
 
@@ -245,25 +253,29 @@ class IsarService {
   /// The caller is responsible for scoping [isarIds]: it must pass only rows it
   /// owns. Nothing in the sync path calls this.
   Future<void> deleteChapterRows(List<int> isarIds) async {
-    if (!_isInitialized || isarIds.isEmpty) return;
-    // Isar auto-increment ids start at 1, so a 0 or negative entry means the
-    // caller handed us a row that was never persisted.
-    final ids = isarIds.where((id) => id > 0).toSet().toList();
-    if (ids.isEmpty) return;
-    await _isar.writeTxn(() async {
-      await _isar.chapters.deleteAll(ids);
+    if (isarIds.isEmpty) return;
+    await _executeWrite('deleteChapterRows', () async {
+      // Isar auto-increment ids start at 1, so a 0 or negative entry means the
+      // caller handed us a row that was never persisted.
+      final ids = isarIds.where((id) => id > 0).toSet().toList();
+      if (ids.isEmpty) return;
+      await _isar.writeTxn(() async {
+        await _isar.chapters.deleteAll(ids);
+      });
     });
   }
 
   Future<void> deleteChapters(List<Chapter> chapters) async {
-    if (!_isInitialized || chapters.isEmpty) return;
-    // Never touch a chapter that has no persisted identity, and never a
-    // local-scrape chapter (negative synthetic serverId) — those exist only
-    // on this device and are not the sync engine's to reap.
-    final deletable = chapters.where((c) => c.serverId > 0).toList();
-    if (deletable.isEmpty) return;
-    await _isar.writeTxn(() async {
-      await _isar.chapters.deleteAll(deletable.map((c) => c.id).toList());
+    if (chapters.isEmpty) return;
+    await _executeWrite('deleteChapters', () async {
+      // Never touch a chapter that has no persisted identity, and never a
+      // local-scrape chapter (negative synthetic serverId) — those exist only
+      // on this device and are not the sync engine's to reap.
+      final deletable = chapters.where((c) => c.serverId > 0).toList();
+      if (deletable.isEmpty) return;
+      await _isar.writeTxn(() async {
+        await _isar.chapters.deleteAll(deletable.map((c) => c.id).toList());
+      });
     });
   }
 
@@ -299,7 +311,7 @@ class IsarService {
     final ids = serverIds.where((id) => id != 0).toSet().toList();
     if (ids.isEmpty) return out;
     for (final chunk in chunkList(ids, kChapterQueryChunkSize)) {
-      final rows = await _isar.chapters.filter().anyOf(chunk, (q, id) => q.serverIdEqualTo(id)).findAll();
+      final rows = await _isar.chapters.filter().anyOf<int, QAfterFilterCondition>(chunk, (q, id) => q.serverIdEqualTo(id)).findAll();
       for (final r in rows) {
         out[r.serverId] = r;
       }
@@ -319,7 +331,7 @@ class IsarService {
     // Chunked: one giant OR filter over thousands of ids is slow to compile
     // and run, so query kChapterQueryChunkSize manga at a time.
     for (final chunk in chunkList(ids, kChapterQueryChunkSize)) {
-      final rows = await _isar.chapters.filter().anyOf(chunk, (q, id) => q.mangaIdEqualTo(id)).findAll();
+      final rows = await _isar.chapters.filter().anyOf<int, QAfterFilterCondition>(chunk, (q, id) => q.mangaIdEqualTo(id)).findAll();
       for (final ch in rows) {
         (byManga[ch.mangaId] ??= []).add(ch);
       }
@@ -347,32 +359,35 @@ class IsarService {
   Future<List<Chapter>> getReadingHistory() async {
     if (!_isInitialized) return [];
     try {
-      // Only surface history for manga still in the library — removed manga
-      // leave their local chapter records behind, which must not show in History.
-      final libraryManga = await getLibraryManga();
-      final libraryIds = <int>{
-        for (final m in libraryManga)
-          // m.canonicalKey only. Adding m.id (the local Isar auto-increment)
-          // put a second id space into a serverId-keyed set, and since both
-          // spaces are small integers, a NON-library series whose serverId
-          // collided with some library manga's local id surfaced in the
-          // Updates feed, History and Continue Reading. The delete path had
-          // this exact arm removed already; the three read paths had not.
-          if (m.canonicalKey != 0) m.canonicalKey,
-      };
-      if (libraryIds.isEmpty) return [];
-
-      final chapters = await _isar.chapters
+      // ISS-060: show EVERY server/local read chapter — including non-library
+      // manga and rows whose lastReadAt is 0 (isRead / lastPageRead still set).
+      // Three queries + merge: Isar has no OR across these fields.
+      final byStamp = await _isar.chapters
           .filter()
           .lastReadAtGreaterThan(0)
-          .sortByLastReadAtDesc()
           .findAll();
-      return [
-        for (final ch in chapters)
-          if (libraryIds.contains(ch.mangaId)) ch,
-      ];
+      final byRead = await _isar.chapters.filter().isReadEqualTo(true).findAll();
+      final byProgress =
+          await _isar.chapters.filter().lastPageReadGreaterThan(0).findAll();
+
+      final byId = <int, Chapter>{};
+      for (final ch in [...byStamp, ...byRead, ...byProgress]) {
+        byId[ch.id] = ch;
+      }
+      final chapters = byId.values.toList();
+      chapters.sort((a, b) {
+        final aTs = a.lastReadAt ?? 0;
+        final bTs = b.lastReadAt ?? 0;
+        // Sensible ordering: stamped reads first (newest), then unstamped
+        // (lastReadAt==0) by lastPageRead / serverId so they stay reachable.
+        if (aTs != bTs) return bTs.compareTo(aTs);
+        final pageCmp = b.lastPageRead.compareTo(a.lastPageRead);
+        if (pageCmp != 0) return pageCmp;
+        return b.serverId.compareTo(a.serverId);
+      });
+      return chapters;
     } catch (e, stack) {
-      LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'Database');
+      unawaited(LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'atabase'));
       return [];
     }
   }
@@ -391,16 +406,13 @@ class IsarService {
     if (!_isInitialized) return [];
     try {
       final libraryManga = await getLibraryManga();
-      final libraryIds = <int>{
-        for (final m in libraryManga)
-          // m.canonicalKey only. Adding m.id (the local Isar auto-increment)
-          // put a second id space into a serverId-keyed set, and since both
-          // spaces are small integers, a NON-library series whose serverId
-          // collided with some library manga's local id surfaced in the
-          // Updates feed, History and Continue Reading. The delete path had
-          // this exact arm removed already; the three read paths had not.
-          if (m.canonicalKey != 0) m.canonicalKey,
-      };
+      final libraryIds = <int>{};
+      final inLibraryAtByManga = <int, int?>{};
+      for (final m in libraryManga) {
+        if (m.canonicalKey == 0) continue;
+        libraryIds.add(m.canonicalKey);
+        inLibraryAtByManga[m.canonicalKey] = m.inLibraryAt;
+      }
 
       if (libraryIds.isEmpty) return [];
 
@@ -408,7 +420,7 @@ class IsarService {
       // `mangaIdIn(...)` filter). Keep pulling pages until we either have the
       // requested `limit` or have scanned the whole feed, instead of a single
       // `limit * 3` pre-fetch that under-fills when many recent chapters belong
-      // to non-library manga.
+      // to non-library manga. Also drop bulk-import stamps (ISS-054).
       const pageSize = 300;
       final result = <Chapter>[];
       int offset = 0;
@@ -423,16 +435,21 @@ class IsarService {
             .findAll();
         if (page.isEmpty) break;
         for (final ch in page) {
-          if (libraryIds.contains(ch.mangaId)) {
-            result.add(ch);
-            if (result.length >= limit) break;
+          if (!libraryIds.contains(ch.mangaId)) continue;
+          if (isLikelyBulkImportChapter(
+            fetchedAt: ch.fetchedAt,
+            inLibraryAt: inLibraryAtByManga[ch.mangaId],
+          )) {
+            continue;
           }
+          result.add(ch);
+          if (result.length >= limit) break;
         }
         offset += page.length;
       }
       return result;
     } catch (e, stack) {
-      LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'Database');
+      unawaited(LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'atabase'));
       return [];
     }
   }
@@ -451,123 +468,125 @@ class IsarService {
   /// server pulls), NOT Isar auto-increment id space. Parents must be keyed
   /// by serverId or every lookup misses.
   Future<void> cleanupMisattributedLocalChapters() async {
-    if (!_isInitialized) return;
-    try {
-      final allManga = await _isar.mangas.where().findAll();
-      if (allManga.isEmpty) return;
-      final mangaByServerId = <int, Manga>{
-        for (final m in allManga)
-          if (m.serverId != 0) m.serverId: m,
-      };
-      final chapters = await _isar.chapters
-          .filter()
-          .serverIdLessThan(0)
-          .findAll();
-      final strayIds = <int>[];
-      for (final ch in chapters) {
-        if (ch.url.isEmpty) continue;
-        final parent = mangaByServerId[ch.mangaId];
-        if (parent == null) {
-          // Orphaned synthetic row (parent manga row gone). Only reap when
-          // the url is provably a series page (RCO /comic/<slug> shape) —
-          // never on guesswork.
-          final segs = Uri.tryParse(ch.url)?.pathSegments.where((s) => s.isNotEmpty).toList() ?? const [];
-          if (segs.length >= 2 && segs[0].toLowerCase() == 'comic') {
+    await _executeWrite('cleanupMisattributedLocalChapters', () async {
+      try {
+        final allManga = await _isar.mangas.where().findAll();
+        if (allManga.isEmpty) return;
+        final mangaByServerId = <int, Manga>{
+          for (final m in allManga)
+            if (m.serverId != 0) m.serverId: m,
+        };
+        final chapters = await _isar.chapters
+            .filter()
+            .serverIdLessThan(0)
+            .findAll();
+        final strayIds = <int>[];
+        for (final ch in chapters) {
+          if (ch.url.isEmpty) continue;
+          final parent = mangaByServerId[ch.mangaId];
+          if (parent == null) {
+            // Orphaned synthetic row (parent manga row gone). Only reap when
+            // the url is provably a series page (RCO /comic/<slug> shape) —
+            // never on guesswork.
+            final segs = Uri.tryParse(ch.url)?.pathSegments.where((s) => s.isNotEmpty).toList() ?? const [];
+            if (segs.length >= 2 && segs[0].toLowerCase() == 'comic') {
+              strayIds.add(ch.id);
+            }
+            continue;
+          }
+          if (parent.url.isEmpty) continue;
+          if (!chapterUrlBelongsToMangaPage(parent.url, ch.url)) {
             strayIds.add(ch.id);
           }
-          continue;
         }
-        if (parent.url.isEmpty) continue;
-        if (!chapterUrlBelongsToMangaPage(parent.url, ch.url)) {
-          strayIds.add(ch.id);
+        if (strayIds.isNotEmpty) {
+          await deleteChapterRows(strayIds);
+          await LoggerService.instance.logInfo(
+            'Cleaned up ${strayIds.length} misattributed local chapters (wrong series url)',
+            'Database',
+          );
         }
+      } catch (e) {
+        debugPrint('[IsarService] cleanupMisattributedLocalChapters error: $e');
       }
-      if (strayIds.isNotEmpty) {
-        await deleteChapterRows(strayIds);
-        await LoggerService.instance.logInfo(
-          'Cleaned up ${strayIds.length} misattributed local chapters (wrong series url)',
-          'Database',
-        );
-      }
-    } catch (e) {
-      debugPrint('[IsarService] cleanupMisattributedLocalChapters error: $e');
-    }
+    });
   }
 
   /// Cleans up ONLY synthetic standalone-scraped chapters that were bulk-stamped
   /// (e.g. the initial Mangago local extension scrape that writes fake serverIds).
   /// Real server chapters (positive serverId) are preserved.
   Future<void> cleanupBulkScrapedUpdates() async {
-    if (!_isInitialized) return;
-    try {
-      // Sorted by FETCHED TIME, not chapter number.
-      //
-      // The caller treats the front of this list as "the newest few" and zeroes
-      // `fetchedAt` on everything after it. Sorting by chapter number meant the
-      // kept set was actually the highest-numbered chapters: usually the same
-      // thing inside a 60-second bucket, but for a re-scrape where one mid-list
-      // chapter was genuinely updated, that is precisely the chapter that got
-      // dropped out of the Updates feed.
-      final chaptersWithFetchedAt = await _isar.chapters
-          .filter()
-          .fetchedAtGreaterThan(0)
-          .sortByFetchedAtDesc()
-          .findAll();
-      if (chaptersWithFetchedAt.isEmpty) return;
+    await _executeWrite('cleanupBulkScrapedUpdates', () async {
+      try {
+        // Sorted by FETCHED TIME, not chapter number.
+        //
+        // The caller treats the front of this list as "the newest few" and zeroes
+        // `fetchedAt` on everything after it. Sorting by chapter number meant the
+        // kept set was actually the highest-numbered chapters: usually the same
+        // thing inside a 60-second bucket, but for a re-scrape where one mid-list
+        // chapter was genuinely updated, that is precisely the chapter that got
+        // dropped out of the Updates feed.
+        final chaptersWithFetchedAt = await _isar.chapters
+            .filter()
+            .fetchedAtGreaterThan(0)
+            .sortByFetchedAtDesc()
+            .findAll();
+        if (chaptersWithFetchedAt.isEmpty) return;
 
-      // Identify standalone-scraped chapters: url non-empty and a synthetic
-      // NEGATIVE serverId (the only range this app ever mints for standalone
-      // chapters — see the -(...) formulas in detail/library/update/migrate).
-      // A positive serverId — however large — is always a real Suwayomi one on
-      // servers with big chapter tables, so never classify it as synthetic.
-      final standaloneChapters = chaptersWithFetchedAt
-          .where((ch) => ch.url.isNotEmpty && isSyntheticServerId(ch.serverId))
-          .toList();
-      if (standaloneChapters.isEmpty) return;
+        // Identify standalone-scraped chapters: url non-empty and a synthetic
+        // NEGATIVE serverId (the only range this app ever mints for standalone
+        // chapters — see the -(...) formulas in detail/library/update/migrate).
+        // A positive serverId — however large — is always a real Suwayomi one on
+        // servers with big chapter tables, so never classify it as synthetic.
+        final standaloneChapters = chaptersWithFetchedAt
+            .where((ch) => ch.url.isNotEmpty && isSyntheticServerId(ch.serverId))
+            .toList();
+        if (standaloneChapters.isEmpty) return;
 
-      final Map<int, List<Chapter>> mangaGroups = {};
-      for (final ch in standaloneChapters) {
-        mangaGroups.putIfAbsent(ch.mangaId, () => []).add(ch);
-      }
-
-      final List<Chapter> toReset = [];
-      for (final list in mangaGroups.values) {
-        // Group by 60-second time windows to catch bulk scraping batches
-        final Map<int, List<Chapter>> timeBuckets = {};
-        for (final ch in list) {
-          final rawFt = ch.fetchedAt ?? 0;
-          final ftSec = normalizeEpochToSeconds(rawFt) ?? 0;
-          final bucket = ftSec ~/ 60;
-          timeBuckets.putIfAbsent(bucket, () => []).add(ch);
+        final Map<int, List<Chapter>> mangaGroups = {};
+        for (final ch in standaloneChapters) {
+          mangaGroups.putIfAbsent(ch.mangaId, () => []).add(ch);
         }
 
-        for (final bucketList in timeBuckets.values) {
-          if (bucketList.length > kFloodThresholdChapters) {
-            // Keep the newest few (list already sorted Desc); zero the rest.
-            // Same thresholds as the ingestion-time gate — see
-            // applyFloodCapToNewChapters. This remains useful as a one-time
-            // repair for floods that predate the ingestion gate, and for
-            // rows written by paths that bypass it.
-            for (int i = kFloodCapChapters; i < bucketList.length; i++) {
-              bucketList[i].fetchedAt = 0;
-              toReset.add(bucketList[i]);
+        final List<Chapter> toReset = [];
+        for (final list in mangaGroups.values) {
+          // Group by 60-second time windows to catch bulk scraping batches
+          final Map<int, List<Chapter>> timeBuckets = {};
+          for (final ch in list) {
+            final rawFt = ch.fetchedAt ?? 0;
+            final ftSec = normalizeEpochToSeconds(rawFt) ?? 0;
+            final bucket = ftSec ~/ 60;
+            timeBuckets.putIfAbsent(bucket, () => []).add(ch);
+          }
+
+          for (final bucketList in timeBuckets.values) {
+            if (bucketList.length > kFloodThresholdChapters) {
+              // Keep the newest few (list already sorted Desc); zero the rest.
+              // Same thresholds as the ingestion-time gate — see
+              // applyFloodCapToNewChapters. This remains useful as a one-time
+              // repair for floods that predate the ingestion gate, and for
+              // rows written by paths that bypass it.
+              for (int i = kFloodCapChapters; i < bucketList.length; i++) {
+                bucketList[i].fetchedAt = 0;
+                toReset.add(bucketList[i]);
+              }
             }
           }
         }
-      }
 
-      if (toReset.isNotEmpty) {
-        await _isar.writeTxn(() async {
-          await _isar.chapters.putAll(toReset);
-        });
-        await LoggerService.instance.logInfo(
-          'Cleaned up ${toReset.length} bulk-stamped standalone chapters from Updates feed',
-          'Database',
-        );
+        if (toReset.isNotEmpty) {
+          await _isar.writeTxn(() async {
+            await _isar.chapters.putAll(toReset);
+          });
+          await LoggerService.instance.logInfo(
+            'Cleaned up ${toReset.length} bulk-stamped standalone chapters from Updates feed',
+            'Database',
+          );
+        }
+      } catch (e) {
+        debugPrint('[IsarService] cleanupBulkScrapedUpdates error: $e');
       }
-    } catch (e) {
-      debugPrint('[IsarService] cleanupBulkScrapedUpdates error: $e');
-    }
+    });
   }
 
   /// Returns chapters that are currently in-progress (opened but not finished).
@@ -616,95 +635,100 @@ class IsarService {
       }
       return result;
     } catch (e, stack) {
-      LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'Database');
+      unawaited(LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'atabase'));
       return [];
     }
   }
 
   Future<void> deleteManga(int serverId) async {
-    if (!_isInitialized) return;
-    await _isar.writeTxn(() async {
-      // No fallback to `.get(serverId)` — see getMangaByServerId. Deleting
-      // whatever unrelated manga happened to own that local Isar id was the
-      // cause of "wrong series disappeared" reports.
-      final localManga = await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
-      // chapter.mangaId is always the manga's serverId (never its local
-      // Isar id), so the `.or().mangaIdEqualTo(localManga.id)` arm below
-      // matched by coincidence at best; drop it to avoid deleting chapters
-      // that belong to a different manga whose serverId happens to equal
-      // this manga's local id.
-      final targetServerId = localManga?.serverId ?? serverId;
-      if (localManga != null) {
-        await _isar.mangas.delete(localManga.id);
-      }
-      final chapters = await _isar.chapters.filter().mangaIdEqualTo(targetServerId).findAll();
-      if (chapters.isNotEmpty) {
-        await _isar.chapters.deleteAll(chapters.map((c) => c.id).toList());
-      }
+    await _executeWrite('deleteManga', () async {
+      await _isar.writeTxn(() async {
+        // No fallback to `.get(serverId)` — see getMangaByServerId. Deleting
+        // whatever unrelated manga happened to own that local Isar id was the
+        // cause of "wrong series disappeared" reports.
+        final localManga = await _isar.mangas.filter().serverIdEqualTo(serverId).findFirst();
+        // chapter.mangaId is always the manga's serverId (never its local
+        // Isar id), so the `.or().mangaIdEqualTo(localManga.id)` arm below
+        // matched by coincidence at best; drop it to avoid deleting chapters
+        // that belong to a different manga whose serverId happens to equal
+        // this manga's local id.
+        final targetServerId = localManga?.serverId ?? serverId;
+        if (localManga != null) {
+          await _isar.mangas.delete(localManga.id);
+        }
+        final chapters = await _isar.chapters.filter().mangaIdEqualTo(targetServerId).findAll();
+        if (chapters.isNotEmpty) {
+          await _isar.chapters.deleteAll(chapters.map((c) => c.id).toList());
+        }
+      });
     });
   }
 
   // ── CATEGORY CRUD ───────────────────────────────────────
   Future<void> saveCategory(Category category) async {
-    if (!_isInitialized) return;
-    await _isar.writeTxn(() async {
-      final existing = await _isar.categorys.filter().serverIdEqualTo(category.serverId).findFirst();
-      if (existing != null) {
-        category.id = existing.id;
-      }
-      await _isar.categorys.put(category);
+    await _executeWrite('saveCategory', () async {
+      await _isar.writeTxn(() async {
+        final existing = await _isar.categorys.filter().serverIdEqualTo(category.serverId).findFirst();
+        if (existing != null) {
+          category.id = existing.id;
+        }
+        await _isar.categorys.put(category);
+      });
     });
   }
 
   Future<void> saveCategories(List<Category> categories, {bool replaceAll = true}) async {
-    if (!_isInitialized) return;
-    Set<int> protectedIds = const {};
-    if (replaceAll) {
-      // Categories that only exist locally (offline-created, still waiting on
-      // a queued create) have ids the server doesn't know about. A server pull
-      // must not wipe them, or the pending create's id remap has nothing to
-      // attach to and the category reappears as an uncategorizable orphan on
-      // the server. Synthetic (negative) temp ids are covered too.
-      protectedIds = (await getPendingCategoryRecords())
-          .where((r) => r.action == SyncAction.create)
-          .map((r) => int.tryParse(r.entityId))
-          .whereType<int>()
-          .toSet();
-    }
-    await _isar.writeTxn(() async {
-      final existing = await _isar.categorys.where().findAll();
-      final existingMap = {for (var e in existing) e.serverId: e.id};
-      for (var c in categories) {
-        if (existingMap.containsKey(c.serverId)) {
-          c.id = existingMap[c.serverId]!;
+    if (categories.isEmpty) return;
+    await _executeWrite('saveCategories', () async {
+      Set<int> protectedIds = const {};
+      if (replaceAll) {
+        // Categories that only exist locally (offline-created, still waiting on
+        // a queued create) have ids the server doesn't know about. A server pull
+        // must not wipe them, or the pending create's id remap has nothing to
+        // attach to and the category reappears as an uncategorizable orphan on
+        // the server. Synthetic (negative) temp ids are covered too.
+        protectedIds = (await getPendingCategoryRecords())
+            .where((r) => r.action == SyncAction.create)
+            .map((r) => int.tryParse(r.entityId))
+            .whereType<int>()
+            .toSet();
+      }
+      await _isar.writeTxn(() async {
+        final existing = await _isar.categorys.where().findAll();
+        final existingMap = {for (var e in existing) e.serverId: e.id};
+        for (var c in categories) {
+          if (existingMap.containsKey(c.serverId)) {
+            c.id = existingMap[c.serverId]!;
+          }
         }
-      }
-      if (replaceAll && categories.isNotEmpty) {
-        final newServerIds = categories.map((c) => c.serverId).toSet();
-        final toDelete = existing
-            .where((e) =>
-                !newServerIds.contains(e.serverId) &&
-                !protectedIds.contains(e.serverId) &&
-                !isSyntheticServerId(e.serverId))
-            .map((e) => e.id)
-            .toList();
-        await _isar.categorys.deleteAll(toDelete);
-      }
-      await _isar.categorys.putAll(categories);
+        if (replaceAll && categories.isNotEmpty) {
+          final newServerIds = categories.map((c) => c.serverId).toSet();
+          final toDelete = existing
+              .where((e) =>
+                  !newServerIds.contains(e.serverId) &&
+                  !protectedIds.contains(e.serverId) &&
+                  !isSyntheticServerId(e.serverId))
+              .map((e) => e.id)
+              .toList();
+          await _isar.categorys.deleteAll(toDelete);
+        }
+        await _isar.categorys.putAll(categories);
+      });
     });
   }
 
   Future<void> deleteCategory(int serverId) async {
-    if (!_isInitialized) return;
-    await _isar.writeTxn(() async {
-      final cat = await _isar.categorys.filter().serverIdEqualTo(serverId).findFirst();
-      if (cat != null) {
-        await _isar.categorys.delete(cat.id);
-      }
-      // No fallback delete by `serverId` as a local id: a server category that
-      // is no longer in the DB (already pulled-deleted) carries a positive
-      // serverId that can collide with an unrelated row's auto-increment id,
-      // silently deleting the wrong category.
+    await _executeWrite('deleteCategory', () async {
+      await _isar.writeTxn(() async {
+        final cat = await _isar.categorys.filter().serverIdEqualTo(serverId).findFirst();
+        if (cat != null) {
+          await _isar.categorys.delete(cat.id);
+        }
+        // No fallback delete by `serverId` as a local id: a server category that
+        // is no longer in the DB (already pulled-deleted) carries a positive
+        // serverId that can collide with an unrelated row's auto-increment id,
+        // silently deleting the wrong category.
+      });
     });
   }
 
@@ -715,9 +739,10 @@ class IsarService {
 
   // ── SYNC RECORD CRUD ────────────────────────────────────
   Future<void> saveSyncRecord(SyncRecord record) async {
-    if (!_isInitialized) return;
-    await _isar.writeTxn(() async {
-      await _isar.syncRecords.put(record);
+    await _executeWrite('saveSyncRecord', () async {
+      await _isar.writeTxn(() async {
+        await _isar.syncRecords.put(record);
+      });
     });
   }
 
@@ -799,17 +824,19 @@ class IsarService {
   }
 
   Future<void> deleteSyncRecord(Id id) async {
-    if (!_isInitialized) return;
-    await _isar.writeTxn(() async {
-      await _isar.syncRecords.delete(id);
+    await _executeWrite('deleteSyncRecord', () async {
+      await _isar.writeTxn(() async {
+        await _isar.syncRecords.delete(id);
+      });
     });
   }
 
   // ── DATABASE MAINTENANCE ────────────────────────────────
   Future<void> clearAll() async {
-    if (!_isInitialized) return;
-    await _isar.writeTxn(() async {
-      await _isar.clear();
+    await _executeWrite('clearAll', () async {
+      await _isar.writeTxn(() async {
+        await _isar.clear();
+      });
     });
   }
 }

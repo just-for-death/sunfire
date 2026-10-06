@@ -19,6 +19,7 @@ import 'package:sunfire/src/core/sync/server_auth_helper.dart';
 import 'package:sunfire/src/features/onboarding/onboarding_screen.dart';
 import 'package:sunfire/src/features/reader/reading_mode.dart';
 import 'package:sunfire/src/main_shell.dart';
+import 'package:sunfire/src/ui/shell/sunfire_breakpoints.dart';
 
 /// Stand-in for a real tab screen. Lets these tests assert on [MainShell]'s
 /// responsive chrome and on router-driven tab switching without booting every
@@ -237,11 +238,13 @@ void main() {
     });
 
     test('phone widths stay on the bottom bar; iPad widths use the rail', () {
-      expect(usesTabletShell(390), isFalse);
-      expect(usesTabletShell(428), isFalse);
-      expect(usesTabletShell(sunfireTabletMinWidth), isTrue);
-      expect(usesTabletShell(768), isTrue);
-      expect(usesTabletShell(1024), isTrue);
+      expect(SunfireBreakpoints.usesSideRailForSize(const Size(390, 844)), isFalse);
+      expect(SunfireBreakpoints.usesSideRailForSize(const Size(428, 926)), isFalse);
+      expect(SunfireBreakpoints.usesSideRailForSize(const Size(720, 1024)), isTrue);
+      expect(SunfireBreakpoints.usesSideRailForSize(const Size(768, 1024)), isTrue);
+      expect(SunfireBreakpoints.usesSideRailForSize(const Size(1024, 768)), isTrue);
+      // Landscape phone: wide enough for a rail but too short, stays compact.
+      expect(SunfireBreakpoints.usesSideRailForSize(const Size(850, 390)), isFalse);
     });
 
     test('background WorkManager is Android-only', () {
@@ -289,7 +292,7 @@ void main() {
       expect(find.text('Library'), findsWidgets);
       expect(find.text('Browse'), findsWidgets);
       expect(find.byIcon(Icons.local_fire_department_rounded), findsOneWidget);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
     testWidgets('iPad landscape still uses the sidebar rail', (tester) async {
       tester.view.physicalSize = const Size(1366, 1024);
@@ -301,7 +304,24 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.byIcon(Icons.local_fire_department_rounded), findsOneWidget);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('Android tablet width uses the Material NavigationRail', (tester) async {
+      tester.view.physicalSize = const Size(1024, 1366);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpShell(tester);
+
+      expect(tester.takeException(), isNull);
+      // The Android rail has its own collapse/expand toggle too, so the
+      // NavigationRail itself is what distinguishes it from the iPad glass bar.
+      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.byIcon(Icons.local_fire_department_rounded), findsNothing);
+      expect(find.text('Library'), findsWidgets);
+      expect(find.text('Browse'), findsWidgets);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
     testWidgets('iPad sidebar collapse/expand does not overflow during animation', (tester) async {
       tester.view.physicalSize = const Size(1280, 800);
@@ -330,7 +350,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.byTooltip('Collapse sidebar'), findsOneWidget);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
     testWidgets('compact Android phone nav does not overflow', (tester) async {
       tester.view.physicalSize = const Size(360, 800);
@@ -472,8 +492,8 @@ void main() {
     });
 
     test('detail two-pane breakpoint stays wider than shell tablet rail', () {
-      expect(sunfireDetailTwoPaneMinWidth, greaterThan(sunfireTabletMinWidth));
-      expect(usesTabletShell(800), isTrue);
+      expect(sunfireDetailTwoPaneMinWidth, greaterThan(SunfireBreakpoints.narrowTabletMaxWidth));
+      expect(SunfireBreakpoints.usesSideRailForSize(const Size(800, 1280)), isTrue);
       expect(800 >= sunfireDetailTwoPaneMinWidth, isFalse);
     });
 

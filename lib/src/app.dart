@@ -10,7 +10,6 @@ import 'package:go_router/go_router.dart';
 import 'core/logging/logger_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/settings_service.dart';
-import 'core/theme/app_theme.dart';
 import 'features/browse/browse_screen.dart';
 import 'features/downloads/download_queue_screen.dart';
 import 'features/history/history_screen.dart';
@@ -34,6 +33,13 @@ import 'features/settings/settings_screen.dart';
 import 'features/stats/stats_screen.dart';
 import 'features/updates/updates_screen.dart';
 import 'main_shell.dart';
+import 'ui/design_system/sunfire_theme.dart';
+import 'ui/shell/sunfire_breakpoints.dart';
+
+/// Number of times [SunfireApp] has (re)built its light/dark themes. Tests use
+/// it to check unrelated setting changes don't rebuild themes (UIS-15).
+@visibleForTesting
+int debugThemeBuildCount = 0;
 
 double effectiveTopSafeInset({
   required double rawTop,
@@ -142,7 +148,7 @@ GoRouter buildAppRouter({
           final path = state.uri.path;
           final fullscreen = path == '/reader' || path.startsWith('/reader/');
           return NoTransitionPage(
-            child: MainShell(child: child, isFullscreen: fullscreen),
+            child: MainShell(isFullscreen: fullscreen, child: child),
           );
         },
         routes: [
@@ -309,7 +315,7 @@ class _SunfireAppState extends State<SunfireApp> {
         if (initialPayload == '/updates') {
           _router.go('/updates');
         } else {
-          _router.push(initialPayload);
+          unawaited(_router.push(initialPayload));
         }
       });
     }
@@ -319,7 +325,7 @@ class _SunfireAppState extends State<SunfireApp> {
         if (route == '/updates') {
           _router.go('/updates');
         } else {
-          _router.push(route);
+          unawaited(_router.push(route));
         }
       }
     });
@@ -327,13 +333,13 @@ class _SunfireAppState extends State<SunfireApp> {
     try {
       _appLinks = AppLinks();
       _linkSubscription = _appLinks!.uriLinkStream.listen(_handleUri);
-      _appLinks!.getInitialLink().then((uri) {
+      unawaited(_appLinks!.getInitialLink().then((uri) {
         if (uri != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) => _handleUri(uri));
         }
-      }).catchError((e) {
+      }).catchError((Object e) {
         debugPrint('[app] Failed to get initial link: $e');
-      });
+      }));
     } catch (ignoredError) { if (kDebugMode) debugPrint('[app] ignored error: $ignoredError'); }
   }
 
@@ -343,7 +349,7 @@ class _SunfireAppState extends State<SunfireApp> {
         final idStr = uri.pathSegments.first;
         final id = int.tryParse(idStr);
         if (id != null && id > 0) {
-          _router.push('/manga/$id');
+          unawaited(_router.push('/manga/$id'));
         }
       } else if (uri.host == 'library') {
         _router.go('/library');
@@ -356,17 +362,27 @@ class _SunfireAppState extends State<SunfireApp> {
       } else if (uri.host == 'more' || uri.host == 'settings') {
         _router.go('/settings');
       } else if (uri.host == 'downloads') {
-        _router.push('/downloads');
+        unawaited(_router.push('/downloads'));
       } else if (uri.host == 'stats') {
-        _router.push('/stats');
+        unawaited(_router.push('/stats'));
       }
     }
   }
 
+  ({
+    String accent,
+    bool oled,
+    bool materialYou,
+    ColorScheme? lightDynamic,
+    ColorScheme? darkDynamic,
+  })? _themeKey;
+  ThemeData? _lightTheme;
+  ThemeData? _darkTheme;
+
   @override
   void dispose() {
-    _linkSubscription?.cancel();
-    _notificationSubscription?.cancel();
+    unawaited(_linkSubscription?.cancel());
+    unawaited(_notificationSubscription?.cancel());
     super.dispose();
   }
 
@@ -378,27 +394,30 @@ class _SunfireAppState extends State<SunfireApp> {
         return DynamicColorBuilder(
           builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
             final useMaterialYou = (!kIsWeb && Platform.isAndroid) && SettingsService.instance.materialYouEnabled;
-            final modeStr = SettingsService.instance.themeMode;
-            final isOled = modeStr == 'OLED Black';
+            final isOled = SunfireTheme.isOledMode;
 
-            final effectiveDarkTheme = AppTheme.darkTheme(useMaterialYou ? darkDynamic : null);
-            final effectiveLightTheme = AppTheme.lightTheme(useMaterialYou ? lightDynamic : null);
-
-            final themeData = isOled
-                ? effectiveDarkTheme.copyWith(
-                    scaffoldBackgroundColor: Colors.black,
-                    canvasColor: Colors.black,
-                  )
-                : effectiveDarkTheme;
-
-            ThemeMode effectiveMode;
-            if (modeStr == 'System Default') {
-              effectiveMode = ThemeMode.system;
-            } else if (modeStr == 'Light') {
-              effectiveMode = ThemeMode.light;
-            } else {
-              effectiveMode = ThemeMode.dark;
+            // UIS-15: SettingsService notifies on every toggle; only rebuild
+            // the (ColorScheme.fromSeed-heavy) themes when a theme input changes.
+            final themeKey = (
+              accent: SettingsService.instance.accentColorName,
+              oled: isOled,
+              materialYou: useMaterialYou,
+              lightDynamic: useMaterialYou ? lightDynamic : null,
+              darkDynamic: useMaterialYou ? darkDynamic : null,
+            );
+            if (themeKey != _themeKey || _lightTheme == null || _darkTheme == null) {
+              _themeKey = themeKey;
+              _lightTheme = SunfireTheme.buildLightTheme(
+                dynamicScheme: themeKey.lightDynamic,
+              );
+              _darkTheme = SunfireTheme.buildDarkTheme(
+                dynamicScheme: themeKey.darkDynamic,
+                isOled: isOled,
+              );
+              debugThemeBuildCount++;
             }
+            final lightTheme = _lightTheme!;
+            final darkTheme = _darkTheme!;
 
             return MaterialApp.router(
               title: 'Sunfire',
@@ -406,13 +425,13 @@ class _SunfireAppState extends State<SunfireApp> {
               locale: (SettingsService.instance.appLocale == 'system' || SettingsService.instance.appLocale.isEmpty)
                   ? null
                   : Locale(SettingsService.instance.appLocale),
-              themeMode: effectiveMode,
-              theme: effectiveLightTheme,
-              darkTheme: themeData,
+              themeMode: SunfireTheme.effectiveThemeMode,
+              theme: lightTheme,
+              darkTheme: darkTheme,
               routerConfig: _router,
               builder: (context, child) {
                 final mediaQuery = MediaQuery.of(context);
-                final isTablet = mediaQuery.size.width >= 720;
+                final isTablet = mediaQuery.size.width >= SunfireBreakpoints.narrowTabletMaxWidth;
                 final isApple = Theme.of(context).platform == TargetPlatform.iOS ||
                     Theme.of(context).platform == TargetPlatform.macOS;
 
@@ -449,12 +468,12 @@ class _NavigationLogger extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
-    LoggerService.instance.logInfo('Navigated to ${route.settings.name ?? route.runtimeType}', 'Navigation');
+    unawaited(LoggerService.instance.logInfo('Navigated to ${route.settings.name ?? route.runtimeType}', 'Navigation'));
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPop(route, previousRoute);
-    LoggerService.instance.logInfo('Popped from ${route.settings.name ?? route.runtimeType}', 'Navigation');
+    unawaited(LoggerService.instance.logInfo('Popped from ${route.settings.name ?? route.runtimeType}', 'Navigation'));
   }
 }

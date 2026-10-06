@@ -1,8 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/db/isar_service.dart';
-import '../../core/db/models/category.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
@@ -22,7 +21,6 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
   final SettingsService _settings = SettingsService.instance;
   bool _isLoading = true;
   bool _isConnected = false;
-  List<Category> _categories = [];
 
   // Server Download Settings
   String _downloadsPath = '';
@@ -35,16 +33,12 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    unawaited(_loadSettings());
   }
 
   Future<void> _loadSettings() async {
     setState(() => _isLoading = true);
     try {
-      final cats = await IsarService.instance.getCategories();
-      if (!mounted) return;
-      _categories = cats;
-
       final res = await GraphQLClientService.instance.fetchServerSettings();
       if (!mounted) return;
       if (res != null && res.containsKey('settings')) {
@@ -84,12 +78,21 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
       return;
     }
     try {
-      await GraphQLClientService.instance.updateServerSettings({key: val});
-      if (mounted) {
+      final res = await GraphQLClientService.instance.persistSetting(key, val);
+      if (!mounted) return;
+      if (res != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Updated $key on server'),
             duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update $key on server'),
+            duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -103,11 +106,10 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
 
   void _showDeleteWhileReadingDialog() {
     final options = ['Disabled', 'Immediately', 'When next chapter opens'];
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
           title: const Text('Delete finished chapters while reading', style: TextStyle(fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -125,79 +127,11 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
           ),
         );
       },
-    );
-  }
-
-  void _showCategoryFilterDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDlgState) {
-            final included = List<String>.from(_settings.autoDownloadCategoriesInclude);
-            final excluded = List<String>.from(_settings.autoDownloadCategoriesExclude);
-
-            return AlertDialog(
-              backgroundColor: const Color(0xFF1F1F24),
-              title: const Text('Auto-Download Categories', style: TextStyle(fontWeight: FontWeight.bold)),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: _categories.isEmpty
-                    ? const Text('No categories available. Create categories in Library settings.', style: TextStyle(color: Colors.grey))
-                    : ListView(
-                        shrinkWrap: true,
-                        children: _categories.map((cat) {
-                          final isInc = included.contains(cat.name);
-                          final isExc = excluded.contains(cat.name);
-
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w500)),
-                            trailing: DropdownButton<String>(
-                              value: isInc ? 'Include' : (isExc ? 'Exclude' : 'Default'),
-                              dropdownColor: const Color(0xFF2B2B32),
-                              underline: const SizedBox(),
-                              items: const [
-                                DropdownMenuItem(value: 'Default', child: Text('Default')),
-                                DropdownMenuItem(value: 'Include', child: Text('Include', style: TextStyle(color: Colors.greenAccent))),
-                                DropdownMenuItem(value: 'Exclude', child: Text('Exclude', style: TextStyle(color: Colors.redAccent))),
-                              ],
-                              onChanged: (val) {
-                                setDlgState(() {
-                                  included.remove(cat.name);
-                                  excluded.remove(cat.name);
-                                  if (val == 'Include') included.add(cat.name);
-                                  if (val == 'Exclude') excluded.add(cat.name);
-                                });
-                                setState(() {
-                                  _settings.autoDownloadCategoriesInclude = included;
-                                  _settings.autoDownloadCategoriesExclude = excluded;
-                                });
-                              },
-                            ),
-                          );
-                        }).toList(),
-                      ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Done'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
-    final incList = _settings.autoDownloadCategoriesInclude;
-    final excList = _settings.autoDownloadCategoriesExclude;
-    final catSubtitle = 'Include: ${incList.isEmpty ? "All" : incList.join(", ")}\nExclude: ${excList.isEmpty ? "None" : excList.join(", ")}';
-
     return ListenableBuilder(
       listenable: _settings,
       builder: (context, _) {
@@ -250,7 +184,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       subtitle: _downloadsPath.isNotEmpty ? _downloadsPath : 'Default (Server data/downloads)',
                       onStringChanged: (v) {
                         setState(() => _downloadsPath = v);
-                        _update('downloadsPath', v);
+                        unawaited(_update('downloadsPath', v));
                       },
                     ),
                     SettingsPropTile(
@@ -261,7 +195,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       boolValue: _downloadAsCbz,
                       onBoolChanged: (v) {
                         setState(() => _downloadAsCbz = v);
-                        _update('downloadAsCbz', v);
+                        unawaited(_update('downloadAsCbz', v));
                       },
                     ),
 
@@ -309,7 +243,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       boolValue: _autoDownloadNewChapters,
                       onBoolChanged: (v) {
                         setState(() => _autoDownloadNewChapters = v);
-                        _update('autoDownloadNewChapters', v);
+                        unawaited(_update('autoDownloadNewChapters', v));
                       },
                     ),
                     SettingsPropTile(
@@ -324,7 +258,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       unit: ' Chapters',
                       onIntChanged: (v) {
                         setState(() => _autoDownloadLimit = v);
-                        _update('autoDownloadNewChaptersLimit', v);
+                        unawaited(_update('autoDownloadNewChaptersLimit', v));
                       },
                     ),
                     SettingsPropTile(
@@ -334,7 +268,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       boolValue: _excludeEntryWithUnreadChapters,
                       onBoolChanged: (v) {
                         setState(() => _excludeEntryWithUnreadChapters = v);
-                        _update('excludeEntryWithUnreadChapters', v);
+                        unawaited(_update('excludeEntryWithUnreadChapters', v));
                       },
                     ),
                     SettingsPropTile(
@@ -344,23 +278,12 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       boolValue: _autoDownloadIgnoreReUploads,
                       onBoolChanged: (v) {
                         setState(() => _autoDownloadIgnoreReUploads = v);
-                        _update('autoDownloadIgnoreReUploads', v);
+                        unawaited(_update('autoDownloadIgnoreReUploads', v));
                       },
                     ),
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                      title: Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: [
-                          const Text('Category', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                          SunfireBadge.local(),
-                        ],
-                      ),
-                      subtitle: Text(catSubtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                      onTap: _showCategoryFilterDialog,
-                    ),
+                    // Local auto-download category include/exclude hidden
+                    // (UIX-13, Jane decision a): nothing read it, since there is no
+                    // local auto-download-on-update feature to filter.
 
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
 
@@ -431,7 +354,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                         // until the running chapter happened to finish, so
                         // turning it on while on cellular kept burning mobile
                         // data for up to ~12 minutes with no way to stop it.
-                        DownloadManagerService.instance.applyResourceGates();
+                        unawaited(DownloadManagerService.instance.applyResourceGates());
                       },
                     ),
                     SettingsPropTile(
@@ -442,7 +365,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       boolValue: _settings.downloadOnlyWhileCharging,
                       onBoolChanged: (v) {
                         _settings.downloadOnlyWhileCharging = v;
-                        DownloadManagerService.instance.applyResourceGates();
+                        unawaited(DownloadManagerService.instance.applyResourceGates());
                       },
                     ),
                   ],

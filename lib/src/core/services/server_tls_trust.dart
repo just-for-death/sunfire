@@ -19,11 +19,18 @@ bool shouldTrustCertificateForHost(String host, String? serverUrl) {
   return host == 'localhost' || host == '127.0.0.1' || host == '::1';
 }
 
+// Certificate pinning was removed for this release (UIX-06, decision A): the
+// previous check only ran inside badCertificateCallback (i.e. for certs that
+// already FAILED CA validation) and compared whole-DER hashes against SPKI-style
+// pins, so it never protected anything. Real pre-send leaf pinning
+// (HttpClient.connectionFactory) is tracked as UIX-06 option B.
+
 /// An [HttpClient] that applies [shouldTrustCertificateForHost] against the
 /// server URL returned by [serverUrl] at handshake time (so it follows the
 /// server being reconfigured without rebuilding the client).
 HttpClient createServerTrustingHttpClient(String? Function() serverUrl) {
   final client = HttpClient();
-  client.badCertificateCallback = (cert, host, port) => shouldTrustCertificateForHost(host, serverUrl());
+  client.badCertificateCallback =
+      (cert, host, port) => shouldTrustCertificateForHost(host, serverUrl());
   return client;
 }

@@ -13,6 +13,9 @@ import 'package:sunfire/src/features/onboarding/onboarding_screen.dart';
 import 'package:sunfire/src/features/updates/updates_screen.dart';
 import 'package:sunfire/src/main_shell.dart';
 
+import 'support/quickjs_fakes.dart';
+import 'support/quickjs_test_loader.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -106,6 +109,7 @@ void main() {
     });
 
     test('5. ContentResolver 3-Tier Resolution Pipeline ordering', () async {
+      installQuickJsFixtureFakes(); // UIX-21: no QuickJS native lib on the test host
       final resolver = ContentResolverService.instance;
       
       // Inject mock local JS extension
@@ -279,7 +283,11 @@ void main() {
       expect(siteDedupMap.values.first.version, equals('1.2.0'));
     });
 
-    testWidgets('14. Tablet & iPad Responsive Navigation Rail adapts for wide viewports (>= 720px)', (tester) async {
+    // The shell picks its chrome from Theme.of(context).platform (UIS-01), so
+    // the iPad case runs under an iOS target-platform override. The variant
+    // sets debugDefaultTargetPlatformOverride and resets it inside the test
+    // (addTearDown would run after flutter_test's foundation-var check).
+    testWidgets('14. Tablet & iPad Responsive Navigation Rail adapts for side-rail viewports (width ≥ 720 and shortestSide ≥ 600)', (tester) async {
       // Set surface size to iPad screen dimensions (834 x 1194)
       tester.view.physicalSize = const Size(834, 1194);
       tester.view.devicePixelRatio = 1.0;
@@ -289,11 +297,30 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: MainShell(child: SizedBox.shrink())));
       await tester.pumpAndSettle();
 
-      // Tablet side navigation rail shows icon and labels
+      // iPad glass sidebar shows the brand icon, labels and collapse control
       expect(find.byIcon(Icons.local_fire_department_rounded), findsOneWidget);
+      expect(find.byTooltip('Collapse sidebar'), findsOneWidget);
+      expect(find.byType(NavigationRail), findsNothing);
       expect(find.text('Library'), findsWidgets);
       expect(find.text('Browse'), findsWidgets);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('14b. Android tablet uses a Material NavigationRail for side-rail viewports (width ≥ 720 and shortestSide ≥ 600)', (tester) async {
+      tester.view.physicalSize = const Size(834, 1194);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(const MaterialApp(home: MainShell(child: SizedBox.shrink())));
+      await tester.pumpAndSettle();
+
+      // The Android rail has its own collapse/expand toggle too, so the
+      // NavigationRail itself is what distinguishes it from the iPad glass bar.
+      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.byIcon(Icons.local_fire_department_rounded), findsNothing);
+      expect(find.text('Library'), findsWidgets);
+      expect(find.text('Browse'), findsWidgets);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
     test('15. Chapter Published Date Formatting & Sanitization', () {
       String? formatChapterDate(int? rawTimestamp) {
@@ -375,13 +402,14 @@ void main() {
     });
 
     test('18. Webtoons Referer and Dynamic Image Headers Guard', () async {
-      // Initialize QuickJS to load extensions from remote repos
+      // Needs the QuickJS native plugin (flutter build linux --debug).
+      expect(tryLoadQuickJsPluginGlobally(), isTrue);
       await QuickJsService.instance.initialize();
-      
+
       final headers = QuickJsService.getImageHeaders('Webtoons (EN)', 'https://webtoon-phinf.pstatic.net/20240101_1/sample.jpg');
       expect(headers.containsKey('Referer'), isTrue);
       expect(headers['Referer'], equals('https://www.webtoons.com/'));
-    });
+    }, tags: ['native'], skip: quickJsSkipReason());
 
     test('19. Chapter Selector Auto-Scroll Offset Clamp Calculation', () {
       const itemExtent = 58.0;

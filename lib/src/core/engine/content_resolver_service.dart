@@ -35,6 +35,16 @@ int compareDownloadedPagePaths(String a, String b) {
   return a.compareTo(b);
 }
 
+/// ISS-073 B3: a server-linked id (`serverId > 0`, within Int32) on a
+/// configured server is resolved through the server's own scrape
+/// (`fetchChapterPages` / `fetchMangaAndChapters`) BEFORE any local JS
+/// extension. The server holds the source cookies / FlareSolverr session; a
+/// local scrape of the same source is what triggered Cloudflare 403 storms.
+/// Local JS stays the fallback when the server fails or for local-only
+/// (serverId <= 0) titles.
+bool preferServerScrape({required int serverId, required bool serverConfigured}) =>
+    serverConfigured && serverId > 0 && serverId < 2147483647;
+
 class ChapterPagesResult {
   final List<String> pageUrls;
   final ContentSourceType source;
@@ -178,8 +188,32 @@ class ContentResolverService {
       }
     }
 
+    // ── PRIORITY 2: SERVER SCRAPE for server-linked chapters (ISS-073) ────
+    // Previously only server-downloaded chapters went to the server first
+    // (ISS-061); every other server chapter burned up to 20s in a local JS
+    // scrape that Cloudflare would 403. Now any serverId > 0 goes server-first.
+    final serverFirst = preferServerScrape(
+      serverId: chapterServerId,
+      serverConfigured: GraphQLClientService.instance.isConfigured,
+    );
+    var serverAttempted = false;
+    if (serverFirst) {
+      serverAttempted = true;
+      final urls = await _fetchServerPages(chapterServerId);
+      if (urls != null) {
+        return ChapterPagesResult(
+          pageUrls: urls,
+          source: ContentSourceType.suwayomiServer,
+          effectiveSourceName: effectiveSourceName,
+          isLocalFiles: false,
+        );
+      }
+    }
+
     // ── PRIORITY 2: LOCAL EXTENSION SCRAPER (Mangayomi / QuickJS) ─────────
-    if (effectiveSourceName != null && effectiveChapterUrl != null && effectiveChapterUrl.isNotEmpty) {
+    if (effectiveSourceName != null &&
+        effectiveChapterUrl != null &&
+        effectiveChapterUrl.isNotEmpty) {
       try {
         var cleanChapterUrl = effectiveChapterUrl;
         String? sourceBaseUrl; // Track base URL for pre-warming
@@ -210,7 +244,7 @@ class ContentResolverService {
 
         final localPages = await Future.any([
           QuickJsService.instance.fetchChapterPagesLocal(effectiveSourceName, cleanChapterUrl),
-          Future.delayed(const Duration(seconds: 20)).then((_) {
+          Future<void>.delayed(const Duration(seconds: 20)).then((_) {
             throw TimeoutException('Local extension scrape timed out after 20s');
           }),
         ]);
@@ -228,30 +262,19 @@ class ContentResolverService {
       }
     }
 
-    // ── PRIORITY 3: SUWAYOMI SERVER PROXY ─────────────────────────────────
-    if (GraphQLClientService.instance.isConfigured && chapterServerId > 0 && chapterServerId < 2147483647) {
-      try {
-        final data = await GraphQLClientService.instance.fetchChapterPages(chapterServerId);
-        if (data != null && data.containsKey('fetchChapterPages') && data['fetchChapterPages'] != null) {
-          final fetchMap = data['fetchChapterPages'] as Map<String, dynamic>?;
-          final rawPages = fetchMap?['pages'] as List<dynamic>?;
-          if (rawPages != null && rawPages.isNotEmpty) {
-            final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
-            final urls = rawPages.map((p) {
-              final str = p.toString();
-              return resolveRelativeUrl(serverUrl, str);
-            }).toList();
-            await LoggerService.instance.logInfo('Resolved ${urls.length} pages via Suwayomi Server', 'ContentResolver');
-            return ChapterPagesResult(
-              pageUrls: urls,
-              source: ContentSourceType.suwayomiServer,
-              effectiveSourceName: effectiveSourceName,
-              isLocalFiles: false,
-            );
-          }
-        }
-      } catch (e) {
-        await LoggerService.instance.logWarning('Server chapter page fetch failed: $e', 'ContentResolver');
+    // ── PRIORITY 4: SERVER (only if not already tried above) ──────────────
+    if (!serverAttempted &&
+        GraphQLClientService.instance.isConfigured &&
+        chapterServerId > 0 &&
+        chapterServerId < 2147483647) {
+      final urls = await _fetchServerPages(chapterServerId);
+      if (urls != null) {
+        return ChapterPagesResult(
+          pageUrls: urls,
+          source: ContentSourceType.suwayomiServer,
+          effectiveSourceName: effectiveSourceName,
+          isLocalFiles: false,
+        );
       }
     }
 
@@ -265,6 +288,42 @@ class ContentResolverService {
   }
 
 
+  /// Server `fetchChapterPages` → absolute page URLs, or null on failure/empty.
+  Future<List<String>?> _fetchServerPages(int chapterServerId) async {
+    try {
+      final data = await GraphQLClientService.instance.fetchChapterPages(chapterServerId);
+      final fetchMap = data?['fetchChapterPages'];
+      final rawPages = fetchMap is Map ? fetchMap['pages'] : null;
+      if (rawPages is List && rawPages.isNotEmpty) {
+        final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
+        final urls = [for (final p in rawPages) resolveRelativeUrl(serverUrl, p.toString())];
+        await LoggerService.instance.logInfo('Resolved ${urls.length} pages via Suwayomi Server', 'ContentResolver');
+        return urls;
+      }
+    } catch (e) {
+      await LoggerService.instance.logWarning('Server chapter page fetch failed: $e', 'ContentResolver');
+    }
+    return null;
+  }
+
+  /// "Clear cookies" for the reader / source error card (ISS-073): clears the
+  /// server's cookie jar + cache (`clearCookiesAndCache`) when a server is
+  /// configured, and drops any local FlareSolverr-prewarmed session state.
+  /// Returns true when the server call succeeded (or no server is configured
+  /// and the local clear ran).
+  Future<bool> clearCookiesAndCache() async {
+    var ok = true;
+    if (GraphQLClientService.instance.isConfigured) {
+      ok = await GraphQLClientService.instance.clearCookiesAndCache();
+    }
+    try {
+      MClient.clearSessionCookies();
+    } catch (e) {
+      await LoggerService.instance.logWarning('Local cookie clear failed: $e', 'ContentResolver');
+    }
+    return ok;
+  }
+
   Future<List<Map<String, dynamic>>> resolveSourceManga({
     required String sourceId,
     required String sourceName,
@@ -275,6 +334,7 @@ class ContentResolverService {
     String? selectedStatus,
     String? selectedType,
     List<dynamic>? dynamicFilters,
+    List<SourceFilterChange>? filters,
   }) async {
     // ── PRIORITY 1: LOCAL EXTENSION ───────────────────────────────────────
     try {
@@ -328,6 +388,7 @@ class ContentResolverService {
             isLatest: isLatest,
             page: page,
             searchQuery: searchQuery,
+            filters: filters,
           );
           if (data != null && data.containsKey('fetchSourceManga')) {
             final payload = data['fetchSourceManga'] as Map<String, dynamic>;

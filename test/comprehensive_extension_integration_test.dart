@@ -1,3 +1,10 @@
+// Opt-in: needs the QuickJS native plugin, live websites and FlareSolverr.
+//   SUNFIRE_TEST_FLARESOLVERR=http://host:8191/v1 \
+//   SUNFIRE_TEST_EXT_DIR=/path/to/mangayomi-extensions/javascript/manga/src/en \
+//   flutter test --tags native test/comprehensive_extension_integration_test.dart
+@Tags(['native', 'network'])
+library;
+
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,54 +21,57 @@ import 'support/quickjs_test_loader.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late QuickJsService quickJs;
-  late bool quickJsReady;
+  final flareSolverrUrl = testEnv('SUNFIRE_TEST_FLARESOLVERR');
+  final extensionsDirPath = testEnv('SUNFIRE_TEST_EXT_DIR');
+  final Object skipReason = quickJsSkipReason() != false
+      ? quickJsSkipReason()
+      : flareSolverrUrl == null
+          ? 'SUNFIRE_TEST_FLARESOLVERR not set'
+          : extensionsDirPath == null
+              ? 'SUNFIRE_TEST_EXT_DIR not set'
+              : false;
 
+  late QuickJsService quickJs;
+
+  // Everything lives in one group so a skip also skips setUpAll (no native
+  // init, no network) instead of letting each body hit a late-init error.
+  group('Extension integration (native + network)', () {
   setUpAll(() async {
     HttpOverrides.global = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
       const MethodChannel('plugins.flutter.io/path_provider'),
       (MethodCall methodCall) async => '/tmp/sunfire_test',
     );
-    quickJsReady = tryLoadQuickJsPluginGlobally();
-    if (!quickJsReady) {
-      print('⚠️ QuickJS native plugin missing — extension live tests will skip. Run: flutter build linux --debug');
-      return;
+    if (!tryLoadQuickJsPluginGlobally()) {
+      fail('QuickJS native plugin found but could not be loaded');
     }
 
     quickJs = QuickJsService.instance;
     await quickJs.initialize();
-    
+
     // Configure FlareSolverr for Cloudflare bypass
-    MClient.cfProxyUrl = 'http://100.85.171.6:8191/v1';
-    print('✅ FlareSolverr configured: http://100.85.171.6:8191/v1');
-    
+    MClient.cfProxyUrl = flareSolverrUrl!;
+    print('✅ FlareSolverr configured: $flareSolverrUrl');
+
     // Load all extensions from the mangayomi-extensions directory
-    final extensionsDir = Directory('/home/zoro/Documents/Projects/manga/mangayomi-extensions/javascript/manga/src/en');
-    if (await extensionsDir.exists()) {
-      final files = await extensionsDir.list().toList();
-      for (final file in files) {
-        if (file is File && file.path.endsWith('.js')) {
-          try {
-            final code = await file.readAsString();
-            final fileName = file.uri.pathSegments.last.replaceAll('.js', '');
-            await quickJs.saveLocalExtension(fileName, code);
-            print('✅ Loaded extension: $fileName');
-          } catch (e) {
-            print('❌ Failed to load extension: ${file.path} - $e');
-          }
+    final extensionsDir = Directory(extensionsDirPath!);
+    if (!await extensionsDir.exists()) {
+      fail('SUNFIRE_TEST_EXT_DIR does not exist: $extensionsDirPath');
+    }
+    final files = await extensionsDir.list().toList();
+    for (final file in files) {
+      if (file is File && file.path.endsWith('.js')) {
+        try {
+          final code = await file.readAsString();
+          final fileName = file.uri.pathSegments.last.replaceAll('.js', '');
+          await quickJs.saveLocalExtension(fileName, code);
+          print('✅ Loaded extension: $fileName');
+        } catch (e) {
+          print('❌ Failed to load extension: ${file.path} - $e');
         }
       }
     }
   });
-
-  void requireQuickJs() {
-    if (!quickJsReady) {
-      markTestSkipped('QuickJS native plugin not loaded (rebuild linux debug bundle)');
-    }
-  }
-
-  setUp(requireQuickJs);
 
   group('COMPREHENSIVE EXTENSION TESTS: Real-World App Behavior', () {
     
@@ -96,7 +106,7 @@ void main() {
           page: 1,
         );
         if (result.isEmpty) {
-          await Future.delayed(const Duration(seconds: 2));
+          await Future<void>.delayed(const Duration(seconds: 2));
           result = await quickJs.fetchSourceMangaLocal(
             'Mangago',
             isLatest: true,
@@ -117,7 +127,7 @@ void main() {
           page: 1,
         );
         if (result.isEmpty) {
-          await Future.delayed(const Duration(seconds: 2));
+          await Future<void>.delayed(const Duration(seconds: 2));
           result = await quickJs.fetchSourceMangaLocal(
             'Mangago',
             searchQuery: 'one piece',
@@ -237,7 +247,7 @@ void main() {
         
         // Test filter structure
         for (final filter in filters) {
-          expect(filter, isA<Map>());
+          expect(filter, isA<Map<dynamic, dynamic>>());
           expect(filter['type_name'], isNotEmpty);
           expect(filter['name'], isNotEmpty);
         }
@@ -660,7 +670,7 @@ void main() {
           page: 1,
         );
         if (result.isEmpty) {
-          await Future.delayed(const Duration(seconds: 2));
+          await Future<void>.delayed(const Duration(seconds: 2));
           result = await quickJs.fetchSourceMangaLocal(
             'read_comics_online',
             searchQuery: 'batman',
@@ -722,7 +732,7 @@ void main() {
         final result = await quickJs.fetchMangaDetailsLocal('Mangapill', '/invalid/url');
         
         // Should handle gracefully without crashing
-        expect(result, isA<Map>());
+        expect(result, isA<Map<dynamic, dynamic>>());
         print('✅ Error Handling: Invalid URL handled gracefully');
       } catch (e) {
         // Expected to handle error gracefully
@@ -795,4 +805,5 @@ void main() {
       }, timeout: const Timeout(Duration(minutes: 2)));
     });
   });
+  }, skip: skipReason);
 }

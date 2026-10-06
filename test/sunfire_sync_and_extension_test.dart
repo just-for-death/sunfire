@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/db/models/chapter.dart';
 import 'package:sunfire/src/core/db/models/manga.dart';
 import 'package:sunfire/src/core/engine/content_resolver_service.dart';
 import 'package:sunfire/src/core/engine/quickjs_service.dart';
+
+import 'support/quickjs_fakes.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -100,9 +103,9 @@ void main() {
           return { pages: ["https://img.cdn.com/1.jpg", "https://img.cdn.com/2.jpg", "https://img.cdn.com/3.jpg"] };
         }
       ''';
-
+unawaited(
       // Save as "Weeb Central"
-      quickJs.saveLocalExtension('Weeb Central', mockJsCode);
+      quickJs.saveLocalExtension('Weeb Central', mockJsCode));
 
       // Verify direct and fuzzy lookups
       expect(quickJs.isLocalExtensionInstalled('Weeb Central'), isTrue);
@@ -116,6 +119,7 @@ void main() {
     });
 
     test('ContentResolverService Priority 1 (Local Extension) resolves without server', () async {
+      installQuickJsFixtureFakes(); // UIX-21: no QuickJS native lib on the test host
       // Set up mock local JS code in QuickJsService
       const sampleScraperJs = '''
         function getPageList(url) {
