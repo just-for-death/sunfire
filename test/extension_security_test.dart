@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/core/engine/quickjs_service.dart';
 
@@ -46,8 +47,8 @@ void main() {
           "baseUrl": "https://example.com"
         }];
       ''';
-
-      QuickJsService.instance.saveLocalExtension('TestExtension', testJs);
+unawaited(
+      QuickJsService.instance.saveLocalExtension('TestExtension', testJs));
       
       // Test that the service can handle various name formats
       expect(QuickJsService.instance.isSourceInstalledLocally('TestExtension'), isTrue);
@@ -62,8 +63,8 @@ void main() {
           "baseUrl": "https://example.com"
         }];
       ''';
-
-      QuickJsService.instance.saveLocalExtension('TestExtension', testJs);
+unawaited(
+      QuickJsService.instance.saveLocalExtension('TestExtension', testJs));
       
       // Should find the extension with various name formats
       expect(QuickJsService.instance.isSourceInstalledLocally('TestExtension'), isTrue);

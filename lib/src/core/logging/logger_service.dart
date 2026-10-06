@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 class LogEntry {
   final DateTime timestamp;
@@ -10,6 +11,9 @@ class LogEntry {
   final String message;
   final dynamic exception;
   final StackTrace? stackTrace;
+  /// Correlation id of the async flow that produced this entry, or null when
+  /// logged outside any [LoggerService.withCorrelationAsync] scope.
+  final String? correlationId;
 
   LogEntry({
     required this.timestamp,
@@ -18,13 +22,15 @@ class LogEntry {
     required this.message,
     this.exception,
     this.stackTrace,
+    this.correlationId,
   });
 
   String format() {
     final cat = category != null ? '[$category] ' : '';
     final exc = exception != null ? '\nException: $exception' : '';
     final st = (stackTrace != null && level == 'ERROR') ? '\n$stackTrace' : '';
-    return '[${timestamp.toIso8601String()}] [$level] $cat$message$exc$st';
+    final corr = correlationId != null ? ' [corr=$correlationId]' : '';
+    return '[${timestamp.toIso8601String()}] [$level]$corr $cat$message$exc$st';
   }
 }
 
@@ -33,7 +39,6 @@ class LoggerService {
   File? _logFile;
   final List<LogEntry> _inMemoryLogs = [];
   final StreamController<LogEntry> _streamController = StreamController<LogEntry>.broadcast();
-
   static const int maxInMemoryLogs = 1000;
 
   LoggerService._();
@@ -45,6 +50,30 @@ class LoggerService {
 
   List<LogEntry> get inMemoryLogs => List.unmodifiable(_inMemoryLogs);
   Stream<LogEntry> get logStream => _streamController.stream;
+
+  /// Zone key for the correlation id (UIX-18). Zone-scoped rather than a
+  /// static global, so concurrent async flows (sync, library update, download
+  /// queue) each keep their own id across awaits instead of overwriting one
+  /// another's.
+  static const Symbol _corrKey = #sunfireCorrelationId;
+
+  /// Generates a new correlation ID.
+  static String _generateCorrelationId() {
+    return const Uuid().v4().substring(0, 8);
+  }
+
+  /// The correlation id of the current flow, or null outside any scope. No id
+  /// is invented per log line (that only added noise).
+  static String? get currentCorrelationId => Zone.current[_corrKey] as String?;
+
+  /// Runs [body] within a new correlation ID scope.
+  static R withCorrelation<R>(R Function() body, {String? correlationId}) =>
+      runZoned(body, zoneValues: {_corrKey: correlationId ?? _generateCorrelationId()});
+
+  /// Async version of [withCorrelation]. The id follows every await and
+  /// callback started inside [body].
+  static Future<R> withCorrelationAsync<R>(Future<R> Function() body, {String? correlationId}) =>
+      runZoned(body, zoneValues: {_corrKey: correlationId ?? _generateCorrelationId()});
 
   Future<void> initialize() async {
     installGlobalErrorHooks();
@@ -74,12 +103,12 @@ class LoggerService {
         return;
       }
       FlutterError.presentError(details);
-      logError(
+      unawaited(logError(
         msg,
         exception: details.exception,
         stackTrace: details.stack,
         category: 'FlutterError',
-      );
+      ));
     };
 
     PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
@@ -91,12 +120,12 @@ class LoggerService {
           msg.contains('SocketException')) {
         return true;
       }
-      logError(
+      unawaited(logError(
         msg,
         exception: error,
         stackTrace: stack,
         category: 'PlatformError',
-      );
+      ));
       return true;
     };
   }
@@ -121,6 +150,7 @@ class LoggerService {
       level: 'INFO',
       category: category,
       message: message,
+      correlationId: currentCorrelationId,
     ));
   }
 
@@ -130,6 +160,7 @@ class LoggerService {
       level: 'DEBUG',
       category: category,
       message: message,
+      correlationId: currentCorrelationId,
     ));
   }
 
@@ -139,6 +170,7 @@ class LoggerService {
       level: 'NETWORK',
       category: category,
       message: message,
+      correlationId: currentCorrelationId,
     ));
   }
 
@@ -148,6 +180,7 @@ class LoggerService {
       level: 'WARN',
       category: category,
       message: message,
+      correlationId: currentCorrelationId,
     ));
   }
 
@@ -159,6 +192,7 @@ class LoggerService {
       message: message,
       exception: exception,
       stackTrace: stackTrace,
+      correlationId: currentCorrelationId,
     );
     await _recordLog(entry);
   }

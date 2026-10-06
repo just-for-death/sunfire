@@ -38,6 +38,7 @@
 //      (negative synthetic id, the pure-local case).
 //
 // Run: fvm flutter test test/incognito_enforcement_test.dart
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -414,6 +415,76 @@ void main() {
       expect((await storedChapter(ch.serverId))!.isRead, isFalse,
           reason: 'turning the setting off must not write the suppressed action');
       expect(await allSyncRecords(), isEmpty);
+    });
+  });
+
+  // UIX-08: the replay guards. A corrupt payload used to be decoded OUTSIDE the
+  // per-record try while Incognito was on, so one bad tracker record threw out
+  // of _flushPendingMutations and skipped the server pull on every cycle.
+  group('replay queue — Incognito guards and corrupt payloads (UIX-08)', () {
+    var seq = 0;
+    Future<SyncRecord> queue(SyncEntityType type, String payload, {SyncAction action = SyncAction.update}) async {
+      final r = SyncRecord()
+        ..recordId = 'uix08-${seq++}'
+        ..entityType = type
+        ..entityId = '1'
+        ..action = action
+        ..payloadJson = payload
+        ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000 + seq
+        ..state = SyncRecordState.pending;
+      await IsarService.instance.saveSyncRecord(r);
+      return r;
+    }
+
+    Future<SyncRecord> reload(SyncRecord r) async => (await IsarService.instance.getSyncRecord(r.id))!;
+
+    test('a corrupt tracker record does not abort the flush (Incognito on)', () async {
+      SettingsService.instance.incognitoMode = true;
+      final bad = await queue(SyncEntityType.tracker, '{bad');
+      final cat = await queue(SyncEntityType.category, jsonEncode({'op': 'rename', 'categoryId': 5, 'name': 'X'}));
+
+      await expectLater(SyncEngine.instance.debugFlushPendingMutations(), completes);
+
+      final badAfter = await reload(bad);
+      expect(badAfter.state, isNot(SyncRecordState.pending), reason: 'corrupt record must be marked failed');
+      expect(badAfter.retryCount, 1, reason: 'a decode error is permanent, so it spends retry budget');
+      final catAfter = await IsarService.instance.getSyncRecord(cat.id);
+      expect(catAfter?.state, isNot(SyncRecordState.pending),
+          reason: 'records after the corrupt one were still dispatched');
+    });
+
+    test('Incognito on: tracker mangaProgress stays pending, untouched', () async {
+      SettingsService.instance.incognitoMode = true;
+      final r = await queue(SyncEntityType.tracker, jsonEncode({'op': 'mangaProgress', 'mangaId': 9}));
+
+      await SyncEngine.instance.debugFlushPendingMutations();
+
+      final after = await reload(r);
+      expect(after.state, SyncRecordState.pending);
+      expect(after.retryCount, 0);
+    });
+
+    test('Incognito on: chapter updates (progress and bookmark) stay pending', () async {
+      SettingsService.instance.incognitoMode = true;
+      final progress = await queue(SyncEntityType.chapter, jsonEncode({'chapterId': 1, 'isRead': true, 'lastPageRead': 3}));
+      final bookmark = await queue(SyncEntityType.chapter, jsonEncode({'chapterId': 2, 'isBookmarked': true}));
+
+      await SyncEngine.instance.debugFlushPendingMutations();
+
+      expect((await reload(progress)).state, SyncRecordState.pending);
+      expect((await reload(bookmark)).state, SyncRecordState.pending);
+    });
+
+    test('Incognito off: tracker mangaProgress is dispatched', () async {
+      SettingsService.instance.incognitoMode = false;
+      final r = await queue(SyncEntityType.tracker, jsonEncode({'op': 'mangaProgress', 'mangaId': 9}));
+
+      await SyncEngine.instance.debugFlushPendingMutations();
+
+      // No server is configured, so the dispatch fails — but it was attempted,
+      // which moves the record out of `pending`.
+      final after = await IsarService.instance.getSyncRecord(r.id);
+      expect(after?.state, isNot(SyncRecordState.pending));
     });
   });
 }

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/sunfire_badge.dart';
+import '../../../ui/widgets/dialog_controllers.dart';
 
 enum SettingsPropKind {
   textField,
@@ -86,13 +88,12 @@ class SettingsPropTile extends StatelessWidget {
     final controller = TextEditingController(text: stringValue ?? '');
     bool isObscured = canObscure;
 
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDlgState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F1F24),
               title: Row(
                 children: [
                   Expanded(child: titleWidget ?? Text(title ?? 'Edit Setting', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
@@ -147,13 +148,13 @@ class SettingsPropTile extends StatelessWidget {
           },
         );
       },
-    );
+    ).then((_) => disposeAfterDialog([controller])));
   }
 
   void _showSliderDialog(BuildContext context) {
     double currentVal = (intValue?.toDouble()) ?? (doubleValue ?? min.toDouble());
-
-    showDialog(
+unawaited(
+    showDialog<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
@@ -163,7 +164,6 @@ class SettingsPropTile extends StatelessWidget {
                 : '${currentVal.toStringAsFixed(1)}$unit';
 
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F1F24),
               title: Row(
                 children: [
                   Expanded(child: titleWidget ?? Text(title ?? 'Adjust Value', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
@@ -215,7 +215,7 @@ class SettingsPropTile extends StatelessWidget {
           },
         );
       },
-    );
+    ));
   }
 
   @override

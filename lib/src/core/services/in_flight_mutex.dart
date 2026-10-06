@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 /// De-duplicates concurrent computations of the same key.
@@ -69,10 +70,10 @@ class InFlightMutex<T> {
     void drop() {
       // Guard against a later run having replaced the entry, so a fast second
       // request is not evicted by the first one's cleanup.
-      if (identical(_inFlight[key], tracked)) _inFlight.remove(key);
+      if (identical(_inFlight[key], tracked)) unawaited(_inFlight.remove(key));
     }
-
-    tracked.then<void>((_) => drop(), onError: (Object _, StackTrace __) => drop());
+unawaited(
+    tracked.then<void>((_) => drop(), onError: (Object _, StackTrace __) => drop()));
     return tracked;
   }
 }

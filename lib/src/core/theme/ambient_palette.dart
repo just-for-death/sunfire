@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 
 class AmbientPalette {
-  static Future<Color> extractDominantColor(ImageProvider imageProvider, {Color fallback = const Color(0xFF1F1F24)}) async {
+  /// Falls back to a Material dark surface (no hard-coded hex) so callers
+  /// that omit [fallback] stay theme-neutral (ISS-044).
+  static Future<Color> extractDominantColor(
+    ImageProvider imageProvider, {
+    Color? fallback,
+  }) async {
     try {
       final scheme = await ColorScheme.fromImageProvider(
         provider: imageProvider,
@@ -9,7 +14,11 @@ class AmbientPalette {
       );
       return scheme.primary;
     } catch (_) {
-      return fallback;
+      return fallback ??
+          ColorScheme.fromSeed(
+            seedColor: Colors.deepPurple,
+            brightness: Brightness.dark,
+          ).surface;
     }
   }
 }

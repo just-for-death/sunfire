@@ -231,11 +231,35 @@ void main() {
   });
 
   group('App versioning fix (beta v11 → stable v1 must NOT be a downgrade)', () {
-    test('current pubspec version is 4.0.0', () {
+    String pubspecVersion() {
       final pubspec = File('pubspec.yaml').readAsStringSync();
       final match = RegExp(r'^version:\s*(.+)$', multiLine: true).firstMatch(pubspec);
       expect(match, isNotNull);
-      expect(match!.group(1)!.trim(), startsWith('4.0.0'));
+      return match!.group(1)!.trim();
+    }
+
+    test('pubspec version is semver+build and not below the 4.0.0 stable line', () {
+      final version = pubspecVersion();
+      expect(version, matches(RegExp(r'^\d+\.\d+\.\d+\+\d+$')));
+      final semver = version.split('+').first;
+      expect(RepoManager.compareAppVersions(semver, '4.0.0'), greaterThanOrEqualTo(0));
+    });
+
+    test('hard-coded in-app version labels match pubspec', () {
+      // The shell sidebar badge and the Advanced settings fallback show a
+      // literal version string. They must track pubspec (or read PackageInfo).
+      final semver = pubspecVersion().split('+').first;
+      for (final path in const [
+        'lib/src/main_shell.dart',
+        'lib/src/features/settings/advanced_settings_screen.dart',
+      ]) {
+        final labels = RegExp(r"'v(\d+\.\d+\.\d+)'")
+            .allMatches(File(path).readAsStringSync())
+            .map((m) => m.group(1));
+        for (final label in labels) {
+          expect(label, semver, reason: '$path shows v$label but pubspec is $semver');
+        }
+      }
     });
 
     test('compareAppVersions: stable 1.0.0 beats prerelease 11.0.0-beta', () {

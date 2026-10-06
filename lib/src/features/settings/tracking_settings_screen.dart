@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import '../../core/metron/metron_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../shared/friendly_network_error.dart';
 
 class TrackingSettingsScreen extends StatefulWidget {
   const TrackingSettingsScreen({super.key});
@@ -31,7 +33,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
     if (currentToken != null) {
       _tokenController.text = currentToken;
     }
-    _fetchServerTrackers();
+    unawaited(_fetchServerTrackers());
   }
 
   @override
@@ -61,6 +63,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
     final token = _tokenController.text.trim();
     if (token.isEmpty) {
       await MetronService.instance.saveToken(null);
+      if (!mounted) return;
       setState(() {
         _verificationMessage = 'Token cleared.';
         _verificationSuccess = true;
@@ -101,7 +104,8 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
       await MetronService.instance.saveToken(token);
       if (mounted) {
         setState(() {
-          _verificationMessage = '⚠️ Token saved, but Metron.cloud timed out ($e). Connection will proceed when network route stabilizes.';
+          _verificationMessage =
+              '⚠️ Token saved, but Metron.cloud failed (${friendlyNetworkError(e, tag: 'TrackingSettings')}). Connection will proceed when network route stabilizes.';
           _verificationSuccess = false;
         });
       }
@@ -328,14 +332,8 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               onChanged: (val) => setState(() => SettingsService.instance.metronAutoScrobble = val),
             ),
           ),
-          ListTile(
-            title: const Text('Auto-Match Comic Metadata'),
-            subtitle: const Text('Automatically query Metron for metadata when new comics are added'),
-            trailing: Switch(
-              value: SettingsService.instance.metronAutoMatch,
-              onChanged: (val) => setState(() => SettingsService.instance.metronAutoMatch = val),
-            ),
-          ),
+          // 'Auto-Match Comic Metadata' hidden (UIX-13, Jane decision a): no
+          // code path ever ran a Metron auto-match, so the switch was a no-op.
 
           const SizedBox(height: 16),
 

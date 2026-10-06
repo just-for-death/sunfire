@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show immutable, kDebugMode, listEquals, kIsWeb;
@@ -16,6 +17,8 @@ import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/server_auth_helper.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
 import 'extension_details_screen.dart';
 import 'global_search_screen.dart';
 import 'migrate_search_screen.dart';
@@ -29,6 +32,10 @@ class BrowseScreen extends StatefulWidget {
 }
 
 class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+
+  // ISS-018: theme-aware colours so Light mode stays readable.
+  ColorScheme get _cs => Theme.of(context).colorScheme;
+  bool get _isLight => _cs.brightness == Brightness.light;
   @override
   bool get wantKeepAlive => true;
   late TabController _tabController;
@@ -56,9 +63,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     _tabController = TabController(length: 3, vsync: this);
     _relevantSettings = _SourceRelevantSettings.capture();
     SettingsService.instance.addListener(_onSettingsChanged);
-    _fetchServerSources();
-    _fetchExtensions();
-    _loadLibraryForMigration();
+    unawaited(_fetchServerSources());
+    unawaited(_fetchExtensions());
+    unawaited(_loadLibraryForMigration());
   }
 
   // ── Settings-change relevance gate ────────────────────────────────────
@@ -81,8 +88,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     if (next == _relevantSettings) return;
     _relevantSettings = next;
     if (mounted) {
-      _fetchServerSources();
-      _fetchExtensions();
+      unawaited(_fetchServerSources());
+      unawaited(_fetchExtensions());
     }
   }
 
@@ -107,12 +114,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     try {
       await _fetchServerSourcesInner();
     } catch (e, st) {
-      LoggerService.instance.logError(
+      unawaited(LoggerService.instance.logError(
         'Failed to load sources: $e',
         exception: e,
         stackTrace: st,
         category: 'Browse',
-      );
+      ));
       if (mounted) {
         setState(() {
           _isLoadingSources = false;
@@ -391,7 +398,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   void _openSourceGrid(String id, String name, bool isLatest) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (context) => SourceMangaGridScreen(
           sourceId: id,
           sourceName: name,
@@ -402,7 +409,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   }
 
   void _toggleSourcePin(String id) {
-    SettingsService.instance.togglePinSource(id);
+    unawaited(SettingsService.instance.togglePinSource(id));
     setState(() {
       final idx = _sourcesList.indexWhere((s) => s['id'] == id);
       if (idx != -1) {
@@ -426,7 +433,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F24),
+        // UIS-ISS-012: theme surface (was hard-coded dark hex)
         title: const Text('Third-party extension', style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text(
           '"$name" comes from a non-official repository.\n\n'
@@ -467,7 +474,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F24),
+        // UIS-ISS-012: theme surface (was hard-coded dark hex)
         title: Text('Uninstall "$name"?', style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text(
           dependentCount > 0
@@ -653,7 +660,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           }
         }
       } catch (e, stack) {
-        LoggerService.instance.logError('Failed to toggle extension $name: $e', exception: e, stackTrace: stack, category: 'Browse');
+        unawaited(LoggerService.instance.logError('Failed to toggle extension $name: $e', exception: e, stackTrace: stack, category: 'Browse'));
         if (!isUpdate && mounted) {
           setState(() {
             ext['isInstalled'] = isInstalled;
@@ -684,7 +691,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   void _showExtensionSettingsDialog(Map<String, dynamic> ext) async {
     final uninstalled = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
+      MaterialPageRoute<bool>(
         builder: (context) => ExtensionDetailsScreen(extensionData: ext),
       ),
     );
@@ -696,10 +703,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   void _showAddRepoDialog() {
     final controller = TextEditingController();
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F24),
+        // UIS-ISS-012: theme surface (was hard-coded dark hex)
         title: const Text('Add Extension Repository', style: TextStyle(fontWeight: FontWeight.bold)),
         content: TextField(
           controller: controller,
@@ -724,7 +731,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 nav.pop();
                 if (mounted) {
                   setState(() => _selectedRepoUrl = normalized);
-                  _fetchExtensions();
+                  unawaited(_fetchExtensions());
                 }
               }
             },
@@ -732,14 +739,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           ),
         ],
       ),
-    ).then((_) => controller.dispose());
+    ).then((_) => controller.dispose()));
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final isTablet = MediaQuery.of(context).size.width >= 720;
+    final isTablet = MediaQuery.of(context).size.width >= SunfireBreakpoints.narrowTabletMaxWidth;
 
     return Scaffold(
       appBar: AppBar(
@@ -752,7 +759,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const GlobalSearchScreen()),
+                MaterialPageRoute<void>(builder: (context) => const GlobalSearchScreen()),
               );
             },
           ),
@@ -826,7 +833,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     _isLoadingSources = true;
                     _sourcesLoadError = null;
                   });
-                  _fetchServerSources();
+                  unawaited(_fetchServerSources());
                 },
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: const Text('Retry'),
@@ -882,8 +889,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final localJsUnpinned = unpinned.where((s) => s['isLocalJs'] == true).toList();
     final serverUnpinned = unpinned.where((s) => s['isLocalJs'] != true).toList();
 
-    final isTablet = MediaQuery.of(context).size.width >= 720;
-    final bottomPadding = isTablet ? 36.0 : 120.0;
+    final isTablet = MediaQuery.of(context).size.width >= SunfireBreakpoints.narrowTabletMaxWidth;
+    final bottomPadding = SunfireBreakpoints.scrollBottomPadding(context);
     final horizontalPadding = isTablet ? 24.0 : 16.0;
 
     // Lazily-built row list.
@@ -944,18 +951,18 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 label: const Text('All'),
                 selected: _selectedSourceFilter == 'All',
                 selectedColor: primaryColor,
-                backgroundColor: const Color(0x1F2A2A32),
+                backgroundColor: SunfireTheme.tileSurface(context),
                 showCheckmark: false,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 labelStyle: TextStyle(
-                  color: _selectedSourceFilter == 'All' ? Colors.white : Colors.grey[400],
+                  color: _selectedSourceFilter == 'All' ? _cs.onPrimary : _cs.onSurfaceVariant,
                   fontWeight: _selectedSourceFilter == 'All' ? FontWeight.bold : FontWeight.w500,
                   fontSize: 13,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                   side: BorderSide(
-                    color: _selectedSourceFilter == 'All' ? primaryColor : const Color(0x2BFFFFFF),
+                    color: _selectedSourceFilter == 'All' ? primaryColor : SunfireTheme.tileBorder(context),
                     width: _selectedSourceFilter == 'All' ? 1.2 : 0.8,
                   ),
                 ),
@@ -967,7 +974,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 label: const Text('Local JS'),
                 selected: _selectedSourceFilter == 'Local JS',
                 selectedColor: Colors.teal.shade800,
-                backgroundColor: const Color(0x1F2A2A32),
+                backgroundColor: SunfireTheme.tileSurface(context),
                 showCheckmark: false,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 labelStyle: TextStyle(
@@ -978,7 +985,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                   side: BorderSide(
-                    color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : const Color(0x2BFFFFFF),
+                    color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : SunfireTheme.tileBorder(context),
                     width: _selectedSourceFilter == 'Local JS' ? 1.2 : 0.8,
                   ),
                 ),
@@ -990,7 +997,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 label: const Text('Server (Suwayomi)'),
                 selected: _selectedSourceFilter == 'Server',
                 selectedColor: Colors.blue.shade800,
-                backgroundColor: const Color(0x1F2A2A32),
+                backgroundColor: SunfireTheme.tileSurface(context),
                 showCheckmark: false,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 labelStyle: TextStyle(
@@ -1001,7 +1008,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                   side: BorderSide(
-                    color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : const Color(0x2BFFFFFF),
+                    color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : SunfireTheme.tileBorder(context),
                     width: _selectedSourceFilter == 'Server' ? 1.2 : 0.8,
                   ),
                 ),
@@ -1013,7 +1020,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 label: const Text('Pinned'),
                 selected: _selectedSourceFilter == 'Pinned',
                 selectedColor: Colors.amber.shade900,
-                backgroundColor: const Color(0x1F2A2A32),
+                backgroundColor: SunfireTheme.tileSurface(context),
                 showCheckmark: false,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 labelStyle: TextStyle(
@@ -1024,7 +1031,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                   side: BorderSide(
-                    color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : const Color(0x2BFFFFFF),
+                    color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : SunfireTheme.tileBorder(context),
                     width: _selectedSourceFilter == 'Pinned' ? 1.2 : 0.8,
                   ),
                 ),
@@ -1092,8 +1099,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () {
-                      _fetchServerSources();
-                      _fetchExtensions();
+                      unawaited(_fetchServerSources());
+                      unawaited(_fetchExtensions());
                     },
                     icon: const Icon(Icons.refresh_rounded, size: 18),
                     label: const Text('Refresh Sources'),
@@ -1141,10 +1148,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6.0),
         child: Material(
-          color: const Color(0x1F2A2A32),
+          color: SunfireTheme.tileSurface(context),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+            side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
@@ -1197,8 +1204,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                           children: [
                             SunfireBadge(
                               label: lang,
-                              color: Colors.grey,
-                              textColor: Colors.white70,
+                              color: _cs.onSurfaceVariant,
+                              textColor: _cs.onSurfaceVariant,
                             ),
                             SunfireBadge(
                               label: isLocalJs ? 'Local' : 'Server',
@@ -1222,14 +1229,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            backgroundColor: Colors.white.withValues(alpha: 0.06),
+                            backgroundColor: _cs.onSurface.withValues(alpha: 0.06),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                           onPressed: () => _openSourceGrid(id, name, true),
-                          child: const Text('Latest', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                          child: Text('Latest', style: TextStyle(color: _cs.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w600)),
                         ),
                       ),
-                    const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
+                    Icon(Icons.chevron_right_rounded, color: _cs.onSurfaceVariant.withValues(alpha: 0.6), size: 20),
                   ],
                 ),
               ],
@@ -1311,8 +1318,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       return (a['name'] as String).compareTo(b['name'] as String);
     });
 
-    final isTablet = MediaQuery.of(context).size.width >= 720;
-    final bottomPadding = isTablet ? 36.0 : 120.0;
+    final isTablet = MediaQuery.of(context).size.width >= SunfireBreakpoints.narrowTabletMaxWidth;
+    final bottomPadding = SunfireBreakpoints.scrollBottomPadding(context);
     final horizontalPadding = isTablet ? 24.0 : 16.0;
 
     return Column(
@@ -1345,15 +1352,15 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       label: const Text('All Repositories'),
                       selected: _selectedRepoUrl.isEmpty || _selectedRepoUrl == 'ALL',
                       selectedColor: primaryColor,
-                      backgroundColor: const Color(0x1F2A2A32),
+                      backgroundColor: SunfireTheme.tileSurface(context),
                       labelStyle: TextStyle(
-                        color: (_selectedRepoUrl.isEmpty || _selectedRepoUrl == 'ALL') ? Colors.white : Colors.grey,
+                        color: (_selectedRepoUrl.isEmpty || _selectedRepoUrl == 'ALL') ? _cs.onPrimary : _cs.onSurfaceVariant,
                         fontWeight: (_selectedRepoUrl.isEmpty || _selectedRepoUrl == 'ALL') ? FontWeight.bold : FontWeight.normal,
                       ),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       onSelected: (_) {
                         setState(() => _selectedRepoUrl = 'ALL');
-                        _fetchExtensions();
+                        unawaited(_fetchExtensions());
                       },
                     ),
                   ),
@@ -1366,15 +1373,15 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         label: Text(repoTitle),
                         selected: isSelected,
                         selectedColor: primaryColor,
-                        backgroundColor: const Color(0x1F2A2A32),
+                        backgroundColor: SunfireTheme.tileSurface(context),
                         labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : Colors.grey,
+                          color: isSelected ? _cs.onPrimary : _cs.onSurfaceVariant,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                         onSelected: (_) {
                           setState(() => _selectedRepoUrl = repoUrl);
-                          _fetchExtensions();
+                          unawaited(_fetchExtensions());
                         },
                       ),
                     );
@@ -1382,7 +1389,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   ActionChip(
                     avatar: const Icon(Icons.add_rounded, size: 18),
                     label: const Text('Add Repo'),
-                    backgroundColor: const Color(0x1F2A2A32),
+                    backgroundColor: SunfireTheme.tileSurface(context),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     onPressed: () => _showAddRepoDialog(),
                   ),
@@ -1403,16 +1410,16 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 label: const Text('All'),
                 selected: _selectedExtensionFilter == 'All',
                 selectedColor: primaryColor.withValues(alpha: 0.25),
-                backgroundColor: const Color(0x1F2A2A32),
+                backgroundColor: SunfireTheme.tileSurface(context),
                 labelStyle: TextStyle(
-                  color: _selectedExtensionFilter == 'All' ? primaryColor : Colors.white70,
+                  color: _selectedExtensionFilter == 'All' ? primaryColor : _cs.onSurfaceVariant,
                   fontWeight: _selectedExtensionFilter == 'All' ? FontWeight.bold : FontWeight.normal,
                   fontSize: 12,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                   side: BorderSide(
-                    color: _selectedExtensionFilter == 'All' ? primaryColor : const Color(0x2BFFFFFF),
+                    color: _selectedExtensionFilter == 'All' ? primaryColor : SunfireTheme.tileBorder(context),
                     width: 0.8,
                   ),
                 ),
@@ -1423,16 +1430,16 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 label: const Text('Local JS'),
                 selected: _selectedExtensionFilter == 'Local JS',
                 selectedColor: Colors.teal.withValues(alpha: 0.25),
-                backgroundColor: const Color(0x1F2A2A32),
+                backgroundColor: SunfireTheme.tileSurface(context),
                 labelStyle: TextStyle(
-                  color: _selectedExtensionFilter == 'Local JS' ? Colors.tealAccent : Colors.white70,
+                  color: _selectedExtensionFilter == 'Local JS' ? (_isLight ? Colors.teal.shade700 : Colors.tealAccent) : _cs.onSurfaceVariant,
                   fontWeight: _selectedExtensionFilter == 'Local JS' ? FontWeight.bold : FontWeight.normal,
                   fontSize: 12,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                   side: BorderSide(
-                    color: _selectedExtensionFilter == 'Local JS' ? Colors.teal : const Color(0x2BFFFFFF),
+                    color: _selectedExtensionFilter == 'Local JS' ? Colors.teal : SunfireTheme.tileBorder(context),
                     width: 0.8,
                   ),
                 ),
@@ -1443,16 +1450,16 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 label: const Text('Server APK'),
                 selected: _selectedExtensionFilter == 'Server APK',
                 selectedColor: Colors.blue.withValues(alpha: 0.25),
-                backgroundColor: const Color(0x1F2A2A32),
+                backgroundColor: SunfireTheme.tileSurface(context),
                 labelStyle: TextStyle(
-                  color: _selectedExtensionFilter == 'Server APK' ? Colors.lightBlueAccent : Colors.white70,
+                  color: _selectedExtensionFilter == 'Server APK' ? (_isLight ? Colors.blue.shade700 : Colors.lightBlueAccent) : _cs.onSurfaceVariant,
                   fontWeight: _selectedExtensionFilter == 'Server APK' ? FontWeight.bold : FontWeight.normal,
                   fontSize: 12,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                   side: BorderSide(
-                    color: _selectedExtensionFilter == 'Server APK' ? Colors.blue : const Color(0x2BFFFFFF),
+                    color: _selectedExtensionFilter == 'Server APK' ? Colors.blue : SunfireTheme.tileBorder(context),
                     width: 0.8,
                   ),
                 ),
@@ -1463,16 +1470,16 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 label: const Text('Installed'),
                 selected: _selectedExtensionFilter == 'Installed',
                 selectedColor: primaryColor.withValues(alpha: 0.25),
-                backgroundColor: const Color(0x1F2A2A32),
+                backgroundColor: SunfireTheme.tileSurface(context),
                 labelStyle: TextStyle(
-                  color: _selectedExtensionFilter == 'Installed' ? primaryColor : Colors.white70,
+                  color: _selectedExtensionFilter == 'Installed' ? primaryColor : _cs.onSurfaceVariant,
                   fontWeight: _selectedExtensionFilter == 'Installed' ? FontWeight.bold : FontWeight.normal,
                   fontSize: 12,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                   side: BorderSide(
-                    color: _selectedExtensionFilter == 'Installed' ? primaryColor : const Color(0x2BFFFFFF),
+                    color: _selectedExtensionFilter == 'Installed' ? primaryColor : SunfireTheme.tileBorder(context),
                     width: 0.8,
                   ),
                 ),
@@ -1535,8 +1542,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 ),
-                                icon: const Icon(Icons.filter_alt_off_rounded, color: Colors.white),
-                                label: const Text('Show All Extensions', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                icon: Icon(Icons.filter_alt_off_rounded, color: _cs.onPrimary),
+                                label: Text('Show All Extensions', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold)),
                                 onPressed: () => setState(() => _selectedExtensionFilter = 'All'),
                               ),
                             ] else ...[
@@ -1546,8 +1553,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 ),
-                                icon: const Icon(Icons.add_rounded, color: Colors.white),
-                                label: const Text('Add Repository', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                icon: Icon(Icons.add_rounded, color: _cs.onPrimary),
+                                label: Text('Add Repository', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold)),
                                 onPressed: () => _showAddRepoDialog(),
                               ),
                             ],
@@ -1575,9 +1582,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                             margin: const EdgeInsets.symmetric(vertical: 4.0),
                             padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
                             decoration: BoxDecoration(
-                              color: const Color(0x1F2A2A32),
+                              color: SunfireTheme.tileSurface(context),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
+                              border: Border.all(color: SunfireTheme.tileBorder(context), width: 0.8),
                             ),
                             child: Row(
                               children: [
@@ -1659,7 +1666,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   ),
                                   onPressed: () => _toggleExtensionInstallation(ext),
-                                  child: const Text('Install', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                  child: Text('Install', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
                                 ),
                             ],
                           ),
@@ -1742,8 +1749,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       migrationItems.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
     }
 
-    final isTablet = MediaQuery.of(context).size.width >= 720;
-    final bottomPadding = isTablet ? 36.0 : 120.0;
+    final isTablet = MediaQuery.of(context).size.width >= SunfireBreakpoints.narrowTabletMaxWidth;
+    final bottomPadding = SunfireBreakpoints.scrollBottomPadding(context);
     final horizontalPadding = isTablet ? 24.0 : 16.0;
 
     return ListView(
@@ -1792,10 +1799,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4.0),
                 child: Material(
-                  color: const Color(0x1F2A2A32),
+                  color: SunfireTheme.tileSurface(context),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                    side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -1821,12 +1828,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     trailing: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0x33FFFFFF),
+                        color: _cs.onSurface.withValues(alpha: 0.10),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         '$count',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _cs.onSurface),
                       ),
                     ),
                     onTap: () => _showMigrationMangaSelectionDialog(name, mangas),
@@ -1842,8 +1849,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   void _showMigrationMangaSelectionDialog(String sourceName, List<Manga> mangas) {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final selectedMangaIds = <int>{};
-
-    showDialog(
+unawaited(
+    showDialog<void>(
       context: context,
       builder: (dialogCtx) {
         return StatefulBuilder(
@@ -1851,7 +1858,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             final allSelected = selectedMangaIds.length == mangas.length;
 
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F1F24),
+              // UIS-ISS-012: theme surface (was hard-coded dark hex)
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1930,7 +1937,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         if (!mounted) break;
                         final migrated = await Navigator.push<bool>(
                           context,
-                          MaterialPageRoute(
+                          MaterialPageRoute<bool>(
                             builder: (context) => MigrateSearchScreen(manga: manga, sources: _sourcesList),
                           ),
                         );
@@ -1938,14 +1945,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       }
                       await _loadLibraryForMigration();
                     },
-                    child: Text('Migrate Selected (${selectedMangaIds.length})', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: Text('Migrate Selected (${selectedMangaIds.length})', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold)),
                   ),
               ],
             );
           },
         );
       },
-    );
+    ));
   }
 
   /// Shows a clear error when QuickJS is not available on Android.
@@ -1989,8 +1996,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
-              icon: const Icon(Icons.bug_report_rounded, color: Colors.white, size: 18),
-              label: const Text('Report Issue', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              icon: Icon(Icons.bug_report_rounded, color: _cs.onPrimary, size: 18),
+              label: Text('Report Issue', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold)),
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Please report this issue at github.com/just-for-death/sunfire/issues')),

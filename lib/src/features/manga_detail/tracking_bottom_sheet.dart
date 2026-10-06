@@ -1,15 +1,22 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
+import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/server_compat_models.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../ui/design_system/sunfire_theme.dart';
 import '../settings/tracking_settings_screen.dart';
+
+/// Tracker start/finish date label. Follows General → Date Format (UIS-P3-3)
+/// instead of a hard-coded US `MM/dd/yyyy`.
+String trackingDateLabel(DateTime date) => SettingsService.instance.formatDate(date);
 
 class TrackingBottomSheet extends StatefulWidget {
   final int mangaServerId;
@@ -22,10 +29,10 @@ class TrackingBottomSheet extends StatefulWidget {
   });
 
   static Future<void> show(BuildContext context, int mangaServerId, String mangaTitle) {
-    return showModalBottomSheet(
+    return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF141419),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -46,6 +53,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _trackers = [];
   List<Map<String, dynamic>> _boundRecords = [];
+  Map<int, TrackerInfo> _trackerInfoById = {};
   Manga? _localManga;
 
   // Search mode state
@@ -70,12 +78,25 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     6: 'Re-Reading',
   };
 
+
+  Map<int, String> _statusesFor(int trackerId) {
+    final info = _trackerInfoById[trackerId];
+    if (info != null && info.statuses.isNotEmpty) {
+      return {for (final s in info.statuses) s.value: s.name};
+    }
+    return statusNames;
+  }
+
+  String _statusLabel(int trackerId, int status) {
+    return _statusesFor(trackerId)[status] ?? statusNames[status] ?? 'Unknown';
+  }
+
   @override
   void initState() {
     super.initState();
     _searchQuery = widget.mangaTitle;
     _trackerSearchController.text = widget.mangaTitle;
-    _loadTrackingData();
+    unawaited(_loadTrackingData());
   }
 
   @override
@@ -100,21 +121,73 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     }
 
     try {
-      final trackersData = await GraphQLClientService.instance.fetchTrackers();
-      final recordsData = await GraphQLClientService.instance.fetchTrackRecords(widget.mangaServerId);
+      final infos = await GraphQLClientService.instance.fetchTrackerInfos();
+      final recordInfos = await GraphQLClientService.instance.fetchTrackRecordInfos(widget.mangaServerId);
 
-      final rawTrackers = trackersData?['trackers']?['nodes'] as List<dynamic>? ?? [];
-      final rawRecords = recordsData?['trackRecords']?['nodes'] as List<dynamic>? ?? [];
-
-      if (mounted) {
-        setState(() {
-          _trackers = rawTrackers.map((t) => t as Map<String, dynamic>).toList();
-          _boundRecords = rawRecords.map((r) => r as Map<String, dynamic>).toList();
-          _isLoading = false;
-        });
+      if (infos != null) {
+        final byId = {for (final i in infos) i.id: i};
+        final trackerMaps = [
+          for (final i in infos)
+            <String, dynamic>{
+              'id': i.id,
+              'name': i.name,
+              'icon': i.icon,
+              'authUrl': i.authUrl,
+              'isLoggedIn': i.isLoggedIn,
+              'isTokenExpired': i.isTokenExpired,
+              'supportsPrivateTracking': i.supportsPrivateTracking,
+            },
+        ];
+        List<Map<String, dynamic>> recordMaps;
+        if (recordInfos != null) {
+          recordMaps = [
+            for (final r in recordInfos)
+              <String, dynamic>{
+                'id': r.id,
+                'mangaId': r.mangaId,
+                'trackerId': r.trackerId,
+                'remoteId': r.remoteId,
+                'remoteUrl': r.remoteUrl,
+                'title': r.title,
+                'status': r.status,
+                'lastChapterRead': r.lastChapterRead,
+                'totalChapters': r.totalChapters,
+                'score': r.score,
+                'displayScore': r.displayScore,
+                'startDate': r.startDate,
+                'finishDate': r.finishDate,
+                'private': r.isPrivate,
+              },
+          ];
+        } else {
+          final recordsData = await GraphQLClientService.instance.fetchTrackRecords(widget.mangaServerId);
+          final rawRecords = recordsData?['trackRecords']?['nodes'] as List<dynamic>? ?? [];
+          recordMaps = rawRecords.map((r) => Map<String, dynamic>.from(r as Map)).toList();
+        }
+        if (mounted) {
+          setState(() {
+            _trackerInfoById = byId;
+            _trackers = trackerMaps;
+            _boundRecords = recordMaps;
+            _isLoading = false;
+          });
+        }
+      } else {
+        final trackersData = await GraphQLClientService.instance.fetchTrackers();
+        final recordsData = await GraphQLClientService.instance.fetchTrackRecords(widget.mangaServerId);
+        final rawTrackers = trackersData?['trackers']?['nodes'] as List<dynamic>? ?? [];
+        final rawRecords = recordsData?['trackRecords']?['nodes'] as List<dynamic>? ?? [];
+        if (mounted) {
+          setState(() {
+            _trackerInfoById = {};
+            _trackers = rawTrackers.map((t) => Map<String, dynamic>.from(t as Map)).toList();
+            _boundRecords = rawRecords.map((r) => Map<String, dynamic>.from(r as Map)).toList();
+            _isLoading = false;
+          });
+        }
       }
     } catch (e, stack) {
-      LoggerService.instance.logError('Failed to fetch trackers: $e', exception: e, stackTrace: stack, category: 'Tracking');
+      unawaited(LoggerService.instance.logError('Failed to fetch trackers: $e', exception: e, stackTrace: stack, category: 'Tracking'));
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -161,7 +234,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
           });
         }
       } catch (e, stack) {
-        LoggerService.instance.logError('Failed to search Metron: $e', exception: e, stackTrace: stack, category: 'Metron');
+        unawaited(LoggerService.instance.logError('Failed to search Metron: $e', exception: e, stackTrace: stack, category: 'Metron'));
         if (mounted && searchGen == _searchGeneration) setState(() => _isSearching = false);
       }
       return;
@@ -178,7 +251,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
         });
       }
     } catch (e, stack) {
-      LoggerService.instance.logError('Failed to search tracker: $e', exception: e, stackTrace: stack, category: 'Tracking');
+      unawaited(LoggerService.instance.logError('Failed to search tracker: $e', exception: e, stackTrace: stack, category: 'Tracking'));
       if (mounted && searchGen == _searchGeneration) setState(() => _isSearching = false);
     }
   }
@@ -226,7 +299,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
           );
         }
       } catch (e, st) {
-        LoggerService.instance.logError('Failed to bind Metron: $e', exception: e, stackTrace: st, category: 'Metron');
+        unawaited(LoggerService.instance.logError('Failed to bind Metron: $e', exception: e, stackTrace: st, category: 'Metron'));
       }
       await _loadTrackingData();
       return;
@@ -236,7 +309,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
       await GraphQLClientService.instance.bindTrack(widget.mangaServerId, trackerId, remoteId);
       await _loadTrackingData();
     } catch (e, st) {
-      LoggerService.instance.logError('Failed to bind tracker: $e', exception: e, stackTrace: st, category: 'Tracking');
+      unawaited(LoggerService.instance.logError('Failed to bind tracker: $e', exception: e, stackTrace: st, category: 'Tracking'));
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -298,7 +371,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
         );
       }
     } catch (e, st) {
-      LoggerService.instance.logError('Failed to scrobble read chapters: $e', exception: e, stackTrace: st, category: 'Metron');
+      unawaited(LoggerService.instance.logError('Failed to scrobble read chapters: $e', exception: e, stackTrace: st, category: 'Metron'));
     } finally {
       if (mounted) setState(() => _isScrobbling = false);
     }
@@ -311,7 +384,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
       await GraphQLClientService.instance.unbindTrack(recordId);
       await _loadTrackingData();
     } catch (e, st) {
-      LoggerService.instance.logError('Failed to unbind tracker: $e', exception: e, stackTrace: st, category: 'Tracking');
+      unawaited(LoggerService.instance.logError('Failed to unbind tracker: $e', exception: e, stackTrace: st, category: 'Tracking'));
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -338,16 +411,23 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
 
   void _showEditTrackDialog(Map<String, dynamic> record, String trackerName) {
     final recordId = parseIntSafe(record['id']);
+    final trackerId = parseIntSafe(record['trackerId']);
+    final info = _trackerInfoById[trackerId];
+    final statusMap = _statusesFor(trackerId);
     int currentStatus = parseIntSafe(record['status'], 1);
     // Suwayomi/other clients may return a status the app does not know about
     // (e.g. 0 or 7+); clamp to a known value so DropdownButton's
     // "exactly one item with value" assert never fires (finding #20).
-    if (!statusNames.containsKey(currentStatus)) {
-      currentStatus = 1;
+    if (!statusMap.containsKey(currentStatus)) {
+      currentStatus = statusMap.keys.isNotEmpty ? statusMap.keys.first : 1;
     }
     double currentChapter = parseDoubleSafe(record['lastChapterRead']);
     int totalChapters = parseIntSafe(record['totalChapters']);
     double currentScore = parseDoubleSafe(record['score']);
+    bool isPrivate = record['private'] == true;
+    final supportsPrivate = info?.supportsPrivateTracking == true;
+    final serverScores = info?.scores ?? const <String>[];
+    // Prefer server score strings when the tracker publishes them.
     // Suwayomi store dates as epoch ms, but be defensive: some legacy rows /
     // other clients may carry seconds. Normalize to ms for display and save.
     String? startEpochStr = _normalizeTrackEpoch(record['startDate']);
@@ -355,22 +435,23 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
 
     String startDisplay = '';
     if (startEpochStr != null) {
-      startDisplay = DateFormat('MM/dd/yyyy').format(DateTime.fromMillisecondsSinceEpoch(int.parse(startEpochStr)));
+      startDisplay = trackingDateLabel(DateTime.fromMillisecondsSinceEpoch(int.parse(startEpochStr)));
     }
     String finishDisplay = '';
     if (finishEpochStr != null) {
-      finishDisplay = DateFormat('MM/dd/yyyy').format(DateTime.fromMillisecondsSinceEpoch(int.parse(finishEpochStr)));
+      finishDisplay = trackingDateLabel(DateTime.fromMillisecondsSinceEpoch(int.parse(finishEpochStr)));
     }
 
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (dialogCtx) {
-        final primaryColor = Theme.of(dialogCtx).colorScheme.primary;
+        final cs = Theme.of(dialogCtx).colorScheme;
+        final primaryColor = cs.primary;
 
         return StatefulBuilder(
           builder: (dialogCtx, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F1F24),
+              backgroundColor: cs.surfaceContainerHigh,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               title: Row(
                 children: [
@@ -396,13 +477,13 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(color: const Color(0x1F2A2A32), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0x2BFFFFFF))),
+                      decoration: BoxDecoration(color: SunfireTheme.tileSurface(dialogCtx), borderRadius: BorderRadius.circular(12), border: Border.all(color: SunfireTheme.tileBorder(dialogCtx))),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<int>(
                           value: currentStatus,
-                          dropdownColor: const Color(0xFF1F1F24),
+                          dropdownColor: cs.surfaceContainerHigh,
                           isExpanded: true,
-                          items: statusNames.entries.map((e) {
+                          items: statusMap.entries.map((e) {
                             return DropdownMenuItem<int>(
                               value: e.key,
                               child: Text(e.value, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -424,7 +505,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: const Color(0x1F2A2A32), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0x2BFFFFFF))),
+                      decoration: BoxDecoration(color: SunfireTheme.tileSurface(dialogCtx), borderRadius: BorderRadius.circular(12), border: Border.all(color: SunfireTheme.tileBorder(dialogCtx))),
                       child: Row(
                         children: [
                           IconButton(
@@ -462,7 +543,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(color: const Color(0x1F2A2A32), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0x2BFFFFFF))),
+                      decoration: BoxDecoration(color: SunfireTheme.tileSurface(dialogCtx), borderRadius: BorderRadius.circular(12), border: Border.all(color: SunfireTheme.tileBorder(dialogCtx))),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<double>(
                           // Server scores can be fractional (e.g. 6.5) while the
@@ -473,7 +554,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           value: currentScore < 0 || currentScore > 10
                               ? 0.0
                               : (currentScore.roundToDouble().clamp(0.0, 10.0)),
-                          dropdownColor: const Color(0xFF1F1F24),
+                          dropdownColor: cs.surfaceContainerHigh,
                           isExpanded: true,
                           items: [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0].map((s) {
                             return DropdownMenuItem<double>(
@@ -520,7 +601,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                         );
                                         if (picked != null) {
                                           setDialogState(() {
-                                            startDisplay = DateFormat('MM/dd/yyyy').format(picked);
+                                            startDisplay = trackingDateLabel(picked);
                                             startEpochStr = picked.millisecondsSinceEpoch.toString();
                                           });
                                         }
@@ -570,7 +651,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                         );
                                         if (picked != null) {
                                           setDialogState(() {
-                                            finishDisplay = DateFormat('MM/dd/yyyy').format(picked);
+                                            finishDisplay = trackingDateLabel(picked);
                                             finishEpochStr = picked.millisecondsSinceEpoch.toString();
                                           });
                                         }
@@ -596,9 +677,20 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         ),
                       ],
                     ),
+                    if (supportsPrivate) ...[
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Private', style: TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: const Text('Hide this title on the tracker', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        value: isPrivate,
+                        onChanged: (v) => setDialogState(() => isPrivate = v),
+                      ),
+                    ],
                   ],
                 ),
               ),
+
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogCtx),
@@ -618,10 +710,11 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         scoreString: currentScore > 0 ? (currentScore.truncateToDouble() == currentScore ? currentScore.toInt().toString() : currentScore.toString()) : null,
                         startDate: startEpochStr,
                         finishDate: finishEpochStr,
+                        isPrivate: supportsPrivate ? isPrivate : null,
                       );
                       await _loadTrackingData();
                     } catch (e, st) {
-                      LoggerService.instance.logError('Failed to update tracking record: $e', exception: e, stackTrace: st, category: 'Tracking');
+                      unawaited(LoggerService.instance.logError('Failed to update tracking record: $e', exception: e, stackTrace: st, category: 'Tracking'));
                       if (mounted) {
                         setState(() => _isLoading = false);
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -631,14 +724,14 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       }
                     }
                   },
-                  child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: Text('Save Changes', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.bold)),
                 ),
               ],
             );
           },
         );
       },
-    );
+    ));
   }
 
   @override
@@ -700,6 +793,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 final trackerName = t['name'] as String? ?? 'Tracker';
                 final isLoggedIn = t['isLoggedIn'] == true;
                 final authUrl = t['authUrl'] as String?;
+                final tokenExpired = t['isTokenExpired'] == true;
                 final bound = _boundRecords.firstWhere(
                   (r) => parseIntSafe(r['trackerId']) == trackerId,
                   orElse: () => <String, dynamic>{},
@@ -709,10 +803,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: Material(
-                    color: const Color(0x1F2A2A32),
+                    color: SunfireTheme.tileSurface(context),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                      side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                     ),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(16),
@@ -748,25 +842,25 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: const Color(0x2BFFFFFF), borderRadius: BorderRadius.circular(6)),
+                                    decoration: BoxDecoration(color: SunfireTheme.overlayFill(context), borderRadius: BorderRadius.circular(6)),
                                     child: Text(
-                                      statusNames[parseIntSafe(bound['status'], 1)] ?? 'Unknown',
-                                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                      _statusLabel(trackerId, parseIntSafe(bound['status'], 1)),
+                                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 11, fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: const Color(0x2BFFFFFF), borderRadius: BorderRadius.circular(6)),
+                                    decoration: BoxDecoration(color: SunfireTheme.overlayFill(context), borderRadius: BorderRadius.circular(6)),
                                     child: Text(
                                       'Ch: ${parseIntSafe(bound["lastChapterRead"])} / ${bound["totalChapters"] != null ? parseIntSafe(bound["totalChapters"]) : "?"}',
-                                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 11),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: const Color(0x2BFFFFFF), borderRadius: BorderRadius.circular(6)),
+                                    decoration: BoxDecoration(color: SunfireTheme.overlayFill(context), borderRadius: BorderRadius.circular(6)),
                                     child: Text(
                                       'Score: ${bound["score"] != null ? parseDoubleSafe(bound["score"]) : "-"}',
                                       style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
@@ -774,6 +868,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                   ),
                                 ],
                               ),
+                              if (bound['private'] == true) ...[
+                                const SizedBox(height: 8),
+                                Text('Private on tracker', style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.w600)),
+                              ],
                               const SizedBox(height: 12),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -787,10 +885,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                 ],
                               ),
                             ] else ...[
-                              if (!isLoggedIn) ...[
+                              if (!isLoggedIn || tokenExpired) ...[
                                 Row(
                                   children: [
-                                    const Text('Not logged in on server.', style: TextStyle(color: Colors.amberAccent, fontSize: 12)),
+                                    Text(tokenExpired ? 'Session expired — log in again.' : 'Not logged in on server.', style: const TextStyle(color: Colors.amberAccent, fontSize: 12)),
                                     const Spacer(),
                                     if (authUrl != null && authUrl.isNotEmpty)
                                       TextButton.icon(
@@ -820,7 +918,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                     onPressed: () {
                                       _searchQuery = widget.mangaTitle;
                                       _trackerSearchController.text = widget.mangaTitle;
-                                      _searchTracker(trackerId);
+                                      unawaited(_searchTracker(trackerId));
                                     },
                                   ),
                                 ),
@@ -863,7 +961,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
             onChanged: (val) => _searchQuery = val,
             onSubmitted: (val) {
               _searchQuery = val;
-              _searchTracker(_searchingTrackerId!);
+              unawaited(_searchTracker(_searchingTrackerId!));
             },
             decoration: InputDecoration(
               hintText: 'Search title...',
@@ -892,10 +990,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 4.0),
                             child: Material(
-                              color: const Color(0x1F2A2A32),
+                              color: SunfireTheme.tileSurface(context),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
-                                side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                                side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                               ),
                               child: ListTile(
                                 leading: (cover != null && cover.isNotEmpty)
@@ -906,15 +1004,15 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                           width: 44,
                                           height: 56,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => Container(width: 44, height: 56, color: const Color(0xFF2A2A32), child: const Icon(Icons.broken_image_rounded, size: 16)),
+                                          errorBuilder: (_, __, ___) => Container(width: 44, height: 56, color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_rounded, size: 16)),
                                         ),
                                       )
-                                    : Container(width: 44, height: 56, decoration: BoxDecoration(color: const Color(0xFF2A2A32), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.image_rounded, size: 20)),
+                                    : Container(width: 44, height: 56, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.image_rounded, size: 20)),
                                 title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
                                 subtitle: Text('$totalCh Chapters • Score: ${res["score"] ?? "-"}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
                                 trailing: ElevatedButton(
                                   style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                                  child: const Text('Bind', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                  child: Text('Bind', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
                                   onPressed: () => _bindManga(_searchingTrackerId!, remoteId),
                                 ),
                               ),
@@ -933,11 +1031,11 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     final isLinked = _localManga?.metronSeriesId != null;
 
     return Material(
-      color: const Color(0x1F2A2A32),
+      color: SunfireTheme.tileSurface(context),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: isLinked ? Colors.blueAccent.withValues(alpha: 0.5) : const Color(0x2BFFFFFF),
+          color: isLinked ? Colors.blueAccent.withValues(alpha: 0.5) : SunfireTheme.tileBorder(context),
           width: 0.8,
         ),
       ),
@@ -1005,11 +1103,11 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                     icon: _isScrobbling
-                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.cloud_upload_outlined, size: 16, color: Colors.white),
+                        ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary))
+                        : Icon(Icons.cloud_upload_outlined, size: 16, color: Theme.of(context).colorScheme.onPrimary),
                     label: Text(
                       _isScrobbling ? 'Scrobbling...' : 'Scrobble Read Chapters',
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                     onPressed: _isScrobbling ? null : _scrobbleAllReadChapters,
                   ),
@@ -1032,7 +1130,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       onPressed: () async {
                         await Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const TrackingSettingsScreen()),
+                          MaterialPageRoute<void>(builder: (context) => const TrackingSettingsScreen()),
                         );
                         setState(() {});
                       },
@@ -1049,12 +1147,12 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         backgroundColor: Colors.blueAccent,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      icon: const Icon(Icons.search_rounded, size: 18, color: Colors.white),
-                      label: const Text('Match & Enrich', style: TextStyle(color: Colors.white)),
+                      icon: Icon(Icons.search_rounded, size: 18, color: Theme.of(context).colorScheme.onPrimary),
+                      label: Text('Match & Enrich', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
                       onPressed: () {
                         _searchQuery = widget.mangaTitle;
                         _trackerSearchController.text = widget.mangaTitle;
-                        _searchTracker(kMetronTrackerId);
+                        unawaited(_searchTracker(kMetronTrackerId));
                       },
                     ),
                   ],

@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
-import 'extension_repos_screen.dart';
+import '../../ui/widgets/proxy_url_display.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -44,7 +46,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
     final result = await showModalBottomSheet<List<String>>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1A1A1F),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
@@ -151,7 +153,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    unawaited(_loadSettings());
   }
 
   Future<void> _loadSettings() async {
@@ -192,12 +194,21 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
       return;
     }
     try {
-      await GraphQLClientService.instance.updateServerSettings({key: val});
-      if (mounted) {
+      final res = await GraphQLClientService.instance.persistSetting(key, val);
+      if (!mounted) return;
+      if (res != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Updated $key on server'),
             duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update $key on server'),
+            duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -274,7 +285,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                       unit: ' workers',
                       onIntChanged: (v) {
                         setState(() => _maxSourcesInParallel = v);
-                        _update('maxSourcesInParallel', v);
+                        unawaited(_update('maxSourcesInParallel', v));
                       },
                     ),
                     SettingsPropTile(
@@ -286,7 +297,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                       subtitle: _localSourcePath.isNotEmpty ? _localSourcePath : 'Default (Server data/local)',
                       onStringChanged: (v) {
                         setState(() => _localSourcePath = v);
-                        _update('localSourcePath', v);
+                        unawaited(_update('localSourcePath', v));
                       },
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
@@ -314,17 +325,15 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                       subtitle: const Text('Add the official Sunfire index or community MangaYomi repositories', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const ExtensionReposScreen()),
-                        );
+                        // UIS-21: use the GoRouter route so the URL stays in sync.
+                        unawaited(context.push('/settings/extension-repos'));
                       },
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
                     const SectionTitle(title: 'Cloudflare Bypass - FlareSolverr (Local App)'),
                     SettingsPropTile(
                       title: 'Local FlareSolverr URL',
-                      subtitle: _settings.cfProxyUrl.isNotEmpty ? _settings.cfProxyUrl : 'Disabled (direct connection)',
+                      subtitle: _settings.cfProxyUrl.isNotEmpty ? maskProxyUrlForDisplay(_settings.cfProxyUrl) : 'Disabled (direct connection)',
                       description: 'Proxy endpoint used by this device to solve Cloudflare Turnstile challenges for local extensions and protected sources.',
                       scope: SettingScope.local,
                       kind: SettingsPropKind.textField,

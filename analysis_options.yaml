@@ -29,6 +29,10 @@ linter:
     use_build_context_synchronously: true
     cancel_subscriptions: true
     close_sinks: true
+    # UIX-25: explicit unawaited(...) for fire-and-forget Futures.
+    unawaited_futures: true
+    discarded_futures: true
+    always_declare_return_types: true
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

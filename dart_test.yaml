@@ -1,0 +1,5 @@
+# Test tags. Default local/CI run for a clean box:
+#   flutter test --exclude-tags native,network
+tags:
+  native: {}   # needs libflutter_qjs_plugin.so (flutter build linux --debug)
+  network: {}  # needs internet / live Suwayomi / FlareSolverr

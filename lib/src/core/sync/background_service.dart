@@ -14,6 +14,7 @@ import '../services/notification_service.dart';
 import '../services/settings_service.dart';
 import 'graphql_client_service.dart';
 import 'server_auth_helper.dart';
+import 'server_session_service.dart';
 
 const _kSyncTaskName = 'sunfire_background_sync';
 const _kSyncTaskTag = 'sunfire_sync';
@@ -79,6 +80,8 @@ void callbackDispatcher() {
         SettingsService.instance.serverUrl,
         authToken: authToken,
       );
+      // ISS-078: background isolate needs the login session too.
+      await ServerSessionService.instance.restore();
 
       // Check for new chapters and dispatch notification if discovered
       // Note: checkForNewChapters automatically invokes SyncEngine.triggerSync()

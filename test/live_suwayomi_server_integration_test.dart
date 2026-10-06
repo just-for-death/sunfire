@@ -1,4 +1,8 @@
 // ignore_for_file: avoid_print
+// Opt-in: needs a live Suwayomi server on localhost:4567.
+@Tags(['network'])
+library;
+
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/services/download_manager_service.dart';
+import '../../core/sync/download_status_merge.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/websocket_service.dart';
 import '../../core/widgets/empty_state_widget.dart';
+import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
 
 class DownloadQueueScreen extends StatefulWidget {
   const DownloadQueueScreen({super.key});
@@ -18,6 +24,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
 
   Map<String, dynamic>? _serverStatus;
   bool _isLoadingServer = false;
+  StreamSubscription<Map<String, dynamic>>? _wsDownloadSub;
 
   @override
   void initState() {
@@ -26,11 +33,24 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
-    _fetchServerDownloadStatus();
+    unawaited(_fetchServerDownloadStatus());
+    // Live server queue (ISS-061): status used to be fetched once at open.
+    _wsDownloadSub = WebSocketService.instance.onDownloadStatus.listen((event) {
+      if (!mounted) return;
+      final merged = mergeDownloadStatusEvent(_serverStatus, event);
+      setState(() {
+        _serverStatus = merged.status;
+        _isLoadingServer = false;
+      });
+      if (merged.needsRefetch) {
+        unawaited(_fetchServerDownloadStatus());
+      }
+    });
   }
 
   @override
   void dispose() {
+    unawaited(_wsDownloadSub?.cancel());
     _tabController.dispose();
     super.dispose();
   }
@@ -51,10 +71,42 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
     }
   }
 
+  Future<void> _applyDownloadMutation(Map<String, dynamic>? res) async {
+    if (!mounted) return;
+    final status = downloadStatusFromMutation(res);
+    if (status != null) {
+      setState(() {
+        _serverStatus = status;
+        _isLoadingServer = false;
+      });
+      return;
+    }
+    await _fetchServerDownloadStatus();
+  }
+
+  Future<void> _dequeueServerItem(int chapterId) async {
+    if (chapterId <= 0) return;
+    final res = await GraphQLClientService.instance.dequeueChapterDownload(chapterId);
+    await _applyDownloadMutation(res);
+  }
+
+  Future<void> _reorderServerItem(int chapterId, int to) async {
+    if (chapterId <= 0) return;
+    final res = await GraphQLClientService.instance.reorderChapterDownload(chapterId, to);
+    await _applyDownloadMutation(res);
+  }
+
+  Future<void> _retryServerItem(int chapterId) async {
+    if (chapterId <= 0) return;
+    // Re-enqueue; server treats this as a retry for ERROR/queued items.
+    await GraphQLClientService.instance.enqueueChapterDownload(chapterId);
+    await _fetchServerDownloadStatus();
+  }
+
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final isTablet = MediaQuery.of(context).size.width >= 720;
+    final isTablet = MediaQuery.of(context).size.width >= SunfireBreakpoints.narrowTabletMaxWidth;
     final isServerTab = _tabController.index == 1;
 
     return Scaffold(
@@ -128,12 +180,12 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                       tooltip: isPaused ? 'Resume queue' : 'Pause queue',
                       onPressed: () {
                         if (isPaused) {
-                          _downloadService.resumeLocalQueue();
+                          unawaited(_downloadService.resumeLocalQueue());
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Resumed download queue'), duration: Duration(seconds: 2)),
                           );
                         } else {
-                          _downloadService.pauseLocalQueue();
+                          unawaited(_downloadService.pauseLocalQueue());
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Paused download queue'), duration: Duration(seconds: 2)),
                           );
@@ -157,7 +209,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
           controller: _tabController,
           indicatorColor: primaryColor,
           labelColor: primaryColor,
-          unselectedLabelColor: Colors.grey,
+          unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
           tabs: const [
             Tab(text: 'Local Device'),
             Tab(text: 'Suwayomi Server'),
@@ -189,17 +241,22 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
 
         final waitingForCharger = _downloadService.isWaitingForCharger;
         final queueList = ListView.builder(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            SunfireBreakpoints.scrollBottomPadding(context),
+          ),
           itemCount: tasks.length,
           itemBuilder: (context, index) {
             final task = tasks[index];
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 6.0),
               child: Material(
-                color: const Color(0x1F2A2A32),
+                color: SunfireTheme.tileSurface(context),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                  side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                 ),
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -216,32 +273,38 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                           child: LinearProgressIndicator(
                             value: task.progress,
                             minHeight: 4,
-                            backgroundColor: const Color(0x33FFFFFF),
+                            backgroundColor: SunfireTheme.overlayFill(context),
                             valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text('${(task.progress * 100).toInt()}% • Downloading...', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                        Text(
+                          '${(task.progress * 100).toInt()}% • Downloading...',
+                          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
                       ] else if (task.status == LocalDownloadStatus.completed) ...[
-                        const Text('Completed', style: TextStyle(fontSize: 11, color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+                        Text('Completed', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.tertiary, fontWeight: FontWeight.bold)),
                       ] else if (task.status == LocalDownloadStatus.queued) ...[
-                        const Text('Queued', style: TextStyle(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold)),
+                        Text('Queued', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.secondary, fontWeight: FontWeight.bold)),
                       ] else if (task.status == LocalDownloadStatus.paused) ...[
-                        const Text('Paused', style: TextStyle(fontSize: 11, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                        Text('Paused', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.secondary, fontWeight: FontWeight.bold)),
                       ] else ...[
-                        Text('Failed: ${task.error ?? "Unknown error"}', style: const TextStyle(fontSize: 11, color: Colors.redAccent)),
+                        Text(
+                          'Failed: ${task.error ?? "Unknown error"}',
+                          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.error),
+                        ),
                       ],
                     ],
                   ),
                   trailing: task.status == LocalDownloadStatus.downloading || task.status == LocalDownloadStatus.queued || task.status == LocalDownloadStatus.paused
                       ? IconButton(
-                          icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
+                          icon: Icon(Icons.cancel_outlined, color: Theme.of(context).colorScheme.error),
                           tooltip: 'Cancel download',
                           onPressed: () => _downloadService.cancelLocalDownload(task.chapterId),
                         )
                       : task.status == LocalDownloadStatus.completed
                           ? IconButton(
-                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey),
+                              icon: Icon(Icons.delete_outline_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
                               tooltip: 'Delete downloaded files',
                               onPressed: () => _downloadService.deleteLocalDownload(task.chapterId),
                             )
@@ -250,7 +313,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     IconButton(
-                                      icon: const Icon(Icons.refresh_rounded, color: Colors.amberAccent),
+                                      icon: Icon(Icons.refresh_rounded, color: Theme.of(context).colorScheme.secondary),
                                       tooltip: 'Retry download',
                                       onPressed: () => _downloadService.enqueueLocalDownload(
                                         chapterId: task.chapterId,
@@ -261,7 +324,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                                       ),
                                     ),
                                     IconButton(
-                                      icon: const Icon(Icons.close_rounded, color: Colors.grey),
+                                      icon: Icon(Icons.close_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                       tooltip: 'Dismiss',
                                       onPressed: () => _downloadService.dismissLocalTask(task.chapterId),
                                     ),
@@ -277,27 +340,32 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
         if (!waitingForCharger) return queueList;
         return Column(
           children: [
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0x1F2A2A32),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0x33FFC107), width: 1),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.battery_charging_full_rounded, color: Colors.amberAccent, size: 22),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Queue paused — "Download only while charging" is on. Downloads resume when the device is plugged in.',
-                      style: const TextStyle(fontSize: 12.5, color: Colors.amberAccent),
-                    ),
+            Builder(
+              builder: (context) {
+                final cs = Theme.of(context).colorScheme;
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: SunfireTheme.tileSurface(context),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: cs.secondary.withValues(alpha: 0.45), width: 1),
                   ),
-                ],
-              ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.battery_charging_full_rounded, color: cs.secondary, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Queue paused — "Download only while charging" is on. Downloads resume when the device is plugged in.',
+                          style: TextStyle(fontSize: 12.5, color: cs.secondary),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
             Expanded(child: queueList),
           ],
@@ -314,14 +382,14 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.cloud_off_rounded, size: 54, color: Colors.grey.withAlpha(120)),
+              Icon(Icons.cloud_off_rounded, size: 54, color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(120)),
               const SizedBox(height: 16),
               const Text('No Suwayomi Server Connected', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Connect a Suwayomi server in Settings to manage remote server downloads, or use the Local Device tab for offline reading.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
@@ -330,8 +398,8 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                icon: const Icon(Icons.settings_rounded, color: Colors.white),
-                label: const Text('Server Settings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                icon: Icon(Icons.settings_rounded, color: Theme.of(context).colorScheme.onPrimary),
+                label: Text('Server Settings', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.bold)),
                 onPressed: () => context.push('/settings/server'),
               ),
             ],
@@ -355,13 +423,38 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16.0),
+    return ReorderableListView.builder(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        SunfireBreakpoints.scrollBottomPadding(context),
+      ),
       itemCount: queue.length,
+      onReorderItem: (oldIndex, newIndex) {
+        // onReorderItem already adjusts newIndex for the removed slot.
+        if (oldIndex == newIndex) return;
+        final rawItem = queue[oldIndex];
+        if (rawItem is! Map<String, dynamic>) return;
+        final chMap = rawItem['chapter'] as Map<String, dynamic>?;
+        final chId = parseIntSafe(chMap?['id']);
+        if (chId <= 0) return;
+        // Optimistic local reorder so the drag feels instant.
+        final mutable = List<dynamic>.from(queue);
+        final moved = mutable.removeAt(oldIndex);
+        mutable.insert(newIndex, moved);
+        setState(() {
+          _serverStatus = {
+            ...?_serverStatus,
+            'queue': mutable,
+          };
+        });
+        unawaited(_reorderServerItem(chId, newIndex));
+      },
       itemBuilder: (context, index) {
         final rawItem = queue[index];
         if (rawItem is! Map<String, dynamic>) {
-          return const SizedBox.shrink();
+          return SizedBox.shrink(key: ValueKey('server_dl_bad_$index'));
         }
         final item = rawItem;
         final chMap = item['chapter'] as Map<String, dynamic>?;
@@ -370,39 +463,90 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
         final progress = parseDoubleSafe(item['progress']);
         final itemState = item['state'] as String? ?? 'QUEUED';
 
+        final mangaMap = item['manga'] as Map<String, dynamic>?;
+        final mangaTitle = (mangaMap?['title'] as String?)?.trim();
+        final tries = downloadItemTries(item);
+        final isError = isDownloadItemError(item) ||
+            itemState.toUpperCase().contains('FAIL');
+        final cs = Theme.of(context).colorScheme;
+        final statusLine = serverDownloadStatusLabel(
+          state: itemState,
+          progress: progress,
+          tries: tries,
+        );
+        final rowKey = ValueKey('server_download_row_${chId}_$index');
+
         return Padding(
+          key: rowKey,
           padding: const EdgeInsets.symmetric(vertical: 6.0),
           child: Material(
-            color: const Color(0x1F2A2A32),
+            color: SunfireTheme.tileSurface(context),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+              side: BorderSide(
+                color: isError ? cs.error.withValues(alpha: 0.55) : SunfireTheme.tileBorder(context),
+                width: 0.8,
+              ),
             ),
             child: ListTile(
-              title: Text(chName, style: const TextStyle(fontWeight: FontWeight.bold)),
+              leading: ReorderableDragStartListener(
+                index: index,
+                child: Icon(Icons.drag_handle_rounded, color: cs.onSurfaceVariant),
+              ),
+              title: Text(
+                (mangaTitle != null && mangaTitle.isNotEmpty) ? mangaTitle : chName,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 4),
+                  if (mangaTitle != null && mangaTitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      chName,
+                      style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                  const SizedBox(height: 6),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
-                      value: progress > 0 ? progress : null,
+                      value: progress > 0 && !isError ? progress : null,
                       minHeight: 4,
-                      backgroundColor: const Color(0x33FFFFFF),
-                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                      backgroundColor: SunfireTheme.overlayFill(context),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isError ? cs.error : primaryColor,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text('$itemState • ${(progress * 100).toInt()}%', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  Text(
+                    statusLine,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: isError ? FontWeight.w600 : FontWeight.normal,
+                      color: isError ? cs.error : cs.onSurfaceVariant,
+                    ),
+                  ),
                 ],
               ),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                onPressed: () async {
-                  await _downloadService.deleteServerDownload(chId);
-                  _fetchServerDownloadStatus();
-                },
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isError)
+                    IconButton(
+                      key: Key('server_download_retry_$chId'),
+                      icon: Icon(Icons.refresh_rounded, color: primaryColor),
+                      tooltip: 'Retry download',
+                      onPressed: () => unawaited(_retryServerItem(chId)),
+                    ),
+                  IconButton(
+                    key: Key('server_download_dequeue_$chId'),
+                    icon: Icon(Icons.close_rounded, color: cs.error),
+                    tooltip: 'Remove from server queue',
+                    onPressed: () => unawaited(_dequeueServerItem(chId)),
+                  ),
+                ],
               ),
             ),
           ),
@@ -410,4 +554,37 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
       },
     );
   }
+}
+
+
+/// Status line for a live server-queue row (ISS-067 / Q3).
+String serverDownloadStatusLabel({
+  required String state,
+  required double progress,
+  int tries = 0,
+}) {
+  final upper = state.toUpperCase();
+  final pct = (progress * 100).toInt();
+  final base = upper.contains('ERROR') || upper.contains('FAIL')
+      ? 'ERROR • $pct%'
+      : '$state • $pct%';
+  if (tries > 0) return '$base • $tries tries';
+  return base;
+}
+
+
+/// Pull `downloadStatus` from a dequeue/reorder GraphQL mutation map (ISS-080).
+Map<String, dynamic>? downloadStatusFromMutation(Map<String, dynamic>? res) {
+  if (res == null) return null;
+  final direct = res['downloadStatus'];
+  if (direct is Map) return Map<String, dynamic>.from(direct);
+  for (final value in res.values) {
+    if (value is! Map) continue;
+    final nested = value['downloadStatus'];
+    if (nested is Map) return Map<String, dynamic>.from(nested);
+    if (value.containsKey('queue') && value.containsKey('state')) {
+      return Map<String, dynamic>.from(value);
+    }
+  }
+  return null;
 }

@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/services/settings_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/sunfire_theme.dart';
+import '../reader/double_page_layout.dart';
+import '../reader/tap_zones.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -24,11 +28,10 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
     required String currentValue,
     required ValueChanged<String> onSelected,
   }) {
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -46,7 +49,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
           ),
         );
       },
-    );
+    ));
   }
 
   Widget _buildPresetChip(String label, double speed) {
@@ -59,7 +62,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
       backgroundColor: const Color(0x1AFFFFFF),
       side: BorderSide(color: isSelected ? primaryColor : Colors.white24, width: 0.8),
       onSelected: (_) {
-        HapticFeedback.selectionClick();
+        unawaited(HapticFeedback.selectionClick());
         _settings.defaultAutoScrollSpeed = speed;
       },
     );
@@ -179,12 +182,80 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                 onBoolChanged: (val) => _settings.tapZonesEnabled = val,
               ),
               SettingsPropTile(
+                title: 'Tap Zones (Paged)',
+                subtitle: _settings.tapZonePresetPaged,
+                scope: SettingScope.local,
+                onTap: () {
+                  _showRadioDialog(
+                    title: 'Tap Zones (Paged)',
+                    options: TapZonePreset.values.map((p) => p.settingsLabel).toList(),
+                    currentValue: _settings.tapZonePresetPaged,
+                    onSelected: (val) => setState(() => _settings.tapZonePresetPaged = val),
+                  );
+                },
+              ),
+              SettingsPropTile(
+                title: 'Tap Zones (Webtoon)',
+                subtitle: _settings.tapZonePresetWebtoon,
+                scope: SettingScope.local,
+                onTap: () {
+                  _showRadioDialog(
+                    title: 'Tap Zones (Webtoon)',
+                    options: TapZonePreset.values.map((p) => p.settingsLabel).toList(),
+                    currentValue: _settings.tapZonePresetWebtoon,
+                    onSelected: (val) => setState(() => _settings.tapZonePresetWebtoon = val),
+                  );
+                },
+              ),
+              SettingsPropTile(
                 title: 'Invert Tap Zones',
                 subtitle: 'Swap previous and next page tap areas',
                 scope: SettingScope.local,
                 kind: SettingsPropKind.switchTile,
                 boolValue: _settings.invertTapZones,
                 onBoolChanged: (val) => _settings.invertTapZones = val,
+              ),
+              SettingsPropTile(
+                title: 'Show Tap Zones Overlay Again',
+                subtitle: 'Flash zone map the next time the reader opens',
+                scope: SettingScope.local,
+                onTap: () {
+                  setState(() => _settings.tapZonesOverlaySeen = false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Tap zones overlay will show next open')),
+                  );
+                },
+              ),
+              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              const SectionTitle(title: 'Double-Page Spreads'),
+              SettingsPropTile(
+                title: 'Display Mode',
+                subtitle: _settings.doublePageDisplayMode,
+                scope: SettingScope.local,
+                onTap: () {
+                  _showRadioDialog(
+                    title: 'Double-Page Display Mode',
+                    options: DoublePageDisplayMode.values.map((m) => m.settingsLabel).toList(),
+                    currentValue: _settings.doublePageDisplayMode,
+                    onSelected: (val) => setState(() => _settings.doublePageDisplayMode = val),
+                  );
+                },
+              ),
+              SettingsPropTile(
+                title: 'Page Offset',
+                subtitle: 'Start with a single first page before pairing',
+                scope: SettingScope.local,
+                kind: SettingsPropKind.switchTile,
+                boolValue: _settings.doublePageOffset,
+                onBoolChanged: (val) => _settings.doublePageOffset = val,
+              ),
+              SettingsPropTile(
+                title: 'Invert Double Pages',
+                subtitle: 'Swap left/right pairing (RTL spreads)',
+                scope: SettingScope.local,
+                kind: SettingsPropKind.switchTile,
+                boolValue: _settings.invertDoublePages,
+                onBoolChanged: (val) => _settings.invertDoublePages = val,
               ),
               SettingsPropTile(
                 title: 'Crop White Borders',
@@ -291,7 +362,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                       icon: const Icon(Icons.remove_rounded, size: 18),
                       tooltip: '-10 px/s',
                       onPressed: () {
-                        HapticFeedback.selectionClick();
+                        unawaited(HapticFeedback.selectionClick());
                         _settings.defaultAutoScrollSpeed = (_settings.defaultAutoScrollSpeed - 10.0).clamp(10.0, 2000.0);
                       },
                     ),
@@ -315,7 +386,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                       icon: const Icon(Icons.add_rounded, size: 18),
                       tooltip: '+10 px/s',
                       onPressed: () {
-                        HapticFeedback.selectionClick();
+                        unawaited(HapticFeedback.selectionClick());
                         _settings.defaultAutoScrollSpeed = (_settings.defaultAutoScrollSpeed + 10.0).clamp(10.0, 2000.0);
                       },
                     ),
@@ -439,12 +510,16 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final cs = Theme.of(context).colorScheme;
+    final primaryColor = cs.primary;
+    // Reader canvas is black in dark/OLED; Light uses scheme surface so the
+    // preview stays readable (ISS-044).
+    final previewBg = cs.brightness == Brightness.dark ? Colors.black : cs.surface;
     return Container(
       height: 120,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0xFF131318),
+        color: previewBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
       ),
@@ -464,11 +539,11 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
                     gradient: LinearGradient(
                       colors: [
                         primaryColor.withValues(alpha: 0.15),
-                        const Color(0x22FFFFFF),
+                        SunfireTheme.overlayFill(context),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white12),
+                    border: Border.all(color: SunfireTheme.tileBorder(context)),
                   ),
                   alignment: Alignment.center,
                   child: Row(
@@ -478,7 +553,7 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
                       const SizedBox(width: 8),
                       Text(
                         'Webtoon Panel ${(index ~/ 3) + 1}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: cs.onSurface),
                       ),
                     ],
                   ),
@@ -489,7 +564,7 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
                 child: Container(
                   height: 8,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: SunfireTheme.overlayFill(context),
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -502,7 +577,7 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: const Color(0xDD0F0F14),
+                color: cs.surfaceContainerHigh.withValues(alpha: 0.92),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: primaryColor.withValues(alpha: 0.6)),
               ),

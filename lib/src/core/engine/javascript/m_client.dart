@@ -1,11 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+
 import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_interceptor/http_interceptor.dart';
+
 import '../../../constants/app_constants.dart';
+import '../../../core/utils/url_sanitizer.dart';
 import '../../logging/logger_service.dart';
 import '../../services/settings_service.dart';
 
@@ -43,6 +47,16 @@ class MClient {
   }
 
   static String get userAgent => _userAgent;
+
+  /// Drop every in-memory solved cookie and the FlareSolverr session names
+  /// (ISS-073 "Clear cookies"). The next request re-solves from scratch.
+  static void clearSessionCookies() {
+    _cookies.clear();
+    _flareSolverrSessions.clear();
+  }
+
+  @visibleForTesting
+  static int get debugCookieCount => _cookies.length;
 
   static InterceptedClient init({
     Map<String, dynamic>? reqcopyWith,
@@ -103,7 +117,7 @@ class MClient {
       try {
         await future;
       } finally {
-        _activeSolves.remove(root);
+        unawaited(_activeSolves.remove(root));
       }
     } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
   }
@@ -225,7 +239,7 @@ class MClient {
 
       final cookieList = (solution['cookies'] as List?) ?? [];
       final cookie = cookieList
-          .whereType<Map>()
+          .whereType<Map<String, dynamic>>()
           .map((c) => "${c['name']}=${c['value']}")
           .join('; ');
 
@@ -238,7 +252,7 @@ class MClient {
       return {
         'body': solution['response'] ?? '',
         'statusCode': solution['status'] ?? 200,
-        'headers': solution['headers'] ?? {},
+        'headers': solution['headers'] ?? <String, dynamic>{},
         'request': {'url': solution['url'] ?? targetUrl},
       };
     } catch (e) {
@@ -288,7 +302,7 @@ class LoggerInterceptor extends InterceptorContract {
     try {
       final method = request.method;
       final url = request.url.toString();
-      LoggerService.instance.logNetwork('-> HTTP $method $url', 'MClient');
+      unawaited(LoggerService.instance.logNetwork('-> HTTP $method $url', 'MClient'));
     } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
     return request;
   }
@@ -306,11 +320,11 @@ class LoggerInterceptor extends InterceptorContract {
       // up succeeding a moment later via the FlareSolverr fallback.
       final willSelfHeal = isCloudflare(response) && MClient.cfProxyUrl.trim().isNotEmpty;
       if (status >= 400 && !willSelfHeal) {
-        LoggerService.instance.logError('<- HTTP $status $method $url', category: 'MClient');
+        unawaited(LoggerService.instance.logError('<- HTTP $status $method $url', category: 'MClient'));
       } else if (status >= 400) {
-        LoggerService.instance.logNetwork('<- HTTP $status $method $url (Cloudflare, bypass pending)', 'MClient');
+        unawaited(LoggerService.instance.logNetwork('<- HTTP $status $method $url (Cloudflare, bypass pending)', 'MClient'));
       } else {
-        LoggerService.instance.logNetwork('<- HTTP $status $method $url', 'MClient');
+        unawaited(LoggerService.instance.logNetwork('<- HTTP $status $method $url', 'MClient'));
       }
     } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
     return response;
@@ -341,19 +355,19 @@ class ResolveCloudFlareChallenge extends RetryPolicy {
     if (!isCloudflare(response)) return false;
     final url = response.request?.url.toString();
     if (url == null || url.isEmpty) return false;
-    debugPrint('[MClient] Cloudflare detected for $url — attempting bypass');
+    debugPrint('[MClient] Cloudflare detected for ${sanitizeUrlForLog(url)} — attempting bypass');
 
     final proxyUrl = MClient.normalizeProxyUrl(MClient.cfProxyUrl.trim());
     if (proxyUrl.isNotEmpty) {
-      debugPrint('[MClient] Using CF proxy: $proxyUrl');
+      debugPrint('[MClient] Using CF proxy: ${sanitizeUrlForLog(proxyUrl)}');
       final headers = response.request?.headers;
       return _solveWithCfProxy(proxyUrl, url, headers);
     }
-    debugPrint('[MClient] Cloudflare challenge detected for $url — no FlareSolverr proxy configured. Set up in Settings.');
-    LoggerService.instance.logWarning(
-      'Cloudflare challenge blocked $url. Configure FlareSolverr in Settings to bypass.',
+    debugPrint('[MClient] Cloudflare challenge detected for ${sanitizeUrlForLog(url)} — no FlareSolverr proxy configured. Set up in Settings.');
+    unawaited(LoggerService.instance.logWarning(
+      'Cloudflare challenge blocked ${sanitizeUrlForLog(url)}. Configure FlareSolverr in Settings to bypass.',
       'MClient',
-    );
+    ));
     return false;
   }
 }
@@ -390,7 +404,7 @@ Future<bool> _solveWithCfProxy(String proxyUrl, String targetUrl, [Map<String, S
 
     final cookieList = (solution['cookies'] as List?) ?? [];
     final cookie = cookieList
-        .whereType<Map>()
+        .whereType<Map<String, dynamic>>()
         .map((c) => "${c['name']}=${c['value']}")
         .join('; ');
     debugPrint('[MClient] CF cookie obtained: ${cookie.isNotEmpty} (${cookie.length} chars)');

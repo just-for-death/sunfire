@@ -6,11 +6,12 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../logging/logger_service.dart';
 import '../services/server_tls_trust.dart';
+import 'server_auth_refresher.dart';
 
 class WebSocketService {
   static WebSocketService? _instance;
   WebSocketChannel? _channel;
-  StreamSubscription? _subscription;
+  StreamSubscription<dynamic>? _subscription;
   String? _wsUrl;
   String? _authToken;
   Timer? _handshakeTimer;
@@ -38,6 +39,21 @@ class WebSocketService {
   /// succeeding and never surfacing why — the socket just silently spun.
   Future<String?> Function()? onAuthExpired;
 
+  /// Login/JWT session hook (ISS-078). Consulted on [initialize] (session
+  /// token outranks the stored header) and first on a 4401/4403 close.
+  ServerAuthRefresher? authRefresher;
+
+  /// Upgrade-request headers (SIMPLE_LOGIN session `Cookie`).
+  Map<String, String> _extraHeaders = const {};
+  String? _httpBase;
+
+  /// Current token used for `connection_init` (test/diagnostics).
+  @visibleForTesting
+  String? get debugAuthToken => _authToken;
+
+  @visibleForTesting
+  Map<String, String> get debugExtraHeaders => _extraHeaders;
+
   final _updateStatusController = StreamController<Map<String, dynamic>>.broadcast();
   final _downloadStatusController = StreamController<Map<String, dynamic>>.broadcast();
 
@@ -61,36 +77,80 @@ class WebSocketService {
       _lastInboundAt = null;
       _reconnectTimer?.cancel();
       _handshakeTimer?.cancel();
-      _subscription?.cancel();
+      unawaited(_subscription?.cancel());
       if (_channel != null) {
-        _channel!.sink.close();
+        unawaited(_channel!.sink.close());
         _channel = null;
       }
       _wsUrl = null;
       _authToken = null;
+      _extraHeaders = const {};
+      _httpBase = null;
       _isConnected = false;
       _isConnecting = false;
       return;
     }
     _isDisposed = false;
     final cleanUrl = trimmed.endsWith('/') ? trimmed.substring(0, trimmed.length - 1) : trimmed;
+    _httpBase = cleanUrl;
+    final refresher = authRefresher;
+    if (refresher != null) {
+      authToken = refresher.authHeaderOverride(cleanUrl) ?? authToken;
+      _extraHeaders = Map.unmodifiable(refresher.extraHeaders(cleanUrl));
+    }
     final wsScheme = cleanUrl.startsWith('https') ? 'wss' : 'ws';
     final hostAndPort = cleanUrl.replaceAll(RegExp(r'https?://'), '');
     final newWsUrl = '$wsScheme://$hostAndPort/api/graphql';
     
     if (_wsUrl != newWsUrl || authToken != _authToken) {
-      _subscription?.cancel();
+      unawaited(_subscription?.cancel());
       if (_channel != null) {
-        _channel!.sink.close();
+        unawaited(_channel!.sink.close());
         _channel = null;
       }
       _isConnected = false;
       _isConnecting = false;
+      // Reset reconnect backoff when server URL or token changes.
+      // Otherwise a backed-off connection (e.g. 5 min) would carry over
+      // to the new server, delaying the first connect attempt.
+      _reconnectDelaySeconds = _baseReconnectSeconds();
     }
     
     _wsUrl = newWsUrl;
     _authToken = authToken;
     connect();
+  }
+
+  /// Swap credentials and reconnect immediately with them (ISS-078: login,
+  /// JWT refresh, logout). No-op when nothing changed. Unlike [initialize]
+  /// this keeps the URL and does not need it.
+  void updateAuth(String? authToken, {Map<String, String>? extraHeaders}) {
+    final headers = extraHeaders == null ? _extraHeaders : Map<String, String>.unmodifiable(extraHeaders);
+    final changed = authToken != _authToken || !_sameHeaders(headers, _extraHeaders);
+    _authToken = authToken;
+    _extraHeaders = headers;
+    if (!changed || _wsUrl == null || _isDisposed) return;
+    _reconnectTimer?.cancel();
+    _handshakeTimer?.cancel();
+    _pingTimer?.cancel();
+    _pongWatchdogTimer?.cancel();
+    unawaited(_subscription?.cancel());
+    _subscription = null;
+    final old = _channel;
+    _channel = null;
+    if (old != null) unawaited(old.sink.close());
+    _isConnected = false;
+    _isConnecting = false;
+    _reconnectDelaySeconds = _baseReconnectSeconds();
+    connect();
+  }
+
+  static bool _sameHeaders(Map<String, String> a, Map<String, String> b) {
+    if (a.length != b.length) return false;
+    for (final e in a.entries) {
+      if (b[e.key] != e.value) return false;
+    }
+    return true;
   }
 
   void connect() {
@@ -103,15 +163,16 @@ class WebSocketService {
       _channel = IOWebSocketChannel.connect(
         Uri.parse(_wsUrl!),
         protocols: ['graphql-transport-ws'],
+        headers: _extraHeaders.isEmpty ? null : _extraHeaders,
         customClient: createServerTrustingHttpClient(() => _wsUrl),
       );
       // Bind the failure callback to THIS channel. A `ready` future that
       // rejects after the socket has been replaced must not tear down the
       // replacement.
       final myChannel = _channel;
-      myChannel!.ready.catchError((e) {
+      unawaited(myChannel!.ready.catchError((Object e) {
         _handleDisconnect('WebSocket connect error: $e', source: myChannel);
-      });
+      }));
 
       final payload = <String, dynamic>{};
       if (_authToken != null && _authToken!.isNotEmpty) {
@@ -145,7 +206,7 @@ class WebSocketService {
           _lastInboundAt = DateTime.now();
           _handleMessage(message);
         },
-        onError: (e) => _handleDisconnect('WebSocket error: $e', source: myChannel),
+        onError: (Object e) => _handleDisconnect('WebSocket error: $e', source: myChannel),
         onDone: () => _handleDisconnect('WebSocket closed by server', source: myChannel),
       );
 
@@ -155,7 +216,7 @@ class WebSocketService {
           _handleDisconnect('WebSocket handshake timeout');
         }
       });
-      LoggerService.instance.logInfo('WebSocket connecting to $_wsUrl...', 'WebSocket');
+      unawaited(LoggerService.instance.logInfo('WebSocket connecting to $_wsUrl...', 'WbSocket'));
     } catch (e) {
       _handleDisconnect('WebSocket connection failed: $e');
     }
@@ -191,6 +252,14 @@ class WebSocketService {
   /// Ceiling for the exponential reconnect backoff.
   @visibleForTesting
   static Duration reconnectMaxDelay = const Duration(seconds: 300);
+
+  /// Current reconnect delay in seconds (escalated backoff). Test-only.
+  @visibleForTesting
+  int get debugReconnectDelaySeconds => _reconnectDelaySeconds;
+
+  /// Force the current reconnect delay. Test-only; restore via initialize/dispose.
+  @visibleForTesting
+  set debugReconnectDelaySeconds(int seconds) => _reconnectDelaySeconds = seconds;
 
   /// Doubles the current backoff and returns the new delay, with jitter.
   ///
@@ -243,11 +312,11 @@ class WebSocketService {
       final last = _lastInboundAt;
       if (last == null) return;
       if (DateTime.now().difference(last) > livenessSilenceTimeout) {
-        LoggerService.instance.logWarning(
+        unawaited(LoggerService.instance.logWarning(
           'WebSocket liveness watchdog: no traffic for '
           '${livenessSilenceTimeout.inSeconds}s — forcing reconnect.',
           'WebSocket',
-        );
+        ));
         _handleDisconnect('WebSocket heartbeat timeout (no inbound traffic)');
       }
     });
@@ -273,7 +342,7 @@ class WebSocketService {
         _backoffResetOnStableAck = true;
         _handshakeTimer?.cancel();
         _startPingTimer();
-        LoggerService.instance.logInfo('WebSocket connection_ack received', 'WebSocket');
+        unawaited(LoggerService.instance.logInfo('WebSocket connection_ack received', 'WbSocket'));
         _subscribeEvents();
       } else if (type == 'ping') {
         // Server-initiated ping: the spec requires us to answer. Answering also
@@ -300,7 +369,7 @@ class WebSocketService {
         }
       }
     } catch (e) {
-      LoggerService.instance.logWarning('WebSocket message parse error: $e', 'WebSocket');
+      unawaited(LoggerService.instance.logWarning('WebSocket message parse error: $e', 'WbSocket'));
     }
   }
 
@@ -322,22 +391,34 @@ class WebSocketService {
     }
 
     try {
-      // 1. Subscribe libraryUpdateStatusChanged — the modern field name (the old
-      //    `updateStatusChanged` is deprecated on current Suwayomi builds).
+      // 1. libraryUpdateStatusChanged — full jobsInfo + manga/category updates
+      //    (ISS-068). UIS/LibraryUpdateService drive progress from finished/total.
       sink.add(jsonEncode({
         'id': '1',
         'type': 'subscribe',
         'payload': {
-          'query': 'subscription { libraryUpdateStatusChanged(input: { maxUpdates: 10 }) { jobsInfo { isRunning } } }'
+          'query':
+              'subscription { libraryUpdateStatusChanged(input: { maxUpdates: 50 }) { '
+              'jobsInfo { isRunning totalJobs finishedJobs skippedCategoriesCount skippedMangasCount } '
+              'omittedUpdates '
+              'mangaUpdates { status manga { id } } '
+              'categoryUpdates { status category { id name } } '
+              '} }'
         }
       }));
 
-      // 2. Subscribe downloadStatusChanged (Requires maxUpdates input arg)
+      // 2. downloadStatusChanged — initial + updates so the Downloads screen can
+      //    merge a live queue without polling (ISS-067).
       sink.add(jsonEncode({
         'id': '2',
         'type': 'subscribe',
         'payload': {
-          'query': 'subscription { downloadStatusChanged(input: { maxUpdates: 10 }) { state omittedUpdates } }'
+          'query':
+              'subscription { downloadStatusChanged(input: { maxUpdates: 50 }) { '
+              'state omittedUpdates '
+              'initial { position progress state tries chapter { id name isDownloaded } manga { id title } } '
+              'updates { type download { position progress state tries chapter { id name isDownloaded } manga { id title } } } '
+              '} }'
         }
       }));
     } catch (e) {
@@ -360,10 +441,10 @@ class WebSocketService {
     // Stale callback: this socket has already been replaced. Acting would tear
     // down the live connection.
     if (source != null && !identical(source, _channel)) {
-      LoggerService.instance.logInfo(
+      unawaited(LoggerService.instance.logInfo(
         'Ignoring disconnect from a superseded WebSocket ($reason)',
         'WebSocket',
-      );
+      ));
       return;
     }
     final closeCode = _channel?.closeCode;
@@ -371,20 +452,20 @@ class WebSocketService {
     _isConnecting = false;
     _pingTimer?.cancel();
     _pongWatchdogTimer?.cancel();
-    _subscription?.cancel();
+    unawaited(_subscription?.cancel());
     try {
-      _channel?.sink.close();
+      unawaited(_channel?.sink.close());
     } catch (ignoredError) { if (kDebugMode) debugPrint('[websocket_service] ignored error: $ignoredError'); }
 
     if (_isDisposed) return;
 
     final authRejected = closeCode == _closeUnauthorized || closeCode == _closeForbidden;
     if (authRejected) {
-      _handleAuthRejected(closeCode);
+      unawaited(_handleAuthRejected(closeCode));
       return;
     }
-
-    LoggerService.instance.logWarning('$reason. Reconnecting in ${_reconnectDelaySeconds}s...', 'WebSocket');
+unawaited(
+    LoggerService.instance.logWarning('$reason. Reconnecting in ${_reconnectDelaySeconds}s...', 'WebSocket'));
 
     // Apply the deferred backoff reset here, where a disconnect is actually
     // happening, rather than on the ack — which may arrive microseconds before
@@ -395,12 +476,12 @@ class WebSocketService {
           DateTime.now().difference(_connectedAt!) >= _stableConnectionDuration) {
         _reconnectDelaySeconds = _baseReconnectSeconds();
       } else {
-        LoggerService.instance.logWarning(
+        unawaited(LoggerService.instance.logWarning(
           'WebSocket connection did not stay up for '
           '${_stableConnectionDuration.inSeconds}s — keeping the escalated backoff '
           'instead of retrying at the base rate',
           'WebSocket',
-        );
+        ));
       }
     }
     _connectedAt = null;
@@ -426,12 +507,32 @@ class WebSocketService {
     _reconnectTimer?.cancel();
     _handshakeTimer?.cancel();
 
+    // ISS-078: the login session refreshes first (JWT refresh / SIMPLE_LOGIN
+    // re-login); its new credentials are read back via the override.
+    final session = authRefresher;
+    if (session != null && _httpBase != null) {
+      var refreshed = false;
+      try {
+        refreshed = await session.onUnauthorized();
+      } catch (_) {}
+      if (_isDisposed || _wsUrl == null) return;
+      final base = _httpBase;
+      final override = base == null ? null : session.authHeaderOverride(base);
+      if (refreshed && base != null) {
+        if (override != null) _authToken = override;
+        _extraHeaders = Map.unmodifiable(session.extraHeaders(base));
+        _reconnectDelaySeconds = _baseReconnectSeconds();
+        connect();
+        return;
+      }
+    }
+
     final refresher = onAuthExpired;
     if (refresher != null) {
-      LoggerService.instance.logWarning(
+      unawaited(LoggerService.instance.logWarning(
         'WebSocket rejected credentials (close $closeCode) — refreshing token.',
         'WebSocket',
-      );
+      ));
       try {
         final fresh = await refresher();
         if (_isDisposed || _wsUrl == null) return;
@@ -442,21 +543,21 @@ class WebSocketService {
           connect();
           return;
         }
-        LoggerService.instance.logWarning(
+        unawaited(LoggerService.instance.logWarning(
           'WebSocket token refresh returned no token — backing off.',
           'WebSocket',
-        );
+        ));
       } catch (e) {
-        LoggerService.instance.logWarning(
+        unawaited(LoggerService.instance.logWarning(
           'WebSocket token refresh failed: $e — backing off.',
           'WebSocket',
-        );
+        ));
       }
     } else {
-      LoggerService.instance.logWarning(
+      unawaited(LoggerService.instance.logWarning(
         'WebSocket rejected credentials (close $closeCode) and no refresher is registered.',
         'WebSocket',
-      );
+      ));
     }
 
     // Credentials are still bad. Reconnect on the backoff schedule so a
@@ -473,9 +574,9 @@ class WebSocketService {
     _pongWatchdogTimer?.cancel();
     _reconnectTimer?.cancel();
     _handshakeTimer?.cancel();
-    _subscription?.cancel();
+    unawaited(_subscription?.cancel());
     try {
-      _channel?.sink.close();
+      unawaited(_channel?.sink.close());
     } catch (ignoredError) { if (kDebugMode) debugPrint('[websocket_service] ignored error: $ignoredError'); }
     // Clear the observable state. Without this, `isConnected` kept returning
     // true after disposal, so any UI bound to it displayed a live connection

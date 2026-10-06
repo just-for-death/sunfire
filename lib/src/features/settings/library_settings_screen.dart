@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
@@ -12,6 +13,7 @@ import '../../core/sync/background_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/widgets/dialog_controllers.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -28,6 +30,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
   List<Category> _categories = [];
   bool _isLoadingCategories = true;
   bool _isConnected = false;
+  int _neverUpdatedMangaCount = 0;
 
   // Server Library Settings
   double _globalUpdateInterval = 12.0;
@@ -39,7 +42,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    unawaited(_loadData());
   }
 
   Future<void> _loadData() async {
@@ -50,11 +53,13 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
     setState(() {
       _categories = list;
     });
+    await _refreshNeverUpdatedCount();
 
     // 2. Refresh from server if available
     if (GraphQLClientService.instance.isConfigured) {
       try {
         final res = await GraphQLClientService.instance.fetchServerSettings();
+        if (!mounted) return;
         if (res != null && res.containsKey('settings')) {
           final s = res['settings'] as Map<String, dynamic>;
           setState(() {
@@ -68,22 +73,11 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
         }
 
         final data = await GraphQLClientService.instance.fetchCategories();
+        if (!mounted) return;
         final rawNodes = data?['categories']?['nodes'] as List<dynamic>? ?? [];
         if (rawNodes.isNotEmpty) {
-          final serverCats = <Category>[];
-          for (final n in rawNodes) {
-            final cMap = n as Map<String, dynamic>;
-            final cat = Category()
-              ..serverId = parseIntSafe(cMap['id'])
-              // Trimmed, and `isDefault` carried across. The name trim matches
-              // every other category write, so the dedupe in the shelf matches
-              // what is stored; the missing `isDefault` meant this refresh's
-              // `putAll` silently reset it to false on every row.
-              ..name = (cMap['name'] as String? ?? 'Category').trim()
-              ..order = parseIntSafe(cMap['order'])
-              ..isDefault = parseBoolSafe(cMap['default']);
-            serverCats.add(cat);
-          }
+          // Malformed ids are skipped, never mapped to Default (id 0) — UIX-14.
+          final serverCats = parseCategoryNodes(rawNodes, fallbackName: 'Category');
 
           // The same wipe guard the sync path applies.
           //
@@ -97,8 +91,11 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
           //
           // Hoisted into `isCategoryPullAcceptable` so the next caller cannot
           // forget it.
+          // `>= 0`, not `> 0`: Suwayomi's built-in "Default" category is
+          // id 0 — excluding it under-counted the shelf the ratio guard
+          // protects. Same fix as SyncEngine._syncCategories.
           final existingServerLinked =
-              (await IsarService.instance.getCategories()).where((c) => c.serverId > 0).length;
+              (await IsarService.instance.getCategories()).where((c) => c.serverId >= 0).length;
           if (!isCategoryPullAcceptable(
             snapshotComplete: isCompleteSnapshot(data),
             incoming: serverCats.length,
@@ -115,6 +112,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
             if (mounted) {
               setState(() => _categories = serverCats);
             }
+            await _refreshNeverUpdatedCount();
           }
         }
       } catch (ignoredError) { if (kDebugMode) debugPrint('[library_settings_screen] ignored error: $ignoredError'); }
@@ -123,14 +121,34 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
   }
 
   Future<void> _updateServer(String key, dynamic val) async {
-    if (!_isConnected) return;
-    try {
-      await GraphQLClientService.instance.updateServerSettings({key: val});
+    if (!_isConnected) {
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Not connected to server — change was not saved'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+    try {
+      final res = await GraphQLClientService.instance.persistSetting(key, val);
+      if (!mounted) return;
+      if (res != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Updated $key on server'),
             duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update $key on server'),
+            duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -188,13 +206,120 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
     await _loadData();
   }
 
+
+  Future<void> _refreshNeverUpdatedCount() async {
+    final excludedIds = _categories
+        .where((c) => c.includeInUpdate.toUpperCase() == 'EXCLUDE')
+        .map((c) => c.serverId)
+        .toSet();
+    if (excludedIds.isEmpty) {
+      if (mounted) setState(() => _neverUpdatedMangaCount = 0);
+      return;
+    }
+    final manga = await IsarService.instance.getLibraryManga();
+    var count = 0;
+    for (final m in manga) {
+      if (m.categoryIds.any(excludedIds.contains)) count++;
+    }
+    if (mounted) setState(() => _neverUpdatedMangaCount = count);
+  }
+
+  Future<void> _setCategoryInclude({
+    required Category cat,
+    required bool forUpdate,
+    required bool enabled,
+  }) async {
+    final value = enabled ? 'INCLUDE' : 'EXCLUDE';
+    if (forUpdate) {
+      cat.includeInUpdate = value;
+    } else {
+      cat.includeInDownload = value;
+    }
+    await IsarService.instance.saveCategory(cat);
+    if (_isConnected) {
+      final res = forUpdate
+          ? await GraphQLClientService.instance.setCategoryIncludeInUpdate(cat.serverId, value)
+          : await GraphQLClientService.instance.setCategoryIncludeInDownload(cat.serverId, value);
+      if (!mounted) return;
+      if (res == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update ${forUpdate ? "update" : "download"} include for ${cat.name}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+    await _refreshNeverUpdatedCount();
+    if (mounted) setState(() {});
+  }
+
+  void _showCategoryIncludeSheet(Category cat) {
+    unawaited(showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final cs = Theme.of(ctx).colorScheme;
+            final inUpdate = cat.includeInUpdate.toUpperCase() != 'EXCLUDE';
+            final inDownload = cat.includeInDownload.toUpperCase() != 'EXCLUDE';
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(cat.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Server category include flags (ISS-071 / Q5)',
+                      style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Include in library updates'),
+                      subtitle: Text(
+                        inUpdate ? 'INCLUDE' : 'EXCLUDE — manga here are skipped on global update',
+                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                      ),
+                      value: inUpdate,
+                      onChanged: (v) async {
+                        await _setCategoryInclude(cat: cat, forUpdate: true, enabled: v);
+                        setSheetState(() {});
+                      },
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Include in auto-download'),
+                      subtitle: Text(
+                        inDownload ? 'INCLUDE' : 'EXCLUDE',
+                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                      ),
+                      value: inDownload,
+                      onChanged: (v) async {
+                        await _setCategoryInclude(cat: cat, forUpdate: false, enabled: v);
+                        setSheetState(() {});
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ));
+  }
+
   void _showAddCategoryDialog() {
     final controller = TextEditingController();
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
           title: const Text('Add Category', style: TextStyle(fontWeight: FontWeight.bold)),
           content: TextField(
             controller: controller,
@@ -210,23 +335,22 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
               onPressed: () {
                 Navigator.pop(context);
-                _addCategory(controller.text);
+                unawaited(_addCategory(controller.text));
               },
               child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         );
       },
-    );
+    ).then((_) => disposeAfterDialog([controller])));
   }
 
   void _showRenameCategoryDialog(Category cat) {
     final controller = TextEditingController(text: cat.name);
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
           title: const Text('Rename Category', style: TextStyle(fontWeight: FontWeight.bold)),
           content: TextField(
             controller: controller,
@@ -242,22 +366,21 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
               onPressed: () {
                 Navigator.pop(context);
-                _renameCategory(cat, controller.text);
+                unawaited(_renameCategory(cat, controller.text));
               },
               child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         );
       },
-    );
+    ).then((_) => disposeAfterDialog([controller])));
   }
 
   void _showDeleteCategoryConfirm(Category cat) {
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
           title: const Text('Delete Category', style: TextStyle(fontWeight: FontWeight.bold)),
           content: Text('Are you sure you want to delete "${cat.name}"? Manga inside will remain in the library.'),
           actions: [
@@ -269,14 +392,14 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
               onPressed: () {
                 Navigator.pop(context);
-                _deleteCategory(cat);
+                unawaited(_deleteCategory(cat));
               },
               child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         );
       },
-    );
+    ));
   }
 
   void _showDefaultCategoryDialog() {
@@ -311,13 +434,12 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
   }
 
   void _showSkipUpdatingDialog() {
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDlgState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F1F24),
               title: const Text('Skip Updating Entries (Server)', style: TextStyle(fontWeight: FontWeight.bold)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -330,7 +452,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     onChanged: (val) {
                       setDlgState(() => _excludeCompleted = val ?? false);
                       setState(() => _excludeCompleted = val ?? false);
-                      _updateServer('excludeCompleted', val ?? false);
+                      unawaited(_updateServer('excludeCompleted', val ?? false));
                     },
                   ),
                   CheckboxListTile(
@@ -341,7 +463,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     onChanged: (val) {
                       setDlgState(() => _excludeNotStarted = val ?? false);
                       setState(() => _excludeNotStarted = val ?? false);
-                      _updateServer('excludeNotStarted', val ?? false);
+                      unawaited(_updateServer('excludeNotStarted', val ?? false));
                     },
                   ),
                   CheckboxListTile(
@@ -352,7 +474,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     onChanged: (val) {
                       setDlgState(() => _excludeUnreadChapters = val ?? false);
                       setState(() => _excludeUnreadChapters = val ?? false);
-                      _updateServer('excludeUnreadChapters', val ?? false);
+                      unawaited(_updateServer('excludeUnreadChapters', val ?? false));
                     },
                   ),
                 ],
@@ -367,7 +489,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
           },
         );
       },
-    );
+    ));
   }
 
   void _showRadioDialog({
@@ -376,11 +498,10 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
     required String currentValue,
     required ValueChanged<String> onSelected,
   }) {
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -398,7 +519,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
           ),
         );
       },
-    );
+    ));
   }
 
   String _formatLastUpdated(int timestampSec) {
@@ -467,7 +588,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                         onChanged: (val) {
                           if (val != null) {
                             setState(() => _globalUpdateInterval = val);
-                            _updateServer('globalUpdateInterval', val);
+                            unawaited(_updateServer('globalUpdateInterval', val));
                           }
                         },
                       ),
@@ -480,7 +601,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       boolValue: _updateMangas,
                       onBoolChanged: (v) {
                         setState(() => _updateMangas = v);
-                        _updateServer('updateMangas', v);
+                        unawaited(_updateServer('updateMangas', v));
                       },
                     ),
                     ListTile(
@@ -507,9 +628,9 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF191920),
+                            color: Theme.of(context).colorScheme.surfaceContainerHigh,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0x1AFFFFFF)),
+                            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                           ),
                           child: const Text(
                             'On iPhone and iPad, library updates run when you open the app (background WorkManager is Android-only for sideload stability).',
@@ -554,7 +675,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                         onChanged: (val) {
                           if (val != null) {
                             setState(() => _settings.libraryUpdateFrequencyHours = val);
-                            BackgroundService.instance.rescheduleTask();
+                            unawaited(BackgroundService.instance.rescheduleTask());
                           }
                         },
                       ),
@@ -567,7 +688,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       boolValue: _settings.libraryUpdateOnlyOnWifi,
                       onBoolChanged: (v) {
                         _settings.libraryUpdateOnlyOnWifi = v;
-                        BackgroundService.instance.rescheduleTask();
+                        unawaited(BackgroundService.instance.rescheduleTask());
                       },
                     ),
                     SettingsPropTile(
@@ -578,7 +699,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       boolValue: _settings.libraryUpdateOnlyCharging,
                       onBoolChanged: (v) {
                         _settings.libraryUpdateOnlyCharging = v;
-                        BackgroundService.instance.rescheduleTask();
+                        unawaited(BackgroundService.instance.rescheduleTask());
                       },
                     ),
                     ],
@@ -599,9 +720,9 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF191920),
+                              color: Theme.of(context).colorScheme.surfaceContainerHigh,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0x1AFFFFFF)),
+                              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -730,6 +851,30 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
                     SectionTitle(title: _isConnected ? 'Categories (Server Synced)' : 'Categories (Local)'),
+                    if (_neverUpdatedMangaCount > 0)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Container(
+                          key: const Key('category_never_updated_warning'),
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.error.withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: Text(
+                            categoryNeverUpdatedWarning(_neverUpdatedMangaCount)!,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Theme.of(context).colorScheme.onErrorContainer,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ),
                     if (_categories.isEmpty)
                       const ListTile(
                         leading: Icon(Icons.info_outline_rounded, color: Colors.grey),
@@ -738,9 +883,21 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       )
                     else
                       ..._categories.map((cat) {
+                        final updateExcluded = cat.includeInUpdate.toUpperCase() == 'EXCLUDE';
+                        final downloadExcluded = cat.includeInDownload.toUpperCase() == 'EXCLUDE';
+                        final flags = <String>[
+                          if (updateExcluded) 'updates off',
+                          if (downloadExcluded) 'downloads off',
+                        ];
                         return ListTile(
+                          key: Key('category_include_tile_${cat.serverId}'),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                          leading: const Icon(Icons.label_outline_rounded),
+                          leading: Icon(
+                            updateExcluded ? Icons.label_off_outlined : Icons.label_outline_rounded,
+                            color: updateExcluded
+                                ? Theme.of(context).colorScheme.error
+                                : null,
+                          ),
                           title: Wrap(
                             crossAxisAlignment: WrapCrossAlignment.center,
                             spacing: 6,
@@ -750,15 +907,31 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                               _isConnected ? SunfireBadge.server() : SunfireBadge.local(),
                             ],
                           ),
+                          subtitle: Text(
+                            flags.isEmpty
+                                ? 'Included in updates & downloads — tap to change'
+                                : '${flags.join(' · ')} — tap to change',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          onTap: () => _showCategoryIncludeSheet(cat),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.edit_outlined, size: 20),
+                                tooltip: 'Rename',
                                 onPressed: () => _showRenameCategoryDialog(cat),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent),
+                                icon: Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 20,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                                tooltip: 'Delete',
                                 onPressed: () => _showDeleteCategoryConfirm(cat),
                               ),
                             ],
@@ -771,4 +944,13 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
       },
     );
   }
+}
+
+/// Warning copy when excluded categories leave manga out of global updates (Q5).
+String? categoryNeverUpdatedWarning(int excludedMangaCount) {
+  if (excludedMangaCount <= 0) return null;
+  if (excludedMangaCount == 1) {
+    return '1 manga is never updated (in excluded categories).';
+  }
+  return '$excludedMangaCount manga are never updated (in excluded categories).';
 }

@@ -40,7 +40,7 @@
 //   2. A 401 still reports the server as not usable to sync. (unchanged)
 //   3. A 401 does not blackhole the next 15s of requests.    (fails pre-fix)
 //   4. A 403 behaves identically to a 401.                   (fails pre-fix)
-//   5. A dead port is still unreachable, and still not usable. (unchanged)
+//   5. A dead ports is still unreachable, and still not usable. (unchanged)
 //   6. A healthy 200 is still both reachable and usable.      (unchanged)
 //
 // Run: fvm flutter test test/graphql_reachability_test.dart
@@ -208,8 +208,8 @@ void main() {
   });
 
   group('genuine transport failures are still unreachable', () {
-    test('a dead port is unreachable and not usable', () async {
-      // Intentionally dead port (not 4567, which may be a live Suwayomi).
+    test('a dead ports is unreachable and not usable', () async {
+      // Intentionally dead ports (not 4567, which may be a live Suwayomi).
       gql.initialize('http://127.0.0.1:45999');
 
       final usable = await gql

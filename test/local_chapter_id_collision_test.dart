@@ -11,6 +11,7 @@
 // with no error anywhere.
 //
 // Run: fvm flutter test test/local_chapter_id_collision_test.dart
+import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -179,7 +180,7 @@ void main() {
     }
 
     test('the legacy index-derived id collides after a prepend', () {
-      seedTwoChapters();
+      unawaited(seedTwoChapters());
       // Source now returns [NEW, A, B] — NEW is at index 0, which is exactly
       // the id chapter A already holds.
       final newIndexInSource = 0;

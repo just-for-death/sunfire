@@ -20,6 +20,8 @@ import '../services/image_cache_helper.dart';
 import '../services/settings_service.dart';
 import '../services/wakelock_coordinator.dart';
 import 'graphql_client_service.dart';
+import 'suwayomi_parse_helpers.dart';
+import 'websocket_service.dart';
 
 // Re-exported so the many existing `sync_engine.dart` importers of this helper
 // keep working, and so the DB layer can reach it without a circular import.
@@ -255,6 +257,79 @@ List<Chapter> selectPrunableChapters({
   return stale;
 }
 
+/// Parses GraphQL category nodes into [Category] rows (UIX-14).
+///
+/// A node whose `id` is missing or malformed is **skipped**. Falling back to 0
+/// (the old `parseIntSafe` default) turned it into Suwayomi's built-in Default
+/// category, and because `serverId` is a unique-replace index the bogus node
+/// then replaced the real Default row. Used by both the sync pull and the
+/// library settings refresh.
+List<Category> parseCategoryNodes(List<dynamic> nodes, {String fallbackName = 'Default'}) {
+  final out = <Category>[];
+  for (final n in nodes) {
+    if (n is! Map) continue;
+    final map = n.cast<String, dynamic>();
+    final id = parseIntSafe(map['id'], -1);
+    if (id < 0) continue;
+    out.add(Category()
+      ..serverId = id
+      // Trimmed, like every local write. The dedupe check compares
+      // trim+lowercase, so an untrimmed pull produced a category that matched
+      // nothing and rendered as a second, identical tab.
+      ..name = (map['name'] as String? ?? fallbackName).trim()
+      ..order = parseIntSafe(map['order'])
+      // `isDefault` carried across; a missing value used to reset it to false
+      // on every row during `putAll`.
+      ..isDefault = parseBoolSafe(map['default'])
+      ..includeInUpdate = parseIncludeOrExclude(map['includeInUpdate'])
+      ..includeInDownload = parseIncludeOrExclude(map['includeInDownload']));
+  }
+  return out;
+}
+
+/// Parses the category ids for one manga from a `fetchLibrary` node's
+/// `categories.nodes` list.
+///
+/// Suwayomi's built-in "Default" category is id 0. Two server shapes mean
+/// "in Default":
+///   1. `categories.nodes` explicitly lists `{ id: 0 }`, and
+///   2. `categories.nodes` is **empty** — the web UI treats uncategorised
+///      in-library manga as Default (ISS-052). An empty list must therefore
+///      become `[0]`, not `[]`, or the Library Default tab permanently shows
+///      0 while All still lists the titles.
+///
+/// An old `> 0` guard dropped id 0 entirely; the -1 sentinel still keeps
+/// malformed nodes (missing/non-numeric id, which `parseIntSafe` would
+/// otherwise report as 0) out of the Default bucket.
+///
+/// Pure and `@visibleForTesting` like the other sync guards.
+@visibleForTesting
+List<int> parseMangaCategoryIds(dynamic catNodes) {
+  if (catNodes is! List) return const [];
+  final ids = <int>[];
+  for (final n in catNodes) {
+    if (n is! Map) continue;
+    final id = parseIntSafe(Map<String, dynamic>.from(n)['id'], -1);
+    if (id >= 0) ids.add(id);
+  }
+  // Empty nodes = uncategorised = Suwayomi Default (id 0).
+  if (ids.isEmpty) return const [0];
+  return ids;
+}
+
+/// Whether a manga with [categoryIds] belongs to library category [catServerId].
+///
+/// Default (id 0) matches both an explicit `0` and an empty list, so titles
+/// synced before empty→`[0]` normalisation still appear under Default.
+/// Every other category is a straight membership check. Used by the Library
+/// category tabs as well as sync tests (ISS-052).
+bool mangaBelongsToCategory(List<int> categoryIds, int catServerId) {
+  if (catServerId == 0) {
+    return categoryIds.isEmpty || categoryIds.contains(0);
+  }
+  return categoryIds.contains(catServerId);
+}
+
 /// True when [chapter] carries any local evidence that the user read it.
 ///
 /// This is the one piece of chapter state that cannot be recovered once the row
@@ -324,10 +399,296 @@ void mergeLastReadAt(Chapter chapter, Map<String, dynamic> chMap) {
   }
 }
 
+/// Merges one chapter node from the server library snapshot into [chapter]
+/// (an existing local row, or a fresh `Chapter()` for a first-seen id).
+///
+/// Single-flight gate with a one-deep queue for [SyncEngine.triggerSync].
+///
+/// Extracted so the queue semantics are unit-testable without spinning the
+/// full GraphQL / Isar cycle (ISS-050/051).
+@visibleForTesting
+class SyncCycleGate {
+  bool isSyncing = false;
+  bool queued = false;
+
+  /// Returns `true` when the caller should run a sync cycle. If a cycle is
+  /// already running, marks [queued] and returns `false`.
+  bool tryBegin() {
+    if (isSyncing) {
+      queued = true;
+      return false;
+    }
+    isSyncing = true;
+    queued = false;
+    return true;
+  }
+
+  /// Clears the queue flag at the start of a cycle body.
+  void beginPass() => queued = false;
+
+  /// After a cycle body finishes: `true` when another pass should run.
+  bool needsAnotherPass() => queued;
+
+  /// Releases the single-flight lock. Call only when no further pass is needed.
+  void end() {
+    isSyncing = false;
+  }
+}
+
+/// Applies a server `fetchedAt` onto [chapter] for the recent-updates pull.
+///
+/// When [preserveCleared] is true and the chapter is already persisted with
+/// `fetchedAt == 0`, the server stamp is skipped so a user Clear sticks across
+/// sync cycles (ISS-055). Brand-new rows (`id == Isar.autoIncrement`) still
+/// receive the stamp.
+@visibleForTesting
+void applyServerFetchedAt(
+  Chapter chapter,
+  Object? rawFetchedAt, {
+  bool preserveCleared = false,
+}) {
+  if (rawFetchedAt == null) return;
+  final ftVal = int.tryParse(rawFetchedAt.toString());
+  if (ftVal == null || ftVal <= 0) return;
+  final seconds = normalizeEpochToSeconds(ftVal) ?? 0;
+  if (seconds <= 0) return;
+  if (preserveCleared &&
+      chapter.id != Isar.autoIncrement &&
+      (chapter.fetchedAt == null || chapter.fetchedAt == 0)) {
+    return;
+  }
+  chapter.fetchedAt = seconds;
+}
+
+/// Documented pull-phase order inside one sync cycle (ISS-050 / ISS-051).
+///
+/// Library membership and the Updates feed must land before the slow per-manga
+/// chapter snapshot and before source-extension replication, so onboarding's
+/// bounded hydration and the first library paint see server titles / recent
+/// chapters even when the rest of the cycle is still running.
+@visibleForTesting
+const List<String> kSyncPullPhaseOrder = <String>[
+  'categories',
+  'libraryMembership',
+  'recentUpdates',
+  'history',
+  'chapterSnapshot',
+  'sourceReplication',
+];
+
+/// Extracted from `_pullServerState` so the snapshot rules are directly
+/// testable. In particular a chapter first seen in the snapshot gets
+/// `fetchedAt = 0`: the snapshot is the whole back-catalogue, not a feed of
+/// updates, and must never stamp chapters into Updates (UIX-05).
+@visibleForTesting
+void mergeSnapshotChapterNode(
+  Chapter chapter,
+  Map<String, dynamic> chMap, {
+  required Manga manga,
+  required bool hasPendingMutation,
+}) {
+  chapter.mangaId = manga.serverId;
+  chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber'] ?? ""}';
+  chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
+  chapter.pageCount = parseIntSafe(chMap['pageCount'], chapter.pageCount);
+
+  // Read-state merge: take the server's value outright unless this
+  // chapter has an unsynced outbound mutation queued, in which
+  // case keep the local value until that mutation replays — the
+  // old "OR true, never false" rule meant an unread-on-another-
+  // -device never made it back here.
+  final serverIsRead = parseBoolSafe(chMap['isRead']);
+  if (!hasPendingMutation) {
+    chapter.isRead = serverIsRead;
+  }
+
+  // lastPageRead merge — the server's page only wins when it
+  // represents strictly more progress (see mergeLastPageRead).
+  final serverLastPageRead = parseIntSafe(chMap['lastPageRead']);
+  chapter.lastPageRead = mergeLastPageRead(
+    local: chapter.lastPageRead,
+    server: serverLastPageRead,
+    hasPendingMutation: hasPendingMutation,
+  );
+
+  mergeLastReadAt(chapter, chMap);
+  mergeIsBookmarked(chapter, chMap, hasPendingMutation: hasPendingMutation);
+
+  final rawUpload = chMap['uploadDate'] ?? chMap['dateUpload'];
+  if (rawUpload != null) {
+    final rawStr = rawUpload.toString().trim();
+    if (rawStr.isNotEmpty && rawStr != '0' && rawStr != 'null') {
+      chapter.dateUpload = rawStr;
+    }
+    final upVal = int.tryParse(rawStr);
+    if (upVal != null && upVal > 0) {
+      chapter.uploadDate = normalizeEpochToSeconds(upVal) ?? 0;
+    }
+  }
+
+  // Do not stamp the historical backlog as updates during the
+  // snapshot. Genuine new chapters reach the Updates feed via
+  // _syncRecentUpdateChapters with the server's fetchedAt. (The
+  // snapshot used to run applyFloodCapToNewChapters here, which
+  // re-stamped 3-4 arbitrary — often the oldest — chapters per
+  // series with `now` on a fresh install / server connect.)
+  if (chapter.id == Isar.autoIncrement) {
+    chapter.fetchedAt = 0;
+  }
+
+  final rawScanlator = chMap['scanlator'] as String?;
+  if (rawScanlator != null && rawScanlator.isNotEmpty) {
+    chapter.scanlator = rawScanlator;
+  }
+
+  // Save remote chapter URLs for on-device QuickJS scraping
+  if (chMap['url'] != null && (chMap['url'] as String).isNotEmpty) {
+    chapter.url = chMap['url'] as String;
+  }
+  if (chMap['realUrl'] != null && (chMap['realUrl'] as String).isNotEmpty) {
+    chapter.realUrl = chMap['realUrl'] as String;
+  }
+
+  // Denormalize manga info into the chapter for offline display.
+  // Guarded on non-empty: this was an unconditional assign, so a
+  // series whose manga row has no cover (server returned only a
+  // proxy URL) lost the cover on every one of its chapters, unlike
+  // the history/recent-update blocks which already guarded.
+  chapter.mangaTitle = manga.title;
+  final seriesThumb = manga.thumbnailUrl;
+  if (seriesThumb != null && seriesThumb.isNotEmpty) {
+    chapter.mangaThumbnailUrl = seriesThumb;
+  }
+}
+
+/// Global-meta keys earlier builds wrote by mistake (ISS-077): `lastSync_null`
+/// from a sync before `initialize()`, and the shared literal device id.
+const List<String> kLegacyLastSyncMetaKeys = ['lastSync_null', 'lastSync_default_device'];
+
+/// `lastSync_<deviceId>` or null when the id is missing / a legacy literal.
+@visibleForTesting
+String? lastSyncMetaKey(String? deviceId) {
+  final id = deviceId?.trim() ?? '';
+  if (id.isEmpty || id == 'null' || id == 'default_device') return null;
+  return 'lastSync_$id';
+}
+
+/// Per-manga change fingerprint for targeted chapter refresh (ISS-076 B6).
+///
+/// Built from cheap markers on the `fetchLibrary` node: when a server reports
+/// the same `chaptersLastFetchedAt`, latest fetched chapter, chapter count,
+/// unread/bookmark/download counts and last-read chapter (id, page, time,
+/// read flag) as last cycle, nothing a full chapter snapshot would merge has
+/// changed and the per-manga `fetchMangaDetails` walk can be skipped.
+///
+/// Returns null when the server did not report markers (older schema) —
+/// callers must then run the full snapshot.
+@visibleForTesting
+String? chapterRefreshFingerprint(Map<String, dynamic> node) {
+  if (!node.containsKey('chaptersLastFetchedAt')) return null;
+  String sub(String key, List<String> fields) {
+    final m = node[key];
+    if (m is! Map) return '-';
+    return fields.map((f) => '${m[f]}').join(':');
+  }
+
+  return [
+    node['chaptersLastFetchedAt'],
+    sub('latestFetchedChapter', const ['id', 'fetchedAt']),
+    sub('chapterStats', const ['totalCount']),
+    node['unreadCount'],
+    node['bookmarkCount'],
+    node['downloadCount'],
+    sub('lastReadChapter', const ['id', 'lastPageRead', 'lastReadAt', 'isRead']),
+  ].join('|');
+}
+
+/// Max age of a skipped manga's last full chapter snapshot (ISS-076). Past
+/// this a full snapshot runs regardless, so anything the markers miss (a
+/// chapter renamed in place, a scanlator change) is bounded in staleness.
+const Duration kChapterSnapshotMaxAge = Duration(hours: 6);
+
+/// Whether the full chapter snapshot for one manga can be skipped (ISS-076).
+@visibleForTesting
+bool shouldSkipChapterSnapshot({
+  required String? currentFingerprint,
+  required String? previousFingerprint,
+  required DateTime? lastFullSnapshotAt,
+  required int localChapterCount,
+  required DateTime now,
+  Duration maxAge = kChapterSnapshotMaxAge,
+}) {
+  if (currentFingerprint == null || previousFingerprint == null) return false;
+  if (currentFingerprint != previousFingerprint) return false;
+  if (localChapterCount <= 0) return false;
+  if (lastFullSnapshotAt == null) return false;
+  return now.difference(lastFullSnapshotAt) < maxAge;
+}
+
+/// Time window (epoch seconds) for the incremental updates pull (ISS-074).
+/// Null → full top-N pull (first cycle, or the periodic full refresh that
+/// reconciles read/downloaded flags on older rows). Otherwise the previous
+/// high-water mark minus [overlap] so clock skew cannot drop a chapter.
+@visibleForTesting
+int? updatesWindowSince({
+  required int? highWaterFetchedAt,
+  required DateTime? lastFullUpdatesPullAt,
+  required DateTime now,
+  Duration fullEvery = const Duration(hours: 6),
+  int overlapSeconds = 3600,
+}) {
+  if (highWaterFetchedAt == null || highWaterFetchedAt <= 0) return null;
+  if (lastFullUpdatesPullAt == null || now.difference(lastFullUpdatesPullAt) >= fullEvery) return null;
+  final since = highWaterFetchedAt - overlapSeconds;
+  return since > 0 ? since : null;
+}
+
 class SyncEngine {
   static SyncEngine? _instance;
-  bool _isSyncing = false;
+  final SyncCycleGate _cycleGate = SyncCycleGate();
+  bool get _isSyncing => _cycleGate.isSyncing;
+  /// Whether a sync cycle (including a queued follow-up pass) is in flight.
+  bool get isSyncing => _cycleGate.isSyncing;
+  set _isSyncing(bool v) {
+    // forceReconcile and a few early-return paths still flip the flag directly.
+    if (v) {
+      _cycleGate.isSyncing = true;
+    } else {
+      _cycleGate.end();
+    }
+  }
   String? _deviceId;
+  Completer<void>? _cycleCompleter;
+  final StreamController<void> _syncCompleteController =
+      StreamController<void>.broadcast();
+  // Process-lifetime singleton (ISS-057); intentionally never cancelled.
+  // ignore: cancel_subscriptions
+  StreamSubscription<Map<String, dynamic>>? _wsUpdatePullSub;
+  Timer? _wsUpdatePullTimer;
+
+  // ISS-076: chapter-refresh fingerprints. In-memory by design: the first
+  // cycle of every process run takes a full snapshot.
+  final Map<int, String> _chapterFingerprints = {};
+  final Map<int, DateTime> _lastFullChapterSnapshotAt = {};
+  Map<int, String?> _currentLibraryFingerprints = const {};
+  int _lastSnapshotSkipped = 0;
+
+  /// How many library manga skipped the full chapter snapshot last cycle (ISS-076).
+  int get lastChapterSnapshotSkippedCount => _lastSnapshotSkipped;
+
+  bool _legacyLastSyncMetaCleaned = false;
+
+  // ISS-074: updates time window.
+  int? _updatesHighWaterFetchedAt;
+  DateTime? _lastFullUpdatesPullAt;
+
+  /// Fires after each full sync cycle (including any one-deep queued follow-up
+  /// pass) finishes. Library / onboarding listen so they can reload Isar when
+  /// a mid-flight `triggerSync` was coalesced into the gate (ISS-059).
+  Stream<void> get onSyncCycleComplete => _syncCompleteController.stream;
+
+  /// Stable per-device id used for `lastSync_<id>` meta and SyncRecord rows.
+  String? get deviceId => _deviceId;
 
   SyncEngine._();
 
@@ -336,10 +697,43 @@ class SyncEngine {
     return _instance!;
   }
 
+  /// Resolves a stable device id: explicit [deviceId], else a persisted UUID in
+  /// SettingsService, else a fresh UUID written there. Never falls back to the
+  /// shared literal `default_device` (ISS-062).
+  static Future<String> resolveStableDeviceId({String? deviceId}) async {
+    if (deviceId != null && deviceId.trim().isNotEmpty && deviceId != 'default_device') {
+      return deviceId.trim();
+    }
+    final existing = SettingsService.instance.syncDeviceId;
+    if (existing != null && existing.trim().isNotEmpty && existing != 'default_device') {
+      return existing.trim();
+    }
+    final minted = const Uuid().v4();
+    SettingsService.instance.syncDeviceId = minted;
+    return minted;
+  }
+
   Future<void> initialize({String? deviceId}) async {
-    _deviceId = deviceId ?? 'default_device';
+    _deviceId = await resolveStableDeviceId(deviceId: deviceId);
     await LoggerService.instance.logInfo('SyncEngine initialized for deviceId: $_deviceId', 'SyncEngine');
+    _ensureWsUpdatePullHook();
     await triggerSync();
+  }
+
+  /// ISS-057: when the server finishes a library update, pull recent chapters
+  /// even if the Updates tab is not open (its listener alone was not enough).
+  void _ensureWsUpdatePullHook() {
+    if (_wsUpdatePullSub != null) return;
+    _wsUpdatePullSub = WebSocketService.instance.onUpdateStatus.listen((event) {
+      final jobs = event['jobsInfo'];
+      final running = jobs is Map && jobs['isRunning'] == true;
+      // Pull when a job reports idle / status progress, coalesced.
+      if (running) return;
+      _wsUpdatePullTimer?.cancel();
+      _wsUpdatePullTimer = Timer(const Duration(milliseconds: 800), () {
+        unawaited(triggerSync());
+      });
+    });
   }
 
   /// Reset failed/abandoned sync records back to pending so a manual retry can
@@ -371,44 +765,77 @@ class SyncEngine {
       if (!online) return;
       await _flushPendingMutations();
       await _syncCategories();
-      await _syncSourcesAndReplicate();
       await _performFullSync(forceLibraryRemovals: true);
+      await _syncSourcesAndReplicate();
     } finally {
       _isSyncing = false;
     }
   }
 
-  Future<void> triggerSync() async {
-    if (_isSyncing) return;
+  /// Runs one sync cycle. Every log line from the cycle carries the same
+  /// correlation id (UIX-18).
+  Future<void> triggerSync() => LoggerService.withCorrelationAsync(_triggerSyncImpl);
+
+  Future<void> _triggerSyncImpl() async {
     if (!GraphQLClientService.instance.isConfigured) {
       return;
     }
-
-    _isSyncing = true;
-    try {
-      final isServerOnline = await GraphQLClientService.instance.checkServerReachable();
-      if (!isServerOnline) {
-        // Server is offline — silently keep local authoritative state without firing network queries
-        return;
+    // Hydration can call triggerSync before initialize(); mint/load a stable
+    // device id first so sync meta is never written under default_device (ISS-062).
+    if (_deviceId == null || _deviceId == 'default_device') {
+      _deviceId = await resolveStableDeviceId();
+    }
+    // Single-flight with a one-deep queue: a call while busy schedules exactly
+    // one follow-up cycle instead of being dropped. Mid-cycle callers await the
+    // in-flight Completer so Library/onboarding reload Isar *after* the queued
+    // pass finishes, not against a stale snapshot (ISS-059).
+    if (!_cycleGate.tryBegin()) {
+      final inFlight = _cycleCompleter;
+      if (inFlight != null) {
+        await inFlight.future;
       }
-      try {
-        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-          await WakelockCoordinator.instance.acquire('sync');
+      return;
+    }
+
+    final cycleDone = Completer<void>();
+    _cycleCompleter = cycleDone;
+    try {
+      do {
+        _cycleGate.beginPass();
+        final isServerOnline = await GraphQLClientService.instance.checkServerReachable();
+        if (!isServerOnline) {
+          // Server is offline — silently keep local authoritative state without firing network queries
+          continue;
         }
-      } catch (ignoredError) { if (kDebugMode) debugPrint('[sync_engine] ignored error: $ignoredError'); }
-      await LoggerService.instance.logInfo('Starting sync cycle with server...', 'SyncEngine');
-      await _flushPendingMutations();
-      await _pullServerState();
-      await LoggerService.instance.logInfo('Sync cycle completed successfully', 'SyncEngine');
-    } catch (e, stack) {
-      await LoggerService.instance.logError('Sync cycle error: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+        try {
+          if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+            await WakelockCoordinator.instance.acquire('sync');
+          }
+        } catch (ignoredError) { if (kDebugMode) debugPrint('[sync_engine] ignored error: $ignoredError'); }
+        try {
+          await LoggerService.instance.logInfo('Starting sync cycle with server...', 'SyncEngine');
+          await _flushPendingMutations();
+          await _pullServerState();
+          await LoggerService.instance.logInfo('Sync cycle completed successfully', 'SyncEngine');
+        } catch (e, stack) {
+          await LoggerService.instance.logError('Sync cycle error: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+        } finally {
+          try {
+            if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+              await WakelockCoordinator.instance.release('sync');
+            }
+          } catch (ignoredError) { if (kDebugMode) debugPrint('[sync_engine] ignored error: $ignoredError'); }
+        }
+      } while (_cycleGate.needsAnotherPass());
     } finally {
-      try {
-        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-          await WakelockCoordinator.instance.release('sync');
-        }
-      } catch (ignoredError) { if (kDebugMode) debugPrint('[sync_engine] ignored error: $ignoredError'); }
-      _isSyncing = false;
+      _cycleGate.end();
+      if (!cycleDone.isCompleted) cycleDone.complete();
+      if (identical(_cycleCompleter, cycleDone)) {
+        _cycleCompleter = null;
+      }
+      if (!_syncCompleteController.isClosed) {
+        _syncCompleteController.add(null);
+      }
     }
   }
 
@@ -970,15 +1397,19 @@ class SyncEngine {
         // category-id remap, where a dropped payload means every manga assigned
         // to that category offline stays unassigned PERMANENTLY. The category
         // exists on the server and nothing references it.
-        LoggerService.instance.logWarning(
+        unawaited(LoggerService.instance.logWarning(
           'Failed to remap a pending category assignment; that manga will stay '
           'unassigned: $e',
           'SyncEngine',
-        );
+        ));
       }
     }
     return changed;
   }
+
+  /// Test seam: runs one replay pass over the pending mutation queue.
+  @visibleForTesting
+  Future<void> debugFlushPendingMutations() => _flushPendingMutations();
 
   Future<void> _flushPendingMutations() async {
     final pendingRecords = await IsarService.instance.getPendingSyncRecords();
@@ -1011,17 +1442,31 @@ class SyncEngine {
       // The guard lives at enqueue time, so a chapter read offline BEFORE the
       // user turned Incognito on was still sitting in the queue and got pushed
       // on the next flush — the opposite of what turning it on is for. Skip
-      // read-progress records while it is on; they stay queued and replay if
-      // the user turns it back off. Non-progress mutations (category edits,
-      // library membership, tracker updates the user made deliberately) are
-      // not reading history and still go through.
+      // chapter updates (read progress AND bookmarks — both are reading
+      // activity) while it is on; they stay queued and replay if the user
+      // turns it back off. Tracker `mangaProgress` replays are held back too
+      // (inside the try below, after the payload is decoded). Category edits,
+      // library membership and other tracker ops are deliberate user actions
+      // and still go through.
       if (SettingsService.instance.incognitoMode &&
           record.entityType == SyncEntityType.chapter &&
           record.action == SyncAction.update) {
         continue;
       }
       try {
+        // Decoded inside the try: a corrupt payload must land in the catch
+        // (non-transient failure, retry budget spent) instead of aborting the
+        // whole flush — and with it every later pull — on every sync cycle.
         final payload = jsonDecode(record.payloadJson) as Map<String, dynamic>;
+        // Incognito also holds back tracker *progress* replays (they leak
+        // reading activity to MAL/AniList). Deliberate tracker ops still go
+        // through. The record stays pending for when Incognito is turned off.
+        if (SettingsService.instance.incognitoMode &&
+            record.entityType == SyncEntityType.tracker &&
+            record.action == SyncAction.update &&
+            payload['op']?.toString() == 'mangaProgress') {
+          continue;
+        }
         bool success = false;
 
         switch (record.entityType) {
@@ -1287,9 +1732,17 @@ class SyncEngine {
   }
 
   Future<void> _pullServerState() async {
+    // Order matters for onboarding (ISS-050): categories are cheap, then the
+    // library membership / updates / chapter snapshot must land in Isar BEFORE
+    // source replication. `downloadAndInstallMatchingSources` can burn the
+    // entire onboarding hydration timeout downloading JS scrapers, and the old
+    // order meant `fetchLibrary` never ran before the timeout — so the app
+    // opened with an empty library even though the server had titles.
+    // Source replication still benefits: it now sees the freshly-pulled
+    // library when remapping.
     await _syncCategories();
-    await _syncSourcesAndReplicate();
     await _performFullSync();
+    await _syncSourcesAndReplicate();
   }
 
   Future<void> _syncSourcesAndReplicate() async {
@@ -1355,19 +1808,7 @@ class SyncEngine {
       final data = await GraphQLClientService.instance.fetchCategories();
       if (data != null && data.containsKey('categories')) {
         final nodes = data['categories']['nodes'] as List<dynamic>;
-        final categories = <Category>[];
-        for (final n in nodes) {
-          final map = n as Map<String, dynamic>;
-          final cat = Category()
-            ..serverId = parseIntSafe(map['id'])
-            // Trimmed, like every local write. The dedupe check further down
-            // compares trim+lowercase, so an untrimmed pull produced a category
-            // that matched nothing and rendered as a second, identical tab.
-            ..name = (map['name'] as String? ?? 'Default').trim()
-            ..order = parseIntSafe(map['order'])
-            ..isDefault = parseBoolSafe(map['default']);
-          categories.add(cat);
-        }
+        final categories = parseCategoryNodes(nodes);
 
         // Wipe guard, which this path did not have at all.
         //
@@ -1382,8 +1823,10 @@ class SyncEngine {
         // Two independent checks: the response must be structurally complete,
         // and it must not have shrunk catastrophically relative to what we hold.
         final snapshotComplete = isCompleteSnapshot(data);
+        // `>= 0`, not `> 0`: Suwayomi's built-in "Default" category is id 0,
+        // and excluding it under-counted the shelf the ratio guard protects.
         final existingServerLinked = (await IsarService.instance.getCategories())
-            .where((c) => c.serverId > 0)
+            .where((c) => c.serverId >= 0)
             .length;
         if (!isCategoryPullAcceptable(
           snapshotComplete: snapshotComplete,
@@ -1426,6 +1869,10 @@ class SyncEngine {
         serverReachable = true;
         final rawNodes = libData['mangas']['nodes'];
         final nodes = rawNodes is List ? rawNodes : const <dynamic>[];
+        _currentLibraryFingerprints = {
+          for (final n in nodes)
+            if (n is Map) parseIntSafe(n['id']): chapterRefreshFingerprint(Map<String, dynamic>.from(n)),
+        };
         final serverMangas = <Manga>[];
 
         for (final n in nodes) {
@@ -1440,10 +1887,19 @@ class SyncEngine {
           manga ??= Manga()..serverId = serverId;
 
           manga.title = nodeMap['title']?.toString() ?? 'Untitled';
-          // Only overwrite author/description from server if user has NOT locked metadata via Metron enrichment
+          // Only overwrite author/description from server if user has NOT locked
+          // metadata via Metron enrichment. Never assign null/blank from a
+          // partial library node — that wiped author on every sync when
+          // fetchLibrary omitted the fields (ISS-053).
           if (!manga.isMetadataLocked) {
-            manga.author = nodeMap['author']?.toString();
-            manga.description = nodeMap['description']?.toString();
+            final serverAuthor = nodeMap['author']?.toString();
+            if (serverAuthor != null && serverAuthor.trim().isNotEmpty) {
+              manga.author = serverAuthor.trim();
+            }
+            final serverDesc = nodeMap['description']?.toString();
+            if (serverDesc != null && serverDesc.trim().isNotEmpty) {
+              manga.description = serverDesc.trim();
+            }
           }
           manga.inLibrary = true;
           // Normalised to seconds like every other local timestamp. This took
@@ -1468,14 +1924,8 @@ class SyncEngine {
 
           if (nodeMap.containsKey('categories') && nodeMap['categories'] != null && nodeMap['categories'] is Map) {
             final catContainer = nodeMap['categories'] as Map;
-            final catNodes = catContainer['nodes'];
-            if (catNodes is List) {
-              manga.categoryIds = catNodes
-                  .whereType<Map>()
-                  .map((c) => parseIntSafe(c['id']))
-                  .where((id) => id > 0)
-                  .toList();
-            }
+            // Missing/null nodes == uncategorised == Default (id 0).
+            manga.categoryIds = parseMangaCategoryIds(catContainer['nodes'] ?? const <dynamic>[]);
           }
 
           final sourceMapNode = nodeMap['source'];
@@ -1535,7 +1985,7 @@ class SyncEngine {
         // Pre-cache cover images to local disk for offline resilience
         for (final m in serverMangas) {
           if (m.thumbnailUrl != null && m.thumbnailUrl!.isNotEmpty) {
-            ImageCacheHelper.cacheThumbnail(m.serverId, m.thumbnailUrl!, sourceName: m.sourceName);
+            unawaited(ImageCacheHelper.cacheThumbnail(m.serverId, m.thumbnailUrl!, sourceName: m.sourceName));
           }
         }
 
@@ -1614,17 +2064,23 @@ class SyncEngine {
 
     if (!serverReachable) return;
 
-    // ── STEP 3: Pull ALL chapters for the full library (full snapshot) ────
-    // This is the core of local-first: every chapter, page count, URL, and
-    // fetch timestamp is stored in Isar so the app never needs the server
-    // to know what chapters exist or to navigate reading history.
-    await _syncAllChaptersForLibrary(serverUrl: serverUrl);
-
-    // ── STEP 4: Pull reading history chapters (isRead=true) ──────────────
+    // ── STEP 3: Recent updates + history BEFORE the full chapter snapshot ─
+    // ISS-051: `_syncAllChaptersForLibrary` is O(library) and can run for
+    // minutes. It also stamps first-seen chapters with `fetchedAt = 0` so they
+    // stay out of Updates (UIX-05). Genuine feed entries must therefore arrive
+    // via `_syncRecentUpdateChapters` *before* that long snapshot — otherwise
+    // onboarding's timeout / the user opening Updates mid-snapshot sees an
+    // empty feed even though the server has recent chapters. Running updates
+    // first also means the snapshot finds those rows already persisted
+    // (id != Isar.autoIncrement) and keeps their server `fetchedAt`.
+    await _syncRecentUpdateChapters(serverUrl: serverUrl);
     await _syncHistoryChapters(serverUrl: serverUrl);
 
-    // ── STEP 5: Pull recent update chapters (new fetched chapters) ────────
-    await _syncRecentUpdateChapters(serverUrl: serverUrl);
+    // ── STEP 4: Pull ALL chapters for the full library (full snapshot) ────
+    // Core of local-first: every chapter, page count, URL, and fetch
+    // timestamp is stored in Isar so the app never needs the server to know
+    // what chapters exist or to navigate reading history.
+    await _syncAllChaptersForLibrary(serverUrl: serverUrl);
 
     // There is deliberately NO local `last_sync_unix` meta write here. One
     // existed, was written at the end of every full sync, and was never read by
@@ -1637,10 +2093,24 @@ class SyncEngine {
     //
     // The server-side per-device marker is kept: the web UI and other tooling
     // read it, and unlike the local one it is not misleading.
-    try {
-      await GraphQLClientService.instance.setGlobalMeta('lastSync_$_deviceId', nowUnix.toString());
-    } catch (e) {
-      await LoggerService.instance.logWarning('Failed to set global meta lastSync: $e', 'SyncEngine');
+    // ISS-077: never write `lastSync_null` (sync before initialize()), and
+    // once per process remove the legacy junk keys earlier builds left behind
+    // (`lastSync_null`, shared `lastSync_default_device` — ISS-062).
+    final markerKey = lastSyncMetaKey(_deviceId);
+    if (markerKey != null) {
+      try {
+        await GraphQLClientService.instance.setGlobalMeta(markerKey, nowUnix.toString());
+      } catch (e) {
+        await LoggerService.instance.logWarning('Failed to set global meta lastSync: $e', 'SyncEngine');
+      }
+    }
+    if (!_legacyLastSyncMetaCleaned) {
+      _legacyLastSyncMetaCleaned = true;
+      for (final junk in kLegacyLastSyncMetaKeys) {
+        try {
+          await GraphQLClientService.instance.deleteGlobalMeta(junk);
+        } catch (_) {}
+      }
     }
   }
 
@@ -1662,11 +2132,25 @@ class SyncEngine {
 
       await LoggerService.instance.logInfo('Full chapter snapshot: syncing ${library.length} manga', 'SyncEngine');
 
+      var skipped = 0;
+      final now = DateTime.now();
+
       // Chunk fetch for concurrency
       for (var i = 0; i < library.length; i += 5) {
         final chunk = library.skip(i).take(5).toList();
         await Future.wait(chunk.map((manga) async {
           try {
+            final fp = _currentLibraryFingerprints[manga.serverId];
+            if (shouldSkipChapterSnapshot(
+              currentFingerprint: fp,
+              previousFingerprint: _chapterFingerprints[manga.serverId],
+              lastFullSnapshotAt: _lastFullChapterSnapshotAt[manga.serverId],
+              localChapterCount: manga.chapterCount,
+              now: now,
+            )) {
+              skipped++;
+              return;
+            }
             final data = await GraphQLClientService.instance.fetchMangaDetails(manga.serverId);
             if (data == null || !data.containsKey('manga')) return;
 
@@ -1674,6 +2158,10 @@ class SyncEngine {
 
           // Update manga fields from detail response (respect metadata lock from Metron)
           if (!manga.isMetadataLocked) {
+            final detailAuthor = mangaData['author'] as String?;
+            if (detailAuthor != null && detailAuthor.trim().isNotEmpty) {
+              manga.author = detailAuthor.trim();
+            }
             manga.description = mangaData['description'] as String? ?? manga.description;
             manga.status = mangaData['status'] as String? ?? manga.status;
             final genresList = mangaData['genre'] as List<dynamic>?;
@@ -1747,74 +2235,12 @@ class SyncEngine {
                   await IsarService.instance.getChapterByServerId(chServerId);
               chapter ??= Chapter()..serverId = chServerId;
 
-              chapter.mangaId = manga.serverId;
-              chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber'] ?? ""}';
-              chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
-              chapter.pageCount = parseIntSafe(chMap['pageCount'], chapter.pageCount);
-
-              // Read-state merge: take the server's value outright unless this
-              // chapter has an unsynced outbound mutation queued, in which
-              // case keep the local value until that mutation replays — the
-              // old "OR true, never false" rule meant an unread-on-another-
-              // -device never made it back here.
-              final serverIsRead = parseBoolSafe(chMap['isRead']);
-              final hasPendingMutation = pendingChapterIds.contains(chapter.serverId.toString());
-              if (!hasPendingMutation) {
-                chapter.isRead = serverIsRead;
-              }
-
-              // lastPageRead merge — the server's page only wins when it
-              // represents strictly more progress (see mergeLastPageRead).
-              final serverLastPageRead = parseIntSafe(chMap['lastPageRead']);
-              chapter.lastPageRead = mergeLastPageRead(
-                local: chapter.lastPageRead,
-                server: serverLastPageRead,
-                hasPendingMutation: hasPendingMutation,
+              mergeSnapshotChapterNode(
+                chapter,
+                chMap,
+                manga: manga,
+                hasPendingMutation: pendingChapterIds.contains(chapter.serverId.toString()),
               );
-
-              mergeLastReadAt(chapter, chMap);
-              mergeIsBookmarked(chapter, chMap, hasPendingMutation: hasPendingMutation);
-
-              final rawUpload = chMap['uploadDate'] ?? chMap['dateUpload'];
-              if (rawUpload != null) {
-                final rawStr = rawUpload.toString().trim();
-                if (rawStr.isNotEmpty && rawStr != '0' && rawStr != 'null') {
-                  chapter.dateUpload = rawStr;
-                }
-                final upVal = int.tryParse(rawStr);
-                if (upVal != null && upVal > 0) {
-                  chapter.uploadDate = normalizeEpochToSeconds(upVal) ?? 0;
-                }
-              }
-
-              // Do not stamp full historical chapter backlog as updates during snapshot
-              if (chapter.id == Isar.autoIncrement) {
-                chapter.fetchedAt = 0;
-              }
-
-              final rawScanlator = chMap['scanlator'] as String?;
-              if (rawScanlator != null && rawScanlator.isNotEmpty) {
-                chapter.scanlator = rawScanlator;
-              }
-
-              // Save remote chapter URLs for on-device QuickJS scraping
-              if (chMap['url'] != null && (chMap['url'] as String).isNotEmpty) {
-                chapter.url = chMap['url'] as String;
-              }
-              if (chMap['realUrl'] != null && (chMap['realUrl'] as String).isNotEmpty) {
-                chapter.realUrl = chMap['realUrl'] as String;
-              }
-
-              // Denormalize manga info into the chapter for offline display.
-              // Guarded on non-empty: this was an unconditional assign, so a
-              // series whose manga row has no cover (server returned only a
-              // proxy URL) lost the cover on every one of its chapters, unlike
-              // the history/recent-update blocks which already guarded.
-              chapter.mangaTitle = manga.title;
-              final seriesThumb = manga.thumbnailUrl;
-              if (seriesThumb != null && seriesThumb.isNotEmpty) {
-                chapter.mangaThumbnailUrl = seriesThumb;
-              }
 
               chaptersToSave.add(chapter);
             }
@@ -1847,6 +2273,14 @@ class SyncEngine {
           }
 
           await IsarService.instance.saveManga(manga);
+          // Only a COMPLETE snapshot may seed the skip fingerprint, or a
+          // truncated pull would be frozen in place for up to 6h.
+          if (chapterNodes != null && isCompleteSnapshot(data) && fp != null) {
+            _chapterFingerprints[manga.serverId] = fp;
+            _lastFullChapterSnapshotAt[manga.serverId] = DateTime.now();
+          } else {
+            _chapterFingerprints.remove(manga.serverId);
+          }
         } catch (e) {
           // Individual manga chapter sync failure is non-fatal — continue with others
           await LoggerService.instance.logWarning('Chapter snapshot failed for manga ${manga.serverId}: $e', 'SyncEngine');
@@ -1854,7 +2288,11 @@ class SyncEngine {
         }));
       }
 
-      await LoggerService.instance.logInfo('Full chapter snapshot complete', 'SyncEngine');
+      _lastSnapshotSkipped = skipped;
+      await LoggerService.instance.logInfo(
+        'Full chapter snapshot complete (${library.length - skipped} fetched, $skipped unchanged/skipped)',
+        'SyncEngine',
+      );
     } catch (e, stack) {
       await LoggerService.instance.logError('Full chapter snapshot error: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
     }
@@ -1955,8 +2393,15 @@ class SyncEngine {
   Future<void> _syncRecentUpdateChapters({required String serverUrl}) async {
     try {
       final pendingChapterIds = await IsarService.instance.getPendingChapterEntityIds();
-      final data = await GraphQLClientService.instance.fetchUpdatesChapters(first: 150);
+      final now = DateTime.now();
+      final since = updatesWindowSince(
+        highWaterFetchedAt: _updatesHighWaterFetchedAt,
+        lastFullUpdatesPullAt: _lastFullUpdatesPullAt,
+        now: now,
+      );
+      final data = await GraphQLClientService.instance.fetchUpdatesChapters(first: 150, sinceFetchedAt: since);
       if (data == null || !data.containsKey('chapters')) return;
+      if (since == null) _lastFullUpdatesPullAt = now;
 
       final nodes = data['chapters']['nodes'] as List<dynamic>?;
       if (nodes == null) return;
@@ -2018,12 +2463,21 @@ class SyncEngine {
           }
         }
 
-        final rawFetchedAt = map['fetchedAt'];
-        if (rawFetchedAt != null) {
-          final ftVal = int.tryParse(rawFetchedAt.toString());
-          if (ftVal != null && ftVal > 0) {
-            chapter.fetchedAt = normalizeEpochToSeconds(ftVal) ?? 0;
-          }
+        // Preserve user-cleared Updates rows (local fetchedAt == 0) across sync
+        // (ISS-055). Brand-new chapters still receive the server stamp.
+        applyServerFetchedAt(chapter, map['fetchedAt'], preserveCleared: true);
+
+        // Bulk-import chapters share fetchedAt ≈ manga.inLibraryAt; keep them
+        // out of the Updates feed so they cannot flood the top-N (ISS-054).
+        final mangaMapForImport = map['manga'] as Map<String, dynamic>?;
+        final importInLibraryAt = normalizeEpochToSeconds(
+          mangaMapForImport?['inLibraryAt'] ?? map['inLibraryAt'],
+        );
+        if (isLikelyBulkImportChapter(
+          fetchedAt: chapter.fetchedAt,
+          inLibraryAt: importInLibraryAt,
+        )) {
+          chapter.fetchedAt = 0;
         }
 
         final rawScanlator = map['scanlator'] as String?;
@@ -2042,6 +2496,10 @@ class SyncEngine {
         }
 
         chaptersToSave.add(chapter);
+        final rawFetched = normalizeEpochToSeconds(map['fetchedAt']);
+        if (rawFetched != null && rawFetched > (_updatesHighWaterFetchedAt ?? 0)) {
+          _updatesHighWaterFetchedAt = rawFetched;
+        }
       }
 
       await IsarService.instance.saveChapters(chaptersToSave);

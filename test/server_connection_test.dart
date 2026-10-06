@@ -21,18 +21,17 @@ void main() {
 
   Future<void> startMockDockerServer() async {
     mockDockerServer = await HttpServer.bind(InternetAddress.loopbackIPv4, serverPort);
-    mockDockerServer!.listen((HttpRequest request) {
+    mockDockerServer!.listen((HttpRequest request) async {
       print("SERVER GOT REQUEST: ${request.uri}");
       if (request.uri.path.contains('graphql')) {
         request.response
           ..statusCode = 200
           ..headers.contentType = ContentType.json
-          ..write(jsonEncode({'data': {'library': [{'id': '123'}]}}))
-          ..close();
+          ..write(jsonEncode({'data': {'library': [{'id': '123'}]}}));
+        await request.response.close();
       } else {
-        request.response
-          ..statusCode = 404
-          ..close();
+        request.response.statusCode = 404;
+        await request.response.close();
       }
     });
   }
@@ -69,7 +68,7 @@ void main() {
     serverPort = 9092; // Use new port to avoid OS TIME_WAIT
     GraphQLClientService.instance.initialize('http://127.0.0.1:$serverPort', authToken: 'Bearer test');
     await startMockDockerServer(); // Simulate docker start
-    await Future.delayed(const Duration(milliseconds: 200)); // Wait for server to bind fully
+    await Future<void>.delayed(const Duration(milliseconds: 200)); // Wait for server to bind fully
 
     // First request might fail due to stale TCP socket from Keep-Alive pool
     await GraphQLClientService.instance.query('''

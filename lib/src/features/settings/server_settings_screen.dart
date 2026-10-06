@@ -7,9 +7,14 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/engine/javascript/m_client.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/server_session_service.dart';
+import 'server_login_sheet.dart';
 import '../../core/sync/server_auth_helper.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/widgets/dialog_controllers.dart';
+import '../../ui/widgets/dialog_title.dart';
+import '../../ui/widgets/proxy_url_display.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -27,6 +32,8 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
   bool _isConnected = false;
   int? _latencyMs;
   String _serverVersion = 'Unknown';
+  String _serverBuildType = '';
+  List<ServerUpdateInfo> _serverUpdates = const [];
 
   // Client
   String _clientUrl = '';
@@ -73,6 +80,11 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
   String _syncYomiHost = '';
   String _syncYomiApiKey = '';
 
+  // KOReader sync (B14)
+  bool _koSyncLoggedIn = false;
+  String _koSyncSubtitle = 'Not connected';
+  String? _lastSyncYomiState;
+
   // WebUI & Diagnostics
   String _webUIFlavor = 'CUSTOM';
   String _webUIChannel = 'STABLE';
@@ -90,7 +102,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     super.initState();
     _clientUrl = _settings.serverUrl;
     _flareSolverrUrl = '';
-    _loadAuthAndSettings();
+    unawaited(_loadAuthAndSettings());
   }
 
   Future<void> _loadAuthAndSettings() async {
@@ -114,6 +126,9 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
           _latencyMs = elapsed;
           if (about != null && about['version'] != null) {
             _serverVersion = about['version'].toString();
+          }
+          if (about != null && about['buildType'] != null) {
+            _serverBuildType = about['buildType'].toString();
           }
 
           _authMode = (s['authMode'] as String?) ?? 'NONE';
@@ -162,6 +177,8 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
           _maxLogFolderSize = (s['maxLogFolderSize'] as String?) ?? '100mb';
           _useHikariPool = parseBoolSafe(s['useHikariConnectionPool'], true);
         });
+        unawaited(_refreshServerUpdates());
+        unawaited(_refreshKoSync());
       } else {
         if (mounted) {
           setState(() {
@@ -198,12 +215,21 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       return;
     }
     try {
-      await GraphQLClientService.instance.updateServerSettings({key: val});
-      if (mounted) {
+      final res = await GraphQLClientService.instance.persistSetting(key, val);
+      if (!mounted) return;
+      if (res != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Updated $key on server'),
             duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update $key on server'),
+            duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -213,6 +239,87 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
+  }
+
+  Future<void> _refreshKoSync() async {
+    if (!GraphQLClientService.instance.isConfigured) return;
+    try {
+      final st = await GraphQLClientService.instance.fetchKoSyncStatus();
+      final last = await GraphQLClientService.instance.fetchLastSyncStatus();
+      if (!mounted) return;
+      setState(() {
+        _koSyncLoggedIn = st?.isLoggedIn == true;
+        if (st == null) {
+          _koSyncSubtitle = 'Unavailable';
+        } else if (st.isLoggedIn) {
+          final user = st.username ?? 'user';
+          final host = st.serverAddress ?? '';
+          _koSyncSubtitle = host.isEmpty ? 'Signed in as $user' : '$user @ $host';
+        } else {
+          _koSyncSubtitle = 'Not connected';
+        }
+        _lastSyncYomiState = last?['state']?.toString();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _showKoSyncDialog() async {
+    final addr = TextEditingController();
+    final user = TextEditingController();
+    final pass = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const DialogTitle(icon: Icons.menu_book_rounded, text: 'Connect KOReader Sync'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: addr, decoration: const InputDecoration(labelText: 'Server address')),
+            TextField(controller: user, decoration: const InputDecoration(labelText: 'Username')),
+            TextField(controller: pass, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Connect')),
+        ],
+      ),
+    );
+    if (ok != true) {
+      addr.dispose();
+      user.dispose();
+      pass.dispose();
+      return;
+    }
+    final st = await GraphQLClientService.instance.connectKoSyncAccount(
+      serverAddress: addr.text,
+      username: user.text,
+      password: pass.text,
+    );
+    addr.dispose();
+    user.dispose();
+    pass.dispose();
+    if (!mounted) return;
+    final msg = st?.message;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(st?.isLoggedIn == true ? 'KOReader connected' : (msg ?? 'Could not connect')),
+    ));
+    await _refreshKoSync();
+  }
+
+  Future<void> _refreshServerUpdates() async {
+    if (!GraphQLClientService.instance.isConfigured) return;
+    try {
+      final bundle = await GraphQLClientService.instance.fetchServerVersionBundle(
+        includeUpdateCheck: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (bundle.serverVersion != null) _serverVersion = bundle.serverVersion!;
+        if (bundle.buildType != null) _serverBuildType = bundle.buildType!;
+        _serverUpdates = bundle.serverUpdates ?? const [];
+      });
+    } catch (_) {}
   }
 
   Future<void> _openWebUI() async {
@@ -271,13 +378,12 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     final passController = TextEditingController(text: _authPassword);
     bool obscure = true;
 
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDlgState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F1F24),
               title: const Text('HTTP Basic Credentials', style: TextStyle(fontWeight: FontWeight.bold)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -315,8 +421,8 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       _authUsername = u;
                       _authPassword = p;
                     });
-                    _update('authUsername', u);
-                    _update('authPassword', p);
+                    unawaited(_update('authUsername', u));
+                    unawaited(_update('authPassword', p));
                     Navigator.pop(context);
                   },
                   child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -326,7 +432,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
           },
         );
       },
-    );
+    ).then((_) => disposeAfterDialog([userController, passController])));
   }
 
   void _showClientCredentialsDialog() async {
@@ -338,18 +444,15 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     bool obscure = true;
 
     if (!mounted) return;
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (context, setDlgState) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1E26),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.vpn_key_rounded, color: Colors.tealAccent),
-              SizedBox(width: 8),
-              Text('Client Credentials', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
+          title: DialogTitle(
+            icon: Icons.vpn_key_rounded,
+            iconColor: Theme.of(context).colorScheme.tertiary,
+            text: 'Client Credentials',
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -443,7 +546,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
           ],
         ),
       ),
-    );
+    ).then((_) => disposeAfterDialog([userController, passController, tokenController])));
   }
 
   @override
@@ -512,7 +615,9 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     ],
                   ),
                   subtitle: Text(
-                    _isConnected ? 'Latency: ${_latencyMs ?? "-"}ms • Version: $_serverVersion' : 'Cannot reach server at target URL',
+                    _isConnected
+                        ? 'Latency: ${_latencyMs ?? "-"}ms • ${serverVersionSummaryLabel(version: _serverVersion == "Unknown" ? null : _serverVersion, buildType: _serverBuildType.isEmpty ? null : _serverBuildType)}'
+                        : 'Cannot reach server at target URL',
                     style: TextStyle(fontSize: 12, color: _isConnected ? Colors.grey : Colors.redAccent),
                   ),
                 ),
@@ -526,6 +631,22 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 ),
 
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                if (_serverUpdates.isNotEmpty)
+                  ..._serverUpdates.map((u) {
+                    final label = u.channel.isEmpty ? u.tag : '${u.channel}: ${u.tag}';
+                    return ListTile(
+                      key: Key('server_settings_update_${u.channel}_${u.tag}'),
+                      leading: const Icon(Icons.system_update_alt_rounded),
+                      title: Text('Server update available — $label'),
+                      subtitle: u.url.isEmpty ? null : Text(u.url, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      onTap: u.url.isEmpty
+                          ? null
+                          : () async {
+                              final uri = Uri.tryParse(u.url);
+                              if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            },
+                    );
+                  }),
                 const SectionTitle(title: 'Authentication (Server)'),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -554,7 +675,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                         setState(() => _authMode = v);
                         // NONE/BASIC_AUTH/SIMPLE_LOGIN/UI_LOGIN are the values
                         // the server actually accepts (schema enum AuthMode).
-                        _update('authMode', v);
+                        unawaited(_update('authMode', v));
                         if (v == 'BASIC_AUTH') _showCredentialsDialog();
                       }
                     },
@@ -568,6 +689,35 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     trailing: const Icon(Icons.key_rounded),
                     onTap: _showCredentialsDialog,
                   ),
+                if (loginModeForAuthMode(_authMode) != null) ...[
+                  ListTile(
+                    key: const Key('server_settings_session_login'),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                    title: const Text('Sign in to server', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    subtitle: Text(
+                      ServerSessionService.instance.isLoggedIn
+                          ? 'Signed in as ${ServerSessionService.instance.username ?? "user"}'
+                          : 'Required for ${serverLoginModeLabel(loginModeForAuthMode(_authMode)!)}',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    trailing: const Icon(Icons.login_rounded),
+                    onTap: () async {
+                      final ok = await showServerLoginSheet(context, authMode: _authMode, baseUrl: _clientUrl);
+                      if (mounted && ok) setState(() {});
+                    },
+                  ),
+                  if (ServerSessionService.instance.isLoggedIn)
+                    ListTile(
+                      key: const Key('server_settings_session_logout'),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      title: const Text('Sign out', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      trailing: const Icon(Icons.logout_rounded),
+                      onTap: () async {
+                        await ServerSessionService.instance.logout();
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                ],
 
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
                 const SectionTitle(title: 'Server Network Bindings (Server)'),
@@ -580,7 +730,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   subtitle: _serverIp,
                   onStringChanged: (v) {
                     setState(() => _serverIp = v);
-                    _update('ip', v);
+                    unawaited(_update('ip', v));
                   },
                 ),
                 SettingsPropTile(
@@ -593,7 +743,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   max: 65535,
                   onIntChanged: (v) {
                     setState(() => _serverPort = v);
-                    _update('port', v);
+                    unawaited(_update('port', v));
                   },
                 ),
                 SettingsPropTile(
@@ -604,7 +754,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _initialOpenInBrowser,
                   onBoolChanged: (v) {
                     setState(() => _initialOpenInBrowser = v);
-                    _update('initialOpenInBrowserEnabled', v);
+                    unawaited(_update('initialOpenInBrowserEnabled', v));
                   },
                 ),
                 SettingsPropTile(
@@ -615,7 +765,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _systemTrayEnabled,
                   onBoolChanged: (v) {
                     setState(() => _systemTrayEnabled = v);
-                    _update('systemTrayEnabled', v);
+                    unawaited(_update('systemTrayEnabled', v));
                   },
                 ),
 
@@ -629,7 +779,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _socksProxyEnabled,
                   onBoolChanged: (v) {
                     setState(() => _socksProxyEnabled = v);
-                    _update('socksProxyEnabled', v);
+                    unawaited(_update('socksProxyEnabled', v));
                   },
                 ),
                 if (_socksProxyEnabled) ...[
@@ -648,7 +798,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       onChanged: (v) {
                         if (v != null) {
                           setState(() => _socksProxyVersion = v);
-                          _update('socksProxyVersion', v);
+                          unawaited(_update('socksProxyVersion', v));
                         }
                       },
                     ),
@@ -661,7 +811,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     subtitle: _socksHost.isNotEmpty ? _socksHost : '127.0.0.1',
                     onStringChanged: (v) {
                       setState(() => _socksHost = v);
-                      _update('socksProxyHost', v);
+                      unawaited(_update('socksProxyHost', v));
                     },
                   ),
                   SettingsPropTile(
@@ -672,7 +822,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     subtitle: _socksPort,
                     onStringChanged: (v) {
                       setState(() => _socksPort = v);
-                      _update('socksProxyPort', v);
+                      unawaited(_update('socksProxyPort', v));
                     },
                   ),
                   SettingsPropTile(
@@ -683,7 +833,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     subtitle: _socksUsername.isNotEmpty ? _socksUsername : 'None',
                     onStringChanged: (v) {
                       setState(() => _socksUsername = v);
-                      _update('socksProxyUsername', v);
+                      unawaited(_update('socksProxyUsername', v));
                     },
                   ),
                   SettingsPropTile(
@@ -695,7 +845,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     subtitle: _socksPassword.isNotEmpty ? '••••••••' : 'None',
                     onStringChanged: (v) {
                       setState(() => _socksPassword = v);
-                      _update('socksProxyPassword', v);
+                      unawaited(_update('socksProxyPassword', v));
                     },
                   ),
                 ],
@@ -710,7 +860,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _flareSolverrEnabled,
                   onBoolChanged: (v) {
                     setState(() => _flareSolverrEnabled = v);
-                    _update('flareSolverrEnabled', v);
+                    unawaited(_update('flareSolverrEnabled', v));
                   },
                 ),
                 if (_flareSolverrEnabled) ...[
@@ -723,7 +873,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     subtitle: _flareSolverrUrl.isNotEmpty ? _flareSolverrUrl : 'Disabled',
                     onStringChanged: (v) {
                       setState(() => _flareSolverrUrl = v);
-                      _update('flareSolverrUrl', v);
+                      unawaited(_update('flareSolverrUrl', v));
                     },
                   ),
                   SettingsPropTile(
@@ -737,7 +887,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     unit: 's',
                     onIntChanged: (v) {
                       setState(() => _flareSolverrTimeout = v);
-                      _update('flareSolverrTimeout', v);
+                      unawaited(_update('flareSolverrTimeout', v));
                     },
                   ),
                   SettingsPropTile(
@@ -748,7 +898,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     subtitle: _flareSolverrSessionName,
                     onStringChanged: (v) {
                       setState(() => _flareSolverrSessionName = v);
-                      _update('flareSolverrSessionName', v);
+                      unawaited(_update('flareSolverrSessionName', v));
                     },
                   ),
                   SettingsPropTile(
@@ -762,7 +912,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     unit: 'm',
                     onIntChanged: (v) {
                       setState(() => _flareSolverrSessionTtl = v);
-                      _update('flareSolverrSessionTtl', v);
+                      unawaited(_update('flareSolverrSessionTtl', v));
                     },
                   ),
                   SettingsPropTile(
@@ -773,7 +923,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     boolValue: _flareSolverrAsResponseFallback,
                     onBoolChanged: (v) {
                       setState(() => _flareSolverrAsResponseFallback = v);
-                      _update('flareSolverrAsResponseFallback', v);
+                      unawaited(_update('flareSolverrAsResponseFallback', v));
                     },
                   ),
                 ],
@@ -786,7 +936,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   scope: SettingScope.local,
                   kind: SettingsPropKind.textField,
                   stringValue: _settings.cfProxyUrl,
-                  subtitle: _settings.cfProxyUrl.isNotEmpty ? _settings.cfProxyUrl : 'Disabled (direct connection)',
+                  subtitle: _settings.cfProxyUrl.isNotEmpty ? maskProxyUrlForDisplay(_settings.cfProxyUrl) : 'Disabled (direct connection)',
                   onStringChanged: (v) {
                     _settings.cfProxyUrl = v;
                     setState(() {});
@@ -798,7 +948,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   title: const Text('Test Local Connection', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                   subtitle: Text(
                     _settings.cfProxyUrl.isNotEmpty
-                        ? 'Test reachability from this device to ${_settings.cfProxyUrl}'
+                        ? 'Test reachability from this device to ${maskProxyUrlForDisplay(_settings.cfProxyUrl)}'
                         : 'Enter a local FlareSolverr URL above to test',
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
@@ -820,7 +970,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   max: 200,
                   onIntChanged: (v) {
                     setState(() => _opdsItemsPerPage = v);
-                    _update('opdsItemsPerPage', v);
+                    unawaited(_update('opdsItemsPerPage', v));
                   },
                 ),
                 SettingsPropTile(
@@ -830,7 +980,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _opdsShowOnlyDownloaded,
                   onBoolChanged: (v) {
                     setState(() => _opdsShowOnlyDownloaded = v);
-                    _update('opdsShowOnlyDownloadedChapters', v);
+                    unawaited(_update('opdsShowOnlyDownloadedChapters', v));
                   },
                 ),
                 SettingsPropTile(
@@ -840,7 +990,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _opdsShowOnlyUnread,
                   onBoolChanged: (v) {
                     setState(() => _opdsShowOnlyUnread = v);
-                    _update('opdsShowOnlyUnreadChapters', v);
+                    unawaited(_update('opdsShowOnlyUnreadChapters', v));
                   },
                 ),
                 SettingsPropTile(
@@ -850,7 +1000,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _opdsMarkAsReadOnDownload,
                   onBoolChanged: (v) {
                     setState(() => _opdsMarkAsReadOnDownload = v);
-                    _update('opdsMarkAsReadOnDownload', v);
+                    unawaited(_update('opdsMarkAsReadOnDownload', v));
                   },
                 ),
                 SettingsPropTile(
@@ -860,7 +1010,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _opdsEnablePageReadProgress,
                   onBoolChanged: (v) {
                     setState(() => _opdsEnablePageReadProgress = v);
-                    _update('opdsEnablePageReadProgress', v);
+                    unawaited(_update('opdsEnablePageReadProgress', v));
                   },
                 ),
                 SettingsPropTile(
@@ -870,7 +1020,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _opdsSkipChapterMetadataFeed,
                   onBoolChanged: (v) {
                     setState(() => _opdsSkipChapterMetadataFeed = v);
-                    _update('opdsSkipChapterMetadataFeed', v);
+                    unawaited(_update('opdsSkipChapterMetadataFeed', v));
                   },
                 ),
                 SettingsPropTile(
@@ -880,11 +1030,30 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _opdsUseBinaryFileSizes,
                   onBoolChanged: (v) {
                     setState(() => _opdsUseBinaryFileSizes = v);
-                    _update('opdsUseBinaryFileSizes', v);
+                    unawaited(_update('opdsUseBinaryFileSizes', v));
                   },
                 ),
 
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const SectionTitle(title: 'KOReader Sync (Server)'),
+                ListTile(
+                  key: const Key('server_settings_kosync'),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  title: const Text('KOReader account', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                  subtitle: Text(_koSyncSubtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  trailing: const Icon(Icons.menu_book_rounded),
+                  onTap: () => unawaited(_showKoSyncDialog()),
+                ),
+                if (_koSyncLoggedIn)
+                  ListTile(
+                    key: const Key('server_settings_kosync_logout'),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                    title: const Text('Disconnect KOReader', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    onTap: () async {
+                      await GraphQLClientService.instance.logoutKoSyncAccount();
+                      await _refreshKoSync();
+                    },
+                  ),
                 const SectionTitle(title: 'SyncYomi Remote Sync (Server)'),
                 SettingsPropTile(
                   title: 'Enable SyncYomi',
@@ -894,10 +1063,29 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _syncYomiEnabled,
                   onBoolChanged: (v) {
                     setState(() => _syncYomiEnabled = v);
-                    _update('syncYomiEnabled', v);
+                    unawaited(_update('syncYomiEnabled', v));
                   },
                 ),
                 if (_syncYomiEnabled) ...[
+                  ListTile(
+                    key: const Key('server_settings_syncyomi_start'),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                    title: const Text('Start SyncYomi now', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    subtitle: Text(
+                      _lastSyncYomiState == null ? 'Run a sync against the configured host' : 'Last: $_lastSyncYomiState',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    trailing: const Icon(Icons.sync_rounded),
+                    onTap: () async {
+                      final result = await GraphQLClientService.instance.startSyncYomi();
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(result == null ? 'SyncYomi start failed' : 'SyncYomi: $result')),
+                      );
+                      await _refreshKoSync();
+                    },
+                  ),
+
                   SettingsPropTile(
                     title: 'SyncYomi Host',
                     scope: SettingScope.server,
@@ -906,7 +1094,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     subtitle: _syncYomiHost.isNotEmpty ? _syncYomiHost : 'Not set',
                     onStringChanged: (v) {
                       setState(() => _syncYomiHost = v);
-                      _update('syncYomiHost', v);
+                      unawaited(_update('syncYomiHost', v));
                     },
                   ),
                   SettingsPropTile(
@@ -918,7 +1106,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     subtitle: _syncYomiApiKey.isNotEmpty ? '••••••••' : 'Not set',
                     onStringChanged: (v) {
                       setState(() => _syncYomiApiKey = v);
-                      _update('syncYomiApiKey', v);
+                      unawaited(_update('syncYomiApiKey', v));
                     },
                   ),
                 ],
@@ -951,7 +1139,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     onChanged: (v) {
                       if (v != null) {
                         setState(() => _webUIFlavor = v);
-                        _update('webUIFlavor', v);
+                        unawaited(_update('webUIFlavor', v));
                       }
                     },
                   ),
@@ -981,7 +1169,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     onChanged: (v) {
                       if (v != null) {
                         setState(() => _webUIChannel = v);
-                        _update('webUIChannel', v);
+                        unawaited(_update('webUIChannel', v));
                       }
                     },
                   ),
@@ -1011,7 +1199,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     onChanged: (v) {
                       if (v != null) {
                         setState(() => _webUIInterface = v);
-                        _update('webUIInterface', v);
+                        unawaited(_update('webUIInterface', v));
                       }
                     },
                   ),
@@ -1027,7 +1215,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   unit: 'h',
                   onIntChanged: (v) {
                     setState(() => _webUIUpdateInterval = v.toDouble());
-                    _update('webUIUpdateCheckInterval', v.toDouble());
+                    unawaited(_update('webUIUpdateCheckInterval', v.toDouble()));
                   },
                 ),
                 SettingsPropTile(
@@ -1038,7 +1226,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _debugLogsEnabled,
                   onBoolChanged: (v) {
                     setState(() => _debugLogsEnabled = v);
-                    _update('debugLogsEnabled', v);
+                    unawaited(_update('debugLogsEnabled', v));
                   },
                 ),
                 SettingsPropTile(
@@ -1049,7 +1237,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _kcefEnabled,
                   onBoolChanged: (v) {
                     setState(() => _kcefEnabled = v);
-                    _update('kcefEnabled', v);
+                    unawaited(_update('kcefEnabled', v));
                   },
                 ),
                 SettingsPropTile(
@@ -1060,7 +1248,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   boolValue: _useHikariPool,
                   onBoolChanged: (v) {
                     setState(() => _useHikariPool = v);
-                    _update('useHikariConnectionPool', v);
+                    unawaited(_update('useHikariConnectionPool', v));
                   },
                 ),
                 SettingsPropTile(
@@ -1073,7 +1261,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   max: 100,
                   onIntChanged: (v) {
                     setState(() => _maxLogFiles = v);
-                    _update('maxLogFiles', v);
+                    unawaited(_update('maxLogFiles', v));
                   },
                 ),
                 SettingsPropTile(
@@ -1084,7 +1272,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   subtitle: _maxLogFileSize,
                   onStringChanged: (v) {
                     setState(() => _maxLogFileSize = v);
-                    _update('maxLogFileSize', v);
+                    unawaited(_update('maxLogFileSize', v));
                   },
                 ),
                 SettingsPropTile(
@@ -1095,7 +1283,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   subtitle: _maxLogFolderSize,
                   onStringChanged: (v) {
                     setState(() => _maxLogFolderSize = v);
-                    _update('maxLogFolderSize', v);
+                    unawaited(_update('maxLogFolderSize', v));
                   },
                 ),
               ],

@@ -6,6 +6,8 @@ import 'package:sunfire/src/core/engine/quickjs_service.dart';
 import 'package:sunfire/src/core/sync/graphql_client_service.dart';
 import 'package:sunfire/src/core/sync/sync_engine.dart';
 
+import 'support/quickjs_fakes.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -107,6 +109,9 @@ void main() {
     });
 
     test('5. Local Mangayomi JS Extension executes on-device with zero server dependence', () async {
+      // No QuickJS native lib on the unit-test host: fake the engine output
+      // from the fixture (UIX-21). This checks resolver routing, not JS eval.
+      installQuickJsFixtureFakes();
       final quickJs = QuickJsService.instance;
 
       const weebCentralJs = '''
@@ -151,6 +156,7 @@ void main() {
     });
 
     test('6. Migrated Library Manga operates 100% offline with local JS scraper and syncs when server returns', () async {
+      installQuickJsFixtureFakes(); // UIX-21: see test 5
       final quickJs = QuickJsService.instance;
 
       const weebCentralJs = '''

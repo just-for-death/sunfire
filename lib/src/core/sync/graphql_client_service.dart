@@ -1,9 +1,25 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
-import 'package:flutter/foundation.dart' show ValueNotifier, debugPrint, kDebugMode;
+import 'package:flutter/foundation.dart' show ValueNotifier, debugPrint, kDebugMode, visibleForTesting;
 import '../logging/logger_service.dart';
 import '../services/server_tls_trust.dart';
+import 'cursor_paginator.dart';
+import 'server_api_models.dart';
+import 'server_auth_refresher.dart';
+import 'server_capabilities.dart';
+import 'server_compat_models.dart';
+import 'source_filters.dart';
+import 'suwayomi_parse_helpers.dart';
+import 'suwayomi_settings_fields.dart';
+
+export 'server_api_models.dart';
+export 'server_auth_refresher.dart';
+export 'server_compat_models.dart';
+export 'source_filters.dart';
+
+part 'graphql_server_compat_api.dart';
 
 int parseIntSafe(dynamic value, [int fallback = 0]) {
   if (value == null) return fallback;
@@ -107,16 +123,44 @@ class GraphQLClientService {
 
   void clearAuthError() => authErrorNotifier.value = false;
 
+  /// Last successful capability probe (ISS-066). Empty until [probeServerCapabilities].
+  ServerCapabilities capabilities = ServerCapabilities.empty;
+
+
+  /// Login/JWT session hook (ISS-078). Null → stored Basic/Bearer header only.
+  ServerAuthRefresher? authRefresher;
+
+  /// Session headers besides Authorization (SIMPLE_LOGIN `Cookie`).
+  Map<String, String> _extraHeaders = const {};
+
   Map<String, String> get authHeaders {
+    final out = <String, String>{..._extraHeaders};
     if (_authToken != null && _authToken!.trim().isNotEmpty) {
       final token = _authToken!.trim();
       if (token.startsWith('Basic ') || token.startsWith('Bearer ')) {
-        return {'Authorization': token};
+        out['Authorization'] = token;
       } else {
-        return {'Authorization': 'Bearer $token'};
+        out['Authorization'] = 'Bearer $token';
       }
     }
-    return const {};
+    return out.isEmpty ? const {} : out;
+  }
+
+  /// Current Authorization header value (or null). Used by the WS layer.
+  String? get currentAuthHeader => authHeaders['Authorization'];
+
+  /// Swap credentials on the live client without resetting reachability or
+  /// capabilities (ISS-078: JWT refresh / login / logout). [extraHeaders]
+  /// replaces the previous extra headers when given.
+  void updateAuthToken(String? authToken, {Map<String, String>? extraHeaders}) {
+    _authToken = authToken;
+    if (extraHeaders != null) _extraHeaders = Map.unmodifiable(extraHeaders);
+    if (_dioInitialized) {
+      _dio.options.headers = <String, dynamic>{
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      };
+    }
   }
 
   void initialize(String baseUrl, {String? authToken}) {
@@ -124,25 +168,23 @@ class GraphQLClientService {
     if (clean.isEmpty) {
       _baseUrl = null;
       _authToken = null;
+      _extraHeaders = const {};
       _lastReachableCheck = null;
       _lastReachableStatus = false;
+      capabilities = ServerCapabilities.empty;
       clearAuthError();
       return;
     }
     _baseUrl = clean.endsWith('/') ? clean.substring(0, clean.length - 1) : clean;
-    _authToken = authToken;
+    // An active login session (ISS-078) outranks the stored Basic/Bearer
+    // header, so a settings-screen re-initialize does not drop the JWT.
+    final refresher = authRefresher;
+    _authToken = refresher?.authHeaderOverride(_baseUrl!) ?? authToken;
+    _extraHeaders = Map.unmodifiable(refresher?.extraHeaders(_baseUrl!) ?? const <String, String>{});
     _lastReachableCheck = null;
     _lastReachableStatus = false;
     clearAuthError();
-    final headers = <String, dynamic>{'Content-Type': 'application/json'};
-    if (authToken != null && authToken.trim().isNotEmpty) {
-      final token = authToken.trim();
-      if (token.startsWith('Basic ') || token.startsWith('Bearer ')) {
-        headers['Authorization'] = token;
-      } else {
-        headers['Authorization'] = 'Bearer $token';
-      }
-    }
+    final headers = <String, dynamic>{'Content-Type': 'application/json', ...authHeaders};
     // Close the previous client, if there is one. Guarded rather than left to a
     // try/catch: `_dio` is `late`, so on the very first initialize() it throws
     // LateInitializationError, and swallowing that printed a confusing
@@ -169,6 +211,18 @@ class GraphQLClientService {
       adapter.createHttpClient = () => createServerTrustingHttpClient(() => _baseUrl);
     }
   }
+
+  /// Replace the HTTP adapter (tests only — e.g. a scripted mock).
+  @visibleForTesting
+  set debugHttpAdapter(HttpClientAdapter adapter) => _dio.httpClientAdapter = adapter;
+
+  /// Backoff between retries of idempotent reads (ISS-075). Tests shrink it.
+  @visibleForTesting
+  Duration Function(int attempt) retryDelay = jitteredBackoff;
+
+  /// Server `flareSolverrTimeout` (seconds); stretches [GraphQLOp.scrapeRead]
+  /// receive timeout. Updated from [fetchServerSettings].
+  int flareSolverrTimeoutSeconds = kDefaultFlareSolverrTimeoutSeconds;
 
   bool get isConfigured => _baseUrl != null && _baseUrl!.trim().isNotEmpty;
   String? get baseUrl => _baseUrl;
@@ -216,7 +270,7 @@ class GraphQLClientService {
       return _isServerUsable;
     }
     try {
-      final res = await _dio.post(
+      final res = await _dio.post<Map<String, dynamic>>(
         '',
         data: jsonEncode({'query': '{ aboutServer { version } }'}),
         options: Options(
@@ -231,6 +285,9 @@ class GraphQLClientService {
         _recordAuthRejection();
       } else {
         _lastReachableStatus = (res.statusCode == 200);
+        if (_lastReachableStatus) {
+          unawaited(probeServerCapabilities());
+        }
       }
     } on DioException catch (e) {
       // This is where a 401/403 actually lands: Dio throws
@@ -254,6 +311,20 @@ class GraphQLClientService {
       final code = e.response?.statusCode ?? 0;
       if (code == 401 || code == 403) {
         _recordAuthRejection();
+        // ISS-078: an expired JWT / SIMPLE_LOGIN cookie — refresh once and
+        // re-probe instead of leaving the reconnect prompt up.
+        final refresher = authRefresher;
+        if (refresher != null && !_probeRefreshInFlight) {
+          _probeRefreshInFlight = true;
+          try {
+            if (await refresher.onUnauthorized()) {
+              _lastReachableCheck = now;
+              return await checkServerReachable(force: true);
+            }
+          } finally {
+            _probeRefreshInFlight = false;
+          }
+        }
       } else {
         _lastReachableStatus = false;
       }
@@ -264,6 +335,8 @@ class GraphQLClientService {
     return _isServerUsable;
   }
 
+  bool _probeRefreshInFlight = false;
+
   /// A probe came back 401/403: the transport works, the credentials do not.
   ///
   /// Records the server as REACHABLE (it answered) and raises the auth error.
@@ -273,8 +346,148 @@ class GraphQLClientService {
     notifyAuthError();
   }
 
-  Future<Map<String, dynamic>?> query(String document, {Map<String, dynamic>? variables, String? label}) async {
+  /// Introspect a handful of types + aboutServer (ISS-066).
+  ///
+  /// Safe to call repeatedly; results are cached on [capabilities]. Failures
+  /// leave prior capabilities untouched (or empty on first connect).
+  Future<ServerCapabilities> probeServerCapabilities({bool force = false}) async {
+    if (!isConfigured) {
+      capabilities = ServerCapabilities.empty;
+      return capabilities;
+    }
+    if (capabilities.probed && !force) return capabilities;
+
+    String? version;
+    String? buildType;
+    String? buildTime;
+    try {
+      final about = await query(
+        '{ aboutServer { version buildType buildTime } }',
+        label: 'probeAboutServer',
+        op: GraphQLOp.read,
+      );
+      final a = about?['aboutServer'] as Map?;
+      version = a?['version']?.toString();
+      buildType = a?['buildType']?.toString();
+      buildTime = a?['buildTime']?.toString();
+    } catch (_) {}
+
+    // Suwayomi's introspection guard rejects any request that names
+    // `__type` more than once ("not asking for introspection in good faith"),
+    // so the old single combined probe always failed and every flag stayed
+    // false. One `__type` per request instead (verified live, v2.4.x).
+    Future<Map<String, dynamic>?> typeProbe(String typeName, String selection) async {
+      final res = await query(
+        '{ __type(name: "$typeName") { $selection } }',
+        label: 'probeServerCapabilities.$typeName',
+        op: GraphQLOp.read,
+      );
+      final t = res?['__type'];
+      return t is Map ? Map<String, dynamic>.from(t) : null;
+    }
+
+    bool hasField(Map<String, dynamic>? t, String name) {
+      final fields = t?['fields'];
+      return fields is List && fields.any((f) => f is Map && f['name'] == name);
+    }
+
+    var hasUserField = false;
+    var hasUserSettings = false;
+    var hasExtensionStores = false;
+    var hasAddManga = false;
+    var hasChapterFetchMarkers = false;
+    var authModes = const <String>['NONE', 'BASIC_AUTH', 'SIMPLE_LOGIN', 'UI_LOGIN'];
+    try {
+      hasUserField = (await typeProbe('MangaUserType', 'name')) != null;
+      hasUserSettings = (await typeProbe('PartialUserSettingsTypeInput', 'name')) != null;
+      hasExtensionStores = hasField(await typeProbe('Query', 'fields { name }'), 'extensionStores');
+      hasAddManga = hasField(await typeProbe('Mutation', 'fields { name }'), 'addManga');
+      final mangaType = await typeProbe('MangaType', 'fields { name }');
+      hasChapterFetchMarkers = hasField(mangaType, 'chaptersLastFetchedAt') &&
+          hasField(mangaType, 'latestFetchedChapter');
+      final enums = (await typeProbe('AuthMode', 'enumValues { name }'))?['enumValues'];
+      if (enums is List && enums.isNotEmpty) {
+        authModes = [
+          for (final e in enums)
+            if (e is Map && e['name'] is String) e['name'] as String,
+        ];
+      }
+    } catch (e) {
+      await LoggerService.instance.logWarning('Capability probe failed: $e', 'GraphQL');
+    }
+
+    capabilities = ServerCapabilities(
+      version: version,
+      buildType: buildType,
+      buildTime: buildTime,
+      hasUserField: hasUserField,
+      hasUserSettings: hasUserSettings,
+      hasExtensionStores: hasExtensionStores,
+      hasAddManga: hasAddManga,
+      hasChapterFetchMarkers: hasChapterFetchMarkers,
+      authModes: authModes,
+      probed: true,
+    );
+    return capabilities;
+  }
+
+  /// Runs a GraphQL [document].
+  ///
+  /// [op] selects the per-operation timeout/retry policy (ISS-075); when
+  /// omitted it is inferred (`mutation` → write, else read). Only idempotent
+  /// classes ([GraphQLOp.read], [GraphQLOp.slowRead], [GraphQLOp.scrapeRead])
+  /// are retried, at most `policy.maxRetries` times with jittered backoff, and
+  /// only on transport failures (timeouts, 5xx, dropped connection — never a
+  /// refused connection, 4xx, or a GraphQL `errors` payload).
+  Future<Map<String, dynamic>?> query(
+    String document, {
+    Map<String, dynamic>? variables,
+    String? label,
+    GraphQLOp? op,
+  }) async {
     if (!isConfigured) return null;
+    final policy = policyForOp(
+      op ?? inferGraphQLOp(document),
+      flareSolverrTimeoutSeconds: flareSolverrTimeoutSeconds,
+    );
+    final refresher = authRefresher;
+    if (refresher != null) await refresher.beforeRequest();
+    var authRetried = false;
+    for (var attempt = 0;; attempt++) {
+      final outcome = await _queryOnce(
+        document,
+        variables: variables,
+        label: label,
+        policy: policy,
+        bypassFastFail: attempt > 0,
+      );
+      // ISS-078: one transparent retry after the session refreshed. Safe for
+      // mutations too — a 401/auth error means the server did not run it.
+      if (outcome.unauthorized && !authRetried && refresher != null) {
+        authRetried = true;
+        if (await refresher.onUnauthorized()) {
+          attempt--;
+          continue;
+        }
+      }
+      if (!outcome.retryable || attempt >= policy.maxRetries) return outcome.data;
+      final delay = retryDelay(attempt + 1);
+      if (kDebugMode) {
+        debugPrint('[graphql_client_service] retry ${attempt + 1}/${policy.maxRetries} [$label] in ${delay.inMilliseconds}ms');
+      }
+      await Future<void>.delayed(delay);
+    }
+  }
+
+  Future<({Map<String, dynamic>? data, bool retryable, bool unauthorized})> _queryOnce(
+    String document, {
+    Map<String, dynamic>? variables,
+    String? label,
+    required GraphQLOpPolicy policy,
+    bool bypassFastFail = false,
+  }) async {
+    const noRetry = (data: null, retryable: false, unauthorized: false);
+    const unauthorized = (data: null, retryable: false, unauthorized: true);
 
     // Fast-fail if the transport path was recently proven broken. This tracks
     // reachability ONLY, never auth: a 401 leaves the status reachable, so
@@ -283,20 +496,23 @@ class GraphQLClientService {
     // the other direction, where a 401 latched here and blackholed every
     // request for 15s without sending any of them.)
     final now = DateTime.now();
-    if (!_lastReachableStatus && _lastReachableCheck != null && now.difference(_lastReachableCheck!) < const Duration(seconds: 15)) {
-      return null;
+    if (!bypassFastFail &&
+        !_lastReachableStatus &&
+        _lastReachableCheck != null &&
+        now.difference(_lastReachableCheck!) < const Duration(seconds: 15)) {
+      return noRetry;
     }
 
     try {
-      final response = await _dio.post(
+      final response = await _dio.post<dynamic>(
         '',
         data: jsonEncode({
           'query': document,
           'variables': variables ?? {},
         }),
         options: Options(
-          sendTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 30),
+          sendTimeout: policy.send,
+          receiveTimeout: policy.receive,
         ),
       );
 
@@ -322,28 +538,31 @@ class GraphQLClientService {
           // null-out every mutation while the UI claims the server is fine.
           if (_looksLikeAuthError(errorMsg.toString())) {
             notifyAuthError();
+            return unauthorized;
           }
-          return null;
+          return noRetry;
         }
-        return data['data'] as Map<String, dynamic>?;
+        return (data: data['data'] as Map<String, dynamic>?, retryable: false, unauthorized: false);
       }
-      return null;
+      return noRetry;
     } on DioException catch (e) {
       if (_isTransportFailure(e)) {
         _lastReachableStatus = false;
         _lastReachableCheck = DateTime.now();
       }
+      var wasUnauthorized = false;
       if (e.type == DioExceptionType.badResponse) {
         final code = e.response?.statusCode ?? 0;
         if (code == 401 || code == 403) {
           notifyAuthError();
+          wasUnauthorized = true;
         }
       }
       // Suppress spammy connection refused errors during offline operation
       if (e.message != null && !e.message!.contains('Connection refused')) {
         await LoggerService.instance.logWarning('GraphQL request failed [$label]: ${e.message}', 'GraphQL');
       }
-      return null;
+      return (data: null, retryable: isRetryableTransportFailure(e), unauthorized: wasUnauthorized);
     } catch (e, stack) {
       // The server ANSWERED — we are inside the success path of the HTTP
       // exchange, and reachability was already set true a few lines above.
@@ -362,7 +581,28 @@ class GraphQLClientService {
         stackTrace: stack,
         category: 'GraphQL',
       );
-      return null;
+      return noRetry;
+    }
+  }
+
+  /// Whether a failed attempt is worth retrying (ISS-075): timeouts, 502/503/504
+  /// and dropped connections. A refused connection means the server is down —
+  /// retrying only delays the offline path.
+  @visibleForTesting
+  static bool isRetryableTransportFailure(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return true;
+      case DioExceptionType.badResponse:
+        final code = e.response?.statusCode ?? 0;
+        return code == 502 || code == 503 || code == 504;
+      case DioExceptionType.connectionError:
+        final msg = '${e.message} ${e.error}'.toLowerCase();
+        return !msg.contains('refused') && !msg.contains('failed host lookup');
+      default:
+        return false;
     }
   }
 
@@ -411,11 +651,13 @@ class GraphQLClientService {
             iconUrl
             isConfigurable
             isNsfw
+            contentWarning
           }
         }
       }
     ''';
-    return await query(queryStr, label: 'fetchSources');
+    final data = await query(queryStr, label: 'fetchSources');
+    return _normalizeSourceOrExtensionNodes(data, rootKey: 'sources');
   }
 
   Future<Map<String, dynamic>?> fetchExtensions() async {
@@ -431,11 +673,43 @@ class GraphQLClientService {
             isObsolete
             hasUpdate
             iconUrl
+            isNsfw
+            contentWarning
           }
         }
       }
     ''';
-    return await query(queryStr, label: 'fetchExtensions');
+    final data = await query(queryStr, label: 'fetchExtensions');
+    return _normalizeSourceOrExtensionNodes(data, rootKey: 'extensions');
+  }
+
+  /// ISS-070: stamp `isNsfw` from `contentWarning` (fallback `isNsfw`); no name heuristic.
+  Map<String, dynamic>? _normalizeSourceOrExtensionNodes(
+    Map<String, dynamic>? data, {
+    required String rootKey,
+  }) {
+    if (data == null || data[rootKey] is! Map) return data;
+    final nodes = (data[rootKey] as Map)['nodes'];
+    if (nodes is! List) return data;
+    final normalized = <dynamic>[];
+    for (final n in nodes) {
+      if (n is! Map) {
+        normalized.add(n);
+        continue;
+      }
+      final m = Map<String, dynamic>.from(n);
+      m['isNsfw'] = isNsfwFromSourceNode(m);
+      final cw = parseContentWarning(m['contentWarning']);
+      if (cw != null) m['contentWarning'] = cw;
+      normalized.add(m);
+    }
+    return {
+      ...data,
+      rootKey: {
+        ...(data[rootKey] as Map),
+        'nodes': normalized,
+      },
+    };
   }
 
   Future<bool> installServerExtension(String pkgName) async {
@@ -509,68 +783,63 @@ class GraphQLClientService {
     return success ? {'status': 'ok'} : null;
   }
 
-  Future<Map<String, dynamic>?> fetchSourceManga(String sourceId, {bool isLatest = false, int page = 1, String? searchQuery}) async {
-    final isSearch = searchQuery != null && searchQuery.trim().isNotEmpty;
-    final typeStr = isLatest ? 'LATEST' : (isSearch ? 'SEARCH' : 'POPULAR');
-
-    if (isSearch) {
-      const searchMutation = r'''
-        mutation($source: LongString!, $page: Int!, $query: String!) {
-          fetchSourceManga(input: {
-            source: $source,
-            type: SEARCH,
-            page: $page,
-            query: $query
-          }) {
-            mangas {
-              id
-              title
-              thumbnailUrl
-              url
-            }
-            hasNextPage
+  /// Browse / search a server source.
+  ///
+  /// [filters] (ISS-079) are `FilterChangeInput`s built from
+  /// [fetchSourceFilters]; when present the request is a SEARCH (that is how
+  /// Suwayomi applies filters) with [searchQuery] as an optional query.
+  Future<Map<String, dynamic>?> fetchSourceManga(
+    String sourceId, {
+    bool isLatest = false,
+    int page = 1,
+    String? searchQuery,
+    List<SourceFilterChange>? filters,
+  }) async {
+    final q = searchQuery?.trim() ?? '';
+    final hasFilters = filters != null && filters.isNotEmpty;
+    final isSearch = q.isNotEmpty || hasFilters;
+    final typeStr = isSearch ? 'SEARCH' : (isLatest ? 'LATEST' : 'POPULAR');
+    const doc = r'''
+      mutation($source: LongString!, $type: FetchSourceMangaType!, $page: Int!, $query: String, $filters: [FilterChangeInput!]) {
+        fetchSourceManga(input: {
+          source: $source,
+          type: $type,
+          page: $page,
+          query: $query,
+          filters: $filters
+        }) {
+          mangas {
+            id
+            title
+            thumbnailUrl
+            url
           }
+          hasNextPage
         }
-      ''';
-      return await query(searchMutation, variables: {
-        'source': sourceId,
-        'page': page,
-        'query': searchQuery.trim(),
-      }, label: 'fetchSourceManga');
-    } else {
-      const browseMutation = r'''
-        mutation($source: LongString!, $type: FetchSourceMangaType!, $page: Int!) {
-          fetchSourceManga(input: {
-            source: $source,
-            type: $type,
-            page: $page
-          }) {
-            mangas {
-              id
-              title
-              thumbnailUrl
-              url
-            }
-            hasNextPage
-          }
-        }
-      ''';
-      return await query(browseMutation, variables: {
-        'source': sourceId,
-        'type': typeStr,
-        'page': page,
-      }, label: 'fetchSourceManga');
-    }
+      }
+    ''';
+    return await query(doc, variables: {
+      'source': sourceId,
+      'type': typeStr,
+      'page': page,
+      if (q.isNotEmpty) 'query': q,
+      if (hasFilters) 'filters': filterChangesToInput(filters),
+    }, label: 'fetchSourceManga', op: GraphQLOp.scrapeRead);
   }
 
   Future<Map<String, dynamic>?> fetchLibrary() async {
-    const pageQuery = r'''
-      query($first: Int!, $offset: Int!) {
-        mangas(condition: { inLibrary: true }, first: $first, offset: $offset) {
+    final userSel = capabilities.hasUserField ? _mangaUserFields : '';
+    final markerSel = capabilities.hasChapterFetchMarkers ? _chapterFetchMarkerFields : '';
+    String pageQuery(bool useCursor) => '''
+      query(\$first: Int!, ${useCursor ? '\$after: Cursor' : '\$offset: Int!'}) {
+        mangas(condition: { inLibrary: true }, first: \$first, ${useCursor ? 'after: \$after' : 'offset: \$offset'}) {
           totalCount
+          pageInfo { endCursor hasNextPage }
           nodes {
             id
             title
+            author
+            description
             thumbnailUrl
             inLibrary
             inLibraryAt
@@ -578,6 +847,8 @@ class GraphQLClientService {
             unreadCount
             url
             realUrl
+            $userSel
+            $markerSel
             source {
               id
               name
@@ -597,71 +868,54 @@ class GraphQLClientService {
     ''';
 
     const pageSize = 200;
-    int offset = 0;
-    int? totalCount;
-    final List<dynamic> allNodes = [];
-    // Whether pagination ran to a genuine end. A page failing after the first
-    // is NOT a short library — it is a transport failure, and the caller must
-    // not treat the pages it did get as the complete server state.
-    var complete = false;
-
-    while (true) {
-      final res = await query(pageQuery, variables: {'first': pageSize, 'offset': offset}, label: 'fetchLibrary');
-      if (res == null || !res.containsKey('mangas')) {
-        if (allNodes.isNotEmpty) {
-          await LoggerService.instance.logWarning(
-            'fetchLibrary: page at offset $offset failed after ${allNodes.length} nodes; '
-            'reporting an INCOMPLETE snapshot',
-            'GraphQL',
-          );
-          return {
-            'mangas': {
-              'totalCount': totalCount ?? allNodes.length,
-              'nodes': allNodes,
-            },
-            kSnapshotCompleteKey: false,
-          };
-        }
-        return null;
-      }
-
-      final mangasMap = res['mangas'] as Map<String, dynamic>;
-      totalCount = parseIntSafe(mangasMap['totalCount']);
-      final nodes = mangasMap['nodes'] as List<dynamic>? ?? [];
-      allNodes.addAll(nodes);
-
-      // Break only when the page shortfall proves we've reached the end, or
-      // when a *present* totalCount is satisfied. totalCount is 0 when the
-      // server omits the field — trusting it then would truncate an entire
-      // library to one 200-item page (and, downstream, poison the wipe-guard
-      // ratio). The `offset` progress check guards against offset-ignoring
-      // servers that would otherwise loop forever.
-      if (nodes.length < pageSize || (totalCount > 0 && allNodes.length >= totalCount)) {
-        complete = true;
-        break;
-      }
-      if (offset == allNodes.length) {
-        await LoggerService.instance.logWarning(
-          'fetchLibrary: server did not advance offset ($offset) — stopping to avoid an infinite loop.',
-          'GraphQL',
+    // Cursor pagination (ISS-074). Whether pagination ran to a genuine end:
+    // a page failing after the first is NOT a short library — it is a
+    // transport failure, and the caller must not treat the pages it did get
+    // as the complete server state.
+    final page = await paginateConnection(
+      pageSize: pageSize,
+      fetchPage: ({String? after, int? offset, required bool useCursor}) async {
+        final res = await query(
+          pageQuery(useCursor),
+          variables: {
+            'first': pageSize,
+            if (useCursor) 'after': after else 'offset': offset ?? 0,
+          },
+          label: 'fetchLibrary',
+          op: GraphQLOp.read,
         );
-        break;
-      }
-      offset = allNodes.length;
+        final m = res?['mangas'];
+        return m is Map ? Map<String, dynamic>.from(m) : null;
+      },
+    );
+    if (page.firstPageFailed) return null;
+    if (!page.complete) {
+      await LoggerService.instance.logWarning(
+        'fetchLibrary: pagination stopped after ${page.nodes.length} nodes; '
+        'reporting an INCOMPLETE snapshot',
+        'GraphQL',
+      );
     }
 
+    final flatNodes = <dynamic>[
+      for (final n in page.nodes)
+        if (n is Map)
+          flattenMangaUserFields(Map<String, dynamic>.from(n))
+        else
+          n,
+    ];
     return {
       'mangas': {
-        'totalCount': totalCount,
-        'nodes': allNodes,
+        'totalCount': page.totalCount ?? flatNodes.length,
+        'nodes': flatNodes,
       },
-      kSnapshotCompleteKey: complete,
+      kSnapshotCompleteKey: page.complete,
     };
   }
 
   /// Chapter node fields shared by the detail query and the paginated root
   /// `chapters` query, so the two can never drift apart.
-  static const String _mangaChapterFields = '''
+  static const String _mangaChapterFieldsBase = '''
         id
         name
         chapterNumber
@@ -677,14 +931,51 @@ class GraphQLClientService {
         scanlator
 ''';
 
+  static const String _mangaChapterUserFields = '''
+        user {
+          isRead
+          isBookmarked
+          isDownloaded
+          lastPageRead
+          lastReadAt
+        }
+''';
+
+  /// When [capabilities.hasUserField], also select `chapter.user {…}` (ISS-072).
+  String get _mangaChapterFields => capabilities.hasUserField
+      ? '$_mangaChapterFieldsBase$_mangaChapterUserFields'
+      : _mangaChapterFieldsBase;
+
+  /// Cheap per-manga change markers for targeted chapter refresh (ISS-076).
+  /// `chapterStats` is aliased so nothing mistakes it for a chapter list.
+  static const String _chapterFetchMarkerFields = '''
+        chaptersLastFetchedAt
+        latestFetchedChapter { id fetchedAt }
+        chapterStats: chapters { totalCount }
+        bookmarkCount
+        downloadCount
+        lastReadChapter { id lastPageRead lastReadAt isRead }
+''';
+
+  static const String _mangaUserFields = '''
+        user {
+          inLibrary
+          inLibraryAt
+          unreadCount
+          bookmarkCount
+          downloadCount
+        }
+''';
+
   Future<Map<String, dynamic>?> fetchMangaDetails(int mangaServerId) async {
     // Manga block first, WITHOUT chapters: the nested `manga.chapters`
     // connection takes no pagination args on most Suwayomi builds, so very
     // long series silently truncate there. Chapters are fetched from the root
     // paginated `chapters` query, then merged into the same response shape.
-    const mangaQueryStr = r'''
-      query($id: Int!) {
-        manga(id: $id) {
+    final userSel = capabilities.hasUserField ? _mangaUserFields : '';
+    final mangaQueryStr = '''
+      query(\$id: Int!) {
+        manga(id: \$id) {
           id
           title
           artist
@@ -696,6 +987,7 @@ class GraphQLClientService {
           thumbnailUrl
           url
           realUrl
+          $userSel
           source {
             id
             name
@@ -705,76 +997,81 @@ class GraphQLClientService {
         }
       }
     ''';
-    final mangaRes = await query(mangaQueryStr, variables: {'id': mangaServerId}, label: 'fetchMangaDetails');
+    final mangaResRaw = await query(mangaQueryStr, variables: {'id': mangaServerId}, label: 'fetchMangaDetails');
+    Map<String, dynamic>? mangaRes;
+    if (mangaResRaw != null && mangaResRaw['manga'] is Map) {
+      mangaRes = {
+        ...mangaResRaw,
+        'manga': flattenMangaUserFields(
+          Map<String, dynamic>.from(mangaResRaw['manga'] as Map),
+        ),
+      };
+    } else {
+      mangaRes = mangaResRaw;
+    }
     if (mangaRes == null || mangaRes['manga'] == null) {
       return _fetchMangaDetailsLegacy(mangaServerId);
     }
 
     const pageSize = 500;
-    final allNodes = <dynamic>[];
-    var offset = 0;
     // See kSnapshotCompleteKey: a page failing after the first must not be
     // mistaken for "the server deleted these chapters", because the caller
-    // hard-deletes chapters the server no longer reports.
-    var chaptersComplete = false;
-    while (true) {
-      final pageQueryStr = '''
-        query {
-          chapters(condition: { mangaId: $mangaServerId }, first: $pageSize, offset: $offset) {
-            pageInfo { hasNextPage }
-            nodes { $_mangaChapterFields }
+    // hard-deletes chapters the server no longer reports. Cursor-paginated
+    // (ISS-074); an empty page with hasNextPage: true is treated as the end.
+    final chapterPage = await paginateConnection(
+      pageSize: pageSize,
+      fetchPage: ({String? after, int? offset, required bool useCursor}) async {
+        final pageQueryStr = '''
+          query(\$mangaId: Int!, \$first: Int!, ${useCursor ? '\$after: Cursor' : '\$offset: Int!'}) {
+            chapters(condition: { mangaId: \$mangaId }, first: \$first, ${useCursor ? 'after: \$after' : 'offset: \$offset'}) {
+              pageInfo { endCursor hasNextPage }
+              nodes { $_mangaChapterFields }
+            }
           }
-        }
-      ''';
-      final pageRes = await query(pageQueryStr, label: 'fetchMangaDetails.chapters');
-      if (pageRes == null || pageRes['chapters'] == null) {
-        // Schema without the paginated root `chapters` query (older/alternate
-        // Suwayomi builds): fall back to the single combined query. Best-effort
-        // — such servers may still truncate very long series.
-        if (offset == 0) return _fetchMangaDetailsLegacy(mangaServerId);
-        await LoggerService.instance.logWarning(
-          'fetchMangaDetails: chapter page at offset $offset failed for manga $mangaServerId '
-          'after ${allNodes.length} nodes; reporting an INCOMPLETE snapshot',
-          'GraphQL',
+        ''';
+        final pageRes = await query(
+          pageQueryStr,
+          variables: {
+            'mangaId': mangaServerId,
+            'first': pageSize,
+            if (useCursor) 'after': after else 'offset': offset ?? 0,
+          },
+          label: 'fetchMangaDetails.chapters',
+          op: GraphQLOp.read,
         );
-        break;
-      }
-      final chapterMap = pageRes['chapters'] as Map<String, dynamic>;
-      final pageNodes = chapterMap['nodes'] as List? ?? const [];
-      if (pageNodes.isEmpty) {
-        chaptersComplete = true;
-        break;
-      }
-      final prevCount = allNodes.length;
-      allNodes.addAll(pageNodes);
-      final pageInfo = chapterMap['pageInfo'] as Map<String, dynamic>?;
-      final hasNextPage = pageInfo != null
-          ? pageInfo['hasNextPage'] == true
-          : pageNodes.length >= pageSize;
-      offset += pageNodes.length;
-      if (!hasNextPage || pageNodes.length < pageSize) {
-        chaptersComplete = true;
-        break;
-      }
-      // A misbehaving server may ignore `offset` and return the same page
-      // forever with hasNextPage: true. Cap the loop so a broken server can't
-      // hang sync or balloon `allNodes` into an OOM. Not "complete" — we never
-      // reached a proven end.
-      if (allNodes.length == prevCount || allNodes.length > 25000) {
-        await LoggerService.instance.logWarning(
-          'fetchMangaDetails: chapter pagination did not terminate cleanly for manga '
-          '$mangaServerId at ${allNodes.length} nodes; reporting an INCOMPLETE snapshot',
-          'GraphQL',
-        );
-        break;
-      }
+        final m = pageRes?['chapters'];
+        return m is Map ? Map<String, dynamic>.from(m) : null;
+      },
+    );
+    // Schema without the paginated root `chapters` query (older/alternate
+    // Suwayomi builds): fall back to the single combined query. Best-effort
+    // — such servers may still truncate very long series.
+    if (chapterPage.firstPageFailed) return _fetchMangaDetailsLegacy(mangaServerId);
+    final allNodes = chapterPage.nodes;
+    final chaptersComplete = chapterPage.complete;
+    if (!chaptersComplete) {
+      await LoggerService.instance.logWarning(
+        'fetchMangaDetails: chapter pagination for manga $mangaServerId stopped '
+        'after ${allNodes.length} nodes; reporting an INCOMPLETE snapshot',
+        'GraphQL',
+      );
     }
 
     // Reassemble data['manga']['chapters']['nodes'] — the shape all callers
     // (detail screen, full chapter snapshot) consume.
     final mangaMap = Map<String, dynamic>.from(mangaRes['manga'] as Map<String, dynamic>);
-    mangaMap['chapters'] = {'nodes': allNodes};
-    return {'manga': mangaMap, kSnapshotCompleteKey: chaptersComplete};
+    final flatNodes = <dynamic>[
+      for (final n in allNodes)
+        if (n is Map)
+          flattenChapterUserFields(Map<String, dynamic>.from(n))
+        else
+          n,
+    ];
+    mangaMap['chapters'] = {'nodes': flatNodes};
+    return {
+      'manga': flattenMangaUserFields(mangaMap),
+      kSnapshotCompleteKey: chaptersComplete,
+    };
   }
 
   /// Single-query fallback used when the root paginated `chapters` query (or
@@ -832,7 +1129,7 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'id': mangaServerId}, label: 'fetchMangaAndChapters');
+    return await query(mutStr, variables: {'id': mangaServerId}, label: 'fetchMangaAndChapters', op: GraphQLOp.scrapeRead);
   }
 
   /// Resolves the server manga id for a series URL on [sourceId] — the path
@@ -847,22 +1144,26 @@ class GraphQLClientService {
     if (url.trim().isEmpty) return null;
 
     // 1) Legacy Tachidesk/Suwayomi servers still expose the addManga mutation.
-    try {
-      const mutStr = r'''
-        mutation($sourceId: LongString!, $url: String!) {
-          addManga(input: { sourceId: $sourceId, url: $url }) {
-            id
+    // Skip when the capability probe already proved it missing (ISS-066).
+    if (!capabilities.probed || capabilities.hasAddManga) {
+      try {
+        const mutStr = r'''
+          mutation($sourceId: LongString!, $url: String!) {
+            addManga(input: { sourceId: $sourceId, url: $url }) {
+              id
+            }
           }
-        }
-      ''';
-      final res = await query(mutStr, variables: {'sourceId': sourceId, 'url': url}, label: 'addMangaByUrl');
-      final id = res?['addManga']?['id'];
-      if (id is int && id > 0) return id;
-      if (id is num && id.toInt() > 0) return id.toInt();
-    } catch (e) {
-      await LoggerService.instance
-          .logWarning('addManga unsupported on this server, falling back to search: $e', 'GraphQL');
+        ''';
+        final res = await query(mutStr, variables: {'sourceId': sourceId, 'url': url}, label: 'addMangaByUrl');
+        final id = res?['addManga']?['id'];
+        if (id is int && id > 0) return id;
+        if (id is num && id.toInt() > 0) return id.toInt();
+      } catch (e) {
+        await LoggerService.instance
+            .logWarning('addManga unsupported on this server, falling back to search: $e', 'GraphQL');
+      }
     }
+
 
     // 2) Modern Suwayomi: search the source and pick the best match by URL/title.
     // Title-first — URL-slug words often fuzzy-match unrelated series (e.g.
@@ -985,6 +1286,8 @@ class GraphQLClientService {
             name
             order
             default
+            includeInUpdate
+            includeInDownload
           }
         }
       }
@@ -1032,21 +1335,20 @@ class GraphQLClientService {
   Future<Map<String, dynamic>?> fetchHistoryChapters(int offset) async {
     // Paginate the whole read history (not just the first 500) and order by
     // last-read so the most recent history is always kept when the server
-    // truncates. The naive single-shot query with no order directive let the
-    // server default ordering hide the newest activity beyond the first page.
+    // truncates. Cursor-paginated (ISS-074): LAST_READ_AT ordering reshuffles
+    // while another device reads, which made offset paging skip/duplicate.
+    // An empty page is the end even when hasNextPage claims otherwise.
     const pageSize = 500;
-    int cursor = offset < 0 ? 0 : offset;
-    final allNodes = <dynamic>[];
-    int? totalCount;
-    const pageQueryStr = '''
-      {
+    String pageQuery(bool useCursor) => '''
+      query(\$first: Int!, ${useCursor ? '\$after: Cursor' : '\$offset: Int!'}) {
         chapters(
           condition: { isRead: true }
           order: [{ by: LAST_READ_AT, byType: DESC }]
-          first: $pageSize
-          offset: PLACEHOLDER
+          first: \$first
+          ${useCursor ? 'after: \$after' : 'offset: \$offset'}
         ) {
           totalCount
+          pageInfo { endCursor hasNextPage }
           nodes {
             id
             name
@@ -1065,46 +1367,49 @@ class GraphQLClientService {
         }
       }
     ''';
-
-    while (true) {
-      final queryStr = pageQueryStr.replaceFirst('PLACEHOLDER', '$cursor');
-      final res = await query(queryStr, label: 'fetchHistoryChapters');
-      if (res == null || !res.containsKey('chapters')) {
-        if (allNodes.isNotEmpty) {
-          return {'chapters': {'totalCount': totalCount ?? allNodes.length, 'nodes': allNodes}};
-        }
-        return res;
-      }
-      final chapterMap = res['chapters'] as Map<String, dynamic>?;
-      final pageNodes = chapterMap?['nodes'] as List? ?? const <dynamic>[];
-      totalCount ??= parseIntSafe(chapterMap?['totalCount']);
-      if (pageNodes.isEmpty) {
-        if (allNodes.isEmpty) return res;
-        break;
-      }
-      final prevCount = allNodes.length;
-      allNodes.addAll(pageNodes);
-      if (allNodes.length == prevCount) break; // server ignored offset — stop looping
-      // totalCount is non-null here: line 906 ran on the first page of this loop.
-      if (allNodes.length >= totalCount) break;
-      cursor += pageNodes.length;
-      if (allNodes.length >= 5000) break; // hard ceiling: never balloon memory
-    }
-
+    final page = await paginateConnection(
+      pageSize: pageSize,
+      maxNodes: 5000, // hard ceiling: never balloon memory
+      startOffset: offset < 0 ? 0 : offset,
+      fetchPage: ({String? after, int? offset, required bool useCursor}) async {
+        final res = await query(
+          pageQuery(useCursor),
+          variables: {
+            'first': pageSize,
+            if (useCursor) 'after': after else 'offset': offset ?? 0,
+          },
+          label: 'fetchHistoryChapters',
+          op: GraphQLOp.read,
+        );
+        final m = res?['chapters'];
+        return m is Map ? Map<String, dynamic>.from(m) : null;
+      },
+    );
+    if (page.firstPageFailed) return null;
     return {
-      'chapters': {'totalCount': totalCount, 'nodes': allNodes},
+      'chapters': {'totalCount': page.totalCount ?? page.nodes.length, 'nodes': page.nodes},
+      kSnapshotCompleteKey: page.complete,
     };
   }
 
-  Future<Map<String, dynamic>?> fetchUpdatesChapters({int first = 100}) async {
+  /// Updates feed, newest `fetchedAt` first.
+  ///
+  /// [sinceFetchedAt] (epoch seconds) narrows to a time window
+  /// (`fetchedAt > since`, ISS-074) so incremental syncs only pull what is new
+  /// instead of re-reading the top-N every cycle.
+  Future<Map<String, dynamic>?> fetchUpdatesChapters({int first = 100, int? sinceFetchedAt}) async {
+    final windowFilter = sinceFetchedAt != null && sinceFetchedAt > 0
+        ? ', fetchedAt: { greaterThan: "$sinceFetchedAt" }'
+        : '';
     final queryStr = '''
       {
         chapters(
-          filter: { inLibrary: { equalTo: true } }
+          filter: { inLibrary: { equalTo: true }$windowFilter }
           order: [{ by: FETCHED_AT, byType: DESC }]
           first: $first
         ) {
           totalCount
+          pageInfo { endCursor hasNextPage }
           nodes {
             id
             name
@@ -1122,6 +1427,7 @@ class GraphQLClientService {
               title
               thumbnailUrl
               inLibrary
+              inLibraryAt
               source {
                 displayName
               }
@@ -1130,7 +1436,7 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(queryStr, label: 'fetchUpdatesChapters');
+    return await query(queryStr, label: 'fetchUpdatesChapters', op: GraphQLOp.read);
   }
 
   Future<String?> fetchLastUpdateTimestamp() async {
@@ -1149,7 +1455,28 @@ class GraphQLClientService {
     return null;
   }
 
-  Future<Map<String, dynamic>?> triggerServerLibraryUpdate() async {
+  /// Triggers a server library update.
+  ///
+  /// When [categoryIds] is non-null/non-empty, only those categories are
+  /// updated (`updateLibrary(input: { categories: [...] })`) — ISS-071
+  /// "Update this category".
+  Future<Map<String, dynamic>?> triggerServerLibraryUpdate({
+    List<int>? categoryIds,
+  }) async {
+    if (categoryIds != null && categoryIds.isNotEmpty) {
+      const mutStr = r'''
+        mutation($categories: [Int!]!) {
+          updateLibrary(input: { categories: $categories }) {
+            clientMutationId
+          }
+        }
+      ''';
+      return await query(
+        mutStr,
+        variables: {'categories': categoryIds},
+        label: 'triggerServerLibraryUpdate.categories',
+      );
+    }
     const mutStr = r'''
       mutation {
         updateLibrary(input: {}) {
@@ -1170,6 +1497,8 @@ class GraphQLClientService {
             isRunning
             finishedJobs
             totalJobs
+            skippedCategoriesCount
+            skippedMangasCount
           }
         }
       }
@@ -1211,23 +1540,208 @@ class GraphQLClientService {
   }
 
   Future<Map<String, dynamic>?> fetchDownloadStatus() async {
+    // Keep selection aligned with downloadStatusChanged WS (ISS-086 / ISS-067)
+    // so the Downloads screen has position/tries/manga titles on initial open.
     const queryStr = r'''
       {
         downloadStatus {
           state
           queue {
+            position
             progress
             state
+            tries
             chapter {
               id
               name
               isDownloaded
+            }
+            manga {
+              id
+              title
             }
           }
         }
       }
     ''';
     return await query(queryStr, label: 'fetchDownloadStatus');
+  }
+
+  // ── ISS-080 B5: download queue dequeue / reorder ──────────────────────
+  //
+  // Each returns the server's resulting `downloadStatus` (same selection as
+  // [fetchDownloadStatus]) or null on failure. Per-item `state` is
+  // QUEUED | DOWNLOADING | FINISHED | ERROR; `tries` is the retry count.
+
+  static const String _downloadStatusSelection = '''
+          downloadStatus {
+            state
+            queue {
+              position
+              progress
+              state
+              tries
+              chapter { id name isDownloaded }
+              manga { id title }
+            }
+          }
+''';
+
+  /// Remove one chapter from the server download queue.
+  Future<Map<String, dynamic>?> dequeueChapterDownload(int chapterId) async {
+    const mutStr = '''
+      mutation(\$id: Int!) {
+        dequeueChapterDownload(input: { id: \$id }) {
+          $_downloadStatusSelection
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'id': chapterId}, label: 'dequeueChapterDownload');
+  }
+
+  /// Remove many chapters from the server download queue in one round-trip.
+  /// Falls back to per-id [dequeueChapterDownload] when the bulk call fails.
+  Future<Map<String, dynamic>?> dequeueChapterDownloads(List<int> chapterIds) async {
+    if (chapterIds.isEmpty) return null;
+    if (chapterIds.length == 1) return dequeueChapterDownload(chapterIds.first);
+    const mutStr = '''
+      mutation(\$ids: [Int!]!) {
+        dequeueChapterDownloads(input: { ids: \$ids }) {
+          $_downloadStatusSelection
+        }
+      }
+    ''';
+    final res = await query(mutStr, variables: {'ids': chapterIds}, label: 'dequeueChapterDownloads');
+    if (res != null) return res;
+    Map<String, dynamic>? last;
+    for (final id in chapterIds) {
+      last = await dequeueChapterDownload(id);
+    }
+    return last;
+  }
+
+  /// Move [chapterId] to queue index [to] (0-based, clamped at 0).
+  Future<Map<String, dynamic>?> reorderChapterDownload(int chapterId, int to) async {
+    const mutStr = '''
+      mutation(\$chapterId: Int!, \$to: Int!) {
+        reorderChapterDownload(input: { chapterId: \$chapterId, to: \$to }) {
+          $_downloadStatusSelection
+        }
+      }
+    ''';
+    return await query(
+      mutStr,
+      variables: {'chapterId': chapterId, 'to': to < 0 ? 0 : to},
+      label: 'reorderChapterDownload',
+    );
+  }
+
+  /// Bulk reorder; each record is `(chapterId: id, to: index)`. Falls back to
+  /// sequential [reorderChapterDownload] calls when the bulk mutation fails.
+  Future<Map<String, dynamic>?> reorderChapterDownloads(
+    List<({int chapterId, int to})> reorders,
+  ) async {
+    if (reorders.isEmpty) return null;
+    if (reorders.length == 1) {
+      return reorderChapterDownload(reorders.first.chapterId, reorders.first.to);
+    }
+    const mutStr = '''
+      mutation(\$reorders: [ChapterDownloadReorderInput!]!) {
+        reorderChapterDownloads(input: { reorders: \$reorders }) {
+          $_downloadStatusSelection
+        }
+      }
+    ''';
+    final res = await query(
+      mutStr,
+      variables: {'reorders': buildDownloadReorderVariables(reorders)},
+      label: 'reorderChapterDownloads',
+    );
+    if (res != null) return res;
+    Map<String, dynamic>? last;
+    for (final r in reorders) {
+      last = await reorderChapterDownload(r.chapterId, r.to);
+    }
+    return last;
+  }
+
+  // ── ISS-084 B13: server / WebUI version + update info ─────────────────
+
+  /// `checkForServerUpdates` → list of `{channel, tag, url}` (empty when up
+  /// to date). Null on failure. Server calls GitHub, so uses the slow timeout.
+  Future<List<ServerUpdateInfo>?> checkForServerUpdates() async {
+    const q = '{ checkForServerUpdates { channel tag url } }';
+    final res = await query(q, label: 'checkForServerUpdates', op: GraphQLOp.slowRead);
+    final list = res?['checkForServerUpdates'];
+    if (list is! List) return null;
+    return [
+      for (final e in list)
+        if (e is Map) ServerUpdateInfo.fromMap(Map<String, dynamic>.from(e)),
+    ];
+  }
+
+  /// `aboutWebUI` → `{channel, tag, updateTimestamp}`.
+  Future<WebUIInfo?> fetchAboutWebUI() async {
+    const q = '{ aboutWebUI { channel tag updateTimestamp } }';
+    final res = await query(q, label: 'aboutWebUI', op: GraphQLOp.read);
+    final m = res?['aboutWebUI'];
+    return m is Map ? WebUIInfo.fromMap(Map<String, dynamic>.from(m)) : null;
+  }
+
+  /// `getWebUIUpdateStatus` → `{state, progress, info{channel, tag}}`.
+  /// state: IDLE | DOWNLOADING | FINISHED | ERROR.
+  Future<WebUIUpdateStatusInfo?> getWebUIUpdateStatus() async {
+    const q = '{ getWebUIUpdateStatus { state progress info { channel tag } } }';
+    final res = await query(q, label: 'getWebUIUpdateStatus', op: GraphQLOp.read);
+    final m = res?['getWebUIUpdateStatus'];
+    return m is Map ? WebUIUpdateStatusInfo.fromMap(Map<String, dynamic>.from(m)) : null;
+  }
+
+  /// `checkForWebUIUpdate` → `{channel, tag, updateAvailable}`.
+  Future<WebUIUpdateCheckInfo?> checkForWebUIUpdate() async {
+    const q = '{ checkForWebUIUpdate { channel tag updateAvailable } }';
+    final res = await query(q, label: 'checkForWebUIUpdate', op: GraphQLOp.slowRead);
+    final m = res?['checkForWebUIUpdate'];
+    return m is Map ? WebUIUpdateCheckInfo.fromMap(Map<String, dynamic>.from(m)) : null;
+  }
+
+  /// One-shot bundle for About / Server settings: aboutServer + aboutWebUI +
+  /// WebUI update status (+ optional server update check). Failing parts are null.
+  Future<ServerVersionBundle> fetchServerVersionBundle({bool includeUpdateCheck = false}) async {
+    const q = '''
+      {
+        aboutServer { name version buildType buildTime github discord }
+        aboutWebUI { channel tag updateTimestamp }
+        getWebUIUpdateStatus { state progress info { channel tag } }
+      }
+    ''';
+    final res = await query(q, label: 'fetchServerVersionBundle', op: GraphQLOp.read);
+    final about = res?['aboutServer'];
+    final web = res?['aboutWebUI'];
+    final st = res?['getWebUIUpdateStatus'];
+    return ServerVersionBundle(
+      aboutServer: about is Map ? Map<String, dynamic>.from(about) : null,
+      webUI: web is Map ? WebUIInfo.fromMap(Map<String, dynamic>.from(web)) : null,
+      webUIUpdateStatus:
+          st is Map ? WebUIUpdateStatusInfo.fromMap(Map<String, dynamic>.from(st)) : null,
+      serverUpdates: includeUpdateCheck ? await checkForServerUpdates() : null,
+    );
+  }
+
+  // ── ISS-073 B3: clear server cookies + cache ──────────────────────────
+
+  /// `clearCookiesAndCache` — for the reader/source "Clear cookies" button
+  /// (e.g. after a Cloudflare loop). Returns true on success.
+  Future<bool> clearCookiesAndCache() async {
+    const mutStr = '''
+      mutation {
+        clearCookiesAndCache(input: {}) {
+          clientMutationId
+        }
+      }
+    ''';
+    final res = await query(mutStr, label: 'clearCookiesAndCache');
+    return res != null;
   }
 
   Future<Map<String, dynamic>?> fetchChapterPages(int chapterId) async {
@@ -1238,7 +1752,7 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'chapterId': chapterId}, label: 'fetchChapterPages');
+    return await query(mutStr, variables: {'chapterId': chapterId}, label: 'fetchChapterPages', op: GraphQLOp.scrapeRead);
   }
 
   Future<Map<String, dynamic>?> updateChapterReadStatus(int chapterId, bool isRead, int lastPageRead) async {
@@ -1308,15 +1822,22 @@ class GraphQLClientService {
     return await this.query(query, variables: {'trackerId': trackerId, 'query': queryStr}, label: 'searchTracker');
   }
 
-  Future<Map<String, dynamic>?> bindTrack(int mangaId, int trackerId, dynamic remoteId) async {
-    const mutStr = r'''
-      mutation($mangaId: Int!, $trackerId: Int!, $remoteId: LongString!) {
-        bindTrack(input: { mangaId: $mangaId, trackerId: $trackerId, remoteId: $remoteId }) {
+  Future<Map<String, dynamic>?> bindTrack(int mangaId, int trackerId, dynamic remoteId, {bool? isPrivate}) async {
+    final privVar = isPrivate == null ? '' : r', $private: Boolean';
+    final privArg = isPrivate == null ? '' : r', private: $private';
+    final mutStr = '''
+      mutation(\$mangaId: Int!, \$trackerId: Int!, \$remoteId: LongString!$privVar) {
+        bindTrack(input: { mangaId: \$mangaId, trackerId: \$trackerId, remoteId: \$remoteId$privArg }) {
           clientMutationId
         }
       }
     ''';
-    return await query(mutStr, variables: {'mangaId': mangaId, 'trackerId': trackerId, 'remoteId': remoteId.toString()}, label: 'bindTrack');
+    return await query(mutStr, variables: {
+      'mangaId': mangaId,
+      'trackerId': trackerId,
+      'remoteId': remoteId.toString(),
+      if (isPrivate != null) 'private': isPrivate,
+    }, label: 'bindTrack');
   }
 
   Future<Map<String, dynamic>?> unbindTrack(int recordId) async {
@@ -1337,16 +1858,21 @@ class GraphQLClientService {
     String? scoreString,
     String? startDate,
     String? finishDate,
+    bool? isPrivate,
   }) async {
-    const mutStr = r'''
-      mutation($recordId: Int!, $lastChapterRead: Float, $status: Int, $scoreString: String, $startDate: LongString, $finishDate: LongString) {
+    // `private` (ISS-083) is only named when set, so servers predating
+    // private tracking still accept the mutation.
+    final privVar = isPrivate == null ? '' : r', $private: Boolean';
+    final privArg = isPrivate == null ? '' : r', private: $private';
+    final mutStr = '''
+      mutation(\$recordId: Int!, \$lastChapterRead: Float, \$status: Int, \$scoreString: String, \$startDate: LongString, \$finishDate: LongString$privVar) {
         updateTrack(input: {
-          recordId: $recordId,
-          lastChapterRead: $lastChapterRead,
-          status: $status,
-          scoreString: $scoreString,
-          startDate: $startDate,
-          finishDate: $finishDate
+          recordId: \$recordId,
+          lastChapterRead: \$lastChapterRead,
+          status: \$status,
+          scoreString: \$scoreString,
+          startDate: \$startDate,
+          finishDate: \$finishDate$privArg
         }) {
           clientMutationId
         }
@@ -1359,6 +1885,7 @@ class GraphQLClientService {
       'scoreString': scoreString,
       'startDate': startDate,
       'finishDate': finishDate,
+      if (isPrivate != null) 'private': isPrivate,
     }, label: 'updateTrack');
   }
 
@@ -1441,6 +1968,151 @@ class GraphQLClientService {
     return await query(mutStr, variables: {'id': categoryId, 'position': position}, label: 'updateCategoryOrder');
   }
 
+
+  /// Bulk `updateChapters` (ISS-069). Falls back to per-id `updateChapter*`
+  /// when [ids] has a single element or the bulk mutation fails.
+  Future<Map<String, dynamic>?> updateChapters(
+    List<int> ids, {
+    bool? isRead,
+    bool? isBookmarked,
+    int? lastPageRead,
+  }) async {
+    if (ids.isEmpty) return {'chapters': <dynamic>[]};
+    final patch = <String, dynamic>{};
+    if (isRead != null) patch['isRead'] = isRead;
+    if (isBookmarked != null) patch['isBookmarked'] = isBookmarked;
+    if (lastPageRead != null) patch['lastPageRead'] = lastPageRead;
+    if (patch.isEmpty) return null;
+
+    if (ids.length == 1) {
+      final id = ids.first;
+      if (isBookmarked != null && isRead == null && lastPageRead == null) {
+        return updateChapterBookmark(id, isBookmarked);
+      }
+      if (isRead != null || lastPageRead != null) {
+        return updateChapterReadStatus(id, isRead ?? false, lastPageRead ?? 0);
+      }
+    }
+
+    const mutStr = r'''
+      mutation($ids: [Int!]!, $patch: UpdateChapterPatchInput!) {
+        updateChapters(input: { ids: $ids, patch: $patch }) {
+          chapters { id isRead isBookmarked lastPageRead }
+        }
+      }
+    ''';
+    final res = await query(
+      mutStr,
+      variables: {'ids': ids, 'patch': patch},
+      label: 'updateChapters',
+    );
+    if (res != null) return res;
+
+    // Per-id fallback when bulk is unsupported / failed.
+    Map<String, dynamic>? last;
+    for (final id in ids) {
+      if (isBookmarked != null && isRead == null && lastPageRead == null) {
+        last = await updateChapterBookmark(id, isBookmarked);
+      } else {
+        last = await updateChapterReadStatus(id, isRead ?? false, lastPageRead ?? 0);
+      }
+    }
+    return last;
+  }
+
+  /// Bulk delete downloaded chapters (ISS-069). Per-id fallback on failure.
+  Future<Map<String, dynamic>?> deleteDownloadedChapters(List<int> ids) async {
+    if (ids.isEmpty) return {'chapters': <dynamic>[]};
+    if (ids.length == 1) {
+      return deleteDownloadedChapter(ids.first);
+    }
+    const mutStr = r'''
+      mutation($ids: [Int!]!) {
+        deleteDownloadedChapters(input: { ids: $ids }) {
+          chapters { id isDownloaded }
+        }
+      }
+    ''';
+    final res = await query(
+      mutStr,
+      variables: {'ids': ids},
+      label: 'deleteDownloadedChapters',
+    );
+    if (res != null) return res;
+    Map<String, dynamic>? last;
+    for (final id in ids) {
+      last = await deleteDownloadedChapter(id);
+    }
+    return last;
+  }
+
+  /// Mark many chapters read in one round-trip (UIS mark-previous-read).
+  Future<bool> markChaptersRead(List<int> ids, {int lastPageRead = 0}) async {
+    final res = await updateChapters(ids, isRead: true, lastPageRead: lastPageRead);
+    return res != null;
+  }
+
+  /// Delete all given downloaded chapter ids (UIS delete-all downloads).
+  Future<bool> deleteAllDownloadedChapters(List<int> ids) async {
+    final res = await deleteDownloadedChapters(ids);
+    return res != null;
+  }
+
+  /// Patch category include flags / name (ISS-071). [includeInUpdate] /
+  /// [includeInDownload] are INCLUDE | EXCLUDE | UNSET.
+  Future<Map<String, dynamic>?> updateCategoryPatch(
+    int categoryId, {
+    String? name,
+    String? includeInUpdate,
+    String? includeInDownload,
+    bool? isDefault,
+  }) async {
+    final patch = <String, dynamic>{};
+    if (name != null) patch['name'] = name;
+    if (includeInUpdate != null) {
+      patch['includeInUpdate'] = parseIncludeOrExclude(includeInUpdate);
+    }
+    if (includeInDownload != null) {
+      patch['includeInDownload'] = parseIncludeOrExclude(includeInDownload);
+    }
+    if (isDefault != null) patch['default'] = isDefault;
+    if (patch.isEmpty) return null;
+    const mutStr = r'''
+      mutation($id: Int!, $patch: UpdateCategoryPatchInput!) {
+        updateCategory(input: { id: $id, patch: $patch }) {
+          category {
+            id
+            name
+            default
+            includeInUpdate
+            includeInDownload
+          }
+        }
+      }
+    ''';
+    return await query(
+      mutStr,
+      variables: {'id': categoryId, 'patch': patch},
+      label: 'updateCategoryPatch',
+    );
+  }
+
+  Future<Map<String, dynamic>?> setCategoryIncludeInUpdate(
+    int categoryId,
+    String value,
+  ) =>
+      updateCategoryPatch(categoryId, includeInUpdate: value);
+
+  Future<Map<String, dynamic>?> setCategoryIncludeInDownload(
+    int categoryId,
+    String value,
+  ) =>
+      updateCategoryPatch(categoryId, includeInDownload: value);
+
+  /// "Update this category" — thin alias for [triggerServerLibraryUpdate].
+  Future<Map<String, dynamic>?> updateLibraryForCategories(List<int> categoryIds) =>
+      triggerServerLibraryUpdate(categoryIds: categoryIds);
+
   Future<Map<String, dynamic>?> startDownloader() async {
     const mutStr = r'''
       mutation {
@@ -1516,6 +2188,84 @@ class GraphQLClientService {
     return await query(mutStr, variables: {'id': mangaId, 'categories': categoryIds}, label: 'setMangaCategories');
   }
 
+  // ── ISS-077 B9: per-manga meta (sunfire_* namespace) ───────────────────
+
+  /// Namespace for every key Sunfire writes into Suwayomi manga meta, so it
+  /// never collides with the WebUI's `webUI_*` / other clients' keys.
+  static const String kSunfireMetaPrefix = 'sunfire_';
+
+  /// Prefixes [key] with [kSunfireMetaPrefix] unless already present.
+  static String sunfireMetaKey(String key) =>
+      key.startsWith(kSunfireMetaPrefix) ? key : '$kSunfireMetaPrefix$key';
+
+  /// `setMangaMeta` with the key forced into the `sunfire_` namespace.
+  /// Returns true on success.
+  Future<bool> setMangaMeta(int mangaId, String key, String value) async {
+    if (mangaId <= 0 || key.trim().isEmpty) return false;
+    const mutStr = r'''
+      mutation($mangaId: Int!, $key: String!, $value: String!) {
+        setMangaMeta(input: { meta: { mangaId: $mangaId, key: $key, value: $value } }) {
+          meta { key value }
+        }
+      }
+    ''';
+    final res = await query(
+      mutStr,
+      variables: {'mangaId': mangaId, 'key': sunfireMetaKey(key.trim()), 'value': value},
+      label: 'setMangaMeta',
+    );
+    return res != null;
+  }
+
+  /// `deleteMangaMeta` (key namespaced like [setMangaMeta]).
+  Future<bool> deleteMangaMeta(int mangaId, String key) async {
+    if (mangaId <= 0 || key.trim().isEmpty) return false;
+    const mutStr = r'''
+      mutation($mangaId: Int!, $key: String!) {
+        deleteMangaMeta(input: { mangaId: $mangaId, key: $key }) {
+          clientMutationId
+        }
+      }
+    ''';
+    final res = await query(
+      mutStr,
+      variables: {'mangaId': mangaId, 'key': sunfireMetaKey(key.trim())},
+      label: 'deleteMangaMeta',
+    );
+    return res != null;
+  }
+
+  /// All `sunfire_*` meta for a manga as `{key: value}` (prefix kept).
+  /// Null on failure.
+  Future<Map<String, String>?> fetchSunfireMangaMeta(int mangaId) async {
+    const q = r'''
+      query($id: Int!) {
+        manga(id: $id) { meta { key value } }
+      }
+    ''';
+    final res = await query(q, variables: {'id': mangaId}, label: 'fetchSunfireMangaMeta', op: GraphQLOp.read);
+    final metas = (res?['manga'] as Map?)?['meta'];
+    if (metas is! List) return null;
+    return {
+      for (final m in metas)
+        if (m is Map && (m['key']?.toString() ?? '').startsWith(kSunfireMetaPrefix))
+          m['key'].toString(): m['value']?.toString() ?? '',
+    };
+  }
+
+  /// `deleteGlobalMeta(key)`. Returns true on success.
+  Future<bool> deleteGlobalMeta(String key) async {
+    const mutStr = r'''
+      mutation($key: String!) {
+        deleteGlobalMeta(input: { key: $key }) {
+          clientMutationId
+        }
+      }
+    ''';
+    final res = await query(mutStr, variables: {'key': key}, label: 'deleteGlobalMeta');
+    return res != null;
+  }
+
   Future<Map<String, dynamic>?> setGlobalMeta(String key, String value) async {
     try {
       const mutStr = r'''
@@ -1536,13 +2286,18 @@ class GraphQLClientService {
 
   // ── SERVER SETTINGS INTEGRATION ────────────────────────────────────────
 
-  /// Fetch complete categorized settings from Suwayomi server (all 69 fields)
+  /// Fetch server + per-user settings (ISS-064/065).
+  ///
+  /// Secrets (`authPassword`, `socksProxyPassword`, `syncYomiApiKey`,
+  /// `databasePassword`) are intentionally not selected — screens show
+  /// set/not-set from empty placeholders. Per-user keys are read from
+  /// `userSettings` and merged into the returned `settings` map for
+  /// existing callers.
   Future<Map<String, dynamic>?> fetchServerSettings() async {
     const queryStr = '''
       query {
         settings {
           authMode
-          authPassword
           authUsername
           autoBackupIncludeCategories
           autoBackupIncludeChapters
@@ -1551,9 +2306,6 @@ class GraphQLClientService {
           autoBackupIncludeManga
           autoBackupIncludeServerSettings
           autoBackupIncludeTracking
-          autoDownloadIgnoreReUploads
-          autoDownloadNewChapters
-          autoDownloadNewChaptersLimit
           backupInterval
           backupPath
           backupTTL
@@ -1562,11 +2314,6 @@ class GraphQLClientService {
           downloadAsCbz
           downloadsPath
           electronPath
-          excludeCompleted
-          excludeEntryWithUnreadChapters
-          excludeNotStarted
-          excludeUnreadChapters
-          extensionRepos
           flareSolverrAsResponseFallback
           flareSolverrEnabled
           flareSolverrSessionName
@@ -1582,6 +2329,27 @@ class GraphQLClientService {
           maxLogFileSize
           maxLogFolderSize
           maxSourcesInParallel
+          port
+          socksProxyEnabled
+          socksProxyHost
+          socksProxyPort
+          socksProxyUsername
+          socksProxyVersion
+          systemTrayEnabled
+          useHikariConnectionPool
+          webUIChannel
+          webUIFlavor
+          webUIInterface
+          webUIUpdateCheckInterval
+        }
+        userSettings {
+          autoDownloadIgnoreReUploads
+          autoDownloadNewChapters
+          autoDownloadNewChaptersLimit
+          excludeCompleted
+          excludeEntryWithUnreadChapters
+          excludeNotStarted
+          excludeUnreadChapters
           opdsEnablePageReadProgress
           opdsItemsPerPage
           opdsMarkAsReadOnDownload
@@ -1589,28 +2357,14 @@ class GraphQLClientService {
           opdsShowOnlyUnreadChapters
           opdsSkipChapterMetadataFeed
           opdsUseBinaryFileSizes
-          port
-          socksProxyEnabled
-          socksProxyHost
-          socksProxyPassword
-          socksProxyPort
-          socksProxyUsername
-          socksProxyVersion
           syncDataCategories
           syncDataChapters
           syncDataHistory
           syncDataManga
           syncDataTracking
-          syncYomiApiKey
           syncYomiEnabled
           syncYomiHost
-          systemTrayEnabled
           updateMangas
-          useHikariConnectionPool
-          webUIChannel
-          webUIFlavor
-          webUIInterface
-          webUIUpdateCheckInterval
         }
         aboutServer {
           version
@@ -1618,81 +2372,53 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(queryStr, label: 'fetchServerSettings');
+    final res = await query(queryStr, label: 'fetchServerSettings');
+    if (res == null) return null;
+    final settings = Map<String, dynamic>.from(
+      (res['settings'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+    final fsTimeout = settings['flareSolverrTimeout'];
+    if (fsTimeout is num && fsTimeout > 0) {
+      flareSolverrTimeoutSeconds = fsTimeout.toInt();
+    }
+    final user = (res['userSettings'] as Map?)?.cast<String, dynamic>();
+    if (user != null) {
+      settings.addAll(user);
+    }
+    return {
+      'settings': settings,
+      if (user != null) 'userSettings': user,
+      if (res['aboutServer'] != null) 'aboutServer': res['aboutServer'],
+    };
   }
 
-  /// Update any partial settings on Suwayomi server
+  /// Update server-wide settings via `setSettings` (PartialSettingsTypeInput).
   Future<Map<String, dynamic>?> updateServerSettings(Map<String, dynamic> partialSettings) async {
+    // Reject accidental per-user or unknown keys before they hit GraphQL validation.
+    final cleaned = <String, dynamic>{};
+    for (final e in partialSettings.entries) {
+      if (isServerSettingsInputField(e.key)) {
+        cleaned[e.key] = e.value;
+      }
+    }
+    if (cleaned.isEmpty) return null;
     const mutStr = r'''
       mutation SetServerSettings($settings: PartialSettingsTypeInput!) {
         setSettings(input: { settings: $settings }) {
           settings {
             authMode
-            authPassword
             authUsername
-            autoBackupIncludeCategories
-            autoBackupIncludeChapters
-            autoBackupIncludeClientData
-            autoBackupIncludeHistory
-            autoBackupIncludeManga
-            autoBackupIncludeServerSettings
-            autoBackupIncludeTracking
-            autoDownloadIgnoreReUploads
-            autoDownloadNewChapters
-            autoDownloadNewChaptersLimit
-            backupInterval
-            backupPath
-            backupTTL
-            backupTime
             debugLogsEnabled
             downloadAsCbz
             downloadsPath
-            electronPath
-            excludeCompleted
-            excludeEntryWithUnreadChapters
-            excludeNotStarted
-            excludeUnreadChapters
-            extensionRepos
-            flareSolverrAsResponseFallback
             flareSolverrEnabled
-            flareSolverrSessionName
-            flareSolverrSessionTtl
-            flareSolverrTimeout
-            flareSolverrUrl
             globalUpdateInterval
-            initialOpenInBrowserEnabled
             ip
-            kcefEnabled
             localSourcePath
-            maxLogFiles
-            maxLogFileSize
-            maxLogFolderSize
             maxSourcesInParallel
-            opdsEnablePageReadProgress
-            opdsItemsPerPage
-            opdsMarkAsReadOnDownload
-            opdsShowOnlyDownloadedChapters
-            opdsShowOnlyUnreadChapters
-            opdsSkipChapterMetadataFeed
-            opdsUseBinaryFileSizes
             port
             socksProxyEnabled
-            socksProxyHost
-            socksProxyPassword
-            socksProxyPort
-            socksProxyUsername
-            socksProxyVersion
-            syncDataCategories
-            syncDataChapters
-            syncDataHistory
-            syncDataManga
-            syncDataTracking
-            syncYomiApiKey
-            syncYomiEnabled
-            syncYomiHost
             systemTrayEnabled
-            updateMangas
-            useHikariConnectionPool
             webUIChannel
             webUIFlavor
             webUIInterface
@@ -1701,7 +2427,60 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'settings': partialSettings}, label: 'updateServerSettings');
+    return await query(mutStr, variables: {'settings': cleaned}, label: 'updateServerSettings');
+  }
+
+  /// Update per-user settings via `setUserSettings` (PartialUserSettingsTypeInput).
+  Future<Map<String, dynamic>?> updateUserSettings(Map<String, dynamic> partialSettings) async {
+    final cleaned = <String, dynamic>{};
+    for (final e in partialSettings.entries) {
+      if (isUserSettingsInputField(e.key)) {
+        cleaned[e.key] = e.value;
+      }
+    }
+    if (cleaned.isEmpty) return null;
+    const mutStr = r'''
+      mutation SetUserSettings($userSettings: PartialUserSettingsTypeInput!) {
+        setUserSettings(input: { userSettings: $userSettings }) {
+          userSettings {
+            autoDownloadIgnoreReUploads
+            autoDownloadNewChapters
+            autoDownloadNewChaptersLimit
+            excludeCompleted
+            excludeEntryWithUnreadChapters
+            excludeNotStarted
+            excludeUnreadChapters
+            opdsEnablePageReadProgress
+            opdsItemsPerPage
+            opdsMarkAsReadOnDownload
+            opdsShowOnlyDownloadedChapters
+            opdsShowOnlyUnreadChapters
+            opdsSkipChapterMetadataFeed
+            opdsUseBinaryFileSizes
+            syncYomiEnabled
+            syncYomiHost
+            updateMangas
+          }
+        }
+      }
+    ''';
+    return await query(mutStr, variables: {'userSettings': cleaned}, label: 'updateUserSettings');
+  }
+
+  /// Route a single key to setSettings or setUserSettings (ISS-064).
+  /// Returns the GraphQL data map on success, or null on failure.
+  Future<Map<String, dynamic>?> persistSetting(String key, dynamic val) async {
+    if (isUserSettingsInputField(key)) {
+      return updateUserSettings({key: val});
+    }
+    if (isServerSettingsInputField(key)) {
+      return updateServerSettings({key: val});
+    }
+    await LoggerService.instance.logWarning(
+      'persistSetting: unknown settings key "$key"',
+      'GraphQL',
+    );
+    return null;
   }
 
   /// Trigger global library update on server

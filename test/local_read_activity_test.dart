@@ -134,11 +134,11 @@ void main() {
         ..isRead = true;
       await IsarService.instance.saveChapter(chapter);
 
-      // Before stamping, the chapter is invisible to both consumers — they
-      // filter on `lastReadAt > 0`.
+      // ISS-060: isRead alone is enough for History (even with lastReadAt==0).
       expect(
         (await IsarService.instance.getReadingHistory()).any((c) => c.serverId == 9002),
-        isFalse,
+        isTrue,
+        reason: 'isRead chapters appear in History without a stamp',
       );
 
       await SyncEngine.instance.stampLocalReadActivity(chapter);
@@ -149,11 +149,11 @@ void main() {
       expect(reloaded!.lastReadAt, isNotNull);
       expect(reloaded.lastReadAt, greaterThan(0));
 
-      // History now returns it.
+      // Still in History, now with a real stamp for ordering.
       expect(
         (await IsarService.instance.getReadingHistory()).any((c) => c.serverId == 9002),
         isTrue,
-        reason: 'History filters on lastReadAt > 0',
+        reason: 'History keeps stamped isRead chapters',
       );
       expect(manga.serverId, 501);
     });

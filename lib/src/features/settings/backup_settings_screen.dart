@@ -1,7 +1,12 @@
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/server_compat_models.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
@@ -16,6 +21,7 @@ class BackupSettingsScreen extends StatefulWidget {
 
 class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
   bool _isLoading = true;
+  bool _restoring = false;
   bool _isConnected = false;
 
   String _backupPath = '';
@@ -35,13 +41,14 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    unawaited(_loadSettings());
   }
 
   Future<void> _loadSettings() async {
     setState(() => _isLoading = true);
     try {
       final res = await GraphQLClientService.instance.fetchServerSettings();
+      if (!mounted) return;
       if (res != null && res.containsKey('settings')) {
         final s = res['settings'] as Map<String, dynamic>;
         setState(() {
@@ -63,21 +70,41 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
         setState(() => _isConnected = false);
       }
     } catch (_) {
-      setState(() => _isConnected = false);
+      if (mounted) setState(() => _isConnected = false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _update(String key, dynamic val) async {
-    if (!_isConnected) return;
-    try {
-      await GraphQLClientService.instance.updateServerSettings({key: val});
+    if (!_isConnected) {
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Not connected to server — change was not saved'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+    try {
+      final res = await GraphQLClientService.instance.persistSetting(key, val);
+      if (!mounted) return;
+      if (res != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Updated $key on server'),
             duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update $key on server'),
+            duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -92,14 +119,13 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
   void _showCreateBackupDialog() {
     bool includeCats = true;
     bool includeChs = true;
-
-    showDialog(
+unawaited(
+    showDialog<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDlgState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F1F24),
               title: const Text('Create Server Backup', style: TextStyle(fontWeight: FontWeight.bold)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -162,7 +188,203 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
           },
         );
       },
+    ));
+  }
+
+
+  Future<void> _pickValidateAndRestore() async {
+    if (_restoring) return;
+    if (!GraphQLClientService.instance.isConfigured) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Connect to the server first.')),
+        );
+      }
+      return;
+    }
+
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['tachibk', 'zip', 'proto.gz'],
+      withData: true,
     );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    late final Uint8List bytes;
+    try {
+      bytes = file.bytes ?? (await file.xFile.readAsBytes());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not read file: $e')),
+        );
+      }
+      return;
+    }
+    final filename = file.name.isNotEmpty ? file.name : 'backup.tachibk';
+
+    if (!mounted) return;
+    setState(() => _restoring = true);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Expanded(child: Text('Validating backup…')),
+          ],
+        ),
+      ),
+    );
+
+    BackupValidationResult? validation;
+    try {
+      validation = await GraphQLClientService.instance.validateBackup(bytes, filename: filename);
+    } catch (e) {
+      validation = null;
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        setState(() => _restoring = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Validate failed: $e')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+
+    final missingLines = <String>[];
+    if (validation != null) {
+      for (final s in validation.missingSources) {
+        missingLines.add('Source: ${s.name.isEmpty ? s.id : s.name}');
+      }
+      for (final tname in validation.missingTrackers) {
+        missingLines.add('Tracker: $tname');
+      }
+    }
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+          title: const Text('Restore server backup?'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(filename, style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                if (validation == null)
+                  const Text('Could not validate — restore may still work, but missing sources are unknown.')
+                else if (validation.isClean)
+                  const Text('Backup looks clean — no missing sources or trackers.')
+                else ...[
+                  const Text('Missing on server:'),
+                  const SizedBox(height: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final line in missingLines)
+                          Text('• $line', style: TextStyle(color: cs.error, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                const Text('This replaces library data on the server. Continue?', style: TextStyle(fontSize: 13)),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: cs.primary),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('Restore', style: TextStyle(color: cs.onPrimary, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (proceed != true || !mounted) {
+      if (mounted) setState(() => _restoring = false);
+      return;
+    }
+
+    final progressNotifier = ValueNotifier<String>('Starting restore…');
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ValueListenableBuilder<String>(
+        valueListenable: progressNotifier,
+        builder: (ctx, label, __) => AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 16),
+              Expanded(child: Text(label)),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    BackupRestoreStatusInfo? status;
+    try {
+      status = await GraphQLClientService.instance.restoreBackupAndWait(
+        bytes,
+        filename: filename,
+        onProgress: (st) {
+          progressNotifier.value = st.totalManga > 0
+              ? '${st.state} · ${st.mangaProgress}/${st.totalManga}'
+              : st.state;
+        },
+      );
+    } catch (e) {
+      status = null;
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        setState(() => _restoring = false);
+        progressNotifier.dispose();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore failed: $e')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+    setState(() => _restoring = false);
+    progressNotifier.dispose();
+
+    if (status == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Restore could not start.')),
+      );
+    } else if (status.isSuccess) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Server backup restored.')),
+      );
+    } else if (status.isFailure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Restore failed (${status.state}).')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Restore ended: ${status.state}')),
+      );
+    }
   }
 
   @override
@@ -192,7 +414,9 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  leading: const Icon(Icons.settings_backup_restore_rounded),
+                  leading: _restoring
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.settings_backup_restore_rounded),
                   title: Wrap(
                     crossAxisAlignment: WrapCrossAlignment.center,
                     spacing: 6,
@@ -202,12 +426,8 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                       SunfireBadge.server(),
                     ],
                   ),
-                  subtitle: const Text('Restore library from a .tachibk backup file on server', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Upload backup archive to Suwayomi WebUI or server backups directory')),
-                    );
-                  },
+                  subtitle: const Text('Validate and restore a .tachibk file to Suwayomi', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  onTap: _restoring ? null : () => unawaited(_pickValidateAndRestore()),
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -227,7 +447,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   subtitle: _backupPath.isNotEmpty ? _backupPath : 'Default (Server data/backups)',
                   onStringChanged: (v) {
                     setState(() => _backupPath = v);
-                    _update('backupPath', v);
+                    unawaited(_update('backupPath', v));
                   },
                 ),
                 SettingsPropTile(
@@ -242,7 +462,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   unit: ' days',
                   onIntChanged: (v) {
                     setState(() => _backupInterval = v);
-                    _update('backupInterval', v);
+                    unawaited(_update('backupInterval', v));
                   },
                 ),
                 ListTile(
@@ -268,7 +488,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                     if (picked != null) {
                       final formatted = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
                       setState(() => _backupTime = formatted);
-                      _update('backupTime', formatted);
+                      unawaited(_update('backupTime', formatted));
                     }
                   },
                 ),
@@ -284,7 +504,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   unit: ' days',
                   onIntChanged: (v) {
                     setState(() => _backupTTL = v);
-                    _update('backupTTL', v);
+                    unawaited(_update('backupTTL', v));
                   },
                 ),
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
@@ -296,7 +516,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   boolValue: _includeCategories,
                   onBoolChanged: (v) {
                     setState(() => _includeCategories = v);
-                    _update('autoBackupIncludeCategories', v);
+                    unawaited(_update('autoBackupIncludeCategories', v));
                   },
                 ),
                 SettingsPropTile(
@@ -306,7 +526,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   boolValue: _includeChapters,
                   onBoolChanged: (v) {
                     setState(() => _includeChapters = v);
-                    _update('autoBackupIncludeChapters', v);
+                    unawaited(_update('autoBackupIncludeChapters', v));
                   },
                 ),
                 SettingsPropTile(
@@ -316,7 +536,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   boolValue: _includeHistory,
                   onBoolChanged: (v) {
                     setState(() => _includeHistory = v);
-                    _update('autoBackupIncludeHistory', v);
+                    unawaited(_update('autoBackupIncludeHistory', v));
                   },
                 ),
                 SettingsPropTile(
@@ -326,7 +546,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   boolValue: _includeManga,
                   onBoolChanged: (v) {
                     setState(() => _includeManga = v);
-                    _update('autoBackupIncludeManga', v);
+                    unawaited(_update('autoBackupIncludeManga', v));
                   },
                 ),
                 SettingsPropTile(
@@ -336,7 +556,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   boolValue: _includeTracking,
                   onBoolChanged: (v) {
                     setState(() => _includeTracking = v);
-                    _update('autoBackupIncludeTracking', v);
+                    unawaited(_update('autoBackupIncludeTracking', v));
                   },
                 ),
                 SettingsPropTile(
@@ -346,7 +566,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   boolValue: _includeServerSettings,
                   onBoolChanged: (v) {
                     setState(() => _includeServerSettings = v);
-                    _update('autoBackupIncludeServerSettings', v);
+                    unawaited(_update('autoBackupIncludeServerSettings', v));
                   },
                 ),
                 SettingsPropTile(
@@ -356,7 +576,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   boolValue: _includeClientData,
                   onBoolChanged: (v) {
                     setState(() => _includeClientData = v);
-                    _update('autoBackupIncludeClientData', v);
+                    unawaited(_update('autoBackupIncludeClientData', v));
                   },
                 ),
               ],

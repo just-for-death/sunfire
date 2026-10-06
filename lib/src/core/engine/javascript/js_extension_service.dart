@@ -155,10 +155,10 @@ if (typeof extention === "undefined") {
       // Logged, not debugPrint'd — `debugPrint` is stripped in release, so a
       // syntactically broken extension was reported as healthy with no
       // diagnostic anywhere.
-      LoggerService.instance.logWarning(
+      unawaited(LoggerService.instance.logWarning(
         'Extension failed to instantiate: ${res.stringResult}',
         'QuickJS',
-      );
+      ));
       // Still mark initialised so the runtime/bridges are torn down normally,
       // but remember the failure so later calls fail fast with a clear reason
       // instead of re-compiling the whole scraper on every single request.

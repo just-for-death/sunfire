@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/engine/quickjs_service.dart';
@@ -42,11 +43,10 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
     required String currentValue,
     required ValueChanged<String> onSelected,
   }) {
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -64,7 +64,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
           ),
         );
       },
-    );
+    ));
   }
 
   @override

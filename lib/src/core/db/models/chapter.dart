@@ -1,6 +1,8 @@
 
 import 'package:isar_community/isar.dart';
 
+import '../epoch_seconds.dart';
+
 part 'chapter.g.dart';
 
 /// Number of freshly-scraped chapters in one batch above which a series is
@@ -9,6 +11,23 @@ const int kFloodThresholdChapters = 4;
 
 /// How many chapters of a flooded series may enter the Updates feed.
 const int kFloodCapChapters = 3;
+
+/// Window (seconds) around manga.inLibraryAt used to detect bulk-import stamps.
+const int kImportFetchedAtWindowSeconds = 60;
+
+/// True when [fetchedAt] ≈ [inLibraryAt] within [windowSeconds] (ISS-054).
+bool isLikelyBulkImportChapter({
+  required int? fetchedAt,
+  required int? inLibraryAt,
+  int windowSeconds = kImportFetchedAtWindowSeconds,
+}) {
+  final ft = fetchedAt ?? 0;
+  final il = inLibraryAt ?? 0;
+  if (ft <= 0 || il <= 0) return false;
+  final a = normalizeEpochToSeconds(ft) ?? ft;
+  final b = normalizeEpochToSeconds(il) ?? il;
+  return (a - b).abs() <= windowSeconds;
+}
 
 /// Applies the flood gate to a batch of newly-scraped chapters, in place.
 ///

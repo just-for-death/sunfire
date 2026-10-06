@@ -15,15 +15,15 @@ const String _notificationTapPortName = 'sunfire_notification_tap_port';
 
 /// Top-level callback for notification responses in background or foreground.
 /// Runs inside the plugin-spawned isolate, so it can only forward the payload
-/// over an isolate port — the real navigation happens on the main isolate
-/// ([NotificationService.initialize] registers the port and forwards to
+/// over an isolate ports — the real navigation happens on the main isolate
+/// ([NotificationService.initialize] registers the ports and forwards to
 /// [onNotificationTapped]).
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) {
   debugPrint('[NotificationService] Notification tapped with payload: ${response.payload}');
-  final port = IsolateNameServer.lookupPortByName(_notificationTapPortName);
-  if (port != null) {
-    port.send(response.payload ?? '/updates');
+  final ports = IsolateNameServer.lookupPortByName(_notificationTapPortName);
+  if (ports != null) {
+    ports.send(response.payload ?? '/updates');
   }
 }
 
@@ -157,7 +157,7 @@ class NotificationService {
 
       // Make background-isolate taps (app killed) reach the main isolate.
       //
-      // The previous port is closed first. `_isInitialized` is set only after
+      // The previous ports is closed first. `_isInitialized` is set only after
       // this try block, so anything thrown above left the service uninitialised
       // and every later notification re-ran this — creating a fresh
       // `ReceivePort` each time and orphaning the last one, never closed, its
@@ -165,15 +165,15 @@ class NotificationService {
       // WorkManager isolate made that a per-notification leak.
       IsolateNameServer.removePortNameMapping(_notificationTapPortName);
       _notificationTapPort?.close();
-      final port = ReceivePort();
-      _notificationTapPort = port;
-      port.listen((payload) {
+      final ports = ReceivePort();
+      _notificationTapPort = ports;
+      ports.listen((payload) {
         if (payload is String) {
           debugPrint('[NotificationService] Background tap forwarded: $payload');
           _selectNotificationStream.add(payload);
         }
       });
-      IsolateNameServer.registerPortWithName(port.sendPort, _notificationTapPortName);
+      IsolateNameServer.registerPortWithName(ports.sendPort, _notificationTapPortName);
 
       // Not implemented on all platforms (Linux throws UnimplementedError).
       // Must not poison _isInitialized: otherwise every showXxx re-runs this
@@ -545,6 +545,6 @@ class NotificationService {
   }
 
   void dispose() {
-    _selectNotificationStream.close();
+    unawaited(_selectNotificationStream.close());
   }
 }

@@ -1,0 +1,106 @@
+/// Suwayomi v2.4+ settings input field names (from introspection).
+///
+/// Server-wide settings go through [setSettings] / [PartialSettingsTypeInput].
+/// Per-user settings go through [setUserSettings] / [PartialUserSettingsTypeInput]
+/// and are read from [userSettings].
+library;
+
+/// Fields accepted by `PartialSettingsTypeInput` (mutation `setSettings`).
+const Set<String> kPartialSettingsInputFields = {
+  'authMode',
+  'authPassword',
+  'authUsername',
+  'autoBackupIncludeCategories',
+  'autoBackupIncludeChapters',
+  'autoBackupIncludeClientData',
+  'autoBackupIncludeHistory',
+  'autoBackupIncludeManga',
+  'autoBackupIncludeServerSettings',
+  'autoBackupIncludeTracking',
+  'autoBackupIncludeUserSettings',
+  'backupInterval',
+  'backupPath',
+  'backupTTL',
+  'backupTime',
+  'databasePassword',
+  'databaseType',
+  'databaseUrl',
+  'databaseUsername',
+  'debugLogsEnabled',
+  'downloadAsCbz',
+  'downloadConversions',
+  'downloadsPath',
+  'electronPath',
+  'flareSolverrAsResponseFallback',
+  'flareSolverrEnabled',
+  'flareSolverrSessionName',
+  'flareSolverrSessionTtl',
+  'flareSolverrTimeout',
+  'flareSolverrUrl',
+  'globalUpdateInterval',
+  'initialOpenInBrowserEnabled',
+  'ip',
+  'jwtAudience',
+  'jwtRefreshExpiry',
+  'jwtTokenExpiry',
+  'kcefEnabled',
+  'localSourcePath',
+  'maxLogFileSize',
+  'maxLogFiles',
+  'maxLogFolderSize',
+  'maxSourcesInParallel',
+  'port',
+  'socksProxyEnabled',
+  'socksProxyHost',
+  'socksProxyPassword',
+  'socksProxyPort',
+  'socksProxyUsername',
+  'socksProxyVersion',
+  'systemTrayEnabled',
+  'useHikariConnectionPool',
+  'webUIChannel',
+  'webUIFlavor',
+  'webUIInterface',
+  'webUIUpdateCheckInterval',
+};
+
+/// Fields accepted by `PartialUserSettingsTypeInput` (mutation `setUserSettings`).
+const Set<String> kPartialUserSettingsInputFields = {
+  'autoDownloadIgnoreReUploads',
+  'autoDownloadNewChapters',
+  'autoDownloadNewChaptersLimit',
+  'excludeCompleted',
+  'excludeEntryWithUnreadChapters',
+  'excludeNotStarted',
+  'excludeUnreadChapters',
+  'koreaderSyncChecksumMethod',
+  'koreaderSyncPercentageTolerance',
+  'koreaderSyncStrategyBackward',
+  'koreaderSyncStrategyForward',
+  'opdsCbzMimetype',
+  'opdsChapterSortOrder',
+  'opdsEnablePageReadProgress',
+  'opdsItemsPerPage',
+  'opdsMarkAsReadOnDownload',
+  'opdsShowOnlyDownloadedChapters',
+  'opdsShowOnlyUnreadChapters',
+  'opdsSkipChapterMetadataFeed',
+  'opdsUseBinaryFileSizes',
+  'serveConversions',
+  'syncDataCategories',
+  'syncDataChapters',
+  'syncDataHistory',
+  'syncDataManga',
+  'syncDataTracking',
+  'syncInterval',
+  'syncYomiApiKey',
+  'syncYomiEnabled',
+  'syncYomiHost',
+  'updateMangas',
+};
+
+bool isUserSettingsInputField(String key) =>
+    kPartialUserSettingsInputFields.contains(key);
+
+bool isServerSettingsInputField(String key) =>
+    kPartialSettingsInputFields.contains(key);

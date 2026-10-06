@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -209,7 +210,7 @@ class DownloadTaskHandler extends TaskHandler {
 
   @override
   void onRepeatEvent(DateTime timestamp) {
-    _syncFromSnapshot();
+    unawaited(_syncFromSnapshot());
   }
 
   @override
@@ -231,7 +232,7 @@ class DownloadTaskHandler extends TaskHandler {
       // service cleanly. Stopping the service alone would just let the OS kill
       // the app and strand downloads.
       FlutterForegroundTask.sendDataToMain(const <String, dynamic>{'action': 'pause'});
-      FlutterForegroundTask.stopService();
+      unawaited(FlutterForegroundTask.stopService());
     }
   }
 

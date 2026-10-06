@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -60,7 +62,7 @@ class MetronService extends ChangeNotifier {
       final token = await _storage.read(key: _storageKey);
       if (token != null && token.isNotEmpty) {
         configureToken(token);
-        _migrateLegacyPlaintextToken();
+        unawaited(_migrateLegacyPlaintextToken());
         return;
       }
     } catch (ignoredError) { if (kDebugMode) debugPrint('[metron_service] ignored error: $ignoredError'); }
@@ -169,7 +171,7 @@ class MetronService extends ChangeNotifier {
 
       return (series: parsed, totalCount: count, nextUrl: next);
     } catch (e, st) {
-      LoggerService.instance.logError('Metron search failed for "$query": $e', exception: e, stackTrace: st, category: 'Metron');
+      unawaited(LoggerService.instance.logError('Metron search failed for "$query": $e', exception: e, stackTrace: st, category:'Metron'));
       rethrow;
     }
   }
@@ -189,7 +191,7 @@ class MetronService extends ChangeNotifier {
       _detailCache[seriesId] = (timestamp: DateTime.now(), series: series);
       return series;
     } catch (e, st) {
-      LoggerService.instance.logError('Metron getSeriesDetail failed for $seriesId: $e', exception: e, stackTrace: st, category: 'Metron');
+      unawaited(LoggerService.instance.logError('Metron getSeriesDetail failed for $seriesId: $e', exception: e, stackTrace: st, category:'Metron'));
       rethrow;
     }
   }
@@ -237,7 +239,7 @@ class MetronService extends ChangeNotifier {
       _issueMapCache[seriesId] = (timestamp: DateTime.now(), issues: issues, issueMap: map);
       return (issues: issues, issueMap: map);
     } catch (e, st) {
-      LoggerService.instance.logError('Metron getSeriesIssues failed for $seriesId: $e', exception: e, stackTrace: st, category: 'Metron');
+      unawaited(LoggerService.instance.logError('Metron getSeriesIssues failed for $seriesId: $e', exception: e, stackTrace: st, category:'Metron'));
       rethrow;
     }
   }
@@ -255,11 +257,11 @@ class MetronService extends ChangeNotifier {
       );
       final ok = res.statusCode == 200 || res.statusCode == 201;
       if (ok) {
-        LoggerService.instance.logInfo('Successfully scrobbled issue $issueId to Metron ($dateStr)', 'Metron');
+        unawaited(LoggerService.instance.logInfo('Successfully scrobbled issue $issueId to Metron ($dateStr)','Metron'));
       }
       return ok;
     } catch (e, st) {
-      LoggerService.instance.logError('Metron scrobbleIssue failed for $issueId: $e', exception: e, stackTrace: st, category: 'Metron');
+      unawaited(LoggerService.instance.logError('Metron scrobbleIssue failed for $issueId: $e', exception: e, stackTrace: st, category:'Metron'));
       rethrow;
     }
   }
@@ -275,7 +277,7 @@ class MetronService extends ChangeNotifier {
           .map((p) => MetronPublisher.fromJson(p))
           .toList();
     } catch (e, st) {
-      LoggerService.instance.logError('Metron getPublishers failed: $e', exception: e, stackTrace: st, category: 'Metron');
+      unawaited(LoggerService.instance.logError('Metron getPublishers failed: $e', exception: e, stackTrace: st, category:'Metron'));
       return [];
     }
   }
@@ -311,26 +313,26 @@ class MetronService extends ChangeNotifier {
         if (issueId > 0) {
           final ok = await scrobbleIssue(issueId: issueId, readDate: readDate);
           if (ok) {
-            LoggerService.instance.logInfo(
+            unawaited(LoggerService.instance.logInfo(
               'Auto-scrobbled "${chapter.name}" (Metron Issue #$matchedKey, ID $issueId) for "${manga.title}"',
               'Metron',
-            );
+            ));
           }
           return ok;
         }
       } else {
-        LoggerService.instance.logWarning(
+        unawaited(LoggerService.instance.logWarning(
           'Metron could not match chapter "${chapter.name}" (num: ${chapter.chapterNumber}) to an issue in series $seriesId',
           'Metron',
-        );
+        ));
       }
     } catch (e, st) {
-      LoggerService.instance.logError(
+      unawaited(LoggerService.instance.logError(
         'Failed to auto-scrobble chapter "${chapter.name}" for "${manga.title}": $e',
         exception: e,
         stackTrace: st,
         category: 'Metron',
-      );
+      ));
     }
     return false;
   }

@@ -19,6 +19,10 @@ import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../main_shell.dart';
+import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
+import '../../ui/widgets/dialog_title.dart';
+import '../../ui/widgets/library_update_progress_banner.dart';
 
 
 class LibraryScreen extends StatefulWidget {
@@ -29,6 +33,10 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveClientMixin {
+
+  // ISS-018: theme-aware colours so Light mode stays readable.
+  ColorScheme get _cs => Theme.of(context).colorScheme;
+  bool get _isLight => _cs.brightness == Brightness.light;
   @override
   bool get wantKeepAlive => true;
   final SettingsService _settings = SettingsService.instance;
@@ -70,11 +78,18 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   /// them on every single Library tab visit. Reset whenever the source or URL
   /// changes, which is handled because a changed row produces a new key.
   final Set<String> _coverHealFailed = {};
+  StreamSubscription<void>? _syncCompleteSub;
 
   @override
   void initState() {
     super.initState();
-    _loadFromIsarThenSync();
+    unawaited(_loadFromIsarThenSync());
+    // ISS-059: when a mid-flight triggerSync was queued behind another cycle,
+    // reload Isar once the gate finishes so the grid is not left empty.
+    _syncCompleteSub = SyncEngine.instance.onSyncCycleComplete.listen((_) {
+      if (!mounted) return;
+      unawaited(_loadFromIsarOnly());
+    });
     MainShell.selectedTabNotifier.addListener(_onTabChanged);
     // This screen reads six display settings straight out of `build()`
     // (showCategoryTabs, libraryDisplayMode, gridColumnCount,
@@ -106,13 +121,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         _reloadQueued = true;
         return;
       }
-      _loadFromIsarOnly();
+      unawaited(_loadFromIsarOnly());
     });
   }
 
   @override
   void dispose() {
     _tabReloadTimer?.cancel();
+    unawaited(_syncCompleteSub?.cancel());
     _settings.removeListener(_onSettingsChanged);
     MainShell.selectedTabNotifier.removeListener(_onTabChanged);
     super.dispose();
@@ -153,7 +169,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         });
       }
     } catch (e, stack) {
-      LoggerService.instance.logError('Library load from Isar failed: $e', exception: e, stackTrace: stack, category: 'Library');
+      unawaited(LoggerService.instance.logError('Library load from Isar failed: $e', exception: e, stackTrace: stack, category: 'Library'));
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -170,7 +186,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
 
     // 2. Background sync (silent — only if server is configured)
     if (GraphQLClientService.instance.isConfigured) {
-      _backgroundSync();
+      unawaited(_backgroundSync());
     }
   }
 
@@ -201,7 +217,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       _isLoadingIsar = false;
       if (_reloadQueued) {
         _reloadQueued = false;
-        _loadFromIsarOnly();
+        unawaited(_loadFromIsarOnly());
       }
     }
   }
@@ -239,7 +255,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         });
       }
     } catch (e, stack) {
-      LoggerService.instance.logError('Failed to load library from Isar: $e', exception: e, stackTrace: stack, category: 'Library');
+      unawaited(LoggerService.instance.logError('Failed to load library from Isar: $e', exception: e, stackTrace: stack, category: 'Library'));
     }
   }
 
@@ -375,7 +391,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           }
         }
       } catch (e) {
-        LoggerService.instance.logWarning('Standalone update check failed for ${manga.title}: $e', 'Library');
+        unawaited(LoggerService.instance.logWarning('Standalone update check failed for ${manga.title}: $e', 'Library'));
       }
     }
   }
@@ -400,7 +416,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     // 1. Category Filter
     if (_settings.showCategoryTabs && _selectedCategoryIndex > 0 && _selectedCategoryIndex <= _categories.length) {
       final selectedCatId = _categories[_selectedCategoryIndex - 1].serverId;
-      list = list.where((m) => m.categoryIds.contains(selectedCatId)).toList();
+      list = list.where((m) => mangaBelongsToCategory(m.categoryIds, selectedCatId)).toList();
     }
 
     // 2. Smart Search Query Filter (Mihon / Mangayomi Tokens)
@@ -479,7 +495,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   void _toggleBatchSelection(int mangaServerId) {
     setState(() {
       if (_selectedMangaIds.contains(mangaServerId)) {
-        HapticFeedback.selectionClick();
+        unawaited(HapticFeedback.selectionClick());
         _selectedMangaIds.remove(mangaServerId);
         if (_selectedMangaIds.isEmpty) {
           _isBatchMode = false;
@@ -487,9 +503,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         }
       } else {
         if (!_isBatchMode) {
-          HapticFeedback.mediumImpact();
+          unawaited(HapticFeedback.mediumImpact());
         } else {
-          HapticFeedback.selectionClick();
+          unawaited(HapticFeedback.selectionClick());
         }
         _selectedMangaIds.add(mangaServerId);
         _isBatchMode = true;
@@ -499,7 +515,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   }
 
   void _selectAll() {
-    HapticFeedback.selectionClick();
+    unawaited(HapticFeedback.selectionClick());
     final currentList = _filteredManga;
     // Decide based on whether *all currently visible* items are selected, not
     // on matching lengths: the selection set may contain stale ids (e.g. the
@@ -530,7 +546,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   /// which is what made the omission visible.
   void _exitBatchMode() {
     if (!mounted) return;
-    HapticFeedback.lightImpact();
+    unawaited(HapticFeedback.lightImpact());
     setState(() {
       _selectedMangaIds.clear();
       _isBatchMode = false;
@@ -571,9 +587,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final Set<int> initialCommonCatIds = Set<int>.from(selectedCatIds);
     if (!mounted) return;
 
-    await showModalBottomSheet(
+    await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
+      // UIS-ISS-012: theme surface (was hard-coded dark hex)
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (sheetContext) {
         return StatefulBuilder(
@@ -610,7 +626,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                             return CheckboxListTile(
                               activeColor: primaryColor,
                               contentPadding: EdgeInsets.zero,
-                              title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              title: Tooltip(message: cat.name, child: Text(cat.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
                               value: isChecked,
                               onChanged: (val) {
                                 setSheetState(() {
@@ -669,14 +685,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                             );
                           }
                         } catch (e, stack) {
-                          LoggerService.instance.logError('Batch category move failed: $e', exception: e, stackTrace: stack, category: 'Library');
+                          unawaited(LoggerService.instance.logError('Batch category move failed: $e', exception: e, stackTrace: stack, category: 'Library'));
                           if (sheetContext.mounted) {
                             Navigator.pop(sheetContext);
                           }
                           _exitBatchMode();
                         }
                       },
-                      child: const Text('Apply Categories', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      child: Text('Apply Categories', style: TextStyle(fontWeight: FontWeight.bold, color: _cs.onPrimary)),
                     ),
                   ],
                 ),
@@ -764,9 +780,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final selectedCount = _selectedMangaIds.length;
     if (selectedCount == 0) return;
 
-    await showModalBottomSheet(
+    await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
+      // UIS-ISS-012: theme surface (was hard-coded dark hex)
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (sheetCtx) {
         return SafeArea(
@@ -802,11 +818,11 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   Widget _buildDownloadOptionTile(BuildContext sheetCtx, String title, int count) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.download_for_offline_outlined, color: Colors.white70),
+      leading: Icon(Icons.download_for_offline_outlined, color: Theme.of(sheetCtx).colorScheme.onSurfaceVariant),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
       onTap: () {
         Navigator.pop(sheetCtx);
-        _executeBatchDownload(count);
+        unawaited(_executeBatchDownload(count));
       },
     );
   }
@@ -876,18 +892,16 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F26),
+        // UIS-ISS-012: theme surface (was hard-coded dark hex)
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 24),
-            SizedBox(width: 8),
-            Text('Remove from Library', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
+        title: const DialogTitle(
+          icon: Icons.delete_outline_rounded,
+          iconColor: Colors.redAccent,
+          text: 'Remove from Library',
         ),
         content: Text(
           'Remove $count selected ${count == 1 ? "title" : "titles"} from your library? This will not delete downloaded chapters.',
-          style: const TextStyle(fontSize: 14, color: Colors.white70),
+          style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         actions: [
           TextButton(
@@ -936,7 +950,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         _buildBatchActionItem(
           icon: Icons.drive_file_move_outlined,
           label: 'Category',
-          color: Colors.white70,
+          color: _cs.onSurfaceVariant,
           onTap: _batchMoveToCategory,
         ),
         _buildBatchActionItem(
@@ -948,13 +962,13 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         _buildBatchActionItem(
           icon: Icons.remove_done_rounded,
           label: 'Unread',
-          color: Colors.amberAccent,
+          color: _isLight ? Colors.amber.shade800 : Colors.amberAccent,
           onTap: () => _batchMarkRead(false),
         ),
         _buildBatchActionItem(
           icon: Icons.download_rounded,
           label: 'Download',
-          color: Colors.lightBlueAccent,
+          color: _isLight ? Colors.blue.shade700 : Colors.lightBlueAccent,
           onTap: _batchDownloadMenu,
         ),
         _buildBatchActionItem(
@@ -977,7 +991,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
               borderRadius: BorderRadius.circular(32),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.55),
+                  color: _cs.shadow.withValues(alpha: _isLight ? 0.18 : 0.55),
                   blurRadius: 28,
                   offset: const Offset(0, 10),
                 ),
@@ -991,9 +1005,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xCC181820),
+                          color: _cs.surfaceContainer.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(32),
-                          border: Border.all(color: const Color(0x22FFFFFF), width: 0.8),
+                          border: Border.all(color: _cs.outlineVariant.withValues(alpha: 0.4), width: 0.8),
                         ),
                         child: dockRow,
                       ),
@@ -1002,12 +1016,12 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                 : Material(
                     elevation: 8,
                     borderRadius: BorderRadius.circular(32),
-                    color: const Color(0xFF23232A),
+                    color: _cs.surfaceContainerHigh,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(32),
-                        border: Border.all(color: const Color(0x1FFFFFFF), width: 0.8),
+                        border: Border.all(color: _cs.outlineVariant.withValues(alpha: 0.4), width: 0.8),
                       ),
                       child: dockRow,
                     ),
@@ -1027,7 +1041,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () {
-        HapticFeedback.selectionClick();
+        unawaited(HapticFeedback.selectionClick());
         onTap();
       },
       child: Padding(
@@ -1055,9 +1069,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final primaryColor = Theme.of(context).colorScheme.primary;
     final textController = TextEditingController();
 
-    showModalBottomSheet(
+    unawaited(showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
+      // UIS-ISS-012: theme surface (was hard-coded dark hex)
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (sheetContext) {
@@ -1136,7 +1150,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                             setSheetState(() {});
                           }
                         },
-                        child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        child: Text('Add', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
@@ -1149,7 +1163,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       itemBuilder: (context, index) {
                         final cat = _categories[index];
                         return ListTile(
-                          title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          title: Tooltip(message: cat.name, child: Text(cat.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
                             onPressed: () async {
@@ -1170,11 +1184,66 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           },
         );
       },
-    ).whenComplete(() => textController.dispose());
+    ).whenComplete(() => textController.dispose()));
+  }
+
+
+  Future<void> _updateSelectedCategory(Category cat) async {
+    if (!GraphQLClientService.instance.isConfigured) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Connect a server to update a category'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final res = await GraphQLClientService.instance.updateLibraryForCategories([cat.serverId]);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          res != null
+              ? 'Updating "${cat.name}" on server…'
+              : 'Failed to start update for "${cat.name}"',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showCategoryChipMenu(Category cat) {
+    unawaited(showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.refresh_rounded),
+                title: Text('Update "${cat.name}"'),
+                subtitle: Text(
+                  'Run a server library update for this category only',
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  unawaited(_updateSelectedCategory(cat));
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    ));
   }
 
   int _getCategoryMangaCount(int catServerId) {
-    return _allManga.where((m) => m.categoryIds.contains(catServerId)).length;
+    return _allManga.where((m) => mangaBelongsToCategory(m.categoryIds, catServerId)).length;
   }
 
   /// True when any filter/display customization in the "Filter & Display" sheet
@@ -1191,10 +1260,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
 
   void _showSortAndDisplayDialog() {
     final primaryColor = Theme.of(context).colorScheme.primary;
-
-    showModalBottomSheet(
+unawaited(
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
+      // UIS-ISS-012: theme surface (was hard-coded dark hex)
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
@@ -1216,7 +1285,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         height: 4,
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white24,
+                          color: _cs.onSurfaceVariant.withValues(alpha: 0.4),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -1234,9 +1303,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           label: Text(mode),
                           selected: isSel,
                           selectedColor: primaryColor,
-                          backgroundColor: const Color(0x1F2A2A32),
-                          labelStyle: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : const Color(0x2BFFFFFF), width: 0.8)),
+                          backgroundColor: SunfireTheme.tileSurface(context),
+                          labelStyle: TextStyle(color: isSel ? _cs.onPrimary : _cs.onSurfaceVariant, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8)),
                           onSelected: (_) {
                             setState(() => _settings.libraryDisplayMode = mode);
                             setSheetState(() {});
@@ -1263,9 +1332,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           label: Text(item['label'] as String),
                           selected: isSel,
                           selectedColor: primaryColor,
-                          backgroundColor: const Color(0x1F2A2A32),
-                          labelStyle: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : const Color(0x2BFFFFFF), width: 0.8)),
+                          backgroundColor: SunfireTheme.tileSurface(context),
+                          labelStyle: TextStyle(color: isSel ? _cs.onPrimary : _cs.onSurfaceVariant, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8)),
                           onSelected: (_) {
                             setState(() => _settings.gridColumnCount = item['val'] as int);
                             setSheetState(() {});
@@ -1284,7 +1353,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           label: const Text('Unread Count'),
                           selected: _settings.showUnreadBadges,
                           selectedColor: primaryColor.withAlpha(80),
-                          checkmarkColor: Colors.white,
+                          checkmarkColor: _cs.onSurface,
                           onSelected: (val) {
                             setState(() => _settings.showUnreadBadges = val);
                             setSheetState(() {});
@@ -1294,7 +1363,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           label: const Text('Downloaded Check'),
                           selected: _settings.showDownloadedBadges,
                           selectedColor: primaryColor.withAlpha(80),
-                          checkmarkColor: Colors.white,
+                          checkmarkColor: _cs.onSurface,
                           onSelected: (val) {
                             setState(() => _settings.showDownloadedBadges = val);
                             setSheetState(() {});
@@ -1314,9 +1383,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           label: Text(filter),
                           selected: isSel,
                           selectedColor: primaryColor,
-                          backgroundColor: const Color(0x1F2A2A32),
-                          labelStyle: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : const Color(0x2BFFFFFF), width: 0.8)),
+                          backgroundColor: SunfireTheme.tileSurface(context),
+                          labelStyle: TextStyle(color: isSel ? _cs.onPrimary : _cs.onSurfaceVariant, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8)),
                           onSelected: (_) {
                             setState(() => _statusFilter = filter);
                             setSheetState(() {});
@@ -1400,7 +1469,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           },
         );
       },
-    );
+    ));
   }
 
   @override
@@ -1413,8 +1482,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     final isCompact = displayMode == 'Compact Grid';
     final isList = displayMode == 'List';
     final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth >= 720;
-    final bottomPadding = _isBatchMode ? (isTablet ? 96.0 : 130.0) : (isTablet ? 36.0 : 120.0);
+    final isTablet = screenWidth >= SunfireBreakpoints.narrowTabletMaxWidth;
+    // UIS-02: real bar height (shell extendBody) + room for the batch dock.
+    final bottomPadding = SunfireBreakpoints.scrollBottomPadding(context, extra: _isBatchMode ? 96 : 16);
     final horizontalPadding = isTablet ? 24.0 : 16.0;
     
     final columnsSetting = _settings.gridColumnCount;
@@ -1548,33 +1618,39 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                 final isSelected = _selectedCategoryIndex == index;
                 final count = index == 0 ? _allManga.length : _getCategoryMangaCount(_categories[index - 1].serverId);
                 final label = index == 0 ? 'All ($count)' : '${_categories[index - 1].name} ($count)';
+                final chip = ChoiceChip(
+                  label: Text(label),
+                  selected: isSelected,
+                  selectedColor: primaryColor,
+                  backgroundColor: SunfireTheme.tileSurface(context),
+                  showCheckmark: false,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  labelStyle: TextStyle(
+                    color: isSelected ? _cs.onPrimary : _cs.onSurfaceVariant,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(
+                      color: isSelected ? primaryColor : SunfireTheme.tileBorder(context),
+                      width: isSelected ? 1.2 : 0.8,
+                    ),
+                  ),
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() => _selectedCategoryIndex = index);
+                    }
+                  },
+                );
                 return Padding(
                   padding: const EdgeInsets.only(right: 8.0),
-                  child: ChoiceChip(
-                    label: Text(label),
-                    selected: isSelected,
-                    selectedColor: primaryColor,
-                    backgroundColor: const Color(0x1F2A2A32),
-                    showCheckmark: false,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : Colors.grey[400],
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      fontSize: 13,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      side: BorderSide(
-                        color: isSelected ? primaryColor : const Color(0x2BFFFFFF),
-                        width: isSelected ? 1.2 : 0.8,
-                      ),
-                    ),
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() => _selectedCategoryIndex = index);
-                      }
-                    },
-                  ),
+                  child: index == 0
+                      ? chip
+                      : GestureDetector(
+                          onLongPress: () => _showCategoryChipMenu(_categories[index - 1]),
+                          child: chip,
+                        ),
                 );
               },
             ),
@@ -1626,6 +1702,13 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                             ),
                           ),
                         ),
+                      LibraryUpdateProgressBanner(
+                        asSliver: true,
+                        margin: EdgeInsets.symmetric(
+                          horizontal: horizontalPadding,
+                          vertical: 6,
+                        ),
+                      ),
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 6),
@@ -1643,7 +1726,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                                     visualDensity: VisualDensity.compact,
                                     selectedColor: primaryColor.withValues(alpha: 0.25),
-                                    backgroundColor: const Color(0x1F2A2A32),
+                                    backgroundColor: SunfireTheme.tileSurface(context),
                                     labelStyle: TextStyle(
                                       color: isSel ? primaryColor : Colors.grey[400],
                                       fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
@@ -1652,7 +1735,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                       side: BorderSide(
-                                        color: isSel ? primaryColor.withValues(alpha: 0.6) : const Color(0x2BFFFFFF),
+                                        color: isSel ? primaryColor.withValues(alpha: 0.6) : SunfireTheme.tileBorder(context),
                                         width: 0.8,
                                       ),
                                     ),
@@ -1697,7 +1780,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                               // A failed load retries; it does not navigate away
                               // from the data the user already has.
                               if (_loadError != null) {
-                                _loadFromIsarOnly();
+                                unawaited(_loadFromIsarOnly());
                                 return;
                               }
                               if (_searchQuery.isNotEmpty || _statusFilter != 'All' || _selectedCategoryIndex > 0) {
@@ -1808,9 +1891,11 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
-                        color: const Color(0xFF1F1F24),
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
                         border: Border.all(
-                          color: isSelected ? primaryColor : const Color(0x1AFFFFFF),
+                          color: isSelected
+                              ? primaryColor
+                              : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
                           width: isSelected ? 2.5 : 0.8,
                         ),
                         boxShadow: [
@@ -1864,7 +1949,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle),
-                          child: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+                          child: Icon(Icons.check_rounded, size: 16, color: _cs.onPrimary),
                         ),
                       ),
                     if (_settings.showUnreadBadges && (manga.unreadCount ?? 0) > 0 && !isSelected)
@@ -1886,7 +1971,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           ),
                           child: Text(
                             '${manga.unreadCount}',
-                            style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800),
+                            style: TextStyle(color: _cs.onPrimary, fontSize: 10.5, fontWeight: FontWeight.w800),
                           ),
                         ),
                       ),
@@ -1990,10 +2075,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4.0),
         child: Material(
-          color: isSelected ? primaryColor.withAlpha(40) : const Color(0x1F2A2A32),
+          color: isSelected ? primaryColor.withAlpha(40) : SunfireTheme.tileSurface(context),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: isSelected ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
+            side: BorderSide(color: isSelected ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8),
           ),
           child: ListTile(
             onTap: () async {
@@ -2027,10 +2112,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     decoration: BoxDecoration(
-                      color: const Color(0x26FFFFFF),
+                      color: _cs.onSurface.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(5),
                     ),
-                    child: Text(langBadge, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white70, letterSpacing: 0.4)),
+                    child: Text(langBadge, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _cs.onSurfaceVariant, letterSpacing: 0.4)),
                   ),
                 ],
                 if (isDownloaded && _settings.showDownloadedBadges) ...[
@@ -2043,7 +2128,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                 ? Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(color: primaryColor, borderRadius: BorderRadius.circular(10)),
-                    child: Text('${manga.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    child: Text('${manga.unreadCount}', style: TextStyle(color: _cs.onPrimary, fontSize: 11, fontWeight: FontWeight.bold)),
                   )
                 : null,
           ),

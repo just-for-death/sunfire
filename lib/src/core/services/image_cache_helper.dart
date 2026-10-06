@@ -3,7 +3,7 @@ import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -98,6 +98,49 @@ class ImageCacheHelper {
     return null;
   }
 
+  /// Async, memoised local-cover lookup for UI tiles (UIS-06).
+  /// [build] must not call the sync existsSync helpers.
+  static final Map<String, String?> _localPathCache = {};
+
+  static String _localCoverCacheKey(int mangaServerId, String? url) =>
+      '$mangaServerId|${url ?? ''}';
+
+  static Future<String?> resolveLocalCoverPath(int mangaServerId, String? url) async {
+    final key = _localCoverCacheKey(mangaServerId, url);
+    if (_localPathCache.containsKey(key)) return _localPathCache[key];
+    String? found;
+    for (final base in _candidateCoverPaths) {
+      final names = <String>[
+        if (mangaServerId > 0) '$mangaServerId.jpg',
+        if (url != null && url.isNotEmpty) 'url_${_hashUrl(url)}.jpg',
+      ];
+      for (final name in names) {
+        final f = File('$base/$name');
+        if (await f.exists() && await f.length() > 100) {
+          found = f.path;
+          break;
+        }
+      }
+      if (found != null) break;
+    }
+    return _localPathCache[key] = found;
+  }
+
+  static void invalidateLocalCover(int mangaServerId, String? url) {
+    _localPathCache.remove(_localCoverCacheKey(mangaServerId, url));
+  }
+
+  @visibleForTesting
+  static void debugSetCandidateCoverPaths(List<String> paths) {
+    _candidateCoverPaths
+      ..clear()
+      ..addAll(paths);
+    _localPathCache.clear();
+  }
+
+  @visibleForTesting
+  static void debugClearLocalPathCache() => _localPathCache.clear();
+
   static Uint8List? getMemoryCover(String url) {
     return _memoryCache[url];
   }
@@ -111,6 +154,7 @@ class ImageCacheHelper {
   /// part failed. Each failure is now reported and the sweep continues.
   static Future<void> clearCache() async {
     _memoryCache.clear();
+    _localPathCache.clear();
     var failures = 0;
     for (final basePath in _candidateCoverPaths) {
       try {
@@ -131,11 +175,11 @@ class ImageCacheHelper {
       }
     }
     if (failures > 0) {
-      LoggerService.instance.logWarning(
+      unawaited(LoggerService.instance.logWarning(
         'Cover cache clear left $failures file(s) behind — the cache is only '
         'partially empty. This is usually another process holding a file open.',
         'ImageCacheHelper',
-      );
+      ));
     }
   }
 
@@ -361,6 +405,7 @@ class ImageCacheHelper {
             }
             final urlFile = File('$basePath/url_${_hashUrl(url)}.jpg');
             await urlFile.writeAsBytes(bytes);
+            invalidateLocalCover(mangaServerId, url);
           } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
         }
         return bytes;
@@ -399,12 +444,17 @@ class MangaCoverImage extends StatefulWidget {
 class _MangaCoverImageState extends State<MangaCoverImage> {
   Uint8List? _recoveredBytes;
   String? _resolvedUrl;
+  String? _localPath;
+  Map<String, String>? _effectiveHeaders;
+  int _resolveGen = 0;
 
   @override
   void initState() {
     super.initState();
     _resolvedUrl = widget.thumbnailUrl;
-    _checkAndFetch();
+    _refreshHeaders();
+    unawaited(_resolveLocalPath());
+    unawaited(_checkAndFetch());
   }
 
   @override
@@ -413,7 +463,43 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
     if (oldWidget.thumbnailUrl != widget.thumbnailUrl || oldWidget.mangaServerId != widget.mangaServerId) {
       _recoveredBytes = null;
       _resolvedUrl = widget.thumbnailUrl;
-      _checkAndFetch();
+      _localPath = null;
+      _refreshHeaders();
+      unawaited(_resolveLocalPath());
+      unawaited(_checkAndFetch());
+    } else if (oldWidget.sourceName != widget.sourceName) {
+      _refreshHeaders();
+    }
+  }
+
+  void _refreshHeaders() {
+    final url = _resolvedUrl ?? widget.thumbnailUrl;
+    if (url == null || url.isEmpty) {
+      _effectiveHeaders = null;
+      return;
+    }
+    final effectiveSource = widget.sourceName ?? '';
+    final headers = Map<String, String>.from(
+      QuickJsService.getImageHeaders(effectiveSource, url),
+    );
+    if (GraphQLClientService.instance.isConfigured &&
+        GraphQLClientService.instance.baseUrl != null &&
+        url.startsWith(GraphQLClientService.instance.baseUrl!)) {
+      headers.addAll(GraphQLClientService.instance.authHeaders);
+    }
+    _effectiveHeaders = headers;
+  }
+
+  Future<void> _resolveLocalPath() async {
+    final gen = ++_resolveGen;
+    final url = _resolvedUrl ?? widget.thumbnailUrl;
+    final path = await ImageCacheHelper.resolveLocalCoverPath(
+      widget.mangaServerId,
+      url,
+    );
+    if (!mounted || gen != _resolveGen) return;
+    if (path != _localPath) {
+      setState(() => _localPath = path);
     }
   }
 
@@ -450,7 +536,11 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
       url = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/${widget.mangaServerId}/thumbnail';
     }
     if (mounted && url != _resolvedUrl) {
-      setState(() => _resolvedUrl = url);
+      setState(() {
+        _resolvedUrl = url;
+        _refreshHeaders();
+      });
+      await _resolveLocalPath();
     }
     if (url == null || url.isEmpty) return;
 
@@ -460,20 +550,29 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
       return;
     }
 
-    final localPath = ImageCacheHelper.getLocalCoverPath(widget.mangaServerId) ??
-        ImageCacheHelper.getLocalCoverPathForUrl(url);
-    if (localPath != null) return;
-
+    final localPath = await ImageCacheHelper.resolveLocalCoverPath(
+      widget.mangaServerId,
+      url,
+    );
+    if (localPath != null) {
+      if (mounted && _localPath != localPath) {
+        setState(() => _localPath = localPath);
+      }
+      return;
+    }
+unawaited(
     // Start background fetch to disk/memory
     ImageCacheHelper.fetchImageBytes(
       url,
       sourceName: widget.sourceName ?? '',
       mangaServerId: widget.mangaServerId,
-    ).then((bytes) {
+    ).then((bytes) async {
       if (bytes != null && mounted) {
-        setState(() => _recoveredBytes = bytes);
+        // Disk write invalidates the memo; re-resolve so localPath paints.
+        await _resolveLocalPath();
+        if (mounted) setState(() => _recoveredBytes = bytes);
       }
-    });
+    }));
   }
 
   @override
@@ -483,9 +582,11 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
       url = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/${widget.mangaServerId}/thumbnail';
     }
 
-    final dpr = MediaQuery.of(context).devicePixelRatio;
-    final int targetCacheWidth = widget.width != null && widget.width!.isFinite ? (widget.width! * dpr).clamp(100.0, 600.0).round() : 360;
-    final int targetCacheHeight = widget.height != null && widget.height!.isFinite ? (widget.height! * dpr).clamp(150.0, 900.0).round() : 520;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    // UIS-07: decode width-only so aspect ratio is preserved (BoxFit.cover crops).
+    final int targetCacheWidth = widget.width != null && widget.width!.isFinite
+        ? (widget.width! * dpr).clamp(100.0, 600.0).round()
+        : 360;
 
     // 1. Render from memory if recovered
     if (_recoveredBytes != null) {
@@ -495,15 +596,13 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
         height: widget.height,
         fit: widget.fit,
         cacheWidth: targetCacheWidth,
-        cacheHeight: targetCacheHeight,
         gaplessPlayback: true,
         errorBuilder: (_, __, ___) => _fallback(),
       );
     }
 
-    // 2. Render from local file if cached (by ID or URL hash)
-    final localPath = ImageCacheHelper.getLocalCoverPath(widget.mangaServerId) ??
-        (url != null ? ImageCacheHelper.getLocalCoverPathForUrl(url) : null);
+    // 2. Render from local file if cached (resolved async; no Sync I/O here)
+    final localPath = _localPath;
     if (localPath != null) {
       return Image.file(
         File(localPath),
@@ -511,7 +610,6 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
         height: widget.height,
         fit: widget.fit,
         cacheWidth: targetCacheWidth,
-        cacheHeight: targetCacheHeight,
         gaplessPlayback: true,
         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
           if (wasSynchronouslyLoaded) return child;
@@ -526,16 +624,10 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
       );
     }
 
-    // 3. Render from Network with headers
+    // 3. Render from Network with headers (computed once per URL change)
     if (url != null && url.isNotEmpty) {
       final effectiveSource = widget.sourceName ?? '';
-      final headers = QuickJsService.getImageHeaders(effectiveSource, url);
-      final effectiveHeaders = Map<String, String>.from(headers);
-      if (GraphQLClientService.instance.isConfigured &&
-          GraphQLClientService.instance.baseUrl != null &&
-          url.startsWith(GraphQLClientService.instance.baseUrl!)) {
-        effectiveHeaders.addAll(GraphQLClientService.instance.authHeaders);
-      }
+      final effectiveHeaders = _effectiveHeaders ?? const <String, String>{};
 
       return Image.network(
         url,
@@ -544,7 +636,6 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
         height: widget.height,
         fit: widget.fit,
         cacheWidth: targetCacheWidth,
-        cacheHeight: targetCacheHeight,
         gaplessPlayback: true,
         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
           if (wasSynchronouslyLoaded) return child;
@@ -557,7 +648,7 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
         },
         errorBuilder: (context, error, stackTrace) {
           // On network error (e.g. 403 CDN), trigger robust fallback fetch
-          ImageCacheHelper.fetchImageBytes(
+          unawaited(ImageCacheHelper.fetchImageBytes(
             url!,
             sourceName: effectiveSource,
             mangaServerId: widget.mangaServerId,
@@ -565,7 +656,7 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
             if (bytes != null && mounted) {
               setState(() => _recoveredBytes = bytes);
             }
-          });
+          }));
           return _fallback();
         },
       );
@@ -575,12 +666,14 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
   }
 
   Widget _fallback() {
+    // UIS-14: theme-aware placeholder (readable in Light and Dark).
+    final cs = Theme.of(context).colorScheme;
     return Container(
       width: widget.width,
       height: widget.height,
-      color: const Color(0xFF26262B),
-      child: const Center(
-        child: Icon(Icons.book_rounded, color: Colors.grey, size: 28),
+      color: cs.surfaceContainerHighest,
+      child: Center(
+        child: Icon(Icons.book_rounded, color: cs.onSurfaceVariant, size: 28),
       ),
     );
   }

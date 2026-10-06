@@ -21,6 +21,22 @@ import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../main_shell.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
+import '../../ui/widgets/library_update_progress_banner.dart';
+import 'updates_feed_grouping.dart';
+
+/// Updates group label (UIS-10): Today / Yesterday / weekday for the last
+/// week, then Settings > General > Date Format.
+@visibleForTesting
+String updatesDateHeader(DateTime date, DateTime now) {
+  final today = DateTime(now.year, now.month, now.day);
+  final itemDate = DateTime(date.year, date.month, date.day);
+  final diffDays = today.difference(itemDate).inDays;
+  if (diffDays <= 0) return 'Today';
+  if (diffDays == 1) return 'Yesterday';
+  if (diffDays < 7) return DateFormat('EEEE').format(date); // e.g. "Wednesday"
+  return SettingsService.instance.formatDate(date);
+}
 
 class UpdatesScreen extends StatefulWidget {
   const UpdatesScreen({super.key});
@@ -48,6 +64,9 @@ int takePendingUnreadDelta(Map<int, int> pending, int mangaId) {
 }
 
 class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveClientMixin {
+
+  // ISS-018: theme-aware colours so Light mode stays readable.
+  ColorScheme get _cs => Theme.of(context).colorScheme;
   @override
   bool get wantKeepAlive => true;
 
@@ -57,12 +76,16 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   bool _isCheckingServer = false;
   bool _isOffline = false;
   String? _lastUpdateText;
+  DateTime? _lastUpdateAt;
+
+  static String _formatLastUpdate(DateTime dt) =>
+      'Last update: ${SettingsService.instance.formatDate(dt)} ${DateFormat.jm().format(dt)}';
   bool _unreadOnly = false;
   String _searchQuery = '';
   bool _isSearching = false;
   String? _liveUpdateStatus;
-  StreamSubscription? _wsUpdateSub;
-  StreamSubscription? _wsDownloadSub;
+  StreamSubscription<Map<String, dynamic>>? _wsUpdateSub;
+  StreamSubscription<Map<String, dynamic>>? _wsDownloadSub;
   Timer? _reloadTimer;
   bool _isReloadingFromCache = false;
   bool _reloadQueued = false;
@@ -70,7 +93,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   @override
   void initState() {
     super.initState();
-    _loadUpdates();
+    unawaited(_loadUpdates());
     MainShell.selectedTabNotifier.addListener(_onTabChanged);
     // showLanguageBadges and selectedLanguages are both read during build (via
     // _languageBadgeLabel and _filteredUpdates) and both are written from the
@@ -88,12 +111,11 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       if (raw is String && raw.trim().isNotEmpty) {
         setState(() => _liveUpdateStatus = raw);
       }
-      // Debounced: a single library-update run emits one
-      // libraryUpdateStatusChanged per source plus an updateStatusChanged per
-      // affected chapter, so this fired dozens of times in a row, each one
-      // re-running a 100-row Isar query plus a per-row cover back-fill. See
-      // _scheduleCacheReload.
-      _scheduleCacheReload();
+      // ISS-057: pull recent chapters from the server, not only reload Isar.
+      // Debounced with the cache reload so a burst of WS events becomes one
+      // sync + one read. Without the pull, 6h server auto-updates never reached
+      // the feed until resume / manual refresh.
+      _scheduleServerPullAndCacheReload();
     });
     _wsDownloadSub = WebSocketService.instance.onDownloadStatus.listen((event) {
       if (!mounted) return;
@@ -108,6 +130,23 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   /// The in-flight guard matters because the async read can resolve after a
   /// newer request has already started; without it, whichever read finished
   /// last won and the feed could show a stale snapshot.
+  Timer? _pullTimer;
+
+  void _scheduleServerPullAndCacheReload({Duration delay = const Duration(milliseconds: 800)}) {
+    _pullTimer?.cancel();
+    _pullTimer = Timer(delay, () {
+      _pullTimer = null;
+      if (!mounted) return;
+      if (GraphQLClientService.instance.isConfigured) {
+        unawaited(SyncEngine.instance.triggerSync().then((_) {
+          if (mounted) _scheduleCacheReload(delay: Duration.zero);
+        }));
+      } else {
+        _scheduleCacheReload(delay: Duration.zero);
+      }
+    });
+  }
+
   void _scheduleCacheReload({Duration delay = const Duration(milliseconds: 400)}) {
     _reloadTimer?.cancel();
     _reloadTimer = Timer(delay, () {
@@ -118,18 +157,36 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         _reloadQueued = true;
         return;
       }
-      _loadUpdatesFromIsarCache();
+      unawaited(_loadUpdatesFromIsarCache());
     });
   }
 
+  late String _lastDateFormat = SettingsService.instance.dateFormat;
+
   void _onSettingsChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final fmt = SettingsService.instance.dateFormat;
+    if (fmt != _lastDateFormat) {
+      // Headers / last-update line are formatted at load time; rebuild them.
+      _lastDateFormat = fmt;
+      _scheduleCacheReload(delay: Duration.zero);
+      if (_lastUpdateAt != null) _lastUpdateText = _formatLastUpdate(_lastUpdateAt!);
+    }
+    setState(() {});
   }
 
   void _onTabChanged() {
     if (MainShell.selectedTabNotifier.value == 1 && mounted) {
       _scheduleCacheReload(delay: Duration.zero);
     }
+  }
+
+  /// UIS-P3-2: push unread feed count to the shell nav badge (cheap, no DB).
+  void _publishUpdatesBadge() {
+    final unread = _updatesList
+        .where((it) => !(it['chapter'] as Chapter).isRead)
+        .length;
+    MainShell.setUpdatesBadge(unread);
   }
 
   List<Map<String, dynamic>> get _filteredUpdates {
@@ -161,8 +218,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     _reloadTimer?.cancel();
     SettingsService.instance.removeListener(_onSettingsChanged);
     MainShell.selectedTabNotifier.removeListener(_onTabChanged);
-    _wsUpdateSub?.cancel();
-    _wsDownloadSub?.cancel();
+    unawaited(_wsUpdateSub?.cancel());
+    unawaited(_wsDownloadSub?.cancel());
     super.dispose();
   }
 
@@ -170,20 +227,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     if (fetchedAt == null || fetchedAt <= 0) return 'Recent';
     final int millis = (normalizeEpochToSeconds(fetchedAt) ?? 0) * 1000;
     final date = DateTime.fromMillisecondsSinceEpoch(millis);
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final itemDate = DateTime(date.year, date.month, date.day);
-
-    final diffDays = today.difference(itemDate).inDays;
-    if (diffDays <= 0) {
-      return 'Today';
-    } else if (diffDays == 1) {
-      return 'Yesterday';
-    } else if (diffDays < 7) {
-      return DateFormat('EEEE').format(date); // e.g. "Wednesday"
-    } else {
-      return DateFormat('MMMM d, yyyy').format(date);
-    }
+    return updatesDateHeader(date, DateTime.now());
   }
 
   Future<void> _loadUpdates() async {
@@ -192,7 +236,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
     // 2. Background server fetch (only if configured, never blocks initial render)
     if (GraphQLClientService.instance.isConfigured) {
-      _fetchServerUpdatesInBackground();
+      unawaited(_fetchServerUpdatesInBackground());
     }
   }
 
@@ -263,7 +307,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         if (ts != null) {
           final dt = DateTime.fromMillisecondsSinceEpoch((normalizeEpochToSeconds(ts) ?? 0) * 1000);
           setState(() {
-            _lastUpdateText = 'Last update: ${DateFormat('MM/dd/yyyy, hh:mm a').format(dt)}';
+            _lastUpdateAt = dt;
+            _lastUpdateText = _formatLastUpdate(dt);
           });
         }
       }
@@ -406,6 +451,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
             _isLoading = false;
             _isOffline = false;
           });
+          _publishUpdatesBadge();
         }
       }
     } catch (_) {
@@ -641,6 +687,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           _updatesList = items;
           _isLoading = false;
         });
+        _publishUpdatesBadge();
       }
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
@@ -710,7 +757,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       }
       return;
     }
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+      _publishUpdatesBadge();
+    }
 
     // Keep the library unread badge in sync — the reader and manga-detail
     // paths both do this, and without it toggling read state here leaves the
@@ -742,16 +792,16 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       final settings = SettingsService.instance;
       if (settings.deleteChapterAfterMarkedRead && ch.isDownloaded) {
         if (!ch.isBookmarked || settings.allowDeletingBookmarkedChapters) {
-          DownloadManagerService.instance.deleteLocalDownload(ch.serverId != 0 ? ch.serverId : ch.id);
+          unawaited(DownloadManagerService.instance.deleteLocalDownload(ch.serverId != 0 ? ch.serverId : ch.id));
         }
       }
       if (settings.metronAutoScrobble && ch.mangaId > 0) {
-        MetronService.instance
+        unawaited(MetronService.instance
             .scrobbleChapterByMangaId(mangaId: ch.mangaId, chapter: ch)
             .catchError((Object e, StackTrace st) {
-          LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron');
+          unawaited(LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron'));
           return false;
-        });
+        }));
       }
     } catch (e) {
       await LoggerService.instance.logWarning('Marked-read side effects failed for chapter ${ch.id}: $e', 'Updates');
@@ -841,7 +891,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F26),
+        // UIS-ISS-012: theme surface (was hard-coded dark hex)
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Mark All as Read', style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text('Mark all ${unreadItems.length} update chapters as read?'),
@@ -853,7 +903,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Mark as Read'),
@@ -896,6 +946,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         chaptersToUpdate.add(ch);
       }
     });
+    _publishUpdatesBadge();
 
     await IsarService.instance.saveChapters(chaptersToUpdate);
 
@@ -950,7 +1001,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F26),
+        // UIS-ISS-012: theme surface (was hard-coded dark hex)
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Clear Updates Feed', style: TextStyle(fontWeight: FontWeight.bold)),
         content: const Text('Remove current chapters from the Updates feed? This will not delete any chapters or reading history.'),
@@ -1015,10 +1066,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     final chId = ch.serverId != 0 ? ch.serverId : ch.id;
     final isLocalDownloaded = DownloadManagerService.instance.isChapterDownloadedLocally(chId);
     final resolvedMangaTitle = (item['title'] as String?) ?? 'Manga';
-
-    showModalBottomSheet(
+unawaited(
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
+      // UIS-ISS-012: theme surface (was hard-coded dark hex)
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (sheetContext) {
         return Padding(
@@ -1083,14 +1134,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                   onTap: () async {
                     Navigator.pop(sheetContext);
                     await DownloadManagerService.instance.deleteLocalDownload(chId);
-                    if (mounted) _loadUpdatesFromIsarCache();
+                    if (mounted) unawaited(_loadUpdatesFromIsarCache());
                   },
                 ),
             ],
           ),
         );
       },
-    );
+    ));
   }
 
   Widget _buildUpdateCard(BuildContext context, Map<String, dynamic> item, {required bool isTablet}) {
@@ -1172,7 +1223,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: isTablet ? 14.5 : 13.5,
-                          color: isRead ? Colors.white60 : Colors.white,
+                          color: isRead ? _cs.onSurfaceVariant : _cs.onSurface,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -1201,7 +1252,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: isTablet ? 12.5 : 12,
-                                color: isRead ? Colors.white38 : primaryColor,
+                                color: isRead ? _cs.onSurfaceVariant.withValues(alpha: 0.7) : primaryColor,
                                 fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
                               ),
                             ),
@@ -1214,9 +1265,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                           item['sourceName'] as String,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
-                            color: Colors.white38,
+                            color: _cs.onSurfaceVariant.withValues(alpha: 0.7),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -1228,16 +1279,16 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                             decoration: BoxDecoration(
-                              color: const Color(0x26FFFFFF),
+                              color: _cs.onSurface.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0x26FFFFFF)),
+                              border: Border.all(color: _cs.outlineVariant.withValues(alpha: 0.5)),
                             ),
                             child: Text(
                               _languageBadgeLabel(item['lang'] as String? ?? '')!,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white70,
+                                color: _cs.onSurfaceVariant,
                                 letterSpacing: 0.5,
                               ),
                             ),
@@ -1256,7 +1307,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                     IconButton(
                       icon: Icon(
                         isRead ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded,
-                        color: isRead ? primaryColor : Colors.white38,
+                        color: isRead ? primaryColor : _cs.onSurfaceVariant.withValues(alpha: 0.7),
                         size: isTablet ? 22 : 20,
                       ),
                       tooltip: isRead ? 'Mark as unread' : 'Mark as read',
@@ -1300,7 +1351,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                       visualDensity: VisualDensity.compact,
                       onPressed: () async {
                         await context.push('/reader/${ch.serverId != 0 ? ch.serverId : ch.id}');
-                        if (mounted) _loadUpdatesFromIsarCache();
+                        if (mounted) unawaited(_loadUpdatesFromIsarCache());
                       },
                     ),
                   ],
@@ -1318,15 +1369,11 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     super.build(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
     final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth >= 720;
+    final isTablet = screenWidth >= SunfireBreakpoints.narrowTabletMaxWidth;
 
-    // Group updates by dateHeader
+    // Group updates by date, then by series (J2K / Komikku style).
     final visibleUpdates = _filteredUpdates;
-    final Map<String, List<Map<String, dynamic>>> groupedUpdates = {};
-    for (final item in visibleUpdates) {
-      final header = item['dateHeader'] as String? ?? 'Recent';
-      groupedUpdates.putIfAbsent(header, () => []).add(item);
-    }
+    final groupedUpdates = groupUpdatesByDateThenSeries(visibleUpdates);
 
     return Scaffold(
       appBar: AppBar(
@@ -1405,23 +1452,25 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert_rounded),
             tooltip: 'More options',
-            color: const Color(0xFF22222C),
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             onSelected: (val) {
               if (val == 'mark_all_read') {
-                _markAllAsRead();
+                unawaited(_markAllAsRead());
               } else if (val == 'clear_feed') {
-                _clearUpdatesHistory();
+                unawaited(_clearUpdatesHistory());
               }
             },
             itemBuilder: (ctx) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'mark_all_read',
                 child: Row(
                   children: [
-                    Icon(Icons.done_all_rounded, size: 20, color: Colors.white70),
-                    SizedBox(width: 10),
-                    Text('Mark all as read'),
+                    Icon(Icons.done_all_rounded,
+                        size: 20,
+                        color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 10),
+                    const Text('Mark all as read'),
                   ],
                 ),
               ),
@@ -1469,61 +1518,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                         scrollCacheExtent: ScrollCacheExtent.pixels(800),
                         slivers: [
-                          ListenableBuilder(
-                            listenable: LibraryUpdateService.instance,
-                            builder: (context, _) {
-                              final updater = LibraryUpdateService.instance;
-                              if (!updater.isUpdating) return const SliverToBoxAdapter(child: SizedBox.shrink());
-                              return SliverToBoxAdapter(
-                                child: Container(
-                                  margin: EdgeInsets.symmetric(
-                                    horizontal: isTablet ? 24 : 16,
-                                    vertical: 8,
-                                  ),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF1E1E26),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          SizedBox(
-                                            width: 14,
-                                            height: 14,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Text(
-                                              updater.statusMessage,
-                                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(4),
-                                        child: LinearProgressIndicator(
-                                          value: updater.progress > 0 ? updater.progress : null,
-                                          minHeight: 4,
-                                          backgroundColor: const Color(0x22FFFFFF),
-                                          valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
+                          LibraryUpdateProgressBanner(
+                            asSliver: true,
+                            margin: EdgeInsets.symmetric(
+                              horizontal: isTablet ? 24 : 16,
+                              vertical: 8,
+                            ),
                           ),
                           if (_lastUpdateText != null)
                             SliverToBoxAdapter(
@@ -1568,8 +1568,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                                         ),
-                                        icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                                        label: const Text('Check Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                        icon: Icon(Icons.refresh_rounded, color: _cs.onPrimary, size: 18),
+                                        label: Text('Check Now', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold)),
                                         onPressed: _checkServerForUpdates,
                                       )
                                     else
@@ -1586,7 +1586,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                               ),
                             )
                           else ...[
-                            for (final entry in groupedUpdates.entries) ...[
+                            for (final section in groupedUpdates) ...[
                               // Date Section Header
                               SliverToBoxAdapter(
                                 child: Padding(
@@ -1599,7 +1599,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                                   child: Row(
                                     children: [
                                       Text(
-                                        entry.key,
+                                        section.dateHeader,
                                         style: TextStyle(
                                           fontSize: isTablet ? 18.5 : 16.5,
                                           fontWeight: FontWeight.bold,
@@ -1610,15 +1610,15 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.08),
+                                          color: _cs.onSurface.withValues(alpha: 0.08),
                                           borderRadius: BorderRadius.circular(10),
                                         ),
                                         child: Text(
-                                          '${entry.value.length}',
-                                          style: const TextStyle(
+                                          '${section.chapterCount}',
+                                          style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
-                                            color: Colors.white70,
+                                            color: _cs.onSurfaceVariant,
                                           ),
                                         ),
                                       ),
@@ -1626,41 +1626,81 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                                   ),
                                 ),
                               ),
-                              // Section Content: Grid on Tablet, List on Phone
-                              if (isTablet)
-                                SliverPadding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                                  sliver: SliverGrid(
-                                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                                      maxCrossAxisExtent: 480,
-                                      mainAxisExtent: 96,
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 10,
+                              // Series groups (J2K / Komikku): subheader when >1 chapter
+                              for (final series in section.series) ...[
+                                if (series.items.length > 1)
+                                  SliverToBoxAdapter(
+                                    child: Padding(
+                                      padding: EdgeInsets.only(
+                                        left: isTablet ? 20.0 : 20.0,
+                                        right: 20.0,
+                                        top: 4,
+                                        bottom: 2,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.collections_bookmark_outlined,
+                                              size: 14, color: _cs.onSurfaceVariant),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              series.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: _cs.onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ),
+                                          Text(
+                                            '${series.items.length} chapters',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: primaryColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
+                                  ),
+                                if (isTablet)
+                                  SliverPadding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                    sliver: SliverGrid(
+                                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                                        maxCrossAxisExtent: 480,
+                                        mainAxisExtent: 96,
+                                        crossAxisSpacing: 12,
+                                        mainAxisSpacing: 10,
+                                      ),
+                                      delegate: SliverChildBuilderDelegate(
+                                        (context, index) => _buildUpdateCard(
+                                          context,
+                                          series.items[index],
+                                          isTablet: true,
+                                        ),
+                                        childCount: series.items.length,
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  SliverList(
                                     delegate: SliverChildBuilderDelegate(
                                       (context, index) => _buildUpdateCard(
                                         context,
-                                        entry.value[index],
-                                        isTablet: true,
+                                        series.items[index],
+                                        isTablet: false,
                                       ),
-                                      childCount: entry.value.length,
+                                      childCount: series.items.length,
                                     ),
                                   ),
-                                )
-                              else
-                                SliverList(
-                                  delegate: SliverChildBuilderDelegate(
-                                    (context, index) => _buildUpdateCard(
-                                      context,
-                                      entry.value[index],
-                                      isTablet: false,
-                                    ),
-                                    childCount: entry.value.length,
-                                  ),
-                                ),
+                              ],
                             ],
                             SliverToBoxAdapter(
-                              child: SizedBox(height: isTablet ? 40 : 120),
+                              child: SizedBox(height: SunfireBreakpoints.scrollBottomPadding(context, extra: 24)),
                             ),
                           ],
                         ],

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -5,13 +6,19 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/settings_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
-import '../../main_shell.dart';
+import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
+import '../../ui/shell/tablet_ui_prefs.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
 
 class AppearanceSettingsScreen extends StatefulWidget {
   const AppearanceSettingsScreen({super.key});
+
+  /// Dynamic colour is Android-only; tests can force the option on/off.
+  @visibleForTesting
+  static bool? debugShowDynamicOption;
 
   @override
   State<AppearanceSettingsScreen> createState() => _AppearanceSettingsScreenState();
@@ -20,17 +27,20 @@ class AppearanceSettingsScreen extends StatefulWidget {
 class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
   final SettingsService _settings = SettingsService.instance;
 
+  bool get _showDynamicOption =>
+      AppearanceSettingsScreen.debugShowDynamicOption ??
+      (!kIsWeb && Platform.isAndroid);
+
   void _showRadioDialog({
     required String title,
     required List<String> options,
     required String currentValue,
     required ValueChanged<String> onSelected,
   }) {
-    showDialog(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F24),
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -48,17 +58,18 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
           ),
         );
       },
-    );
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _settings,
+      listenable: Listenable.merge([_settings, TabletUiPrefs.listenable]),
       builder: (context, _) {
         return SettingsSubpageScaffold(
           title: 'Appearance',
           body: ListView(
+            padding: EdgeInsets.only(bottom: SunfireBreakpoints.scrollBottomPadding(context)),
             children: [
               const SectionTitle(title: 'Theme & Palette'),
               ListTile(
@@ -73,33 +84,50 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                     SunfireBadge.local(),
                   ],
                 ),
-                subtitle: Text(_settings.themeMode, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                subtitle: Text(SunfireTheme.themeModeLabel(_settings.themeMode),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
                 onTap: () {
                   _showRadioDialog(
                     title: 'Theme Mode',
-                    options: const ['OLED Black', 'Dark Theme', 'Light', 'System Default'],
-                    currentValue: _settings.themeMode,
+                    options: SunfireTheme.themeModeOptions,
+                    currentValue: SunfireTheme.themeModeLabel(_settings.themeMode),
                     onSelected: (val) => _settings.themeMode = val,
                   );
                 },
               ),
-              if (!kIsWeb && Platform.isAndroid) ...[
+              // UIS-P2-C: Pure black is its own switch (works with Dark,
+              // System and Dynamic colour; Light is unaffected).
+              SettingsPropTile(
+                key: const ValueKey('pure_black_toggle'),
+                title: 'Pure black (AMOLED)',
+                subtitle: 'Black background, surfaces and bars in dark mode',
+                scope: SettingScope.local,
+                kind: SettingsPropKind.switchTile,
+                boolValue: _settings.pureBlackEnabled,
+                onBoolChanged: (val) => _settings.pureBlackEnabled = val,
+              ),
+              if (_showDynamicOption) ...[
                 SettingsPropTile(
-                  title: 'Material You Dynamic Color',
-                  subtitle: 'Extract theme accent colors from OS wallpaper (Android 12+)',
+                  key: const ValueKey('dynamic_color_toggle'),
+                  title: 'Dynamic colour (Material You)',
+                  subtitle: 'Use your wallpaper colours (Android 12+). '
+                      'Replaces the accent palette below.',
                   scope: SettingScope.local,
                   kind: SettingsPropKind.switchTile,
                   boolValue: _settings.materialYouEnabled,
                   onBoolChanged: (val) => _settings.materialYouEnabled = val,
                 ),
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
               ],
+              const Divider(height: 1),
 
               const SectionTitle(title: 'Accent Color Palette'),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Text(
-                  'Current: ${_settings.accentColorName}',
+                  _showDynamicOption && _settings.materialYouEnabled
+                      ? 'Dynamic colour is on — accent applies when it is off '
+                          'or unsupported'
+                      : 'Current: ${_settings.accentColorName}',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -149,40 +177,42 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                 ),
               ),
 
-              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              const Divider(height: 1),
               const SectionTitle(title: 'Tablet Layout'),
               SettingsPropTile(
                 title: 'Expanded Sidebar',
-                subtitle: 'Show labels on the iPad / tablet navigation rail (width ≥ ${sunfireTabletMinWidth.toInt()}px)',
+                subtitle: 'Show labels on the tablet navigation rail (iPad and Android)',
                 scope: SettingScope.local,
                 kind: SettingsPropKind.switchTile,
                 boolValue: _settings.tabletSidebarExpanded,
                 onBoolChanged: (val) => _settings.tabletSidebarExpanded = val,
               ),
-              const Divider(height: 1, color: Color(0x1AFFFFFF)),
-              const SectionTitle(title: 'Date & Time Formatting'),
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                leading: const Icon(Icons.calendar_month_outlined),
+                leading: const Icon(Icons.tablet_mac_outlined),
                 title: Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
                   spacing: 6,
                   runSpacing: 4,
                   children: [
-                    const Text('Date Format', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    const Text('Tablet UI mode', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                     SunfireBadge.local(),
                   ],
                 ),
-                subtitle: Text(_settings.dateFormat, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                subtitle: Text(
+                  '${TabletUiPrefs.mode} — rail vs bottom bar for large windows',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
                 onTap: () {
                   _showRadioDialog(
-                    title: 'Date Format',
-                    options: const ['YYYY-MM-DD', 'MM/DD/YYYY', 'DD/MM/YYYY', 'DD.MM.YYYY'],
-                    currentValue: _settings.dateFormat,
-                    onSelected: (val) => _settings.dateFormat = val,
+                    title: 'Tablet UI mode',
+                    options: SunfireBreakpoints.tabletUiModeOptions,
+                    currentValue: TabletUiPrefs.mode,
+                    onSelected: (val) => TabletUiPrefs.setMode(val),
                   );
                 },
               ),
+              // Date Format lives in General settings only (UIS-10).
             ],
           ),
         );

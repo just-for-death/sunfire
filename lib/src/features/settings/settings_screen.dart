@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
 import 'about_screen.dart';
 import 'advanced_settings_screen.dart';
 import 'appearance_settings_screen.dart';
@@ -23,6 +25,10 @@ class _SettingSearchItem {
   final List<String> keywords;
   final Widget Function(BuildContext) destination;
 
+  /// GoRouter path for items that have one (UIS-21); preferred over
+  /// [destination] so navigation and the URL stay in sync.
+  final String? route;
+
   const _SettingSearchItem({
     required this.title,
     required this.subtitle,
@@ -30,6 +36,7 @@ class _SettingSearchItem {
     required this.icon,
     required this.keywords,
     required this.destination,
+    this.route,
   });
 }
 
@@ -201,6 +208,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
       icon: Icons.hub_rounded,
       keywords: ['extension', 'repo', 'repository', 'mangayomi', 'scrapers', 'js', 'plugins'],
       destination: (context) => const ExtensionReposScreen(),
+      route: '/settings/extension-repos',
     ),
     _SettingSearchItem(
       title: 'Parallel Scrapers Concurrency',
@@ -447,7 +455,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final isTablet = MediaQuery.of(context).size.width >= 720;
+    final isTablet = MediaQuery.of(context).size.width >= SunfireBreakpoints.narrowTabletMaxWidth;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
@@ -507,7 +515,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                     )
                   : _buildSearchResults(primaryColor))
               : ListView(
-                  padding: const EdgeInsets.only(bottom: 120),
+                  padding: EdgeInsets.only(bottom: SunfireBreakpoints.scrollBottomPadding(context)),
                   children: [
                     // 1. SERVER (PRIMARY)
                     _buildTile(
@@ -554,7 +562,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const TrackingSettingsScreen()),
+                          MaterialPageRoute<void>(builder: (context) => const TrackingSettingsScreen()),
                         );
                       },
                     ),
@@ -646,7 +654,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 120, top: 8),
+      padding: EdgeInsets.only(bottom: SunfireBreakpoints.scrollBottomPadding(context), top: 8),
       itemCount: results.length,
       itemBuilder: (context, idx) {
         final item = results[idx];
@@ -686,10 +694,15 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
           ),
           trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: item.destination),
-            );
+            final route = item.route;
+            if (route != null) {
+              unawaited(context.push(route));
+            } else {
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(builder: item.destination),
+              );
+            }
           },
         );
       },

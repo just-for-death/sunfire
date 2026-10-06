@@ -8,6 +8,13 @@
 //      Dio first then a curl fallback (mirrors the production desktop path)
 //   5. Validate each downloaded file is a real image (magic-byte sniffing,
 //      not an HTML error/interstitial page) and report size + timing.
+//
+// Opt-in: needs the QuickJS native plugin, live websites and FlareSolverr.
+//   SUNFIRE_TEST_FLARESOLVERR=http://host:8191 SUNFIRE_TEST_EXT_DIR=/path/to/src/en \
+//   flutter test --tags native test/download_simulation_test.dart
+@Tags(['native', 'network'])
+library;
+
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -54,16 +61,26 @@ Future<List<int>?> _downloadPage(Dio dio, String url, Map<String, String> header
 }
 
 void main() {
+  final flareSolverrUrl = testEnv('SUNFIRE_TEST_FLARESOLVERR');
+  final extDirPath = testEnv('SUNFIRE_TEST_EXT_DIR');
+  final Object skipReason = quickJsSkipReason() != false
+      ? quickJsSkipReason()
+      : flareSolverrUrl == null
+          ? 'SUNFIRE_TEST_FLARESOLVERR not set'
+          : extDirPath == null
+              ? 'SUNFIRE_TEST_EXT_DIR not set'
+              : false;
+
   test(
     'Download a chapter from every extension and validate images',
+    skip: skipReason,
     () async {
       if (!tryLoadQuickJsPluginGlobally()) {
-        markTestSkipped('QuickJS native plugin missing — run flutter build linux --debug');
-        return;
+        fail('QuickJS native plugin found but could not be loaded');
       }
-      MClient.cfProxyUrl = 'http://100.85.171.6:8191';
+      MClient.cfProxyUrl = flareSolverrUrl!;
 
-      final extDir = Directory('/home/zoro/Documents/Projects/manga/mangayomi-extensions/javascript/manga/src/en');
+      final extDir = Directory(extDirPath!);
       final outDir = Directory('/tmp/sunfire_download_sim');
       if (outDir.existsSync()) outDir.deleteSync(recursive: true);
       outDir.createSync(recursive: true);

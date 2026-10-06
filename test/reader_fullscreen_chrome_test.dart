@@ -58,6 +58,20 @@ void main() {
 
       await _pumpShell(tester, isFullscreen: false, surface: ipad);
       expect(find.byTooltip('Collapse sidebar'), findsOneWidget);
-    });
+      // iPad chrome follows Theme.platform (UIS-01); the variant sets and
+      // resets debugDefaultTargetPlatformOverride inside the test.
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('Android tablet: fullscreen hides the NavigationRail, tabs keep it', (tester) async {
+      const tablet = Size(1024, 768);
+      await _pumpShell(tester, isFullscreen: true, surface: tablet);
+      expect(find.text('page-body'), findsOneWidget);
+      expect(find.byType(NavigationRail), findsNothing);
+      expect(find.text('Library'), findsNothing);
+
+      await _pumpShell(tester, isFullscreen: false, surface: tablet);
+      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.text('Library'), findsWidgets);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   });
 }

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/metron/metron_models.dart';
@@ -32,7 +34,7 @@ class _MetronSeriesDetailScreenState extends State<MetronSeriesDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSeriesData();
+    unawaited(_loadSeriesData());
   }
 
   Future<void> _loadSeriesData() async {
@@ -80,8 +82,8 @@ class _MetronSeriesDetailScreenState extends State<MetronSeriesDetailScreen> {
       final bMatch = b.title.toLowerCase().contains(query) ? 1 : 0;
       return bMatch.compareTo(aMatch);
     });
-
-    showModalBottomSheet(
+unawaited(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -154,7 +156,7 @@ class _MetronSeriesDetailScreenState extends State<MetronSeriesDetailScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Future<void> _applyMetronLink(Manga manga) async {
@@ -315,7 +317,7 @@ class _MetronSeriesDetailScreenState extends State<MetronSeriesDetailScreen> {
                               final q = series?.name ?? widget.initialTitle ?? '';
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(
+                                MaterialPageRoute<void>(
                                   builder: (context) => GlobalSearchScreen(initialQuery: q),
                                 ),
                               );
