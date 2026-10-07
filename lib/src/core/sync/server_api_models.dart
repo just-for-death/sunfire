@@ -148,6 +148,7 @@ class ServerVersionBundle {
   const ServerVersionBundle({this.aboutServer, this.webUI, this.webUIUpdateStatus, this.serverUpdates});
   String? get serverVersion => aboutServer?['version']?.toString();
   String? get buildType => aboutServer?['buildType']?.toString();
+  String? get serverPlatform => aboutServer?['platform']?.toString();
   bool get hasServerUpdate => serverUpdates != null && serverUpdates!.isNotEmpty;
 }
 
@@ -171,13 +172,15 @@ String serverVersionSummaryLabel({
   String? buildType,
   String? webUIChannel,
   String? webUITag,
+  String? serverPlatform,
 }) {
   if (version == null || version.isEmpty) return 'Server version unknown';
   final type = (buildType == null || buildType.isEmpty) ? '' : ' ($buildType)';
+  final plat = (serverPlatform == null || serverPlatform.isEmpty) ? '' : ' · $serverPlatform';
   final webBits = <String>[
     if (webUIChannel != null && webUIChannel.isNotEmpty) webUIChannel,
     if (webUITag != null && webUITag.isNotEmpty) webUITag,
   ];
   final web = webBits.isEmpty ? '' : '; WebUI ${webBits.join(' ')}';
-  return 'Server v$version$type$web';
+  return 'Server v$version$type$plat$web';
 }

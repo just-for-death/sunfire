@@ -13,6 +13,7 @@ class ServerCapabilities {
     this.hasExtensionStores = false,
     this.hasAddManga = false,
     this.hasChapterFetchMarkers = false,
+    this.hasCategoryIsDefaultCategory = false,
     this.authModes = const ['NONE', 'BASIC_AUTH', 'SIMPLE_LOGIN', 'UI_LOGIN'],
     this.probed = false,
   });
@@ -39,6 +40,9 @@ class ServerCapabilities {
   /// (ISS-076 targeted chapter refresh).
   final bool hasChapterFetchMarkers;
 
+  /// `CategoryType.isDefaultCategory` exists (server v2.4.2366+).
+  final bool hasCategoryIsDefaultCategory;
+
   /// Known AuthMode enum values from introspection (fallback list if probe fails).
   final List<String> authModes;
 
@@ -54,6 +58,7 @@ class ServerCapabilities {
     bool? hasExtensionStores,
     bool? hasAddManga,
     bool? hasChapterFetchMarkers,
+    bool? hasCategoryIsDefaultCategory,
     List<String>? authModes,
     bool? probed,
   }) {
@@ -66,6 +71,8 @@ class ServerCapabilities {
       hasExtensionStores: hasExtensionStores ?? this.hasExtensionStores,
       hasAddManga: hasAddManga ?? this.hasAddManga,
       hasChapterFetchMarkers: hasChapterFetchMarkers ?? this.hasChapterFetchMarkers,
+      hasCategoryIsDefaultCategory:
+          hasCategoryIsDefaultCategory ?? this.hasCategoryIsDefaultCategory,
       authModes: authModes ?? this.authModes,
       probed: probed ?? this.probed,
     );
@@ -80,6 +87,7 @@ class ServerCapabilities {
         'hasExtensionStores': hasExtensionStores,
         'hasAddManga': hasAddManga,
         'hasChapterFetchMarkers': hasChapterFetchMarkers,
+        'hasCategoryIsDefaultCategory': hasCategoryIsDefaultCategory,
         'authModes': authModes,
         'probed': probed,
       };

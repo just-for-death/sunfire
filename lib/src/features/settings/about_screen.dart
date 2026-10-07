@@ -284,6 +284,7 @@ class _AboutScreenState extends State<AboutScreen> {
       buildType: buildType,
       webUIChannel: web?.channel,
       webUITag: web?.tag,
+      serverPlatform: bundle?.serverPlatform,
     );
     final cs = Theme.of(context).colorScheme;
     return Column(

@@ -60,6 +60,29 @@ void main() {
       final c = Category();
       expect(c.includeInUpdate, 'UNSET');
       expect(c.includeInDownload, 'UNSET');
+      expect(c.isDefaultCategory, isFalse);
+    });
+
+    test('parseCategoryNodes joins isDefaultCategory into isDefault (v2.4.2366+)', () {
+      final cats = parseCategoryNodes([
+        {
+          'id': 0,
+          'name': 'Default',
+          'order': 0,
+          'default': true,
+          'isDefaultCategory': true,
+        },
+        {
+          'id': 5,
+          'name': 'Legacy',
+          'order': 1,
+          // Old servers omit the field: stays false, `default` still rules.
+        },
+      ]);
+      expect(cats.first.isDefaultCategory, isTrue);
+      expect(cats.first.isDefault, isTrue);
+      expect(cats.last.isDefaultCategory, isFalse);
+      expect(cats.last.isDefault, isFalse);
     });
   });
 

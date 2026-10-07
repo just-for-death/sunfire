@@ -25,5 +25,20 @@ void main() {
         'Server v2.4.2366 (Stable); WebUI STABLE r1627',
       );
     });
+
+    test('appends server platform when present (v2.4.2366+)', () {
+      expect(
+        serverVersionSummaryLabel(
+          version: '2.4.2366',
+          buildType: 'Stable',
+          serverPlatform: 'docker',
+        ),
+        'Server v2.4.2366 (Stable) · docker',
+      );
+      expect(
+        serverVersionSummaryLabel(version: '2.4.2366'),
+        'Server v2.4.2366',
+      );
+    });
   });
 }

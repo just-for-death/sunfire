@@ -278,9 +278,13 @@ List<Category> parseCategoryNodes(List<dynamic> nodes, {String fallbackName = 'D
       // nothing and rendered as a second, identical tab.
       ..name = (map['name'] as String? ?? fallbackName).trim()
       ..order = parseIntSafe(map['order'])
-      // `isDefault` carried across; a missing value used to reset it to false
-      // on every row during `putAll`.
-      ..isDefault = parseBoolSafe(map['default'])
+      // Server v2.4.2366+ forward-compat: when the server exposes
+      // `isDefaultCategory`, it joins `default` as a source of truth for the
+      // built-in category (the legacy flag stays until the announced
+      // incompatible change lands). Absent on older servers → false.
+      ..isDefaultCategory = parseBoolSafe(map['isDefaultCategory'])
+      ..isDefault = parseBoolSafe(map['default']) ||
+          parseBoolSafe(map['isDefaultCategory'])
       ..includeInUpdate = parseIncludeOrExclude(map['includeInUpdate'])
       ..includeInDownload = parseIncludeOrExclude(map['includeInDownload']));
   }
