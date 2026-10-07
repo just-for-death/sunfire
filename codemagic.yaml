@@ -1,5 +1,5 @@
 # ==============================================================================
-# Codemagic CI/CD for Sunfire Manga Reader — v4.0.0
+# Codemagic CI/CD for Sunfire Manga Reader — v5.0.0
 #
 # Signing model (local-only by design): the persistent Android release key
 # lives on the release machine (gitignored, never committed) and CI has no
@@ -16,7 +16,7 @@ workflows:
   # WORKFLOW 1: ANDROID VERIFY (Linux x2 — analyze + test + debug compile)
   # ────────────────────────────────────────────────────────────────────────────
   android-release:
-    name: Android Verify (Analyze, Test, Debug Build) - v4.0.0
+    name: Android Verify (Analyze, Test, Debug Build) - v5.0.0
     max_build_duration: 60
     instance_type: linux_x2
     environment:
@@ -91,7 +91,7 @@ workflows:
   # WORKFLOW 2: iOS RELEASE (Mac Mini M2 — AltStore / TrollStore / Sideloadly)
   # ────────────────────────────────────────────────────────────────────────────
   ios-release:
-    name: iOS IPA (Unsigned Sideload) - v4.0.0
+    name: iOS IPA (Unsigned Sideload) - v5.0.0
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -150,7 +150,7 @@ workflows:
   # wrongly signed (see the header comment).
   # ────────────────────────────────────────────────────────────────────────────
   all-release:
-    name: Multi-Platform Verify + iOS IPA - v4.0.0
+    name: Multi-Platform Verify + iOS IPA - v5.0.0
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:

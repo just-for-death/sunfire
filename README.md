@@ -13,13 +13,13 @@
 <p align="center">
   <a href="https://github.com/just-for-death/sunfire/releases"><img alt="Release" src="https://img.shields.io/github/v/release/just-for-death/sunfire?style=flat-square&color=FF5722"></a>
   <a href="LICENSE"><img alt="License: MPL 2.0" src="https://img.shields.io/badge/License-MPL_2.0-blue.svg?style=flat-square"></a>
-  <a href="CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/changelog-4.0.0-9C27B0?style=flat-square"></a>
+  <a href="CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/changelog-5.0.0-9C27B0?style=flat-square"></a>
   <a href="PRIVACY.md"><img alt="Privacy: no telemetry" src="https://img.shields.io/badge/privacy-no%20telemetry-4CAF50?style=flat-square"></a>
   <a href="https://github.com/just-for-death/sunfire/issues"><img alt="Issues" src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square"></a>
 </p>
 
 <p align="center">
-  <b>Android</b> · <b>iOS / iPadOS</b> · <b>Linux</b> &nbsp;|&nbsp; Current version <code>4.0.0+1</code>
+  <b>Android</b> · <b>iOS / iPadOS</b> · <b>Linux</b> &nbsp;|&nbsp; Current version <code>5.0.0+1</code>
 </p>
 
 ---
@@ -330,7 +330,7 @@ experience in particular follows Mihon's design closely.
 Notable changes are recorded in [CHANGELOG.md](CHANGELOG.md), following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The current
-release is **4.0.0**, the first under the remote-extension architecture.
+release is **5.0.0**. See the changelog for what changed since 4.0.0.
 
 ---
 
