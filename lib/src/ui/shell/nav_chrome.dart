@@ -7,14 +7,14 @@ import 'package:flutter/services.dart';
 
 /// Platform-adaptive navigation chrome for Sunfire.
 ///
-/// Mirrors the Catalyst split, molded to Sunfire's 5 tabs and extras:
+/// Sunfire's 5 tabs and extras:
 ///
 /// - iOS/iPhone: frosted-glass floating pill tab bar (Sunfire's signature),
 ///   with text-scaler clamping and Semantics.
 /// - Android phone: Material 3 [NavigationBar].
 /// - Android tablet / desktop / wide: Material 3 [NavigationRail].
 /// - Narrow windows: compact mode — first 4 tabs + a "More" overflow sheet
-///   (Settings, Downloads, Stats), same pattern as Catalyst's compact nav.
+///   (Settings, Downloads, Stats).
 ///
 /// Haptics follow the platform: light impact on iOS, selection click
 /// elsewhere — matching what `MainShell` already did.
@@ -493,7 +493,7 @@ class AndroidTabletRail extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Compact overflow sheet (Catalyst compact-nav pattern)
+// Compact overflow sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Overflow sheet for compact mode: the destinations that did not fit in

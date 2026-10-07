@@ -2,9 +2,8 @@ import 'package:flutter/widgets.dart';
 
 /// Shared layout breakpoints for Sunfire's platform-adaptive shell.
 ///
-/// Aligned with the same rules as Catalyst's `AppBreakpoints` so phone,
-/// narrow-tablet (Stage Manager / foldables / small landscape tablets) and
-/// wide-tablet layouts behave identically:
+/// Phone, narrow-tablet (Stage Manager / foldables / small landscape tablets)
+/// and wide-tablet layouts behave as follows:
 ///
 /// - phone shell below 600dp width
 /// - compact (overflow-menu) shell when the window is tablet-class but too
@@ -37,7 +36,7 @@ abstract final class SunfireBreakpoints {
 
   /// Phone vs tablet split for the shell chrome.
   ///
-  /// 600 matches Material 3's window-size classes and Catalyst. Whether the
+  /// 600 matches Material 3's window-size classes. Whether the
   /// shell shows a rail or a bottom bar is [usesSideRail]; size-only density
   /// tweaks in screens read [narrowTabletMaxWidth] (UIS-02).
   static bool isTabletLayout(BuildContext context) =>

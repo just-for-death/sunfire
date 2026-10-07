@@ -1,4 +1,4 @@
-/// Sunfire color tokens - adapts Catalyst's color system for Sunfire's manga reader.
+/// Sunfire color tokens for the manga reader.
 /// Uses FlexColorScheme compatible seeds with OLED/True Black support.
 library;
 
@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import '../../../core/services/settings_service.dart';
 
 /// Semantic color tokens for Sunfire manga reader.
-/// Adapts Catalyst's FlexColorScheme-based system for manga reading.
+/// FlexColorScheme-based system tuned for manga reading.
 class SunfireColors {
   SunfireColors._();
 
