@@ -396,6 +396,7 @@ class GraphQLClientService {
     var hasExtensionStores = false;
     var hasAddManga = false;
     var hasChapterFetchMarkers = false;
+    var hasCategoryIsDefaultCategory = false;
     var authModes = const <String>['NONE', 'BASIC_AUTH', 'SIMPLE_LOGIN', 'UI_LOGIN'];
     try {
       hasUserField = (await typeProbe('MangaUserType', 'name')) != null;
@@ -405,6 +406,11 @@ class GraphQLClientService {
       final mangaType = await typeProbe('MangaType', 'fields { name }');
       hasChapterFetchMarkers = hasField(mangaType, 'chaptersLastFetchedAt') &&
           hasField(mangaType, 'latestFetchedChapter');
+      // Server v2.4.2366+. Unknown type name or absent field → false, and
+      // callers fall back to the legacy selection set. Never assumed true.
+      final categoryType = await typeProbe('CategoryType', 'fields { name }');
+      hasCategoryIsDefaultCategory =
+          hasField(categoryType, 'isDefaultCategory');
       final enums = (await typeProbe('AuthMode', 'enumValues { name }'))?['enumValues'];
       if (enums is List && enums.isNotEmpty) {
         authModes = [
@@ -425,6 +431,7 @@ class GraphQLClientService {
       hasExtensionStores: hasExtensionStores,
       hasAddManga: hasAddManga,
       hasChapterFetchMarkers: hasChapterFetchMarkers,
+      hasCategoryIsDefaultCategory: hasCategoryIsDefaultCategory,
       authModes: authModes,
       probed: true,
     );
@@ -1277,7 +1284,13 @@ class GraphQLClientService {
   }
 
   Future<Map<String, dynamic>?> fetchCategories() async {
-    const queryStr = '''
+    // `isDefaultCategory` exists only on server v2.4.2366+. Requesting an
+    // unknown field fails the whole query (validation error → null data),
+    // which would silently stop category sync on older servers — so it is
+    // interpolated only when the capability probe saw it.
+    final defaultCatSel =
+        capabilities.hasCategoryIsDefaultCategory ? 'isDefaultCategory' : '';
+    final queryStr = '''
       {
         categories {
           totalCount
@@ -1288,6 +1301,7 @@ class GraphQLClientService {
             default
             includeInUpdate
             includeInDownload
+            $defaultCatSel
           }
         }
       }
@@ -1708,14 +1722,26 @@ class GraphQLClientService {
   /// One-shot bundle for About / Server settings: aboutServer + aboutWebUI +
   /// WebUI update status (+ optional server update check). Failing parts are null.
   Future<ServerVersionBundle> fetchServerVersionBundle({bool includeUpdateCheck = false}) async {
-    const q = '''
+    Map<String, dynamic>? res;
+    // `platform` exists only on server v2.4.2366+. An unknown field fails the
+    // whole query (validation error → null data), so retry without it: one
+    // extra round trip on old servers, full data on new ones.
+    const withPlatform = '''
+      {
+        aboutServer { name version buildType buildTime github discord platform }
+        aboutWebUI { channel tag updateTimestamp }
+        getWebUIUpdateStatus { state progress info { channel tag } }
+      }
+    ''';
+    const legacy = '''
       {
         aboutServer { name version buildType buildTime github discord }
         aboutWebUI { channel tag updateTimestamp }
         getWebUIUpdateStatus { state progress info { channel tag } }
       }
     ''';
-    final res = await query(q, label: 'fetchServerVersionBundle', op: GraphQLOp.read);
+    res = await query(withPlatform, label: 'fetchServerVersionBundle', op: GraphQLOp.read);
+    res ??= await query(legacy, label: 'fetchServerVersionBundle.legacy', op: GraphQLOp.read);
     final about = res?['aboutServer'];
     final web = res?['aboutWebUI'];
     final st = res?['getWebUIUpdateStatus'];
