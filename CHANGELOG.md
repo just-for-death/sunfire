@@ -7,6 +7,17 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [5.0.0] — Unreleased
+
+### Added
+
+- Suwayomi-Server v2.4.2366 compatibility: `aboutServer.platform` in the
+  About screen, `Category.isDefaultCategory` forward-compat field.
+- Tracking edit dialog offers server-published score strings verbatim.
+- Reader is fullscreen on phone and tablet (no sidebar rail / bottom bar).
+- Auto-scroll range extended to 10–2000 px/s with Warp/Light presets.
+- Updates tab mirrors the server when connected.
+
 ## [4.0.0] — 2026-09-27
 
 The first release under the remote-extension architecture. This is a
