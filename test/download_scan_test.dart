@@ -26,9 +26,16 @@ Future<Directory> _chapter(Directory root, String name, {required int pages, boo
   return dir;
 }
 
-Future<void> _age(FileSystemEntity e, String when) async {
-  final res = await Process.run('touch', ['-d', when, e.path]);
-  expect(res.exitCode, 0, reason: 'touch -d failed: ${res.stderr}');
+/// Backdates [e] by [age]. Uses `touch -t` with an explicit timestamp stamp
+/// instead of GNU `touch -d '10 days ago'`: BSD touch (macOS builders) has no
+/// `-d` flag, which failed every Codemagic run with a bare exit-code assert.
+Future<void> _age(FileSystemEntity e, Duration age) async {
+  final t = DateTime.now().subtract(age);
+  String two(int v) => v.toString().padLeft(2, '0');
+  final stamp =
+      '${t.year.toString().padLeft(4, '0')}${two(t.month)}${two(t.day)}${two(t.hour)}${two(t.minute)}.${two(t.second)}';
+  final res = await Process.run('touch', ['-t', stamp, e.path]);
+  expect(res.exitCode, 0, reason: 'touch -t failed: ${res.stderr}');
 }
 
 void main() {
@@ -45,9 +52,9 @@ void main() {
   test('old complete folders are registered; incomplete ones are not', () async {
     final old = await _chapter(root, '123', pages: 3);
     await for (final f in old.list()) {
-      await _age(f, '10 days ago');
+      await _age(f, const Duration(days: 10));
     }
-    await _age(old, '10 days ago');
+    await _age(old, const Duration(days: 10));
     expect(old.statSync().modified.isBefore(DateTime.now().subtract(const Duration(days: 9))), isTrue);
 
     await _chapter(root, '456', pages: 3, marker: false); // interrupted download
