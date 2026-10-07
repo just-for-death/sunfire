@@ -79,7 +79,11 @@ workflows:
           # debug build when present and skip gracefully when absent.
           flutter build linux --debug || echo "⚠️ Linux debug build unavailable; native tests will skip."
       - name: Test
-        script: flutter test --exclude-tags network  # native runs: Linux debug build above
+        script: |
+          # Repo baseline (see dart_test.yaml): native tests need
+          # libflutter_qjs_plugin.so and network tests need a live
+          # Suwayomi server + FlareSolverr — neither exists on builders.
+          flutter test --exclude-tags native,network --exclude-tags network  # native runs: Linux debug build above
       - name: Debug compile check (no artifacts)
         script: |
           # Proves the Android native build compiles. The APK is deliberately
@@ -217,7 +221,11 @@ workflows:
       - name: Analyze
         script: flutter analyze
       - name: Test
-        script: flutter test --exclude-tags native,network  # no Linux build in this workflow
+        script: |
+          # Repo baseline (see dart_test.yaml): native tests need
+          # libflutter_qjs_plugin.so and network tests need a live
+          # Suwayomi server + FlareSolverr — neither exists on builders.
+          flutter test --exclude-tags native,network --exclude-tags native,network  # no Linux build in this workflow
       - name: Debug compile check (no artifacts)
         script: |
           # Proves the Android native build compiles. The APK is deliberately
