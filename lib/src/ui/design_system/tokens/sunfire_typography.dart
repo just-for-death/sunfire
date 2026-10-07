@@ -1,4 +1,4 @@
-/// Sunfire-specific typography extending Catalyst's Material 3 type scale.
+/// Sunfire-specific typography built on the Material 3 type scale.
 /// Adds manga-specific styles for the reader, library, and manga details.
 library;
 
@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 class SunfireTypography {
   SunfireTypography._();
 
-  // ── Base Material 3 Type Scale (from Catalyst) ─────────────────────────────
+  // ── Base Material 3 Type Scale ─────────────────────────────
   static const TextStyle displayLarge = TextStyle(
     fontSize: 57, height: 64 / 57, fontWeight: FontWeight.w400, letterSpacing: -0.25,
   );

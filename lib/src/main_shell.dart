@@ -298,8 +298,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   /// iOS (Apple mobile) keeps Sunfire's glass identity; Android and desktop
-  /// use Material 3 chrome. Mirrors the Catalyst platform split, molded to
-  /// Sunfire's 5 tabs and extras (fullscreen reader, batch-mode hiding).
+  /// use Material 3 chrome, molded to Sunfire's 5 tabs and extras
+  /// (fullscreen reader, batch-mode hiding).
   /// Uses the theme platform (not `dart:io`) so tests can select iOS vs
   /// Android via `debugDefaultTargetPlatformOverride`.
   bool _useGlassChrome(BuildContext context) => isAppleMobile(context);
@@ -308,9 +308,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       MediaQuery.maybeDisableAnimationsOf(context) ?? false;
 
   /// Compact overflow mode: first 4 tabs + a "More" sheet (Settings,
-  /// Downloads, Stats). Same pattern as Catalyst's compact phone nav —
-  /// narrow windows and large accessibility text would otherwise overflow
-  /// the 5-up bar.
+  /// Downloads, Stats). Narrow windows and large accessibility text would
+  /// otherwise overflow the 5-up bar.
   bool _useCompactNav(BuildContext context) =>
       SunfireBreakpoints.isCompactNav(context);
 
@@ -387,7 +386,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   /// - iPad → Sunfire's floating frosted-glass sidebar + rounded content
   ///   card (kept as-is; it already matches the glass-sidebar concept).
   /// - Android / desktop → Material 3 [NavigationRail] + plain content
-  ///   (Catalyst Android-tablet pattern).
+  ///   (Android-tablet pattern).
   Widget _buildWideShell(
     BuildContext context,
     Color primaryColor,
