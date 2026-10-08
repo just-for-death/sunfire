@@ -3,6 +3,9 @@
 // category changes, (3) server-side library removals.
 //
 // Run: flutter test --timeout 60s test/library_full_reconcile_test.dart
+@Tags(['native'])
+library;
+
 import 'dart:ffi';
 import 'dart:io';
 

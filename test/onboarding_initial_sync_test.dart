@@ -3,6 +3,9 @@
 // stamps must survive the chapter snapshot (UIX-05 fetchedAt=0 for backlog).
 //
 // Run: flutter test --timeout 60s test/onboarding_initial_sync_test.dart
+@Tags(['native'])
+library;
+
 import 'dart:ffi';
 import 'dart:io';
 

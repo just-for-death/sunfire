@@ -247,6 +247,14 @@ void main() {
       gql.initialize(server.url);
       server.status = 200;
 
+      // Settle capabilities FIRST: a 200 probe fires an unawaited
+      // probeServerCapabilities() chain, and while it is still in flight a
+      // second probe fires another one. Those background requests race the
+      // count below (passes on fast machines, flakes under CI load). Once
+      // settled, later probes are no-ops and the sequence is exactly two.
+      await gql.probeServerCapabilities();
+      server.requests.clear();
+
       expect(await gql.checkServerReachable(force: true), isTrue);
       final data = await gql.query('{ aboutServer { version } }', label: 'ok');
 
