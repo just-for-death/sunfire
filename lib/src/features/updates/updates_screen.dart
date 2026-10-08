@@ -223,6 +223,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   @override
   void dispose() {
     _reloadTimer?.cancel();
+    _pullTimer?.cancel();
     OfflineMonitor.instance.removeListener(_onOfflineChanged);
     SettingsService.instance.removeListener(_onSettingsChanged);
     MainShell.selectedTabNotifier.removeListener(_onTabChanged);
@@ -241,6 +242,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   Future<void> _loadUpdates() async {
     // 1. Show local cache immediately (0ms instant render)
     await _loadUpdatesFromIsarCache();
+
+    // Mount mid-outage: the transition handler only fires on *changes*, so a
+    // screen opened while already offline would serve cache with no banner
+    // and no snapshot timestamp. Sync from the monitor on every load.
+    if (OfflineMonitor.instance.isOffline) {
+      _isOffline = true;
+      _offlineSnapshotAt ??= DateTime.now();
+      unawaited(_refreshPendingCount());
+      if (mounted) setState(() {});
+      return;
+    }
 
     // 2. Background server fetch (only if configured, never blocks initial render)
     // Offline means doomed 8s timeouts: serve the cache, say so, skip the fetch.
