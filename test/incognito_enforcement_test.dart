@@ -38,6 +38,9 @@
 //      (negative synthetic id, the pure-local case).
 //
 // Run: fvm flutter test test/incognito_enforcement_test.dart
+@Tags(['native'])
+library;
+
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';

@@ -2,6 +2,9 @@
 // pull / delete flows that must not clobber (or leak) local-only categories.
 //
 // Run: fvm flutter test test/category_offline_sync_test.dart
+@Tags(['native'])
+library;
+
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';

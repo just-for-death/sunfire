@@ -11,6 +11,9 @@
 // with no error anywhere.
 //
 // Run: fvm flutter test test/local_chapter_id_collision_test.dart
+@Tags(['native'])
+library;
+
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';

@@ -8,6 +8,9 @@
 // Library "Last Read" sorting.
 //
 // Run: fvm flutter test test/local_read_activity_test.dart
+@Tags(['native'])
+library;
+
 import 'dart:ffi';
 import 'dart:io';
 

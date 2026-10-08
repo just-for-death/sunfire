@@ -19,6 +19,9 @@
 // progress to Isar and pushed it to the server with the privacy setting on.
 //
 // Run: fvm flutter test test/incognito_leak_baseline_repro_test.dart
+@Tags(['native'])
+library;
+
 import 'dart:ffi';
 import 'dart:io';
 

@@ -4,6 +4,9 @@
 //      webtoons previously duplicated the server-synced webtoons entry).
 //   2. findExistingLibraryManga — the dedup unit in SourceMigrationService,
 //      exercised against a real in-memory Isar database.
+@Tags(['native'])
+library;
+
 import 'dart:ffi';
 import 'dart:io';
 
