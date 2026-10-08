@@ -29,8 +29,8 @@ workflows:
       vars:
         LANG: en_US.UTF-8
         LC_ALL: en_US.UTF-8
-    android_signing:
-      - sunfire-release
+      android_signing:
+        - sunfire-release
     cache:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
@@ -176,14 +176,14 @@ workflows:
       vars:
         LANG: en_US.UTF-8
         LC_ALL: en_US.UTF-8
+      android_signing:
+        - sunfire-release
     triggering:
       events:
         - tag
       tag_patterns:
         - pattern: 'v*'
           include: true
-    android_signing:
-      - sunfire-release
     cache:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
