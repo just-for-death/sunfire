@@ -65,3 +65,23 @@ List<DateUpdateSection> groupUpdatesByDateThenSeries(
 
   return sections;
 }
+
+/// Identity signature for one Updates feed row: anything the card renders.
+String updateCardKey({
+  required int chapterServerId,
+  required int mangaId,
+  required bool isRead,
+  required bool isDownloaded,
+}) =>
+    'upd_${chapterServerId}_${mangaId}_${isRead ? 1 : 0}_${isDownloaded ? 1 : 0}';
+
+/// True when two feed snapshots would render identically (same rows in the
+/// same order with the same visual state). Lets reloads skip setState so
+/// WebSocket bursts and tab revisits don't flash a rebuilt list.
+bool sameFeedItems(List<Map<String, dynamic>> a, List<Map<String, dynamic>> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i]['key'] != b[i]['key']) return false;
+  }
+  return true;
+}
