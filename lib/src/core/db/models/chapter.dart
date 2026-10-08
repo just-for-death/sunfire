@@ -12,6 +12,15 @@ const int kFloodThresholdChapters = 4;
 /// How many chapters of a flooded series may enter the Updates feed.
 const int kFloodCapChapters = 3;
 
+/// Merges bulk-import-stamped rows back in ONLY when the primary pass came
+/// back empty: an offline feed with rows on disk must never render "No
+/// Recent Updates". Display-layer flood caps still apply downstream, so a
+/// fresh bulk import shows a capped sample instead of an empty screen.
+List<T> mergeBulkFallback<T>(List<T> kept, List<T> droppedBulk, int limit) {
+  if (kept.isNotEmpty || droppedBulk.isEmpty) return kept;
+  return [...kept, ...droppedBulk.take(limit)];
+}
+
 /// Window (seconds) around manga.inLibraryAt used to detect bulk-import stamps.
 const int kImportFetchedAtWindowSeconds = 60;
 

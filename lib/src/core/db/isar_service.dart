@@ -423,6 +423,11 @@ class IsarService {
       // to non-library manga. Also drop bulk-import stamps (ISS-054).
       const pageSize = 300;
       final result = <Chapter>[];
+      // Bulk-stamped rows excluded below are stashed, not discarded: if the
+      // primary pass finds nothing (e.g. fresh import where every chapter
+      // looks bulk-stamped), the feed falls back to them instead of rendering
+      // an empty offline screen.
+      final droppedBulk = <Chapter>[];
       int offset = 0;
       const maxScan = 10000; // hard ceiling: never balloon memory on huge feeds
       while (result.length < limit && offset < maxScan) {
@@ -440,6 +445,7 @@ class IsarService {
             fetchedAt: ch.fetchedAt,
             inLibraryAt: inLibraryAtByManga[ch.mangaId],
           )) {
+            droppedBulk.add(ch);
             continue;
           }
           result.add(ch);
@@ -447,7 +453,7 @@ class IsarService {
         }
         offset += page.length;
       }
-      return result;
+      return mergeBulkFallback(result, droppedBulk, limit);
     } catch (e, stack) {
       unawaited(LoggerService.instance.logError('Isar query failed: $e', exception: e, stackTrace: stack, category: 'atabase'));
       return [];

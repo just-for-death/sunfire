@@ -395,6 +395,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
                 'isDownloaded': isDownloaded,
                 'fetchedAt': fetchedAt,
                 'dateHeader': _formatDateHeader(fetchedAt),
+                'key': updateCardKey(
+                  chapterServerId: chServerId,
+                  mangaId: resolvedMId,
+                  isRead: ch.isRead,
+                  isDownloaded: isDownloaded,
+                ),
               });
             }
           }
@@ -446,11 +452,16 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
             .where((it) => serverIds.contains((it['chapter'] as Chapter).serverId))
             .toList();
         if (mounted) {
-          setState(() {
-            _updatesList = mirrored;
-            _isLoading = false;
-            _isOffline = false;
-          });
+          // Same no-flash guard as the cache path: the mirror runs after
+          // every successful server fetch, often with identical content.
+          // (_isOffline was already cleared above for this round trip.)
+          if (_isLoading || !sameFeedItems(_updatesList, mirrored)) {
+            setState(() {
+              _updatesList = mirrored;
+              _isLoading = false;
+              _isOffline = false;
+            });
+          }
           _publishUpdatesBadge();
         }
       }
@@ -510,7 +521,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         final hasPendingReadMutation = pendingReadChapterIds.contains(serverId);
 
         final mergedItem = Map<String, dynamic>.from(serverItem);
-        mergedItem['chapter'] = Chapter()
+        final mergedChapter = Chapter()
           ..id = localCh.id
           ..serverId = serverCh.serverId
           ..mangaId = serverCh.mangaId
@@ -530,6 +541,18 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           ..scanlator = serverCh.scanlator
           ..uploadDate = serverCh.uploadDate
           ..pageCount = serverCh.pageCount;
+        mergedItem['chapter'] = mergedChapter;
+        // The merged row may carry local read/download state that differs
+        // from the server snapshot it was copied from — re-key it so feed
+        // diffing sees the actual rendered identity.
+        mergedItem['key'] = updateCardKey(
+          chapterServerId: mergedChapter.serverId,
+          mangaId: mergedChapter.mangaId,
+          isRead: mergedChapter.isRead,
+          isDownloaded: (mergedItem['isDownloaded'] as bool? ?? false) ||
+              mergedChapter.isDownloadedLocally ||
+              mergedChapter.isDownloadedOnServer,
+        );
 
         mergedItems.add(mergedItem);
       } else {
@@ -663,6 +686,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           }
         }
 
+        final chId = ch.serverId != 0 ? ch.serverId : ch.id;
+        final storedDownloaded = ch.isDownloaded || ch.isDownloadedOnServer;
         items.add({
           'chapter': ch,
           'mangaId': ch.mangaId,
@@ -670,9 +695,15 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           'thumbnailUrl': thumb,
           'sourceName': '',
           'lang': _langByMangaId[ch.mangaId] ?? '',
-          'isDownloaded': ch.isDownloaded || ch.isDownloadedOnServer,
+          'isDownloaded': storedDownloaded,
           'fetchedAt': ch.fetchedAt,
           'dateHeader': _formatDateHeader(ch.fetchedAt),
+          'key': updateCardKey(
+            chapterServerId: chId,
+            mangaId: ch.mangaId,
+            isRead: ch.isRead,
+            isDownloaded: storedDownloaded,
+          ),
         });
       }
 
@@ -683,10 +714,15 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       });
 
       if (mounted) {
-        setState(() {
-          _updatesList = items;
-          _isLoading = false;
-        });
+        // Skip the rebuild when nothing visual changed: WebSocket bursts and
+        // tab revisits re-read identical rows, and a full-list setState
+        // flashes every cover. First load always applies.
+        if (_isLoading || !sameFeedItems(_updatesList, items)) {
+          setState(() {
+            _updatesList = items;
+            _isLoading = false;
+          });
+        }
         _publishUpdatesBadge();
       }
     } catch (_) {
@@ -1158,7 +1194,20 @@ unawaited(
     final isDownloaded = (item['isDownloaded'] as bool? ?? false) || isLocalDownloaded || ch.isDownloaded || ch.isDownloadedOnServer;
     final isRead = ch.isRead;
 
+    // Stable identity for this row: lets slivers reuse the element instead
+    // of rebuilding (and re-fading covers) on every reload, and lets reloads
+    // skip setState entirely when nothing visual changed. Refreshed here so
+    // read/download toggles update it even between reloads.
+    final cardKey = updateCardKey(
+      chapterServerId: chId,
+      mangaId: mangaId,
+      isRead: isRead,
+      isDownloaded: isDownloaded,
+    );
+    item['key'] = cardKey;
+
     return Padding(
+      key: ValueKey(cardKey),
       padding: EdgeInsets.symmetric(
         horizontal: isTablet ? 0.0 : 16.0,
         vertical: 4.0,
