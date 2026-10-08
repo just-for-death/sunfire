@@ -1,24 +1,26 @@
 # ==============================================================================
 # Codemagic CI/CD for Sunfire Manga Reader — v5.0.0
 #
-# ARTIFACTS: Both APKs and IPA are built UNSIGNED.
-# - Android: release APKs built without any signing config (--no-codesign not
-#   available for Android; gradle configured to skip signing in release build)
-# - iOS: unsigned IPA for AltStore/TrollStore/Sideloadly (--no-codesign)
+# ARTIFACTS (matching Catalyst's approach):
+# - Android: SIGNED release APKs (all ABIs) using keystore from Code signing identities
+# - iOS: UNSIGNED IPA for AltStore/TrollStore/Sideloadly (--no-codesign)
 #
-# SIGNING IS DONE LOCALLY on the release machine using the persistent key
-# (android/sunfire-release.jks, gitignored). CI artifacts are raw unsigned
-# binaries that the release machine signs before publishing.
+# SIGNING SETUP (do once in Codemagic UI):
+# 1. Team settings → Code signing identities → Android keystores
+# 2. Upload android/sunfire-release.jks (gitignored locally)
+# 3. Set keystore password, key alias, key password
+# 4. Reference name: "sunfire-release" (used in android_signing below)
+# 5. Keystore is NEVER in repo; CI signs APKs, signing machine signs locally
 # Release cert SHA-256: 455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775
 # ==============================================================================
 
 workflows:
 
   # ────────────────────────────────────────────────────────────────────────────
-# WORKFLOW 1: ANDROID UNSIGNED RELEASE (Linux x2 — unsigned release APKs)
-# ────────────────────────────────────────────────────────────────────────────
-  android-unsigned-release:
-    name: Android Unsigned Release APKs - v5.0.0
+  # WORKFLOW 1: ANDROID SIGNED RELEASE (macOS — signed release APKs)
+  # ────────────────────────────────────────────────────────────────────────────
+  android-release:
+    name: Android Release APKs (Signed) - v5.0.0
     max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
@@ -27,6 +29,8 @@ workflows:
       vars:
         LANG: en_US.UTF-8
         LC_ALL: en_US.UTF-8
+    android_signing:
+      - sunfire-release
     cache:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
@@ -68,16 +72,16 @@ workflows:
       - name: Build Linux debug for native test libs (best-effort)
         script: |
           flutter build linux --debug || echo "⚠️ Linux debug build unavailable; native tests will skip."
-      - name: Build UNSIGNED release APKs (all ABIs)
+      - name: Build SIGNED release APKs (all ABIs)
         script: |
           set -e
-          # Configure gradle to build release without signing
-          printf 'storePassword=\nkeyPassword=\nkeyAlias=\nstoreFile=\n' > "$CM_BUILD_DIR/android/key.properties"
-          # Build unsigned release APKs (all ABIs)
+          # Codemagic auto-generates key.properties from android_signing keystore
+          # Do NOT create key.properties manually — it will be generated from android_signing
           flutter build apk --release \
             --android-skip-build-dependency-validation \
+            --split-per-abi \
             --no-tree-shake-icons
-      - name: Verify APKs are unsigned
+      - name: Verify APKs are SIGNED (release cert)
         script: |
           set -e
           shopt -s nullglob
@@ -88,22 +92,21 @@ workflows:
           fi
           for apk in "${apks[@]}"; do
             echo "Checking: $apk"
-            # Check if APK has no signature (V2/V3)
-            if apksigner verify --print-certs "$apk" 2>&1 | grep -q "No signatures found"; then
-              echo "  ✅ Unsigned: $apk"
+            if apksigner verify --print-certs "$apk" 2>&1 | grep -q "455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775"; then
+              echo "  ✅ SIGNED with release cert: $apk"
             else
-              echo "  ❌ SIGNED (unexpected): $apk"
+              echo "  ❌ NOT signed with release cert: $apk"
               apksigner verify --print-certs "$apk"
               exit 1
             fi
           done
-          echo "✅ All APKs verified as unsigned"
+          echo "✅ All APKs verified as signed with release certificate"
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
       - build/app/outputs/flutter-apk/*.apk.sha1
 
   # ────────────────────────────────────────────────────────────────────────────
-  # WORKFLOW 2: iOS UNSIGNED IPA (Mac Mini M2 — AltStore / TrollStore / Sideloadly)
+  # WORKFLOW 2: iOS UNSIGNED IPA (Mac Mini M1 — AltStore / TrollStore / Sideloadly)
   # ────────────────────────────────────────────────────────────────────────────
   ios-unsigned-ipa:
     name: iOS Unsigned IPA (Sideload) - v5.0.0
@@ -159,12 +162,10 @@ workflows:
       - release/Sunfire-*.ipa
 
   # ────────────────────────────────────────────────────────────────────────────
-  # WORKFLOW 3: ALL PLATFORMS UNSIGNED (Unified CI — Triggered on Tags and Main)
-  # Builds UNSIGNED release APKs (all ABIs) + UNSIGNED IPA for sideloading.
-  # Both artifacts are UNSIGNED — signing is done locally with the persistent key.
+  # WORKFLOW 3: ALL PLATFORMS (Unified — Triggered on Tags)
   # ────────────────────────────────────────────────────────────────────────────
-  all-unsigned-release:
-    name: Multi-Platform Unsigned Release (APKs + IPA) - v5.0.0
+  all-release:
+    name: Multi-Platform Release (Signed APKs + Unsigned IPA) - v5.0.0
     max_build_duration: 90
     instance_type: mac_mini_m1
     environment:
@@ -178,14 +179,11 @@ workflows:
     triggering:
       events:
         - tag
-        - push
-      branch_patterns:
-        - pattern: 'main'
-          include: true
-          source: true
       tag_patterns:
         - pattern: 'v*'
           include: true
+    android_signing:
+      - sunfire-release
     cache:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
@@ -198,7 +196,6 @@ workflows:
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
       - name: Pre-install Android NDK (retried)
         script: |
-          # Same AGP-default-NDK pin: install r27 up front with retries
           set -e
           SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           SDKMANAGER=""
@@ -227,17 +224,16 @@ workflows:
       - name: Analyze
         script: flutter analyze
       - name: Test
-        script: |
-          # Repo baseline: native tests need libflutter_qjs_plugin.so + network
-          flutter test --exclude-tags native,network
-      - name: Build UNSIGNED release APKs (all ABIs)
+        script: flutter test --exclude-tags native,network
+      - name: Build SIGNED release APKs (all ABIs)
         script: |
           set -e
-          printf 'storePassword=\nkeyPassword=\nkeyAlias=\nstoreFile=\n' > "$CM_BUILD_DIR/android/key.properties"
+          # Codemagic auto-generates key.properties from android_signing keystore
           flutter build apk --release \
             --android-skip-build-dependency-validation \
+            --split-per-abi \
             --no-tree-shake-icons
-      - name: Verify APKs are unsigned
+      - name: Verify APKs are SIGNED
         script: |
           set -e
           shopt -s nullglob
@@ -248,15 +244,15 @@ workflows:
           fi
           for apk in "${apks[@]}"; do
             echo "Checking: $apk"
-            if apksigner verify --print-certs "$apk" 2>&1 | grep -q "No signatures found"; then
-              echo "  ✅ Unsigned: $apk"
+            if apksigner verify --print-certs "$apk" 2>&1 | grep -q "455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775"; then
+              echo "  ✅ SIGNED with release cert: $apk"
             else
-              echo "  ❌ SIGNED (unexpected): $apk"
+              echo "  ❌ NOT signed with release cert: $apk"
               apksigner verify --print-certs "$apk"
               exit 1
             fi
           done
-          echo "✅ All APKs verified as unsigned"
+          echo "✅ All APKs verified as signed with release certificate"
       - name: Build iOS unsigned xcarchive & IPA
         script: |
           set -e
