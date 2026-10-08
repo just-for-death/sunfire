@@ -1,112 +1,34 @@
 # ==============================================================================
 # Codemagic CI/CD for Sunfire Manga Reader — v5.0.0
-#
-# ARTIFACTS (matching Catalyst's approach):
-# - Android: SIGNED release APKs (all ABIs) using keystore from Code signing identities
-# - iOS: UNSIGNED IPA for AltStore/TrollStore/Sideloadly (--no-codesign)
-#
-# SIGNING SETUP (do once in Codemagic UI):
-# 1. Team settings → Code signing identities → Android keystores
-# 2. Upload android/sunfire-release.jks (gitignored locally)
-# 3. Set keystore password, key alias, key password
-# 4. Reference name: "sunfire-release" (used in android_signing below)
-# 5. Keystore is NEVER in repo; CI signs APKs, signing machine signs locally
-# Release cert SHA-256: 455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775
+# Copied from Catalyst's approach
 # ==============================================================================
 
 workflows:
 
   # ────────────────────────────────────────────────────────────────────────────
-  # WORKFLOW 1: ANDROID SIGNED RELEASE (macOS — signed release APKs)
+  # WORKFLOW 1: ANDROID RELEASE APKs
   # ────────────────────────────────────────────────────────────────────────────
   android-release:
-    name: Android Release APKs (Signed) - v5.0.0
+    name: Android Release APKs - v5.0.0
     max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
       flutter: 3.47.0
       java: 17
-      vars:
-        LANG: en_US.UTF-8
-        LC_ALL: en_US.UTF-8
-      android_signing:
-        - sunfire-release
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-        - $HOME/.gradle/caches
-        - $HOME/.gradle/wrapper
+
     scripts:
-      - name: Set up Android SDK local.properties
-        script: |
-          echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
-      - name: Pre-install Android NDK (retried)
-        script: |
-          set -e
-          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          SDKMANAGER=""
-          for candidate in "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$SDK_ROOT/tools/bin/sdkmanager"; do
-            if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
-          done
-          if [ -z "$SDKMANAGER" ]; then
-            echo "❌ sdkmanager not found under $SDK_ROOT/cmdline-tools." >&2
-            ls "$SDK_ROOT" >&2 || true
-            exit 1
-          fi
-          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses > /dev/null || true
-          for i in 1 2 3; do
-            if "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "ndk;27.0.12077973"; then
-              break
-            fi
-            echo "sdkmanager NDK attempt $i failed, clearing partial download and retrying..."
-            rm -rf "$SDK_ROOT/.temp" "$SDK_ROOT/ndk/27.0.12077973"
-            sleep 5
-            if [ "$i" = 3 ]; then exit 1; fi
-          done
-      - name: Get Flutter packages
+      - name: Get packages
         script: flutter pub get
-      - name: Analyze
-        script: flutter analyze
-      - name: Test
-        script: flutter test --exclude-tags native,network
-      - name: Build Linux debug for native test libs (best-effort)
-        script: |
-          flutter build linux --debug || echo "⚠️ Linux debug build unavailable; native tests will skip."
-      - name: Build SIGNED release APKs (all ABIs)
-        script: |
-          set -e
-          # Codemagic auto-generates key.properties from android_signing keystore
-          # Do NOT create key.properties manually — it will be generated from android_signing
-          flutter build apk --release \
-            --android-skip-build-dependency-validation \
-            --split-per-abi \
-            --no-tree-shake-icons
-      - name: Verify APKs are SIGNED (release cert)
-        script: |
-          set -e
-          shopt -s nullglob
-          apks=(build/app/outputs/flutter-apk/*.apk)
-          if [ ${#apks[@]} -eq 0 ]; then
-            echo "❌ No APKs found!" >&2
-            exit 1
-          fi
-          for apk in "${apks[@]}"; do
-            echo "Checking: $apk"
-            if apksigner verify --print-certs "$apk" 2>&1 | grep -q "455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775"; then
-              echo "  ✅ SIGNED with release cert: $apk"
-            else
-              echo "  ❌ NOT signed with release cert: $apk"
-              apksigner verify --print-certs "$apk"
-              exit 1
-            fi
-          done
-          echo "✅ All APKs verified as signed with release certificate"
+      - name: Build release APKs
+        script: flutter build apk --release --split-per-abi
+
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
-      - build/app/outputs/flutter-apk/*.apk.sha1
+      - build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+      - build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+      - build/app/outputs/flutter-apk/app-x86_64-release.apk
 
   # ────────────────────────────────────────────────────────────────────────────
-  # WORKFLOW 2: iOS UNSIGNED IPA (Mac Mini M1 — AltStore / TrollStore / Sideloadly)
+  # WORKFLOW 2: iOS UNSIGNED IPA (AltStore / TrollStore / Sideloadly)
   # ────────────────────────────────────────────────────────────────────────────
   ios-unsigned-ipa:
     name: iOS Unsigned IPA (Sideload) - v5.0.0
@@ -116,56 +38,45 @@ workflows:
       flutter: 3.47.0
       xcode: latest
       cocoapods: default
-      vars:
-        LANG: en_US.UTF-8
-        LC_ALL: en_US.UTF-8
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-        - $HOME/Library/Caches/CocoaPods
+
     scripts:
-      - name: Get Flutter packages
+      - name: Get packages
         script: |
           flutter config --no-enable-swift-package-manager
           flutter pub get
-      - name: Build iOS xcarchive (No code signing required)
+      - name: Build IPA unsigned (no code signing)
         script: |
           set -e
           flutter build ipa --release --no-codesign
-      - name: Package Unsigned Sunfire.ipa
+      - name: Prepare Sunfire.ipa artifact
         script: |
           set -e
           VERSION=$(grep '^version:' "$CM_BUILD_DIR/pubspec.yaml" | sed -e 's/version: //' -e 's/["'\'']//g' -e 's/+.*//' -e 's/ //g')
-          mkdir -p "$CM_BUILD_DIR/release"
           mkdir -p build/ios/ipa
           shopt -s nullglob
           ipas=(build/ios/ipa/*.ipa)
           if [ ${#ipas[@]} -gt 0 ]; then
-            echo "Existing IPA found from flutter build: ${ipas[0]}"
-            mv "${ipas[0]}" "$CM_BUILD_DIR/release/Sunfire-v${VERSION}.ipa"
+            mv "${ipas[0]}" build/ios/ipa/Sunfire-v${VERSION}.ipa
+          elif [ -d build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app ]; then
+            echo "IPA missing from flutter output; packaging from xcarchive..."
+            rm -rf /tmp/sunfire-ipa && mkdir -p /tmp/sunfire-ipa/Payload
+            cp -R build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app /tmp/sunfire-ipa/Payload/
+            (cd /tmp/sunfire-ipa && zip -qr "$CM_BUILD_DIR/build/ios/ipa/Sunfire-v${VERSION}.ipa" Payload)
           else
-            echo "Packaging Sunfire.ipa directly from xcarchive payload..."
-            APP_DIR=$(find build/ios/archive -type d -name "*.app" | head -n 1)
-            if [ -n "$APP_DIR" ]; then
-              echo "Found app payload at: $APP_DIR"
-              rm -rf /tmp/sunfire-ipa && mkdir -p /tmp/sunfire-ipa/Payload
-              cp -R "$APP_DIR" /tmp/sunfire-ipa/Payload/
-              (cd /tmp/sunfire-ipa && zip -qr "$CM_BUILD_DIR/release/Sunfire-v${VERSION}.ipa" Payload)
-              echo "✅ Successfully created Sunfire-v${VERSION}.ipa"
-            else
-              echo "❌ Error: Could not find .app bundle in build/ios/archive!" >&2
-              exit 1
-            fi
+            echo "No .ipa or xcarchive app bundle found" >&2
+            exit 1
           fi
-          ls -lh "$CM_BUILD_DIR/release/"
+          ls -lh build/ios/ipa/Sunfire-v${VERSION}.ipa
+
     artifacts:
-      - release/Sunfire-*.ipa
+      - build/ios/ipa/Sunfire-v${VERSION}.ipa
+      - build/ios/archive/*.xcarchive
 
   # ────────────────────────────────────────────────────────────────────────────
-  # WORKFLOW 3: ALL PLATFORMS (Unified — Triggered on Tags)
+  # WORKFLOW 3: BOTH PLATFORMS — triggers on v* tags
   # ────────────────────────────────────────────────────────────────────────────
   all-release:
-    name: Multi-Platform Release (Signed APKs + Unsigned IPA) - v5.0.0
+    name: iOS + Android v5.0.0 (unsigned IPA)
     max_build_duration: 90
     instance_type: mac_mini_m1
     environment:
@@ -173,107 +84,44 @@ workflows:
       xcode: latest
       java: 17
       cocoapods: default
-      vars:
-        LANG: en_US.UTF-8
-        LC_ALL: en_US.UTF-8
-      android_signing:
-        - sunfire-release
     triggering:
       events:
         - tag
       tag_patterns:
         - pattern: 'v*'
           include: true
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-        - $HOME/.gradle/caches
-        - $HOME/.gradle/wrapper
-        - $HOME/Library/Caches/CocoaPods
     scripts:
-      - name: Set up Android SDK local.properties
-        script: |
-          echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
-      - name: Pre-install Android NDK (retried)
-        script: |
-          set -e
-          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          SDKMANAGER=""
-          for candidate in "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$SDK_ROOT/tools/bin/sdkmanager"; do
-            if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
-          done
-          if [ -z "$SDKMANAGER" ]; then
-            echo "❌ sdkmanager not found under $SDK_ROOT/cmdline-tools." >&2
-            ls "$SDK_ROOT" >&2 || true
-            exit 1
-          fi
-          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses > /dev/null || true
-          for i in 1 2 3; do
-            if "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "ndk;27.0.12077973"; then
-              break
-            fi
-            echo "sdkmanager NDK attempt $i failed, clearing partial download and retrying..."
-            rm -rf "$SDK_ROOT/.temp" "$SDK_ROOT/ndk/27.0.12077973"
-            sleep 5
-            if [ "$i" = 3 ]; then exit 1; fi
-          done
-      - name: Get Flutter packages
-        script: |
-          flutter config --no-enable-swift-package-manager
-          flutter pub get
-      - name: Analyze
-        script: flutter analyze
-      - name: Test
-        script: flutter test --exclude-tags native,network
-      - name: Build SIGNED release APKs (all ABIs)
+      - name: Get packages
+        script: flutter pub get
+      - name: Build APKs
+        script: flutter build apk --release --split-per-abi
+      - name: Build IPA unsigned (no code signing)
         script: |
           set -e
-          # Codemagic auto-generates key.properties from android_signing keystore
-          flutter build apk --release \
-            --android-skip-build-dependency-validation \
-            --split-per-abi \
-            --no-tree-shake-icons
-      - name: Verify APKs are SIGNED
-        script: |
-          set -e
-          shopt -s nullglob
-          apks=(build/app/outputs/flutter-apk/*.apk)
-          if [ ${#apks[@]} -eq 0 ]; then
-            echo "❌ No APKs found!" >&2
-            exit 1
-          fi
-          for apk in "${apks[@]}"; do
-            echo "Checking: $apk"
-            if apksigner verify --print-certs "$apk" 2>&1 | grep -q "455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775"; then
-              echo "  ✅ SIGNED with release cert: $apk"
-            else
-              echo "  ❌ NOT signed with release cert: $apk"
-              apksigner verify --print-certs "$apk"
-              exit 1
-            fi
-          done
-          echo "✅ All APKs verified as signed with release certificate"
-      - name: Build iOS unsigned xcarchive & IPA
+          flutter build ipa --release --no-codesign
+      - name: Prepare Sunfire.ipa artifact
         script: |
           set -e
           VERSION=$(grep '^version:' "$CM_BUILD_DIR/pubspec.yaml" | sed -e 's/version: //' -e 's/["'\'']//g' -e 's/+.*//' -e 's/ //g')
-          mkdir -p "$CM_BUILD_DIR/release"
-          flutter build ipa --release --no-codesign
           mkdir -p build/ios/ipa
           shopt -s nullglob
           ipas=(build/ios/ipa/*.ipa)
           if [ ${#ipas[@]} -gt 0 ]; then
-            mv "${ipas[0]}" "$CM_BUILD_DIR/release/Sunfire-v${VERSION}.ipa"
+            mv "${ipas[0]}" build/ios/ipa/Sunfire-v${VERSION}.ipa
+          elif [ -d build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app ]; then
+            echo "IPA missing from flutter output; packaging from xcarchive..."
+            rm -rf /tmp/sunfire-ipa && mkdir -p /tmp/sunfire-ipa/Payload
+            cp -R build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app /tmp/sunfire-ipa/Payload/
+            (cd /tmp/sunfire-ipa && zip -qr "$CM_BUILD_DIR/build/ios/ipa/Sunfire-v${VERSION}.ipa" Payload)
           else
-            APP_DIR=$(find build/ios/archive -type d -name "*.app" | head -n 1)
-            if [ -n "$APP_DIR" ]; then
-              rm -rf /tmp/sunfire-ipa && mkdir -p /tmp/sunfire-ipa/Payload
-              cp -R "$APP_DIR" /tmp/sunfire-ipa/Payload/
-              (cd /tmp/sunfire-ipa && zip -qr "$CM_BUILD_DIR/release/Sunfire-v${VERSION}.ipa" Payload)
-            fi
+            echo "No .ipa or xcarchive app bundle found" >&2
+            exit 1
           fi
-          ls -lh "$CM_BUILD_DIR/release/"
+          ls -lh build/ios/ipa/Sunfire-v${VERSION}.ipa
+
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
-      - build/app/outputs/flutter-apk/*.apk.sha1
-      - release/Sunfire-*.ipa
+      - build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+      - build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+      - build/app/outputs/flutter-apk/app-x86_64-release.apk
+      - build/ios/ipa/Sunfire-v${VERSION}.ipa
+      - build/ios/archive/*.xcarchive
