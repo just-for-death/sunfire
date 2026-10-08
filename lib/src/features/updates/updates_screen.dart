@@ -80,6 +80,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   DateTime? _offlineSnapshotAt;
   /// Queued mutations waiting for reconnect, shown in the offline banner.
   int _pendingCount = 0;
+  /// Throttle for the Isar count query: transitions can flap, and the count
+  /// only changes when THIS screen enqueues work (force-refreshed below) or
+  /// a sync flush drains the queue (which also flips the monitor). A stale
+  /// count is harmless — the banner is informational, not a ledger.
+  DateTime? _pendingCountAt;
+  static const _pendingCountTtl = Duration(seconds: 30);
   String? _lastUpdateText;
   DateTime? _lastUpdateAt;
 
@@ -288,10 +294,23 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     }
   }
 
-  Future<void> _refreshPendingCount() async {
+  Future<void> _refreshPendingCount({bool force = false}) async {
+    final now = DateTime.now();
+    final last = _pendingCountAt;
+    if (!force &&
+        last != null &&
+        now.difference(last) < _pendingCountTtl) {
+      return;
+    }
     try {
       final pending = await IsarService.instance.getPendingSyncRecords();
-      if (mounted) setState(() => _pendingCount = pending.length);
+      if (!mounted) return;
+      _pendingCountAt = now;
+      // setState only on change: banner rebuilds are cheap, but this fires
+      // from transition handlers where a no-op rebuild is pure waste.
+      if (pending.length != _pendingCount) {
+        setState(() => _pendingCount = pending.length);
+      }
     } catch (_) {}
   }
 
@@ -877,6 +896,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     if (mounted) {
       setState(() {});
       _publishUpdatesBadge();
+      // This screen just enqueued work: bypass the throttle.
+      unawaited(_refreshPendingCount(force: true));
     }
 
     // Keep the library unread badge in sync — the reader and manga-detail
@@ -1109,6 +1130,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
           behavior: SnackBarBehavior.floating,
         ),
       );
+      // Bulk enqueue above: bypass the throttle.
+      unawaited(_refreshPendingCount(force: true));
     }
   }
 
