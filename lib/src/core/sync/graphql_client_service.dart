@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show ValueNotifier, debugPrint, kDebugM
 import '../logging/logger_service.dart';
 import '../services/server_tls_trust.dart';
 import 'cursor_paginator.dart';
+import 'offline_monitor.dart';
 import 'server_api_models.dart';
 import 'server_auth_refresher.dart';
 import 'server_capabilities.dart';
@@ -286,6 +287,7 @@ class GraphQLClientService {
       } else {
         _lastReachableStatus = (res.statusCode == 200);
         if (_lastReachableStatus) {
+          OfflineMonitor.instance.reportTransportSuccess();
           unawaited(probeServerCapabilities());
         }
       }
@@ -327,9 +329,11 @@ class GraphQLClientService {
         }
       } else {
         _lastReachableStatus = false;
+        OfflineMonitor.instance.reportTransportFailure();
       }
     } catch (_) {
       _lastReachableStatus = false;
+      OfflineMonitor.instance.reportTransportFailure();
     }
     _lastReachableCheck = now;
     return _isServerUsable;
@@ -343,6 +347,8 @@ class GraphQLClientService {
   /// [_isServerUsable] is what reports it as unusable for sync.
   void _recordAuthRejection() {
     _lastReachableStatus = true;
+    // The server answered: transport works regardless of credentials.
+    OfflineMonitor.instance.reportTransportSuccess();
     notifyAuthError();
   }
 
@@ -525,6 +531,7 @@ class GraphQLClientService {
 
       _lastReachableStatus = true;
       _lastReachableCheck = DateTime.now();
+      OfflineMonitor.instance.reportTransportSuccess();
       // A successful authenticated response means credentials are valid again.
       clearAuthError();
 
@@ -556,6 +563,7 @@ class GraphQLClientService {
       if (_isTransportFailure(e)) {
         _lastReachableStatus = false;
         _lastReachableCheck = DateTime.now();
+        OfflineMonitor.instance.reportTransportFailure();
       }
       var wasUnauthorized = false;
       if (e.type == DioExceptionType.badResponse) {
