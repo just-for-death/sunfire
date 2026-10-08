@@ -180,12 +180,18 @@ void main() {
       await mgr.pauseLocalQueue();
       expect(mgr.isQueuePaused, isTrue);
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('sunfire_download_queue_v1_paused'), isTrue);
+      // Paused flag is now embedded in the queue state JSON
+      final raw = prefs.getString('sunfire_download_queue_v1');
+      expect(raw, isNotNull);
+      final decoded = jsonDecode(raw!);
+      expect(decoded['paused'], isTrue);
 
       // Foreground auto-resume must NOT override an explicit pause.
       mgr.resumeLocalQueueAfterForeground();
       expect(mgr.isQueuePaused, isTrue);
-      expect(prefs.getBool('sunfire_download_queue_v1_paused'), isTrue);
+      final raw2 = prefs.getString('sunfire_download_queue_v1');
+      final decoded2 = jsonDecode(raw2!);
+      expect(decoded2['paused'], isTrue);
     });
 
     test('explicit user resume clears the persisted pause', () async {
@@ -194,7 +200,9 @@ void main() {
       await mgr.resumeLocalQueue();
       expect(mgr.isQueuePaused, isFalse);
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('sunfire_download_queue_v1_paused'), isFalse);
+      final raw = prefs.getString('sunfire_download_queue_v1');
+      final decoded = jsonDecode(raw!);
+      expect(decoded['paused'], isFalse);
     });
   });
 }

@@ -525,10 +525,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     }
 
     return PopScope(
-      canPop: !SettingsService.instance.confirmExit && _currentIndex == 0,
+      // Fullscreen routes (reader) pop normally: the tab-reset gate below
+      // would otherwise hijack system-back into a jump to Library.
+      canPop: widget.isFullscreen || (!SettingsService.instance.confirmExit && _currentIndex == 0),
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        if (_currentIndex != 0) {
+        if (!widget.isFullscreen && _currentIndex != 0) {
           _handleTabSelect(0);
           return;
         }

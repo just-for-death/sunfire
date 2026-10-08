@@ -92,6 +92,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   final Map<int, TransformationController> _webtoonZoomControllers = {};
   int _loadGeneration = 0;
   DateTime? _lastPrevChapterNavAt;
+  DateTime? _lastNextChapterNavAt;
   DateTime? _lastPrevPageNavAt;
   DateTime? _lastNextPageNavAt;
 
@@ -359,8 +360,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       final max = _scrollController.position.maxScrollExtent;
       final cur = _scrollController.offset;
 
-      // Check bottom of chapter
-      if (max > 50 && cur >= max - 8) {
+      // Check bottom of chapter. Chapters shorter than one viewport
+      // (max <= 50) can never satisfy the threshold below — treat them as
+      // already at bottom so the ticker terminates (and auto-advance fires)
+      // instead of clamping to max forever.
+      if (max <= 50 || cur >= max - 8) {
         _stopAutoScroll();
         if (_settings.autoScrollAutoNextChapter && _nextChapter != null) {
           final nextChapterId = _chapterTargetId(_nextChapter!);
@@ -684,6 +688,16 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     );
     final maxScroll = _scrollController.position.maxScrollExtent;
     _scrollController.jumpTo(maxScroll > 0 ? offset.clamp(0.0, maxScroll) : offset);
+  }
+
+  bool _canAdvanceToNextChapter() {
+    if (_nextChapter == null || !_scrollController.hasClients) return false;
+    final now = DateTime.now();
+    if (_lastNextChapterNavAt != null &&
+        now.difference(_lastNextChapterNavAt!) < const Duration(milliseconds: 700)) {
+      return false;
+    }
+    return true;
   }
 
   bool _canGoToPrevChapterFromTop() {
@@ -2038,7 +2052,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       if (_scrollController.hasClients &&
           _scrollController.position.maxScrollExtent > 50 &&
           _scrollController.offset >= _scrollController.position.maxScrollExtent - 20) {
-        if (_nextChapter != null) {
+        if (_nextChapter != null && _canAdvanceToNextChapter()) {
+          _lastNextChapterNavAt = DateTime.now();
           unawaited(_loadChapterAndPages(_chapterTargetId(_nextChapter!)));
         }
       } else {
@@ -2220,12 +2235,16 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   Future<void> _toggleReaderBookmark() async {
-    if (_chapter == null) return;
-    final newState = !_chapter!.isBookmarked;
-    setState(() => _chapter!.isBookmarked = newState);
-    await IsarService.instance.saveChapter(_chapter!);
-    if (_chapter!.serverId > 0) {
-      unawaited(SyncEngine.instance.syncChapterBookmark(_chapter!.serverId,newState));
+    final target = _chapter;
+    if (target == null) return;
+    // Snapshot: _chapter is reassigned by chapter loads; saving/syncing the
+    // live field after the await below could persist and push the WRONG
+    // (newly loaded) chapter's state.
+    final newState = !target.isBookmarked;
+    setState(() => target.isBookmarked = newState);
+    await IsarService.instance.saveChapter(target);
+    if (target.serverId > 0) {
+      unawaited(SyncEngine.instance.syncChapterBookmark(target.serverId, newState));
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();

@@ -305,9 +305,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         final key = 'js_${identity}_${js.lang}'.toLowerCase();
         if (identity.isEmpty || !seenKeys.add(key)) continue; // merged repo lists are already deduped; skip intra-repo dupes
 
-        final jsLang = js.lang.toLowerCase();
-        final isEn = jsLang == 'en' || jsLang == 'all';
-        final isInstalled = isEn && QuickJsService.instance.isLocalExtensionInstalled(js.name);
+        // Install/update state must not depend on language: non-English
+        // extensions live on disk the same way and deserve update badges.
+        final isInstalled = QuickJsService.instance.isLocalExtensionInstalled(js.name);
         final installedVer = isInstalled ? QuickJsService.instance.getInstalledVersion(js.name) : '';
         final hasUpdate = isInstalled && installedVer.isNotEmpty && RepoManager.compareVersions(js.version, installedVer) > 0;
 

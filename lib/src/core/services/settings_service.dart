@@ -556,7 +556,7 @@ class SettingsService extends ChangeNotifier {
   int? get defaultCategoryId => _prefs?.getInt('default_category_id');
   set defaultCategoryId(int? value) {
     if (value == null) {
-      unawaited(_prefs?.remove('default_catgory_id'));
+      unawaited(_prefs?.remove('default_category_id'));
     } else {
       unawaited(_prefs?.setInt('default_category_id', value));
     }
@@ -610,6 +610,7 @@ class SettingsService extends ChangeNotifier {
     } else {
       unawaited(_prefs?.setString('sync_device_id', value.trim()));
     }
+    notifyListeners();
   }
 
   int get initialSyncTimeoutSeconds => _prefs?.getInt('initial_sync_timeout_seconds') ?? 45;

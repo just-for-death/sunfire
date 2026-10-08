@@ -169,7 +169,11 @@ unawaited(
           Text(
             'Fully client-side restore: pick a Tachiyomi/Suwayomi .tachibk backup, review the '
             'manga it contains, and add them to your server library. Sources are matched by '
-            'name and language against the sources installed on your server.',
+            'name and language against the sources installed on your server.\n\n'
+            'Library and categories only: reading progress, bookmarks, history '
+            'and tracker bindings are not imported (chapter lists arrive from '
+            'the server afterwards, so there is nothing reliable to attach '
+            'them to yet).',
             style: const TextStyle(fontSize: 13, color: Colors.white60),
           ),
           const SizedBox(height: 16),

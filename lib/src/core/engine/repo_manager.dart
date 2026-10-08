@@ -250,7 +250,38 @@ class RepoManager {
     final hasPre2 = v2.contains('-');
     if (hasPre1 && !hasPre2) return -1;
     if (!hasPre1 && hasPre2) return 1;
+    if (hasPre1 && hasPre2) {
+      // Both prereleases with equal cores (e.g. 1.0.0-beta.2 vs
+      // 1.0.0-beta.10): compare identifiers numerically where possible so
+      // newer betas are actually offered as updates.
+      return _comparePrerelease(
+        v1.split('-').skip(1).join('-'),
+        v2.split('-').skip(1).join('-'),
+      );
+    }
     return 0;
+  }
+
+  /// Compares semver prerelease identifier strings per §11: dot-separated
+  /// identifiers, numeric ones compared as integers, numeric < alphanumeric,
+  /// longer set wins when all shared identifiers are equal.
+  static int _comparePrerelease(String p1, String p2) {
+    final a = p1.split('.');
+    final b = p2.split('.');
+    for (var i = 0; i < a.length && i < b.length; i++) {
+      final n1 = int.tryParse(a[i]);
+      final n2 = int.tryParse(b[i]);
+      if (n1 != null && n2 != null) {
+        if (n1 != n2) return n1.compareTo(n2);
+      } else if (n1 != null) {
+        return -1;
+      } else if (n2 != null) {
+        return 1;
+      } else if (a[i] != b[i]) {
+        return a[i].compareTo(b[i]);
+      }
+    }
+    return a.length.compareTo(b.length);
   }
 
   /// Compares Sunfire's OWN app-version strings, which do NOT follow strict

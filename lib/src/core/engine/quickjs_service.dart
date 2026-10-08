@@ -239,25 +239,33 @@ class QuickJsService {
 
   /// Runs the first-run remote auto-install if nothing is installed yet.
   /// Safe to call repeatedly: no-ops when extensions already exist.
-  Future<void> ensureAutoInstalled() async {
+  Future<void> ensureAutoInstalled({List<String>? repoUrls}) async {
     await _loadInstalledExtensionsFromDisk();
-    await _autoInstallExtensionsFromRemoteRepos();
+    await _autoInstallExtensionsFromRemoteRepos(repoUrls: repoUrls);
   }
 
-  Future<void> _autoInstallExtensionsFromRemoteRepos() async {
+  /// Bulk-installs catalog sources on first run. When [repoUrls] is given
+  /// (onboarding's explicit user choice), only those repos are used;
+  /// otherwise the official + community defaults apply. Respects an
+  /// explicit empty choice by installing nothing.
+  Future<void> _autoInstallExtensionsFromRemoteRepos({List<String>? repoUrls}) async {
     try {
       // Check if we already have extensions installed
       if (_installedJsSources.isNotEmpty) {
         return; // Already have extensions, skip auto-install
       }
 
-      // Fetch from official and community repos
-      final repoUrls = [
-        RepoManager.officialIndexUrl,
-        RepoManager.communityIndexUrl,
-      ];
+      // Fetch from official and community repos (or the caller's explicit list)
+      final effectiveUrls = repoUrls ??
+          [
+            RepoManager.officialIndexUrl,
+            RepoManager.communityIndexUrl,
+          ];
+      if (repoUrls != null && repoUrls.isEmpty) {
+        return; // Explicit empty choice: install nothing.
+      }
 
-      final repoSources = await RepoManager.instance.fetchCombinedRepoSources(repoUrls);
+      final repoSources = await RepoManager.instance.fetchCombinedRepoSources(effectiveUrls);
       
       if (repoSources.isEmpty) {
         await LoggerService.instance.logWarning('No extensions found in remote repos', 'QuickJS');

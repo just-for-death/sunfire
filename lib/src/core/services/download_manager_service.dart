@@ -38,6 +38,10 @@ class LocalDownloadTask {
   double progress; // 0.0 to 1.0
   LocalDownloadStatus status;
   String? error;
+  /// The task's status BEFORE it was cancelled. Used by _unaccountRemoval
+  /// when a cancelled task is later dismissed, so the correct counter bucket
+  /// (completed vs failed) is decremented. Null when not cancelled.
+  LocalDownloadStatus? statusBeforeCancel;
 
   LocalDownloadTask({
     required this.chapterId,
@@ -48,6 +52,7 @@ class LocalDownloadTask {
     this.progress = 0.0,
     this.status = LocalDownloadStatus.queued,
     this.error,
+    this.statusBeforeCancel,
   });
 
   Map<String, dynamic> toJson() => {
@@ -59,9 +64,16 @@ class LocalDownloadTask {
     'progress': progress,
     'status': status.name,
     'error': error,
+    'statusBeforeCancel': statusBeforeCancel?.name,
   };
 
   factory LocalDownloadTask.fromJson(Map<String, dynamic> map) {
+    final statusBeforeCancel = map['statusBeforeCancel'] != null
+        ? LocalDownloadStatus.values.firstWhere(
+            (e) => e.name == map['statusBeforeCancel'],
+            orElse: () => LocalDownloadStatus.queued,
+          )
+        : null;
     return LocalDownloadTask(
       chapterId: map['chapterId'] as int,
       mangaId: map['mangaId'] as int,
@@ -74,6 +86,7 @@ class LocalDownloadTask {
         orElse: () => LocalDownloadStatus.queued,
       ),
       error: map['error'] as String?,
+      statusBeforeCancel: statusBeforeCancel,
     );
   }
 }
@@ -119,6 +132,13 @@ class DownloadManagerService extends ChangeNotifier {
         final allowed = isNetworkAllowed(results);
         if (allowed && !_isQueuePaused && !_isProcessingLocalQueue && _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
           unawaited(_processLocalQueue());
+        } else if (!allowed && _localTasks.any((t) => t.status == LocalDownloadStatus.downloading)) {
+          // A spontaneous handover (walking out of Wi-Fi range) must stop
+          // in-flight work the same way toggling the setting does — otherwise
+          // the rest of the chapter keeps downloading over mobile data until
+          // the chapter boundary re-checks the gate. applyResourceGates
+          // no-ops when the settings still allow the new network.
+          unawaited(applyResourceGates());
         }
       });
     } catch (e) {
@@ -136,6 +156,10 @@ class DownloadManagerService extends ChangeNotifier {
         if (charging && !_isQueuePaused && !_isProcessingLocalQueue &&
             _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
           unawaited(_processLocalQueue());
+        } else if (!charging && _localTasks.any((t) => t.status == LocalDownloadStatus.downloading)) {
+          // Unplugged mid-chapter with charge-only on: same treatment as the
+          // network handover above (applyResourceGates no-ops if allowed).
+          unawaited(applyResourceGates());
         }
       });
     } catch (e) {
@@ -166,11 +190,6 @@ class DownloadManagerService extends ChangeNotifier {
   }
 
   static const String _queuePrefKey = 'sunfire_download_queue_v1';
-
-  /// Persisted so an explicit "Pause" survives app restarts. Without this the
-  /// startup/foreground auto-resume would silently re-start a queue the user
-  /// stopped on purpose (e.g. to save mobile data), making Pause meaningless.
-  static const String _queuePausedPrefKey = 'sunfire_download_queue_v1_paused';
 
   /// Persisted batch state for completion notifications across interruptions.
   /// Contains: total, completed, failed, counted.
@@ -221,6 +240,12 @@ class DownloadManagerService extends ChangeNotifier {
   /// state observed is the last state written.
   Future<void> _pendingSave = Future<void>.value();
 
+  /// Separate chain for batch state persistence. Queue writes and batch writes
+  /// are independent failure domains; coupling them on one chain meant a slow
+  /// queue write could delay critical batch counter durability, and a queue
+  /// write failure would block batch persistence.
+  Future<void> _batchSaveChain = Future<void>.value();
+
   Future<void> _saveQueueState() {
     _pendingSave = _pendingSave.then((_) => _writeQueueState()).catchError((Object e) {
       debugPrint('[DownloadManager] Error saving queue state: $e');
@@ -228,7 +253,17 @@ class DownloadManagerService extends ChangeNotifier {
     return _pendingSave;
   }
 
-  Future<void> _saveBatchState() async {
+  Future<void> _saveBatchState() {
+    // Batch increments fire from several async stacks; serialization prevents
+    // bare setStrings from landing out of order. Uses its own chain, independent
+    // of the queue write chain.
+    _batchSaveChain = _batchSaveChain.then((_) => _writeBatchState()).catchError((Object e) {
+      debugPrint('[DownloadManager] Error saving batch state: $e');
+    });
+    return _batchSaveChain;
+  }
+
+  Future<void> _writeBatchState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_batchStatePrefKey, jsonEncode({
@@ -236,6 +271,8 @@ class DownloadManagerService extends ChangeNotifier {
         'completed': _completedInBatch,
         'failed': _failedInBatch,
         'counted': _batchCounted,
+        'members': _batchMembers.toList(),
+        'accounted': _batchAccounted.toList(),
       }));
     } catch (e) {
       debugPrint('[DownloadManager] Error saving batch state: $e');
@@ -252,6 +289,38 @@ class DownloadManagerService extends ChangeNotifier {
         _completedInBatch = decoded['completed'] as int? ?? 0;
         _failedInBatch = decoded['failed'] as int? ?? 0;
         _batchCounted = decoded['counted'] as bool? ?? false;
+        final membersRaw = decoded['members'];
+        final accountedRaw = decoded['accounted'];
+        // Validate list element types: reject malformed state rather than
+        // silently filtering to empty sets (which would make the batch
+        // uncountable with non-zero total).
+        if (membersRaw is List && membersRaw.every((e) => e is int) &&
+            accountedRaw is List && accountedRaw.every((e) => e is int)) {
+          _batchMembers
+            ..clear()
+            ..addAll(membersRaw.cast<int>());
+          _batchAccounted
+            ..clear()
+            ..addAll(accountedRaw.cast<int>());
+        } else {
+          debugPrint('[DownloadManager] Batch state has invalid members/accounted — resetting');
+          _batchMembers.clear();
+          _batchAccounted.clear();
+          _batchCounted = false;
+          _batchTotal = 0;
+          _completedInBatch = 0;
+          _failedInBatch = 0;
+        }
+        // Old persisted format (pre-members/accounted) loads _batchCounted=true
+        // with empty member sets. This would permanently disable _beginBatch()
+        // (guard: if (_batchCounted) return) and leave the batch uncounted.
+        // If members is empty but counted=true, treat it as stale and reset.
+        if (_batchCounted && _batchMembers.isEmpty) {
+          _batchCounted = false;
+          _batchTotal = 0;
+          _completedInBatch = 0;
+          _failedInBatch = 0;
+        }
       }
     } catch (e) {
       debugPrint('[DownloadManager] Error loading batch state: $e');
@@ -278,21 +347,44 @@ class DownloadManagerService extends ChangeNotifier {
     required int completed,
     required int failed,
     required bool counted,
+    Set<int>? members,
+    Set<int>? accounted,
   }) {
     _batchTotal = total;
     _completedInBatch = completed;
     _failedInBatch = failed;
     _batchCounted = counted;
+    if (members != null) {
+      _batchMembers
+        ..clear()
+        ..addAll(members);
+    }
+    if (accounted != null) {
+      _batchAccounted
+        ..clear()
+        ..addAll(accounted);
+    }
   }
 
   /// Test seam: read current in-memory batch counters.
   @visibleForTesting
-  ({int total, int completed, int failed, bool counted}) get debugBatchCounters => (
+  ({int total, int completed, int failed, bool counted, Set<int> members, Set<int> accounted}) get debugBatchCounters => (
         total: _batchTotal,
         completed: _completedInBatch,
         failed: _failedInBatch,
         counted: _batchCounted,
+        members: Set.of(_batchMembers),
+        accounted: Set.of(_batchAccounted),
       );
+
+  /// Test seam: replace the in-memory task list (drives cancel/dismiss/
+  /// delete/clear paths without a running queue or native downloads).
+  @visibleForTesting
+  void debugSetTasksForTest(List<LocalDownloadTask> tasks) {
+    _localTasks
+      ..clear()
+      ..addAll(tasks);
+  }
 
   /// Test seam: persist current counters via [_saveBatchState].
   @visibleForTesting
@@ -310,7 +402,16 @@ class DownloadManagerService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonList = _localTasks.map((t) => t.toJson()).toList();
-      await prefs.setString(_queuePrefKey, jsonEncode(jsonList));
+      // The paused flag rides in the SAME atomic write as the tasks. It used
+      // to live in a separate pref key written by a separate call, so a kill
+      // between the two left tasks `paused` with the flag `false` (or vice
+      // versa) and the next launch guessed wrong — resuming a queue the user
+      // explicitly paused, or stalling one they resumed. One key = no window.
+      // The standalone pref key is still maintained for legacy readers/tests.
+      await prefs.setString(
+        _queuePrefKey,
+        jsonEncode({'v': 1, 'paused': _isQueuePaused, 'tasks': jsonList}),
+      );
     } catch (e) {
       debugPrint('[DownloadManager] Error saving queue state: $e');
     }
@@ -321,9 +422,23 @@ class DownloadManagerService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_queuePrefKey);
       if (raw != null && raw.isNotEmpty) {
-        final decoded = jsonDecode(raw) as List<dynamic>;
+        final decoded = jsonDecode(raw);
+        // New shape: map with tasks + paused flag. Legacy shape: bare task
+        // list (pre-atomic writes); the separate paused pref still applies.
+        final List<dynamic> list;
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['paused'] is bool) {
+            _isQueuePaused = decoded['paused'] as bool;
+          }
+          final tasks = decoded['tasks'];
+          list = tasks is List ? tasks : const [];
+        } else if (decoded is List) {
+          list = decoded;
+        } else {
+          return;
+        }
         _localTasks.clear();
-        for (final item in decoded) {
+        for (final item in list) {
           if (item is Map<String, dynamic>) {
             final task = LocalDownloadTask.fromJson(item);
             // Any tasks interrupted mid-flight should reset to queued
@@ -337,24 +452,6 @@ class DownloadManagerService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('[DownloadManager] Error loading queue state: $e');
-    }
-  }
-
-  Future<void> _loadQueuePausedFlag() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _isQueuePaused = prefs.getBool(_queuePausedPrefKey) ?? false;
-    } catch (e) {
-      debugPrint('[DownloadManager] Error loading pause flag: $e');
-    }
-  }
-
-  Future<void> _persistQueuePausedFlag() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_queuePausedPrefKey, _isQueuePaused);
-    } catch (e) {
-      debugPrint('[DownloadManager] Error persisting pause flag: $e');
     }
   }
 
@@ -410,9 +507,9 @@ class DownloadManagerService extends ChangeNotifier {
         task.status = LocalDownloadStatus.queued;
       }
     }
-    // Only set the charger banner when the CHARGER is the blocker — otherwise
-    // the Downloads screen told users on mobile data to plug in a charger.
-    _waitingForCharger = !chargingOk;
+    // Only set the charger banner when the CHARGER is the ONLY blocker.
+    // If network is also disallowed, the banner should not say "waiting for charger".
+    _waitingForCharger = !chargingOk && networkAllowed;
     for (final token in List<CancelToken>.from(_cancelTokens.values)) {
       try {
         token.cancel('Resource constraint enabled');
@@ -425,9 +522,18 @@ class DownloadManagerService extends ChangeNotifier {
   }
 
   // ── Batch tracking for background/notification reporting ────────────
+  // Invariant (enforced by every path below): at batch finish,
+  // succeeded + failed == total, where total = batch size at begin (+
+  // mid-run enqueues, − member removals). Every member reaches exactly one
+  // counted outcome: _batchMembers tracks who is in the denominator,
+  // _batchAccounted tracks who already contributed to a numerator. Without
+  // both sets, cancel/dismiss/delete/retry each adjusted a different subset
+  // of counters and the summary reported e.g. "4 succeeded, 1 failed" of 4.
   int _batchTotal = 0;
   int _completedInBatch = 0;
   int _failedInBatch = 0;
+  final Set<int> _batchMembers = {};
+  final Set<int> _batchAccounted = {};
   bool _batchCounted = false;
 
   /// Refreshes the snapshot + notifier while the queue is processing so the
@@ -440,7 +546,14 @@ class DownloadManagerService extends ChangeNotifier {
     _batchCounted = true;
     // Count only tasks that will actually be attempted in this run (retryable
     // ones). Failed/cancelled leftovers from earlier runs are excluded.
-    _batchTotal = countRetryableTasks(_localTasks);
+    _batchMembers
+      ..clear()
+      ..addAll(_localTasks.where((t) =>
+          t.status == LocalDownloadStatus.queued ||
+          t.status == LocalDownloadStatus.paused ||
+          t.status == LocalDownloadStatus.downloading).map((t) => t.chapterId));
+    _batchAccounted.clear();
+    _batchTotal = _batchMembers.length;
     _completedInBatch = 0;
     _failedInBatch = 0;
     unawaited(_saveBatchState());
@@ -460,7 +573,48 @@ class DownloadManagerService extends ChangeNotifier {
     _completedInBatch = 0;
     _failedInBatch = 0;
     _batchCounted = false;
+    _batchMembers.clear();
+    _batchAccounted.clear();
     unawaited(_clearBatchState());
+  }
+
+  /// Counts one terminal outcome toward the batch summary, exactly once per
+  /// member. Non-members (stale pre-batch rows) and already-counted members
+  /// (cancel-then-dismiss) are ignored, which is what keeps
+  /// succeeded + failed == total at finish.
+  void _accountOutcome(LocalDownloadTask task, {required bool success}) {
+    if (!_batchCounted) return;
+    if (!_batchMembers.contains(task.chapterId)) return;
+    if (_batchAccounted.add(task.chapterId)) {
+      if (success) {
+        _completedInBatch++;
+      } else {
+        _failedInBatch++;
+      }
+      unawaited(_saveBatchState());
+    }
+  }
+
+  /// Removes a task from the denominator (dismiss/delete/clear). Undoes its
+  /// numerator contribution if it had one. Must run BEFORE any status
+  /// overwrite so the pre-removal status picks the right bucket.
+  void _unaccountRemoval(LocalDownloadTask task) {
+    if (!_batchCounted) return;
+    // Not a denominator member (stale pre-batch row): touch nothing, or its
+    // removal corrupts a total it was never part of.
+    if (!_batchMembers.remove(task.chapterId)) return;
+    if (_batchTotal > 0) _batchTotal--;
+    if (_batchAccounted.remove(task.chapterId)) {
+      // If the task was cancelled and later dismissed, use the status
+      // BEFORE cancel to decide which bucket to decrement.
+      final effectiveStatus = task.statusBeforeCancel ?? task.status;
+      if (effectiveStatus == LocalDownloadStatus.completed) {
+        if (_completedInBatch > 0) _completedInBatch--;
+      } else {
+        if (_failedInBatch > 0) _failedInBatch--;
+      }
+    }
+    unawaited(_saveBatchState());
   }
 
   /// Reflects the current live queue in the Android foreground-service
@@ -537,7 +691,6 @@ class DownloadManagerService extends ChangeNotifier {
       }
     }
     await _saveQueueState();
-    await _persistQueuePausedFlag();
     await _stopActiveNotifier();
     notifyListeners();
   }
@@ -556,7 +709,6 @@ class DownloadManagerService extends ChangeNotifier {
       }
     }
     await _saveQueueState();
-    await _persistQueuePausedFlag();
     if (!_isProcessingLocalQueue && _localTasks.any((t) => t.status == LocalDownloadStatus.queued)) {
       unawaited(_processLocalQueue());
     }
@@ -606,7 +758,11 @@ class DownloadManagerService extends ChangeNotifier {
     await _loadQueueState();
     await _loadBatchState();
     await _migrateLegacyDownloadFolders();
-    await _loadQueuePausedFlag();
+    // NOTE: _loadQueuePausedFlag() is deliberately NOT called here.
+    // The paused flag is now loaded atomically with the queue state in
+    // _loadQueueState() (new v1 format with embedded `paused` field).
+    // Calling the legacy loader afterward would overwrite the correct value
+    // with a stale value from the old separate key on upgrade.
     try {
       final prefs = await SharedPreferences.getInstance();
       if (prefs.containsKey(_legacyLastFullScanPrefKey)) {
@@ -619,14 +775,13 @@ class DownloadManagerService extends ChangeNotifier {
     // reflects the server's actual state (from last sync), not optimistic
     // enqueue markers that may have been queued but failed/404'd.
     await rebuildServerDownloadCache();
-    // Reconcile a crashed resume: if the flag says paused but NO tasks are
-    // paused (all are queued/downloading), the process died between
-    // _saveQueueState() and _persistQueuePausedFlag() in resumeLocalQueue().
-    // Trust the task states and clear the stale flag so the queue auto-resumes.
+    // Reconcile a crashed resume: if the queue state says paused but NO tasks
+    // are paused (all are queued/downloading), the process died mid-resume.
+    // Trust the task states, clear the flag, and auto-resume.
     if (_isQueuePaused && !_localTasks.any((t) => t.status == LocalDownloadStatus.paused)) {
       debugPrint('[DownloadManager] Stale paused flag detected (tasks all queued/active) — reconciling');
       _isQueuePaused = false;
-      await _persistQueuePausedFlag();
+      await _saveQueueState();
     }
     // Auto-resume only when the user didn't explicitly pause the queue. A
     // paused queue must survive app restarts — otherwise Pause would only
@@ -839,15 +994,23 @@ class DownloadManagerService extends ChangeNotifier {
     );
     _localTasks.removeWhere((t) => t.chapterId == chapterId);
     _localTasks.add(task);
-    // Keep the reported batch total accurate: enqueuing a brand-new item
-    // during a run grows the total, but retrying a failed one merely replaces
-    // its slot (and undoes the failure it already logged) instead of
-    // inflating both counters.
+    // Re-entering a failed member frees its slot for a recount (without
+    // this, the accounted set would swallow the retry's outcome); a brand-new
+    // item joins the denominator. A retry joins the denominator too (it's a
+    // new attempt that will produce a counted outcome), so we add to members
+    // and total just like a new item.
     if (_batchCounted) {
       if (wasFailed) {
-        if (_failedInBatch > 0) _failedInBatch--;
+        if (_batchAccounted.remove(chapterId) && _failedInBatch > 0) {
+          _failedInBatch--;
+        }
+        // The retry is a new attempt — it joins the denominator and can
+        // produce a new counted outcome.
+        _batchMembers.add(chapterId);
+        _batchTotal++;
       } else {
         _batchTotal++;
+        _batchMembers.add(chapterId);
       }
       unawaited(_saveBatchState());
     }
@@ -971,8 +1134,7 @@ unawaited(
           } else {
             task.status = LocalDownloadStatus.failed;
             task.error = e.toString();
-            _failedInBatch++;
-            unawaited(_saveBatchState());
+            _accountOutcome(task, success: false);
             await LoggerService.instance.logError('Failed to download chapter ${task.chapterId}: $e', exception: e, stackTrace: stack, category: 'DownloadManager');
             // Clean up the partial download folder so it doesn't leak disk space.
             await _cleanupIncompleteDownload(task.chapterId);
@@ -984,8 +1146,7 @@ unawaited(
         } else {
           task.status = LocalDownloadStatus.completed;
           task.progress = 1.0;
-          _completedInBatch++;
-          unawaited(_saveBatchState());
+          _accountOutcome(task, success: true);
           _downloadedLocalChapterIds.add(task.chapterId);
           _downloadedLocalMangaIds.add(task.mangaId);
           // Bookkeeping only — never allowed to fail the download.
@@ -1386,14 +1547,12 @@ unawaited(
       _cancelTokens.remove(chapterId)?.cancel('Cancelled');
       final task = _localTasks.where((t) => t.chapterId == chapterId).firstOrNull;
       if (task != null) {
-        final wasCompleted = task.status == LocalDownloadStatus.completed;
+        // Unaccount BEFORE overwriting status (same reason as dismiss): the
+        // deleted row leaves the batch, undoing any counted outcome from its
+        // own bucket so succeeded + failed == total holds.
+        _unaccountRemoval(task);
         task.status = LocalDownloadStatus.failed;
         task.error = 'Cancelled';
-        // A removed in-flight/queued task no longer counts toward the batch
-        // total reported in the completion notification.
-        if (_batchCounted && !wasCompleted && _batchTotal > 0) {
-          _batchTotal--;
-        }
       }
 
       final appDir = await getApplicationDocumentsDirectory();
@@ -1436,21 +1595,22 @@ unawaited(
     final task = _localTasks.where((t) => t.chapterId == chapterId).firstOrNull;
     if (task != null) {
       final wasCompleted = task.status == LocalDownloadStatus.completed;
+      // Store the status before cancel for proper accounting if later dismissed.
+      task.statusBeforeCancel = task.status;
       task.status = LocalDownloadStatus.failed;
       task.error = 'Cancelled';
-      if (!wasCompleted && _batchCounted) {
-        // User-cancelled tasks count as failures in the batch summary, but
-        // they are also removed from the batch total so "succeeded/failed/total"
-        // stays consistent. A cancel is not a "failed download" in the sense of
-        // an error — it's a deliberate removal that shouldn't inflate the
-        // denominator.
-        _failedInBatch++;
-        unawaited(_saveBatchState());
-        if (_batchTotal > 0) _batchTotal--;
+      if (!wasCompleted) {
+        // A cancel is a terminal outcome: counted once via the accounted
+        // set (double-taps can't double-count), total untouched.
+        _accountOutcome(task, success: false);
       }
       unawaited(_saveQueueState());
       notifyListeners();
-      unawaited(_cleanupIncompleteDownload(chapterId));
+      // NOTE: We deliberately do NOT call _cleanupIncompleteDownload here.
+      // A cancel keeps the task in the list (for Retry), and the partial
+      // files should remain so a subsequent retry can resume from the
+      // last valid page. The cleanup is only for Dismiss/Delete where the
+      // user explicitly wants the chapter removed.
     }
   }
 
@@ -1470,28 +1630,14 @@ unawaited(
     final task = _localTasks.where((t) => t.chapterId == chapterId).firstOrNull;
     final token = _cancelTokens.remove(chapterId);
     if (task != null) {
-      // Mark the task cancelled BEFORE the in-flight download throws, so the
-      // queue loop recognises a deliberate dismiss instead of logging a
-      // failure — while still removing it from the reported batch total.
-      final wasCompleted = task.status == LocalDownloadStatus.completed;
-      // Captured BEFORE the overwrite below: this is how we tell "the cancel
-      // path already accounted for this task" from "dismissed cold".
-      final alreadyCountedAsCancelled = task.error == 'Cancelled';
+      // Unaccount BEFORE overwriting status: a dismissed row leaves the
+      // batch entirely (denominator shrinks, and any counted outcome is
+      // undone from its own bucket). The status overwrite below is only so
+      // the in-flight loop recognises a deliberate dismiss instead of
+      // logging a failure.
+      _unaccountRemoval(task);
       task.status = LocalDownloadStatus.failed;
       task.error = 'Cancelled';
-      if (!wasCompleted && _batchCounted && _batchTotal > 0) {
-        // `cancelLocalDownload` deliberately KEEPS the task in the list so the
-        // user can Retry or Dismiss it, and it already decremented
-        // `_batchTotal` and incremented `_failedInBatch` for this same task.
-        // Dismissing it then found the still-present task and decremented a
-        // SECOND time, so the denominator was short by one per
-        // cancel-then-dismiss: a 10-chapter batch with 2 of those reported
-        // "8 succeeded, 2 failed" of 8. The `> 0` guard only stopped it going
-        // negative.
-        if (!alreadyCountedAsCancelled) {
-          _batchTotal--;
-        }
-      }
     }
     if (token != null) {
       try {
@@ -1505,6 +1651,9 @@ unawaited(
   }
 
   void clearCompletedDownloads() {
+    for (final t in _localTasks.where((t) => t.status == LocalDownloadStatus.completed).toList()) {
+      _unaccountRemoval(t);
+    }
     _localTasks.removeWhere((t) => t.status == LocalDownloadStatus.completed);
     unawaited(_saveQueueState());
     notifyListeners();

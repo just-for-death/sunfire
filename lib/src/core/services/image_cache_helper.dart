@@ -25,7 +25,27 @@ final _urlLocks = InFlightMutex<Uint8List?>();
 class ImageCacheHelper {
   static final List<String> _candidateCoverPaths = [];
   static final LinkedHashMap<String, Uint8List> _memoryCache = LinkedHashMap<String, Uint8List>();
-  static final Map<int, String> _resolvedPaths = {};
+
+  /// True LRU put: re-inserting an existing key refreshes recency so
+  /// frequently-viewed covers are not evicted as fast as never-revisited
+  /// ones. Evicts oldest-first past [kMemoryCoverCap].
+  static const int kMemoryCoverCap = 200;
+
+  static void _touchMemoryCover(String url, Uint8List bytes) {
+    _memoryCache.remove(url);
+    _memoryCache[url] = bytes;
+    while (_memoryCache.length > kMemoryCoverCap) {
+      _memoryCache.remove(_memoryCache.keys.first);
+    }
+  }
+
+  /// Last prune per directory: pruning scans + stats every file, so at most
+  /// once per interval no matter how many covers land in between.
+  static final Map<String, DateTime> _lastDiskPruneAt = {};
+
+  /// Disk usage ceiling per covers directory. Oldest-by-mtime files go first.
+  static const int kDiskCoverFileCap = 800;
+  static const Duration kDiskPruneInterval = Duration(minutes: 10);
 
   static Future<void> initialize() async {
     try {
@@ -142,7 +162,40 @@ class ImageCacheHelper {
   static void debugClearLocalPathCache() => _localPathCache.clear();
 
   static Uint8List? getMemoryCover(String url) {
-    return _memoryCache[url];
+    final hit = _memoryCache.remove(url);
+    // Refresh recency on read: without re-insertion the map degrades to
+    // FIFO and hot covers are evicted as fast as cold ones.
+    if (hit != null) _memoryCache[url] = hit;
+    return hit;
+  }
+
+  /// Bounds one covers directory to [kDiskCoverFileCap] files, oldest mtime
+  /// first. Best-effort and throttled: failures are swallowed so a slow or
+  /// locked disk can never fail a cover fetch.
+  static Future<void> pruneDiskCoverCache(String basePath) async {
+    try {
+      final now = DateTime.now();
+      final last = _lastDiskPruneAt[basePath];
+      if (last != null && now.difference(last) < kDiskPruneInterval) return;
+      _lastDiskPruneAt[basePath] = now;
+      final dir = Directory(basePath);
+      if (!await dir.exists()) return;
+      final files = await dir.list().where((e) => e is File).toList();
+      if (files.length <= kDiskCoverFileCap) return;
+      final withTime = <({File file, DateTime modified})>[];
+      for (final f in files.cast<File>()) {
+        try {
+          withTime.add((file: f, modified: await f.lastModified()));
+        } catch (_) {}
+      }
+      withTime.sort((a, b) => a.modified.compareTo(b.modified));
+      for (var i = 0; i < withTime.length - kDiskCoverFileCap; i++) {
+        try {
+          await withTime[i].file.delete();
+          _localPathCache.removeWhere((_, v) => v == withTime[i].file.path);
+        } catch (_) {}
+      }
+    } catch (_) {}
   }
 
   /// Empties the memory and on-disk cover caches.
@@ -193,15 +246,15 @@ class ImageCacheHelper {
       effectiveUrl = '${GraphQLClientService.instance.baseUrl}/api/v1/manga/$mangaServerId/thumbnail';
     }
     if (effectiveUrl.isEmpty) return null;
-    if (_memoryCache.containsKey(effectiveUrl)) return _memoryCache[effectiveUrl];
+    final memHit = getMemoryCover(effectiveUrl);
+    if (memHit != null) return memHit;
 
     // Check disk cache first across all candidate directories (by ID or URL hash)
     final localPath = getLocalCoverPath(mangaServerId) ?? getLocalCoverPathForUrl(effectiveUrl);
     if (localPath != null) {
       try {
         final bytes = await File(localPath).readAsBytes();
-        _memoryCache[effectiveUrl] = bytes;
-        if (_memoryCache.length > 200) _memoryCache.remove(_memoryCache.keys.first);
+        _touchMemoryCover(effectiveUrl, bytes);
         return bytes;
       } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
     }
@@ -256,6 +309,11 @@ class ImageCacheHelper {
   }
 
   static Future<Uint8List?> _doFetch(String url, String sourceName, int mangaServerId) async {
+    // The extension passes below may reassign `url` to a resolved direct CDN
+    // URL. Tiles look up (and memoize misses) under the ORIGINAL url, so keep
+    // it to invalidate both memo keys after a successful write — otherwise
+    // the stale null memo keeps serving the placeholder until restart.
+    final originalUrl = url;
     try {
       Uint8List? bytes;
 
@@ -385,7 +443,7 @@ class ImageCacheHelper {
                   m.thumbnailUrl = realCoverUrl;
                   await IsarService.instance.saveManga(m);
                 } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
-                _memoryCache[realCoverUrl] = bytes;
+                _touchMemoryCover(realCoverUrl, bytes);
               }
             }
           }
@@ -393,19 +451,21 @@ class ImageCacheHelper {
       }
 
       if (bytes != null && bytes.length > 200) {
-        _memoryCache[url] = bytes;
-        if (_memoryCache.length > 200) _memoryCache.remove(_memoryCache.keys.first);
+        _touchMemoryCover(url, bytes);
         if (_candidateCoverPaths.isNotEmpty) {
           final basePath = _candidateCoverPaths.first;
           try {
             if (mangaServerId > 0) {
               final file = File('$basePath/$mangaServerId.jpg');
               await file.writeAsBytes(bytes);
-              _resolvedPaths[mangaServerId] = file.path;
             }
             final urlFile = File('$basePath/url_${_hashUrl(url)}.jpg');
             await urlFile.writeAsBytes(bytes);
             invalidateLocalCover(mangaServerId, url);
+            if (originalUrl != url) {
+              invalidateLocalCover(mangaServerId, originalUrl);
+            }
+            unawaited(pruneDiskCoverCache(basePath));
           } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
         }
         return bytes;

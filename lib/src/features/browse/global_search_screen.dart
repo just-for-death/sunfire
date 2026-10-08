@@ -173,7 +173,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         }
       }
       if (mounted) {
-        unawaited(context.push('/mnga/$id'));
+        unawaited(context.push('/manga/$id'));
       }
     }
   }

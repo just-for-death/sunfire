@@ -172,6 +172,7 @@ class GraphQLClientService {
       _extraHeaders = const {};
       _lastReachableCheck = null;
       _lastReachableStatus = false;
+      lastRequestWasTransportFailure = false;
       capabilities = ServerCapabilities.empty;
       clearAuthError();
       return;
@@ -184,6 +185,7 @@ class GraphQLClientService {
     _extraHeaders = Map.unmodifiable(refresher?.extraHeaders(_baseUrl!) ?? const <String, String>{});
     _lastReachableCheck = null;
     _lastReachableStatus = false;
+    lastRequestWasTransportFailure = false;
     clearAuthError();
     final headers = <String, dynamic>{'Content-Type': 'application/json', ...authHeaders};
     // Close the previous client, if there is one. Guarded rather than left to a
@@ -230,6 +232,18 @@ class GraphQLClientService {
 
   DateTime? _lastReachableCheck;
   bool _lastReachableStatus = false;
+
+  /// Verdict of the most recently completed request: true when it failed at
+  /// the transport level, false when the server answered (any HTTP status,
+  /// including rejections). Read synchronously by the sync dispatch loop
+  /// right after its mutation returns, so a rejection is never misclassified
+  /// by a STALE shared flag set by some other subsystem's timeout minutes...
+  /// rather seconds ago (`isKnownUnreachable` spans a 15s window and any
+  /// concurrent request can poison it). Still theoretically raceable by a
+  /// request completing on another stack in the same microtask window, but
+  /// strictly fresher than the shared flag. Never null before first request:
+  /// false (optimistic) matches the pre-existing default classification.
+  bool lastRequestWasTransportFailure = false;
 
   /// True when the most recent request or probe failed at the transport level
   /// (timeout, dropped connection, 5xx, DNS) and left the server marked
@@ -287,6 +301,7 @@ class GraphQLClientService {
       } else {
         _lastReachableStatus = (res.statusCode == 200);
         if (_lastReachableStatus) {
+          lastRequestWasTransportFailure = false;
           OfflineMonitor.instance.reportTransportSuccess();
           unawaited(probeServerCapabilities());
         }
@@ -328,12 +343,22 @@ class GraphQLClientService {
           }
         }
       } else {
-        _lastReachableStatus = false;
-        OfflineMonitor.instance.reportTransportFailure();
+        // Only real transport failures vote unreachable: a 400/404/422 means
+        // the server answered and rejected the request shape, which says
+        // nothing about the transport. (Mirrors _queryOnce's classifier.)
+        if (_isTransportFailure(e)) {
+          _lastReachableStatus = false;
+          lastRequestWasTransportFailure = true;
+          OfflineMonitor.instance.reportTransportFailure();
+        }
       }
     } catch (_) {
-      _lastReachableStatus = false;
-      OfflineMonitor.instance.reportTransportFailure();
+      // Non-Dio throw after the HTTP exchange completed ( refresh logic,
+      // JSON handling): the server answered, so this is not a transport
+      // failure — same rule as _queryOnce's success-path catch.
+      _lastReachableStatus = true;
+      lastRequestWasTransportFailure = false;
+      OfflineMonitor.instance.reportTransportSuccess();
     }
     _lastReachableCheck = now;
     return _isServerUsable;
@@ -347,6 +372,7 @@ class GraphQLClientService {
   /// [_isServerUsable] is what reports it as unusable for sync.
   void _recordAuthRejection() {
     _lastReachableStatus = true;
+    lastRequestWasTransportFailure = false;
     // The server answered: transport works regardless of credentials.
     OfflineMonitor.instance.reportTransportSuccess();
     notifyAuthError();
@@ -509,10 +535,15 @@ class GraphQLClientService {
     // the other direction, where a 401 latched here and blackholed every
     // request for 15s without sending any of them.)
     final now = DateTime.now();
+    // Fast-fail only if BOTH the 15s cache AND OfflineMonitor agree we're offline.
+    // OfflineMonitor uses a 3-failure debounce to avoid UI flicker; the 15s
+    // window here prevents hammering a down server. Requiring both avoids the
+    // inconsistency where UI shows "online" but sync silently drops requests.
     if (!bypassFastFail &&
         !_lastReachableStatus &&
         _lastReachableCheck != null &&
-        now.difference(_lastReachableCheck!) < const Duration(seconds: 15)) {
+        now.difference(_lastReachableCheck!) < const Duration(seconds: 15) &&
+        OfflineMonitor.instance.isOffline) {
       return noRetry;
     }
 
@@ -531,6 +562,7 @@ class GraphQLClientService {
 
       _lastReachableStatus = true;
       _lastReachableCheck = DateTime.now();
+      lastRequestWasTransportFailure = false;
       OfflineMonitor.instance.reportTransportSuccess();
       // A successful authenticated response means credentials are valid again.
       clearAuthError();
@@ -563,6 +595,7 @@ class GraphQLClientService {
       if (_isTransportFailure(e)) {
         _lastReachableStatus = false;
         _lastReachableCheck = DateTime.now();
+        lastRequestWasTransportFailure = true;
         OfflineMonitor.instance.reportTransportFailure();
       }
       var wasUnauthorized = false;
@@ -590,6 +623,7 @@ class GraphQLClientService {
       // transport failure. It blackholed a perfectly reachable server for the
       // full 15s window, and — unlike the DioException branch above — logged
       // absolutely nothing, so it was completely undiagnosable.
+      lastRequestWasTransportFailure = false;
       await LoggerService.instance.logError(
         'GraphQL response for [$label] was unparseable: $e',
         exception: e,
@@ -1536,7 +1570,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'chapterId': chapterId}, label: 'enqueueChapterDownload');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'chapterId': chapterId},
+      label: 'enqueueChapterDownload',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> enqueueChapterDownloads(List<int> chapterIds) async {
@@ -1547,7 +1585,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'chapterIds': chapterIds}, label: 'enqueueChapterDownloads');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'chapterIds': chapterIds},
+      label: 'enqueueChapterDownloads',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> deleteDownloadedChapter(int chapterId) async {
@@ -1558,7 +1600,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'chapterId': chapterId}, label: 'deleteDownloadedChapter');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'chapterId': chapterId},
+      label: 'deleteDownloadedChapter',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> fetchDownloadStatus() async {
@@ -1618,7 +1664,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'id': chapterId}, label: 'dequeueChapterDownload');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'id': chapterId},
+      label: 'dequeueChapterDownload',
+    )).data;
   }
 
   /// Remove many chapters from the server download queue in one round-trip.
@@ -1633,13 +1683,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    final res = await query(mutStr, variables: {'ids': chapterIds}, label: 'dequeueChapterDownloads');
-    if (res != null) return res;
-    Map<String, dynamic>? last;
-    for (final id in chapterIds) {
-      last = await dequeueChapterDownload(id);
-    }
-    return last;
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'ids': chapterIds},
+      label: 'dequeueChapterDownloads',
+    )).data;
   }
 
   /// Move [chapterId] to queue index [to] (0-based, clamped at 0).
@@ -1789,6 +1837,164 @@ class GraphQLClientService {
     return await query(mutStr, variables: {'chapterId': chapterId}, label: 'fetchChapterPages', op: GraphQLOp.scrapeRead);
   }
 
+  /// Internal helper: calls [query] and captures the transport-failure
+  /// classification of the final attempt atomically. Returns a record of
+  /// (data, wasTransportFailure). This avoids the race where a concurrent
+  /// request overwrites [lastRequestWasTransportFailure] between the caller's
+  /// `await query(...)` and its read of the shared flag.
+  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
+      _queryAndClassify(
+    String document, {
+    Map<String, dynamic>? variables,
+    String? label,
+    GraphQLOp? op,
+  }) async {
+    final data = await query(
+      document,
+      variables: variables,
+      label: label,
+      op: op,
+    );
+    // Capture immediately: no await between query returning and this read.
+    final wasTransportFailure = lastRequestWasTransportFailure;
+    return (data: data, wasTransportFailure: wasTransportFailure);
+  }
+
+  /// Public version of [updateChapterReadStatus] that returns the transport
+  /// failure classification atomically captured from the final attempt.
+  /// Use this instead of [updateChapterReadStatus] when the caller needs to
+  /// distinguish transport failures from GraphQL rejections for retry logic.
+  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
+      updateChapterReadStatusWithClassification(
+    int chapterId,
+    bool isRead,
+    int lastPageRead,
+  ) async {
+    const mutStr = r'''
+      mutation($id: Int!, $isRead: Boolean, $lastPageRead: Int) {
+        updateChapter(input: { id: $id, patch: { isRead: $isRead, lastPageRead: $lastPageRead } }) {
+          chapter {
+            id
+            isRead
+            lastPageRead
+          }
+        }
+      }
+    ''';
+    return _queryAndClassify(
+      mutStr,
+      variables: {'id': chapterId, 'isRead': isRead, 'lastPageRead': lastPageRead},
+      label: 'updateChapterReadStatus',
+    );
+  }
+
+  /// Public version of [updateChapterBookmark] with transport classification.
+  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
+      updateChapterBookmarkWithClassification(
+    int chapterId,
+    bool isBookmarked,
+  ) async {
+    const mutStr = r'''
+      mutation($id: Int!, $isBookmarked: Boolean) {
+        updateChapter(input: { id: $id, patch: { isBookmarked: $isBookmarked } }) {
+          chapter {
+            id
+            isBookmarked
+          }
+        }
+      }
+    ''';
+    return _queryAndClassify(
+      mutStr,
+      variables: {'id': chapterId, 'isBookmarked': isBookmarked},
+      label: 'updateChapterBookmark',
+    );
+  }
+
+  /// Public version of [createCategory] with transport classification.
+  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
+      createCategoryWithClassification(String name) async {
+    const mutStr = r'''
+      mutation($name: String!) {
+        createCategory(input: { name: $name }) {
+          category {
+            id
+            name
+            order
+          }
+        }
+      }
+    ''';
+    return _queryAndClassify(
+      mutStr,
+      variables: {'name': name},
+      label: 'createCategory',
+    );
+  }
+
+  /// Public version of [updateCategoryName] with transport classification.
+  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
+      updateCategoryNameWithClassification(int categoryId, String newName) async {
+    const mutStr = r'''
+      mutation($id: Int!, $name: String!) {
+        updateCategory(input: { id: $id, patch: { name: $name } }) {
+          category {
+            id
+            name
+          }
+        }
+      }
+    ''';
+    return _queryAndClassify(
+      mutStr,
+      variables: {'id': categoryId, 'name': newName},
+      label: 'updateCategoryName',
+    );
+  }
+
+  /// Public version of [setMangaCategories] with transport classification.
+  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
+      setMangaCategoriesWithClassification(
+    int mangaId,
+    List<int> categoryIds, {
+    List<int>? existingCategoryIds,
+  }) async {
+    if (existingCategoryIds != null) {
+      final toAdd = categoryIds.where((c) => !existingCategoryIds.contains(c)).toList();
+      final toRemove = existingCategoryIds.where((c) => !categoryIds.contains(c)).toList();
+      if (toAdd.isNotEmpty || toRemove.isNotEmpty) {
+        const patchMut = r'''
+          mutation($id: Int!, $add: [Int!]!, $remove: [Int!]!) {
+            updateMangaCategories(input: { id: $id, patch: { addToCategories: $add, removeFromCategories: $remove } }) {
+              clientMutationId
+            }
+          }
+        ''';
+        final res = await _queryAndClassify(
+          patchMut,
+          variables: {'id': mangaId, 'add': toAdd, 'remove': toRemove},
+          label: 'updateMangaCategories',
+        );
+        if (res.data != null) return res;
+      }
+    }
+    // Modern Suwayomi's UpdateMangaCategoriesPatchInput has no `categories`
+    // field — only addToCategories / clearCategories / removeFromCategories.
+    // "Replace all" is therefore a clear + add (verified against live schema).
+    const mutStr = r'''
+      mutation($id: Int!, $categories: [Int!]!) {
+        updateMangaCategories(input: { id: $id, patch: { clearCategories: true, addToCategories: $categories } }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return _queryAndClassify(
+      mutStr,
+      variables: {'id': mangaId, 'categories': categoryIds},
+      label: 'setMangaCategories',
+    );
+  }
+
   Future<Map<String, dynamic>?> updateChapterReadStatus(int chapterId, bool isRead, int lastPageRead) async {
     const mutStr = r'''
       mutation($id: Int!, $isRead: Boolean, $lastPageRead: Int) {
@@ -1801,7 +2007,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'id': chapterId, 'isRead': isRead, 'lastPageRead': lastPageRead}, label: 'updateChapterReadStatus');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'id': chapterId, 'isRead': isRead, 'lastPageRead': lastPageRead},
+      label: 'updateChapterReadStatus',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> trackProgress(int mangaId) async {
@@ -1945,7 +2155,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'id': chapterId, 'isBookmarked': isBookmarked}, label: 'updateChapterBookmark');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'id': chapterId, 'isBookmarked': isBookmarked},
+      label: 'updateChapterBookmark',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> updateMangaLibraryState(int mangaId, bool inLibrary) async {
@@ -1959,7 +2173,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'id': mangaId, 'inLibrary': inLibrary}, label: 'updateMangaLibraryState');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'id': mangaId, 'inLibrary': inLibrary},
+      label: 'updateMangaLibraryState',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> createCategory(String name) async {
@@ -1974,7 +2192,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'name': name}, label: 'createCategory');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'name': name},
+      label: 'createCategory',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> updateCategoryName(int categoryId, String newName) async {
@@ -1988,7 +2210,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'id': categoryId, 'name': newName}, label: 'updateCategoryName');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'id': categoryId, 'name': newName},
+      label: 'updateCategoryName',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> updateCategoryOrder(int categoryId, int position) async {
@@ -1999,7 +2225,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'id': categoryId, 'position': position}, label: 'updateCategoryOrder');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'id': categoryId, 'position': position},
+      label: 'updateCategoryOrder',
+    )).data;
   }
 
 
@@ -2035,23 +2265,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    final res = await query(
+    return (await _queryAndClassify(
       mutStr,
       variables: {'ids': ids, 'patch': patch},
       label: 'updateChapters',
-    );
-    if (res != null) return res;
-
-    // Per-id fallback when bulk is unsupported / failed.
-    Map<String, dynamic>? last;
-    for (final id in ids) {
-      if (isBookmarked != null && isRead == null && lastPageRead == null) {
-        last = await updateChapterBookmark(id, isBookmarked);
-      } else {
-        last = await updateChapterReadStatus(id, isRead ?? false, lastPageRead ?? 0);
-      }
-    }
-    return last;
+    )).data;
   }
 
   /// Bulk delete downloaded chapters (ISS-069). Per-id fallback on failure.
@@ -2067,17 +2285,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    final res = await query(
+    return (await _queryAndClassify(
       mutStr,
       variables: {'ids': ids},
       label: 'deleteDownloadedChapters',
-    );
-    if (res != null) return res;
-    Map<String, dynamic>? last;
-    for (final id in ids) {
-      last = await deleteDownloadedChapter(id);
-    }
-    return last;
+    )).data;
   }
 
   /// Mark many chapters read in one round-trip (UIS mark-previous-read).
@@ -2124,11 +2336,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(
+    return (await _queryAndClassify(
       mutStr,
       variables: {'id': categoryId, 'patch': patch},
       label: 'updateCategoryPatch',
-    );
+    )).data;
   }
 
   Future<Map<String, dynamic>?> setCategoryIncludeInUpdate(
@@ -2155,7 +2367,10 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, label: 'startDownloader');
+    return (await _queryAndClassify(
+      mutStr,
+      label: 'startDownloader',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> stopDownloader() async {
@@ -2166,7 +2381,10 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, label: 'stopDownloader');
+    return (await _queryAndClassify(
+      mutStr,
+      label: 'stopDownloader',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> clearDownloader() async {
@@ -2177,7 +2395,10 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, label: 'clearDownloader');
+    return (await _queryAndClassify(
+      mutStr,
+      label: 'clearDownloader',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> deleteCategory(int categoryId) async {
@@ -2188,7 +2409,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'categoryId': categoryId}, label: 'deleteCategory');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'categoryId': categoryId},
+      label: 'deleteCategory',
+    )).data;
   }
 
   Future<Map<String, dynamic>?> setMangaCategories(
@@ -2206,8 +2431,8 @@ class GraphQLClientService {
           }
         }
       ''';
-      final res = await query(patchMut, variables: {'id': mangaId, 'add': toAdd, 'remove': toRemove}, label: 'updateMangaCategories');
-      if (res != null) return res;
+      final res = await _queryAndClassify(patchMut, variables: {'id': mangaId, 'add': toAdd, 'remove': toRemove}, label: 'updateMangaCategories');
+      if (res.data != null) return res.data;
     }
     // Modern Suwayomi's UpdateMangaCategoriesPatchInput has no `categories`
     // field — only addToCategories / clearCategories / removeFromCategories.
@@ -2219,7 +2444,11 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, variables: {'id': mangaId, 'categories': categoryIds}, label: 'setMangaCategories');
+    return (await _queryAndClassify(
+      mutStr,
+      variables: {'id': mangaId, 'categories': categoryIds},
+      label: 'setMangaCategories',
+    )).data;
   }
 
   // ── ISS-077 B9: per-manga meta (sunfire_* namespace) ───────────────────
@@ -2243,12 +2472,12 @@ class GraphQLClientService {
         }
       }
     ''';
-    final res = await query(
+    final res = await _queryAndClassify(
       mutStr,
       variables: {'mangaId': mangaId, 'key': sunfireMetaKey(key.trim()), 'value': value},
       label: 'setMangaMeta',
     );
-    return res != null;
+    return res.data != null;
   }
 
   /// `deleteMangaMeta` (key namespaced like [setMangaMeta]).
@@ -2261,12 +2490,12 @@ class GraphQLClientService {
         }
       }
     ''';
-    final res = await query(
+    final res = await _queryAndClassify(
       mutStr,
       variables: {'mangaId': mangaId, 'key': sunfireMetaKey(key.trim())},
       label: 'deleteMangaMeta',
     );
-    return res != null;
+    return res.data != null;
   }
 
   /// All `sunfire_*` meta for a manga as `{key: value}` (prefix kept).
@@ -2526,7 +2755,10 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, label: 'updateLibrary');
+    return (await _queryAndClassify(
+      mutStr,
+      label: 'updateLibrary',
+    )).data;
   }
 
   /// Clear cached images on server
@@ -2538,11 +2770,20 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(mutStr, label: 'clearCachedImages');
+    return (await _queryAndClassify(
+      mutStr,
+      label: 'clearCachedImages',
+    )).data;
   }
 
   /// Create immediate backup on server with options
-  Future<Map<String, dynamic>?> createServerBackup({bool includeCategories = true, bool includeChapters = true}) async {
+  Future<Map<String, dynamic>?> createServerBackup({
+    bool includeCategories = true,
+    bool includeChapters = true,
+    bool includeHistory = true,
+    bool includeTracking = true,
+    bool includeClientData = true,
+  }) async {
     const mutStr = r'''
       mutation CreateBackup($flags: PartialBackupFlagsInput) {
         createBackup(input: { flags: $flags }) {
@@ -2551,17 +2792,20 @@ class GraphQLClientService {
         }
       }
     ''';
-    return await query(
+    return (await _queryAndClassify(
       mutStr,
       variables: {
         'flags': {
           'includeManga': true,
           'includeCategories': includeCategories,
           'includeChapters': includeChapters,
+          'includeHistory': includeHistory,
+          'includeTracking': includeTracking,
+          'includeClientData': includeClientData,
         },
       },
       label: 'createBackup',
-    );
+    )).data;
   }
 
   /// Query restore status for ongoing backup restoration
