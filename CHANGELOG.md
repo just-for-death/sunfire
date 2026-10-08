@@ -7,7 +7,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
-## [5.0.0] — Unreleased
+## [5.0.0] — 2026-10-08
 
 ### Added
 
@@ -17,6 +17,17 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Reader is fullscreen on phone and tablet (no sidebar rail / bottom bar).
 - Auto-scroll range extended to 10–2000 px/s with Warp/Light presets.
 - Updates tab mirrors the server when connected.
+
+### Fixed
+
+- Browse grid taps now open extension results (local IDs were swallowed).
+- Updates header no longer leaks raw sync payloads.
+- Cross-series chapters filtered at fetch and repaired at startup.
+- Mangago grids deduplicated; ReadComicsOnline chapters scoped to series.
+- Extension auto-install deferred until onboarding completes.
+- First-run metadata parse hardened for trailing-comma headers.
+
+[5.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v5.0.0
 
 ## [4.0.0] — 2026-09-27
 
