@@ -351,6 +351,12 @@ class _SunfireAppState extends State<SunfireApp> {
         if (id != null && id > 0) {
           unawaited(_router.push('/manga/$id'));
         }
+      } else if (uri.host == 'reader' && uri.pathSegments.isNotEmpty) {
+        final idStr = uri.pathSegments.first;
+        final id = int.tryParse(idStr);
+        if (id != null && id != 0) {
+          unawaited(_router.push('/reader/$id'));
+        }
       } else if (uri.host == 'library') {
         _router.go('/library');
       } else if (uri.host == 'updates') {

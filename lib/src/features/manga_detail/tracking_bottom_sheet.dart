@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -335,6 +336,16 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   Future<void> _scrobbleAllReadChapters() async {
     if (!mounted || _isScrobbling) return;
     if (_localManga == null || _localManga!.metronSeriesId == null) return;
+    // Incognito promises nothing is pushed to trackers — including an
+    // explicit "scrobble all". Same guard + snackbar as the read paths.
+    if (SettingsService.instance.incognitoMode) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Incognito Mode is on — tracking is paused')),
+        );
+      }
+      return;
+    }
     setState(() => _isScrobbling = true);
 
     try {
@@ -816,156 +827,9 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
 
             // ── SERVER MANGA TRACKERS ──
             if (_trackers.isEmpty) ...[
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24.0),
-                  child: Text('No server manga trackers (MAL/AniList) configured.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                ),
-              ),
+              _buildEmptyServerTrackersCard(context, primaryColor),
             ] else ...[
-              ..._trackers.map((t) {
-                final trackerId = parseIntSafe(t['id']);
-                final trackerName = t['name'] as String? ?? 'Tracker';
-                final isLoggedIn = t['isLoggedIn'] == true;
-                final authUrl = t['authUrl'] as String?;
-                final tokenExpired = t['isTokenExpired'] == true;
-                final bound = _boundRecords.firstWhere(
-                  (r) => parseIntSafe(r['trackerId']) == trackerId,
-                  orElse: () => <String, dynamic>{},
-                );
-                final isBound = bound.isNotEmpty;
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Material(
-                    color: SunfireTheme.tileSurface(context),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
-                    ),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: isBound ? () => _showEditTrackDialog(bound, trackerName) : null,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.track_changes_rounded, color: isBound ? Colors.greenAccent : primaryColor, size: 22),
-                                    const SizedBox(width: 10),
-                                    Text(trackerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                  ],
-                                ),
-                                if (isBound)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: Colors.greenAccent.withAlpha(40), borderRadius: BorderRadius.circular(8)),
-                                    child: const Text('TRACKED', style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            if (isBound) ...[
-                              Text(bound['title'] as String? ?? widget.mangaTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: SunfireTheme.overlayFill(context), borderRadius: BorderRadius.circular(6)),
-                                    child: Text(
-                                      _statusLabel(trackerId, parseIntSafe(bound['status'], 1)),
-                                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 11, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: SunfireTheme.overlayFill(context), borderRadius: BorderRadius.circular(6)),
-                                    child: Text(
-                                      'Ch: ${parseIntSafe(bound["lastChapterRead"])} / ${bound["totalChapters"] != null ? parseIntSafe(bound["totalChapters"]) : "?"}',
-                                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 11),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: SunfireTheme.overlayFill(context), borderRadius: BorderRadius.circular(6)),
-                                    child: Text(
-                                      'Score: ${bound["score"] != null ? parseDoubleSafe(bound["score"]) : "-"}',
-                                      style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (bound['private'] == true) ...[
-                                const SizedBox(height: 8),
-                                Text('Private on tracker', style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.w600)),
-                              ],
-                              const SizedBox(height: 12),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text('Tap card to edit status & progress', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.w600)),
-                                  TextButton.icon(
-                                    icon: const Icon(Icons.link_off_rounded, color: Colors.redAccent, size: 16),
-                                    label: const Text('Unbind', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
-                                    onPressed: () => _unbindRecord(parseIntSafe(bound['id'])),
-                                  ),
-                                ],
-                              ),
-                            ] else ...[
-                              if (!isLoggedIn || tokenExpired) ...[
-                                Row(
-                                  children: [
-                                    Text(tokenExpired ? 'Session expired — log in again.' : 'Not logged in on server.', style: const TextStyle(color: Colors.amberAccent, fontSize: 12)),
-                                    const Spacer(),
-                                    if (authUrl != null && authUrl.isNotEmpty)
-                                      TextButton.icon(
-                                        icon: const Icon(Icons.open_in_browser_rounded, size: 16),
-                                        label: const Text('Log In'),
-                                        onPressed: () async {
-                                          if (await canLaunchUrlString(authUrl)) {
-                                            await launchUrlString(authUrl, mode: LaunchMode.externalApplication);
-                                          }
-                                        },
-                                      ),
-                                  ],
-                                ),
-                              ] else ...[
-                                const Text('Not linked with this tracker.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                                const SizedBox(height: 12),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: primaryColor.withAlpha(40),
-                                      foregroundColor: primaryColor,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    ),
-                                    icon: const Icon(Icons.search_rounded, size: 18),
-                                    label: const Text('Search & Bind'),
-                                    onPressed: () {
-                                      _searchQuery = widget.mangaTitle;
-                                      _trackerSearchController.text = widget.mangaTitle;
-                                      unawaited(_searchTracker(trackerId));
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }),
+              ..._trackers.map((t) => _buildServerTrackerCard(t, primaryColor)),
             ],
           ],
         );
@@ -1064,139 +928,976 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   Widget _buildMetronTrackerCard(Color primaryColor) {
     final isMetronConfigured = MetronService.instance.isConfigured;
     final isLinked = _localManga?.metronSeriesId != null;
+    final issueCount = _localManga?.metronIssuesJson != null
+        ? _getIssueCount(_localManga!.metronIssuesJson!)
+        : 0;
 
-    return Material(
-      color: SunfireTheme.tileSurface(context),
-      shape: RoundedRectangleBorder(
+    return Container(
+      decoration: BoxDecoration(
+        color: SunfireTheme.tileSurface(context),
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: isLinked ? Colors.blueAccent.withValues(alpha: 0.5) : SunfireTheme.tileBorder(context),
-          width: 0.8,
+        border: Border.all(
+          color: isLinked
+              ? Colors.blueAccent.withValues(alpha: 0.5)
+              : isMetronConfigured
+                  ? Colors.blueAccent.withValues(alpha: 0.2)
+                  : SunfireTheme.tileBorder(context),
+          width: isLinked ? 1.5 : 1.0,
         ),
+        boxShadow: isLinked
+            ? [
+                BoxShadow(
+                  color: Colors.blueAccent.withValues(alpha: 0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header with icon, title, and status
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
+                // Status ring + icon
+                Stack(
                   children: [
-                    Icon(
-                      Icons.auto_stories_rounded,
-                      color: isLinked ? Colors.blueAccent : Colors.grey,
-                      size: 22,
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: isLinked
+                            ? Colors.blueAccent.withValues(alpha: 0.15)
+                            : isMetronConfigured
+                                ? Colors.blueAccent.withValues(alpha: 0.08)
+                                : Colors.grey.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isLinked
+                              ? Colors.blueAccent.withValues(alpha: 0.5)
+                              : isMetronConfigured
+                                  ? Colors.blueAccent.withValues(alpha: 0.3)
+                                  : Colors.grey.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Center(
+                        child: Icon(
+                          Icons.auto_stories_rounded,
+                          color: isLinked
+                              ? Colors.blueAccent
+                              : isMetronConfigured
+                                  ? Colors.blueAccent.withValues(alpha: 0.7)
+                                  : Colors.grey,
+                          size: 24,
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Metron.cloud (Western Comics)',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    // Connection status dot
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: isLinked
+                              ? Colors.blueAccent
+                              : isMetronConfigured
+                                  ? Colors.greenAccent
+                                  : Colors.grey,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.surface,
+                            width: 2,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
+                const SizedBox(width: 14),
+                // Title and subtitle
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Metron.cloud (Western Comics)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: isLinked || isMetronConfigured
+                              ? Theme.of(context).colorScheme.onSurface
+                              : Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: isLinked
+                                  ? Colors.blueAccent
+                                  : isMetronConfigured
+                                      ? Colors.greenAccent
+                                      : Colors.grey,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            isLinked
+                                ? 'Linked & Enriched'
+                                : isMetronConfigured
+                                    ? 'Connected — Not Linked'
+                                    : 'Not Configured',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isLinked
+                                  ? Colors.blueAccent
+                                  : isMetronConfigured
+                                      ? Colors.greenAccent
+                                      : Colors.grey,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Status badge
                 if (isLinked)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.blueAccent.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(6),
+                      color: Colors.blueAccent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
                     ),
-                    child: const Text(
-                      'LINKED',
-                      style: TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.link_rounded, size: 12, color: Colors.blueAccent),
+                        const SizedBox(width: 4),
+                        Text(
+                          'LINKED',
+                          style: TextStyle(
+                            color: Colors.blueAccent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+
+            const SizedBox(height: 16),
+
             if (isLinked) ...[
-              Text(
-                'Publisher: ${_localManga?.publisher ?? "Unknown Publisher"}',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-              const SizedBox(height: 4),
-              const Row(
-                children: [
-                  Icon(Icons.lock_outline, size: 14, color: Colors.greenAccent),
-                  SizedBox(width: 4),
-                  Text(
-                    'Metadata Locked & Enriched',
-                    style: TextStyle(color: Colors.greenAccent, fontSize: 11),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
+              // Linked state - show rich metadata
+              _buildLinkedMetadata(context, issueCount),
+              const SizedBox(height: 16),
+
+              // Action buttons
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        // Colors.blueAccent is dark enough for white text
+                        foregroundColor: const Color(0xFFFFFFFF),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
+                      ),
+                      icon: _isScrobbling
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: const Color(0xFFFFFFFF),
+                              ),
+                            )
+                          : const Icon(Icons.cloud_upload_outlined, size: 18),
+                      label: Text(
+                        _isScrobbling ? 'Scrobbling...' : 'Scrobble All Read Chapters',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      onPressed: _isScrobbling ? null : _scrobbleAllReadChapters,
                     ),
-                    icon: _isScrobbling
-                        ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary))
-                        : Icon(Icons.cloud_upload_outlined, size: 16, color: Theme.of(context).colorScheme.onPrimary),
-                    label: Text(
-                      _isScrobbling ? 'Scrobbling...' : 'Scrobble Read Chapters',
-                      style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    onPressed: _isScrobbling ? null : _scrobbleAllReadChapters,
                   ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.link_off_rounded, color: Colors.redAccent, size: 16),
-                    label: const Text('Unlink', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.redAccent,
+                      side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    ),
+                    icon: const Icon(Icons.link_off_rounded, size: 18),
+                    label: const Text('Unlink', style: TextStyle(fontWeight: FontWeight.w600)),
                     onPressed: _unlinkMetron,
                   ),
                 ],
               ),
             ] else ...[
-              if (!isMetronConfigured) ...[
-                Row(
-                  children: [
-                    const Text('Metron token not configured.', style: TextStyle(color: Colors.amberAccent, fontSize: 12)),
-                    const Spacer(),
-                    TextButton.icon(
-                      icon: const Icon(Icons.settings_rounded, size: 16),
-                      label: const Text('Configure'),
-                      onPressed: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(builder: (context) => const TrackingSettingsScreen()),
-                        );
-                        setState(() {});
-                      },
-                    ),
-                  ],
+              // Not linked states
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isMetronConfigured
+                      ? Colors.blueAccent.withValues(alpha: 0.05)
+                      : Colors.amberAccent.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isMetronConfigured
+                        ? Colors.blueAccent.withValues(alpha: 0.2)
+                        : Colors.amberAccent.withValues(alpha: 0.3),
+                  ),
                 ),
-              ] else ...[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Row(
                   children: [
-                    const Text('Not linked with Metron.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    Icon(
+                      isMetronConfigured ? Icons.info_outline_rounded : Icons.warning_amber_rounded,
+                      color: isMetronConfigured ? Colors.blueAccent : Colors.amberAccent,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        isMetronConfigured
+                            ? 'This manga is not linked to a Metron series. Link it to enable automatic scrobbling and metadata enrichment.'
+                            : 'Metron.cloud is not configured. Add your API token in Settings → Tracking to enable western comics tracking.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isMetronConfigured
+                              ? Colors.blueAccent.withValues(alpha: 0.8)
+                              : Colors.amberAccent.withValues(alpha: 0.8),
+                          height: 1.4,
+                        ),
                       ),
-                      icon: Icon(Icons.search_rounded, size: 18, color: Theme.of(context).colorScheme.onPrimary),
-                      label: Text('Match & Enrich', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
-                      onPressed: () {
-                        _searchQuery = widget.mangaTitle;
-                        _trackerSearchController.text = widget.mangaTitle;
-                        unawaited(_searchTracker(kMetronTrackerId));
-                      },
                     ),
                   ],
                 ),
-              ],
+              ),
+              const SizedBox(height: 14),
+
+              // Primary action button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isMetronConfigured ? Colors.blueAccent : Colors.amberAccent,
+                    // blueAccent is dark enough for white; amberAccent is light enough for black
+                    foregroundColor: isMetronConfigured ? const Color(0xFFFFFFFF) : const Color(0xFF000000),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                  ),
+                  icon: Icon(
+                    isMetronConfigured ? Icons.search_rounded : Icons.settings_rounded,
+                    size: 20,
+                  ),
+                  label: Text(
+                    isMetronConfigured ? 'Match & Enrich This Manga' : 'Configure Metron.cloud',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: isMetronConfigured
+                      ? () {
+                          _searchQuery = widget.mangaTitle;
+                          _trackerSearchController.text = widget.mangaTitle;
+                          unawaited(_searchTracker(kMetronTrackerId));
+                        }
+                      : () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(builder: (context) => const TrackingSettingsScreen()),
+                          );
+                          setState(() {});
+                        },
+                ),
+              ),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildLinkedMetadata(BuildContext context, int issueCount) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Publisher + Issue count row
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetadataChip(
+                context,
+                icon: Icons.menu_book_rounded,
+                label: 'Publisher',
+                value: _localManga?.publisher ?? 'Unknown Publisher',
+                color: Colors.blueAccent,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildMetadataChip(
+                context,
+                icon: Icons.confirmation_number_rounded,
+                label: 'Issues in Series',
+                value: issueCount > 0 ? '$issueCount issues' : 'Unknown',
+                color: Colors.greenAccent,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // Locked metadata indicator
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.greenAccent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.lock_rounded, size: 14, color: Colors.greenAccent),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Metadata Locked & Enriched',
+                    style: TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(),
+            // Series ID for debugging
+            if (_localManga?.metronSeriesId != null)
+              Text(
+                'Series ID: ${_localManga!.metronSeriesId}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.withValues(alpha: 0.6),
+                  fontFamily: 'monospace',
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMetadataChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: color.withValues(alpha: 0.7),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _getIssueCount(String issuesJson) {
+    try {
+      final map = jsonDecode(issuesJson) as Map<String, dynamic>;
+      return map.length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Widget _buildEmptyServerTrackersCard(BuildContext context, Color primaryColor) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Icon(
+                Icons.track_changes_outlined,
+                size: 48,
+                color: Colors.grey.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No Server Trackers Found',
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Connect a Suwayomi server in Settings → Server to track manga via AniList, MyAnimeList, or Kitsu. Once connected and authorized, your trackers will appear here.',
+                style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.settings_rounded, size: 18),
+                label: const Text('Open Server Settings'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amberAccent,
+                  foregroundColor: const Color(0xFF000000),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/settings/server');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServerTrackerCard(Map<String, dynamic> t, Color primaryColor) {
+    final trackerId = parseIntSafe(t['id']);
+    final trackerName = t['name'] as String? ?? 'Tracker';
+    final isLoggedIn = t['isLoggedIn'] == true;
+    final authUrl = t['authUrl'] as String?;
+    final tokenExpired = t['isTokenExpired'] == true;
+    final iconName = t['icon'] as String?;
+
+    final bound = _boundRecords.firstWhere(
+      (r) => parseIntSafe(r['trackerId']) == trackerId,
+      orElse: () => <String, dynamic>{},
+    );
+    final isBound = bound.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isBound
+              ? Colors.greenAccent.withValues(alpha: 0.03)
+              : isLoggedIn
+                  ? primaryColor.withValues(alpha: 0.03)
+                  : SunfireTheme.tileSurface(context),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isBound
+                ? Colors.greenAccent.withValues(alpha: 0.5)
+                : isLoggedIn
+                    ? primaryColor.withValues(alpha: 0.3)
+                    : SunfireTheme.tileBorder(context),
+            width: isBound ? 1.5 : 1.0,
+          ),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: isBound ? () => _showEditTrackDialog(bound, trackerName) : null,
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with tracker icon and status
+                Row(
+                  children: [
+                    // Tracker icon with status ring
+                    Stack(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: isBound
+                                ? Colors.greenAccent.withValues(alpha: 0.15)
+                                : isLoggedIn
+                                    ? primaryColor.withValues(alpha: 0.15)
+                                    : Colors.grey.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isBound
+                                  ? Colors.greenAccent.withValues(alpha: 0.5)
+                                  : isLoggedIn
+                                      ? primaryColor.withValues(alpha: 0.5)
+                                      : Colors.grey.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Center(
+                            child: iconName != null && iconName.isNotEmpty
+                                ? Image.network(
+                                    iconName,
+                                    width: 28,
+                                    height: 28,
+                                    errorBuilder: (_, __, ___) => Icon(
+                                      Icons.track_changes_rounded,
+                                      color: isBound ? Colors.greenAccent : (isLoggedIn ? primaryColor : Colors.grey),
+                                      size: 24,
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.track_changes_rounded,
+                                    color: isBound ? Colors.greenAccent : (isLoggedIn ? primaryColor : Colors.grey),
+                                    size: 24,
+                                  ),
+                          ),
+                        ),
+                        // Connection status dot
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 14,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: isBound
+                                  ? Colors.greenAccent
+                                  : isLoggedIn
+                                      ? primaryColor
+                                      : Colors.grey,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.surface,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 14),
+                    // Tracker name and status
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            trackerName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: isBound || isLoggedIn
+                                  ? Theme.of(context).colorScheme.onSurface
+                                  : Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  color: isBound
+                                      ? Colors.greenAccent
+                                      : isLoggedIn
+                                          ? primaryColor
+                                          : Colors.grey,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                isBound
+                                    ? 'Tracking Active'
+                                    : isLoggedIn
+                                        ? 'Authorized — Not Linked'
+                                        : tokenExpired
+                                            ? 'Session Expired'
+                                            : 'Not Authorized',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isBound
+                                      ? Colors.greenAccent
+                                      : isLoggedIn
+                                          ? primaryColor
+                                          : tokenExpired
+                                              ? Colors.redAccent
+                                              : Colors.grey,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Status badge
+                    if (isBound)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.greenAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.check_circle_rounded, size: 12, color: Colors.greenAccent),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'TRACKING',
+                              style: TextStyle(
+                                color: Colors.greenAccent,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (!isLoggedIn && authUrl != null && authUrl.isNotEmpty)
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.amberAccent,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        ),
+                        icon: const Icon(Icons.login_rounded, size: 14),
+                        label: const Text('Log In', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                        onPressed: () async {
+                          if (await canLaunchUrlString(authUrl)) {
+                            await launchUrlString(authUrl, mode: LaunchMode.externalApplication);
+                          }
+                        },
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                if (isBound) ...[
+                  // Bound state - show tracking info
+                  _buildBoundTrackerInfo(bound, trackerId),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Tap card to edit status & progress',
+                        style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        ),
+                        icon: const Icon(Icons.link_off_rounded, size: 14),
+                        label: const Text('Unbind', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                        onPressed: () => _unbindRecord(parseIntSafe(bound['id'])),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  // Not bound states
+                  if (!isLoggedIn || tokenExpired) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: tokenExpired
+                            ? Colors.redAccent.withValues(alpha: 0.08)
+                            : Colors.amberAccent.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: tokenExpired
+                              ? Colors.redAccent.withValues(alpha: 0.3)
+                              : Colors.amberAccent.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            tokenExpired ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
+                            color: tokenExpired ? Colors.redAccent : Colors.amberAccent,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              tokenExpired
+                                  ? 'Session expired — log in again to restore tracking.'
+                                  : 'Not logged in on server. Authorize this tracker to enable tracking.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: tokenExpired
+                                    ? Colors.redAccent.withValues(alpha: 0.8)
+                                    : Colors.amberAccent.withValues(alpha: 0.8),
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                          if (authUrl != null && authUrl.isNotEmpty) ...[
+                            const SizedBox(width: 10),
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.amberAccent,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              ),
+                              icon: const Icon(Icons.login_rounded, size: 14),
+                              label: const Text('Log In', style: TextStyle(fontWeight: FontWeight.w600)),
+                              onPressed: () async {
+                                if (await canLaunchUrlString(authUrl)) {
+                                  await launchUrlString(authUrl, mode: LaunchMode.externalApplication);
+                                }
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isLoggedIn ? primaryColor : Colors.amberAccent,
+                          // primaryColor uses theme's onPrimary; amberAccent is light -> black
+                          foregroundColor: isLoggedIn
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : const Color(0xFF000000),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          elevation: 0,
+                        ),
+                        icon: const Icon(Icons.search_rounded, size: 18),
+                        label: Text(
+                          isLoggedIn ? 'Search & Bind' : 'Authorize Tracker',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: isLoggedIn
+                            ? () {
+                                _searchQuery = widget.mangaTitle;
+                                _trackerSearchController.text = widget.mangaTitle;
+                                unawaited(_searchTracker(trackerId));
+                              }
+                            : () async {
+                                // authUrl is guaranteed non-null by outer condition (authUrl != null && authUrl.isNotEmpty)
+                                final url = authUrl!;
+                                if (await canLaunchUrlString(url)) {
+                                  await launchUrlString(url, mode: LaunchMode.externalApplication);
+                                }
+                              },
+                      ),
+                    ),
+                  ] else ...[
+                    // Logged in but not linked
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded, color: primaryColor, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'This tracker is authorized but not linked to this manga. Search and bind to start tracking.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: primaryColor.withValues(alpha: 0.8),
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          elevation: 0,
+                        ),
+                        icon: const Icon(Icons.search_rounded, size: 18),
+                        label: const Text('Search & Bind', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                        onPressed: () {
+                          _searchQuery = widget.mangaTitle;
+                          _trackerSearchController.text = widget.mangaTitle;
+                          unawaited(_searchTracker(trackerId));
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBoundTrackerInfo(Map<String, dynamic> bound, int trackerId) {
+    final currentStatus = parseIntSafe(bound['status'], 1);
+    final currentChapter = parseIntSafe(bound['lastChapterRead']);
+    final totalChapters = parseIntSafe(bound['totalChapters']);
+    final score = bound['score'] != null ? parseDoubleSafe(bound['score']) : null;
+    final isPrivate = bound['private'] == true;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Title
+        Text(
+          bound['title'] as String? ?? widget.mangaTitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+        ),
+        const SizedBox(height: 10),
+        // Status chips row
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            // Status
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.blueAccent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.flag_rounded, size: 12, color: Colors.blueAccent),
+                  const SizedBox(width: 4),
+                  Text(
+                    _statusLabel(trackerId, currentStatus),
+                    style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            // Chapter progress
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.purpleAccent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.menu_book_rounded, size: 12, color: Colors.purpleAccent),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Ch: $currentChapter / ${totalChapters > 0 ? totalChapters : "?"}',
+                    style: const TextStyle(color: Colors.purpleAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            // Score
+            if (score != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.amberAccent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star_rounded, size: 12, color: Colors.amberAccent),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Score: ${score == score.roundToDouble() ? score.toInt() : score}',
+                      style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            // Private
+            if (isPrivate)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.lock_outline_rounded, size: 12, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'Private',
+                      style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

@@ -82,23 +82,27 @@ void main() {
     });
   });
 
-  group('SyncCycleGate (dropped follow-up syncs)', () {
-    test('a call while busy queues exactly one follow-up pass', () {
+  group('SyncCycleGate (follow-up syncs queued)', () {
+    test('calls while busy queue multiple follow-up passes', () {
       final gate = SyncCycleGate();
       expect(gate.tryBegin(), isTrue);
       expect(gate.tryBegin(), isFalse);
       expect(gate.queued, isTrue);
-      // Further calls while busy stay one-deep (still queued, not a counter).
+      // Further calls while busy increment the counter (no longer one-deep).
       expect(gate.tryBegin(), isFalse);
       expect(gate.queued, isTrue);
 
-      gate.beginPass();
-      expect(gate.queued, isFalse);
+      gate.beginPass(); // Consumes 1 of 2 queued
+      expect(gate.queued, isTrue); // Still 1 queued
       // A caller during the pass re-queues.
       expect(gate.tryBegin(), isFalse);
-      expect(gate.needsAnotherPass(), isTrue);
+      expect(gate.queued, isTrue); // Now 2 queued (1 remaining + 1 new)
 
-      gate.beginPass();
+      gate.beginPass(); // Consumes 1 of 2 queued
+      expect(gate.queued, isTrue); // Still 1 queued
+
+      gate.beginPass(); // Consumes last queued
+      expect(gate.queued, isFalse); // All consumed
       expect(gate.needsAnotherPass(), isFalse);
       gate.end();
       expect(gate.isSyncing, isFalse);

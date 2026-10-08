@@ -111,6 +111,8 @@ class MetronService extends ChangeNotifier {
     _searchCache.clear();
     _detailCache.clear();
     _issueMapCache.clear();
+    // A different account must not inherit this session's dedup memory.
+    _scrobbledThisSession.clear();
     notifyListeners();
   }
 
@@ -283,6 +285,13 @@ class MetronService extends ChangeNotifier {
   }
 
   /// Scrobble a manga chapter to Metron if the manga has a linked Metron series.
+  ///
+  /// Session-deduplicated per (series, issue): re-tapping "scrobble all" or
+  /// toggling read→unread→read replays the same issue otherwise, stacking
+  /// duplicate entries on the Metron account. A repeat within this process
+  /// returns true (idempotent success) without another POST.
+  final Set<String> _scrobbledThisSession = {};
+
   Future<bool> scrobbleMangaChapter({
     required Manga manga,
     required Chapter chapter,
@@ -311,8 +320,11 @@ class MetronService extends ChangeNotifier {
       if (matchedKey != null && issueMap.containsKey(matchedKey)) {
         final issueId = issueMap[matchedKey]!;
         if (issueId > 0) {
+          final dedupKey = '$seriesId:$issueId';
+          if (_scrobbledThisSession.contains(dedupKey)) return true;
           final ok = await scrobbleIssue(issueId: issueId, readDate: readDate);
           if (ok) {
+            _scrobbledThisSession.add(dedupKey);
             unawaited(LoggerService.instance.logInfo(
               'Auto-scrobbled "${chapter.name}" (Metron Issue #$matchedKey, ID $issueId) for "${manga.title}"',
               'Metron',

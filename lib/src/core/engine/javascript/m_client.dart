@@ -301,7 +301,9 @@ class LoggerInterceptor extends InterceptorContract {
   Future<BaseRequest> interceptRequest({required BaseRequest request}) async {
     try {
       final method = request.method;
-      final url = request.url.toString();
+      // Sanitized: signed image/scraper URLs carry tokens in query/fragment,
+      // and these lines persist to the on-disk diagnostic log.
+      final url = sanitizeUrlForLog(request.url.toString());
       unawaited(LoggerService.instance.logNetwork('-> HTTP $method $url', 'MClient'));
     } catch (ignoredError) { if (kDebugMode) debugPrint('[m_client] ignored error: $ignoredError'); }
     return request;
@@ -311,7 +313,7 @@ class LoggerInterceptor extends InterceptorContract {
   Future<BaseResponse> interceptResponse({required BaseResponse response}) async {
     try {
       final method = response.request?.method ?? 'GET';
-      final url = response.request?.url.toString() ?? 'Unknown URL';
+      final url = sanitizeUrlForLog(response.request?.url.toString() ?? 'Unknown URL');
       final status = response.statusCode;
       // A Cloudflare-flagged status with a proxy configured is an expected,
       // self-healing condition (a bypass fetch follows right after) rather

@@ -118,6 +118,9 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
   void _showCreateBackupDialog() {
     bool includeCats = true;
     bool includeChs = true;
+    bool includeHist = true;
+    bool includeTrack = true;
+    bool includeClient = true;
 unawaited(
     showDialog<void>(
       context: context,
@@ -143,6 +146,24 @@ unawaited(
                     value: includeChs,
                     onChanged: (val) => setDlgState(() => includeChs = val ?? true),
                   ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Include History', style: TextStyle(fontSize: 14)),
+                    value: includeHist,
+                    onChanged: (val) => setDlgState(() => includeHist = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Include Tracking', style: TextStyle(fontSize: 14)),
+                    value: includeTrack,
+                    onChanged: (val) => setDlgState(() => includeTrack = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Include Client Data', style: TextStyle(fontSize: 14)),
+                    value: includeClient,
+                    onChanged: (val) => setDlgState(() => includeClient = val ?? true),
+                  ),
                 ],
               ),
               actions: [
@@ -158,6 +179,9 @@ unawaited(
                       final res = await GraphQLClientService.instance.createServerBackup(
                         includeCategories: includeCats,
                         includeChapters: includeChs,
+                        includeHistory: includeHist,
+                        includeTracking: includeTrack,
+                        includeClientData: includeClient,
                       );
                       if (context.mounted) {
                         final createdUrl = res?['createBackup']?['url']?.toString();

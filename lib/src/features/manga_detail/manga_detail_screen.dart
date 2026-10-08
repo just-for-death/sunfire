@@ -1123,7 +1123,24 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       }
       return;
     }
-    final prevs = _chapters.where((c) => c.chapterNumber < ch.chapterNumber && !c.isRead).toList();
+    // Position-based, not number-compared: chapters with unparseable names
+    // fall back to chapterNumber 0.0, and `0.0 < target` is never true for
+    // them, so a raw number comparison silently skipped prologues/extras and
+    // left the unread badge off by one. Sort a copy into reading order and
+    // take everything before the target's position instead.
+    final ordered = List<Chapter>.of(_chapters)
+      ..sort((a, b) {
+        final n = a.chapterNumber.compareTo(b.chapterNumber);
+        if (n != 0) return n;
+        return a.id.compareTo(b.id);
+      });
+    var targetIdx = ordered.indexWhere((c) =>
+        (ch.id != 0 && c.id == ch.id) ||
+        (ch.serverId != 0 && c.serverId == ch.serverId) ||
+        (ch.url.isNotEmpty && c.url == ch.url));
+    if (targetIdx < 0) targetIdx = ordered.length;
+    final prevs =
+        ordered.take(targetIdx).where((c) => !c.isRead).toList();
     for (final p in prevs) {
       p.applyReadState(true);
       if (_settings.deleteChapterAfterMarkedRead && p.isDownloaded) {

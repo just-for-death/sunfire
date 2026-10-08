@@ -22,7 +22,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
-import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
+import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting, kDebugMode, debugPrint;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -153,6 +153,10 @@ abstract class ServerSessionStore {
 /// secure write succeeds.
 class SecureServerSessionStore implements ServerSessionStore {
   static const String storageKey = 'sunfire_server_session';
+
+  /// Same insecure-fallback visibility as [ServerAuthHelper]: true once a
+  /// session has been read from or written to plaintext prefs.
+  static bool insecureFallbackActive = false;
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
     iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -168,7 +172,11 @@ class SecureServerSessionStore implements ServerSessionStore {
     } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(storageKey);
+      final v = prefs.getString(storageKey);
+      if (v != null && v.isNotEmpty) {
+        insecureFallbackActive = true;
+      }
+      return v;
     } catch (_) {
       return null;
     }
@@ -184,15 +192,24 @@ class SecureServerSessionStore implements ServerSessionStore {
         await _storage.write(key: storageKey, value: value);
       }
       secureOk = true;
-    } catch (_) {}
+    } on Exception catch (e) {
+      if (kDebugMode) debugPrint('[SecureServerSessionStore] secure write failed: $e');
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       if (secureOk || value == null) {
+        if (secureOk && value != null) insecureFallbackActive = false;
         await prefs.remove(storageKey);
       } else {
+        insecureFallbackActive = true;
         await prefs.setString(storageKey, value);
       }
-    } catch (_) {}
+    } on Exception catch (e) {
+      if (!secureOk) {
+        throw StateError('Both secure storage and SharedPreferences failed to save session: $e');
+      }
+      if (kDebugMode) debugPrint('[SecureServerSessionStore] prefs cleanup failed: $e');
+    }
   }
 }
 

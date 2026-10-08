@@ -15,7 +15,6 @@ class ExtensionDetailsScreen extends StatefulWidget {
 }
 
 class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
-  bool _isSourceEnabled = true;
 
   @override
   Widget build(BuildContext context) {
@@ -124,10 +123,6 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
                         ),
                       );
                     },
-                  ),
-                  Switch(
-                    value: _isSourceEnabled,
-                    onChanged: (val) => setState(() => _isSourceEnabled = val),
                   ),
                 ],
               ),

@@ -1125,8 +1125,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                               0,
                               (acc, c) => c.order > acc ? c.order : acc,
                             );
+                            // serverId left 0: saveCategory mints a
+                            // collision-checked synthetic id in place.
                             final newCat = Category()
-                              ..serverId = IsarService.generateSyntheticServerId()
                               ..name = name
                               ..order = maxOrder + 1;
                             await IsarService.instance.saveCategory(newCat);

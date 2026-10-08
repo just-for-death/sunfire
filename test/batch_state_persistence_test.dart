@@ -24,7 +24,13 @@ void main() {
   });
 
   test('save then load restores total/completed/failed/counted', () async {
-    mgr.debugSetBatchCounters(total: 5, completed: 2, failed: 1, counted: true);
+    mgr.debugSetBatchCounters(
+        total: 5,
+        completed: 2,
+        failed: 1,
+        counted: true,
+        members: {1, 2, 3, 4, 5},
+        accounted: {1, 2, 3});
     await mgr.debugSaveBatchState();
 
     final prefs = await SharedPreferences.getInstance();
@@ -35,9 +41,17 @@ void main() {
     expect(decoded['completed'], 2);
     expect(decoded['failed'], 1);
     expect(decoded['counted'], isTrue);
+    expect(decoded['members'], isA<List<dynamic>>());
+    expect(decoded['accounted'], isA<List<dynamic>>());
 
     // Wipe memory, then reload from prefs.
-    mgr.debugSetBatchCounters(total: 0, completed: 0, failed: 0, counted: false);
+    mgr.debugSetBatchCounters(
+        total: 0,
+        completed: 0,
+        failed: 0,
+        counted: false,
+        members: {},
+        accounted: {});
     expect(mgr.debugBatchCounters.total, 0);
 
     await mgr.debugLoadBatchState();
@@ -46,10 +60,18 @@ void main() {
     expect(c.completed, 2);
     expect(c.failed, 1);
     expect(c.counted, isTrue);
+    expect(c.members, <int>{1, 2, 3, 4, 5});
+    expect(c.accounted, <int>{1, 2, 3});
   });
 
   test('load with empty prefs leaves counters unchanged (zeros)', () async {
-    mgr.debugSetBatchCounters(total: 0, completed: 0, failed: 0, counted: false);
+    mgr.debugSetBatchCounters(
+        total: 0,
+        completed: 0,
+        failed: 0,
+        counted: false,
+        members: <int>{},
+        accounted: <int>{});
     await mgr.debugLoadBatchState();
     final c = mgr.debugBatchCounters;
     expect(c.total, 0);
@@ -65,16 +87,26 @@ void main() {
         'completed': 3,
         'failed': 0,
         'counted': true,
+        'members': <int>[1, 2, 3, 4, 5, 6, 7],
+        'accounted': <int>[1, 2, 3],
       }),
     });
     // New getInstance() after setMockInitialValues resets the mock store.
-    mgr.debugSetBatchCounters(total: 99, completed: 99, failed: 99, counted: false);
+    mgr.debugSetBatchCounters(
+        total: 99,
+        completed: 99,
+        failed: 99,
+        counted: false,
+        members: <int>{},
+        accounted: <int>{});
     await mgr.debugLoadBatchState();
     final c = mgr.debugBatchCounters;
     expect(c.total, 7);
     expect(c.completed, 3);
     expect(c.failed, 0);
     expect(c.counted, isTrue);
+    expect(c.members, <int>{1, 2, 3, 4, 5, 6, 7});
+    expect(c.accounted, <int>{1, 2, 3});
   });
 
   test('clear removes the prefs key', () async {

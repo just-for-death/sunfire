@@ -44,8 +44,38 @@ String? blockedRequestReason(Uri uri) {
   if (bare.endsWith('.local') ||
       bare.endsWith('.internal') ||
       bare.endsWith('.localhost') ||
-      bare.endsWith('.home.arpa')) {
-    return 'host "$bare" is a local-network name';
+      bare.endsWith('.localdomain') ||
+      bare.endsWith('.home.arpa') ||
+      bare.endsWith('.home') ||
+      bare.endsWith('.lan') ||
+      bare.endsWith('.corp') ||
+      bare.endsWith('.intranet') ||
+      bare.endsWith('.test') ||
+      bare.endsWith('.example') ||
+      bare.endsWith('.invalid') ||
+      bare.endsWith('.onion')) {
+    return 'host "$bare" is a local-network or reserved name';
+  }
+
+  // Punycode (IDN) check: `xn--` prefix indicates an encoded Unicode label.
+  // We don't fully decode (would require ICU), but we can check if the
+  // decoded form would match our blocked suffixes by looking for `xn--`
+  // labels that, when the `xn--` prefix is stripped, could match.
+  // Conservative approach: reject any host with `xn--` labels that might
+  // decode to our blocked suffixes. This is safe because legitimate
+  // public punycode domains don't typically use our reserved suffixes.
+  if (bare.contains('.xn--') || bare.startsWith('xn--')) {
+    // Check if any `xn--` label could be a blocked suffix.
+    // Since we can't fully decode without ICU, we reject hosts where an
+    // `xn--` label appears in a position that would match our suffixes
+    // if decoded. This is a conservative safety measure.
+    final labels = bare.split('.');
+    for (final label in labels) {
+      if (label.startsWith('xn--')) {
+        // Can't decode without ICU; reject conservatively.
+        return 'host "$bare" contains an encoded (punycode) label';
+      }
+    }
   }
 
   // IPv6 literals. Anything not in the allow-listed global range is refused:

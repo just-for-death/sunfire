@@ -76,6 +76,12 @@ class ServerAuthCredentials {
 
 class ServerAuthHelper {
   static const String storageKey = 'sunfire_server_auth';
+
+  /// True when credentials are currently held in plaintext SharedPreferences
+  /// because the OS keystore failed. The fallback keeps users signed in, but
+  /// it must never be silent: the server settings screen surfaces it.
+  static bool insecureFallbackActive = false;
+
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
     iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -93,6 +99,9 @@ class ServerAuthHelper {
     try {
       final prefs = await SharedPreferences.getInstance();
       final header = prefs.getString(storageKey);
+      if (header != null && header.isNotEmpty) {
+        insecureFallbackActive = true;
+      }
       return ServerAuthCredentials.fromHeaderValue(header);
     } catch (_) {
       return const ServerAuthCredentials(type: ServerAuthType.none);
@@ -123,13 +132,17 @@ class ServerAuthHelper {
         await _storage.write(key: storageKey, value: header);
       }
       secureWriteSucceeded = true;
-    } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
+    } catch (e) {
+      // Log but continue to prefs fallback.
+      if (kDebugMode) debugPrint('[server_auth_helper] secure write failed: $e');
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
       if (secureWriteSucceeded) {
         // Clean up any legacy plaintext credentials now that the secure copy is
         // known to exist.
+        insecureFallbackActive = false;
         await prefs.remove(storageKey);
       } else if (header.isEmpty) {
         // Clearing: there is no secure copy to fall back on, so the plaintext
@@ -139,9 +152,18 @@ class ServerAuthHelper {
         // Secure storage is unavailable. Mirror the read path's fallback so the
         // credentials survive at all — plaintext on disk is strictly better than
         // losing them, and it is what this file already reads from.
+        insecureFallbackActive = true;
         await prefs.setString(storageKey, header);
       }
-    } catch (ignoredError) { if (kDebugMode) debugPrint('[server_auth_helper] ignored ${ignoredError.runtimeType} (details withheld: credential storage)'); }
+    } on Exception catch (e) {
+      // If secure write also failed, we have nowhere to store credentials.
+      // Throw to alert the caller instead of silently losing them.
+      if (!secureWriteSucceeded) {
+        throw StateError('Both secure storage and SharedPreferences failed to save credentials: $e');
+      }
+      // Secure write succeeded but prefs cleanup failed - not fatal, just log.
+      if (kDebugMode) debugPrint('[server_auth_helper] prefs cleanup failed: $e');
+    }
   }
 
   static Future<String> getRawAuthHeader() async {

@@ -496,10 +496,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       selectedRepos: _userRepoUrls,
     );
     SettingsService.instance.onboardingCompleted = true;
-    // First-run extension catalogs were deferred at startup (no repo traffic
-    // before the user chooses server vs standalone). Install now that the
-    // choice is made — fire-and-forget so onboarding never blocks on it.
-    unawaited(QuickJsService.instance.ensureAutoInstalled());
+    // Install the user's explicit catalog choice (or the defaults when they
+    // picked none) — never bulk-install hardcoded catalogs over it.
+    unawaited(QuickJsService.instance.ensureAutoInstalled(
+      repoUrls: _userRepoUrls.isEmpty ? null : List.of(_userRepoUrls),
+    ));
     if (cleanUrl != null) {
       SettingsService.instance.serverUrl = cleanUrl;
     }

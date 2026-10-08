@@ -250,19 +250,35 @@ unawaited(
                       Text('${widget.sourceName} Filters', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                       TextButton(
                         onPressed: () {
-                          setSheetState(() {
-                            if (_hasDynamicFilters) {
-                               for(var f in _dynamicFilters) {
-                                  if (f['type_name'] == 'SelectFilter' || f['type_name'] == 'SortFilter') {
-                                      f['state'] = 0;
+                          // Reset EVERYTHING, not just Select/Sort chips: stale
+                          // GroupFilter/CheckBox state or a lingering
+                          // _serverFilterChanges list kept the grid filtered
+                          // with no way to clear except clearing search.
+                          if (_hasDynamicFilters) {
+                            for (final f in _dynamicFilters) {
+                              final t = f['type_name'];
+                              if (t == 'SelectFilter' || t == 'SortFilter') {
+                                f['state'] = 0;
+                              } else if (f['state'] is bool) {
+                                f['state'] = false;
+                              } else if (f['state'] is List) {
+                                for (final c in (f['state'] as List)) {
+                                  if (c is Map && c['state'] is bool) {
+                                    c['state'] = false;
                                   }
-                               }
-                            } else {
-                                _selectedSort = 'Popularity';
-                                _selectedStatus = 'All';
-                                _selectedType = 'All';
+                                }
+                              }
                             }
-                          });
+                          } else {
+                            _selectedSort = 'Popularity';
+                            _selectedStatus = 'All';
+                            _selectedType = 'All';
+                          }
+                          _isFilterApplied = false;
+                          _serverFilterChanges = const [];
+                          Navigator.pop(sheetContext);
+                          setState(() => _currentPage = 1);
+                          unawaited(_fetchSourceManga());
                         },
                         child: Text('Reset', style: TextStyle(color: primaryColor)),
                       ),

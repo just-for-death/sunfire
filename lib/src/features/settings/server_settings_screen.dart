@@ -9,6 +9,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/server_auth_helper.dart';
 import '../../core/sync/server_session_service.dart';
+import '../../core/sync/sync_engine.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/widgets/dialog_controllers.dart';
@@ -559,6 +560,33 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
           : ListView(
               children: [
                 const SectionTitle(title: 'Client Connection (App Target)'),
+                if (ServerAuthHelper.insecureFallbackActive ||
+                    SecureServerSessionStore.insecureFallbackActive)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Device secure storage is unavailable, so server credentials are kept '
+                              'in plaintext app storage. Anyone with a backup or root access could '
+                              'read them.',
+                              style: TextStyle(fontSize: 12, color: Colors.orange),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 SettingsPropTile(
                   title: 'Server URL',
                   subtitle: _clientUrl.isNotEmpty ? _clientUrl : 'Not configured (Standalone mode)',
@@ -580,6 +608,20 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     final auth = _clientAuth.toHeaderValue();
                     GraphQLClientService.instance.initialize(url, authToken: auth);
                     WebSocketService.instance.initialize(url, authToken: auth);
+                    // The pending queue addresses the OLD server's ids — never
+                    // replay it against the new one. Quarantine first, then
+                    // tell the user what was dropped.
+                    final dropped = await SyncEngine.instance.quarantinePendingForServerSwitch();
+                    if (!mounted) return;
+                    if (dropped > 0 && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Server changed: discarded $dropped unsynced change(s) addressed to the previous server. Re-mark anything missing.',
+                          ),
+                        ),
+                      );
+                    }
                     await _loadSettings();
                   },
                 ),

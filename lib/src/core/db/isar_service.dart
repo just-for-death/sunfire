@@ -37,6 +37,40 @@ class IsarService {
   /// True for ids produced by [generateSyntheticServerId] (offline-temp ids).
   static bool isSyntheticServerId(int id) => id < 0;
 
+  /// Global mutex to serialize synthetic ID minting across concurrent callers.
+  /// Without this, two concurrent `saveMangas` calls can both call `exists(id)`
+  /// outside a transaction, get `false`, mint the same ID, and the second
+  /// `putAll` silently replaces the first under `unique: true, replace: true`.
+  static final _SyntheticIdMintLock _mintLock = _SyntheticIdMintLock();
+
+  /// Mints a synthetic id guaranteed unused per [exists]: the time-modulo
+  /// formula repeats every ~1000s and the counter resets per process, so a
+  /// blind mint can collide across sessions and silently replace a row under
+  /// unique-replace indexes. Retries (bounded) until free. [reserved] covers
+  /// ids minted earlier in the same batch that are not on disk yet.
+  /// This method is serialized globally via [_mintLock] to prevent cross-
+  /// caller races (see _mintUniqueSyntheticServerId race audit finding).
+  static Future<int> _mintUniqueSyntheticServerId(
+    Future<bool> Function(int id) exists, [
+    Set<int>? reserved,
+  ]) async {
+    return _mintLock.run(() async {
+      for (var attempt = 0; attempt < 25; attempt++) {
+        final id = _generateSyntheticServerId();
+        if (reserved != null && reserved.contains(id)) continue;
+        if (!await exists(id)) {
+          reserved?.add(id);
+          return id;
+        }
+      }
+      // Practically unreachable (25 consecutive 1-in-10^13 collisions), but
+      // never return a known-taken id: fall back to Int64-range random.
+      final fallback =
+          -(DateTime.now().microsecondsSinceEpoch % 9223372036854775807);
+      return fallback == 0 ? -1 : fallback;
+    });
+  }
+
   IsarService._();
 
   static IsarService get instance {
@@ -134,7 +168,9 @@ class IsarService {
   Future<void> saveManga(Manga manga) async {
     await _executeWrite('saveManga', () async {
       if (manga.serverId == 0) {
-        manga.serverId = _generateSyntheticServerId();
+        manga.serverId = await _mintUniqueSyntheticServerId(
+          (id) async => await _isar.mangas.filter().serverIdEqualTo(id).findFirst() != null,
+        );
       }
       await _isar.writeTxn(() async {
         await _isar.mangas.put(manga);
@@ -145,9 +181,13 @@ class IsarService {
   Future<void> saveMangas(List<Manga> mangas) async {
     if (mangas.isEmpty) return;
     await _executeWrite('saveMangas', () async {
+      final reserved = <int>{};
       for (int i = 0; i < mangas.length; i++) {
         if (mangas[i].serverId == 0) {
-          mangas[i].serverId = _generateSyntheticServerId();
+          mangas[i].serverId = await _mintUniqueSyntheticServerId(
+            (id) async => await _isar.mangas.filter().serverIdEqualTo(id).findFirst() != null,
+            reserved,
+          );
         }
       }
       await _isar.writeTxn(() async {
@@ -214,7 +254,9 @@ class IsarService {
   Future<void> saveChapter(Chapter chapter) async {
     await _executeWrite('saveChapter', () async {
       if (chapter.serverId == 0) {
-        chapter.serverId = _generateSyntheticServerId();
+        chapter.serverId = await _mintUniqueSyntheticServerId(
+          (id) async => await _isar.chapters.filter().serverIdEqualTo(id).findFirst() != null,
+        );
       }
       await _isar.writeTxn(() async {
         await _isar.chapters.put(chapter);
@@ -225,9 +267,13 @@ class IsarService {
   Future<void> saveChapters(List<Chapter> chapters) async {
     if (chapters.isEmpty) return;
     await _executeWrite('saveChapters', () async {
+      final reserved = <int>{};
       for (int i = 0; i < chapters.length; i++) {
         if (chapters[i].serverId == 0) {
-          chapters[i].serverId = _generateSyntheticServerId();
+          chapters[i].serverId = await _mintUniqueSyntheticServerId(
+            (id) async => await _isar.chapters.filter().serverIdEqualTo(id).findFirst() != null,
+            reserved,
+          );
         }
       }
       await _isar.writeTxn(() async {
@@ -428,6 +474,11 @@ class IsarService {
       // looks bulk-stamped), the feed falls back to them instead of rendering
       // an empty offline screen.
       final droppedBulk = <Chapter>[];
+      // Per-manga counts over the scanned window: a bulk stamp is only
+      // evidence of a bulk import when MANY rows share it. A lone chapter
+      // stamped within a minute of adding its series is a genuine update and
+      // must not vanish (same threshold family as the display flood cap).
+      final windowCounts = <int, int>{};
       int offset = 0;
       const maxScan = 10000; // hard ceiling: never balloon memory on huge feeds
       while (result.length < limit && offset < maxScan) {
@@ -441,10 +492,12 @@ class IsarService {
         if (page.isEmpty) break;
         for (final ch in page) {
           if (!libraryIds.contains(ch.mangaId)) continue;
-          if (isLikelyBulkImportChapter(
-            fetchedAt: ch.fetchedAt,
-            inLibraryAt: inLibraryAtByManga[ch.mangaId],
-          )) {
+          windowCounts[ch.mangaId] = (windowCounts[ch.mangaId] ?? 0) + 1;
+          if ((windowCounts[ch.mangaId] ?? 0) > kFloodThresholdChapters &&
+              isLikelyBulkImportChapter(
+                fetchedAt: ch.fetchedAt,
+                inLibraryAt: inLibraryAtByManga[ch.mangaId],
+              )) {
             droppedBulk.add(ch);
             continue;
           }
@@ -674,6 +727,18 @@ class IsarService {
   Future<void> saveCategory(Category category) async {
     await _executeWrite('saveCategory', () async {
       await _isar.writeTxn(() async {
+        // Offline-created categories arrive with serverId == 0; without a
+        // synthetic id, two of them map to the same unique key and the second
+        // put silently REPLACES the first (plus its manga assignments).
+        if (category.serverId == 0) {
+          category.serverId = await _mintUniqueSyntheticServerId(
+            (id) async => (await _isar.categorys
+                    .filter()
+                    .serverIdEqualTo(id)
+                    .findFirst()) !=
+                null,
+          );
+        }
         final existing = await _isar.categorys.filter().serverIdEqualTo(category.serverId).findFirst();
         if (existing != null) {
           category.id = existing.id;
@@ -836,13 +901,38 @@ class IsarService {
       });
     });
   }
+}
 
-  // ── DATABASE MAINTENANCE ────────────────────────────────
-  Future<void> clearAll() async {
-    await _executeWrite('clearAll', () async {
-      await _isar.writeTxn(() async {
-        await _isar.clear();
-      });
-    });
+/// Global mutex for synthetic ID minting. Ensures only one caller at a time
+/// can execute the `exists` check + mint loop, preventing cross-caller
+/// collisions under `unique: true, replace: true` indexes.
+class _SyntheticIdMintLock {
+  final _queue = <Completer<void>>[];
+  bool _held = false;
+
+  Future<T> run<T>(Future<T> Function() action) async {
+    if (!_held) {
+      _held = true;
+      try {
+        return await action();
+      } finally {
+        _held = false;
+        if (_queue.isNotEmpty) {
+          _queue.removeAt(0).complete();
+        }
+      }
+    }
+    final completer = Completer<void>();
+    _queue.add(completer);
+    await completer.future;
+    _held = true;
+    try {
+      return await action();
+    } finally {
+      _held = false;
+      if (_queue.isNotEmpty) {
+        _queue.removeAt(0).complete();
+      }
+    }
   }
 }

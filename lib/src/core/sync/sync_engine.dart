@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting, debugPrint, kDebugMode;
 import 'package:isar_community/isar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../db/epoch_seconds.dart';
 import '../db/isar_service.dart';
@@ -406,36 +407,47 @@ void mergeLastReadAt(Chapter chapter, Map<String, dynamic> chMap) {
 /// Merges one chapter node from the server library snapshot into [chapter]
 /// (an existing local row, or a fresh `Chapter()` for a first-seen id).
 ///
-/// Single-flight gate with a one-deep queue for [SyncEngine.triggerSync].
+/// Single-flight gate with a counter-based queue for [SyncEngine.triggerSync].
 ///
 /// Extracted so the queue semantics are unit-testable without spinning the
 /// full GraphQL / Isar cycle (ISS-050/051).
+/// Changed from bool to int to support multiple concurrent callers: each
+/// `triggerSync` call increments the counter; `beginPass` decrements it.
+/// This prevents dropped sync cycles under burst contention (pull-to-refresh
+/// + WS update + chapter read).
 @visibleForTesting
 class SyncCycleGate {
   bool isSyncing = false;
-  bool queued = false;
+  int _queuedCount = 0;
 
   /// Returns `true` when the caller should run a sync cycle. If a cycle is
-  /// already running, marks [queued] and returns `false`.
+  /// already running, increments the queue counter and returns `false`.
   bool tryBegin() {
     if (isSyncing) {
-      queued = true;
+      _queuedCount++;
       return false;
     }
     isSyncing = true;
-    queued = false;
     return true;
   }
 
-  /// Clears the queue flag at the start of a cycle body.
-  void beginPass() => queued = false;
+  /// Backward-compat getter for tests that check the old `queued` bool.
+  /// @deprecated Use `_queuedCount` or `needsAnotherPass()` instead.
+  bool get queued => _queuedCount > 0;
+
+  /// Decrements the queue counter at the start of a cycle body.
+  void beginPass() {
+    if (_queuedCount > 0) _queuedCount--;
+  }
 
   /// After a cycle body finishes: `true` when another pass should run.
-  bool needsAnotherPass() => queued;
+  bool needsAnotherPass() => _queuedCount > 0;
 
-  /// Releases the single-flight lock. Call only when no further pass is needed.
+  /// Releases the single-flight lock and clears the queue. Call only when no
+  /// further pass is needed (e.g., server switch quarantine).
   void end() {
     isSyncing = false;
+    _queuedCount = 0;
   }
 }
 
@@ -720,6 +732,7 @@ class SyncEngine {
   Future<void> initialize({String? deviceId}) async {
     _deviceId = await resolveStableDeviceId(deviceId: deviceId);
     await LoggerService.instance.logInfo('SyncEngine initialized for deviceId: $_deviceId', 'SyncEngine');
+    await _loadDispatchAttempts();
     _ensureWsUpdatePullHook();
     await triggerSync();
   }
@@ -748,8 +761,19 @@ class SyncEngine {
     for (final record in records) {
       record.retryCount = 0;
       record.state = SyncRecordState.pending;
+      // The in-memory attempt budget must restart too: without this a record
+      // that failed 39 times transiently is abandoned after a single further
+      // transient failure, so the manual retry silently does almost nothing
+      // for exactly the records that need it most.
+      _dispatchAttempts.remove(record.id);
       await IsarService.instance.saveSyncRecord(record);
     }
+    // Persist the cleared attempt map and reload to sync in-memory state.
+    // Without this, a process restart before the unawaited persist completes
+    // would read the old persisted map (with high attempt counts) and the
+    // "retried" records would immediately be treated as poisoned again.
+    await _persistDispatchAttempts();
+    await _loadDispatchAttempts();
     await LoggerService.instance.logInfo(
       'Reset ${records.length} failed/abandoned sync record(s) to pending for retry',
       'SyncEngine',
@@ -757,6 +781,39 @@ class SyncEngine {
     // Kick an immediate flush so the retry is not only queued for the next cycle.
     unawaited(triggerSync());
     return records.length;
+  }
+
+  /// Discards queued + failed sync records when the server URL changes.
+  /// Returns the number discarded. Pending records carry small-int ids from
+  /// the OLD server; replaying them against a new server would land progress
+  /// and category edits on unrelated wrong series with no error surfaced.
+  /// Deleting is deliberate: silent corruption beats silent loss, and the
+  /// count is logged + surfaced so the user knows what was dropped.
+  Future<int> quarantinePendingForServerSwitch() async {
+    final pending = await IsarService.instance.getPendingSyncRecords();
+    final failed = await IsarService.instance.getFailedSyncRecords();
+    final ids = <int>{
+      for (final r in [...pending, ...failed]) r.id,
+    };
+    for (final id in ids) {
+      await IsarService.instance.deleteSyncRecord(id);
+      _dispatchAttempts.remove(id);
+    }
+    // Clear in-flight sync state that targets the old server:
+    _wsUpdatePullTimer?.cancel();
+    _wsUpdatePullTimer = null;
+    _progressLocks.clear();
+    _lastDirectPage.clear();
+    _cycleGate.end(); // abort any in-flight cycle and clear the queue
+    unawaited(_persistDispatchAttempts());
+    if (ids.isNotEmpty) {
+      await LoggerService.instance.logWarning(
+        'Server changed: discarded ${ids.length} queued/failed sync record(s) '
+        'addressed to the previous server; re-mark anything missing',
+        'SyncEngine',
+      );
+    }
+    return ids.length;
   }
 
   /// Bypass wipe-guard and apply server library removals (Settings → Advanced).
@@ -897,6 +954,20 @@ class SyncEngine {
     return true;
   }
 
+  /// Per-chapter serialization gates: rapid page turns fire overlapping
+  /// `syncChapterProgress` calls, and without ordering two direct
+  /// `updateChapterReadStatus` mutations (page 20, then 21) race with
+  /// last-writer-wins persisting page 20 on the server. Chained futures make
+  /// same-chapter work strictly ordered; different chapters stay parallel.
+  /// Entries are removed on completion (identical-check) so the map cannot
+  /// grow with the library.
+  final Map<int, Future<void>> _progressLocks = {};
+
+  /// Last successfully direct-dispatched page per chapter. An offline enqueue
+  /// racing a just-completed direct dispatch max()es against this, so a
+  /// stale queued page can never overwrite newer server state on replay.
+  final Map<int, int> _lastDirectPage = {};
+
   Future<void> syncChapterProgress(
     int chapterServerId, {
     required bool isRead,
@@ -908,19 +979,54 @@ class SyncEngine {
     // particular would replay long after the user turned Incognito back off.
     if (SettingsService.instance.incognitoMode) return;
 
+    final prior = _progressLocks[chapterServerId] ?? Future<void>.value();
+    // Force async boundary so any synchronous throw in _syncChapterProgressInner
+    // becomes a Future error, caught by the guarded chain. Without this, a
+    // synchronous throw (e.g., JSON encoding, Isar closed) would propagate out
+    // of the await below, leaving the guarded future stored but the work lost.
+    final current = prior.then((_) => Future.sync(() => _syncChapterProgressInner(
+          chapterServerId,
+          isRead: isRead,
+          lastPageRead: lastPageRead,
+        )));
+    // The stored chain must never complete with an error, or every later
+    // waiter for this chapter would throw without doing work.
+    final guarded = current.then<void>((_) {}, onError: (_) {});
+    unawaited(guarded);
+    _progressLocks[chapterServerId] = guarded;
+    try {
+      await current;
+    } finally {
+      if (identical(_progressLocks[chapterServerId], guarded)) {
+        unawaited(_progressLocks.remove(chapterServerId));
+      }
+    }
+  }
+
+  Future<void> _syncChapterProgressInner(
+    int chapterServerId, {
+    required bool isRead,
+    required int lastPageRead,
+  }) async {
+
     if (GraphQLClientService.instance.isConfigured) {
       final isOnline = await GraphQLClientService.instance.checkServerReachable();
       if (isOnline) {
         try {
-          final res = await GraphQLClientService.instance.updateChapterReadStatus(
-            chapterServerId,
-            isRead,
-            lastPageRead,
-          );
-          if (res != null) {
+          final res = await GraphQLClientService.instance
+              .updateChapterReadStatusWithClassification(
+                chapterServerId,
+                isRead,
+                lastPageRead,
+              );
+          if (res.data != null) {
             // The server now has the latest progress, so any still-queued
             // progress update for this chapter is stale. Replaying it later
             // would overwrite this newer value with an older one.
+            _lastDirectPage[chapterServerId] = lastPageRead;
+            while (_lastDirectPage.length > 2000) {
+              _lastDirectPage.remove(_lastDirectPage.keys.first);
+            }
             await _dropQueuedProgressRecords(chapterServerId);
             return;
           }
@@ -948,10 +1054,14 @@ class SyncEngine {
       // queued record before either writes; without this max() the slower
       // writer persisted page 20 over page 21 and the replay uploaded stale
       // progress. Same reason for isRead: a queued "read" must not be undone
-      // by a late "unread" from the same burst.
+      // by a late "unread" from the same burst. The just-dispatched page
+      // joins the max so an offline enqueue racing a completed direct send
+      // cannot rewind the server either.
       final queued = _readQueuedProgress(record.payloadJson);
       final incoming = lastPageRead;
-      final bestPage = queued == null ? incoming : (incoming > queued ? incoming : queued);
+      var bestPage = queued == null ? incoming : (incoming > queued ? incoming : queued);
+      final direct = _lastDirectPage[chapterServerId];
+      if (direct != null && direct > bestPage) bestPage = direct;
       final bestRead = isRead || (queued == null ? false : _readQueuedIsRead(record.payloadJson));
 
       record.payloadJson = jsonEncode({
@@ -1147,8 +1257,9 @@ class SyncEngine {
       final isOnline = await GraphQLClientService.instance.checkServerReachable();
       if (isOnline) {
         try {
-          final res = await GraphQLClientService.instance.createCategory(name);
-          final created = res?['createCategory']?['category'];
+          final res = await GraphQLClientService.instance
+              .createCategoryWithClassification(name);
+          final created = res.data?['createCategory']?['category'];
           if (created is Map) {
             final remoteId = parseIntSafe(created['id']);
             if (remoteId > 0 && remoteId != localServerId) {
@@ -1250,6 +1361,13 @@ class SyncEngine {
     }
   }
 
+  /// Per-manga serialization for category assign coalescing. Rapid UI toggles
+  /// fire overlapping `syncMangaCategories` calls, and without ordering two
+  /// assign mutations race: both load pending assigns, both delete each other's
+  /// records, both save — one assign is lost. Chained futures make same-manga
+  /// work strictly ordered; different manga stay parallel.
+  final Map<int, Future<void>> _categoryAssignLocks = {};
+
   Future<void> syncMangaCategories(int mangaServerId, List<int> categoryIds, {List<int>? existingCategoryIds}) async {
     if (mangaServerId <= 0) return;
 
@@ -1266,6 +1384,27 @@ class SyncEngine {
       }
     }
 
+    final prior = _categoryAssignLocks[mangaServerId] ?? Future<void>.value();
+    final current = prior.then((_) => _syncMangaCategoriesInner(
+          mangaServerId,
+          categoryIds,
+        ));
+    final guarded = current.then<void>((_) {}, onError: (_) {});
+    unawaited(guarded);
+    _categoryAssignLocks[mangaServerId] = guarded;
+    try {
+      await current;
+    } finally {
+      if (identical(_categoryAssignLocks[mangaServerId], guarded)) {
+        unawaited(_categoryAssignLocks.remove(mangaServerId));
+      }
+    }
+  }
+
+  Future<void> _syncMangaCategoriesInner(
+    int mangaServerId,
+    List<int> categoryIds,
+  ) async {
     final record = SyncRecord()
       ..recordId = const Uuid().v4()
       ..entityType = SyncEntityType.category
@@ -1279,7 +1418,32 @@ class SyncEngine {
       ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000
       ..deviceId = _deviceId ?? 'default_device'
       ..state = SyncRecordState.pending;
+    // Coalesce like chapter progress: an assign payload carries the FULL
+    // category list, so older pending assigns for this manga are pure waste
+    // (and replay N full setMangaCategories mutations where one suffices).
+    try {
+      final pending = await IsarService.instance.getPendingSyncRecords();
+      for (final r in pending) {
+        if (r.entityType == SyncEntityType.category &&
+            r.entityId == 'manga_$mangaServerId' &&
+            r.state == SyncRecordState.pending &&
+            _isAssignPayload(r.payloadJson)) {
+          await IsarService.instance.deleteSyncRecord(r.id);
+        }
+      }
+    } catch (_) {}
     await IsarService.instance.saveSyncRecord(record);
+  }
+
+  /// True when a sync payload is a category-assign op (full category list).
+  static bool _isAssignPayload(String? payloadJson) {
+    if (payloadJson == null || payloadJson.isEmpty) return false;
+    try {
+      final decoded = jsonDecode(payloadJson);
+      return decoded is Map && decoded['op']?.toString() == 'assign';
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> syncCategoryRename(int categoryServerId, String newName) async {
@@ -1290,8 +1454,9 @@ class SyncEngine {
       final isOnline = await GraphQLClientService.instance.checkServerReachable();
       if (isOnline) {
         try {
-          final res = await GraphQLClientService.instance.updateCategoryName(categoryServerId, trimmed);
-          if (res != null) return;
+          final res = await GraphQLClientService.instance
+              .updateCategoryNameWithClassification(categoryServerId, trimmed);
+          if (res.data != null) return;
         } catch (e) {
           await LoggerService.instance.logWarning('Direct category rename failed ($categoryServerId): $e, queuing', 'SyncEngine');
         }
@@ -1480,20 +1645,35 @@ class SyncEngine {
               if (chapterId > 0) {
                 var allOk = true;
                 var attempted = false;
+                bool wasTransportFailure = false;
                 if (chapterMutationNeedsBookmark(payload)) {
                   attempted = true;
                   final isBookmarked = parseBoolSafe(payload['isBookmarked']);
-                  final res = await GraphQLClientService.instance.updateChapterBookmark(chapterId, isBookmarked);
-                  allOk = allOk && res != null;
+                  final res = await GraphQLClientService.instance
+                      .updateChapterBookmarkWithClassification(chapterId, isBookmarked);
+                  allOk = allOk && res.data != null;
+                  wasTransportFailure = wasTransportFailure || res.wasTransportFailure;
                 }
                 if (chapterMutationNeedsReadProgress(payload)) {
                   attempted = true;
                   final isRead = parseBoolSafe(payload['isRead']);
                   final lastPageRead = parseIntSafe(payload['lastPageRead']);
-                  final res = await GraphQLClientService.instance.updateChapterReadStatus(chapterId, isRead, lastPageRead);
-                  allOk = allOk && res != null;
+                  final res = await GraphQLClientService.instance
+                      .updateChapterReadStatusWithClassification(chapterId, isRead, lastPageRead);
+                  allOk = allOk && res.data != null;
+                  wasTransportFailure = wasTransportFailure || res.wasTransportFailure;
                 }
                 success = attempted && allOk;
+                // Capture the transport failure classification for this dispatch.
+                // This replaces reading the shared `lastRequestWasTransportFailure` flag
+                // which was subject to cross-request races.
+                if (!success) {
+                  await _recordDispatchFailure(
+                    record,
+                    transient: wasTransportFailure,
+                  );
+                  continue;
+                }
               } else {
                 // `parseIntSafe` returns 0 for a missing or non-numeric id, so
                 // a corrupt payload landed here and was reported as SUCCESS.
@@ -1555,7 +1735,8 @@ class SyncEngine {
               // Probing by name first makes the create effectively idempotent.
               Map<String, dynamic>? created;
               final existing = await GraphQLClientService.instance.fetchCategories();
-              if (existing != null && existing['categories'] is Map) {
+              final categoriesListed = existing != null && existing['categories'] is Map;
+              if (categoriesListed) {
                 final nodes = (existing['categories'] as Map)['nodes'];
                 if (nodes is List) {
                   for (final n in nodes.whereType<Map<String, dynamic>>()) {
@@ -1567,7 +1748,18 @@ class SyncEngine {
                   }
                 }
               }
-              created ??= (await GraphQLClientService.instance.createCategory(name))?['createCategory']?['category'] as Map<String, dynamic>?;
+              if (created == null) {
+                if (!categoriesListed) {
+                  // The probe itself failed: a previous attempt may have
+                  // committed server-side while its response was lost.
+                  // Creating blindly duplicates the category; defer to the
+                  // next flush (which probes first) via an explicit transient
+                  // failure, skipping the generic epilogue below.
+                  await _recordDispatchFailure(record, transient: true);
+                  continue;
+                }
+                created ??= (await GraphQLClientService.instance.createCategory(name))?['createCategory']?['category'] as Map<String, dynamic>?;
+              }
               if (created != null) {
                 final remoteId = parseIntSafe(created['id']);
                 if (remoteId > 0 && localServerId != remoteId) {
@@ -1618,13 +1810,23 @@ class SyncEngine {
             } else if (op == 'assign') {
               final mangaId = parseIntSafe(payload['mangaId']);
               final ids = (payload['categoryIds'] as List?)?.map((e) => parseIntSafe(e)).toList() ?? <int>[];
-              final res = await GraphQLClientService.instance.setMangaCategories(mangaId, ids);
-              success = res != null;
+              final res = await GraphQLClientService.instance
+                  .setMangaCategoriesWithClassification(mangaId, ids);
+              success = res.data != null;
+              if (!success) {
+                await _recordDispatchFailure(record, transient: res.wasTransportFailure);
+                continue;
+              }
             } else if (op == 'rename') {
               final categoryId = parseIntSafe(payload['categoryId'] ?? record.entityId);
               final name = payload['name']?.toString() ?? '';
-              final res = await GraphQLClientService.instance.updateCategoryName(categoryId, name);
-              success = res != null;
+              final res = await GraphQLClientService.instance
+                  .updateCategoryNameWithClassification(categoryId, name);
+              success = res.data != null;
+              if (!success) {
+                await _recordDispatchFailure(record, transient: res.wasTransportFailure);
+                continue;
+              }
             }
             break;
           case SyncEntityType.source:
@@ -1634,27 +1836,11 @@ class SyncEngine {
         if (success) {
           await _completeDispatchedRecord(record);
         } else {
-          // GraphQLClientService.query() swallows every failure and returns
-          // null, so a dropped connection lands here, not in the catch below.
-          // `isKnownUnreachable` is the right discriminator and needs no auth
-          // guard: it tracks the transport only. A 401/403 is answered by the
-          // server, so it leaves that status reachable and falls through to
-          // transient: false, which is what we want — counting an auth failure
-          // against the retry budget abandons the record in a bounded number of
-          // cycles instead of re-attempting it for 14 days with a bad
-          // credential.
-          //
-          // Do NOT re-add `&& !hasAuthError` here. It used to paper over
-          // checkServerReachable marking a 401'd server unreachable, and now
-          // that distinction is correct it actively backfires: a real network
-          // drop arriving while a *stale* auth error is still latched would be
-          // read as permanent and burn the record's retry budget on something
-          // that would have succeeded on the next attempt.
-          final client = GraphQLClientService.instance;
-          await _recordDispatchFailure(
-            record,
-            transient: client.isKnownUnreachable,
-          );
+          // For entity types without WithClassification helpers (tracker, source),
+          // we conservatively treat the failure as non-transient (false) so it
+          // burns retry budget and is abandoned if it's a permanent error.
+          // TODO: add WithClassification helpers for remaining mutations.
+          await _recordDispatchFailure(record, transient: false);
         }
       } catch (e, stack) {
         await _recordDispatchFailure(record, transient: isTransientSyncError(e));
@@ -1673,6 +1859,7 @@ class SyncEngine {
     if (current == null) return;
     // The record is done, so its attempt budget is spent.
     _dispatchAttempts.remove(dispatched.id);
+    unawaited(_persistDispatchAttempts());
     if (current.payloadJson == dispatched.payloadJson) {
       await IsarService.instance.deleteSyncRecord(dispatched.id);
     } else {
@@ -1700,6 +1887,64 @@ class SyncEngine {
   /// 14-day age bound still applies.
   final Map<int, int> _dispatchAttempts = {};
 
+  /// Serialization chain for attempt persistence. Multiple callers (flush,
+  /// retry, quarantine) fire concurrent `setString`; without serialization
+  /// the last writer wins and earlier updates are lost, resetting poison
+  /// records' attempt budgets on restart.
+  Future<void> _attemptsSaveChain = Future.value();
+
+  /// Prefs key for the persisted attempt map. A poison record failing only
+  /// with transport-classified errors otherwise gets a fresh 40-attempt
+  /// budget on every launch (the map above is process-local) and hammers
+  /// for up to 14 days per restart.
+  static const _dispatchAttemptsPrefKey = 'sunfire_sync_attempts_v1';
+
+  /// Cap: the map is diagnostic ballast, never unbounded storage.
+  static const _maxPersistedAttempts = 500;
+
+  Future<void> _persistDispatchAttempts() {
+    _attemptsSaveChain = _attemptsSaveChain.then((_) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        var entries = _dispatchAttempts.entries.toList();
+        if (entries.length > _maxPersistedAttempts) {
+          entries = entries.sublist(entries.length - _maxPersistedAttempts);
+        }
+        await prefs.setString(_dispatchAttemptsPrefKey,
+            jsonEncode({for (final e in entries) e.key.toString(): e.value}));
+      } catch (_) {}
+    });
+    return _attemptsSaveChain;
+  }
+
+  /// Restores attempt budgets, keeping only ids that still exist as
+  /// pending/failed records (a success between persist and restart must not
+  /// keep penalizing anything).
+  Future<void> _loadDispatchAttempts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_dispatchAttemptsPrefKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final live = <int>{};
+      for (final r in await IsarService.instance.getPendingSyncRecords()) {
+        live.add(r.id);
+      }
+      for (final r in await IsarService.instance.getFailedSyncRecords()) {
+        live.add(r.id);
+      }
+      _dispatchAttempts.clear();
+      decoded.forEach((k, v) {
+        final id = int.tryParse(k.toString());
+        final n = v is int ? v : int.tryParse(v.toString());
+        if (id != null && n != null && n > 0 && live.contains(id)) {
+          _dispatchAttempts[id] = n;
+        }
+      });
+    } catch (_) {}
+  }
+
   /// Applies retry accounting after a failed dispatch. Re-reads the record so
   /// only `retryCount`/`state` are written and a payload coalesced during the
   /// request isn't reverted by saving the stale in-memory copy.
@@ -1711,6 +1956,7 @@ class SyncEngine {
     }
     final attempts = (_dispatchAttempts[current.id] ?? 0) + 1;
     _dispatchAttempts[current.id] = attempts;
+    unawaited(_persistDispatchAttempts());
     current.retryCount = retryCountAfterFailure(current.retryCount, transient: transient);
     final nextState = stateAfterFailure(
       retryCount: current.retryCount,
@@ -1723,6 +1969,7 @@ class SyncEngine {
       // dead weight. Without this the map grows by one entry per poisoned
       // record for the life of the process.
       _dispatchAttempts.remove(current.id);
+      unawaited(_persistDispatchAttempts());
       if (attempts > 0 && transient) {
         await LoggerService.instance.logWarning(
           'Abandoning sync record ${current.id} after $attempts attempts '
