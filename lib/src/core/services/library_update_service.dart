@@ -9,6 +9,7 @@ import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/download_status_merge.dart';
 import '../sync/graphql_client_service.dart';
+import '../sync/offline_monitor.dart';
 import '../sync/sync_engine.dart';
 import '../sync/websocket_service.dart';
 import 'battery_state_service.dart';
@@ -149,8 +150,17 @@ class LibraryUpdateService extends ChangeNotifier {
         return 0;
       }
 
+      // Offline-aware availability: a known-dead connection skips the live
+      // probe entirely (no doomed 3s timeouts per cycle) and drops straight
+      // to the local-scrape path below with an honest status line.
+      final offlineKnown = OfflineMonitor.instance.isOffline;
       final serverAvailable = GraphQLClientService.instance.isConfigured &&
+          !offlineKnown &&
           await GraphQLClientService.instance.checkServerReachable();
+      if (offlineKnown) {
+        _statusMessage = 'Offline — checking local sources only...';
+        notifyListeners();
+      }
 
       // Avoid stacking updateLibrary on top of an in-flight SyncEngine cycle
       // (resume used to fire both and amplify the sync storm — ISS-058).

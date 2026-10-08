@@ -18,6 +18,7 @@ import '../../core/services/image_cache_helper.dart';
 import '../../core/services/library_update_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/offline_monitor.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../main_shell.dart';
@@ -75,6 +76,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   bool _isLoading = true;
   bool _isCheckingServer = false;
   bool _isOffline = false;
+  /// When the outage began (frozen feed = snapshot as of this time).
+  DateTime? _offlineSnapshotAt;
+  /// Queued mutations waiting for reconnect, shown in the offline banner.
+  int _pendingCount = 0;
   String? _lastUpdateText;
   DateTime? _lastUpdateAt;
 
@@ -94,6 +99,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   void initState() {
     super.initState();
     unawaited(_loadUpdates());
+    OfflineMonitor.instance.addListener(_onOfflineChanged);
     MainShell.selectedTabNotifier.addListener(_onTabChanged);
     // showLanguageBadges and selectedLanguages are both read during build (via
     // _languageBadgeLabel and _filteredUpdates) and both are written from the
@@ -137,7 +143,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     _pullTimer = Timer(delay, () {
       _pullTimer = null;
       if (!mounted) return;
-      if (GraphQLClientService.instance.isConfigured) {
+      if (GraphQLClientService.instance.isConfigured &&
+          !OfflineMonitor.instance.isOffline) {
         unawaited(SyncEngine.instance.triggerSync().then((_) {
           if (mounted) _scheduleCacheReload(delay: Duration.zero);
         }));
@@ -216,6 +223,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   @override
   void dispose() {
     _reloadTimer?.cancel();
+    OfflineMonitor.instance.removeListener(_onOfflineChanged);
     SettingsService.instance.removeListener(_onSettingsChanged);
     MainShell.selectedTabNotifier.removeListener(_onTabChanged);
     unawaited(_wsUpdateSub?.cancel());
@@ -235,9 +243,44 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     await _loadUpdatesFromIsarCache();
 
     // 2. Background server fetch (only if configured, never blocks initial render)
-    if (GraphQLClientService.instance.isConfigured) {
+    // Offline means doomed 8s timeouts: serve the cache, say so, skip the fetch.
+    if (GraphQLClientService.instance.isConfigured &&
+        !OfflineMonitor.instance.isOffline) {
       unawaited(_fetchServerUpdatesInBackground());
     }
+    if (OfflineMonitor.instance.isOffline) {
+      _offlineSnapshotAt ??= DateTime.now();
+      unawaited(_refreshPendingCount());
+    }
+  }
+
+  /// OfflineMonitor transitions drive the feed mode, not per-request guesses:
+  /// entering offline freezes the snapshot timestamp (feed = cache as of
+  /// then); recovery triggers exactly one refresh.
+  void _onOfflineChanged() {
+    if (!mounted) return;
+    final offline = OfflineMonitor.instance.isOffline;
+    if (offline == _isOffline && !offline) return;
+    setState(() {
+      _isOffline = offline;
+      if (offline) {
+        _offlineSnapshotAt ??= DateTime.now();
+      } else {
+        _offlineSnapshotAt = null;
+      }
+    });
+    if (offline) {
+      unawaited(_refreshPendingCount());
+    } else {
+      unawaited(_refreshFeed());
+    }
+  }
+
+  Future<void> _refreshPendingCount() async {
+    try {
+      final pending = await IsarService.instance.getPendingSyncRecords();
+      if (mounted) setState(() => _pendingCount = pending.length);
+    } catch (_) {}
   }
 
   /// Builds mangaId → language cache from the local library so update feed items
@@ -733,10 +776,36 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   /// Pull-to-refresh: re-read the local cache, then pull the latest update
   /// chapters from the server. Bounded, and never triggers a library-wide
   /// re-scrape — see the RefreshIndicator for why.
+  /// Offline banner: frozen-snapshot age plus queued work, so an outage
+  /// reads as a state ("as of 12:39 PM, 3 changes queued") instead of a void.
+  String get _offlineBannerText {
+    final bits = <String>['Offline'];
+    final at = _offlineSnapshotAt;
+    if (at != null) {
+      bits.add('updates as of ${DateFormat.jm().format(at)}');
+    } else {
+      bits.add('cached updates');
+    }
+    if (_pendingCount > 0) {
+      bits.add('$_pendingCount change${_pendingCount == 1 ? '' : 's'} will sync on reconnect');
+    }
+    return bits.join(' — ');
+  }
+
   Future<void> _refreshFeed() async {
     await _loadUpdatesFromIsarCache();
     if (!mounted) return;
     if (!GraphQLClientService.instance.isConfigured) return;
+    // Offline pull-to-refresh: re-reading the cache above is the whole job.
+    // A server pull now would only burn timeouts to report failure.
+    if (OfflineMonitor.instance.isOffline) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_offlineBannerText)),
+        );
+      }
+      return;
+    }
     await _fetchServerUpdatesInBackground();
   }
 
@@ -1462,9 +1531,9 @@ unawaited(
                 ),
               )
             else if (_isOffline)
-              const Text(
-                'Offline — Cached updates',
-                style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w600),
+              Text(
+                _offlineBannerText,
+                style: const TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w600),
               ),
           ],
         ),
