@@ -1,22 +1,24 @@
 # ==============================================================================
 # Codemagic CI/CD for Sunfire Manga Reader — v5.0.0
 #
-# Signing model (local-only by design): the persistent Android release key
-# lives on the release machine (gitignored, never committed) and CI has no
-# access to it — so CI MUST NOT emit installable APKs. Every CI-built APK
-# would carry a random debug certificate and force an uninstall to update.
-# CI therefore only VERIFIES (analyze + test + debug compile); installable
-# release APKs are built locally (see README "Release signing").
+# ARTIFACTS: Both APKs and IPA are built UNSIGNED.
+# - Android: release APKs built without any signing config (--no-codesign not
+#   available for Android; gradle configured to skip signing in release build)
+# - iOS: unsigned IPA for AltStore/TrollStore/Sideloadly (--no-codesign)
+#
+# SIGNING IS DONE LOCALLY on the release machine using the persistent key
+# (android/sunfire-release.jks, gitignored). CI artifacts are raw unsigned
+# binaries that the release machine signs before publishing.
 # Release cert SHA-256: 455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775
 # ==============================================================================
 
 workflows:
 
   # ────────────────────────────────────────────────────────────────────────────
-  # WORKFLOW 1: ANDROID VERIFY (Linux x2 — analyze + test + debug compile)
-  # ────────────────────────────────────────────────────────────────────────────
-  android-release:
-    name: Android Verify (Analyze, Test, Debug Build) - v5.0.0
+# WORKFLOW 1: ANDROID UNSIGNED RELEASE (Linux x2 — unsigned release APKs)
+# ────────────────────────────────────────────────────────────────────────────
+  android-unsigned-release:
+    name: Android Unsigned Release APKs - v5.0.0
     max_build_duration: 60
     instance_type: linux_x2
     environment:
@@ -25,11 +27,6 @@ workflows:
       vars:
         LANG: en_US.UTF-8
         LC_ALL: en_US.UTF-8
-    # NOTE: release signing uses a LOCAL-ONLY key (android/sunfire-release.jks
-    # + android/key.properties, both gitignored, never committed). CI has no
-    # access to it by design, so this workflow collects NO APK artifacts:
-    # without the release key any APK would be wrongly signed. Installable
-    # release APKs are built locally: see README "Release signing".
     cache:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
@@ -41,15 +38,8 @@ workflows:
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
       - name: Pre-install Android NDK (retried)
         script: |
-          # flutter_qjs pins no ndkVersion, so AGP falls back to its default
-          # NDK r27 (27.0.12077973) and auto-installs it on first Gradle run.
-          # That single-shot download has arrived corrupt before (ZipException
-          # -> InstallFailedException), killing the whole build. Install it
-          # explicitly with retries so one bad download cannot fail the build.
           set -e
           SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          # sdkmanager is not on PATH on all builder images (notably macOS):
-          # resolve it under the SDK root explicitly.
           SDKMANAGER=""
           for candidate in "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$SDK_ROOT/tools/bin/sdkmanager"; do
             if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
@@ -73,29 +63,50 @@ workflows:
         script: flutter pub get
       - name: Analyze
         script: flutter analyze
+      - name: Test
+        script: flutter test --exclude-tags native,network
       - name: Build Linux debug for native test libs (best-effort)
         script: |
-          # QuickJS-backed tests load libflutter_qjs_plugin.so from a Linux
-          # debug build when present and skip gracefully when absent.
           flutter build linux --debug || echo "⚠️ Linux debug build unavailable; native tests will skip."
-      - name: Test
+      - name: Build UNSIGNED release APKs (all ABIs)
         script: |
-          # Repo baseline (see dart_test.yaml): native tests need
-          # libflutter_qjs_plugin.so and network tests need a live
-          # Suwayomi server + FlareSolverr — neither exists on builders.
-          flutter test --exclude-tags native,network --exclude-tags network  # native runs: Linux debug build above
-      - name: Debug compile check (no artifacts)
+          set -e
+          # Configure gradle to build release without signing
+          printf 'storePassword=\nkeyPassword=\nkeyAlias=\nstoreFile=\n' > "$CM_BUILD_DIR/android/key.properties"
+          # Build unsigned release APKs (all ABIs)
+          flutter build apk --release \
+            --android-skip-build-dependency-validation \
+            --no-tree-shake-icons
+      - name: Verify APKs are unsigned
         script: |
-          # Proves the Android native build compiles. The APK is deliberately
-          # NOT collected: without the release key it would be a wrongly-signed
-          # artifact. See the header comment.
-          flutter build apk --debug --android-skip-build-dependency-validation
+          set -e
+          shopt -s nullglob
+          apks=(build/app/outputs/flutter-apk/*.apk)
+          if [ ${#apks[@]} -eq 0 ]; then
+            echo "❌ No APKs found!" >&2
+            exit 1
+          fi
+          for apk in "${apks[@]}"; do
+            echo "Checking: $apk"
+            # Check if APK has no signature (V2/V3)
+            if apksigner verify --print-certs "$apk" 2>&1 | grep -q "No signatures found"; then
+              echo "  ✅ Unsigned: $apk"
+            else
+              echo "  ❌ SIGNED (unexpected): $apk"
+              apksigner verify --print-certs "$apk"
+              exit 1
+            fi
+          done
+          echo "✅ All APKs verified as unsigned"
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/flutter-apk/*.apk.sha1
 
   # ────────────────────────────────────────────────────────────────────────────
-  # WORKFLOW 2: iOS RELEASE (Mac Mini M2 — AltStore / TrollStore / Sideloadly)
+  # WORKFLOW 2: iOS UNSIGNED IPA (Mac Mini M2 — AltStore / TrollStore / Sideloadly)
   # ────────────────────────────────────────────────────────────────────────────
-  ios-release:
-    name: iOS IPA (Unsigned Sideload) - v5.0.0
+  ios-unsigned-ipa:
+    name: iOS Unsigned IPA (Sideload) - v5.0.0
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -148,13 +159,12 @@ workflows:
       - release/Sunfire-*.ipa
 
   # ────────────────────────────────────────────────────────────────────────────
-  # WORKFLOW 3: ALL PLATFORMS (Unified CI — Triggered on Tags and Main)
-  # Verifies everything, then builds the unsigned sideload IPA only.
-  # No APK artifacts: without the local-only release key any APK would be
-  # wrongly signed (see the header comment).
+  # WORKFLOW 3: ALL PLATFORMS UNSIGNED (Unified CI — Triggered on Tags and Main)
+  # Builds UNSIGNED release APKs (all ABIs) + UNSIGNED IPA for sideloading.
+  # Both artifacts are UNSIGNED — signing is done locally with the persistent key.
   # ────────────────────────────────────────────────────────────────────────────
-  all-release:
-    name: Multi-Platform Verify + iOS IPA - v5.0.0
+  all-unsigned-release:
+    name: Multi-Platform Unsigned Release (APKs + IPA) - v5.0.0
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:
@@ -188,13 +198,9 @@ workflows:
           echo "flutter.sdk=$FLUTTER_ROOT" > "$CM_BUILD_DIR/android/local.properties"
       - name: Pre-install Android NDK (retried)
         script: |
-          # Same AGP-default-NDK pin as android-release: install r27 up front
-          # with retries instead of letting Gradle's single-shot auto-install
-          # fail the build on a corrupt download.
+          # Same AGP-default-NDK pin: install r27 up front with retries
           set -e
           SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          # sdkmanager is not on PATH on all builder images (notably macOS):
-          # resolve it under the SDK root explicitly.
           SDKMANAGER=""
           for candidate in "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$SDK_ROOT/tools/bin/sdkmanager"; do
             if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
@@ -222,16 +228,35 @@ workflows:
         script: flutter analyze
       - name: Test
         script: |
-          # Repo baseline (see dart_test.yaml): native tests need
-          # libflutter_qjs_plugin.so and network tests need a live
-          # Suwayomi server + FlareSolverr — neither exists on builders.
-          flutter test --exclude-tags native,network --exclude-tags native,network  # no Linux build in this workflow
-      - name: Debug compile check (no artifacts)
+          # Repo baseline: native tests need libflutter_qjs_plugin.so + network
+          flutter test --exclude-tags native,network
+      - name: Build UNSIGNED release APKs (all ABIs)
         script: |
-          # Proves the Android native build compiles. The APK is deliberately
-          # NOT collected: without the release key it would be a wrongly-signed
-          # artifact. See the header comment.
-          flutter build apk --debug --android-skip-build-dependency-validation
+          set -e
+          printf 'storePassword=\nkeyPassword=\nkeyAlias=\nstoreFile=\n' > "$CM_BUILD_DIR/android/key.properties"
+          flutter build apk --release \
+            --android-skip-build-dependency-validation \
+            --no-tree-shake-icons
+      - name: Verify APKs are unsigned
+        script: |
+          set -e
+          shopt -s nullglob
+          apks=(build/app/outputs/flutter-apk/*.apk)
+          if [ ${#apks[@]} -eq 0 ]; then
+            echo "❌ No APKs found!" >&2
+            exit 1
+          fi
+          for apk in "${apks[@]}"; do
+            echo "Checking: $apk"
+            if apksigner verify --print-certs "$apk" 2>&1 | grep -q "No signatures found"; then
+              echo "  ✅ Unsigned: $apk"
+            else
+              echo "  ❌ SIGNED (unexpected): $apk"
+              apksigner verify --print-certs "$apk"
+              exit 1
+            fi
+          done
+          echo "✅ All APKs verified as unsigned"
       - name: Build iOS unsigned xcarchive & IPA
         script: |
           set -e
@@ -253,4 +278,6 @@ workflows:
           fi
           ls -lh "$CM_BUILD_DIR/release/"
     artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/flutter-apk/*.apk.sha1
       - release/Sunfire-*.ipa
