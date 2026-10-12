@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -39,10 +37,11 @@ import 'controller/reader_canvas.dart';
 import 'controller/reader_controller.dart';
 import 'controller/reader_theme.dart';
 import 'double_page_layout.dart';
+import 'listen_sheet.dart';
 import 'reader_chapter_navigation.dart';
+import 'reader_overlay_hud.dart';
 import 'reader_prefetch.dart';
 import 'reader_scroll_utils.dart';
-import 'listen_sheet.dart';
 import 'reader_settings_scope.dart';
 import 'reading_mode.dart';
 import 'tap_zone_overlay.dart';
@@ -3493,543 +3492,106 @@ unawaited(
                       ),
                     ),
 
-                  // ── 2. OVERLAY HUD (TOP APP BAR & BOTTOM SLIDER) ──
-                  // Top Overlay Bar with smooth 200ms slide & fade
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: AnimatedSlide(
-                      offset: _showControls ? Offset.zero : const Offset(0, -1),
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeInOut,
-                      child: AnimatedOpacity(
-                        opacity: _showControls ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 200),
-                        child: IgnorePointer(
-                          ignoring: !_showControls,
-                          child: Container(
-                            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 8, left: 16, right: 16, bottom: 12),
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Color(0xCC000000), Colors.transparent],
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                                  onPressed: _safeExitReader,
-                                ),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _chapter?.name ?? 'Reader',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                      ),
-                                      Text(
-                                        '${readingModeHudLabel(_readingMode)} • ${_readerTheme.name.toUpperCase()}',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(color: primaryColor, fontSize: 10, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: Icon(
-                                    _chapter?.isBookmarked == true
-                                        ? Icons.bookmark_rounded
-                                        : Icons.bookmark_border_rounded,
-                                    color: _chapter?.isBookmarked == true ? Colors.amberAccent : Colors.white70,
-                                  ),
-                                  tooltip: _chapter?.isBookmarked == true ? 'Remove Bookmark' : 'Bookmark Chapter',
-                                  onPressed: _toggleReaderBookmark,
-                                ),
-                                IconButton(
-                                  icon: Icon(
-                                    _settings.incognitoMode ? Icons.visibility_off_rounded : Icons.visibility_outlined,
-                                    color: _settings.incognitoMode ? Colors.amberAccent : Colors.white70,
-                                  ),
-                                  tooltip: _settings.incognitoMode ? 'Incognito Mode: ON' : 'Incognito Mode: OFF',
-                                  onPressed: () {
-                                    setState(() => _settings.incognitoMode = !_settings.incognitoMode);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(_settings.incognitoMode
-                                            ? 'Incognito Mode Active (History & tracking paused)'
-                                            : 'Incognito Mode Deactivated'),
-                                        duration: const Duration(seconds: 2),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.format_list_bulleted_rounded, color: Colors.white),
-                                  tooltip: 'Chapters',
-                                  onPressed: _showChapterSelectorSheet,
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.headset_rounded, color: Colors.white),
-                                  tooltip: 'Listen (OCR + TTS)',
-                                  onPressed: _showListenSheet,
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.tune_rounded, color: Colors.white),
-                                  tooltip: 'Settings',
-                                  onPressed: _showReaderSettingsSheet,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Bottom HUD Bar with Scrubber Slider with smooth 200ms slide & fade
-                  Positioned(
-                    bottom: 16 + MediaQuery.of(context).padding.bottom,
-                    left: 16,
-                    right: 16,
-                    child: AnimatedSlide(
-                      offset: _showControls ? Offset.zero : const Offset(0, 1),
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeInOut,
-                      child: AnimatedOpacity(
-                        opacity: _showControls ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 200),
-                        child: IgnorePointer(
-                          ignoring: !_showControls,
-                          child: Center(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(24),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xE614141A),
-                                    borderRadius: BorderRadius.circular(24),
-                                    border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
-                                    boxShadow: const [
-                                      BoxShadow(color: Color(0x66000000), blurRadius: 16, offset: Offset(0, 4)),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Wrap(
-                                        alignment: WrapAlignment.center,
-                                        crossAxisAlignment: WrapCrossAlignment.center,
-                                        spacing: 4,
-                                        runSpacing: 4,
-                                        children: [
-                                          IconButton(
-                                            icon: const Icon(Icons.skip_previous_rounded, color: Colors.white),
-                                            tooltip: 'Previous Chapter',
-                                            onPressed: _prevChapter != null ? () => _readerController.loadChapter(_chapterTargetId(_prevChapter!)) : null,
-                                          ),
-                                          ValueListenableBuilder<int>(
-                                            valueListenable: _pageIndicator,
-                                            builder: (_, activePage, __) => Text(
-                                              'Page $activePage / ${_pageUrls.length}',
-                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                            ),
-                                          ),
-                                          InkWell(
-                                            onTap: _cycleReadingMode,
-                                            borderRadius: BorderRadius.circular(10),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                              decoration: BoxDecoration(
-                                                color: primaryColor.withValues(alpha: 0.2),
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(color: primaryColor.withValues(alpha: 0.5), width: 0.8),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    _readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps
-                                                        ? Icons.swap_vert_rounded
-                                                        : (_readingMode == ReadingMode.pagedRtl ? Icons.arrow_back_rounded : Icons.arrow_forward_rounded),
-                                                    size: 13,
-                                                    color: primaryColor,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    readingModeHudLabel(_readingMode),
-                                                    style: TextStyle(
-                                                      color: primaryColor,
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
-                                                      letterSpacing: 0.5,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                           if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps)
-                                             GestureDetector(
-                                               onTap: _toggleAutoScroll,
-                                               onLongPress: _showAutoScrollSpeedDialog,
-                                               child: Container(
-                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                 decoration: BoxDecoration(
-                                                   color: _isAutoScrolling ? primaryColor.withValues(alpha: 0.3) : const Color(0x22FFFFFF),
-                                                   borderRadius: BorderRadius.circular(12),
-                                                   border: Border.all(
-                                                     color: _isAutoScrolling ? primaryColor : Colors.white24,
-                                                     width: 0.8,
-                                                   ),
-                                                 ),
-                                                 child: Row(
-                                                   mainAxisSize: MainAxisSize.min,
-                                                   children: [
-                                                     Icon(
-                                                       _isAutoScrolling ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                                       size: 13,
-                                                       color: _isAutoScrolling ? primaryColor : Colors.white,
-                                                     ),
-                                                     const SizedBox(width: 3),
-                                                     Text(
-                                                       'AUTO',
-                                                       style: TextStyle(
-                                                         color: _isAutoScrolling ? primaryColor : Colors.white,
-                                                         fontSize: 10,
-                                                         fontWeight: FontWeight.bold,
-                                                         letterSpacing: 0.5,
-                                                       ),
-                                                     ),
-                                                   ],
-                                                 ),
-                                               ),
-                                             ),
-                                           IconButton(
-                                             icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
-                                            tooltip: 'Next Chapter',
-                                            onPressed: _nextChapter != null ? () => _readerController.loadChapter(_chapterTargetId(_nextChapter!)) : null,
-                                          ),
-                                        ],
-                                      ),
-                                      if (_pageUrls.length > 1)
-                                        ConstrainedBox(
-                                          constraints: BoxConstraints(maxWidth: (MediaQuery.of(context).size.width - 64).clamp(180.0, 320.0)),
-                                          child: SizedBox(
-                                            height: 28,
-                                            child: SliderTheme(
-                                              data: SliderThemeData(
-                                                activeTrackColor: primaryColor,
-                                                inactiveTrackColor: Colors.grey[800],
-                                                thumbColor: primaryColor,
-                                                trackHeight: 3,
-                                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                                              ),
-                                              child: ValueListenableBuilder<int>(
-                                                valueListenable: _pageIndicator,
-                                                builder: (_, activePage, __) => Slider(
-                                                  value: (_isDraggingSlider
-                                                      ? (_sliderDragValue ?? activePage.toDouble())
-                                                      : activePage.toDouble()).clamp(1.0, _pageUrls.length.toDouble()),
-                                                  min: 1.0,
-                                                  max: _pageUrls.length.toDouble(),
-                                                  divisions: _pageUrls.length > 1 ? _pageUrls.length - 1 : 1,
-                                                  onChangeStart: (_) {
-                                                    setState(() => _isDraggingSlider = true);
-                                                  },
-                                                  onChanged: (val) {
-                                                    final targetPage = val.round();
-                                                    setState(() {
-                                                      _sliderDragValue = val;
-                                                      _currentPage = targetPage;
-                                                    });
-                                                    _setPageIndicator(targetPage);
-                                                    if (_readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl) {
-                                                      if (_pageController.hasClients) {
-                                                        _pageController.jumpToPage(_pagedControllerIndexForPage(targetPage));
-                                                      }
-                                                    } else {
-                                                      if (_scrollController.hasClients) {
-                                                        _jumpToWebtoonPage(targetPage);
-                                                      }
-                                                    }
-                                                  },
-                                                  onChangeEnd: (val) {
-                                                    final targetPage = val.round();
-                                                    setState(() {
-                                                      _isDraggingSlider = false;
-                                                      _sliderDragValue = null;
-                                                      _currentPage = targetPage;
-                                                    });
-                                                    _setPageIndicator(targetPage);
-                                                    _debouncedUpdateProgress(targetPage);
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // ── 3. FLOATING PAGE INDICATOR CAPSULE (Webtoon Mode) ──
-                  if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps)
-                    Positioned(
-                      bottom: 24 + MediaQuery.of(context).padding.bottom,
-                      right: 20,
-                      child: ValueListenableBuilder<bool>(
-                        valueListenable: _scrollIndicatorVisible,
-                        builder: (context, showIndicator, _) {
-                          return AnimatedOpacity(
-                        opacity: (!_showControls && showIndicator && _pageUrls.isNotEmpty) ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 250),
-                        child: IgnorePointer(
-                          ignoring: !showIndicator || _showControls,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xCC14141A),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
-                              boxShadow: const [
-                                BoxShadow(color: Color(0x40000000), blurRadius: 8, offset: Offset(0, 2)),
-                              ],
-                            ),
-                            child: ValueListenableBuilder<int>(
-                              valueListenable: _pageIndicator,
-                              builder: (context, page, _) => Text(
-                                '$page / ${_pageUrls.length}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                          ),
+                  // ── 2–4. OVERLAY HUD (R1.8 extracted) ──
+                  Positioned.fill(
+                    child: ReaderOverlayHud(
+                    showControls: _showControls,
+                    primaryColor: primaryColor,
+                    chapter: _chapter,
+                    readingMode: _readingMode,
+                    readerTheme: _readerTheme,
+                    incognitoMode: _settings.incognitoMode,
+                    prevChapter: _prevChapter,
+                    nextChapter: _nextChapter,
+                    pageUrlsLength: _pageUrls.length,
+                    pageIndicator: _pageIndicator,
+                    scrollIndicatorVisible: _scrollIndicatorVisible,
+                    isDraggingSlider: _isDraggingSlider,
+                    sliderDragValue: _sliderDragValue,
+                    isAutoScrolling: _isAutoScrolling,
+                    isUserTouching: _isUserTouching,
+                    autoScrollSpeed: _autoScrollSpeed,
+                    isAutoScrollHudCollapsed: _isAutoScrollHudCollapsed,
+                    autoScrollShowFloatingHud: _settings.autoScrollShowFloatingHud,
+                    onExit: _safeExitReader,
+                    onToggleBookmark: _toggleReaderBookmark,
+                    onToggleIncognito: () {
+                      setState(() => _settings.incognitoMode = !_settings.incognitoMode);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(_settings.incognitoMode
+                              ? 'Incognito Mode Active (History & tracking paused)'
+                              : 'Incognito Mode Deactivated'),
+                          duration: const Duration(seconds: 2),
                         ),
                       );
-                        },
-                      ),
-                    ),
-
-                  // ── 4. FLOATING AUTO-SCROLL CONTROLS CAPSULE (Webtoon Mode) ──
-                  if ((_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) &&
-                      _isAutoScrolling &&
-                      !_showControls &&
-                      _settings.autoScrollShowFloatingHud)
-                    Positioned(
-                      bottom: 24 + MediaQuery.of(context).padding.bottom,
-                      left: 20,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeOutCubic,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xCC141419),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: _isUserTouching
-                                    ? Colors.amberAccent.withValues(alpha: 0.8)
-                                    : primaryColor.withValues(alpha: 0.6),
-                                width: 1.0,
-                              ),
-                              boxShadow: const [
-                                BoxShadow(color: Color(0x55000000), blurRadius: 12, offset: Offset(0, 3)),
-                              ],
-                            ),
-                            child: _isAutoScrollHudCollapsed
-                                ? GestureDetector(
-                                    onTap: () {
-                                      unawaited(HapticFeedback.lightImpact());
-                                      setState(() => _isAutoScrollHudCollapsed = false);
-                                    },
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          _isUserTouching ? Icons.touch_app_rounded : Icons.speed_rounded,
-                                          size: 15,
-                                          color: _isUserTouching ? Colors.amberAccent : primaryColor,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '${_autoScrollSpeed.round()}',
-                                          style: TextStyle(
-                                            color: _isUserTouching ? Colors.amberAccent : Colors.white,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 2),
-                                        const Icon(Icons.chevron_right_rounded, size: 14, color: Colors.white38),
-                                      ],
-                                    ),
-                                  )
-                                : Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      // Play / Pause button
-                                      GestureDetector(
-                                        onTap: () {
-                                          unawaited(HapticFeedback.selectionClick());
-                                          _toggleAutoScroll();
-                                        },
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: BoxDecoration(
-                                            color: primaryColor.withValues(alpha: 0.2),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: Icon(
-                                            _isUserTouching ? Icons.touch_app_rounded : Icons.pause_rounded,
-                                            size: 15,
-                                            color: _isUserTouching ? Colors.amberAccent : primaryColor,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      // Speed indicator chip (tap to open full speed modal)
-                                      GestureDetector(
-                                        onTap: () {
-                                          unawaited(HapticFeedback.lightImpact());
-                                          _showAutoScrollSpeedDialog();
-                                        },
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.08),
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(color: Colors.white12, width: 0.6),
-                                          ),
-                                          child: Text(
-                                            _isUserTouching ? 'PAUSED' : '${_autoScrollSpeed.round()} px/s',
-                                            style: TextStyle(
-                                              color: _isUserTouching ? Colors.amberAccent : Colors.white,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing: 0.3,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      // Decrement button
-                                      GestureDetector(
-                                        onTap: () {
-                                          unawaited(HapticFeedback.selectionClick());
-                                          setState(() {
-                                            final step = _autoScrollSpeed >= 300 ? 50.0 : (_autoScrollSpeed >= 100 ? 25.0 : 10.0);
-                                            _autoScrollSpeed = (_autoScrollSpeed - step).clamp(10.0, 2000.0);
-                                          });
-                                        },
-                                        child: const Padding(
-                                          padding: EdgeInsets.symmetric(horizontal: 4),
-                                          child: Icon(Icons.remove_rounded, size: 15, color: Colors.white70),
-                                        ),
-                                      ),
-                                      // Increment button
-                                      GestureDetector(
-                                        onTap: () {
-                                          unawaited(HapticFeedback.selectionClick());
-                                          setState(() {
-                                            final step = _autoScrollSpeed >= 300 ? 50.0 : (_autoScrollSpeed >= 100 ? 25.0 : 10.0);
-                                            _autoScrollSpeed = (_autoScrollSpeed + step).clamp(10.0, 2000.0);
-                                          });
-                                        },
-                                        child: const Padding(
-                                          padding: EdgeInsets.symmetric(horizontal: 4),
-                                          child: Icon(Icons.add_rounded, size: 15, color: Colors.white70),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      // Quick Turbo / Fast cycle
-                                      GestureDetector(
-                                        onTap: () {
-                                          unawaited(HapticFeedback.selectionClick());
-                                          setState(() {
-                                            if (_autoScrollSpeed < 180.0) {
-                                              _autoScrollSpeed = 250.0;
-                                            } else if (_autoScrollSpeed < 450.0) {
-                                              _autoScrollSpeed = 500.0;
-                                            } else {
-                                              _autoScrollSpeed = _settings.defaultAutoScrollSpeed;
-                                            }
-                                          });
-                                        },
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: _autoScrollSpeed >= 180.0
-                                                ? primaryColor.withValues(alpha: 0.35)
-                                                : Colors.white.withValues(alpha: 0.08),
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(
-                                              color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.white24,
-                                              width: 0.8,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.bolt_rounded,
-                                                size: 13,
-                                                color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.amberAccent,
-                                              ),
-                                              const SizedBox(width: 2),
-                                              Text(
-                                                _autoScrollSpeed >= 450.0
-                                                    ? 'TURBO'
-                                                    : (_autoScrollSpeed >= 180.0 ? 'FAST' : 'NORM'),
-                                                style: TextStyle(
-                                                  color: _autoScrollSpeed >= 180.0 ? primaryColor : Colors.white,
-                                                  fontSize: 9,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      // Collapse HUD chevron
-                                      GestureDetector(
-                                        onTap: () {
-                                          unawaited(HapticFeedback.lightImpact());
-                                          setState(() => _isAutoScrollHudCollapsed = true);
-                                        },
-                                        child: const Padding(
-                                          padding: EdgeInsets.symmetric(horizontal: 2),
-                                          child: Icon(Icons.chevron_left_rounded, size: 16, color: Colors.white38),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    },
+                    onShowChapters: _showChapterSelectorSheet,
+                    onShowListen: _showListenSheet,
+                    onShowSettings: _showReaderSettingsSheet,
+                    onLoadPrevChapter: _prevChapter != null
+                        ? () => _readerController.loadChapter(_chapterTargetId(_prevChapter!))
+                        : null,
+                    onLoadNextChapter: _nextChapter != null
+                        ? () => _readerController.loadChapter(_chapterTargetId(_nextChapter!))
+                        : null,
+                    onCycleReadingMode: _cycleReadingMode,
+                    onToggleAutoScroll: _toggleAutoScroll,
+                    onShowAutoScrollSpeed: _showAutoScrollSpeedDialog,
+                    onSliderChangeStart: () {
+                      setState(() => _isDraggingSlider = true);
+                    },
+                    onSliderChanged: (val) {
+                      final targetPage = val.round();
+                      setState(() {
+                        _sliderDragValue = val;
+                        _currentPage = targetPage;
+                      });
+                      _setPageIndicator(targetPage);
+                      if (_readingMode == ReadingMode.pagedLtr ||
+                          _readingMode == ReadingMode.pagedRtl) {
+                        if (_pageController.hasClients) {
+                          _pageController.jumpToPage(_pagedControllerIndexForPage(targetPage));
+                        }
+                      } else if (_scrollController.hasClients) {
+                        _jumpToWebtoonPage(targetPage);
+                      }
+                    },
+                    onSliderChangeEnd: (val) {
+                      final targetPage = val.round();
+                      setState(() {
+                        _isDraggingSlider = false;
+                        _sliderDragValue = null;
+                        _currentPage = targetPage;
+                      });
+                      _setPageIndicator(targetPage);
+                      _debouncedUpdateProgress(targetPage);
+                    },
+                    onAutoScrollSpeedDelta: (delta) {
+                      setState(() {
+                        _autoScrollSpeed =
+                            (_autoScrollSpeed + delta).clamp(10.0, 2000.0);
+                      });
+                    },
+                    onAutoScrollSpeedCycle: () {
+                      setState(() {
+                        if (_autoScrollSpeed < 180.0) {
+                          _autoScrollSpeed = 250.0;
+                        } else if (_autoScrollSpeed < 450.0) {
+                          _autoScrollSpeed = 500.0;
+                        } else {
+                          _autoScrollSpeed = _settings.defaultAutoScrollSpeed;
+                        }
+                      });
+                    },
+                    onCollapseAutoScrollHud: () {
+                      setState(() => _isAutoScrollHudCollapsed = true);
+                    },
+                    onExpandAutoScrollHud: () {
+                      setState(() => _isAutoScrollHudCollapsed = false);
+                    },
+                  ),
+                  ),
             ],
           ),
         ),
