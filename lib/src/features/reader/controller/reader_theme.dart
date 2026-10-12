@@ -98,7 +98,7 @@ String colorFilterLabel(ReaderColorFilter filter) {
     case ReaderColorFilter.grayscale:
       return 'Grayscale';
     case ReaderColorFilter.nightAmber:
-      return 'Night Amber';
+      return 'Amber Tint';
     case ReaderColorFilter.sepia:
       return 'Sepia';
   }
