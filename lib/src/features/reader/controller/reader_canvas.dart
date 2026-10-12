@@ -9,6 +9,8 @@
 // - Placeholder/error states
 // - Chapter transition cards
 
+import 'dart:async' show unawaited;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -20,6 +22,19 @@ import '../double_page_layout.dart';
 import '../reading_mode.dart';
 import 'reader_controller.dart';
 import 'reader_theme.dart';
+
+/// Builds a page widget for [ReaderCanvas].
+///
+/// Live [ReaderScreen] supplies this so curl/recovery/desktop prefetch stay on
+/// the production image path while the canvas owns layout.
+typedef ReaderPageBuilder = Widget Function(
+  BuildContext context,
+  String url,
+  int index, {
+  required bool isPaged,
+  double? contentWidth,
+  bool enablePerPageZoom,
+});
 
 /// ReaderCanvas — renders manga pages using CustomPainter for performance.
 ///
@@ -52,6 +67,9 @@ class ReaderCanvas extends StatefulWidget {
     this.showTransitionCard = false,
     this.nextChapter,
     this.chapter,
+    this.pageBuilder,
+    this.transitionBuilder,
+    this.onRequestNextChapter,
   });
 
   final ReaderController controller;
@@ -72,6 +90,12 @@ class ReaderCanvas extends StatefulWidget {
   final bool showTransitionCard;
   final void Function(int page)? onPageChanged;
   final void Function(String url, int index)? onImageRecovered;
+  /// When set, replaces the built-in Image.network page path (R1.6 live cutover).
+  final ReaderPageBuilder? pageBuilder;
+  /// When set, replaces the built-in end-of-chapter transition card.
+  final WidgetBuilder? transitionBuilder;
+  /// When set, used by the default transition card's "Read Next" button.
+  final VoidCallback? onRequestNextChapter;
 
   @override
   State<ReaderCanvas> createState() => _ReaderCanvasState();
@@ -134,7 +158,8 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
       onPageChanged: widget.onPageChanged,
       itemBuilder: (context, index) {
         if (withTransition && index == contentCount) {
-          return _buildTransitionCard(context);
+          return widget.transitionBuilder?.call(context) ??
+              _buildTransitionCard(context);
         }
         if (useDouble) {
           return _buildSpreadItem(context, slots[index], index);
@@ -152,6 +177,7 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
     Widget pageAt(int i) => Expanded(
       child: Center(
         child: _buildPageWidget(
+          context,
           widget.pageUrls[i],
           i,
           isPaged: true,
@@ -171,7 +197,14 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
 
   Widget _buildSinglePageItem(BuildContext context, int index) {
     return RepaintBoundary(
-      child: Center(child: _buildPageWidget(widget.pageUrls[index], index, isPaged: true)),
+      child: Center(
+        child: _buildPageWidget(
+          context,
+          widget.pageUrls[index],
+          index,
+          isPaged: true,
+        ),
+      ),
     );
   }
 
@@ -207,9 +240,11 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
           itemCount: itemCount,
           itemBuilder: (context, index) {
             if (withTransition && index == widget.pageUrls.length) {
-              return _buildTransitionCard(context);
+              return widget.transitionBuilder?.call(context) ??
+                  _buildTransitionCard(context);
             }
             final pageWidget = _buildPageWidget(
+              context,
               widget.pageUrls[index],
               index,
               isPaged: false,
@@ -247,12 +282,25 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
   // ─── Page Widget ─────────────────────────────────────────────────
 
   Widget _buildPageWidget(
+    BuildContext context,
     String url,
     int index, {
     required bool isPaged,
     double? contentWidth,
     bool enablePerPageZoom = false,
   }) {
+    final custom = widget.pageBuilder;
+    if (custom != null) {
+      return custom(
+        context,
+        url,
+        index,
+        isPaged: isPaged,
+        contentWidth: contentWidth,
+        enablePerPageZoom: enablePerPageZoom,
+      );
+    }
+
     final colorFilter = activeColorFilter(widget.colorFilter);
 
     Widget image = Image.network(
@@ -409,7 +457,13 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       elevation: 0,
                     ),
-                    onPressed: () => widget.controller.loadNextChapter(),
+                    onPressed: () {
+                      if (widget.onRequestNextChapter != null) {
+                        widget.onRequestNextChapter!();
+                      } else {
+                        unawaited(widget.controller.loadNextChapter());
+                      }
+                    },
                     child: const Text(
                       'Read Next Chapter',
                       style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
