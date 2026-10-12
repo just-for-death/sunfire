@@ -39,6 +39,7 @@ import 'controller/reader_theme.dart';
 import 'double_page_layout.dart';
 import 'listen_sheet.dart';
 import 'reader_chapter_navigation.dart';
+import 'reader_chapter_resolve.dart';
 import 'reader_chapter_transition.dart';
 import 'reader_overlay_hud.dart';
 import 'reader_prefetch.dart';
@@ -1287,60 +1288,33 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     // generation check. Assigning `_chapter` before the check let a slower,
     // older load overwrite the newer load's chapter and every later step
     // (progress, next/prev, page resolve) then ran against the wrong chapter.
-    // Server id wins; the local Isar id is only a fallback for chapters that
-    // have no server id (locally imported), so a server id can never match an
-    // unrelated chapter that merely shares the number as its local id.
-    Chapter? loadedChapter = await IsarService.instance.getChapterByServerId(chapterId);
-    if (loadedChapter == null) {
-      // Local-id fallback: only accept a chapter whose OWN local id equals the
-      // requested id (proves it was addressed as a local chapter) and that has
-      // no positive server id — so a server id can never be misresolved through
-      // a coincidental auto-increment collision.
-      final byLocalId = await IsarService.instance.getChapterByLocalId(chapterId);
-      if (byLocalId != null && byLocalId.id == chapterId && byLocalId.serverId <= 0) loadedChapter = byLocalId;
-    }
+    final loadedChapter =
+        await resolveChapterRecord(IsarService.instance, chapterId);
     if (loadGen != _loadGeneration) return;
     _chapter = loadedChapter;
 
     if (_chapter != null) {
-      final mId = _chapter!.mangaId > 0 ? _chapter!.mangaId : (_parentManga?.serverId ?? _parentManga?.id ?? 0);
-      var siblings = await IsarService.instance.getChaptersForManga(mId);
-      if (siblings.isEmpty && _parentManga != null) {
-        if (_parentManga!.id > 0 && _parentManga!.id != mId) {
-          siblings = await IsarService.instance.getChaptersForManga(_parentManga!.id);
-        }
-        if (siblings.isEmpty && _parentManga!.serverId > 0 && _parentManga!.serverId != mId) {
-          siblings = await IsarService.instance.getChaptersForManga(_parentManga!.serverId);
-        }
-      }
-      // A newer _loadChapterAndPages call may have already replaced _chapter
-      // and started its own sibling/manga lookups while these awaits were in
-      // flight. Without this check, this stale call would overwrite the
-      // NEW chapter's sibling list / next-prev / reading mode with data
-      // computed for the OLD chapter.
+      // A newer load may have already replaced `_chapter` while these awaits
+      // were in flight — bail before writing sibling/next/prev for a stale gen.
+      final nav = await resolveSiblingChapterNav(
+        isar: IsarService.instance,
+        chapter: _chapter!,
+        parentManga: _parentManga,
+      );
       if (loadGen != _loadGeneration) return;
-      _siblingChapters = sortSiblingChapters(siblings);
-
-      final idx = findSiblingChapterIndex(_siblingChapters, _chapter!);
-
-      Chapter? nextCh;
-      Chapter? prevCh;
-      if (idx != -1) {
-        nextCh = siblingChapterAt(_siblingChapters, idx, 1);
-        prevCh = siblingChapterAt(_siblingChapters, idx, -1);
-      }
+      _siblingChapters = nav.siblings;
 
       final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId) ?? _parentManga;
       if (loadGen != _loadGeneration) return;
       if (mounted) {
         setState(() {
-          _nextChapter = nextCh;
-          _prevChapter = prevCh;
+          _nextChapter = nav.next;
+          _prevChapter = nav.prev;
           _applyMangaReadingMode(manga);
         });
       } else {
-        _nextChapter = nextCh;
-        _prevChapter = prevCh;
+        _nextChapter = nav.next;
+        _prevChapter = nav.prev;
         _applyMangaReadingMode(manga);
       }
       _syncGestureNavChapters();
