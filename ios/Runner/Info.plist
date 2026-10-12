@@ -107,5 +107,13 @@
 		<true/>
 		<key>LSSupportsOpeningDocumentsInPlace</key>
 		<true/>
+		<!-- I8.3: allow Live Activities for reading sessions. -->
+		<key>NSSupportsLiveActivities</key>
+		<true/>
+		<!-- I8.4: activity types donated to Siri / Shortcuts. -->
+		<key>NSUserActivityTypes</key>
+		<array>
+			<string>com.sunfire.app.continue-reading</string>
+		</array>
 	</dict>
 </plist>

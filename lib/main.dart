@@ -15,6 +15,8 @@ import 'src/core/services/download_manager_service.dart';
 import 'src/core/services/image_cache_helper.dart';
 import 'src/core/services/notification_service.dart';
 import 'src/core/services/settings_service.dart';
+import 'src/core/services/multi_window_service.dart';
+import 'src/core/services/window_state_service.dart';
 import 'src/core/sync/background_service.dart';
 import 'src/core/sync/download_foreground_task.dart';
 import 'src/core/sync/graphql_client_service.dart';
@@ -38,6 +40,16 @@ unawaited(
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
+
+  // D9.4: detect sub-window engines early so background ownership below can
+  // be gated to the main window. Fail-closed to main-window behavior.
+  String? subWindowRoute;
+  try {
+    subWindowRoute = await MultiWindowService.instance.subWindowRoute();
+  } catch (e) {
+    debugPrint('MultiWindow detect error: $e');
+  }
+  final bool isSubWindow = subWindowRoute != null;
 
   try {
     await LoggerService.instance.initialize();
@@ -157,7 +169,10 @@ unawaited(
       // refresh on 401 / near expiry; WS reconnects with the new token).
       await ServerSessionService.instance.restore();
       unawaited(SyncEngine.instance.initialize());
-      await BackgroundService.instance.initialize();
+      // D9.4: only the main window owns periodic background sync.
+      if (!isSubWindow) {
+        await BackgroundService.instance.initialize();
+      }
     } catch (e) {
       debugPrint('SyncEngine/Network init error: $e');
     }
@@ -169,15 +184,17 @@ unawaited(
   // bypassed the Cloudflare bypass and failed on protected sources.
 
   // Android foreground service that keeps the download queue alive while the
-  // app is backgrounded. No-op on other platforms. Initialised BEFORE the
-  // download manager so the "Stop" (pause) callback is registered before the
-  // queue can start the service — a tap during the very first seconds is
-  // never lost.
+  // app is backgrounded. No-op on other platforms. D9.4: main window only.
+  // Initialised BEFORE the download manager so the "Stop" (pause) callback is
+  // registered before the queue can start the service — a tap during the very
+  // first seconds is never lost.
   try {
-    DownloadForegroundTask.instance.initialize();
-    // Handle pause signal sent from the background isolate when the user taps
-    // "Stop" on the foreground-service notification.
-    FlutterForegroundTask.addTaskDataCallback(_onForegroundTaskData);
+    if (!isSubWindow) {
+      DownloadForegroundTask.instance.initialize();
+      // Handle pause signal sent from the background isolate when the user taps
+      // "Stop" on the foreground-service notification.
+      FlutterForegroundTask.addTaskDataCallback(_onForegroundTaskData);
+    }
   } catch (e) {
     debugPrint('DownloadForegroundTask init error: $e');
   }
@@ -188,7 +205,16 @@ unawaited(
     debugPrint('DownloadManagerService init error: $e');
   }
 
-  runApp(const SunfireApp());
+  // D9.3: restore desktop window bounds (no-op on mobile).
+  try {
+    await WindowStateService.instance.restore();
+  } catch (e) {
+    debugPrint('WindowState restore error: $e');
+  }
+
+  // D9.4: sub-window engines (opened via MultiWindowService) boot straight
+  // into their route. Background ownership stays with the main window.
+  runApp(SunfireApp(initialLocation: subWindowRoute));
 }
 
 /// Handles messages from the foreground-service background isolate.

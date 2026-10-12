@@ -16,6 +16,8 @@ import 'core/sync/sync_engine.dart';
 import 'core/sync/websocket_service.dart';
 import 'features/settings/server_login_sheet.dart';
 import 'ui/shell/nav_chrome.dart';
+import 'ui/shell/desktop_menus.dart';
+import 'ui/shell/keyboard_shortcuts.dart';
 import 'ui/shell/rail_extras.dart';
 import 'ui/shell/sunfire_breakpoints.dart';
 import 'ui/shell/tablet_ui_prefs.dart';
@@ -568,7 +570,16 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           }
         }
       },
-      child: scaffold,
+      // D9.2: desktop keyboard shortcuts (tabs, quick sync). No-op on
+      // mobile; Shortcuts only fires with a physical keyboard.
+      // D9.1: native platform menus (macOS; no-op elsewhere).
+      child: SunfireMenuBar(
+        child: SunfireShortcuts(
+          onSwitchTab: _handleTabSelect,
+          onQuickSync: _handleQuickSync,
+          child: scaffold,
+        ),
+      ),
     );
   }
 
