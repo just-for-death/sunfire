@@ -20,6 +20,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../main_shell.dart';
 import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/components/sunfire_skeleton.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/library_update_progress_banner.dart';
@@ -1675,8 +1676,14 @@ unawaited(
               RefreshIndicator(
             color: primaryColor,
             onRefresh: _handleRefresh,
-            child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: primaryColor))
+            child: _isLoading && _filteredManga.isEmpty
+                // S6.1: skeleton grid on cold start instead of a bare
+                // spinner, so first paint already shows layout shape.
+                // When refreshing with data visible, keep the list.
+                ? SunfireSkeletonGrid(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: childAspectRatio,
+                  )
                 : CustomScrollView(
                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     scrollCacheExtent: ScrollCacheExtent.pixels(800),

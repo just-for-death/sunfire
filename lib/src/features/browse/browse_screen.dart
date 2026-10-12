@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show immutable, kDebugMode, listEquals, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
@@ -63,6 +64,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     _tabController = TabController(length: 3, vsync: this);
     _relevantSettings = _SourceRelevantSettings.capture();
     SettingsService.instance.addListener(_onSettingsChanged);
+    unawaited(_loadPersistentFilters());
     unawaited(_fetchServerSources());
     unawaited(_fetchExtensions());
     unawaited(_loadLibraryForMigration());
@@ -101,6 +103,31 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   }
 
   String _selectedSourceFilter = 'All'; // 'All', 'Local JS', 'Server', 'Pinned'
+
+  /// S6.3: persist the language + source-type filters across restarts.
+  static const String _kLangFilterPref = 'browse_lang_filter';
+  static const String _kSourceFilterPref = 'browse_source_filter';
+
+  Future<void> _loadPersistentFilters() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString(_kLangFilterPref);
+      final source = prefs.getString(_kSourceFilterPref);
+      if (!mounted) return;
+      setState(() {
+        if (lang != null && lang.isNotEmpty) _selectedLangFilter = lang;
+        if (source != null && source.isNotEmpty) _selectedSourceFilter = source;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _savePersistentFilters() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kLangFilterPref, _selectedLangFilter);
+      await prefs.setString(_kSourceFilterPref, _selectedSourceFilter);
+    } catch (_) {}
+  }
 
   Future<void> _fetchServerSources() async {
     // Everything is wrapped so `_isLoadingSources` can never stick true.
@@ -924,7 +951,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             const SizedBox(width: 8),
             PopupMenuButton<String>(
               icon: Icon(Icons.filter_list_rounded, color: primaryColor),
-              onSelected: (lang) => setState(() => _selectedLangFilter = lang),
+              onSelected: (lang) {
+                setState(() => _selectedLangFilter = lang);
+                unawaited(_savePersistentFilters());
+              },
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'ALL', child: Text('All Languages')),
                 PopupMenuItem(value: 'EN', child: Text('English (EN)')),
@@ -966,7 +996,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     width: _selectedSourceFilter == 'All' ? 1.2 : 0.8,
                   ),
                 ),
-                onSelected: (_) => setState(() => _selectedSourceFilter = 'All'),
+                onSelected: (_) {
+                  setState(() => _selectedSourceFilter = 'All');
+                  unawaited(_savePersistentFilters());
+                },
               ),
               const SizedBox(width: 8),
               ChoiceChip(
@@ -989,7 +1022,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     width: _selectedSourceFilter == 'Local JS' ? 1.2 : 0.8,
                   ),
                 ),
-                onSelected: (_) => setState(() => _selectedSourceFilter = 'Local JS'),
+                onSelected: (_) {
+                  setState(() => _selectedSourceFilter = 'Local JS');
+                  unawaited(_savePersistentFilters());
+                },
               ),
               const SizedBox(width: 8),
               ChoiceChip(
@@ -1012,7 +1048,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     width: _selectedSourceFilter == 'Server' ? 1.2 : 0.8,
                   ),
                 ),
-                onSelected: (_) => setState(() => _selectedSourceFilter = 'Server'),
+                onSelected: (_) {
+                  setState(() => _selectedSourceFilter = 'Server');
+                  unawaited(_savePersistentFilters());
+                },
               ),
               const SizedBox(width: 8),
               ChoiceChip(
@@ -1035,7 +1074,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     width: _selectedSourceFilter == 'Pinned' ? 1.2 : 0.8,
                   ),
                 ),
-                onSelected: (_) => setState(() => _selectedSourceFilter = 'Pinned'),
+                onSelected: (_) {
+                  setState(() => _selectedSourceFilter = 'Pinned');
+                  unawaited(_savePersistentFilters());
+                },
               ),
             ],
           ),

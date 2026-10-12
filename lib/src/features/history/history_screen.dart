@@ -12,7 +12,11 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../main_shell.dart';
+import '../../ui/design_system/components/sunfire_chip.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
+
+/// S6.7: timeline filter for the History screen.
+enum HistoryFilter { all, completed, inProgress }
 
 /// History group label for a read date (UIS-10). Today / Yesterday / Past Week,
 /// then Settings > General > Date Format. Grouping compares adjacent labels;
@@ -45,10 +49,17 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
   // start, for at least one frame.
   bool _isLoading = true;
 
+  /// S6.7: history filter (timeline filter chips below the app bar).
+  HistoryFilter _filter = HistoryFilter.all;
+
+  /// Last successful sync timestamp for the sync-status line (S6.7).
+  DateTime? _lastSyncAt;
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadHistory());
+    unawaited(_refreshLastSync());
     MainShell.selectedTabNotifier.addListener(_onTabChanged);
     SettingsService.instance.addListener(_onSettingsChanged);
   }
@@ -95,6 +106,34 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
 
   bool get _isLoadingHistory => _historyLoadInFlight != null;
 
+  /// S6.7: refresh the last-sync timestamp for the sync-status line.
+  Future<void> _refreshLastSync() async {
+    try {
+      final ts = await IsarService.instance.getLastSyncTimestamp();
+      if (mounted) setState(() => _lastSyncAt = ts);
+    } catch (_) {}
+  }
+
+  /// S6.7: timeline items after applying the active filter.
+  List<Map<String, dynamic>> get _filteredItems {
+    if (_filter == HistoryFilter.all) return _historyItems;
+    return _historyItems.where((item) {
+      final ch = item['chapter'] as Chapter;
+      if (_filter == HistoryFilter.completed) return ch.isRead;
+      return !ch.isRead;
+    }).toList();
+  }
+
+  /// S6.7: human-readable sync status for the filter row.
+  String get _syncStatusLabel {
+    if (_lastSyncAt == null) return 'Never synced';
+    final diff = DateTime.now().difference(_lastSyncAt!);
+    if (diff.inMinutes < 1) return 'Synced just now';
+    if (diff.inMinutes < 60) return 'Synced ${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return 'Synced ${diff.inHours}h ago';
+    return 'Synced ${diff.inDays}d ago';
+  }
+
   Future<void> _loadHistory() {
     final existing = _historyLoadInFlight;
     if (existing != null) return existing;
@@ -104,8 +143,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
   }
 
   Future<void> _runHistoryLoad() async {
-    final loadGen = ++_loadGeneration;
-    if (mounted) setState(() => _isLoading = true);
+    final loadGen = ++_loadGeneration;    if (mounted) setState(() => _isLoading = true);
     try {
       final chapters = await IsarService.instance.getReadingHistory();
       final items = <Map<String, dynamic>>[];
@@ -162,6 +200,8 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
           _historyItems = items;
           _isLoading = false;
         });
+        // S6.7: refresh the sync-status line alongside the timeline.
+        unawaited(_refreshLastSync());
       }
     } catch (e) {
       if (loadGen != _loadGeneration) return;
@@ -173,6 +213,44 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
       // refresh gets a fresh pass rather than joining this one.
       _historyLoadInFlight = null;
     }
+  }
+
+  /// S6.7: filter chips + sync-status header (index 0 of the timeline list).
+  Widget _buildFilterHeader() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4.0, bottom: 4.0),
+      child: Row(
+        children: [
+          SunfireChip(
+            label: 'All',
+            selected: _filter == HistoryFilter.all,
+            onSelected: (_) => setState(() => _filter = HistoryFilter.all),
+          ),
+          const SizedBox(width: 8),
+          SunfireChip(
+            label: 'Completed',
+            selected: _filter == HistoryFilter.completed,
+            onSelected: (_) =>
+                setState(() => _filter = HistoryFilter.completed),
+          ),
+          const SizedBox(width: 8),
+          SunfireChip(
+            label: 'In progress',
+            selected: _filter == HistoryFilter.inProgress,
+            onSelected: (_) =>
+                setState(() => _filter = HistoryFilter.inProgress),
+          ),
+          const Spacer(),
+          Text(
+            _syncStatusLabel,
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _clearHistory() async {
@@ -280,15 +358,18 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                               top: 12.0,
                               bottom: SunfireBreakpoints.scrollBottomPadding(context),
                             ),
-                      itemCount: _historyItems.length,
+                      itemCount: _filteredItems.length + 1,
                       itemBuilder: (context, index) {
-                        final item = _historyItems[index];
+                        // S6.7: index 0 is the filter + sync-status header.
+                        if (index == 0) return _buildFilterHeader();
+                        final visibleItems = _filteredItems;
+                        final item = visibleItems[index - 1];
                         final ch = item['chapter'] as Chapter;
                         final manga = item['manga'] as Manga?;
                         final title = manga?.title ?? 'Manga #${ch.mangaId}';
                         final thumb = manga?.thumbnailUrl;
                         final dateHeader = item['dateHeader'] as String;
-                        final bool showHeader = index == 0 || _historyItems[index - 1]['dateHeader'] != dateHeader;
+                        final bool showHeader = index == 1 || visibleItems[index - 2]['dateHeader'] != dateHeader;
 
                         final double progressValue = ch.pageCount > 0
                             ? (ch.lastPageRead / ch.pageCount).clamp(0.0, 1.0)
@@ -300,6 +381,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                             : (ch.isRead ? 'Completed' : 'Page $currentPage');
 
                         return Column(
+                          key: ValueKey('history_${ch.serverId != 0 ? ch.serverId : ch.id}'),
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (showHeader)
