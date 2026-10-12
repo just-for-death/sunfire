@@ -16,9 +16,12 @@ import '../../core/engine/content_resolver_service.dart' show preferServerScrape
 import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
+import '../../core/db/models/tag.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
+import '../../core/services/multi_window_service.dart';
 import '../../core/services/settings_service.dart';
+import '../../core/services/tag_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
@@ -28,6 +31,7 @@ import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../browse/global_search_screen.dart';
 import '../browse/migrate_search_screen.dart';
+import '../library/manga_tag_editor_sheet.dart';
 import 'manga_detail_layout.dart';
 import 'tracking_bottom_sheet.dart';
 
@@ -44,6 +48,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   final SettingsService _settings = SettingsService.instance;
   Manga? _manga;
   List<Chapter> _chapters = [];
+  List<Tag> _tags = const [];
   bool _isLoading = true;
 
   /// True during a refresh that deliberately leaves existing content on screen.
@@ -239,6 +244,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final hasValidCachedChapters = _chapters.isNotEmpty && _chapters.every((c) => c.url.isNotEmpty);
     if (_manga != null && hasValidCachedChapters && mounted && loadGen == _loadGeneration) {
       setState(() => _isLoading = false);
+      unawaited(_reloadTags());
     }
 
     final isLocalExtension = QuickJsService.instance.hasExtension(_manga?.sourceName ?? '');
@@ -671,6 +677,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         _isLoading = false;
         _isRefreshing = false;
       });
+      unawaited(_reloadTags());
     }
   }
 
@@ -799,6 +806,28 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _reloadTags() async {
+    final manga = _manga;
+    if (manga == null) {
+      if (mounted) setState(() => _tags = const []);
+      return;
+    }
+    final tags =
+        await TagService.instance.getTagsForManga(manga.canonicalKey);
+    if (!mounted) return;
+    setState(() => _tags = tags);
+  }
+
+  Future<void> _showTagEditor() async {
+    if (_manga == null) return;
+    final dirty = await MangaTagEditorSheet.show(
+      context,
+      mangaServerId: _manga!.canonicalKey,
+      mangaTitle: _manga!.title,
+    );
+    if (dirty == true) await _reloadTags();
   }
 
   Future<void> _showCategoryPickerDialog() async {
@@ -1916,7 +1945,38 @@ unawaited(
                       );
                     }).toList(),
                   ),
+                  const SizedBox(height: 12),
+                ],
+                if (_tags.isNotEmpty) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ..._tags.map((t) {
+                        return SunfireBadge(
+                          label: t.name,
+                          variant: SunfireBadgeVariant.chip,
+                          onTap: _showTagEditor,
+                        );
+                      }),
+                      ActionChip(
+                        avatar: const Icon(Icons.sell_outlined, size: 16),
+                        label: const Text('Tags'),
+                        onPressed: _showTagEditor,
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
+                ] else ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _showTagEditor,
+                      icon: const Icon(Icons.sell_outlined, size: 18),
+                      label: const Text('Add tags'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                 ],
                 Text(
                   manga.description ?? 'No synopsis available for this manga.',
@@ -2112,6 +2172,9 @@ unawaited(
                     case 'categories':
                       await _showCategoryPickerDialog();
                       break;
+                    case 'tags':
+                      await _showTagEditor();
+                      break;
                     case 'refresh':
                       await _loadMangaDetails(keepContent: _manga != null);
                       break;
@@ -2121,14 +2184,31 @@ unawaited(
                     case 'migrate':
                       await _openMigrate(manga);
                       break;
+                    case 'newwindow':
+                      // D9.4: open this manga in a second window (desktop).
+                      final opened = await MultiWindowService.instance
+                          .openMangaWindow(manga.serverId);
+                      if (!opened && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text(
+                                  'New windows are only available on desktop.')),
+                        );
+                      }
+                      break;
                   }
                 },
                 itemBuilder: (context) => [
                   if (manga.inLibrary)
                     const PopupMenuItem(value: 'categories', child: Text('Edit Categories')),
+                  const PopupMenuItem(value: 'tags', child: Text('Edit Tags')),
                   const PopupMenuItem(value: 'refresh', child: Text('Refresh')),
                   const PopupMenuItem(value: 'browser', child: Text('Open in Browser')),
                   const PopupMenuItem(value: 'migrate', child: Text('Migrate Source')),
+                  if (MultiWindowService.instance.isDesktop)
+                    const PopupMenuItem(
+                        value: 'newwindow',
+                        child: Text('Open in New Window')),
                 ],
               ),
             ],
@@ -2367,7 +2447,38 @@ unawaited(
                       );
                     }).toList(),
                   ),
+                  const SizedBox(height: 12),
+                ],
+                if (_tags.isNotEmpty) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ..._tags.map((t) {
+                        return SunfireBadge(
+                          label: t.name,
+                          variant: SunfireBadgeVariant.chip,
+                          onTap: _showTagEditor,
+                        );
+                      }),
+                      ActionChip(
+                        avatar: const Icon(Icons.sell_outlined, size: 16),
+                        label: const Text('Tags'),
+                        onPressed: _showTagEditor,
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
+                ] else ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _showTagEditor,
+                      icon: const Icon(Icons.sell_outlined, size: 18),
+                      label: const Text('Add tags'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                 ],
                 GestureDetector(
                   onTap: () => setState(() => _isDescExpanded = !_isDescExpanded),
