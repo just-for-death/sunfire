@@ -316,6 +316,18 @@ class PageLoader {
     _cachedHeights[url] = height;
   }
 
+  /// I3: synchronous peek at LRU image bytes (bumps recency on hit).
+  Uint8List? peekCachedBytes(String url) {
+    if (_disposed) return null;
+    return _cache.get(url);
+  }
+
+  /// I3: seed / mirror recovered bytes into the loader LRU.
+  void cacheBytes(String url, Uint8List bytes) {
+    if (_disposed || bytes.isEmpty) return;
+    _cache.put(url, bytes);
+  }
+
   // Private implementation details below
 
   // Prefetched chapters cache: key -> _PrefetchedChapter

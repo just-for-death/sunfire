@@ -273,5 +273,24 @@ void main() {
 
       loader.dispose();
     });
+
+    test('cacheBytes / peekCachedBytes round-trip (I3)', () {
+      final loader = PageLoader(
+        sourceName: 'TestSource',
+        mangaId: 1,
+        chapterTargetId: 2,
+      );
+      const url = 'https://example.com/page.jpg';
+      final bytes = Uint8List.fromList(List<int>.generate(64, (i) => i));
+
+      expect(loader.peekCachedBytes(url), isNull);
+      loader.cacheBytes(url, bytes);
+      expect(loader.peekCachedBytes(url), orderedEquals(bytes));
+
+      loader.clear();
+      expect(loader.peekCachedBytes(url), isNull);
+
+      loader.dispose();
+    });
   });
 }
