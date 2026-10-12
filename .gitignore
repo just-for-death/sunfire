@@ -102,6 +102,16 @@ ISSUES.md
 TEAM_STATUS.md
 AUDIT_FINDINGS.md
 
+# Agent / Cursor local tooling (skills, rules, plans, task boards)
+.cursor/
+.agents/
+V6_PLAN.md
+V6_TASKS.md
+*_PLAN.md
+*_TASKS.md
+*_TASK_BOARD.md
+docs/planning/
+
 # Removed working docs (deleted; do not re-add)
 /PROJECT_KNOWLEDGE_BASE.md
 /docs/releases/
