@@ -7,6 +7,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 
+import '../db/models/category.dart';
+import '../db/models/chapter.dart';
+import '../db/models/manga.dart';
+import 'graphql_client_service.dart' show GraphQLClientService;
 import 'server_adapter.dart'
     show
         ServerAdapter,
@@ -16,11 +20,7 @@ import 'server_adapter.dart'
         TrackerProgress;
 import 'server_capabilities.dart' show ServerCapabilities;
 import 'server_type.dart' show ServerConfigManager;
-import 'graphql_client_service.dart' show GraphQLClientService;
 import 'sync_engine.dart' show SyncEngine, parseCategoryNodes;
-import '../db/models/manga.dart';
-import '../db/models/chapter.dart';
-import '../db/models/category.dart';
 
 /// Suwayomi/Tachidesk server adapter using GraphQL API.
 class SuwayomiAdapter extends ServerAdapter {

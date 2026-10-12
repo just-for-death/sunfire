@@ -1,17 +1,17 @@
 // Widget smoke / behavior tests for ReaderCanvas (T2.1).
 // Prefer real asserts over golden screenshots — CI-stable and API-honest.
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import 'package:mockito/mockito.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
-
-import 'package:sunfire/src/features/reader/controller/reader_canvas.dart';
-import 'package:sunfire/src/features/reader/controller/reader_controller.dart';
-import 'package:sunfire/src/features/reader/reading_mode.dart';
-import 'package:sunfire/src/features/reader/controller/reader_theme.dart';
+import 'package:mockito/mockito.dart';
 import 'package:sunfire/src/core/db/models/chapter.dart';
 import 'package:sunfire/src/core/services/settings_service.dart';
+import 'package:sunfire/src/features/reader/controller/reader_canvas.dart';
+import 'package:sunfire/src/features/reader/controller/reader_controller.dart';
+import 'package:sunfire/src/features/reader/controller/reader_theme.dart';
+import 'package:sunfire/src/features/reader/reading_mode.dart';
+
 import 'reader_canvas_test.mocks.dart';
 
 @GenerateMocks([ReaderController, SettingsService])

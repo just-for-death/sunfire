@@ -182,7 +182,9 @@ class DuplicateDetectionService {
       final urlA = _sourceMigration.normalizeUrlForMatch(a.url);
       final urlB = _sourceMigration.normalizeUrlForMatch(b.url);
       if (urlA.isNotEmpty && urlB.isNotEmpty &&
-          (urlA.contains(urlB) || urlB.contains(urlA))) return true;
+          (urlA.contains(urlB) || urlB.contains(urlA))) {
+        return true;
+      }
     }
 
     // 3. Normalized title equality (when URLs missing/different)
@@ -213,7 +215,9 @@ class DuplicateDetectionService {
     final urlB = _sourceMigration.normalizeUrlForMatch(b.url);
     if (urlA.isNotEmpty && urlB.isNotEmpty && urlA == urlB) return 'Exact URL match';
     if (urlA.isNotEmpty && urlB.isNotEmpty &&
-        (urlA.contains(urlB) || urlB.contains(urlA))) return 'URL containment';
+        (urlA.contains(urlB) || urlB.contains(urlA))) {
+      return 'URL containment';
+    }
 
     final titleA = _normalizeTitle(a.title);
     final titleB = _normalizeTitle(b.title);
@@ -231,8 +235,12 @@ class DuplicateDetectionService {
     // Jaccard similarity on bigrams
     final setA = <String>{};
     final setB = <String>{};
-    for (var i = 0; i < a.length - 1; i++) setA.add(a.substring(i, i + 2));
-    for (var i = 0; i < b.length - 1; i++) setB.add(b.substring(i, i + 2));
+    for (var i = 0; i < a.length - 1; i++) {
+      setA.add(a.substring(i, i + 2));
+    }
+    for (var i = 0; i < b.length - 1; i++) {
+      setB.add(b.substring(i, i + 2));
+    }
     final intersection = setA.intersection(setB).length;
     final union = setA.union(setB).length;
     return union == 0 ? 0.0 : intersection / union;

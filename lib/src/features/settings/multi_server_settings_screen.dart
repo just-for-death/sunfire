@@ -118,7 +118,7 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
         ),
       ),
     ).then((v) {
-      disposeAfterDialog([nameCtrl, urlCtrl]);
+      unawaited(disposeAfterDialog([nameCtrl, urlCtrl]));
       return v;
     });
 

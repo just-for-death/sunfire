@@ -4,15 +4,16 @@
 // Part of S4.1: Multi-server support — simultaneous Suwayomi/Kavita/Mihon
 
 import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 
-import 'server_adapter.dart' show ServerAdapter, SyncOperation, LibrarySnapshot, ChapterPagesResult, TrackerProgress;
-import 'server_type.dart' show ServerConfigManager;
-import 'server_capabilities.dart' show ServerCapabilities;
-import '../db/models/manga.dart';
-import '../db/models/chapter.dart';
 import '../db/models/category.dart';
+import '../db/models/chapter.dart';
+import '../db/models/manga.dart';
+import 'server_adapter.dart' show ServerAdapter, SyncOperation, LibrarySnapshot, ChapterPagesResult, TrackerProgress;
+import 'server_capabilities.dart' show ServerCapabilities;
+import 'server_type.dart' show ServerConfigManager;
 
 /// Kavita server adapter using REST API.
 class KavitaAdapter extends ServerAdapter {

@@ -1,18 +1,19 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:isar_community/isar.dart';
 import 'package:path_provider/path_provider.dart';
+
 import '../engine/chapter_url_attribution.dart';
 import '../logging/logger_service.dart';
-
 import 'epoch_seconds.dart';
 import 'list_chunks.dart';
 import 'models/category.dart';
-import 'models/tag.dart';
 import 'models/chapter.dart';
 import 'models/manga.dart';
 import 'models/sync_meta.dart';
 import 'models/sync_record.dart';
+import 'models/tag.dart';
 import 'write_gate.dart';
 
 /// Max manga ids per `anyOf` chapter query in [IsarService.getChaptersForMangas].

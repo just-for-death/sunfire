@@ -435,8 +435,12 @@ class SyncManager {
   void dispose() {
     _autoSyncTimer?.cancel();
     _autoSyncTimer = null;
-    if (!_progressController.isClosed) _progressController.close();
-    if (!_resultController.isClosed) _resultController.close();
+    if (!_progressController.isClosed) {
+      unawaited(_progressController.close());
+    }
+    if (!_resultController.isClosed) {
+      unawaited(_resultController.close());
+    }
     _initialized = false;
   }
 
