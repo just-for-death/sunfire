@@ -169,10 +169,15 @@ class SyncManager {
         ));
       }
 
-      _emitProgress(const SyncProgress(
+      final deltaManga = deltaResult.mangaUpdated;
+      final deltaChapters = deltaResult.chaptersUpdated;
+      _emitProgress(SyncProgress(
         phase: SyncPhase.applyingChanges,
         current: 55,
         total: 100,
+        currentManga: deltaManga + deltaChapters > 0
+            ? 'Applying $deltaManga manga · $deltaChapters chapters'
+            : null,
       ));
 
       final applyResult = await syncEngine.applyDeltaChanges(deltaResult);
@@ -206,10 +211,13 @@ class SyncManager {
         conflicts: conflicts,
       );
 
-      _emitProgress(const SyncProgress(
+      // S1.5: surface per-run manga/chapter counts on the progress dialog.
+      _emitProgress(SyncProgress(
         phase: SyncPhase.completed,
         current: 100,
         total: 100,
+        currentManga:
+            '${result.mangaUpdated} manga · ${result.chaptersUpdated} chapters updated',
       ));
 
       return _finish(result);
@@ -245,11 +253,25 @@ class SyncManager {
 
     _isSyncing = true;
     _cancelRequested = false;
-    _emitProgress(const SyncProgress(
+    final idList = mangaIds.toList();
+    final labels = <String>[];
+    for (final id in idList) {
+      final manga = await isarService.getMangaByServerId(id);
+      labels.add(manga?.title.trim().isNotEmpty == true
+          ? manga!.title
+          : 'Manga $id');
+    }
+    final preview = labels.isEmpty
+        ? null
+        : (labels.length <= 2
+            ? labels.join(', ')
+            : '${labels.first} (+${labels.length - 1} more)');
+    // S1.5: item-scale progress (not opaque 10→100%) for selective sync.
+    _emitProgress(SyncProgress(
       phase: SyncPhase.fetchingManga,
-      current: 10,
-      total: 100,
-      currentManga: 'Selective manga sync',
+      current: 0,
+      total: idList.isEmpty ? 1 : idList.length,
+      currentManga: preview,
     ));
 
     try {
@@ -269,8 +291,11 @@ class SyncManager {
       _pendingConflicts = result.conflicts;
       _emitProgress(SyncProgress(
         phase: result.success ? SyncPhase.completed : SyncPhase.failed,
-        current: 100,
-        total: 100,
+        current: idList.isEmpty ? 1 : idList.length,
+        total: idList.isEmpty ? 1 : idList.length,
+        currentManga: result.success
+            ? '${result.mangaUpdated} manga · ${result.chaptersUpdated} chapters'
+            : preview,
       ));
       return _finish(result.copyWith(lastSyncTimestamp: _lastSyncTimestamp));
     } catch (e, stack) {
