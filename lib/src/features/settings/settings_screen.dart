@@ -82,6 +82,25 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
       icon: Icons.dns_outlined,
       keywords: ['server', 'url', 'host', 'port', 'ip', 'suwayomi', 'remote'],
       destination: (context) => const ServerSettingsScreen(),
+      route: '/settings/server',
+    ),
+    _SettingSearchItem(
+      title: 'Sync Health',
+      subtitle: 'Last sync, pending mutations, device status',
+      category: 'Server',
+      icon: Icons.monitor_heart_outlined,
+      keywords: ['sync', 'health', 'pending', 'conflict', 'device', 'delta'],
+      destination: (context) => const ServerSettingsScreen(),
+      route: '/settings/sync-health',
+    ),
+    _SettingSearchItem(
+      title: 'Multi-server (Experimental)',
+      subtitle: 'Manage secondary server adapters',
+      category: 'Server',
+      icon: Icons.hub_outlined,
+      keywords: ['multi', 'server', 'kavita', 'mihon', 'adapter', 'experimental'],
+      destination: (context) => const ServerSettingsScreen(),
+      route: '/settings/multi-server',
     ),
     _SettingSearchItem(
       title: 'Client Credentials (Basic Auth / Bearer)',
@@ -524,6 +543,22 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                       subtitle: 'Connection, bindings, SOCKS proxy, FlareSolverr (Server & Local), OPDS, SyncYomi',
                       tags: ['SERVER'],
                       onTap: () => context.push('/settings/server'),
+                    ),
+
+                    _buildTile(
+                      icon: Icons.monitor_heart_outlined,
+                      title: 'Sync Health',
+                      subtitle: 'Last sync, pending mutations, errors, other devices',
+                      tags: ['LOCAL'],
+                      onTap: () => context.push('/settings/sync-health'),
+                    ),
+
+                    _buildTile(
+                      icon: Icons.hub_outlined,
+                      title: 'Multi-server (Experimental)',
+                      subtitle: 'List/add adapters — does not replace Suwayomi SyncEngine',
+                      tags: ['LOCAL'],
+                      onTap: () => context.push('/settings/multi-server'),
                     ),
 
                     // 2. LIBRARY

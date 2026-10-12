@@ -45,11 +45,22 @@ class ReaderController {
     required this.settings,
     required this.syncEngine,
     required this.metronService,
-  }) : _gesturePipeline = GesturePipeline(
-          navigationController: _placeholderNavigationController,
-          positionManager: _placeholderPositionManager,
-          settings: settings,
-        ),
+    PageLoader? pageLoader,
+    PositionManager? positionManager,
+    NavigationController? navigationController,
+    GesturePipeline? gesturePipeline,
+  })  : _pageLoader = pageLoader,
+        _positionManager = positionManager,
+        _navigationController = navigationController,
+        _subControllersInjected = navigationController != null,
+        _gesturePipeline = gesturePipeline ??
+            GesturePipeline(
+              navigationController:
+                  navigationController ?? _placeholderNavigationController,
+              positionManager:
+                  positionManager ?? _placeholderPositionManager,
+              settings: settings,
+            ),
         _tickerProvider = _TickerProvider();
 
   final int chapterServerId;
@@ -59,6 +70,10 @@ class ReaderController {
   final MetronService metronService;
 
   final _TickerProvider _tickerProvider;
+
+  /// When true, sub-controllers were provided by the caller (tests / DI) and
+  /// must not be replaced or double-disposed.
+  final bool _subControllersInjected;
 
   // Placeholder for early initialization
   static final NavigationController _placeholderNavigationController =
@@ -85,7 +100,7 @@ class ReaderController {
     metronService: MetronService.instance,
   );
 
-  // Sub-controllers (initialized after chapter load)
+  // Sub-controllers (initialized after chapter load, or injected via ctor)
   PageLoader? _pageLoader;
   PositionManager? _positionManager;
   NavigationController? _navigationController;
@@ -212,6 +227,13 @@ class ReaderController {
     _initPreferences();
     _applySettingsToPipeline();
 
+    // Injected sub-controllers skip the Isar-backed _initSubControllers path,
+    // so wire callbacks here once.
+    if (_subControllersInjected) {
+      _wireNavigationCallbacks();
+      _wireGestureCallbacks();
+    }
+
     unawaited(_loadChapterAndPages(chapterServerId));
   }
 
@@ -246,6 +268,12 @@ class ReaderController {
   // ─── Private: Initialize Sub-controllers ──────────────────────────
 
   void _initSubControllers(Chapter chapter) {
+    if (_subControllersInjected) {
+      _wireNavigationCallbacks();
+      _wireGestureCallbacks();
+      return;
+    }
+
     final sourceName = _parentManga?.sourceName ?? '';
     _pageLoader = PageLoader(
       sourceName: sourceName,
@@ -370,12 +398,12 @@ class ReaderController {
   /// Load a chapter and its pages.
   Future<void> _loadChapterAndPages(int chapterId) async {
     onLoadingChanged?.call(true);
-    
+
     // If sub-controllers not initialized yet, load chapter first to get source info
     if (_navigationController == null) {
-      final loadedChapter = await IsarService.instance.getChapterByServerId(chapterId);
+      final loadedChapter = await isarService.getChapterByServerId(chapterId);
       if (loadedChapter == null) {
-        final byLocalId = await IsarService.instance.getChapterByLocalId(chapterId);
+        final byLocalId = await isarService.getChapterByLocalId(chapterId);
         if (byLocalId != null && byLocalId.id == chapterId && byLocalId.serverId <= 0) {
           _initSubControllers(byLocalId);
         }
@@ -383,19 +411,17 @@ class ReaderController {
         _initSubControllers(loadedChapter);
       }
     }
-    
+
     if (_navigationController != null) {
       await _navigationController!.loadChapterAndPages(chapterId);
     }
-    
+
     onLoadingChanged?.call(false);
 
     // Restore progress after chapter loads
     if (_navigationController?.chapter != null && _navigationController!.pageUrls.isNotEmpty) {
       await _restoreProgress();
     }
-    // Ensure we return properly even if no chapter was loaded
-    return;
   }
 
   /// Load the next chapter.
@@ -709,11 +735,14 @@ class ReaderController {
     try {
       _gesturePipeline.dispose();
     } catch (_) {}
-    // NavigationController.dispose() already disposes pageLoader +
-    // positionManager internally — do not dispose them twice here.
-    try {
-      _navigationController?.dispose();
-    } catch (_) {}
+    // Injected sub-controllers are owned by the caller (tests) — do not dispose.
+    // Production NavigationController.dispose() also disposes pageLoader +
+    // positionManager, so do not dispose those twice.
+    if (!_subControllersInjected) {
+      try {
+        _navigationController?.dispose();
+      } catch (_) {}
+    }
     _navigationController = null;
     _pageLoader = null;
     _positionManager = null;

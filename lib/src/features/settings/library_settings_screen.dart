@@ -13,8 +13,10 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/background_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/sync/sync_manager.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/widgets/dialog_controllers.dart';
+import '../../ui/widgets/sync_ui_actions.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -552,6 +554,44 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
               ? const Center(child: CircularProgressIndicator())
               : ListView(
                   children: [
+                    const SectionTitle(title: 'Sync'),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      leading: const Icon(Icons.sync_rounded),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          const Text('Delta Sync', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: const Text(
+                        'Fetch changes since last sync (SyncManager → SyncEngine)',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      onTap: () => unawaited(runSyncWithProgressDialog(
+                        context,
+                        title: 'Delta Sync',
+                        syncFn: () => SyncManager.instance.syncDelta(),
+                      )),
+                    ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      leading: const Icon(Icons.cloud_sync_rounded),
+                      title: const Text('Full Sync now', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      subtitle: const Text(
+                        'Re-fetch from the beginning of history',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      onTap: () => unawaited(runSyncWithProgressDialog(
+                        context,
+                        title: 'Full Sync',
+                        syncFn: () => SyncManager.instance.syncFull(),
+                      )),
+                    ),
+                    const Divider(height: 1),
                     const SectionTitle(title: 'Global Update (Server)'),
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -881,6 +921,36 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       ),
                       subtitle: const Text('Create color-coded tags for your library', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       onTap: () => context.push('/settings/library/tags'),
+                    ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      leading: const Icon(Icons.auto_awesome_outlined),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          const Text('Smart Collections', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: const Text('Auto-assign tags from genre, status, source, unread', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      onTap: () => context.push('/settings/library/smart-collections'),
+                    ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      leading: const Icon(Icons.import_export_rounded),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          const Text('Import / Export Library', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: const Text('JSON/CSV metadata; Tachiyomi .tachibk via Backup', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      onTap: () => context.push('/settings/library/import-export'),
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
                     SectionTitle(title: _isConnected ? 'Categories (Server Synced)' : 'Categories (Local)'),

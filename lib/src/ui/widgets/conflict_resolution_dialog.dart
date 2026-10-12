@@ -550,6 +550,15 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.tonalIcon(
+              icon: const Icon(Icons.done_all_rounded, size: 18),
+              label: const Text('Apply strategy to all'),
+              onPressed: () => widget.onResolveAll(_batchStrategy),
+            ),
+          ),
         ],
       ),
     );

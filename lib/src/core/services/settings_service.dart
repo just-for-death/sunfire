@@ -751,6 +751,14 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── L10.1 SMART COLLECTIONS ────────────────────────────────
+  String get smartCollectionRulesJson =>
+      _prefs?.getString('smart_collection_rules_json') ?? '';
+  set smartCollectionRulesJson(String value) {
+    unawaited(_prefs?.setString('smart_collection_rules_json', value));
+    notifyListeners();
+  }
+
   // `metronAutoMatch` removed (UIX-13, decision a): nothing ever performed the
   // auto-match. Legacy `metron_auto_match` pref is left unread.
 }
