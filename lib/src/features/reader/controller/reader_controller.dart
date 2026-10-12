@@ -53,6 +53,7 @@ class ReaderController {
         _positionManager = positionManager,
         _navigationController = navigationController,
         _subControllersInjected = navigationController != null,
+        _gesturePipelineInjected = gesturePipeline != null,
         _gesturePipeline = gesturePipeline ??
             GesturePipeline(
               navigationController:
@@ -74,6 +75,7 @@ class ReaderController {
   /// When true, sub-controllers were provided by the caller (tests / DI) and
   /// must not be replaced or double-disposed.
   final bool _subControllersInjected;
+  final bool _gesturePipelineInjected;
 
   // Placeholder for early initialization
   static final NavigationController _placeholderNavigationController =
@@ -205,6 +207,52 @@ class ReaderController {
 
   // ─── Initialization ──────────────────────────────────────────────
 
+  /// Bind UI-owned scroll/page/zoom controllers without loading a chapter.
+  ///
+  /// Used by the live [ReaderScreen] cutover: chapter load stays on the screen
+  /// while this orchestrator owns theme/gesture/progress sub-controllers.
+  void attachUiControllers({
+    required ScrollController scrollController,
+    required PageController pageController,
+    required TransformationController transformationController,
+    AnimationController? zoomAnimController,
+    required Map<int, TransformationController> webtoonZoomControllers,
+  }) {
+    _scrollController = scrollController;
+    _pageController = pageController;
+    _transformationController = transformationController;
+    _zoomAnimController = zoomAnimController;
+    _webtoonZoomControllers = webtoonZoomControllers;
+    _initPreferences();
+    _applySettingsToPipeline();
+  }
+
+  /// Keep PageLoader identity in sync when the live reader recreates it.
+  void setPageLoader(PageLoader? loader) {
+    _pageLoader = loader;
+  }
+
+  /// Mirror live reading-mode / theme for canvas consumers.
+  void syncPresentation({
+    required ReadingMode readingMode,
+    required ReaderThemeMode readerTheme,
+    required ReaderColorFilter colorFilter,
+    required ImageScaleType scaleType,
+    required bool cropBorders,
+    required bool invertTaps,
+    required bool isZoomed,
+    required int currentPage,
+  }) {
+    _readingMode = readingMode;
+    _readerTheme = readerTheme;
+    _colorFilter = colorFilter;
+    _scaleType = scaleType;
+    _cropBorders = cropBorders;
+    _invertTaps = invertTaps;
+    _isZoomed = isZoomed;
+    _currentPage = currentPage;
+  }
+
   /// Initialize the controller and load the initial chapter.
   Future<void> initialize({
     required ScrollController scrollController,
@@ -213,19 +261,17 @@ class ReaderController {
     AnimationController? zoomAnimController,
     required Map<int, TransformationController> webtoonZoomControllers,
   }) async {
-    _scrollController = scrollController;
-    _pageController = pageController;
-    _transformationController = transformationController;
-    _zoomAnimController =
-        zoomAnimController ??
-        AnimationController(
-          vsync: _tickerProvider,
-          duration: const Duration(milliseconds: 200),
-        );
-    _webtoonZoomControllers = webtoonZoomControllers;
-
-    _initPreferences();
-    _applySettingsToPipeline();
+    attachUiControllers(
+      scrollController: scrollController,
+      pageController: pageController,
+      transformationController: transformationController,
+      zoomAnimController: zoomAnimController ??
+          AnimationController(
+            vsync: _tickerProvider,
+            duration: const Duration(milliseconds: 200),
+          ),
+      webtoonZoomControllers: webtoonZoomControllers,
+    );
 
     // Injected sub-controllers skip the Isar-backed _initSubControllers path,
     // so wire callbacks here once.
@@ -732,12 +778,15 @@ class ReaderController {
   // ─── Dispose ──────────────────────────────────────────────────────
 
   void dispose() {
-    try {
-      _gesturePipeline.dispose();
-    } catch (_) {}
-    // Injected sub-controllers are owned by the caller (tests) — do not dispose.
-    // Production NavigationController.dispose() also disposes pageLoader +
-    // positionManager, so do not dispose those twice.
+    // Injected GesturePipeline is owned by the live ReaderScreen.
+    if (!_gesturePipelineInjected) {
+      try {
+        _gesturePipeline.dispose();
+      } catch (_) {}
+    }
+    // Injected NavigationController (and its PageLoader/PositionManager) are
+    // owned by the caller — do not dispose. Production NavigationController
+    // dispose() also tears down pageLoader + positionManager.
     if (!_subControllersInjected) {
       try {
         _navigationController?.dispose();
