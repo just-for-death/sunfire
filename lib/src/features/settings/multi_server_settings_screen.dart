@@ -11,7 +11,11 @@ import 'package:uuid/uuid.dart';
 import '../../core/sync/multi_server_manager.dart';
 import '../../core/sync/server_type.dart';
 import '../../ui/design_system/components/components.dart'
-    show showSunfireConfirmDialog;
+    show
+        SunfireBottomSheet,
+        SunfireButton,
+        showSunfireConfirmDialog,
+        showSunfireSheet;
 import '../../ui/widgets/dialog_controllers.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -55,13 +59,17 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
     final urlCtrl = TextEditingController(text: 'http://');
     var type = ServerType.kavita;
 
-    final ok = await showDialog<bool>(
+    final ok = await showSunfireSheet<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlg) => AlertDialog(
-          title: const Text('Add server (experimental)'),
-          content: SingleChildScrollView(
-            child: Column(
+        builder: (ctx, setDlg) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(ctx).bottom,
+          ),
+          child: SunfireBottomSheet(
+            title: 'Add server (experimental)',
+            subtitle: 'Adapters only — SyncEngine stays Suwayomi-primary',
+            body: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
@@ -96,17 +104,17 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
                 ),
               ],
             ),
+            actions: [
+              SunfireButton.secondary(
+                label: 'Cancel',
+                onPressed: () => Navigator.pop(ctx, false),
+              ),
+              SunfireButton.primary(
+                label: 'Add',
+                onPressed: () => Navigator.pop(ctx, true),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Add'),
-            ),
-          ],
         ),
       ),
     ).then((v) {
