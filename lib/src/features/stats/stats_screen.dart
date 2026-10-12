@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
+import 'reading_heatmap.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -23,6 +24,9 @@ class _StatsScreenState extends State<StatsScreen> {
   Map<String, int> _sourceCounts = {};
 
   int _readingStreakDays = 0;
+
+  /// R9.5: per-day chapters-read counts for the heatmap.
+  Map<DateTime, int> _dailyReadCounts = {};
 
   @override
   void initState() {
@@ -63,6 +67,7 @@ class _StatsScreenState extends State<StatsScreen> {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final uniqueDays = <DateTime>{};
+      final dailyCounts = <DateTime, int>{};
       for (final ch in historyChapters) {
         final ts = ch.lastReadAt ?? 0;
         if (ts > 0) {
@@ -70,7 +75,10 @@ class _StatsScreenState extends State<StatsScreen> {
           // a millis-reporting source must be converted once, here, through the
           // same helper every other reader uses. See [normalizeEpochToSeconds].
           final dt = DateTime.fromMillisecondsSinceEpoch((normalizeEpochToSeconds(ts) ?? 0) * 1000);
-          uniqueDays.add(DateTime(dt.year, dt.month, dt.day));
+          final day = DateTime(dt.year, dt.month, dt.day);
+          uniqueDays.add(day);
+          // R9.5: one read event per chapter for the heatmap.
+          dailyCounts[day] = (dailyCounts[day] ?? 0) + 1;
         }
       }
       int streak = 0;
@@ -93,6 +101,7 @@ class _StatsScreenState extends State<StatsScreen> {
           _genreCounts = genres;
           _sourceCounts = sources;
           _readingStreakDays = streak;
+          _dailyReadCounts = dailyCounts;
           _isLoading = false;
         });
       }
@@ -194,6 +203,23 @@ class _StatsScreenState extends State<StatsScreen> {
                         ),
                       ],
                     ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // ── READING HEATMAP (R9.5) ──
+                Text('READING ACTIVITY', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                const SizedBox(height: 8),
+                Material(
+                  color: const Color(0x1F2A2A32),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: ReadingHeatmap(dailyCounts: _dailyReadCounts),
                   ),
                 ),
 
