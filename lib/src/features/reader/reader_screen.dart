@@ -39,6 +39,7 @@ import 'controller/reader_theme.dart';
 import 'double_page_layout.dart';
 import 'listen_sheet.dart';
 import 'reader_chapter_navigation.dart';
+import 'reader_chapter_transition.dart';
 import 'reader_overlay_hud.dart';
 import 'reader_prefetch.dart';
 import 'reader_scroll_utils.dart';
@@ -3214,129 +3215,14 @@ unawaited(
   }
 
   Widget _buildChapterTransitionCard() {
-    final colorScheme = Theme.of(context).colorScheme;
-    final primaryColor = colorScheme.primary;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      constraints: const BoxConstraints(maxWidth: 460),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // ── Finished chapter section ──
-          if (_chapter != null)
-            _buildChapterTransitionSection(
-              label: 'Finished',
-              chapter: _chapter!,
-              labelColor: primaryColor,
-            ),
-
-          const SizedBox(height: 28),
-
-          // ── Next chapter section ──
-          if (_nextChapter != null) ...[
-            _buildChapterTransitionSection(
-              label: 'Next',
-              chapter: _nextChapter!,
-              labelColor: primaryColor,
-            ),
-            const SizedBox(height: 24),
-            // Read Next Chapter button
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  foregroundColor: colorScheme.onPrimary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
-                ),
-                onPressed: () => _readerController.loadChapter(_chapterTargetId(_nextChapter!)),
-                child: const Text(
-                  'Read Next Chapter',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-              ),
-            ),
-          ] else
-            // No next chapter card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colorScheme.outlineVariant, width: 0.8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline_rounded, color: primaryColor, size: 20),
-                  const SizedBox(width: 14),
-                  const Expanded(
-                    child: Text(
-                      "You're all caught up — there's no next chapter.",
-                      style: TextStyle(fontSize: 13, height: 1.35),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChapterTransitionSection({required String label, required Chapter chapter, required Color labelColor}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '$label:',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: labelColor,
-            letterSpacing: 0.3,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            if (chapter.isDownloaded) ...[
-              Icon(Icons.check_circle_rounded, color: labelColor, size: 18),
-              const SizedBox(width: 8),
-            ],
-            Expanded(
-              child: Text(
-                chapter.name,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  height: 1.25,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        if (chapter.scanlator != null && chapter.scanlator!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              chapter.scanlator!,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.white.withValues(alpha: 0.45),
-                height: 1.3,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-      ],
+    return ReaderChapterTransitionCard(
+      chapter: _chapter,
+      nextChapter: _nextChapter,
+      onReadNext: () {
+        if (_nextChapter == null) return;
+        unawaited(
+            _readerController.loadChapter(_chapterTargetId(_nextChapter!)));
+      },
     );
   }
 
