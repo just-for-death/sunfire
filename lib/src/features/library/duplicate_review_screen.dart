@@ -348,7 +348,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(d.title, style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text('${d.chapterCount ?? 0} chapters • ${d.sourceName}',
+                Text('${d.chapterCount} chapters • ${d.sourceName}',
                     style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ],
             ),

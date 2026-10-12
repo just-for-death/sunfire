@@ -5,8 +5,6 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show debugPrint;
-
 import 'server_type.dart';
 import '../db/models/manga.dart';
 import '../db/models/chapter.dart';

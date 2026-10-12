@@ -8,14 +8,12 @@
 // Provides a UI for reviewing and confirming merges.
 
 import 'dart:async';
-import 'dart:collection';
 import 'dart:math' show min, max;
 
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../db/isar_service.dart';
 import '../db/models/manga.dart';
-import '../db/models/chapter.dart';
 import '../engine/source_migration_service.dart'
     show SourceMigrationService;
 
@@ -199,8 +197,8 @@ class DuplicateDetectionService {
 
     // 4. Source fuzzy + chapter count overlap
     if (includeSourceFuzzy) {
-      final chaptersA = a.chapterCount ?? 0;
-      final chaptersB = b.chapterCount ?? 0;
+      final chaptersA = a.chapterCount;
+      final chaptersB = b.chapterCount;
       if (chaptersA > 0 && chaptersB > 0) {
         final overlap = min(chaptersA, chaptersB) / max(chaptersA, chaptersB);
         if (overlap > 0.7 && _normalizeTitle(a.title) == _normalizeTitle(b.title)) return true;
@@ -258,7 +256,7 @@ class DuplicateDetectionService {
 
       // Update canonical manga stats
       final canon = group.canonical;
-      canon.chapterCount = (canon.chapterCount ?? 0) + (dupe.chapterCount ?? 0);
+      canon.chapterCount = canon.chapterCount + dupe.chapterCount;
       canon.unreadCount = (canon.unreadCount ?? 0) + (dupe.unreadCount ?? 0);
       await IsarService.instance.saveManga(canon);
 

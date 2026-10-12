@@ -8,7 +8,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import 'server_adapter.dart' show ServerAdapter, SyncOperation, LibrarySnapshot, ChapterPagesResult, TrackerProgress;
-import 'server_type.dart' show ServerConfig, ServerConfigManager;
+import 'server_type.dart' show ServerConfigManager;
 import 'server_capabilities.dart' show ServerCapabilities;
 import '../db/models/manga.dart' show Manga, stableLocalMangaServerId;
 import '../db/models/chapter.dart' show Chapter, mintLocalChapterServerId;
