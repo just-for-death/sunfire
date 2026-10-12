@@ -1,11 +1,13 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/sync/family_sharing.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import 'widgets/section_title.dart';
@@ -463,6 +465,124 @@ unawaited(
     }
   }
 
+  Future<void> _exportFamilyShare() async {
+    try {
+      final json = await FamilySharingService.instance.exportLibrary();
+      await Clipboard.setData(ClipboardData(text: json));
+      if (!mounted) return;
+      final count = FamilySharePayload.decode(json).entries.length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Copied read-only share ($count title(s)) to clipboard',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _importFamilyShare() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Import family share'),
+        content: const Text(
+          'Paste a share JSON from the clipboard, or pick a .json file. '
+          'Import is read-only — nothing is written to your library.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'cancel'),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'file'),
+            child: const Text('Pick file'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, 'clipboard'),
+            child: const Text('Paste clipboard'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || choice == 'cancel' || !mounted) return;
+
+    String? raw;
+    if (choice == 'clipboard') {
+      final data = await Clipboard.getData('text/plain');
+      raw = data?.text;
+    } else {
+      final picked = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        withData: true,
+      );
+      if (picked == null || picked.files.isEmpty) return;
+      final file = picked.files.first;
+      if (file.bytes != null) {
+        raw = utf8.decode(file.bytes!);
+      }
+    }
+
+    if (raw == null || raw.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No share data found')),
+      );
+      return;
+    }
+
+    try {
+      final payload = FamilySharingService.instance.importShare(raw);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Shared shelf (${payload.entries.length})'),
+          content: SizedBox(
+            width: 400,
+            height: 320,
+            child: ListView.builder(
+              itemCount: payload.entries.length,
+              itemBuilder: (_, i) {
+                final e = payload.entries[i];
+                return ListTile(
+                  dense: true,
+                  title: Text(e.title),
+                  subtitle: Text(
+                    [
+                      if (e.author != null && e.author!.isNotEmpty) e.author!,
+                      if (e.totalChapters > 0)
+                        '${e.readChapters}/${e.totalChapters} read',
+                    ].join(' · '),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invalid share: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SettingsSubpageScaffold(
@@ -522,6 +642,36 @@ unawaited(
                   title: const Text('Restore from .tachibk File (Device)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                   subtitle: const Text('Parse a .tachibk backup on this device and import it into your server library', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   onTap: () => context.push('/settings/import-backup'),
+                ),
+                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const SectionTitle(title: 'Family Sharing (Read-only)'),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  leading: const Icon(Icons.family_restroom_rounded),
+                  title: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      const Text('Export share package', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      SunfireBadge.local(),
+                    ],
+                  ),
+                  subtitle: const Text(
+                    'Copy a read-only library JSON (no credentials) to the clipboard',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  onTap: () => unawaited(_exportFamilyShare()),
+                ),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  leading: const Icon(Icons.import_contacts_rounded),
+                  title: const Text('Import share package', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                  subtitle: const Text(
+                    'Paste or pick a share JSON — preview only, never writes to Isar',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  onTap: () => unawaited(_importFamilyShare()),
                 ),
                 const Divider(height: 1, color: Color(0x1AFFFFFF)),
                 const SectionTitle(title: 'Automatic Backup Schedule (Server)'),

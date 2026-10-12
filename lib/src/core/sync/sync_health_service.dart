@@ -8,6 +8,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../db/isar_service.dart';
+import 'cross_device_awareness.dart';
+import 'offline_monitor.dart';
 
 /// SyncHealthService — provides real-time sync health metrics for the dashboard.
 ///
@@ -37,7 +39,11 @@ class SyncHealthService {
   /// Start periodic health updates.
   void start() {
     if (_timer != null) return;
-    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _refresh());
+    _timer = Timer.periodic(const Duration(seconds: 10), (_) {
+      // ignore: discarded_futures
+      _refresh();
+    });
+    // ignore: discarded_futures
     _refresh();
   }
 
@@ -88,6 +94,7 @@ class SyncHealthService {
 
     final lastSync = await IsarService.instance.getLastSyncTimestamp();
     final nextSync = lastSync?.add(const Duration(hours: 4));
+    final devices = CrossDeviceAwarenessService.instance.devices;
 
     return SyncHealth(
       lastSuccessfulSync: lastSync,
@@ -100,11 +107,20 @@ class SyncHealthService {
       pendingByAction: pendingByType,
       failedByAction: failedByType,
       totalAttempts: pending.length + failed.length,
-      estimatedTimeToClear: pending.length > 0
-          ? Duration(seconds: (pending.length * 2).toInt())
+      estimatedTimeToClear: pending.isNotEmpty
+          ? Duration(seconds: pending.length * 2)
           : Duration.zero,
-      isOnline: true, // Will be overridden by OfflineMonitor
+      isOnline: OfflineMonitor.instance.isOnline,
+      knownDeviceCount: devices.length,
+      activeDeviceCount: CrossDeviceAwarenessService.instance.activeDeviceCount,
+      currentDeviceId: CrossDeviceAwarenessService.instance.currentDeviceId,
     );
+  }
+
+  /// Force an immediate refresh (settings screen pull-to-refresh).
+  Future<SyncHealth> refreshNow() async {
+    await _refresh();
+    return _current;
   }
 }
 
@@ -123,6 +139,9 @@ class SyncHealth {
     this.totalAttempts = 0,
     this.estimatedTimeToClear = Duration.zero,
     this.isOnline = true,
+    this.knownDeviceCount = 0,
+    this.activeDeviceCount = 0,
+    this.currentDeviceId = '',
   });
 
   final DateTime? lastSuccessfulSync;
@@ -137,6 +156,9 @@ class SyncHealth {
   final int totalAttempts;
   final Duration estimatedTimeToClear;
   final bool isOnline;
+  final int knownDeviceCount;
+  final int activeDeviceCount;
+  final String currentDeviceId;
 
   SyncHealth copyWith({
     DateTime? lastSuccessfulSync,
@@ -145,6 +167,9 @@ class SyncHealth {
     int? failedCount,
     Duration? estimatedTimeToClear,
     bool? isOnline,
+    int? knownDeviceCount,
+    int? activeDeviceCount,
+    String? currentDeviceId,
   }) {
     return SyncHealth(
       lastSuccessfulSync: lastSuccessfulSync ?? this.lastSuccessfulSync,
@@ -153,6 +178,9 @@ class SyncHealth {
       failedCount: failedCount ?? this.failedCount,
       estimatedTimeToClear: estimatedTimeToClear ?? this.estimatedTimeToClear,
       isOnline: isOnline ?? this.isOnline,
+      knownDeviceCount: knownDeviceCount ?? this.knownDeviceCount,
+      activeDeviceCount: activeDeviceCount ?? this.activeDeviceCount,
+      currentDeviceId: currentDeviceId ?? this.currentDeviceId,
     );
   }
 

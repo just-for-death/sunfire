@@ -1,4 +1,5 @@
-// Golden tests for ReaderCanvas
+// Widget smoke / behavior tests for ReaderCanvas (T2.1).
+// Prefer real asserts over golden screenshots — CI-stable and API-honest.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
@@ -15,7 +16,7 @@ import 'reader_canvas_test.mocks.dart';
 
 @GenerateMocks([ReaderController, SettingsService])
 void main() {
-  group('ReaderCanvas Golden Tests', () {
+  group('ReaderCanvas widget tests', () {
     late MockReaderController mockController;
     late MockSettingsService mockSettings;
     late ScrollController scrollController;
@@ -33,7 +34,6 @@ void main() {
       webtoonZoomControllers = {};
       webtoonPageKeys = {};
 
-      // Setup default controller behavior
       when(mockController.readingMode).thenReturn(ReadingMode.longStrip);
       when(mockController.pageUrls).thenReturn(['https://example.com/page1.jpg']);
       when(mockController.currentPage).thenReturn(1);
@@ -56,7 +56,6 @@ void main() {
       when(mockController.showTapZoneOverlay).thenReturn(false);
       when(mockController.settings).thenReturn(mockSettings);
 
-      // Setup default settings behavior
       when(mockSettings.readingMode).thenReturn('Long Strip');
       when(mockSettings.tapZonesEnabled).thenReturn(true);
       when(mockSettings.tapZonePresetPaged).thenReturn('Default');
@@ -84,122 +83,76 @@ void main() {
       }
     });
 
-    testWidgets('renders webtoon mode with single page', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ReaderCanvas(
-            controller: mockController,
-            scrollController: scrollController,
-            pageController: pageController,
-            transformationController: transformationController,
-            webtoonZoomControllers: webtoonZoomControllers,
-            webtoonPageKeys: webtoonPageKeys,
-            readingMode: ReadingMode.longStrip,
-            pageUrls: ['https://example.com/page1.jpg'],
-            currentPage: 1,
-            colorFilter: ReaderColorFilter.none,
-            cropBorders: false,
-            scaleType: ImageScaleType.fitWidth,
-            readerTheme: ReaderThemeMode.black,
-          ),
+    Widget buildCanvas({
+      ReadingMode readingMode = ReadingMode.longStrip,
+      List<String> pageUrls = const ['https://example.com/page1.jpg'],
+      ReaderColorFilter colorFilter = ReaderColorFilter.none,
+      bool cropBorders = false,
+      bool showTransitionCard = false,
+      Chapter? nextChapter,
+      Chapter? chapter,
+    }) {
+      return MaterialApp(
+        home: ReaderCanvas(
+          controller: mockController,
+          scrollController: scrollController,
+          pageController: pageController,
+          transformationController: transformationController,
+          webtoonZoomControllers: webtoonZoomControllers,
+          webtoonPageKeys: webtoonPageKeys,
+          readingMode: readingMode,
+          pageUrls: pageUrls,
+          currentPage: 1,
+          colorFilter: colorFilter,
+          cropBorders: cropBorders,
+          scaleType: ImageScaleType.fitWidth,
+          readerTheme: ReaderThemeMode.black,
+          showTransitionCard: showTransitionCard,
+          nextChapter: nextChapter,
+          chapter: chapter,
         ),
       );
+    }
 
-      await tester.pumpAndSettle();
+    testWidgets('renders webtoon mode with ListView', (WidgetTester tester) async {
+      await tester.pumpWidget(buildCanvas());
+      await tester.pump();
 
-      // Verify the canvas renders
       expect(find.byType(ReaderCanvas), findsOneWidget);
       expect(find.byType(ListView), findsOneWidget);
+      expect(find.byType(PageView), findsNothing);
     });
 
-    testWidgets('renders paged mode with single page', (WidgetTester tester) async {
+    testWidgets('renders paged LTR mode with PageView', (WidgetTester tester) async {
       when(mockController.readingMode).thenReturn(ReadingMode.pagedLtr);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ReaderCanvas(
-            controller: mockController,
-            scrollController: scrollController,
-            pageController: pageController,
-            transformationController: transformationController,
-            webtoonZoomControllers: webtoonZoomControllers,
-            webtoonPageKeys: webtoonPageKeys,
-            readingMode: ReadingMode.pagedLtr,
-            pageUrls: ['https://example.com/page1.jpg'],
-            currentPage: 1,
-            colorFilter: ReaderColorFilter.none,
-            cropBorders: false,
-            scaleType: ImageScaleType.fitWidth,
-            readerTheme: ReaderThemeMode.black,
-          ),
-        ),
-      );
-
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(buildCanvas(readingMode: ReadingMode.pagedLtr));
+      await tester.pump();
 
       expect(find.byType(ReaderCanvas), findsOneWidget);
       expect(find.byType(PageView), findsOneWidget);
+      expect(find.byType(ListView), findsNothing);
     });
 
-    testWidgets('applies color filter when set', (WidgetTester tester) async {
+    testWidgets('applies ColorFiltered when invert filter set', (WidgetTester tester) async {
       when(mockController.colorFilter).thenReturn(ReaderColorFilter.invert);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ReaderCanvas(
-            controller: mockController,
-            scrollController: scrollController,
-            pageController: pageController,
-            transformationController: transformationController,
-            webtoonZoomControllers: webtoonZoomControllers,
-            webtoonPageKeys: webtoonPageKeys,
-            readingMode: ReadingMode.longStrip,
-            pageUrls: ['https://example.com/page1.jpg'],
-            currentPage: 1,
-            colorFilter: ReaderColorFilter.invert,
-            cropBorders: false,
-            scaleType: ImageScaleType.fitWidth,
-            readerTheme: ReaderThemeMode.black,
-          ),
-        ),
-      );
+      await tester.pumpWidget(buildCanvas(colorFilter: ReaderColorFilter.invert));
+      await tester.pump();
 
-      await tester.pumpAndSettle();
-
-      // Verify ColorFiltered widget is present
       expect(find.byType(ColorFiltered), findsOneWidget);
     });
 
-    testWidgets('applies crop borders when enabled', (WidgetTester tester) async {
+    testWidgets('applies ClipRect when crop borders enabled', (WidgetTester tester) async {
       when(mockController.cropBorders).thenReturn(true);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ReaderCanvas(
-            controller: mockController,
-            scrollController: scrollController,
-            pageController: pageController,
-            transformationController: transformationController,
-            webtoonZoomControllers: webtoonZoomControllers,
-            webtoonPageKeys: webtoonPageKeys,
-            readingMode: ReadingMode.longStrip,
-            pageUrls: ['https://example.com/page1.jpg'],
-            currentPage: 1,
-            colorFilter: ReaderColorFilter.none,
-            cropBorders: true,
-            scaleType: ImageScaleType.fitWidth,
-            readerTheme: ReaderThemeMode.black,
-          ),
-        ),
-      );
+      await tester.pumpWidget(buildCanvas(cropBorders: true));
+      await tester.pump();
 
-      await tester.pumpAndSettle();
-
-      // Verify ClipRect is present for crop borders
       expect(find.byType(ClipRect), findsAtLeastNWidgets(1));
     });
 
-    testWidgets('shows transition card when next chapter available', (WidgetTester tester) async {
+    testWidgets('shows transition card with next chapter CTA', (WidgetTester tester) async {
       final nextChapter = Chapter()
         ..serverId = 2
         ..name = 'Chapter 2'
@@ -207,135 +160,94 @@ void main() {
 
       when(mockController.nextChapter).thenReturn(nextChapter);
       when(mockController.showTransitionCard).thenReturn(true);
+      when(mockController.loadNextChapter()).thenAnswer((_) async {});
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ReaderCanvas(
-            controller: mockController,
-            scrollController: scrollController,
-            pageController: pageController,
-            transformationController: transformationController,
-            webtoonZoomControllers: webtoonZoomControllers,
-            webtoonPageKeys: webtoonPageKeys,
-            readingMode: ReadingMode.longStrip,
-            pageUrls: ['https://example.com/page1.jpg'],
-            currentPage: 1,
-            colorFilter: ReaderColorFilter.none,
-            cropBorders: false,
-            scaleType: ImageScaleType.fitWidth,
-            readerTheme: ReaderThemeMode.black,
-            showTransitionCard: true,
-            nextChapter: nextChapter,
-            chapter: Chapter()..serverId = 1..name = 'Chapter 1',
-          ),
-        ),
-      );
+      await tester.pumpWidget(buildCanvas(
+        showTransitionCard: true,
+        nextChapter: nextChapter,
+        chapter: Chapter()
+          ..serverId = 1
+          ..name = 'Chapter 1',
+      ));
+      await tester.pump();
 
-      await tester.pumpAndSettle();
-
-      // Debug: dump widget tree
-      debugDumpApp();
-
-      // Verify transition card elements
       expect(find.text('Finished:'), findsOneWidget);
       expect(find.text('Next:'), findsOneWidget);
+      expect(find.text('Chapter 1'), findsOneWidget);
       expect(find.text('Chapter 2'), findsOneWidget);
       expect(find.text('Read Next Chapter'), findsOneWidget);
+
+      await tester.tap(find.text('Read Next Chapter'));
+      await tester.pump();
+      verify(mockController.loadNextChapter()).called(1);
     });
 
     testWidgets('shows caught up message when no next chapter', (WidgetTester tester) async {
       when(mockController.nextChapter).thenReturn(null);
       when(mockController.showTransitionCard).thenReturn(true);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ReaderCanvas(
-            controller: mockController,
-            scrollController: scrollController,
-            pageController: pageController,
-            transformationController: transformationController,
-            webtoonZoomControllers: webtoonZoomControllers,
-            webtoonPageKeys: webtoonPageKeys,
-            readingMode: ReadingMode.longStrip,
-            pageUrls: ['https://example.com/page1.jpg'],
-            currentPage: 1,
-            colorFilter: ReaderColorFilter.none,
-            cropBorders: false,
-            scaleType: ImageScaleType.fitWidth,
-            readerTheme: ReaderThemeMode.black,
-            showTransitionCard: true,
-            nextChapter: null,
-            chapter: Chapter()..serverId = 1..name = 'Chapter 1',
-          ),
-        ),
+      await tester.pumpWidget(buildCanvas(
+        showTransitionCard: true,
+        nextChapter: null,
+        chapter: Chapter()
+          ..serverId = 1
+          ..name = 'Chapter 1',
+      ));
+      await tester.pump();
+
+      expect(
+        find.text("You're all caught up — there's no next chapter."),
+        findsOneWidget,
       );
-
-      await tester.pumpAndSettle();
-
-      expect(find.text("You're all caught up — there's no next chapter."), findsOneWidget);
+      expect(find.text('Read Next Chapter'), findsNothing);
     });
 
-    testWidgets('renders paged RTL mode correctly', (WidgetTester tester) async {
+    testWidgets('paged RTL PageView is reversed', (WidgetTester tester) async {
       when(mockController.readingMode).thenReturn(ReadingMode.pagedRtl);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ReaderCanvas(
-            controller: mockController,
-            scrollController: scrollController,
-            pageController: pageController,
-            transformationController: transformationController,
-            webtoonZoomControllers: webtoonZoomControllers,
-            webtoonPageKeys: webtoonPageKeys,
-            readingMode: ReadingMode.pagedRtl,
-            pageUrls: ['https://example.com/page1.jpg'],
-            currentPage: 1,
-            colorFilter: ReaderColorFilter.none,
-            cropBorders: false,
-            scaleType: ImageScaleType.fitWidth,
-            readerTheme: ReaderThemeMode.black,
-          ),
-        ),
-      );
+      await tester.pumpWidget(buildCanvas(readingMode: ReadingMode.pagedRtl));
+      await tester.pump();
 
-      await tester.pumpAndSettle();
-
-      // PageView should have reverse=true for RTL
       final pageView = tester.widget<PageView>(find.byType(PageView));
       expect(pageView.reverse, isTrue);
     });
 
-    testWidgets('applies double page spread in paged mode', (WidgetTester tester) async {
+    testWidgets('double-page landscape builds a Row spread', (WidgetTester tester) async {
       when(mockController.readingMode).thenReturn(ReadingMode.pagedLtr);
       when(mockController.pageUrls).thenReturn([
         'https://example.com/page1.jpg',
         'https://example.com/page2.jpg',
       ]);
+      when(mockSettings.doublePageDisplayMode).thenReturn('Always');
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ReaderCanvas(
-            controller: mockController,
-            scrollController: scrollController,
-            pageController: pageController,
-            transformationController: transformationController,
-            webtoonZoomControllers: webtoonZoomControllers,
-            webtoonPageKeys: webtoonPageKeys,
-            readingMode: ReadingMode.pagedLtr,
-            pageUrls: ['https://example.com/page1.jpg', 'https://example.com/page2.jpg'],
-            currentPage: 1,
-            colorFilter: ReaderColorFilter.none,
-            cropBorders: false,
-            scaleType: ImageScaleType.fitWidth,
-            readerTheme: ReaderThemeMode.black,
-          ),
-        ),
-      );
+      await tester.binding.setSurfaceSize(const Size(1200, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(buildCanvas(
+        readingMode: ReadingMode.pagedLtr,
+        pageUrls: [
+          'https://example.com/page1.jpg',
+          'https://example.com/page2.jpg',
+        ],
+      ));
+      await tester.pump();
 
-      // Should render spread with two pages
+      expect(find.byType(PageView), findsOneWidget);
       expect(find.byType(Row), findsAtLeastNWidgets(1));
+    });
+
+    testWidgets('semantics label includes page and chapter', (WidgetTester tester) async {
+      await tester.pumpWidget(buildCanvas(
+        chapter: Chapter()
+          ..serverId = 1
+          ..name = 'Ch. One',
+      ));
+      await tester.pump();
+
+      expect(
+        find.bySemanticsLabel('Page 1 of 1, Ch. One'),
+        findsOneWidget,
+      );
     });
   });
 }

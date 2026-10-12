@@ -24,7 +24,8 @@ import 'graphql_client_service.dart';
 import 'suwayomi_parse_helpers.dart';
 import 'websocket_service.dart';
 import 'conflict_resolver.dart'
-    show ConflictResolver, UserChoiceMarker;
+    show ConflictResolver, ConflictResolutionStrategy, UserChoiceMarker;
+export 'conflict_resolver.dart' show ConflictResolutionStrategy;
 
 // Re-exported so the many existing `sync_engine.dart` importers of this helper
 // keep working, and so the DB layer can reach it without a circular import.
@@ -172,14 +173,6 @@ class SyncConfig {
   final Duration autoSyncInterval;
   final bool wifiOnly;
   final int maxParallelDownloads;
-}
-
-enum ConflictResolutionStrategy {
-  lastWriteWins,
-  serverWins,
-  localWins,
-  crdt,
-  userChoice,
 }
 
 /// A queued mutation is abandoned after this many *counted* failures.
@@ -3078,15 +3071,20 @@ class SyncEngine {
     }
   }
 
-  /// Resolve conflicts using the conflict resolver
-  Future<SyncResult> resolveConflicts(List<SyncConflict> conflicts) async {
-    final resolver = ConflictResolver();
+  /// Resolve conflicts using the conflict resolver.
+  ///
+  /// Pass [resolver] from SyncManager / conflict UI to override the default LWW.
+  Future<SyncResult> resolveConflicts(
+    List<SyncConflict> conflicts, {
+    ConflictResolver? resolver,
+  }) async {
+    final active = resolver ?? ConflictResolver();
     var resolved = 0;
     var skipped = 0;
 
     for (final conflict in conflicts) {
       try {
-        final resolvedValue = resolver.resolve(
+        final resolvedValue = active.resolve(
           entityType: conflict.entityType,
           entityId: conflict.entityId,
           field: conflict.field,
@@ -3116,6 +3114,14 @@ class SyncEngine {
           ? const []
           : ['Resolved $resolved conflict(s); $skipped still need attention'],
     );
+  }
+
+  /// Apply a single conflict with an already-chosen value (conflict UI path).
+  Future<void> applyResolvedConflict(
+    SyncConflict conflict,
+    dynamic resolvedValue,
+  ) async {
+    await _applyConflictResolution(conflict, resolvedValue);
   }
 
   Future<void> _applyConflictResolution(SyncConflict conflict, dynamic resolvedValue) async {
