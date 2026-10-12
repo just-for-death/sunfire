@@ -37,6 +37,7 @@ import 'features/settings/multi_server_settings_screen.dart';
 import 'features/settings/reader_settings_screen.dart';
 import 'features/settings/server_settings_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/settings/selective_sync_screen.dart';
 import 'features/settings/sync_health_screen.dart';
 import 'features/stats/stats_screen.dart';
 import 'features/updates/updates_screen.dart';
@@ -209,6 +210,13 @@ GoRouter buildAppRouter({
             pageBuilder: (context, state) => sunfireTransitionPage(
               state: state,
               child: const SyncHealthScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/selective-sync',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const SelectiveSyncScreen(),
             ),
           ),
           GoRoute(

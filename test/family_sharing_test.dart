@@ -55,7 +55,7 @@ void main() {
     });
 
     test('rejects wrong version', () {
-      final bad = jsonEncode({'version': 999, 'entries': []});
+      final bad = jsonEncode({'version': 999, 'entries': <dynamic>[]});
       expect(() => FamilySharePayload.decode(bad),
           throwsA(isA<FormatException>()));
     });

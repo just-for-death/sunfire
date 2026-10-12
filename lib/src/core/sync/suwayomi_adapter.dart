@@ -14,7 +14,6 @@ import 'server_adapter.dart'
         LibrarySnapshot,
         ChapterPagesResult,
         TrackerProgress;
-import 'server_type.dart' show ServerConfig;
 import 'server_capabilities.dart' show ServerCapabilities;
 import 'server_type.dart' show ServerConfigManager;
 import 'graphql_client_service.dart' show GraphQLClientService;
@@ -94,7 +93,7 @@ class SuwayomiAdapter extends ServerAdapter {
       final mangaList = <Manga>[];
       final nodes = libData?['mangas']?['nodes'] as List?;
       if (nodes != null) {
-        for (final n in nodes.whereType<Map>()) {
+        for (final n in nodes.whereType<Map<dynamic, dynamic>>()) {
           mangaList.add(SyncEngine.instance
               .parseMangaNode(Map<String, dynamic>.from(n)));
         }
@@ -141,7 +140,7 @@ class SuwayomiAdapter extends ServerAdapter {
       final nodes = data?['chapters']?['nodes'] as List?;
       if (nodes == null) return [];
       return nodes
-          .whereType<Map>()
+          .whereType<Map<dynamic, dynamic>>()
           .map((n) => SyncEngine.instance
               .parseChapterNode(Map<String, dynamic>.from(n)))
           .toList();
@@ -180,7 +179,7 @@ class SuwayomiAdapter extends ServerAdapter {
           final res = await _client.fetchSourceManga(sourceId,
               searchQuery: query);
           final mangas = res?['fetchSourceManga']?['mangas'] as List? ?? [];
-          for (final m in mangas.whereType<Map>()) {
+          for (final m in mangas.whereType<Map<dynamic, dynamic>>()) {
             if (results.length >= limit) break;
             results.add(Manga()
               ..serverId = 0

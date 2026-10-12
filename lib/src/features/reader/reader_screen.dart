@@ -31,8 +31,10 @@ import '../../core/sync/live_activities_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/widget_sync_service.dart';
 import '../../core/utils/url_sanitizer.dart';
+import 'controller/gesture_pipeline.dart';
+import 'controller/navigation_controller.dart';
 import 'controller/page_loader.dart';
-import 'controller/smart_zoom.dart';
+import 'controller/position_manager.dart';
 import 'double_page_layout.dart';
 import 'reader_chapter_navigation.dart';
 import 'reader_prefetch.dart';
@@ -156,6 +158,28 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   /// Recreated when chapter/source identity changes; null when no chapter.
   PageLoader? _pageLoader;
 
+  /// R1.8 slice: progress persistence / sync / scrobble via PositionManager.
+  late final PositionManager _positionManager = PositionManager(
+    settings: _settings,
+    isarService: IsarService.instance,
+    syncEngine: SyncEngine.instance,
+    metronService: MetronService.instance,
+  );
+
+  /// R1.8 slice: GesturePipeline owns tap/keyboard/pointer routing; page
+  /// navigation still runs through proven reader_screen methods via callbacks.
+  late final NavigationController _gestureNav = NavigationController(
+    isarService: IsarService.instance,
+    pageLoader: PageLoader(sourceName: '', mangaId: 0, chapterTargetId: 0),
+    positionManager: _positionManager,
+    settings: _settings,
+  );
+  late final GesturePipeline _gesturePipeline = GesturePipeline(
+    navigationController: _gestureNav,
+    positionManager: _positionManager,
+    settings: _settings,
+  );
+
   final ScrollController _scrollController = ScrollController();
   late PageController _pageController;
   Timer? _progressDebounceTimer;
@@ -190,6 +214,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       duration: const Duration(milliseconds: 200),
     );
     _initPreferences();
+    _wireGesturePipeline();
     if (_settings.keepScreenAwake) {
       _safeSetWakelock(true);
     }
@@ -198,6 +223,94 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _initVolumeKeyListener();
     }
     unawaited(_loadChapterAndPages(widget.chapterServerId));
+  }
+
+  /// R1.8: bind GesturePipeline callbacks to live reader actions once.
+  void _wireGesturePipeline() {
+    final gp = _gesturePipeline;
+    gp.onToggleControls = _toggleControls;
+    gp.onStopAutoScroll = () {
+      _stopAutoScroll();
+      if (mounted) setState(() => _isAutoScrolling = false);
+    };
+    gp.onScrollVerticalBy = _scrollVerticalBy;
+    gp.onGoToNextPage = _goToNextPage;
+    gp.onGoToPrevPage = _goToPrevPage;
+    gp.canAdvanceToNextChapterOverride = _canAdvanceToNextChapter;
+    gp.canGoToPrevChapterFromTopOverride = _canGoToPrevChapterFromTop;
+    gp.onLoadNextChapter = () async {
+      if (_nextChapter == null) return;
+      _lastNextChapterNavAt = DateTime.now();
+      await _loadChapterAndPages(_chapterTargetId(_nextChapter!));
+    };
+    gp.onLoadPrevChapter = () async {
+      if (_prevChapter == null) return;
+      _lastPrevChapterNavAt = DateTime.now();
+      await _loadChapterAndPages(_chapterTargetId(_prevChapter!));
+    };
+    gp.onTapZoneOverlayChanged = (show) {
+      if (mounted) setState(() => _showTapZoneOverlay = show);
+    };
+    gp.onZoomStateChanged = (zoomed) {
+      if (mounted) setState(() => _isZoomed = zoomed);
+    };
+    gp.onUserTouchingChanged = (touching) {
+      if (!mounted) return;
+      setState(() {
+        _isUserTouching = touching;
+        // Ease-in restart lives on the reader ticker, not GesturePipeline's.
+        if (!touching) _autoScrollStartTime = DateTime.now();
+      });
+    };
+    gp.onAnimateScroll = (offset, {duration, curve}) {
+      if (!_scrollController.hasClients) return;
+      if (duration != null) {
+        unawaited(_scrollController.animateTo(
+          offset,
+          duration: duration,
+          curve: curve ?? Curves.easeOutCubic,
+        ));
+      } else {
+        _scrollController.jumpTo(offset);
+      }
+    };
+    gp.getMaxScrollExtent = () =>
+        _scrollController.hasClients
+            ? _scrollController.position.maxScrollExtent
+            : 0.0;
+    gp.getCurrentScrollOffset =
+        () => _scrollController.hasClients ? _scrollController.offset : 0.0;
+    gp.getScreenHeight =
+        () => mounted ? MediaQuery.sizeOf(context).height : 800.0;
+    gp.scrollControllerHasClients = () => _scrollController.hasClients;
+    gp.pageControllerHasClients = () => _pageController.hasClients;
+    gp.pageControllerPage = () =>
+        _pageController.hasClients ? (_pageController.page ?? 0.0) : 0.0;
+  }
+
+  /// Push live reader state into GesturePipeline before handling input.
+  void _syncGesturePipelineState({int? pageIndexForAspect}) {
+    final gp = _gesturePipeline;
+    gp.setReadingMode(_readingMode);
+    gp.setIsAutoScrolling(_isAutoScrolling);
+    gp.setIsUserTouching(_isUserTouching);
+    gp.setIsZoomed(_isZoomed);
+    gp.setShowTapZoneOverlay(_showTapZoneOverlay);
+    gp.setInvertTaps(_invertTaps);
+    gp.setAutoScrollSpeed(_autoScrollSpeed);
+    gp.setCurrentPage(_currentPage);
+    gp.setPageUrls(_pageUrls);
+    gp.setNextChapter(_nextChapter);
+    gp.setPrevChapter(_prevChapter);
+    gp.setTransformationController(_transformationController);
+    gp.setWebtoonZoomControllers(_webtoonZoomControllers);
+    gp.setZoomAnimController(_zoomAnimController);
+    gp.setScrollController(_scrollController);
+    if (!mounted) return;
+    gp.setViewportSize(MediaQuery.sizeOf(context));
+    final idx = pageIndexForAspect ?? (_currentPage - 1);
+    final url = (idx >= 0 && idx < _pageUrls.length) ? _pageUrls[idx] : null;
+    gp.setCurrentPageAspect(url == null ? null : _cachedPageAspects[url]);
   }
 
   @override
@@ -594,9 +707,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   /// Shared webtoon "page" step for side taps, volume keys, and keyboard.
   double _webtoonPageStep() => MediaQuery.of(context).size.height * 0.85;
 
-  /// Finer keyboard nudge (arrows) — fraction of a full page step.
-  double _webtoonFineStep() => _webtoonPageStep() * 0.45;
-
   void _resetZoom({bool animate = false}) {
     _cancelZoomAnimation();
     for (final c in _webtoonZoomControllers.values) {
@@ -803,23 +913,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   /// URLs with a live height probe, so a rebuild cannot stack listeners.
   final Set<String> _heightProbesInFlight = {};
 
-  void _syncZoomedFlag() {
-    final scale = _transformationController.value.getMaxScaleOnAxis();
-    final isNowZoomed = scale > 1.05;
-    if (isNowZoomed != _isZoomed && mounted) {
-      setState(() => _isZoomed = isNowZoomed);
-    } else {
-      _isZoomed = isNowZoomed;
-    }
-  }
-
-  Matrix4 _zoomMatrixAround(Offset focal, double scale) {
-    return Matrix4.identity()
-      ..translateByDouble(focal.dx, focal.dy, 0.0, 1.0)
-      ..scaleByDouble(scale, scale, 1.0, 1.0)
-      ..translateByDouble(-focal.dx, -focal.dy, 0.0, 1.0);
-  }
-
   VoidCallback? _zoomTickListener;
 
   void _cancelZoomAnimation() {
@@ -925,6 +1018,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   void _applyMangaReadingMode(Manga? manga) {
     _parentManga = manga;
+    _positionManager.setParentManga(manga);
     final override = manga?.readingModeOverride?.trim();
     _readerSettingsScope = initialReaderSettingsScope(override);
     if (override != null && override.isNotEmpty) {
@@ -1001,52 +1095,24 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     final key = event.logicalKey;
-    final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
-    final isRtl = _readingMode == ReadingMode.pagedRtl;
 
-    if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.keyD) {
-      if (isRtl) {
-        _goToPrevPage();
-      } else {
-        _goToNextPage();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyA) {
-      if (isRtl) {
-        _goToNextPage();
-      } else {
-        _goToPrevPage();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.pageDown) {
-      if (isPaged) {
-        _goToNextPage();
-      } else {
-        _scrollVerticalBy(_webtoonPageStep());
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.pageUp) {
-      if (isPaged) {
-        _goToPrevPage();
-      } else {
-        _scrollVerticalBy(-_webtoonPageStep());
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.arrowDown) {
-      if (isPaged) {
-        _goToNextPage();
-      } else {
-        _scrollVerticalBy(_webtoonFineStep());
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.arrowUp) {
-      if (isPaged) {
-        _goToPrevPage();
-      } else {
-        _scrollVerticalBy(-_webtoonFineStep());
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.escape) {
+    // R1.8: nav / scroll keys via GesturePipeline; reader keeps volume / HUD keys.
+    if (key == LogicalKeyboardKey.arrowRight ||
+        key == LogicalKeyboardKey.keyD ||
+        key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.keyA ||
+        key == LogicalKeyboardKey.space ||
+        key == LogicalKeyboardKey.pageDown ||
+        key == LogicalKeyboardKey.pageUp ||
+        key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.home ||
+        key == LogicalKeyboardKey.end) {
+      _syncGesturePipelineState();
+      return _gesturePipeline.handleKeyEvent(event);
+    }
+
+    if (key == LogicalKeyboardKey.escape) {
       _safeExitReader();
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.audioVolumeDown && _settings.volumeKeyTurn) {
@@ -1144,6 +1210,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _prefetchingChapters.clear();
     _pageLoader?.dispose();
     _pageLoader = null;
+    _gesturePipeline.dispose();
+    _positionManager.dispose();
     _scrollController.removeListener(_onVerticalScroll);
     _scrollController.dispose();
     _pageController.dispose();
@@ -1826,131 +1894,29 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   /// Internal progress update using a snapshot to prevent cross-chapter pollution.
+  /// R1.8: delegates persistence/sync/scrobble to [PositionManager].
   Future<void> _updateProgressWithSnapshot(int page, Chapter chapterSnapshot, int totalPagesSnapshot) async {
-    // Privacy & Security: If Incognito Mode is enabled, do not persist reading progress or sync to server
-    if (_settings.incognitoMode) return;
-    // No pages loaded (still loading, timed out, or the source returned an
-    // empty list): there is no progress to record.
-    if (totalPagesSnapshot == 0) return;
+    final result = await _positionManager.updateProgress(
+      chapterSnapshot: chapterSnapshot,
+      totalPages: totalPagesSnapshot,
+      page: page,
+      parentManga: _parentManga,
+    );
+    if (!result.updated) return;
 
-    final totalPages = totalPagesSnapshot;
-    final clampedPage = totalPages > 0 ? page.clamp(1, totalPages) : page;
-    final isComplete = page >= totalPages;
-    final wasRead = chapterSnapshot.isRead;
-
-    // Clamp the STORED value, not just the incoming one. `lastPageRead` is not
-    // bounded by the page count: mergeLastPageRead takes the max of local and
-    // server without clamping, so a stored value larger than the chapter's
-    // current page count is entirely reachable (a source whose page count
-    // shrank between resolutions — 30 pages yesterday, 25 today).
-    //
-    // The non-regression rule in shouldPersistProgressPage then rejects EVERY
-    // call, because `page < previousSaved` holds for all of them. The chapter
-    // could never be marked read, unreadCount never decremented, the tracker
-    // never synced, the auto-scrobble never fired, and every re-open started
-    // at page 1 — a permanently wrong library badge from one stale number.
-    //
-    // Once the previous value is out of range it carries no information about
-    // where the user actually is, so it must not veto the update.
-    final previousSaved = totalPages > 0 ? chapterSnapshot.lastPageRead.clamp(0, totalPages) : chapterSnapshot.lastPageRead;
-
-    if (!shouldPersistProgressPage(page: clampedPage, previousSaved: previousSaved)) {
-      return;
-    }
-
-    chapterSnapshot.lastPageRead = clampedPage;
-    if (chapterSnapshot.pageCount != totalPages) {
-      chapterSnapshot.pageCount = totalPages;
-    }
-    if (isComplete) {
-      chapterSnapshot.isRead = true;
-      if (_settings.deleteFinishedChaptersWhileReading == 'Immediately') {
-        if (!chapterSnapshot.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-          unawaited(DownloadManagerService.instance.deleteLocalDownload(_chapterTargetId(chapterSnapshot)));
-        }
-      }
-    }
-    chapterSnapshot.lastReadAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    // I8.3: keep Dynamic Island / lock-screen progress in sync.
-    if (identical(chapterSnapshot, _chapter)) {
-      final fraction = totalPages > 0 ? clampedPage / totalPages : 0.0;
-      _mirrorPlatformReadingSession(progress: fraction);
-    }
-    // Awaited and logged. This is the data the whole feature exists to save,
-    // and it was fire-and-forget: an Isar write failure (disk full, corrupt DB)
-    // was completely invisible, so the chapter silently lost its position, was
-    // never marked read, and the tracker scrobble was skipped. The dispose()
-    // flush fires during route teardown and races engine shutdown, which is
-    // exactly where it is least likely to be noticed.
-    try {
-      await IsarService.instance.saveChapter(chapterSnapshot);
-    } catch (e, st) {
-      await LoggerService.instance.logError(
-        'Failed to persist reading progress for chapter ${chapterSnapshot.serverId}',
-        exception: e,
-        stackTrace: st,
-        category: 'Reader',
+    // I8.3: keep Dynamic Island / lock-screen progress in sync (UI/platform only).
+    if (identical(chapterSnapshot, _chapter) && result.totalPages > 0) {
+      _mirrorPlatformReadingSession(
+        progress: result.clampedPage / result.totalPages,
       );
     }
 
-    // Keep series last-read stamp for library sorting, and decrement the unread
-    // badge — as ONE awaited critical section on a single Manga instance.
-    //
-    // These were two independent `getMangaByServerId(...).then(...)` chains.
-    // That method has no instance cache, so each returned a DISTINCT Manga for
-    // the same row, and both were full-object `put`s: the second clobbered the
-    // first's field. Either `lastReadAt` regressed to the value read before the
-    // other write landed (the series dropping back down the "Recently read"
-    // sort) or the unread decrement was lost. The read was also launched after
-    // the unawaited write, with no ordering guarantee between the two txns.
-    final mangaId = chapterSnapshot.mangaId;
-    // `!= 0`, not `> 0`: a local/standalone manga's canonical id is a NEGATIVE
-    // synthetic value, so the `> 0` gate skipped every local series and their
-    // unread badge never decremented — and nothing would ever correct it,
-    // because a full sync only covers server-linked manga. getMangaByServerId
-    // filters the serverId column, which holds that negative value fine.
-    if (mangaId != 0 && (_parentManga != null || wasRead != chapterSnapshot.isRead)) {
-      final stampSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      final justBecameRead = !wasRead && chapterSnapshot.isRead;
-      try {
-        final parent = _parentManga ??
-            await IsarService.instance.getMangaByServerId(mangaId);
-        if (parent != null && (parent.serverId == mangaId || parent.id == mangaId)) {
-          parent.lastReadAt = stampSeconds;
-          if (justBecameRead && (parent.unreadCount ?? 0) > 0) {
-            parent.unreadCount = parent.unreadCount! - 1;
-          }
-          await IsarService.instance.saveManga(parent);
-        }
-      } catch (e, st) {
-        await LoggerService.instance.logError(
-          'Failed to update series read state for manga $mangaId',
-          exception: e,
-          stackTrace: st,
-          category: 'Reader',
-        );
-      }
-    }
-
-    if (chapterSnapshot.serverId > 0) {
-      unawaited(SyncEngine.instance.syncChapterProgress(
-        chapterSnapshot.serverId,
-        isRead: chapterSnapshot.isRead,
-        lastPageRead: clampedPage,
-      ));
-    }
-
-    // Push tracker progress only when the chapter *transitions* to fully read.
-    // The previous `|| isComplete` re-scrobbled/re-synced on every save at
-    // the last page (mark-read, dispose, chapter-switch flush) even after the
-    // chapter was already read, producing duplicate scrobbles per chapter.
-    if (!wasRead && chapterSnapshot.isRead) {
-      if (chapterSnapshot.mangaId > 0) {
-        _scrobbleToMetronIfLinked(chapterSnapshot);
-        final chapterNum = chapterSnapshot.chapterNumber > 0
-            ? chapterSnapshot.chapterNumber
-            : clampedPage.toDouble();
-        unawaited(SyncEngine.instance.syncMangaTrackerProgress(chapterSnapshot.mangaId, chapterNum));
+    if (result.becameComplete &&
+        _settings.deleteFinishedChaptersWhileReading == 'Immediately') {
+      if (!chapterSnapshot.isBookmarked ||
+          _settings.allowDeletingBookmarkedChapters) {
+        unawaited(DownloadManagerService.instance
+            .deleteLocalDownload(_chapterTargetId(chapterSnapshot)));
       }
     }
   }
@@ -1962,21 +1928,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     final totalPagesSnapshot = _pageUrls.length;
     if (chapterSnapshot == null || totalPagesSnapshot == 0) return;
     unawaited(_updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot));
-  }
-
-  void _scrobbleToMetronIfLinked(Chapter chapter) {
-    if (!_settings.metronAutoScrobble) return;
-    if (_parentManga != null && _parentManga!.metronSeriesId != null) {
-      unawaited(MetronService.instance.scrobbleMangaChapter(manga: _parentManga!, chapter: chapter).catchError((Object e, StackTrace st) {
-        unawaited(LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category:'Metron'));
-        return false;
-      }));
-    } else if (chapter.mangaId > 0) {
-      unawaited(MetronService.instance.scrobbleChapterByMangaId(mangaId: chapter.mangaId, chapter: chapter).catchError((Object e, StackTrace st) {
-        unawaited(LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category:'Metron'));
-        return false;
-      }));
-    }
   }
 
   Future<void> _clearCookiesAndCache() async {
@@ -2110,98 +2061,18 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   void _handleTapZone(TapUpDetails details, BoxConstraints constraints) {
-    if (_isAutoScrolling) {
-      _stopAutoScroll();
-      return;
-    }
-    if (_showTapZoneOverlay) {
-      _dismissTapZoneOverlay();
-      return;
-    }
-    final webtoonZoomed = isWebtoonReadingMode(_readingMode) &&
-        _webtoonZoomControllers[_currentPage - 1]?.value.getMaxScaleOnAxis() != null &&
-        (_webtoonZoomControllers[_currentPage - 1]?.value.getMaxScaleOnAxis() ?? 1.0) > 1.05;
-    final preset = _activeTapZonePreset();
-    if (!_settings.tapZonesEnabled || preset == TapZonePreset.off || _isZoomed || webtoonZoomed) {
-      _toggleControls();
-      return;
-    }
-
-    final width = constraints.maxWidth;
-    final height = constraints.maxHeight;
-    final dx = details.localPosition.dx;
-    final dy = details.localPosition.dy;
-    final raw = resolveTapZoneAction(
-      preset: preset,
-      dx: dx,
-      dy: dy,
-      width: width,
-      height: height,
-    );
-    final action = applyTapZoneModifiers(
-      raw,
-      invert: _invertTaps,
-      rtlPaged: _readingMode == ReadingMode.pagedRtl,
-    );
-
-    if (action == TapZoneAction.menu) {
-      _toggleControls();
-      return;
-    }
-
-    if (isPagedReadingMode(_readingMode)) {
-      if (action == TapZoneAction.next) {
-        _goToNextPage();
-      } else {
-        _goToPrevPage();
-      }
-      return;
-    }
-
-    // Webtoon / vertical
-    if (action == TapZoneAction.next) {
-      if (_scrollController.hasClients &&
-          _scrollController.position.maxScrollExtent > 50 &&
-          _scrollController.offset >= _scrollController.position.maxScrollExtent - 20) {
-        if (_nextChapter != null && _canAdvanceToNextChapter()) {
-          _lastNextChapterNavAt = DateTime.now();
-          unawaited(_loadChapterAndPages(_chapterTargetId(_nextChapter!)));
-        }
-      } else {
-        _scrollVerticalBy(_webtoonPageStep());
-      }
-    } else {
-      if (_canGoToPrevChapterFromTop()) {
-        _lastPrevChapterNavAt = DateTime.now();
-        unawaited(_loadChapterAndPages(_chapterTargetId(_prevChapter!)));
-      } else {
-        _scrollVerticalBy(-_webtoonPageStep());
-      }
-    }
+    // R1.8: GesturePipeline owns tap-zone routing.
+    _syncGesturePipelineState();
+    _gesturePipeline.handleTapZone(details, constraints);
   }
 
-  double _smartZoomForCurrentPage({int? pageIndex}) {
-    final idx = pageIndex ?? (_currentPage - 1);
-    final url = (idx >= 0 && idx < _pageUrls.length) ? _pageUrls[idx] : null;
-    final aspect = url == null ? null : _cachedPageAspects[url];
-    final size = MediaQuery.sizeOf(context);
-    return smartZoomScale(
-      viewportWidth: size.width,
-      viewportHeight: size.height,
-      imageAspect: aspect,
-      maxScale: _maxZoomScale,
-    );
-  }
-
-  void _handleDoubleTapZoom() {
-    final currentScale = _transformationController.value.getMaxScaleOnAxis();
-    if (currentScale > 1.05) {
-      _animateZoomTo(Matrix4.identity(), markZoomed: false);
-      return;
-    }
-    final pos = _doubleTapDetails?.localPosition ?? Offset.zero;
-    final zoomedMatrix = _zoomMatrixAround(pos, _smartZoomForCurrentPage());
-    _animateZoomTo(zoomedMatrix, markZoomed: true);
+  void _handleDoubleTapZoom({TransformationController? controllerOverride, int? pageIndex}) {
+    // R1.8: GesturePipeline owns double-tap smart zoom.
+    _syncGesturePipelineState(pageIndexForAspect: pageIndex);
+    _gesturePipeline.setDoubleTapDetails(
+        _doubleTapDetails?.localPosition ?? Offset.zero);
+    _gesturePipeline.handleDoubleTapZoom(
+        controllerOverride: controllerOverride);
   }
 
   void _goToNextPage() {
@@ -3235,21 +3106,9 @@ unawaited(
       return GestureDetector(
         onDoubleTapDown: (details) => _doubleTapDetails = details,
         onDoubleTap: () {
-          if (!enablePerPageZoom) {
-            _handleDoubleTapZoom();
-            return;
-          }
-          // Prefer zoom over tap-zones on the second tap.
-          final currentScale = transform.value.getMaxScaleOnAxis();
-          if (currentScale > 1.05) {
-            _animateZoomTo(Matrix4.identity(), markZoomed: false, controllerOverride: transform);
-            return;
-          }
-          final pos = _doubleTapDetails?.localPosition ?? Offset.zero;
-          _animateZoomTo(
-            _zoomMatrixAround(pos, _smartZoomForCurrentPage(pageIndex: index)),
-            markZoomed: true,
-            controllerOverride: transform,
+          _handleDoubleTapZoom(
+            controllerOverride: enablePerPageZoom ? transform : null,
+            pageIndex: index,
           );
         },
         child: InteractiveViewer(
@@ -3257,11 +3116,15 @@ unawaited(
           minScale: _minZoomScale,
           maxScale: _maxZoomScale,
           panEnabled: enablePerPageZoom ? (transform.value.getMaxScaleOnAxis() > 1.05) : _isZoomed,
-          onInteractionUpdate: (_) {
-            if (!enablePerPageZoom) _syncZoomedFlag();
+          onInteractionUpdate: (details) {
+            if (enablePerPageZoom) return;
+            _syncGesturePipelineState();
+            _gesturePipeline.handleInteractionUpdate(details);
           },
-          onInteractionEnd: (_) {
-            if (!enablePerPageZoom) _syncZoomedFlag();
+          onInteractionEnd: (details) {
+            if (enablePerPageZoom) return;
+            _syncGesturePipelineState();
+            _gesturePipeline.handleInteractionEnd(details);
           },
           child: image,
         ),
@@ -3531,36 +3394,21 @@ unawaited(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return Listener(
-              onPointerDown: (_) {
-                if (_isAutoScrolling && !_isUserTouching) {
-                  if (mounted) setState(() => _isUserTouching = true);
-                }
+              onPointerDown: (e) {
+                _syncGesturePipelineState();
+                _gesturePipeline.handlePointerDown(e);
               },
-              onPointerUp: (_) {
-                if (_isUserTouching) {
-                  _autoScrollStartTime = DateTime.now();
-                  if (mounted) setState(() => _isUserTouching = false);
-                }
+              onPointerUp: (e) {
+                _syncGesturePipelineState();
+                _gesturePipeline.handlePointerUp(e);
               },
-              onPointerCancel: (_) {
-                if (_isUserTouching) {
-                  _autoScrollStartTime = DateTime.now();
-                  if (mounted) setState(() => _isUserTouching = false);
-                }
+              onPointerCancel: (e) {
+                _syncGesturePipelineState();
+                _gesturePipeline.handlePointerCancel(e);
               },
               onPointerSignal: (pointerSignal) {
-                if (pointerSignal is PointerScrollEvent) {
-                  final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
-                  if (isPaged) {
-                    final isRtl = _readingMode == ReadingMode.pagedRtl;
-                    final effectiveDx = isRtl ? -pointerSignal.scrollDelta.dx : pointerSignal.scrollDelta.dx;
-                    if (effectiveDx > 25 || pointerSignal.scrollDelta.dy > 25) {
-                      _goToNextPage();
-                    } else if (effectiveDx < -25 || pointerSignal.scrollDelta.dy < -25) {
-                      _goToPrevPage();
-                    }
-                  }
-                }
+                _syncGesturePipelineState();
+                _gesturePipeline.handlePointerSignal(pointerSignal);
               },
               child: GestureDetector(
                 onTapUp: (details) => _handleTapZone(details, constraints),

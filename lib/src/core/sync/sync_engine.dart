@@ -653,7 +653,7 @@ void mergeSnapshotChapterNode(
   chapter.mangaId = manga.serverId;
   chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber'] ?? ""}';
   chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
-  chapter.pageCount = parseIntSafe(chMap['pageCount']) ?? chapter.pageCount;
+  chapter.pageCount = parseIntSafe(chMap['pageCount']);
 
   // Read-state merge: take the server's value outright unless this
   // chapter has an unsynced outbound mutation queued, in which
@@ -1417,7 +1417,7 @@ class SyncEngine {
                 await IsarService.instance.deleteCategory(localServerId);
                 cat.serverId = remoteId;
                 cat.name = created['name']?.toString() ?? name;
-                cat.order = parseIntSafe(created['order']) ?? order;
+                cat.order = parseIntSafe(created['order']);
                 await IsarService.instance.saveCategory(cat);
               }
             }
@@ -2720,7 +2720,7 @@ class SyncEngine {
           chapter.mangaId = mangaServerId;
           chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber'] ?? ""}';
           chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
-          chapter.pageCount = parseIntSafe(chMap['pageCount']) ?? chapter.pageCount;
+          chapter.pageCount = parseIntSafe(chMap['pageCount']);
 
           // Read-state: take the server's value unless this chapter still has
           // an unsynced outbound mutation queued (see _syncAllChaptersForLibrary).
@@ -2746,7 +2746,7 @@ class SyncEngine {
             }
 
             // Also upsert parent manga into Isar if not already there
-            final mServerId = parseIntSafe(mangaMap['id']) ?? mangaServerId;
+            final mServerId = parseIntSafe(mangaMap['id']);
             var parentManga = parentMangasToSave[mServerId] ?? await IsarService.instance.getMangaByServerId(mServerId);
             parentManga ??= Manga()..serverId = mServerId;
             if (parentManga.title.isEmpty || parentManga.title == 'Untitled') {
@@ -2813,14 +2813,14 @@ class SyncEngine {
         var chapter = await IsarService.instance.getChapterByServerId(chServerId);
         chapter ??= Chapter()..serverId = chServerId;
 
-        chapter.mangaId = parseIntSafe(map['mangaId']) ?? chapter.mangaId;
+        chapter.mangaId = parseIntSafe(map['mangaId']);
         chapter.name = map['name'] as String? ?? chapter.name;
-        chapter.chapterNumber = parseDoubleSafe(map['chapterNumber']) ?? chapter.chapterNumber;
+        chapter.chapterNumber = parseDoubleSafe(map['chapterNumber']);
         // pageCount was missing here, and Chapter.applyReadState does
         // `if (read) lastPageRead = pageCount` — so marking a chapter that
         // first arrived through the updates feed read wrote lastPageRead = 0
         // and threw away the resume position.
-        chapter.pageCount = parseIntSafe(map['pageCount']) ?? chapter.pageCount;
+        chapter.pageCount = parseIntSafe(map['pageCount']);
         final serverIsRead = parseBoolSafe(map['isRead']);
         final hasPendingMutation = pendingChapterIds.contains(chServerId.toString());
         if (!hasPendingMutation) {
@@ -2831,7 +2831,7 @@ class SyncEngine {
         // that was still queued for upload.
         chapter.lastPageRead = mergeLastPageRead(
           local: chapter.lastPageRead,
-          server: parseIntSafe(map['lastPageRead']) ?? chapter.lastPageRead,
+          server: parseIntSafe(map['lastPageRead']),
           hasPendingMutation: hasPendingMutation,
         );
         // Also missing here: without lastReadAt a chapter that arrives already

@@ -135,6 +135,12 @@ class _FakeMetronService_16 extends _i1.SmartFake
     : super(parent, parentInvocation);
 }
 
+class _FakeProgressUpdateResult_17 extends _i1.SmartFake
+    implements _i11.ProgressUpdateResult {
+  _FakeProgressUpdateResult_17(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
 /// A class which mocks [IsarService].
 ///
 /// See the documentation for Mockito's code generation for more information.
@@ -2720,7 +2726,7 @@ class MockPositionManager extends _i1.Mock implements _i11.PositionManager {
           as _i13.MetronService);
 
   @override
-  _i14.Future<bool> updateProgress({
+  _i14.Future<_i11.ProgressUpdateResult> updateProgress({
     required _i6.Chapter? chapterSnapshot,
     required int? totalPages,
     required int? page,
@@ -2733,9 +2739,19 @@ class MockPositionManager extends _i1.Mock implements _i11.PositionManager {
               #page: page,
               #parentManga: parentManga,
             }),
-            returnValue: _i14.Future<bool>.value(false),
+            returnValue: _i14.Future<_i11.ProgressUpdateResult>.value(
+              _FakeProgressUpdateResult_17(
+                this,
+                Invocation.method(#updateProgress, [], {
+                  #chapterSnapshot: chapterSnapshot,
+                  #totalPages: totalPages,
+                  #page: page,
+                  #parentManga: parentManga,
+                }),
+              ),
+            ),
           )
-          as _i14.Future<bool>);
+          as _i14.Future<_i11.ProgressUpdateResult>);
 
   @override
   void setParentManga(_i5.Manga? manga) => super.noSuchMethod(

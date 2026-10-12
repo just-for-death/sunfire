@@ -107,7 +107,7 @@ void main() {
   group('C5.4 dialogs', () {
     testWidgets('confirm helper returns true on confirm',
         (tester) async {
-      var result;
+      bool? result;
       await tester.pumpWidget(wrap(Builder(
         builder: (context) => SunfireButton.primary(
           label: 'Open',
