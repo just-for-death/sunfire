@@ -34,6 +34,38 @@ class PageLoadResult {
   bool get isSuccess => bytes != null;
 }
 
+/// Snapshot of PageLoader cache/load metrics (I3.4).
+class PageLoaderMetrics {
+  const PageLoaderMetrics({
+    required this.cacheHits,
+    required this.cacheMisses,
+    required this.completedLoads,
+    required this.failedLoads,
+    required this.totalLoadMicroseconds,
+    required this.cachedEntries,
+    required this.cachedBytes,
+    required this.inFlight,
+    required this.pending,
+  });
+
+  final int cacheHits;
+  final int cacheMisses;
+  final int completedLoads;
+  final int failedLoads;
+  final int totalLoadMicroseconds;
+  final int cachedEntries;
+  final int cachedBytes;
+  final int inFlight;
+  final int pending;
+
+  int get totalRequests => cacheHits + cacheMisses;
+
+  double get hitRate => totalRequests > 0 ? cacheHits / totalRequests : 0.0;
+
+  double get avgLoadMilliseconds =>
+      completedLoads > 0 ? totalLoadMicroseconds / completedLoads / 1000.0 : 0.0;
+}
+
 /// Priority levels for page loading.
 enum PageLoadPriority {
   current,  // Currently visible page
@@ -100,6 +132,9 @@ class PageLoader {
   // LRU cache for image bytes.
   final _cache = _LruCache<String, Uint8List>(maxSize: 200);
 
+  // Cached intrinsic heights for webtoon layout calculations.
+  final Map<String, double> _cachedHeights = {};
+
   // In-flight requests deduplication.
   final Map<String, Completer<PageLoadResult>> _inFlight = {};
 
@@ -111,6 +146,35 @@ class PageLoader {
 
   // Closed flag.
   bool _disposed = false;
+
+  // ─── I3.4 Metrics: hit rate, memory usage, load time ─────────────
+  int _cacheHits = 0;
+  int _cacheMisses = 0;
+  int _completedLoads = 0;
+  int _failedLoads = 0;
+  int _totalLoadMicroseconds = 0;
+
+  /// Snapshot of cache/load metrics for observability (I3.4).
+  PageLoaderMetrics get metrics => PageLoaderMetrics(
+        cacheHits: _cacheHits,
+        cacheMisses: _cacheMisses,
+        completedLoads: _completedLoads,
+        failedLoads: _failedLoads,
+        totalLoadMicroseconds: _totalLoadMicroseconds,
+        cachedEntries: _cache.length,
+        cachedBytes: _cache.values.fold<int>(0, (sum, b) => sum + b.length),
+        inFlight: _inFlight.length,
+        pending: _pending.length,
+      );
+
+  /// Reset accumulated metrics counters (keeps cached data).
+  void resetMetrics() {
+    _cacheHits = 0;
+    _cacheMisses = 0;
+    _completedLoads = 0;
+    _failedLoads = 0;
+    _totalLoadMicroseconds = 0;
+  }
 
   /// Load a single page image.
   ///
@@ -130,8 +194,10 @@ class PageLoader {
     // Check cache first
     final cached = _cache.get(url);
     if (cached != null) {
+      _cacheHits++;
       return Future.value(PageLoadResult(bytes: cached, fromCache: true));
     }
+    _cacheMisses++;
 
     // Check in-flight
     final inFlight = _inFlight[url];
@@ -225,8 +291,10 @@ class PageLoader {
   void clear() {
     cancelAll();
     _cache.clear();
+    _cachedHeights.clear();
     _prefetchedChapters.clear();
     _prefetchingChapters.clear();
+    resetMetrics();
   }
 
   /// Dispose all resources.
@@ -234,8 +302,18 @@ class PageLoader {
     _disposed = true;
     cancelAll();
     _cache.clear();
+    _cachedHeights.clear();
     _prefetchedChapters.clear();
     _prefetchingChapters.clear();
+    resetMetrics();
+  }
+
+  /// Get cached intrinsic height for a URL (for webtoon layout).
+  double getCachedHeight(String url) => _cachedHeights[url] ?? 0.0;
+
+  /// Cache intrinsic height for a URL.
+  void cacheHeight(String url, double height) {
+    _cachedHeights[url] = height;
   }
 
   // Private implementation details below
@@ -271,7 +349,7 @@ class PageLoader {
   // Start loading a single image.
   void _startLoad(_PageLoadRequest request) {
     if (_disposed) {
-      request.completer.complete(PageLoadResult(error: 'Disposed'));
+      _safeComplete(request, const PageLoadResult(error: 'Disposed'));
       _inFlight.remove(request.url);
       _processQueue();
       return;
@@ -281,13 +359,31 @@ class PageLoader {
     unawaited(_loadAndComplete(request));
   }
 
+  /// Complete a request unless it was already completed by cancelAll/dispose.
+  /// Disposal during an in-flight load previously threw
+  /// `Bad state: Future already completed`.
+  void _safeComplete(_PageLoadRequest request, PageLoadResult result) {
+    if (!request.completer.isCompleted) {
+      request.completer.complete(result);
+    }
+  }
+
   Future<void> _loadAndComplete(_PageLoadRequest request) async {
+    final stopwatch = Stopwatch()..start();
     try {
       final result = await _loadImage(request.url, request.sourceName, request.headers);
-      _cache.put(request.url, result.bytes!);
-      request.completer.complete(result);
+      _totalLoadMicroseconds += stopwatch.elapsedMicroseconds;
+      if (result.isSuccess) {
+        _completedLoads++;
+        _cache.put(request.url, result.bytes!);
+      } else {
+        _failedLoads++;
+      }
+      _safeComplete(request, result);
     } catch (e) {
-      request.completer.complete(PageLoadResult(error: e.toString()));
+      _totalLoadMicroseconds += stopwatch.elapsedMicroseconds;
+      _failedLoads++;
+      _safeComplete(request, PageLoadResult(error: e.toString()));
     } finally {
       _inFlight.remove(request.url);
       _activeLoads--;
@@ -392,6 +488,10 @@ class _LruCache<K, V> {
   bool containsKey(K key) => _map.containsKey(key);
 
   void clear() => _map.clear();
+
+  int get length => _map.length;
+
+  Iterable<V> get values => _map.values;
 
   void _evict() {
     while (_map.length > maxSize) {
