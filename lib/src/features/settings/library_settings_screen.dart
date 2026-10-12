@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/category.dart';
@@ -848,6 +849,38 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       onTap: _showDefaultCategoryDialog,
+                    ),
+                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    SectionTitle(title: 'Library Maintenance (Local)'),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      leading: const Icon(Icons.find_replace_rounded),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          const Text('Duplicate Detection', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: const Text('Scan for and merge duplicate manga entries', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      onTap: () => context.push('/settings/library/duplicate-detection'),
+                    ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      leading: const Icon(Icons.sell_outlined),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          const Text('Custom Tags', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: const Text('Create color-coded tags for your library', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      onTap: () => context.push('/settings/library/tags'),
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
                     SectionTitle(title: _isConnected ? 'Categories (Server Synced)' : 'Categories (Local)'),
