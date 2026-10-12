@@ -38,8 +38,8 @@ import 'controller/reader_controller.dart';
 import 'controller/reader_theme.dart';
 import 'double_page_layout.dart';
 import 'listen_sheet.dart';
-import 'reader_chapter_navigation.dart';
 import 'reader_chapter_resolve.dart';
+import 'reader_chapter_selector_sheet.dart';
 import 'reader_chapter_transition.dart';
 import 'reader_overlay_hud.dart';
 import 'reader_prefetch.dart';
@@ -2640,104 +2640,12 @@ unawaited(
   }
 
   void _showChapterSelectorSheet() {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    // Use the fuzzy sibling matcher so serverId==0 (locally-created) chapters
-    // still highlight correctly instead of matching nothing (-1).
-    final currentIndex = _chapter != null ? findSiblingChapterIndex(_siblingChapters, _chapter!) : -1;
-unawaited(
-    showModalBottomSheet<void>(
+    unawaited(ReaderChapterSelectorSheet.show(
       context: context,
-      backgroundColor: const Color(0xFF18181D),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (sheetContext) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.65,
-          minChildSize: 0.35,
-          maxChildSize: 0.92,
-          expand: false,
-          builder: (context, scrollController) {
-            if (currentIndex > 0) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (scrollController.hasClients) {
-                  final targetOffset = (currentIndex * 58.0).clamp(0.0, scrollController.position.maxScrollExtent);
-                  scrollController.jumpTo(targetOffset);
-                }
-              });
-            }
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-              child: Column(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 14),
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Chapters', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                      Text('${_siblingChapters.length} Total', style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: ListView.builder(
-                      controller: scrollController,
-                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                      itemCount: _siblingChapters.length,
-                      itemBuilder: (context, index) {
-                        final ch = _siblingChapters[index];
-                        final isCurrent = (ch.id == _chapter?.id) || (ch.serverId != 0 && ch.serverId == _chapter?.serverId);
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3),
-                          child: Material(
-                            color: isCurrent ? primaryColor.withValues(alpha: 0.15) : const Color(0x1F2A2A32),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(
-                                color: isCurrent ? primaryColor.withValues(alpha: 0.6) : const Color(0x2BFFFFFF),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: ListTile(
-                              dense: true,
-                              title: Text(
-                                ch.name.isNotEmpty ? ch.name : 'Chapter ${ch.chapterNumber}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: isCurrent ? primaryColor : (ch.isRead ? Colors.grey : Colors.white),
-                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              trailing: isCurrent
-                                  ? Icon(Icons.check_circle_rounded, color: primaryColor, size: 18)
-                                  : (ch.isRead ? const Icon(Icons.done_rounded, color: Colors.grey, size: 16) : null),
-                              onTap: () {
-                                Navigator.pop(sheetContext);
-                                if (!isCurrent) {
-                                  unawaited(_readerController.loadChapter(_chapterTargetId(ch)));
-                                }
-                              },
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
+      siblings: _siblingChapters,
+      current: _chapter,
+      onSelect: (ch) {
+        unawaited(_readerController.loadChapter(_chapterTargetId(ch)));
       },
     ));
   }
