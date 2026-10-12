@@ -10,6 +10,8 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/sync/multi_server_manager.dart';
 import '../../core/sync/server_type.dart';
+import '../../ui/design_system/components/components.dart'
+    show showSunfireConfirmDialog;
 import '../../ui/widgets/dialog_controllers.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -131,6 +133,15 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
   }
 
   Future<void> _remove(ServerConfig config) async {
+    final ok = await showSunfireConfirmDialog(
+      context: context,
+      title: 'Remove server?',
+      message: 'Remove "${config.name}" from the multi-server list? '
+          'This does not change the primary Suwayomi sync path.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    );
+    if (ok != true || !mounted) return;
     await MultiServerManager.instance.removeAdapter(config.id);
     await ServerConfigManager.instance.removeServer(config.id);
     if (mounted) await _bootstrap();

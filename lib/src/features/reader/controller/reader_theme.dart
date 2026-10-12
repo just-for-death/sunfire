@@ -15,18 +15,21 @@ enum ReaderColorFilter { none, invert, grayscale, nightAmber, sepia }
 enum ImageScaleType { fitWidth, fitHeight, fitScreen, original }
 
 /// Canvas background color for each theme mode.
+///
+/// Colors match the live [ReaderScreen] values (dark slate is cooler than
+/// Material grey-900 so OLED and "Dark Slate" stay visually distinct).
 Color canvasBackgroundColor(ReaderThemeMode mode) {
   switch (mode) {
     case ReaderThemeMode.black:
-      return Colors.black;
+      return const Color(0xFF000000);
     case ReaderThemeMode.darkGray:
-      return const Color(0xFF121212);
+      return const Color(0xFF1A1A20);
     case ReaderThemeMode.white:
-      return Colors.white;
+      return const Color(0xFFFFFFFF);
   }
 }
 
-/// Active color filter for a given mode and invert-tap state.
+/// Active color filter for a given mode.
 /// Returns null for [ReaderColorFilter.none].
 ColorFilter? activeColorFilter(ReaderColorFilter mode) {
   switch (mode) {
@@ -47,12 +50,8 @@ ColorFilter? activeColorFilter(ReaderColorFilter mode) {
         0, 0, 0, 1, 0,
       ]);
     case ReaderColorFilter.nightAmber:
-      return const ColorFilter.matrix([
-        1.0, 0.0, 0.0, 0, 0,
-        0.0, 0.5, 0.0, 0, 0,
-        0.0, 0.0, 0.0, 0, 0,
-        0, 0, 0, 1, 0,
-      ]);
+      // Live reader uses a soft amber burn, not a hard matrix crush.
+      return ColorFilter.mode(Colors.amber.withAlpha(50), BlendMode.colorBurn);
     case ReaderColorFilter.sepia:
       return const ColorFilter.matrix([
         0.393, 0.769, 0.189, 0, 0,
@@ -60,6 +59,20 @@ ColorFilter? activeColorFilter(ReaderColorFilter mode) {
         0.272, 0.534, 0.131, 0, 0,
         0, 0, 0, 1, 0,
       ]);
+  }
+}
+
+/// BoxFit for [ImageScaleType] (paged/webtoon image widgets).
+BoxFit imageBoxFit(ImageScaleType type) {
+  switch (type) {
+    case ImageScaleType.fitHeight:
+      return BoxFit.fitHeight;
+    case ImageScaleType.fitScreen:
+      return BoxFit.contain;
+    case ImageScaleType.original:
+      return BoxFit.none;
+    case ImageScaleType.fitWidth:
+      return BoxFit.fitWidth;
   }
 }
 
