@@ -11,6 +11,7 @@ import '../../core/db/models/category.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/sync/sync_manager.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/components/components.dart' show SunfireButton;
 import '../../ui/widgets/sync_ui_actions.dart';
 
 class SelectiveSyncScreen extends StatefulWidget {
@@ -166,12 +167,13 @@ class _SelectiveSyncScreenState extends State<SelectiveSyncScreen>
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: FilledButton.icon(
+            child: SunfireButton.primary(
+              expanded: true,
+              icon: Icons.sync,
+              label: 'Sync ${_selectedManga.length} manga',
               onPressed: _selectedManga.isEmpty
                   ? null
                   : () => unawaited(_syncSelectedManga()),
-              icon: const Icon(Icons.sync),
-              label: Text('Sync ${_selectedManga.length} manga'),
             ),
           ),
         ),
@@ -211,12 +213,13 @@ class _SelectiveSyncScreenState extends State<SelectiveSyncScreen>
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: FilledButton.icon(
+            child: SunfireButton.primary(
+              expanded: true,
+              icon: Icons.sync,
+              label: 'Sync ${_selectedCategories.length} categories',
               onPressed: _selectedCategories.isEmpty
                   ? null
                   : () => unawaited(_syncSelectedCategories()),
-              icon: const Icon(Icons.sync),
-              label: Text('Sync ${_selectedCategories.length} categories'),
             ),
           ),
         ),
