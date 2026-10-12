@@ -166,6 +166,10 @@ class ReaderController {
   /// Called when settings should be persisted
   void Function()? onSettingsChanged;
 
+  /// Live [ReaderScreen] cutover: complex load (recover/prefetch/platform)
+  /// stays on the screen; all entry points still go through [loadChapter].
+  Future<void> Function(int chapterId)? onRequestChapterLoad;
+
   // ─── Getters ──────────────────────────────────────────────────────
   ReadingMode get readingMode => _readingMode;
   Manga? get parentManga => _parentManga;
@@ -280,7 +284,7 @@ class ReaderController {
       _wireGestureCallbacks();
     }
 
-    unawaited(_loadChapterAndPages(chapterServerId));
+    unawaited(loadChapter(chapterServerId));
   }
 
   void _initPreferences() {
@@ -384,8 +388,8 @@ class ReaderController {
   }
 
   void _wireGestureCallbacks() {
-    _gesturePipeline.onLoadNextChapter = () => _loadNextChapter();
-    _gesturePipeline.onLoadPrevChapter = () => _loadPrevChapter();
+    _gesturePipeline.onLoadNextChapter = () => loadNextChapter();
+    _gesturePipeline.onLoadPrevChapter = () => loadPrevChapter();
     _gesturePipeline.onToggleControls = _toggleControls;
     _gesturePipeline.onStopAutoScroll = _stopAutoScroll;
     _gesturePipeline.onScrollVerticalBy = (delta) {
@@ -441,8 +445,18 @@ class ReaderController {
 
   // ─── Public API: Chapter Loading ─────────────────────────────────
 
-  /// Load a chapter and its pages.
-  Future<void> _loadChapterAndPages(int chapterId) async {
+  /// Load a chapter and its pages (live path may delegate via [onRequestChapterLoad]).
+  Future<void> loadChapter(int chapterId) async {
+    final delegated = onRequestChapterLoad;
+    if (delegated != null) {
+      await delegated(chapterId);
+      return;
+    }
+    await _loadChapterAndPagesViaNavigation(chapterId);
+  }
+
+  /// Scaffold / test path: NavigationController owns resolve + sibling sync.
+  Future<void> _loadChapterAndPagesViaNavigation(int chapterId) async {
     onLoadingChanged?.call(true);
 
     // If sub-controllers not initialized yet, load chapter first to get source info
@@ -470,20 +484,20 @@ class ReaderController {
     }
   }
 
-  /// Load the next chapter.
-  Future<void> _loadNextChapter() async {
+  /// Load the next chapter (uses synced [NavigationController.nextChapter]).
+  Future<void> loadNextChapter() async {
     final next = _navigationController?.nextChapter;
     if (next == null) return;
     final id = next.serverId != 0 ? next.serverId : next.id;
-    await _loadChapterAndPages(id);
+    await loadChapter(id);
   }
 
   /// Load the previous chapter.
-  Future<void> _loadPrevChapter() async {
+  Future<void> loadPrevChapter() async {
     final prev = _navigationController?.prevChapter;
     if (prev == null) return;
     final id = prev.serverId != 0 ? prev.serverId : prev.id;
-    await _loadChapterAndPages(id);
+    await loadChapter(id);
   }
 
   /// Restore reading progress for current chapter.
@@ -758,12 +772,6 @@ class ReaderController {
   }
 
   // ─── Public API for Canvas ────────────────────────────────────────
-
-  /// Load the next chapter (public for canvas).
-  Future<void> loadNextChapter() => _loadNextChapter();
-
-  /// Load the previous chapter (public for canvas).
-  Future<void> loadPrevChapter() => _loadPrevChapter();
 
   /// Stop auto-scroll (public for canvas).
   void stopAutoScroll() => _stopAutoScroll();
