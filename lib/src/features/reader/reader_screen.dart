@@ -45,6 +45,7 @@ import 'reader_overlay_hud.dart';
 import 'reader_prefetch.dart';
 import 'reader_scroll_utils.dart';
 import 'reader_settings_scope.dart';
+import 'reader_settings_sheet.dart';
 import 'reading_mode.dart';
 import 'tap_zone_overlay.dart';
 import 'tap_zones.dart';
@@ -2303,339 +2304,48 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   void _showReaderSettingsSheet() {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-unawaited(
-    showModalBottomSheet<void>(
+    unawaited(ReaderSettingsSheet.show(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return DraggableScrollableSheet(
-              initialChildSize: 0.7,
-              maxChildSize: 0.9,
-              minChildSize: 0.4,
-              expand: false,
-              builder: (context, scrollCtrl) {
-                return ListView(
-                  controller: scrollCtrl,
-                  padding: const EdgeInsets.all(20.0),
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Reader Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    if (_parentManga != null) ...[
-                      SegmentedButton<ReaderSettingsScope>(
-                        segments: const [
-                          ButtonSegment(
-                            value: ReaderSettingsScope.manga,
-                            label: Text('Manga'),
-                            icon: Icon(Icons.menu_book_rounded, size: 16),
-                          ),
-                          ButtonSegment(
-                            value: ReaderSettingsScope.global,
-                            label: Text('Global'),
-                            icon: Icon(Icons.public_rounded, size: 16),
-                          ),
-                        ],
-                        selected: {_readerSettingsScope},
-                        onSelectionChanged: (sel) {
-                          final next = sel.first;
-                          setState(() => _readerSettingsScope = next);
-                          // Re-persist current mode under the new scope.
-                          unawaited(_persistReadingMode(_readingMode));
-                          setSheetState(() {});
-                        },
-                        style: ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                          textStyle: WidgetStatePropertyAll(
-                            TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _readerSettingsScope == ReaderSettingsScope.manga
-                            ? 'Reading mode applies to this series only'
-                            : 'Reading mode applies to all series',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                      ),
-                      const SizedBox(height: 16),
-                    ] else
-                      const SizedBox(height: 8),
-
-                    // 1. READING MODE
-                    _buildSectionHeader('READING MODE'),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _buildFilterChip(readingModeSettingsValue(ReadingMode.longStrip), _readingMode == ReadingMode.longStrip, () {
-                          _applyReadingMode(ReadingMode.longStrip);
-                          setSheetState(() {});
-                        }, primaryColor),
-                        _buildFilterChip(readingModeSettingsValue(ReadingMode.longStripGaps), _readingMode == ReadingMode.longStripGaps, () {
-                          _applyReadingMode(ReadingMode.longStripGaps);
-                          setSheetState(() {});
-                        }, primaryColor),
-                        _buildFilterChip(readingModeSettingsValue(ReadingMode.pagedLtr), _readingMode == ReadingMode.pagedLtr, () {
-                          _applyReadingMode(ReadingMode.pagedLtr);
-                          setSheetState(() {});
-                        }, primaryColor),
-                        _buildFilterChip(readingModeSettingsValue(ReadingMode.pagedRtl), _readingMode == ReadingMode.pagedRtl, () {
-                          _applyReadingMode(ReadingMode.pagedRtl);
-                          setSheetState(() {});
-                        }, primaryColor),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // 2. BACKGROUND THEME
-                    _buildSectionHeader('BACKGROUND COLOR'),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        _buildFilterChip('OLED Black', _readerTheme == ReaderThemeMode.black, () {
-                          setState(() => _readerTheme = ReaderThemeMode.black);
-                          _settings.readerTheme = 'Black';
-                          setSheetState(() {});
-                        }, primaryColor),
-                        _buildFilterChip('Dark Slate', _readerTheme == ReaderThemeMode.darkGray, () {
-                          setState(() => _readerTheme = ReaderThemeMode.darkGray);
-                          _settings.readerTheme = 'Dark Gray';
-                          setSheetState(() {});
-                        }, primaryColor),
-                        _buildFilterChip('Paper White', _readerTheme == ReaderThemeMode.white, () {
-                          setState(() => _readerTheme = ReaderThemeMode.white);
-                          _settings.readerTheme = 'White';
-                          setSheetState(() {});
-                        }, primaryColor),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // 3. COLOR FILTER
-                    _buildSectionHeader('COLOR FILTER / NIGHT MODE'),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        _buildFilterChip('None', _colorFilter == ReaderColorFilter.none, () {
-                          setState(() => _colorFilter = ReaderColorFilter.none);
-                          _settings.colorFilter = 'None';
-                          setSheetState(() {});
-                        }, primaryColor),
-                        _buildFilterChip('Invert Colors', _colorFilter == ReaderColorFilter.invert, () {
-                          setState(() => _colorFilter = ReaderColorFilter.invert);
-                          _settings.colorFilter = 'Invert';
-                          setSheetState(() {});
-                        }, primaryColor),
-                        _buildFilterChip('Grayscale', _colorFilter == ReaderColorFilter.grayscale, () {
-                          setState(() => _colorFilter = ReaderColorFilter.grayscale);
-                          _settings.colorFilter = 'Grayscale';
-                          setSheetState(() {});
-                        }, primaryColor),
-                        _buildFilterChip('Amber Night', _colorFilter == ReaderColorFilter.nightAmber, () {
-                          setState(() => _colorFilter = ReaderColorFilter.nightAmber);
-                          _settings.colorFilter = 'Amber Tint';
-                          setSheetState(() {});
-                        }, primaryColor),
-                        _buildFilterChip('Sepia', _colorFilter == ReaderColorFilter.sepia, () {
-                          setState(() => _colorFilter = ReaderColorFilter.sepia);
-                          _settings.colorFilter = 'Sepia';
-                          setSheetState(() {});
-                        }, primaryColor),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // 4. IMAGE SCALE
-                    _buildSectionHeader('SCALE TYPE'),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        _buildFilterChip('Fit Width', _scaleType == ImageScaleType.fitWidth, () {
-                          setState(() => _scaleType = ImageScaleType.fitWidth);
-                          _settings.scaleType = 'Fit Width';
-                          setSheetState(() {});
-                        }, primaryColor),
-                        _buildFilterChip('Fit Height', _scaleType == ImageScaleType.fitHeight, () {
-                          setState(() => _scaleType = ImageScaleType.fitHeight);
-                          _settings.scaleType = 'Fit Height';
-                          setSheetState(() {});
-                        }, primaryColor),
-                        _buildFilterChip('Fit Screen', _scaleType == ImageScaleType.fitScreen, () {
-                          setState(() => _scaleType = ImageScaleType.fitScreen);
-                          _settings.scaleType = 'Fit Screen';
-                          setSheetState(() {});
-                        }, primaryColor),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // 5. NAVIGATION TOGGLES
-                    _buildSectionHeader('NAVIGATION & GESTURES'),
-                    SwitchListTile(
-                      title: const Text('3-Zone Tap Navigation'),
-                      subtitle: const Text('Tap left/right edges to turn pages'),
-                      value: _settings.tapZonesEnabled,
-                      activeThumbColor: primaryColor,
-                      onChanged: (val) {
-                        setState(() => _settings.tapZonesEnabled = val);
-                        setSheetState(() {});
-                      },
-                    ),
-                    SwitchListTile(
-                      title: const Text('Invert Tap Zones'),
-                      subtitle: const Text('Swap previous and next page tap areas'),
-                      value: _invertTaps,
-                      activeThumbColor: primaryColor,
-                      onChanged: (val) {
-                        setState(() => _invertTaps = val);
-                        _settings.invertTapZones = val;
-                        setSheetState(() {});
-                      },
-                    ),
-                    ListTile(
-                      title: const Text('Tap Zones (Paged)'),
-                      subtitle: Text(_settings.tapZonePresetPaged),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
-                      onTap: () async {
-                        final choice = await showDialog<String>(
-                          context: context,
-                          builder: (ctx) => SimpleDialog(
-                            title: const Text('Tap Zones (Paged)'),
-                            children: [
-                              for (final p in TapZonePreset.values)
-                                SimpleDialogOption(
-                                  onPressed: () => Navigator.pop(ctx, p.settingsLabel),
-                                  child: Text(p.settingsLabel),
-                                ),
-                            ],
-                          ),
-                        );
-                        if (choice != null) {
-                          setState(() => _settings.tapZonePresetPaged = choice);
-                          setSheetState(() {});
-                        }
-                      },
-                    ),
-                    ListTile(
-                      title: const Text('Tap Zones (Webtoon)'),
-                      subtitle: Text(_settings.tapZonePresetWebtoon),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
-                      onTap: () async {
-                        final choice = await showDialog<String>(
-                          context: context,
-                          builder: (ctx) => SimpleDialog(
-                            title: const Text('Tap Zones (Webtoon)'),
-                            children: [
-                              for (final p in TapZonePreset.values)
-                                SimpleDialogOption(
-                                  onPressed: () => Navigator.pop(ctx, p.settingsLabel),
-                                  child: Text(p.settingsLabel),
-                                ),
-                            ],
-                          ),
-                        );
-                        if (choice != null) {
-                          setState(() => _settings.tapZonePresetWebtoon = choice);
-                          setSheetState(() {});
-                        }
-                      },
-                    ),
-                    _buildSectionHeader('DOUBLE-PAGE SPREADS'),
-                    ListTile(
-                      title: const Text('Display Mode'),
-                      subtitle: Text(_settings.doublePageDisplayMode),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
-                      onTap: () async {
-                        final choice = await showDialog<String>(
-                          context: context,
-                          builder: (ctx) => SimpleDialog(
-                            title: const Text('Double-Page Display'),
-                            children: [
-                              for (final m in DoublePageDisplayMode.values)
-                                SimpleDialogOption(
-                                  onPressed: () => Navigator.pop(ctx, m.settingsLabel),
-                                  child: Text(m.settingsLabel),
-                                ),
-                            ],
-                          ),
-                        );
-                        if (choice != null) {
-                          setState(() => _settings.doublePageDisplayMode = choice);
-                          setSheetState(() {});
-                        }
-                      },
-                    ),
-                    SwitchListTile(
-                      title: const Text('Page Offset'),
-                      subtitle: const Text('First page alone before pairing'),
-                      value: _settings.doublePageOffset,
-                      activeThumbColor: primaryColor,
-                      onChanged: (val) {
-                        setState(() => _settings.doublePageOffset = val);
-                        setSheetState(() {});
-                      },
-                    ),
-                    SwitchListTile(
-                      title: const Text('Invert Double Pages'),
-                      subtitle: const Text('Swap left/right pairing (RTL)'),
-                      value: _settings.invertDoublePages,
-                      activeThumbColor: primaryColor,
-                      onChanged: (val) {
-                        setState(() => _settings.invertDoublePages = val);
-                        setSheetState(() {});
-                      },
-                    ),
-                    SwitchListTile(
-                      title: const Text('Volume Key Page Turn'),
-                      subtitle: const Text('Turn pages with physical volume rocker'),
-                      value: _settings.volumeKeyTurn,
-                      activeThumbColor: primaryColor,
-                      onChanged: (val) {
-                        setState(() => _settings.volumeKeyTurn = val);
-                        setSheetState(() {});
-                      },
-                    ),
-                    SwitchListTile(
-                      title: const Text('Keep Screen Awake'),
-                      subtitle: const Text('Prevent device display from sleeping'),
-                      value: _settings.keepScreenAwake,
-                      activeThumbColor: primaryColor,
-                      onChanged: (val) {
-                        setState(() => _settings.keepScreenAwake = val);
-                        _safeSetWakelock(val);
-                        setSheetState(() {});
-                      },
-                    ),
-                    SwitchListTile(
-                      title: const Text('Crop White Borders'),
-                      subtitle: const Text('Trim page whitespace margins automatically'),
-                      value: _cropBorders,
-                      activeThumbColor: primaryColor,
-                      onChanged: (val) {
-                        setState(() => _cropBorders = val);
-                        _settings.cropBorders = val;
-                        setSheetState(() {});
-                      },
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
-      },
+      model: ReaderSettingsSheetModel(
+        settings: _settings,
+        hasParentManga: _parentManga != null,
+        scope: _readerSettingsScope,
+        readingMode: _readingMode,
+        readerTheme: _readerTheme,
+        colorFilter: _colorFilter,
+        scaleType: _scaleType,
+        invertTaps: _invertTaps,
+        cropBorders: _cropBorders,
+        onScopeChanged: (next) {
+          setState(() => _readerSettingsScope = next);
+          unawaited(_persistReadingMode(_readingMode));
+        },
+        onApplyReadingMode: _applyReadingMode,
+        onThemeChanged: (theme) {
+          setState(() => _readerTheme = theme);
+          _settings.readerTheme = themeModeLabel(theme);
+        },
+        onColorFilterChanged: (filter) {
+          setState(() => _colorFilter = filter);
+          _settings.colorFilter = colorFilterLabel(filter);
+        },
+        onScaleTypeChanged: (scale) {
+          setState(() => _scaleType = scale);
+          _settings.scaleType = scaleTypeLabel(scale);
+        },
+        onInvertTapsChanged: (val) {
+          setState(() => _invertTaps = val);
+          _settings.invertTapZones = val;
+        },
+        onCropBordersChanged: (val) {
+          setState(() => _cropBorders = val);
+          _settings.cropBorders = val;
+        },
+        onKeepScreenAwakeChanged: (val) {
+          setState(() => _settings.keepScreenAwake = val);
+          _safeSetWakelock(val);
+        },
+      ),
     ));
   }
 
@@ -2661,35 +2371,6 @@ unawaited(
       headers: headers,
       title: _chapter?.name ?? 'Page $_currentPage',
     ));
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(
-        title,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap, Color primaryColor) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      selectedColor: primaryColor,
-      backgroundColor: const Color(0x1F2A2A32),
-      labelStyle: TextStyle(
-        color: isSelected ? Colors.white : Colors.grey,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-        fontSize: 13,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: isSelected ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
-      ),
-      onSelected: (_) => onTap(),
-    );
   }
 
   /// Delegates to the shared validator.
