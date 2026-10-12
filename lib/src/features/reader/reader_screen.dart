@@ -35,6 +35,8 @@ import 'controller/gesture_pipeline.dart';
 import 'controller/navigation_controller.dart';
 import 'controller/page_loader.dart';
 import 'controller/position_manager.dart';
+import 'controller/reader_canvas.dart';
+import 'controller/reader_controller.dart';
 import 'controller/reader_theme.dart';
 import 'double_page_layout.dart';
 import 'reader_chapter_navigation.dart';
@@ -179,6 +181,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     settings: _settings,
   );
 
+  /// R1.5: orchestrator holding the live PositionManager / Navigation /
+  /// GesturePipeline. Chapter load stays on this screen; canvas may consume
+  /// the controller for zoom + next-chapter requests.
+  late final ReaderController _readerController;
+
   final ScrollController _scrollController = ScrollController();
   late PageController _pageController;
   Timer? _progressDebounceTimer;
@@ -211,6 +218,23 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _zoomAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
+    );
+    _readerController = ReaderController(
+      chapterServerId: widget.chapterServerId,
+      isarService: IsarService.instance,
+      settings: _settings,
+      syncEngine: SyncEngine.instance,
+      metronService: MetronService.instance,
+      positionManager: _positionManager,
+      navigationController: _gestureNav,
+      gesturePipeline: _gesturePipeline,
+    );
+    _readerController.attachUiControllers(
+      scrollController: _scrollController,
+      pageController: _pageController,
+      transformationController: _transformationController,
+      zoomAnimController: _zoomAnimController,
+      webtoonZoomControllers: _webtoonZoomControllers,
     );
     _initPreferences();
     _wireGesturePipeline();
@@ -851,6 +875,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     if (ch == null) {
       _pageLoader?.dispose();
       _pageLoader = null;
+      _readerController.setPageLoader(null);
       return;
     }
     final source = _sourceName ?? '';
@@ -868,6 +893,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       mangaId: ch.mangaId,
       chapterTargetId: targetId,
     );
+    _readerController.setPageLoader(_pageLoader);
   }
 
   void _schedulePageHeightCacheForProvider(String url, double width, ImageProvider provider) {
@@ -1167,6 +1193,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _prefetchingChapters.clear();
     _pageLoader?.dispose();
     _pageLoader = null;
+    _readerController.dispose();
     _gesturePipeline.dispose();
     _positionManager.dispose();
     _scrollController.removeListener(_onVerticalScroll);
@@ -2032,6 +2059,60 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     // R1.8: GesturePipeline owns tap-zone routing.
     _syncGesturePipelineState();
     _gesturePipeline.handleTapZone(details, constraints);
+  }
+
+  /// R1.6: webtoon layout via [ReaderCanvas]; pages still built by live recover path.
+  Widget _buildLiveWebtoonCanvas(BoxConstraints constraints) {
+    _readerController.syncPresentation(
+      readingMode: _readingMode,
+      readerTheme: _readerTheme,
+      colorFilter: _colorFilter,
+      scaleType: _scaleType,
+      cropBorders: _cropBorders,
+      invertTaps: _invertTaps,
+      isZoomed: _isZoomed,
+      currentPage: _currentPage,
+    );
+    final showTransition =
+        _pageUrls.isNotEmpty &&
+        _settings.seamlessTransitions &&
+        _settings.showEndOfChapterDialog;
+    return ReaderCanvas(
+      controller: _readerController,
+      scrollController: _scrollController,
+      pageController: _pageController,
+      transformationController: _transformationController,
+      webtoonZoomControllers: _webtoonZoomControllers,
+      webtoonPageKeys: _webtoonPageKeys,
+      readingMode: _readingMode,
+      pageUrls: _pageUrls,
+      currentPage: _currentPage,
+      colorFilter: _colorFilter,
+      cropBorders: _cropBorders,
+      scaleType: _scaleType,
+      readerTheme: _readerTheme,
+      chapter: _chapter,
+      nextChapter: _nextChapter,
+      showTransitionCard: showTransition,
+      transitionBuilder: (_) => _buildChapterTransitionCard(),
+      onRequestNextChapter: () {
+        if (_nextChapter == null) return;
+        unawaited(_loadChapterAndPages(_chapterTargetId(_nextChapter!)));
+      },
+      pageBuilder: (context, url, index,
+          {required bool isPaged,
+          double? contentWidth,
+          bool enablePerPageZoom = false}) {
+        return _buildPageWidget(
+          url,
+          index,
+          constraints: constraints,
+          isPaged: isPaged,
+          contentWidth: contentWidth,
+          enablePerPageZoom: enablePerPageZoom,
+        );
+      },
+    );
   }
 
   void _handleDoubleTapZoom({TransformationController? controllerOverride, int? pageIndex}) {
@@ -3344,63 +3425,7 @@ unawaited(
                       },
                     ),
                     child: _readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps
-                        ? MediaQuery.removePadding(
-                            context: context,
-                            removeTop: true,
-                            removeBottom: true,
-                            child: ListView.builder(
-                              controller: _scrollController,
-                              padding: EdgeInsets.zero,
-                              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                              scrollCacheExtent: ScrollCacheExtent.pixels(2500),
-                              addRepaintBoundaries: false,
-                              clipBehavior: Clip.none,
-                              itemCount: _pageUrls.isEmpty
-                                  ? 0
-                                  : (_settings.seamlessTransitions && _settings.showEndOfChapterDialog ? _pageUrls.length + 1 : _pageUrls.length),
-                              itemBuilder: (context, index) {
-                                if (index == _pageUrls.length) {
-                                  return _buildChapterTransitionCard();
-                                }
-                                final isWideScreen = constraints.maxWidth > 800;
-                                final contentWidth = isWideScreen ? 780.0 : constraints.maxWidth;
-                                final pageWidget = _buildPageWidget(
-                                  _pageUrls[index],
-                                  index,
-                                  constraints: constraints,
-                                  isPaged: false,
-                                  contentWidth: contentWidth,
-                                  enablePerPageZoom: true,
-                                );
-                                final itemKey = _webtoonPageKeys.putIfAbsent(index, () => GlobalKey());
-                                final gap = webtoonPageGap(_readingMode);
-
-                                Widget item = KeyedSubtree(
-                                  key: itemKey,
-                                  child: RepaintBoundary(
-                                    child: Center(
-                                      child: SizedBox(
-                                        width: contentWidth,
-                                        child: pageWidget,
-                                      ),
-                                    ),
-                                  ),
-                                );
-
-                                if (gap > 0) {
-                                  return Padding(
-                                    padding: EdgeInsets.only(bottom: gap),
-                                    child: item,
-                                  );
-                                }
-
-                                if (webtoonShouldOverlapPrevious(_readingMode, index)) {
-                                  item = Transform.translate(offset: const Offset(0, -1), child: item);
-                                }
-                                return item;
-                              },
-                            ),
-                          )
+                        ? _buildLiveWebtoonCanvas(constraints)
                         : Builder(builder: (context) {
                             final useDouble = _doublePagesActive(constraints);
                             final slots = useDouble ? _currentSpreadSlots() : const <SpreadSlot>[];
