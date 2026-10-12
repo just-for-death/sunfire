@@ -65,6 +65,8 @@ void main() {
       when(mockSettings.autoScrollPauseOnTouch).thenReturn(true);
       when(mockSettings.autoScrollSmoothEaseIn).thenReturn(true);
       when(mockSettings.doublePageDisplayMode).thenReturn('Automatic');
+      when(mockSettings.invertDoublePages).thenReturn(false);
+      when(mockSettings.doublePageOffset).thenReturn(false);
       when(mockSettings.seamlessTransitions).thenReturn(true);
       when(mockSettings.showEndOfChapterDialog).thenReturn(true);
       when(mockSettings.cropBorders).thenReturn(false);
