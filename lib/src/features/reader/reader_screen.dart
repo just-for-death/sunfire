@@ -2061,8 +2061,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _gesturePipeline.handleTapZone(details, constraints);
   }
 
-  /// R1.6: webtoon layout via [ReaderCanvas]; pages still built by live recover path.
-  Widget _buildLiveWebtoonCanvas(BoxConstraints constraints) {
+  void _syncReaderControllerPresentation() {
     _readerController.syncPresentation(
       readingMode: _readingMode,
       readerTheme: _readerTheme,
@@ -2073,6 +2072,27 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       isZoomed: _isZoomed,
       currentPage: _currentPage,
     );
+  }
+
+  ReaderPageBuilder _livePageBuilder(BoxConstraints constraints) {
+    return (context, url, index,
+        {required bool isPaged,
+        double? contentWidth,
+        bool enablePerPageZoom = false}) {
+      return _buildPageWidget(
+        url,
+        index,
+        constraints: constraints,
+        isPaged: isPaged,
+        contentWidth: contentWidth,
+        enablePerPageZoom: enablePerPageZoom,
+      );
+    };
+  }
+
+  /// R1.6: webtoon layout via [ReaderCanvas]; pages still built by live recover path.
+  Widget _buildLiveWebtoonCanvas(BoxConstraints constraints) {
+    _syncReaderControllerPresentation();
     final showTransition =
         _pageUrls.isNotEmpty &&
         _settings.seamlessTransitions &&
@@ -2099,19 +2119,49 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         if (_nextChapter == null) return;
         unawaited(_loadChapterAndPages(_chapterTargetId(_nextChapter!)));
       },
-      pageBuilder: (context, url, index,
-          {required bool isPaged,
-          double? contentWidth,
-          bool enablePerPageZoom = false}) {
-        return _buildPageWidget(
-          url,
-          index,
-          constraints: constraints,
-          isPaged: isPaged,
-          contentWidth: contentWidth,
-          enablePerPageZoom: enablePerPageZoom,
-        );
+      pageBuilder: _livePageBuilder(constraints),
+    );
+  }
+
+  /// R1.6: paged layout via [ReaderCanvas] with live spread isolation + pageBuilder.
+  Widget _buildLivePagedCanvas(BoxConstraints constraints) {
+    _syncReaderControllerPresentation();
+    final useDouble = _doublePagesActive(constraints);
+    final slots = useDouble ? _currentSpreadSlots() : const <SpreadSlot>[];
+    final showTransition =
+        _pageUrls.isNotEmpty &&
+        _settings.seamlessTransitions &&
+        _settings.showEndOfChapterDialog;
+    return ReaderCanvas(
+      controller: _readerController,
+      scrollController: _scrollController,
+      pageController: _pageController,
+      transformationController: _transformationController,
+      webtoonZoomControllers: _webtoonZoomControllers,
+      webtoonPageKeys: _webtoonPageKeys,
+      readingMode: _readingMode,
+      pageUrls: _pageUrls,
+      currentPage: _currentPage,
+      colorFilter: _colorFilter,
+      cropBorders: _cropBorders,
+      scaleType: _scaleType,
+      readerTheme: _readerTheme,
+      chapter: _chapter,
+      nextChapter: _nextChapter,
+      showTransitionCard: showTransition,
+      spreadSlots: slots,
+      onPageChanged: _onPageChanged,
+      transitionBuilder: (_) => Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: _buildChapterTransitionCard(),
+        ),
+      ),
+      onRequestNextChapter: () {
+        if (_nextChapter == null) return;
+        unawaited(_loadChapterAndPages(_chapterTargetId(_nextChapter!)));
       },
+      pageBuilder: _livePageBuilder(constraints),
     );
   }
 
@@ -3424,62 +3474,10 @@ unawaited(
                         PointerDeviceKind.stylus,
                       },
                     ),
-                    child: _readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps
+                    child: _readingMode == ReadingMode.longStrip ||
+                            _readingMode == ReadingMode.longStripGaps
                         ? _buildLiveWebtoonCanvas(constraints)
-                        : Builder(builder: (context) {
-                            final useDouble = _doublePagesActive(constraints);
-                            final slots = useDouble ? _currentSpreadSlots() : const <SpreadSlot>[];
-                            final contentCount = useDouble ? slots.length : _pageUrls.length;
-                            final withTransition = _pageUrls.isNotEmpty &&
-                                _settings.seamlessTransitions &&
-                                _settings.showEndOfChapterDialog;
-                            return PageView.builder(
-                              controller: _pageController,
-                              physics: _isZoomed
-                                  ? const NeverScrollableScrollPhysics()
-                                  : const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                              reverse: _readingMode == ReadingMode.pagedRtl,
-                              itemCount: _pageUrls.isEmpty ? 0 : (withTransition ? contentCount + 1 : contentCount),
-                              onPageChanged: _onPageChanged,
-                              itemBuilder: (context, index) {
-                                if (withTransition && index == contentCount) {
-                                  return Center(
-                                    child: SingleChildScrollView(
-                                      padding: const EdgeInsets.symmetric(vertical: 40),
-                                      child: _buildChapterTransitionCard(),
-                                    ),
-                                  );
-                                }
-                                if (useDouble) {
-                                  final slot = slots[index];
-                                  final order = slot.visualOrder(invertDoublePages: _settings.invertDoublePages);
-                                  final left = order.$1;
-                                  final right = order.$2;
-                                  Widget pageAt(int i) => Expanded(
-                                        child: Center(
-                                          child: _buildPageWidget(
-                                            _pageUrls[i],
-                                            i,
-                                            constraints: constraints,
-                                            isPaged: true,
-                                          ),
-                                        ),
-                                      );
-                                  if (right == null) {
-                                    return RepaintBoundary(
-                                      child: Row(children: [pageAt(left)]),
-                                    );
-                                  }
-                                  return RepaintBoundary(
-                                    child: Row(children: [pageAt(left), pageAt(right)]),
-                                  );
-                                }
-                                return RepaintBoundary(
-                                  child: Center(child: _buildPageWidget(_pageUrls[index], index, constraints: constraints, isPaged: true)),
-                                );
-                              },
-                            );
-                          }),
+                        : _buildLivePagedCanvas(constraints),
                   ),
 
                   // ── 1b. FIRST-RUN TAP ZONE OVERLAY ───────────────
