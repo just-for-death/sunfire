@@ -236,6 +236,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       zoomAnimController: _zoomAnimController,
       webtoonZoomControllers: _webtoonZoomControllers,
     );
+    // R1.8: all chapter loads enter via ReaderController; implementation stays here.
+    _readerController.onRequestChapterLoad = _loadChapterAndPages;
     _initPreferences();
     _wireGesturePipeline();
     if (_settings.keepScreenAwake) {
@@ -245,7 +247,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
       _initVolumeKeyListener();
     }
-    unawaited(_loadChapterAndPages(widget.chapterServerId));
+    unawaited(_readerController.loadChapter(widget.chapterServerId));
   }
 
   /// R1.8: bind GesturePipeline callbacks to live reader actions once.
@@ -264,12 +266,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     gp.onLoadNextChapter = () async {
       if (_nextChapter == null) return;
       _lastNextChapterNavAt = DateTime.now();
-      await _loadChapterAndPages(_chapterTargetId(_nextChapter!));
+      await _readerController.loadChapter(_chapterTargetId(_nextChapter!));
     };
     gp.onLoadPrevChapter = () async {
       if (_prevChapter == null) return;
       _lastPrevChapterNavAt = DateTime.now();
-      await _loadChapterAndPages(_chapterTargetId(_prevChapter!));
+      await _readerController.loadChapter(_chapterTargetId(_prevChapter!));
     };
     gp.onTapZoneOverlayChanged = (show) {
       if (mounted) setState(() => _showTapZoneOverlay = show);
@@ -514,7 +516,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         if (_settings.autoScrollAutoNextChapter && _nextChapter != null) {
           final nextChapterId = _chapterTargetId(_nextChapter!);
           _resumeAutoScrollForChapter[nextChapterId] = true;
-          unawaited(_loadChapterAndPages(nextChapterId));
+          unawaited(_readerController.loadChapter(nextChapterId));
         }
         return;
       }
@@ -2117,7 +2119,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       transitionBuilder: (_) => _buildChapterTransitionCard(),
       onRequestNextChapter: () {
         if (_nextChapter == null) return;
-        unawaited(_loadChapterAndPages(_chapterTargetId(_nextChapter!)));
+        unawaited(_readerController.loadChapter(_chapterTargetId(_nextChapter!)));
       },
       pageBuilder: _livePageBuilder(constraints),
     );
@@ -2159,7 +2161,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       ),
       onRequestNextChapter: () {
         if (_nextChapter == null) return;
-        unawaited(_loadChapterAndPages(_chapterTargetId(_nextChapter!)));
+        unawaited(_readerController.loadChapter(_chapterTargetId(_nextChapter!)));
       },
       pageBuilder: _livePageBuilder(constraints),
     );
@@ -2201,7 +2203,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         unawaited(HapticFeedback.lightImpact());
         _pageController.nextPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
       } else if (_nextChapter != null) {
-        unawaited(_loadChapterAndPages(_chapterTargetId(_nextChapter!)));
+        unawaited(_readerController.loadChapter(_chapterTargetId(_nextChapter!)));
       }
     } else {
       if (_scrollController.hasClients) {
@@ -2209,7 +2211,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         final currentOffset = _scrollController.offset;
         if (maxScroll > 50 && currentOffset >= maxScroll - 20) {
           if (_nextChapter != null) {
-            unawaited(_loadChapterAndPages(_chapterTargetId(_nextChapter!)));
+            unawaited(_readerController.loadChapter(_chapterTargetId(_nextChapter!)));
           }
         } else {
           final targetOffset = (currentOffset + _webtoonPageStep()).clamp(0.0, maxScroll);
@@ -2247,7 +2249,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         unawaited(HapticFeedback.lightImpact());
         _pageController.previousPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
       } else if (_prevChapter != null) {
-        unawaited(_loadChapterAndPages(_chapterTargetId(_prevChapter!)));
+        unawaited(_readerController.loadChapter(_chapterTargetId(_prevChapter!)));
       }
     } else {
       if (_scrollController.hasClients) {
@@ -2256,7 +2258,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         if (currentOffset <= 20) {
           if (_canGoToPrevChapterFromTop()) {
             _lastPrevChapterNavAt = DateTime.now();
-            unawaited(_loadChapterAndPages(_chapterTargetId(_prevChapter!)));
+            unawaited(_readerController.loadChapter(_chapterTargetId(_prevChapter!)));
           }
         } else {
           final targetOffset = (currentOffset - _webtoonPageStep()).clamp(0.0, maxScroll);
@@ -2724,7 +2726,7 @@ unawaited(
                               onTap: () {
                                 Navigator.pop(sheetContext);
                                 if (!isCurrent) {
-                                  unawaited(_loadChapterAndPages(_chapterTargetId(ch)));
+                                  unawaited(_readerController.loadChapter(_chapterTargetId(ch)));
                                 }
                               },
                             ),
@@ -3224,7 +3226,7 @@ unawaited(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
-                onPressed: () => _loadChapterAndPages(_chapterTargetId(_nextChapter!)),
+                onPressed: () => _readerController.loadChapter(_chapterTargetId(_nextChapter!)),
                 child: const Text(
                   'Read Next Chapter',
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
@@ -3377,7 +3379,7 @@ unawaited(
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       ),
                       icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                      onPressed: () => _loadChapterAndPages(_currentChapterId),
+                      onPressed: () => _readerController.loadChapter(_currentChapterId),
                       label: const Text('Retry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                     OutlinedButton.icon(
@@ -3631,7 +3633,7 @@ unawaited(
                                           IconButton(
                                             icon: const Icon(Icons.skip_previous_rounded, color: Colors.white),
                                             tooltip: 'Previous Chapter',
-                                            onPressed: _prevChapter != null ? () => _loadChapterAndPages(_chapterTargetId(_prevChapter!)) : null,
+                                            onPressed: _prevChapter != null ? () => _readerController.loadChapter(_chapterTargetId(_prevChapter!)) : null,
                                           ),
                                           ValueListenableBuilder<int>(
                                             valueListenable: _pageIndicator,
@@ -3713,7 +3715,7 @@ unawaited(
                                            IconButton(
                                              icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
                                             tooltip: 'Next Chapter',
-                                            onPressed: _nextChapter != null ? () => _loadChapterAndPages(_chapterTargetId(_nextChapter!)) : null,
+                                            onPressed: _nextChapter != null ? () => _readerController.loadChapter(_chapterTargetId(_nextChapter!)) : null,
                                           ),
                                         ],
                                       ),
