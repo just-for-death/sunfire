@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A7.3 (App shortcuts): launcher shortcuts mapped to Sunfire deep links
+     handled in lib/src/app.dart (_handleUri). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="continue_reading"
+        android:enabled="true"
+        android:icon="@mipmap/launcher_icon"
+        android:shortcutShortLabel="@string/shortcut_continue_reading"
+        android:shortcutLongLabel="@string/shortcut_continue_reading_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.sunfire.app"
+            android:targetClass="com.sunfire.app.MainActivity"
+            android:data="sunfire://history" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="library_updates"
+        android:enabled="true"
+        android:icon="@mipmap/launcher_icon"
+        android:shortcutShortLabel="@string/shortcut_updates"
+        android:shortcutLongLabel="@string/shortcut_updates_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.sunfire.app"
+            android:targetClass="com.sunfire.app.MainActivity"
+            android:data="sunfire://updates" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="browse_sources"
+        android:enabled="true"
+        android:icon="@mipmap/launcher_icon"
+        android:shortcutShortLabel="@string/shortcut_browse"
+        android:shortcutLongLabel="@string/shortcut_browse_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.sunfire.app"
+            android:targetClass="com.sunfire.app.MainActivity"
+            android:data="sunfire://browse" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="downloads"
+        android:enabled="true"
+        android:icon="@mipmap/launcher_icon"
+        android:shortcutShortLabel="@string/shortcut_downloads"
+        android:shortcutLongLabel="@string/shortcut_downloads_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.sunfire.app"
+            android:targetClass="com.sunfire.app.MainActivity"
+            android:data="sunfire://downloads" />
+    </shortcut>
+</shortcuts>

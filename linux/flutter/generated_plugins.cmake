@@ -3,13 +3,17 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  desktop_drop
+  desktop_multi_window
   dynamic_color
   flutter_qjs
   flutter_secure_storage_linux
   gtk
   isar_community_flutter_libs
+  screen_retriever_linux
   url_launcher_linux
   volume_controller
+  window_manager
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
