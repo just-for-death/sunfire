@@ -27,12 +27,15 @@ import '../../core/services/download_manager_service.dart';
 import '../../core/services/safe_curl.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/services/wakelock_coordinator.dart';
+import '../../core/sync/live_activities_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/sync/widget_sync_service.dart';
 import '../../core/utils/url_sanitizer.dart';
 import 'double_page_layout.dart';
 import 'reader_chapter_navigation.dart';
 import 'reader_prefetch.dart';
 import 'reader_scroll_utils.dart';
+import 'listen_sheet.dart';
 import 'reader_settings_scope.dart';
 import 'reading_mode.dart';
 import 'tap_zone_overlay.dart';
@@ -845,6 +848,48 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
   }
 
+  /// A7.4 / I8.3 / I8.4: mirror the live session to home-screen widget,
+  /// Live Activities, and Siri suggestions. Best-effort; never blocks reading.
+  /// Skipped in incognito so private sessions do not leak to the OS shell.
+  void _mirrorPlatformReadingSession({required double? progress}) {
+    if (_settings.incognitoMode) return;
+    final chapter = _chapter;
+    if (chapter == null) return;
+    final manga = _parentManga;
+    final mangaTitle = chapter.mangaTitle.isNotEmpty
+        ? chapter.mangaTitle
+        : (manga?.title ?? 'Unknown');
+    final chapterName = chapter.name;
+    final mangaId = chapter.mangaId != 0
+        ? chapter.mangaId
+        : (manga?.canonicalKey ?? 0);
+    final chapterId =
+        chapter.serverId != 0 ? chapter.serverId : chapter.id;
+
+    unawaited(WidgetSyncService.instance.updateContinueReading(
+      mangaTitle: mangaTitle,
+      chapterName: chapterName,
+      mangaId: mangaId,
+      chapterId: chapterId,
+    ));
+
+    if (progress == null) {
+      unawaited(LiveActivitiesService.instance.startReading(
+        mangaTitle: mangaTitle,
+        chapterName: chapterName,
+      ));
+      if (mangaId != 0) {
+        unawaited(SiriShortcutsService.instance.donateContinueReading(
+          mangaTitle: mangaTitle,
+          chapterName: chapterName,
+          mangaId: mangaId,
+        ));
+      }
+    } else {
+      unawaited(LiveActivitiesService.instance.updateProgress(progress));
+    }
+  }
+
   void _applyMangaReadingMode(Manga? manga) {
     _parentManga = manga;
     final override = manga?.readingModeOverride?.trim();
@@ -1054,6 +1099,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     if (_chapter != null && !_isLoading && _pageUrls.isNotEmpty) {
       _updateProgress(_currentPage);
     }
+    // I8.3: end Live Activity when leaving the reader.
+    unawaited(LiveActivitiesService.instance.endReading());
     unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     _focusNode.dispose();
     _recoveredImageBytes.clear();
@@ -1203,6 +1250,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         _prevChapter = prevCh;
         _applyMangaReadingMode(manga);
       }
+      // Platform mirrors after parent manga is known (widget / Live Activities / Siri).
+      _mirrorPlatformReadingSession(progress: null);
     }
 
     // ── 3-TIER RESOLVER: 1. Local Extension -> 2. Local Download -> 3. Server ──
@@ -1765,6 +1814,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       }
     }
     chapterSnapshot.lastReadAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    // I8.3: keep Dynamic Island / lock-screen progress in sync.
+    if (identical(chapterSnapshot, _chapter)) {
+      final fraction = totalPages > 0 ? clampedPage / totalPages : 0.0;
+      _mirrorPlatformReadingSession(progress: fraction);
+    }
     // Awaited and logged. This is the data the whole feature exists to save,
     // and it was fire-and-forget: an Isar write failure (disk full, corrupt DB)
     // was completely invisible, so the chapter silently lost its position, was
@@ -2697,6 +2751,19 @@ unawaited(
     ));
   }
 
+  /// R9.3/R9.4: Listen sheet - OCR transcript with TTS playback.
+  void _showListenSheet() {
+    if (_pageUrls.isEmpty) return;
+    final currentUrl = _pageUrls[_currentPage - 1];
+    final headers = QuickJsService.getImageHeaders(_sourceName ?? '', currentUrl);
+    unawaited(ListenSheet.show(
+      context,
+      pageUrl: currentUrl,
+      headers: headers,
+      title: _chapter?.name ?? 'Page $_currentPage',
+    ));
+  }
+
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
@@ -3597,6 +3664,11 @@ unawaited(
                                   icon: const Icon(Icons.format_list_bulleted_rounded, color: Colors.white),
                                   tooltip: 'Chapters',
                                   onPressed: _showChapterSelectorSheet,
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.headset_rounded, color: Colors.white),
+                                  tooltip: 'Listen (OCR + TTS)',
+                                  onPressed: _showListenSheet,
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.tune_rounded, color: Colors.white),
