@@ -7,14 +7,14 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 
-import 'server_adapter.dart' show ServerAdapter, SyncOperation, LibrarySnapshot, ChapterPagesResult, TrackerProgress;
-import 'server_type.dart' show ServerConfigManager;
-import 'server_capabilities.dart' show ServerCapabilities;
-import '../db/models/manga.dart' show Manga, stableLocalMangaServerId;
-import '../db/models/chapter.dart' show Chapter, mintLocalChapterServerId;
-import '../db/models/category.dart';
-import '../engine/quickjs_service.dart';
 import '../db/isar_service.dart';
+import '../db/models/category.dart';
+import '../db/models/chapter.dart' show Chapter, mintLocalChapterServerId;
+import '../db/models/manga.dart' show Manga, stableLocalMangaServerId;
+import '../engine/quickjs_service.dart';
+import 'server_adapter.dart' show ServerAdapter, SyncOperation, LibrarySnapshot, ChapterPagesResult, TrackerProgress;
+import 'server_capabilities.dart' show ServerCapabilities;
+import 'server_type.dart' show ServerConfigManager;
 
 /// Mihon/Tachiyomi adapter for local extension scraping.
 /// This doesn't connect to a server - it scrapes sources locally.

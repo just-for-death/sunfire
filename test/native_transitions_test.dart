@@ -2,6 +2,8 @@
 //
 // I8.1: platform-aware page transitions.
 
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -51,7 +53,7 @@ void main() {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     final router = testRouter();
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
-    router.push('/next');
+    unawaited(router.push('/next'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(
@@ -72,7 +74,7 @@ void main() {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     final router = testRouter();
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
-    router.push('/next');
+    unawaited(router.push('/next'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(

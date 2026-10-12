@@ -8,8 +8,8 @@
 
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../../core/db/isar_service.dart';
 import '../../../core/db/models/chapter.dart';
@@ -45,12 +45,11 @@ class ReaderController {
     required this.settings,
     required this.syncEngine,
     required this.metronService,
-    PageLoader? pageLoader,
+    this._pageLoader,
     PositionManager? positionManager,
     NavigationController? navigationController,
     GesturePipeline? gesturePipeline,
-  })  : _pageLoader = pageLoader,
-        _positionManager = positionManager,
+  })  : _positionManager = positionManager,
         _navigationController = navigationController,
         _subControllersInjected = navigationController != null,
         _gesturePipelineInjected = gesturePipeline != null,
@@ -118,7 +117,7 @@ class ReaderController {
   bool _cropBorders = false;
   bool _invertTaps = false;
   bool _showTapZoneOverlay = false;
-  bool _showTransitionCard = false;
+  final bool _showTransitionCard = false;
   bool _isZoomed = false;
 
   // Auto-scroll state

@@ -15,8 +15,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 
 import '../../../core/engine/content_resolver_service.dart';
-import '../../../core/engine/quickjs_service.dart';
 import '../../../core/engine/javascript/m_client.dart';
+import '../../../core/engine/quickjs_service.dart';
 import '../../../core/services/safe_curl.dart';
 
 /// Result of a page load operation.

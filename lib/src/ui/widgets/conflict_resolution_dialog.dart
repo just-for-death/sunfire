@@ -13,8 +13,8 @@
 
 import 'package:flutter/material.dart';
 
-import '../../core/sync/sync_engine.dart' show SyncConflict, ConflictResolution;
 import '../../core/sync/conflict_resolver.dart' show ConflictResolutionStrategy;
+import '../../core/sync/sync_engine.dart' show SyncConflict, ConflictResolution;
 
 /// ConflictResolutionDialog — UI for resolving sync conflicts with visual diffs.
 ///
