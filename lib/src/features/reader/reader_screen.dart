@@ -1220,6 +1220,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _recoveredImageBytes.remove(evictCandidate);
     }
     _recoveredImageBytes[url] = bytes;
+    // I3: keep PageLoader LRU in sync so warm/peek can feed visible widgets.
+    _pageLoader?.cacheBytes(url, bytes);
   }
 
   // Local chapters are persisted with synthetic NEGATIVE serverIds, so `!= 0`
@@ -1822,13 +1824,35 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   /// R1.8 / I3: priority-warm current/next/prev via PageLoader (all non-web).
   /// Desktop still owns the heavier curl-based upcoming prefetch separately.
+  /// On success, promote bytes into `_recoveredImageBytes` so visible widgets
+  /// render from memory instead of re-hitting the network.
   void _warmPagesViaLoader(int pageOneBased) {
     final loader = _pageLoader;
     if (loader == null || _pageUrls.isEmpty || kIsWeb) return;
     final idx = pageOneBased - 1;
     void warm(int i, PageLoadPriority priority) {
       if (i < 0 || i >= _pageUrls.length) return;
-      unawaited(loader.loadPage(url: _pageUrls[i], index: i, priority: priority));
+      final url = _pageUrls[i];
+      if (_recoveredImageBytes.containsKey(url)) return;
+      final cached = loader.peekCachedBytes(url);
+      if (cached != null) {
+        // Promote loader cache into the screen map without another download.
+        if (mounted) setState(() => _storeRecoveredImage(url, cached));
+        return;
+      }
+      unawaited(() async {
+        final result = await loader.loadPage(
+          url: url,
+          index: i,
+          priority: priority,
+          sourceName: _sourceName,
+        );
+        if (!mounted) return;
+        final bytes = result.bytes;
+        if (bytes == null || bytes.isEmpty) return;
+        if (_recoveredImageBytes.containsKey(url)) return;
+        setState(() => _storeRecoveredImage(url, bytes));
+      }());
     }
     warm(idx, PageLoadPriority.current);
     warm(idx + 1, PageLoadPriority.next);
@@ -2980,10 +3004,14 @@ unawaited(
       _prefetchUpcomingPages(index);
     }
 
+    // I3: prefer screen recover map, then PageLoader LRU (warm/prefetch).
+    final memoryBytes =
+        _recoveredImageBytes[url] ?? _pageLoader?.peekCachedBytes(url);
+
     Widget image;
-    if (_recoveredImageBytes.containsKey(url)) {
+    if (memoryBytes != null) {
       image = Image.memory(
-        _recoveredImageBytes[url]!,
+        memoryBytes,
         width: imageWidth,
         fit: boxFit,
         alignment: imageAlignment,
