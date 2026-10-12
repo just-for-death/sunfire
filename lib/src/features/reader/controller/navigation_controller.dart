@@ -10,7 +10,7 @@ import '../../../core/engine/content_resolver_service.dart'
 import '../../../core/engine/quickjs_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/sync/widget_sync_service.dart';
-import '../reader_chapter_navigation.dart';
+import '../reader_chapter_resolve.dart';
 import 'page_loader.dart';
 import 'position_manager.dart';
 
@@ -145,51 +145,27 @@ class NavigationController {
     _resetZoom();
   }
 
-  // Load chapter from Isar
-  Future<Chapter?> _loadChapter(int chapterId) async {
-    Chapter? loadedChapter = await IsarService.instance.getChapterByServerId(chapterId);
-    if (loadedChapter == null) {
-      // Local-id fallback
-      final byLocalId = await IsarService.instance.getChapterByLocalId(chapterId);
-      if (byLocalId != null && byLocalId.id == chapterId && byLocalId.serverId <= 0) {
-        loadedChapter = byLocalId;
-      }
-    }
-    return loadedChapter;
-  }
+  // Load chapter from Isar (shared resolve with live ReaderScreen).
+  Future<Chapter?> _loadChapter(int chapterId) =>
+      resolveChapterRecord(IsarService.instance, chapterId);
 
-  // Load sibling chapters and determine next/prev
+  // Load sibling chapters and determine next/prev.
   Future<void> _loadSiblingChapters(int loadGen) async {
     if (_chapter == null) return;
 
-    final mId = _chapter!.mangaId > 0 ? _chapter!.mangaId : (_parentManga?.serverId ?? _parentManga?.id ?? 0);
-    var siblings = await IsarService.instance.getChaptersForManga(mId);
-    if (siblings.isEmpty && _parentManga != null) {
-      if (_parentManga!.id > 0 && _parentManga!.id != mId) {
-        siblings = await IsarService.instance.getChaptersForManga(_parentManga!.id);
-      }
-      if (siblings.isEmpty && _parentManga!.serverId > 0 && _parentManga!.serverId != mId) {
-        siblings = await IsarService.instance.getChaptersForManga(_parentManga!.serverId);
-      }
-    }
+    final nav = await resolveSiblingChapterNav(
+      isar: IsarService.instance,
+      chapter: _chapter!,
+      parentManga: _parentManga,
+    );
     if (loadGen != _loadGeneration) return;
 
-    _siblingChapters = sortSiblingChapters(siblings);
+    _siblingChapters = nav.siblings;
+    _nextChapter = nav.next;
+    _prevChapter = nav.prev;
 
-    final idx = findSiblingChapterIndex(_siblingChapters, _chapter!);
-    Chapter? nextCh;
-    Chapter? prevCh;
-    if (idx != -1) {
-      nextCh = siblingChapterAt(_siblingChapters, idx, 1);
-      prevCh = siblingChapterAt(_siblingChapters, idx, -1);
-    }
-
-    _nextChapter = nextCh;
-    _prevChapter = prevCh;
-
-    // Notify next chapter prefetch
-    if (nextCh != null) {
-      onNextChapterPrefetched?.call(nextCh);
+    if (nav.next != null) {
+      onNextChapterPrefetched?.call(nav.next!);
     }
   }
 
