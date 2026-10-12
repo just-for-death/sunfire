@@ -1,22 +1,22 @@
 // Integration tests for chapter navigation flow (T2.4).
 // Sub-controllers are injected via ReaderController constructor.
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import 'package:mockito/mockito.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
-
-import 'package:sunfire/src/features/reader/controller/reader_controller.dart';
+import 'package:mockito/mockito.dart';
+import 'package:sunfire/src/core/db/isar_service.dart';
+import 'package:sunfire/src/core/db/models/chapter.dart';
+import 'package:sunfire/src/core/metron/metron_service.dart';
+import 'package:sunfire/src/core/services/settings_service.dart';
+import 'package:sunfire/src/core/sync/sync_engine.dart';
 import 'package:sunfire/src/features/reader/controller/navigation_controller.dart';
 import 'package:sunfire/src/features/reader/controller/page_loader.dart';
 import 'package:sunfire/src/features/reader/controller/position_manager.dart';
-import 'package:sunfire/src/core/db/models/chapter.dart';
-import 'package:sunfire/src/core/services/settings_service.dart';
-import 'package:sunfire/src/core/sync/sync_engine.dart';
-import 'package:sunfire/src/core/metron/metron_service.dart';
-import 'package:sunfire/src/core/db/isar_service.dart';
-import 'package:sunfire/src/features/reader/reading_mode.dart';
+import 'package:sunfire/src/features/reader/controller/reader_controller.dart';
 import 'package:sunfire/src/features/reader/controller/reader_theme.dart';
+import 'package:sunfire/src/features/reader/reading_mode.dart';
+
 import 'reader_controller_test.mocks.dart';
 
 @GenerateMocks([

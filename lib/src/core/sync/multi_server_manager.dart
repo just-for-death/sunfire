@@ -7,13 +7,13 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint;
 
+import '../db/models/category.dart';
+import '../db/models/manga.dart';
+import 'kavita_adapter.dart' show KavitaAdapter;
+import 'mihon_adapter.dart' show MihonAdapter;
 import 'server_adapter.dart' show ServerAdapter, LibrarySnapshot, SyncOperation;
 import 'server_type.dart' show ServerConfig, ServerConfigManager, ServerType;
 import 'suwayomi_adapter.dart' show SuwayomiAdapter;
-import 'kavita_adapter.dart' show KavitaAdapter;
-import 'mihon_adapter.dart' show MihonAdapter;
-import '../db/models/manga.dart';
-import '../db/models/category.dart';
 
 /// MultiServerManager - coordinates multiple server adapters.
 ///

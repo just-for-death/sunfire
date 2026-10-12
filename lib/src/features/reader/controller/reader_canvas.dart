@@ -15,9 +15,9 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-import '../../../core/engine/quickjs_service.dart';
-import '../../../core/engine/javascript/m_client.dart';
 import '../../../core/db/models/chapter.dart';
+import '../../../core/engine/javascript/m_client.dart';
+import '../../../core/engine/quickjs_service.dart';
 import '../double_page_layout.dart';
 import '../reading_mode.dart';
 import 'reader_controller.dart';

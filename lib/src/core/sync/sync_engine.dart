@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting, debugPrint, kDebugMode;
 import 'package:isar_community/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+
 import '../db/epoch_seconds.dart';
 import '../db/isar_service.dart';
 import '../db/models/category.dart';
@@ -15,21 +17,20 @@ import '../engine/quickjs_service.dart';
 import '../engine/repo_manager.dart';
 import '../engine/source_migration_service.dart';
 import '../logging/logger_service.dart';
-
 import '../services/download_manager_service.dart';
 import '../services/image_cache_helper.dart';
 import '../services/settings_service.dart';
 import '../services/wakelock_coordinator.dart';
+import 'conflict_resolver.dart'
+    show ConflictResolver, ConflictResolutionStrategy, UserChoiceMarker;
 import 'graphql_client_service.dart';
 import 'suwayomi_parse_helpers.dart';
 import 'websocket_service.dart';
-import 'conflict_resolver.dart'
-    show ConflictResolver, ConflictResolutionStrategy, UserChoiceMarker;
-export 'conflict_resolver.dart' show ConflictResolutionStrategy;
 
 // Re-exported so the many existing `sync_engine.dart` importers of this helper
 // keep working, and so the DB layer can reach it without a circular import.
 export '../db/epoch_seconds.dart';
+export 'conflict_resolver.dart' show ConflictResolutionStrategy;
 
 /// Result of a sync operation
 class SyncResult {

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -21,8 +22,8 @@ import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../main_shell.dart';
-import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/components/sunfire_skeleton.dart';
+import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/library_update_progress_banner.dart';
