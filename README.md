@@ -48,11 +48,13 @@ doesn't add a second service to babysit.
 - Four reading modes: long strip, long strip (gaps), paged LTR, paged RTL
 - Pinch and double-tap zoom, white-border cropping
 - Color filters: invert, grayscale, night amber, sepia
-- 3-zone tap navigation, volume-key page turns, auto-scroll with speed presets
+- 3-zone tap navigation, volume-key page turns, auto-scroll with speed presets (Warp 1200, Light 1600)
 - Mihon-style end-of-chapter card with scanlator attribution and a full-width
   **Read Next Chapter** button
 - Cross-chapter prefetch and download-ahead, both generation-guarded so a slow
   network can't apply a stale chapter's pages
+- Next/previous chapter debounce (700ms) prevents accidental double-advance
+- Auto-scroll treats short chapters correctly (no immediate auto-advance hang)
 
 **Library and sync**
 - Bidirectional sync of library, categories, history, bookmarks, chapter
@@ -62,6 +64,8 @@ doesn't add a second service to babysit.
 - Incognito mode that suppresses history writes on *every* path, not just the
   reader
 - Categories, sorting, filtering, unread badges, and global update intervals
+- **Server-switch quarantine** discards pending mutations addressed to the old server
+- **Category assign coalescing** prevents duplicate server mutations on rapid UI toggles
 
 **Sources**
 - Two catalogs out of the box: the **Sunfire Official** catalog (9 maintained
@@ -71,6 +75,7 @@ doesn't add a second service to babysit.
 - Optional [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) for
   Cloudflare-protected sites, using a named session per root domain so a solved
   browser context is reused instead of re-solving on every request
+- Non-English extensions show update badges (previously English-only)
 
 **Downloads**
 - Per-chapter and whole-series batch download with a durable queue
@@ -79,11 +84,26 @@ doesn't add a second service to babysit.
 - CBZ compression, Wi-Fi and charging constraints
 - Downloaded chapters are fully readable offline, including local-only
   entries that have no server ID
+- **Batch counter invariant** guarantees `succeeded + failed == total` at finish
+- **Atomic queue+paused write** eliminates race window on process death
+- **Cancel-then-dismiss accounting fix** prevents counter corruption
 
 **Tracking**
 - [Metron.cloud](https://metron.cloud) for Western comics, with automatic
   scrobbling on chapter read
 - AniList, MyAnimeList, and Kitsu through your Suwayomi server
+- **Metron session dedup** prevents duplicate scrobbles from rapid re-taps
+- **TrackingSettingsScreen** — connection status, rate limit progress bars, server tracker cards
+- **TrackingBottomSheet** — Metron 3-state card (Linked/Connected/Not Configured), rich metadata chips, server tracker 4 states (Tracking Active, Authorized Not Linked, Session Expired, Not Authorized), bound tracker status chips (Status, Chapters, Score, Private), search results with cover images
+
+**Everything else**
+- Reading statistics: daily streak, chapters read, time read, top genres,
+  source distribution
+- JSON backup and restore, with optional scheduled backups
+- OPDS, SOCKS proxy, and scoped TLS trust
+- On-device diagnostic log with a live viewer
+- Material You dynamic color, light/dark/pure-black themes
+- Phone bottom navigation, tablet navigation rail, two-pane detail view
 
 **Everything else**
 - Reading statistics: daily streak, chapters read, time read, top genres,

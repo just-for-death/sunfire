@@ -27,6 +27,119 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Extension auto-install deferred until onboarding completes.
 - First-run metadata parse hardened for trailing-comma headers.
 
+### Security & Privacy
+
+- **Credential fallback visibility** — Settings → Server shows an orange
+  banner when credentials are stored in plaintext because the OS keystore is
+  unavailable; secure write success cleans up the plaintext copy automatically.
+- **Log sanitization** — MClient request/response logs strip query, fragment,
+  and userinfo from URLs via `sanitizeUrlForLog`.
+- **RFC 6761 + punycode SSRF guard** — request_guard blocks `.test`, `.example`,
+  `.invalid`, `.onion`, `.lan`, `.corp`, `.intranet`, `.home`, `.localdomain`,
+  and any punycode (`xn--`) labels that could decode to reserved suffixes.
+- **Secure storage error handling** — narrow catches, throw on total failure
+  instead of silently losing credentials.
+
+### Sync & Download Hardening
+
+- **Per-dispatch transport verdict** — `WithClassification` mutation helpers
+  return atomically captured transport-failure verdict, eliminating cross-
+  request races that misclassified GraphQL rejections as transient.
+- **Attempt persistence chain** — `_attemptsSaveChain` serializes
+  `_dispatchAttempts` writes; poison records never regain budget on restart.
+- **Server-switch quarantine** — clears `_wsUpdatePullTimer`, `_progressLocks`,
+  `_lastDirectPage`, `_cycleGate`; discarded count surfaced to user.
+- **Category assign coalescing** — per-manga lock serializes rapid UI toggles;
+  older pending assigns deleted before new one saved.
+- **Multi-deep sync queue** — counter-based `_queuedCount` prevents dropped
+  cycles under burst contention (pull-to-refresh + WS + chapter read).
+- **Retry reloads attempts** — `_loadDispatchAttempts` called after persist so
+  manual retry state survives restart.
+- **Batch counter invariant** — `_batchMembers` + `_batchAccounted` sets
+  enforce `succeeded + failed + pending == total` at all times.
+- **Atomic queue+paused write** — single JSON with embedded `paused` field
+  eliminates race window on process death.
+- **Cancel-then-dismiss accounting fix** — stores `_statusBeforeCancel` so
+  dismissing a cancelled task decrements the correct counter bucket.
+- **Charger gate logic** — `_waitingForCharger` only true when charger is the
+  *sole* blocker (`!chargingOk && networkAllowed`).
+- **Retry adds to denominator** — re-enqueued failed task joins batch members
+  and increments total.
+- **Batch state validation** — corrupt/missing `members`/`accounted` resets
+  counters instead of silently making batch uncountable.
+- **Legacy paused flag removed** — new format embeds flag in queue JSON; old
+  separate key no longer overwrites correct state on upgrade.
+
+### Database & Backup
+
+- **Synthetic ID collision fix** — global mutex `_mintLock` serializes
+  `_mintUniqueSyntheticServerId` across concurrent `saveMangas`/`saveChapters`
+  calls; prevents silent replace under `unique: true, replace: true`.
+- **Bulk-stamp evidence gating** — `getRecentChapters` counts per-manga window
+  before dropping bulk-import rows; evidence threshold matches flood cap.
+- **Removed dangerous `clearAll()`** — no longer exposed; sign-out uses
+  targeted deletes.
+- **Zip bomb protection** — `.tachibk` limited to 64 MB compressed + 128 MB
+  uncompressed + 1000 entries; nested archives rejected.
+- **Required ID validation** — `_toInt` throws for non-integer `id` fields in
+  backup JSON instead of silently collapsing to 0.
+- **Honest import scope** — UI explicitly states "Library and categories only:
+  reading progress, bookmarks, history, tracker bindings not imported".
+- **All 6 backup flags in dialog** — categories, chapters, history, tracking,
+  client data, manga (previously only 2).
+
+### Tracker UI Overhaul
+
+- **TrackingSettingsScreen** — Metron connection card with status dot, rate
+  limit progress bars with health warnings (burst + daily), server tracker
+  cards with authorization badge and login button.
+- **TrackingBottomSheet** — Metron 3-state card (Linked/Connected/Not
+  Configured) with rich metadata chips (Publisher, Issues in Series, Locked
+  indicator, Series ID); server tracker 4 states (Tracking Active, Authorized
+  Not Linked, Session Expired, Not Authorized) with color-coded borders and
+  status dots; bound tracker status chips (Status, Chapters, Score, Private);
+  search results with cover images and publisher info; Metron session dedup.
+
+### Reader & Manga Detail
+
+- **Bookmark snapshot** — captures `_chapter` before `await` so concurrent
+  chapter loads cannot persist/sync the wrong chapter.
+- **Auto-scroll short-chapter fix** — `maxScrollExtent <= 50` treated as
+  "at bottom" instead of hanging; immediate auto-advance works correctly.
+- **Next/previous chapter debounce** — 700 ms guards (`_lastNextChapterNavAt`,
+  `_lastPrevChapterNavAt`) prevent accidental double-advance from tap-zone
+  and auto-scroll racing.
+- **Position-based prev-chapters-read** — sorts by reading order then ID; fixes
+  prologue/extras with `chapterNumber=0` being skipped.
+- **Scrobble session dedup** — `_scrobbledThisSession` per (series, issue)
+  prevents duplicate Metron entries from rapid re-taps.
+- **Incognito guards** — tracking sheet and reader paths check incognito
+  before any scrobble/sync.
+
+### Navigation & Browse
+
+- **Route typo fix** — `/mnga/$id` → `/manga/$id` (dead-end search results).
+- **Reader deep link** — `/reader/:id` handler added.
+- **Fullscreen back handling** — `PopScope` allows system-back on reader
+  routes instead of hijacking to Library.
+- **Non-English extension badges** — `isEn` gate removed; update badges show
+  for all languages.
+- **Full filter reset** — clears GroupFilter/CheckBox state + clears
+  `_serverFilterChanges`; stale filters no longer persist.
+- **Onboarding repo choice respect** — explicit empty choice installs nothing;
+  hardcoded catalogs no longer bulk-install over user choice.
+
+### Other Fixes
+
+- **Image cache** — true LRU (re-insert on hit), disk prune (800 files/dir,
+  10-min throttle), dual-key invalidation after extension cover resolution.
+- **Global search route** — `/mnga` typo fixed.
+- **Extension details screen** — removed dead `_isSourceEnabled` toggle.
+- **Settings persistence** — `default_catgory_id` typo fixed, `syncDeviceId`
+  setter notifies listeners.
+- **RepoManager version compare** — prerelease identifiers compared
+  numerically (e.g., `1.0.0-beta.2` < `1.0.0-beta.10`).
+
 [5.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v5.0.0
 
 ## [4.0.0] — 2026-09-27
