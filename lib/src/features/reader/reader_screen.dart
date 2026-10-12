@@ -35,6 +35,7 @@ import 'controller/gesture_pipeline.dart';
 import 'controller/navigation_controller.dart';
 import 'controller/page_loader.dart';
 import 'controller/position_manager.dart';
+import 'controller/reader_theme.dart';
 import 'double_page_layout.dart';
 import 'reader_chapter_navigation.dart';
 import 'reader_prefetch.dart';
@@ -45,11 +46,9 @@ import 'reading_mode.dart';
 import 'tap_zone_overlay.dart';
 import 'tap_zones.dart';
 
+export 'controller/reader_theme.dart'
+    show ReaderThemeMode, ReaderColorFilter, ImageScaleType;
 export 'reading_mode.dart' show ReadingMode;
-
-enum ReaderThemeMode { black, darkGray, white }
-enum ReaderColorFilter { none, invert, grayscale, nightAmber, sepia }
-enum ImageScaleType { fitWidth, fitHeight, fitScreen, original }
 
 class ReaderScreen extends StatefulWidget {
   final int chapterServerId;
@@ -962,9 +961,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   void _initPreferences() {
     _readingMode = parseReadingMode(_settings.readingMode);
-    _readerTheme = _parseReaderTheme(_settings.readerTheme);
-    _colorFilter = _parseColorFilter(_settings.colorFilter);
-    _scaleType = _parseScaleType(_settings.scaleType);
+    _readerTheme = parseReaderTheme(_settings.readerTheme);
+    _colorFilter = parseColorFilter(_settings.colorFilter);
+    _scaleType = parseScaleType(_settings.scaleType);
     _cropBorders = _settings.cropBorders;
     _invertTaps = _settings.invertTapZones;
     _autoScrollSpeed = _settings.defaultAutoScrollSpeed;
@@ -1044,48 +1043,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         _parentManga!.readingModeOverride = plan.mangaOverride;
         await IsarService.instance.saveManga(_parentManga!);
       }
-    }
-  }
-
-  ReaderThemeMode _parseReaderTheme(String str) {
-    switch (str.toLowerCase()) {
-      case 'dark gray':
-      case 'gray':
-        return ReaderThemeMode.darkGray;
-      case 'white':
-        return ReaderThemeMode.white;
-      default:
-        return ReaderThemeMode.black;
-    }
-  }
-
-  ReaderColorFilter _parseColorFilter(String str) {
-    switch (str.toLowerCase()) {
-      case 'invert':
-      case 'invert colors':
-        return ReaderColorFilter.invert;
-      case 'grayscale':
-        return ReaderColorFilter.grayscale;
-      case 'amber tint':
-      case 'night amber':
-        return ReaderColorFilter.nightAmber;
-      case 'sepia':
-        return ReaderColorFilter.sepia;
-      default:
-        return ReaderColorFilter.none;
-    }
-  }
-
-  ImageScaleType _parseScaleType(String str) {
-    switch (str.toLowerCase()) {
-      case 'fit height':
-        return ImageScaleType.fitHeight;
-      case 'fit screen':
-        return ImageScaleType.fitScreen;
-      case 'original':
-        return ImageScaleType.original;
-      default:
-        return ImageScaleType.fitWidth;
     }
   }
 
@@ -1355,6 +1312,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         _prevChapter = prevCh;
         _applyMangaReadingMode(manga);
       }
+      _syncGestureNavChapters();
       // Platform mirrors after parent manga is known (widget / Live Activities / Siri).
       _mirrorPlatformReadingSession(progress: null);
     }
@@ -1547,6 +1505,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _sourceName = resolved.effectiveSourceName ?? sourceName;
     _pageUrls = resolved.pageUrls;
     _syncPageLoader();
+    _syncGestureNavChapters();
     if (_chapter != null && _pageUrls.isNotEmpty && _chapter!.pageCount != _pageUrls.length) {
       _chapter!.pageCount = _pageUrls.length;
       unawaited(IsarService.instance.saveChapter(_chapter!));
@@ -1833,13 +1792,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
   }
 
-  /// R1.8: priority-warm current/next/prev pages through PageLoader (desktop).
+  /// R1.8 / I3: priority-warm current/next/prev via PageLoader (all non-web).
+  /// Desktop still owns the heavier curl-based upcoming prefetch separately.
   void _warmPagesViaLoader(int pageOneBased) {
     final loader = _pageLoader;
-    if (loader == null || _pageUrls.isEmpty) return;
-    if (kIsWeb || !(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
-      return;
-    }
+    if (loader == null || _pageUrls.isEmpty || kIsWeb) return;
     final idx = pageOneBased - 1;
     void warm(int i, PageLoadPriority priority) {
       if (i < 0 || i >= _pageUrls.length) return;
@@ -1848,6 +1805,17 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     warm(idx, PageLoadPriority.current);
     warm(idx + 1, PageLoadPriority.next);
     warm(idx - 1, PageLoadPriority.prev);
+  }
+
+  /// R1.3: keep GesturePipeline's NavigationController sibling state in sync.
+  void _syncGestureNavChapters() {
+    _gestureNav.setSiblingChapters(_siblingChapters);
+    _gestureNav.setNextChapter(_nextChapter);
+    _gestureNav.setPrevChapter(_prevChapter);
+    _gestureNav.setPageUrls(_pageUrls);
+    _gestureNav.setCurrentPage(_currentPage);
+    _gestureNav.setCurrentChapterId(_currentChapterId);
+    if (_chapter != null) _gestureNav.setChapter(_chapter!);
   }
 
   void _onPageChanged(int index) {
@@ -2171,59 +2139,10 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
   }
 
-  Color get _canvasBackgroundColor {
-    switch (_readerTheme) {
-      case ReaderThemeMode.white:
-        return const Color(0xFFFFFFFF);
-      case ReaderThemeMode.darkGray:
-        return const Color(0xFF1A1A20);
-      case ReaderThemeMode.black:
-        return const Color(0xFF000000);
-    }
-  }
-
-  ColorFilter? get _activeColorFilter {
-    switch (_colorFilter) {
-      case ReaderColorFilter.invert:
-        return const ColorFilter.matrix([
-          -1, 0, 0, 0, 255,
-          0, -1, 0, 0, 255,
-          0, 0, -1, 0, 255,
-          0, 0, 0, 1, 0,
-        ]);
-      case ReaderColorFilter.grayscale:
-        return const ColorFilter.matrix([
-          0.2126, 0.7152, 0.0722, 0, 0,
-          0.2126, 0.7152, 0.0722, 0, 0,
-          0.2126, 0.7152, 0.0722, 0, 0,
-          0, 0, 0, 1, 0,
-        ]);
-      case ReaderColorFilter.nightAmber:
-        return ColorFilter.mode(Colors.amber.withAlpha(50), BlendMode.colorBurn);
-      case ReaderColorFilter.sepia:
-        return const ColorFilter.matrix([
-          0.393, 0.769, 0.189, 0, 0,
-          0.349, 0.686, 0.168, 0, 0,
-          0.272, 0.534, 0.131, 0, 0,
-          0, 0, 0, 1, 0,
-        ]);
-      case ReaderColorFilter.none:
-        return null;
-    }
-  }
-
-  BoxFit get _imageBoxFit {
-    switch (_scaleType) {
-      case ImageScaleType.fitHeight:
-        return BoxFit.fitHeight;
-      case ImageScaleType.fitScreen:
-        return BoxFit.contain;
-      case ImageScaleType.original:
-        return BoxFit.none;
-      case ImageScaleType.fitWidth:
-        return BoxFit.fitWidth;
-    }
-  }
+  // R1.7: theme/filter/scale helpers live in reader_theme.dart.
+  Color get _canvasBackgroundColor => canvasBackgroundColor(_readerTheme);
+  ColorFilter? get _activeColorFilter => activeColorFilter(_colorFilter);
+  BoxFit get _imageBoxFit => imageBoxFit(_scaleType);
 
   void _cycleReadingMode() {
     _applyReadingMode(cycleReadingMode(_readingMode), showSnack: true);
