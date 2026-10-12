@@ -102,14 +102,15 @@ class _SyncProgressDialogState extends State<SyncProgressDialog> {
                     ),
                   ),
                   if (_progress.currentManga != null) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
                       _progress.currentManga!,
                       style: TextStyle(
-                        fontSize: 12,
-                        color: scheme.onSurfaceVariant,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.primary,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -123,7 +124,10 @@ class _SyncProgressDialogState extends State<SyncProgressDialog> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${(_progress.progress * 100).clamp(0, 100).toStringAsFixed(0)}%',
+                    _progress.total > 0
+                        ? '${_progress.current} / ${_progress.total}'
+                            '  ·  ${(_progress.progress * 100).clamp(0, 100).toStringAsFixed(0)}%'
+                        : '${(_progress.progress * 100).clamp(0, 100).toStringAsFixed(0)}%',
                     style: TextStyle(
                       fontSize: 12,
                       color: scheme.onSurfaceVariant,
