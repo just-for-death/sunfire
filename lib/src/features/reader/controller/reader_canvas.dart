@@ -70,6 +70,7 @@ class ReaderCanvas extends StatefulWidget {
     this.pageBuilder,
     this.transitionBuilder,
     this.onRequestNextChapter,
+    this.spreadSlots,
   });
 
   final ReaderController controller;
@@ -96,6 +97,9 @@ class ReaderCanvas extends StatefulWidget {
   final WidgetBuilder? transitionBuilder;
   /// When set, used by the default transition card's "Read Next" button.
   final VoidCallback? onRequestNextChapter;
+  /// When non-null, use these spread slots (live reader wide-page isolation).
+  /// An empty list forces single-page paged layout.
+  final List<SpreadSlot>? spreadSlots;
 
   @override
   State<ReaderCanvas> createState() => _ReaderCanvasState();
@@ -170,7 +174,9 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
   }
 
   Widget _buildSpreadItem(BuildContext context, SpreadSlot slot, int spreadIndex) {
-    final order = slot.visualOrder(invertDoublePages: widget.controller.invertTaps);
+    final order = slot.visualOrder(
+      invertDoublePages: widget.controller.settings.invertDoublePages,
+    );
     final left = order.$1;
     final right = order.$2;
 
@@ -545,23 +551,17 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
   // ─── Helpers ────────────────────────────────────────────────────
 
   bool _shouldUseDoublePages(BuildContext context) {
+    final override = widget.spreadSlots;
+    if (override != null) return override.isNotEmpty;
     final mode = parseDoublePageDisplayMode(widget.controller.settings.doublePageDisplayMode);
     final isLandscape = MediaQuery.of(context).size.width > MediaQuery.of(context).size.height;
     return shouldUseDoublePages(mode: mode, isLandscape: isLandscape);
   }
 
   List<SpreadSlot> _currentSpreadSlots() {
-    final slots = <SpreadSlot>[];
-    if (widget.pageUrls.length < 2) return slots;
-
-    for (var i = 0; i < widget.pageUrls.length; i += 2) {
-      if (i + 1 < widget.pageUrls.length) {
-        slots.add(SpreadSlot(primaryIndex: i, secondaryIndex: i + 1));
-      } else {
-        slots.add(SpreadSlot(primaryIndex: i, secondaryIndex: null));
-      }
-    }
-    return slots;
+    final override = widget.spreadSlots;
+    if (override != null) return override;
+    return buildSpreadSlots(pageCount: widget.pageUrls.length);
   }
 
   Map<String, String> _buildHeaders(String url) {
