@@ -613,6 +613,23 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Get a user-defined friendly name for a device.
+  String? getDeviceName(String deviceId) {
+    final v = _prefs?.getString('device_name_$deviceId');
+    if (v == null || v.trim().isEmpty) return null;
+    return v.trim();
+  }
+
+  /// Set a user-defined friendly name for a device.
+  Future<void> setDeviceName(String deviceId, String name) async {
+    if (name.trim().isEmpty) {
+      await _prefs?.remove('device_name_$deviceId');
+    } else {
+      await _prefs?.setString('device_name_$deviceId', name.trim());
+    }
+    notifyListeners();
+  }
+
   int get initialSyncTimeoutSeconds => _prefs?.getInt('initial_sync_timeout_seconds') ?? 45;
   set initialSyncTimeoutSeconds(int value) {
     unawaited(_prefs?.setInt('initial_sync_timeout_seconds', value));

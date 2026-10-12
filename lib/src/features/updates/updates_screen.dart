@@ -44,6 +44,18 @@ class UpdatesScreen extends StatefulWidget {
 
   @override
   State<UpdatesScreen> createState() => _UpdatesScreenState();
+
+  /// S6.2: stable-diffing lookup for sliver delegates. Finds the index of
+  /// the item whose card key matches [key], or null when absent.
+  @visibleForTesting
+  static int? findSeriesItemIndex(
+      List<Map<String, dynamic>> items, Key? key) {
+    if (key is! ValueKey) return null;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i]['key'] == key.value) return i;
+    }
+    return null;
+  }
 }
 
 /// Snapshots the accumulated unread delta for [mangaId] and resets it to 0.
@@ -1836,6 +1848,11 @@ unawaited(
                                           isTablet: true,
                                         ),
                                         childCount: series.items.length,
+                                        // S6.2: stable diffing - reuse elements
+                                        // by card key across reloads.
+                                        findChildIndexCallback: (key) =>
+                                            UpdatesScreen.findSeriesItemIndex(
+                                                series.items, key),
                                       ),
                                     ),
                                   )
@@ -1848,6 +1865,11 @@ unawaited(
                                         isTablet: false,
                                       ),
                                       childCount: series.items.length,
+                                      // S6.2: stable diffing - reuse elements
+                                      // by card key across reloads.
+                                      findChildIndexCallback: (key) =>
+                                          UpdatesScreen.findSeriesItemIndex(
+                                              series.items, key),
                                     ),
                                   ),
                               ],

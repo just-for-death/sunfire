@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +22,9 @@ class BackupSettingsScreen extends StatefulWidget {
 class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
   bool _isLoading = true;
   bool _restoring = false;
+
+  /// D9.5: true while a file drag hovers the backup screen.
+  bool _dragging = false;
   bool _isConnected = false;
 
   String _backupPath = '';
@@ -245,6 +249,55 @@ unawaited(
       return;
     }
     final filename = file.name.isNotEmpty ? file.name : 'backup.tachibk';
+    await _validateAndRestore(bytes, filename);
+  }
+
+  /// D9.5: files dropped onto the backup screen (.tachibk/.zip/.proto.gz).
+  Future<void> _onFilesDropped(DropDoneDetails details) async {
+    if (_restoring) return;
+    final accepted = details.files.where((f) {
+      final name = f.name.toLowerCase();
+      return name.endsWith('.tachibk') ||
+          name.endsWith('.zip') ||
+          name.endsWith('.proto.gz');
+    }).toList();
+    if (accepted.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Drop a .tachibk, .zip or .proto.gz backup file.')),
+        );
+      }
+      return;
+    }
+    final file = accepted.first;
+    Uint8List bytes;
+    try {
+      bytes = await file.readAsBytes();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not read file: $e')),
+        );
+      }
+      return;
+    }
+    await _validateAndRestore(bytes,
+        file.name.isNotEmpty ? file.name : 'backup.tachibk');
+  }
+
+  /// Shared validate + confirm + restore flow (picker and drag & drop).
+  Future<void> _validateAndRestore(Uint8List bytes, String filename) async {
+    if (_restoring) return;
+    if (!GraphQLClientService.instance.isConfigured) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Connect to the server first.')),
+        );
+      }
+      return;
+    }
+
 
     if (!mounted) return;
     setState(() => _restoring = true);
@@ -415,10 +468,21 @@ unawaited(
     return SettingsSubpageScaffold(
       title: 'Backup and Restore',
       onRefresh: _loadSettings,
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              children: [
+      // D9.5: drop a .tachibk/.zip/.proto.gz anywhere on this screen to
+      // restore it (desktop). Mobile file picking is unchanged.
+      body: DropTarget(
+        onDragEntered: (_) => setState(() => _dragging = true),
+        onDragExited: (_) => setState(() => _dragging = false),
+        onDragDone: (details) {
+          setState(() => _dragging = false);
+          unawaited(_onFilesDropped(details));
+        },
+        child: Stack(
+          children: [
+            _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView(
+                    children: [
                 const SectionTitle(title: 'Backup and Restore'),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -604,6 +668,37 @@ unawaited(
                 ),
               ],
             ),
+            // D9.5: drag highlight overlay.
+            if (_dragging)
+              Positioned.fill(
+                child: Container(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.12),
+                  alignment: Alignment.center,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 2,
+                      ),
+                    ),
+                    child: const Text(
+                      'Drop backup file to restore',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
