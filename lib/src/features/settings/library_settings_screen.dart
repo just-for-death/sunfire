@@ -591,6 +591,23 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                         syncFn: () => SyncManager.instance.syncFull(),
                       )),
                     ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      leading: const Icon(Icons.filter_alt_outlined),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        children: [
+                          const Text('Selective Sync', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: const Text(
+                        'Sync only chosen manga or categories',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      onTap: () => context.push('/settings/selective-sync'),
+                    ),
                     const Divider(height: 1),
                     const SectionTitle(title: 'Global Update (Server)'),
                     ListTile(

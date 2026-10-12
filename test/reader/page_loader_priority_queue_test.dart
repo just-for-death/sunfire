@@ -1,6 +1,5 @@
 // lib/src/features/reader/controller/page_loader.dart priority queue unit tests
 
-import 'dart:async' show unawaited;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';

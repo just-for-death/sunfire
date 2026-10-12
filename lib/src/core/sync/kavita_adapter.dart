@@ -4,13 +4,11 @@
 // Part of S4.1: Multi-server support — simultaneous Suwayomi/Kavita/Mihon
 
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import 'server_adapter.dart' show ServerAdapter, SyncOperation, LibrarySnapshot, ChapterPagesResult, TrackerProgress;
-import 'server_type.dart' show ServerConfig, ServerConfigManager;
+import 'server_type.dart' show ServerConfigManager;
 import 'server_capabilities.dart' show ServerCapabilities;
 import '../db/models/manga.dart';
 import '../db/models/chapter.dart';
@@ -66,7 +64,7 @@ class KavitaAdapter extends ServerAdapter {
     }
 
     try {
-      final response = await _dio.get('/api/Server/info');
+      final response = await _dio.get<dynamic>('/api/Server/info');
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
         _capabilities = ServerCapabilities(
@@ -87,7 +85,7 @@ class KavitaAdapter extends ServerAdapter {
   Future<bool> isReachable() async {
     if (config.baseUrl.isEmpty) return false;
     try {
-      final response = await _dio.get('/api/Server/ping');
+      final response = await _dio.get<dynamic>('/api/Server/ping');
       return response.statusCode == 200;
     } catch (_) {
       return false;
@@ -101,12 +99,12 @@ class KavitaAdapter extends ServerAdapter {
     if (config.baseUrl.isEmpty) return LibrarySnapshot.empty();
 
     try {
-      final mangaResponse = await _dio.get('/api/Series', queryParameters: {
+      final mangaResponse = await _dio.get<dynamic>('/api/Series', queryParameters: {
         'page': 0,
         'pageSize': 1000,
       });
 
-      final categoryResponse = await _dio.get('/api/Categories');
+      final categoryResponse = await _dio.get<dynamic>('/api/Categories');
 
       final mangaList = <Manga>[];
       if (mangaResponse.statusCode == 200) {
@@ -142,7 +140,7 @@ class KavitaAdapter extends ServerAdapter {
   @override
   Future<Manga?> fetchManga(int mangaId) async {
     try {
-      final response = await _dio.get('/api/Series/$mangaId');
+      final response = await _dio.get<dynamic>('/api/Series/$mangaId');
       if (response.statusCode == 200) {
         return _parseManga(Map<String, dynamic>.from(response.data as Map));
       }
@@ -155,10 +153,10 @@ class KavitaAdapter extends ServerAdapter {
   @override
   Future<List<Chapter>> fetchChapters(int mangaId) async {
     try {
-      final response = await _dio.get('/api/Series/$mangaId/chapters');
+      final response = await _dio.get<dynamic>('/api/Series/$mangaId/chapters');
       if (response.statusCode == 200) {
         final items = response.data as List? ?? [];
-        return items.whereType<Map>().map((m) => _parseChapter(Map<String, dynamic>.from(m))).toList();
+        return items.whereType<Map<dynamic, dynamic>>().map((m) => _parseChapter(Map<String, dynamic>.from(m))).toList();
       }
     } catch (e) {
       debugPrint('[KavitaAdapter] fetchChapters failed: $e');
@@ -169,10 +167,10 @@ class KavitaAdapter extends ServerAdapter {
   @override
   Future<List<Category>> fetchCategories() async {
     try {
-      final response = await _dio.get('/api/Categories');
+      final response = await _dio.get<dynamic>('/api/Categories');
       if (response.statusCode == 200) {
         final items = response.data['items'] as List? ?? [];
-        return items.whereType<Map>().map((m) => _parseCategory(Map<String, dynamic>.from(m))).toList();
+        return items.whereType<Map<dynamic, dynamic>>().map((m) => _parseCategory(Map<String, dynamic>.from(m))).toList();
       }
     } catch (e) {
       debugPrint('[KavitaAdapter] fetchCategories failed: $e');
@@ -183,13 +181,13 @@ class KavitaAdapter extends ServerAdapter {
   @override
   Future<List<Manga>> searchManga(String query, {int limit = 20}) async {
     try {
-      final response = await _dio.get('/api/Series/search', queryParameters: {
+      final response = await _dio.get<dynamic>('/api/Series/search', queryParameters: {
         'searchTerm': query,
         'pageSize': limit,
       });
       if (response.statusCode == 200) {
         final items = response.data['items'] as List? ?? [];
-        return items.whereType<Map>().map((m) => _parseManga(Map<String, dynamic>.from(m))).toList();
+        return items.whereType<Map<dynamic, dynamic>>().map((m) => _parseManga(Map<String, dynamic>.from(m))).toList();
       }
     } catch (e) {
       debugPrint('[KavitaAdapter] searchManga failed: $e');
@@ -202,7 +200,7 @@ class KavitaAdapter extends ServerAdapter {
   @override
   Future<ChapterPagesResult> fetchChapterPages(int chapterId) async {
     try {
-      final response = await _dio.get('/api/Chapter/$chapterId/images');
+      final response = await _dio.get<dynamic>('/api/Chapter/$chapterId/images');
       if (response.statusCode == 200) {
         final items = response.data as List? ?? [];
         final pages = items.map((i) => i['url']?.toString() ?? '').where((u) => u.isNotEmpty).toList();
@@ -217,7 +215,7 @@ class KavitaAdapter extends ServerAdapter {
   @override
   Future<Chapter?> fetchChapter(int chapterId) async {
     try {
-      final response = await _dio.get('/api/Chapter/$chapterId');
+      final response = await _dio.get<dynamic>('/api/Chapter/$chapterId');
       if (response.statusCode == 200) {
         return _parseChapter(Map<String, dynamic>.from(response.data as Map));
       }
@@ -270,7 +268,7 @@ class KavitaAdapter extends ServerAdapter {
   @override
   Future<bool> removeManga(int mangaId) async {
     try {
-      final response = await _dio.delete('/api/Series/$mangaId');
+      final response = await _dio.delete<dynamic>('/api/Series/$mangaId');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
       debugPrint('[KavitaAdapter] removeManga failed: $e');
@@ -296,7 +294,7 @@ class KavitaAdapter extends ServerAdapter {
     bool isDefault = false,
   }) async {
     try {
-      final response = await _dio.post('/api/Categories', data: {
+      final response = await _dio.post<dynamic>('/api/Categories', data: {
         'name': name,
         'order': order ?? 0,
       });
@@ -312,7 +310,7 @@ class KavitaAdapter extends ServerAdapter {
   @override
   Future<Category?> updateCategory(Category category) async {
     try {
-      final response = await _dio.put('/api/Categories/${category.id}', data: {
+      final response = await _dio.put<dynamic>('/api/Categories/${category.id}', data: {
         'name': category.name,
         'order': category.order,
       });
@@ -328,7 +326,7 @@ class KavitaAdapter extends ServerAdapter {
   @override
   Future<bool> deleteCategory(int categoryId) async {
     try {
-      final response = await _dio.delete('/api/Categories/$categoryId');
+      final response = await _dio.delete<dynamic>('/api/Categories/$categoryId');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
       debugPrint('[KavitaAdapter] deleteCategory failed: $e');
@@ -358,7 +356,7 @@ class KavitaAdapter extends ServerAdapter {
   @override
   Future<String?> getChapterDownloadUrl(int chapterId) async {
     try {
-      final response = await _dio.get('/api/Chapter/$chapterId/download');
+      final response = await _dio.get<dynamic>('/api/Chapter/$chapterId/download');
       if (response.statusCode == 200) {
         return response.data['downloadUrl']?.toString();
       }

@@ -761,9 +761,6 @@ class ReaderController {
 class _TickerProvider implements TickerProvider {
   @override
   Ticker createTicker(TickerCallback onTick) => _TestTicker(onTick);
-
-  @override
-  void dispose() {}
 }
 
 class _TestTicker extends Ticker {

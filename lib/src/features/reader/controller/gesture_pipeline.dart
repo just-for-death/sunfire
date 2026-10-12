@@ -48,6 +48,8 @@ class GesturePipeline {
 
   // ─── Configuration constants ──────────────────────────────────────
   static const double _doubleTapZoomScale = 2.5;
+  /// Matches live InteractiveViewer maxScale on reader_screen.
+  static const double _maxZoomScale = 3.5;
 
   // ─── State (set by owner via setters) ────────────────────────────
   ReadingMode _readingMode = ReadingMode.longStrip;
@@ -118,6 +120,17 @@ class GesturePipeline {
 
   /// Called to animate page controller
   void Function({Duration? duration, Curve? curve})? onAnimatePage;
+
+  /// When set, page next/prev delegates to the live reader (R1.8 cutover).
+  /// Keeps proven `_goToNextPage` / `_goToPrevPage` behavior while this
+  /// pipeline owns gesture routing.
+  VoidCallback? onGoToNextPage;
+  VoidCallback? onGoToPrevPage;
+
+  /// Optional overrides for chapter-advance gates (live reader has stricter
+  /// scroll-position checks than [NavigationController]'s debounce-only helpers).
+  bool Function()? canAdvanceToNextChapterOverride;
+  bool Function()? canGoToPrevChapterFromTopOverride;
 
   /// Called to get max scroll extent
   double Function()? getMaxScrollExtent;
@@ -242,6 +255,7 @@ class GesturePipeline {
             viewportHeight: vp.height,
             imageAspect: _currentPageAspect,
             fallback: _doubleTapZoomScale,
+            maxScale: _maxZoomScale,
           );
     final zoomedMatrix = _zoomMatrixAround(pos, scale);
     _animateZoomTo(zoomedMatrix, markZoomed: true, controllerOverride: transform);
@@ -445,14 +459,14 @@ class GesturePipeline {
       final maxScroll = getMaxScrollExtent?.call() ?? 0.0;
       final currentOffset = getCurrentScrollOffset?.call() ?? 0.0;
       if (maxScroll > 50 && currentOffset >= maxScroll - 20) {
-        if (_nextChapter != null && navigationController.canAdvanceToNextChapter()) {
+        if (_nextChapter != null && _canAdvanceToNextChapter()) {
           unawaited(onLoadNextChapter?.call());
         }
       } else {
         _scrollVerticalBy(_webtoonPageStep());
       }
     } else {
-      if (navigationController.canGoToPrevChapterFromTop()) {
+      if (_canGoToPrevChapterFromTop()) {
         unawaited(onLoadPrevChapter?.call());
       } else {
         _scrollVerticalBy(-_webtoonPageStep());
@@ -460,7 +474,19 @@ class GesturePipeline {
     }
   }
 
+  bool _canAdvanceToNextChapter() =>
+      canAdvanceToNextChapterOverride?.call() ??
+      navigationController.canAdvanceToNextChapter();
+
+  bool _canGoToPrevChapterFromTop() =>
+      canGoToPrevChapterFromTopOverride?.call() ??
+      navigationController.canGoToPrevChapterFromTop();
+
   void _goToNextPage() {
+    if (onGoToNextPage != null) {
+      onGoToNextPage!();
+      return;
+    }
     if (_pageUrls.isEmpty) return;
 
     final isPaged = isPagedReadingMode(_readingMode);
@@ -511,6 +537,10 @@ class GesturePipeline {
   }
 
   void _goToPrevPage() {
+    if (onGoToPrevPage != null) {
+      onGoToPrevPage!();
+      return;
+    }
     if (_pageUrls.isEmpty) return;
 
     final isPaged = isPagedReadingMode(_readingMode);
@@ -541,7 +571,7 @@ class GesturePipeline {
       if (scrollControllerHasClients?.call() == true) {
         final currentOffset = getCurrentScrollOffset?.call() ?? 0.0;
         if (currentOffset <= 20) {
-          if (_prevChapter != null && navigationController.canGoToPrevChapterFromTop()) {
+          if (_prevChapter != null && _canGoToPrevChapterFromTop()) {
             unawaited(onLoadPrevChapter?.call());
           }
         } else {

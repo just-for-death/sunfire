@@ -141,7 +141,7 @@ void main() {
         page: 7,
       );
 
-      expect(wrote, isTrue);
+      expect(wrote.updated, isTrue);
       final stored = await IsarService.instance.getChapterByServerId(ch.serverId);
       expect(stored, isNotNull);
       expect(stored!.lastPageRead, equals(7));
@@ -159,7 +159,7 @@ void main() {
         page: 20,
       );
 
-      expect(wrote, isTrue);
+      expect(wrote.updated, isTrue);
       final stored = await IsarService.instance.getChapterByServerId(ch.serverId);
       expect(stored, isNotNull);
       expect(stored!.lastPageRead, equals(20));
@@ -176,7 +176,7 @@ void main() {
         page: 4,
       );
 
-      expect(wrote, isFalse);
+      expect(wrote.updated, isFalse);
       final stored = await IsarService.instance.getChapterByServerId(ch.serverId);
       expect(stored, isNotNull);
       expect(stored!.lastPageRead, equals(12));
@@ -192,7 +192,7 @@ void main() {
         page: 99,
       );
 
-      expect(wrote, isTrue);
+      expect(wrote.updated, isTrue);
       final stored = await IsarService.instance.getChapterByServerId(ch.serverId);
       expect(stored, isNotNull);
       expect(stored!.lastPageRead, equals(20));
