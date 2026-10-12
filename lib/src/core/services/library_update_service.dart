@@ -5,16 +5,26 @@ import 'package:flutter/foundation.dart';
 
 import '../db/isar_service.dart';
 import '../db/models/chapter.dart';
+import '../db/models/manga.dart';
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/download_status_merge.dart';
 import '../sync/graphql_client_service.dart';
 import '../sync/offline_monitor.dart';
 import '../sync/sync_engine.dart';
+import '../sync/bandwidth_policy.dart';
 import '../sync/websocket_service.dart';
 import 'battery_state_service.dart';
 import 'notification_service.dart';
 import 'settings_service.dart';
+
+/// Exception thrown when a library update is cancelled by the user.
+class LibraryUpdateCancelledException implements Exception {
+  const LibraryUpdateCancelledException();
+  
+  @override
+  String toString() => 'LibraryUpdateCancelledException: Update was cancelled by user';
+}
 
 class LibraryUpdateService extends ChangeNotifier {
   LibraryUpdateService._();
@@ -26,6 +36,21 @@ class LibraryUpdateService extends ChangeNotifier {
   int _lastFoundCount = 0;
   int _skippedCategoriesCount = 0;
   int _skippedMangasCount = 0;
+  
+  // Cancellation support
+  bool _isCancelled = false;
+  bool _isPaused = false;
+  Completer<void>? _cancelCompleter;
+  
+  // Per-manga progress tracking
+  Manga? _currentManga;
+  int _currentMangaIndex = 0;
+  int _totalManga = 0;
+  String _currentCategory = '';
+  int _processedMangaCount = 0;
+  int _totalChapters = 0;
+  int _processedChapters = 0;
+  int _currentChapterIndex = 0;
 
   bool get isUpdating => _isUpdating;
   double get progress => _progress;
@@ -37,6 +62,105 @@ class LibraryUpdateService extends ChangeNotifier {
 
   /// Manga skipped by the server updater (per-category / strategy filters).
   int get skippedMangasCount => _skippedMangasCount;
+
+  /// Whether the current update can be cancelled.
+  bool get canCancel => _isUpdating && !_isCancelled;
+
+  /// Whether the update is currently paused.
+  bool get isPaused => _isPaused;
+
+  /// Current manga being processed.
+  Manga? get currentManga => _currentManga;
+
+  /// Index of current manga (0-based).
+  int get currentMangaIndex => _currentMangaIndex;
+
+  /// Total number of manga to process.
+  int get totalManga => _totalManga;
+
+  /// Current category being processed.
+  String get currentCategory => _currentCategory;
+
+  /// Number of manga processed so far.
+  int get processedMangaCount => _processedMangaCount;
+
+  /// Total chapters across all manga.
+  int get totalChapters => _totalChapters;
+
+  /// Chapters processed so far.
+  int get processedChapters => _processedChapters;
+
+  /// Current chapter index within current manga.
+  int get currentChapterIndex => _currentChapterIndex;
+
+  /// Per-manga progress (0.0 to 1.0).
+  double get mangaProgress => _totalChapters > 0 
+      ? (_processedChapters / _totalChapters).clamp(0.0, 1.0) 
+      : 0.0;
+
+  /// Per-manga progress percentage string.
+  String get mangaProgressPercent => 
+      '${(mangaProgress * 100).toStringAsFixed(1)}%';
+
+  /// Overall progress including current manga.
+  double get overallProgressWithManga => _totalManga > 0
+      ? ((_processedMangaCount + mangaProgress) / _totalManga).clamp(0.0, 1.0)
+      : _progress;
+
+  /// Request cancellation of the current update.
+  Future<void> cancel() async {
+    if (!_isUpdating || _isCancelled) return;
+    _isCancelled = true;
+    _statusMessage = 'Cancelling...';
+    notifyListeners();
+    
+    // Complete the completer to signal cancellation
+    _cancelCompleter?.complete();
+    
+    // Wait for the update to actually stop (up to 5 seconds)
+    try {
+      await _cancelCompleter?.future.timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // Timeout or error - force cleanup
+    }
+  }
+
+  /// Pause the current update.
+  void pause() {
+    if (!_isUpdating || _isCancelled || _isPaused) return;
+    _isPaused = true;
+    _statusMessage = 'Paused';
+    notifyListeners();
+  }
+
+  /// Resume a paused update.
+  void resume() {
+    if (!_isUpdating || _isCancelled || !_isPaused) return;
+    _isPaused = false;
+    _statusMessage = 'Resuming...';
+    notifyListeners();
+  }
+
+  /// Reset cancellation state for next update.
+  void _resetCancellation() {
+    _isCancelled = false;
+    _isPaused = false;
+  }
+
+  /// Check if update was cancelled and throw if so.
+  void _checkCancelled() {
+    if (_isCancelled) {
+      throw LibraryUpdateCancelledException();
+    }
+  }
+
+  /// Check if update is paused and wait if so.
+  Future<void> _waitIfPaused() async {
+    while (_isPaused && !_isCancelled) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    _checkCancelled();
+  }
 
   /// Checks whether connection satisfies user's Wi-Fi / wired network constraint.
   Future<bool> _satisfiesNetworkConstraint() async {
@@ -59,6 +183,24 @@ class LibraryUpdateService extends ChangeNotifier {
     return BatteryStateService.instance.isCharging();
   }
 
+  /// Metered-data budget gate for automated updates (S4.3). Estimates the
+  /// metadata cost of a library update cycle (~1 MB) and defers the run when
+  /// the metered window cannot cover it. Manual runs bypass this gate.
+  Future<bool> _satisfiesMeteredBudget() async {
+    try {
+      final conn = await BandwidthPolicy.instance.currentClass();
+      if (conn != ConnectionClass.metered) return true;
+      final decision = await BandwidthPolicy.instance.decide(
+        conn: conn,
+        bytes: 1024 * 1024, // metadata estimate for one update cycle
+        degradable: false, // metadata can't be degraded
+      );
+      return decision == TransferDecision.allow;
+    } catch (_) {
+      return true; // fail open: never wedge automated updates on gate errors
+    }
+  }
+
   /// Unified library update: handles both live Suwayomi server jobs and local QuickJS scraping.
   /// Detects genuinely newly fetched chapters and triggers native notifications.
   /// Library update task. Its log lines share one correlation id (UIX-18).
@@ -79,6 +221,8 @@ class LibraryUpdateService extends ChangeNotifier {
       return 0;
     }
     _isUpdating = true;
+    _cancelCompleter = Completer<void>();
+    _resetCancellation();
 
     // NOTE: every early return below relies on the `finally` at the bottom of
     // the try to release the single-flight flag. The constraint gates used to
@@ -112,6 +256,15 @@ class LibraryUpdateService extends ChangeNotifier {
         final satisfiesCharging = await _satisfiesChargingConstraint();
         if (!satisfiesCharging) {
           debugPrint('[LibraryUpdateService] Skipping update: charge-only mode and device is not charging.');
+          return 0;
+        }
+
+        // S4.3: metered-data budget gate for automated runs. Manual runs
+        // bypass (explicit user intent); automated runs defer when the
+        // metered window is exhausted.
+        final satisfiesBudget = await _satisfiesMeteredBudget();
+        if (!satisfiesBudget) {
+          debugPrint('[LibraryUpdateService] Skipping update: metered data budget exhausted.');
           return 0;
         }
       }
@@ -282,8 +435,22 @@ class LibraryUpdateService extends ChangeNotifier {
           localManga.map((m) => m.canonicalKey).toList(),
         );
 
+        // Initialize per-manga progress tracking
+        _totalManga = totalManga;
+        _processedMangaCount = 0;
+        _currentMangaIndex = 0;
+
         for (int i = 0; i < totalManga; i++) {
+          // Check for cancellation/pause before processing each manga
+          await _waitIfPaused();
+          _checkCancelled();
+
           final manga = localManga[i];
+          _currentManga = manga;
+          _currentMangaIndex = i;
+          _currentCategory = manga.categoryIds.isNotEmpty ? manga.categoryIds.first.toString() : '';
+          _processedMangaCount = i;
+          
           _progress = 0.10 + ((i + 1) / (totalManga > 0 ? totalManga : 1)) * 0.65;
           _statusMessage = 'Updating ${manga.title} (${i + 1}/$totalManga)...';
           notifyListeners();
@@ -305,8 +472,21 @@ class LibraryUpdateService extends ChangeNotifier {
                 final existingUrls = existing.map((c) => c.url).toSet();
                 final existingServerIds = existing.map((c) => c.serverId).toSet();
                 final newChaptersToSave = <Chapter>[];
+                
+                // Initialize chapter progress for this manga
+                _totalChapters = rawChapters.length;
+                _processedChapters = 0;
+                _currentChapterIndex = 0;
 
                 for (int cIdx = 0; cIdx < rawChapters.length; cIdx++) {
+                  // Check for cancellation/pause before processing each chapter
+                  await _waitIfPaused();
+                  _checkCancelled();
+                  
+                  _currentChapterIndex = cIdx;
+                  _processedChapters = cIdx;
+                  notifyListeners();
+
                   final chMap = rawChapters[cIdx] as Map<String, dynamic>;
                   final chUrl = (chMap['url'] ?? chMap['link'] ?? '').toString();
                   if (chUrl.isNotEmpty && !existingUrls.contains(chUrl)) {
@@ -426,6 +606,10 @@ class LibraryUpdateService extends ChangeNotifier {
 
       await Future<void>.delayed(const Duration(milliseconds: 600));
       return _lastFoundCount;
+    } on LibraryUpdateCancelledException {
+      debugPrint('[LibraryUpdateService] Update cancelled by user');
+      _statusMessage = 'Update cancelled';
+      return 0;
     } catch (e, st) {
       await LoggerService.instance.logError(
         'LibraryUpdateService failed: $e',
@@ -437,6 +621,16 @@ class LibraryUpdateService extends ChangeNotifier {
       return 0;
     } finally {
       _isUpdating = false;
+      _currentManga = null;
+      _currentMangaIndex = 0;
+      _totalManga = 0;
+      _currentCategory = '';
+      _processedMangaCount = 0;
+      _totalChapters = 0;
+      _processedChapters = 0;
+      _currentChapterIndex = 0;
+      _cancelCompleter?.complete();
+      _resetCancellation();
       notifyListeners();
     }
   }

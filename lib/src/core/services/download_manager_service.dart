@@ -17,6 +17,7 @@ import '../engine/image_validation.dart';
 import '../engine/javascript/m_client.dart';
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
+import '../sync/bandwidth_policy.dart';
 import '../sync/download_foreground_task.dart';
 import '../sync/graphql_client_service.dart';
 import 'battery_state_service.dart';
@@ -222,6 +223,40 @@ class DownloadManagerService extends ChangeNotifier {
       debugPrint('[DownloadManager] Network check error: $e');
       return true; // Fail-open for safety
     }
+  }
+
+  /// S6.8/S4.3: metered-budget gate for the download loop. Chapters are
+  /// large (unknown size upfront), so any non-trivial queue pauses when the
+  /// metered window is exhausted. Fail-open on gate errors.
+  Future<bool> _checkMeteredBudget() async {
+    try {
+      final conn = await BandwidthPolicy.instance.currentClass();
+      if (conn != ConnectionClass.metered) return true;
+      final remaining = await BandwidthPolicy.instance.bytesRemaining();
+      // Unlimited cap (null) or any remaining budget: allow. Downloads
+      // record their bytes via BandwidthPolicy.recordBytes on completion.
+      if (remaining == null) return true;
+      return remaining > 0;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// S6.8: sum a finished chapter's bytes into the metered budget.
+  /// Best-effort; never fails the download.
+  Future<void> _recordChapterBytes(int chapterId) async {
+    try {
+      final conn = await BandwidthPolicy.instance.currentClass();
+      if (conn != ConnectionClass.metered) return;
+      final docs = await getApplicationDocumentsDirectory();
+      final dir = Directory('${docs.path}/downloads/$chapterId');
+      if (!await dir.exists()) return;
+      var total = 0;
+      await for (final e in dir.list()) {
+        if (e is File) total += await e.length();
+      }
+      await BandwidthPolicy.instance.recordBytes(total);
+    } catch (_) {}
   }
 
   /// Serializes every queue-state write into a single chain.
@@ -1089,6 +1124,15 @@ unawaited(
         }
         _waitingForCharger = false;
 
+        // S6.8/S4.3: metered-data budget gate. When the metered window is
+        // exhausted, pause instead of burning mobile data; the queue
+        // resumes automatically on an unmetered connection (smart resume).
+        if (!await _checkMeteredBudget()) {
+          stoppedForNetwork = true;
+          debugPrint('[DownloadManager] ⏸️ Pausing queue: metered data budget exhausted');
+          break;
+        }
+
         // Download chapters in reading order (ascending chapter number) so a
         // batch of 1..100 starts at chapter 1, then 2, 3, … rather than the
         // source's newest-first order. Tasks are grouped by manga.
@@ -1149,6 +1193,8 @@ unawaited(
           _accountOutcome(task, success: true);
           _downloadedLocalChapterIds.add(task.chapterId);
           _downloadedLocalMangaIds.add(task.mangaId);
+          // S6.8: account metered bytes for the bandwidth budget.
+          unawaited(_recordChapterBytes(task.chapterId));
           // Bookkeeping only — never allowed to fail the download.
           try {
             final m = await IsarService.instance.getMangaByServerId(task.mangaId);

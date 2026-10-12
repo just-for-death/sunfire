@@ -2821,4 +2821,200 @@ class GraphQLClientService {
     ''';
     return await query(queryStr, variables: {'restoreId': restoreId}, label: 'fetchRestoreStatus');
   }
+
+  /// Fetch library changes since [since] using real Suwayomi filters.
+  ///
+  /// There is no `delta` / `mangaByIds` root field on Suwayomi. This uses
+  /// `mangas(filter: lastFetchedAt/chaptersLastFetchedAt > since)` and
+  /// `chapters(filter: fetchedAt > since, inLibrary)` — the same filter
+  /// surface as [fetchUpdatesChapters].
+  ///
+  /// Returns `{ manga: [...nodes], chapters: [...nodes], categories: [...] }`.
+  Future<Map<String, dynamic>?> fetchDelta({
+    required DateTime since,
+    Set<int>? mangaIds,
+    Set<int>? categoryIds,
+  }) async {
+    final sinceSec = since.millisecondsSinceEpoch ~/ 1000;
+    if (sinceSec <= 0) {
+      // Epoch zero means "full sync" — refuse invent-delta theater; callers
+      // should use the existing full library sync path instead.
+      await LoggerService.instance.logWarning(
+        'fetchDelta: since=$since is a full-history request; use fetchLibrary',
+        'GraphQL',
+      );
+      return null;
+    }
+
+    final mangaIdFilter = (mangaIds != null && mangaIds.isNotEmpty)
+        ? ', id: { in: [${mangaIds.join(',')}] }'
+        : '';
+    final chapterMangaIdFilter = (mangaIds != null && mangaIds.isNotEmpty)
+        ? ', mangaId: { in: [${mangaIds.join(',')}] }'
+        : '';
+    final categoryFilter = (categoryIds != null && categoryIds.isNotEmpty)
+        ? ', categoryId: { in: [${categoryIds.join(',')}] }'
+        : '';
+
+    final mangaQuery = '''
+      {
+        mangas(
+          filter: {
+            inLibrary: { equalTo: true }
+            or: [
+              { lastFetchedAt: { greaterThan: "$sinceSec" } }
+              { chaptersLastFetchedAt: { greaterThan: "$sinceSec" } }
+            ]
+            $mangaIdFilter
+            $categoryFilter
+          }
+          first: 200
+        ) {
+          nodes {
+            id
+            title
+            author
+            artist
+            description
+            thumbnailUrl
+            status
+            inLibrary
+            inLibraryAt
+            url
+            realUrl
+            unreadCount
+            source { displayName name }
+            categories { nodes { id } }
+          }
+        }
+      }
+    ''';
+
+    final chapterQuery = '''
+      {
+        chapters(
+          filter: {
+            inLibrary: { equalTo: true }
+            fetchedAt: { greaterThan: "$sinceSec" }
+            $chapterMangaIdFilter
+          }
+          order: [{ by: FETCHED_AT, byType: DESC }]
+          first: 500
+        ) {
+          nodes {
+            id
+            name
+            chapterNumber
+            url
+            realUrl
+            pageCount
+            isRead
+            isBookmarked
+            lastPageRead
+            lastReadAt
+            isDownloaded
+            uploadDate
+            fetchedAt
+            mangaId
+          }
+        }
+      }
+    ''';
+
+    final mangaData = await query(mangaQuery, label: 'fetchDelta.mangas', op: GraphQLOp.read);
+    final chapterData =
+        await query(chapterQuery, label: 'fetchDelta.chapters', op: GraphQLOp.read);
+
+    if (mangaData == null && chapterData == null) return null;
+
+    final mangaNodes = (mangaData?['mangas'] is Map)
+        ? ((mangaData!['mangas'] as Map)['nodes'] as List? ?? const <dynamic>[])
+        : const <dynamic>[];
+    final chapterNodes = (chapterData?['chapters'] is Map)
+        ? ((chapterData!['chapters'] as Map)['nodes'] as List? ??
+            const <dynamic>[])
+        : const <dynamic>[];
+
+    return {
+      'manga': mangaNodes
+          .whereType<Map<dynamic, dynamic>>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList(),
+      'chapters': chapterNodes
+          .whereType<Map<dynamic, dynamic>>()
+          .map((c) => Map<String, dynamic>.from(c))
+          .toList(),
+      'categories': <Map<String, dynamic>>[],
+    };
+  }
+
+  /// Fetch specific manga by IDs via `mangas(filter: { id: { in: ... } })`.
+  Future<List<Map<String, dynamic>>?> fetchMangaByIds(List<int> mangaIds) async {
+    if (mangaIds.isEmpty) return [];
+    final ids = mangaIds.where((id) => id > 0).toList();
+    if (ids.isEmpty) return [];
+
+    final queryStr = '''
+      {
+        mangas(filter: { id: { in: [${ids.join(',')}] } }, first: ${ids.length}) {
+          nodes {
+            id
+            title
+            author
+            artist
+            description
+            thumbnailUrl
+            status
+            inLibrary
+            inLibraryAt
+            url
+            realUrl
+            unreadCount
+            source { displayName name }
+            categories { nodes { id } }
+          }
+        }
+      }
+    ''';
+
+    final data = await query(queryStr, label: 'fetchMangaByIds', op: GraphQLOp.read);
+    if (data == null || data['mangas'] == null) return null;
+    final nodes = (data['mangas'] as Map)['nodes'] as List?;
+    return nodes
+        ?.whereType<Map<dynamic, dynamic>>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+  }
+
+  /// Fetch specific categories by IDs via `categories(filter: { id: { in: ... } })`.
+  Future<List<Map<String, dynamic>>?> fetchCategoriesByIds(List<int> categoryIds) async {
+    if (categoryIds.isEmpty) return [];
+    final ids = categoryIds.where((id) => id > 0).toList();
+    if (ids.isEmpty) return [];
+
+    final queryStr = '''
+      {
+        categories(filter: { id: { in: [${ids.join(',')}] } }, first: ${ids.length}) {
+          nodes {
+            id
+            name
+            order
+            default
+            includeInUpdate
+            includeInDownload
+            isDefaultCategory
+          }
+        }
+      }
+    ''';
+
+    final data =
+        await query(queryStr, label: 'fetchCategoriesByIds', op: GraphQLOp.read);
+    if (data == null || data['categories'] == null) return null;
+    final nodes = (data['categories'] as Map)['nodes'] as List?;
+    return nodes
+        ?.whereType<Map<dynamic, dynamic>>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+  }
 }

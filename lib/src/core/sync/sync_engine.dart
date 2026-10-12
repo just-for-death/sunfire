@@ -23,10 +23,164 @@ import '../services/wakelock_coordinator.dart';
 import 'graphql_client_service.dart';
 import 'suwayomi_parse_helpers.dart';
 import 'websocket_service.dart';
+import 'conflict_resolver.dart'
+    show ConflictResolver, UserChoiceMarker;
 
 // Re-exported so the many existing `sync_engine.dart` importers of this helper
 // keep working, and so the DB layer can reach it without a circular import.
 export '../db/epoch_seconds.dart';
+
+/// Result of a sync operation
+class SyncResult {
+  const SyncResult({
+    required this.success,
+    this.mangaUpdated = 0,
+    this.chaptersUpdated = 0,
+    this.categoriesUpdated = 0,
+    this.errors = const [],
+    this.lastSyncTimestamp,
+    this.conflicts = const [],
+    this.data,
+  });
+
+  final bool success;
+  final int mangaUpdated;
+  final int chaptersUpdated;
+  final int categoriesUpdated;
+  final List<String> errors;
+  final DateTime? lastSyncTimestamp;
+  final List<SyncConflict> conflicts;
+  final Map<String, dynamic>? data;
+
+  SyncResult copyWith({
+    bool? success,
+    int? mangaUpdated,
+    int? chaptersUpdated,
+    int? categoriesUpdated,
+    List<String>? errors,
+    DateTime? lastSyncTimestamp,
+    List<SyncConflict>? conflicts,
+    Map<String, dynamic>? data,
+  }) {
+    return SyncResult(
+      success: success ?? this.success,
+      mangaUpdated: mangaUpdated ?? this.mangaUpdated,
+      chaptersUpdated: chaptersUpdated ?? this.chaptersUpdated,
+      categoriesUpdated: categoriesUpdated ?? this.categoriesUpdated,
+      errors: errors ?? this.errors,
+      lastSyncTimestamp: lastSyncTimestamp ?? this.lastSyncTimestamp,
+      conflicts: conflicts ?? this.conflicts,
+      data: data ?? this.data,
+    );
+  }
+}
+
+/// Progress updates during sync
+class SyncProgress {
+  const SyncProgress({
+    required this.phase,
+    required this.current,
+    required this.total,
+    this.currentManga,
+    this.bytesTransferred = 0,
+    this.totalBytes = 0,
+  });
+
+  final SyncPhase phase;
+  final int current;
+  final int total;
+  final String? currentManga;
+  final int bytesTransferred;
+  final int totalBytes;
+
+  double get progress => total > 0 ? current / total : 0.0;
+}
+
+enum SyncPhase {
+  initializing,
+  fetchingDelta,
+  fetchingManga,
+  fetchingChapters,
+  fetchingCategories,
+  resolvingConflicts,
+  applyingChanges,
+  uploadingChanges,
+  completed,
+  failed,
+}
+
+/// Conflict between local and remote data
+class SyncConflict {
+  const SyncConflict({
+    required this.entityType,
+    required this.entityId,
+    required this.localData,
+    required this.remoteData,
+    required this.field,
+    this.localTimestamp,
+    this.remoteTimestamp,
+    this.resolution,
+  });
+
+  final String entityType;
+  final int entityId;
+  final String field;
+  final dynamic localData;
+  final dynamic remoteData;
+  final DateTime? localTimestamp;
+  final DateTime? remoteTimestamp;
+  final ConflictResolution? resolution;
+}
+
+enum ConflictResolution {
+  localWins,
+  remoteWins,
+  merge,
+  userChoice,
+}
+
+/// Sync configuration
+class SyncConfig {
+  const SyncConfig({
+    this.deltaSyncEnabled = true,
+    this.conflictResolutionStrategy = ConflictResolutionStrategy.lastWriteWins,
+    this.batchSize = 50,
+    this.maxRetries = 3,
+    this.retryDelay = const Duration(seconds: 5),
+    this.timeout = const Duration(minutes: 5),
+    this.syncCategories = true,
+    this.syncManga = true,
+    this.syncChapters = true,
+    this.syncProgress = true,
+    this.syncReadingProgress = true,
+    this.autoSyncInterval = const Duration(hours: 4),
+    this.wifiOnly = false,
+    this.maxParallelDownloads = 4,
+  });
+
+  final bool deltaSyncEnabled;
+  final ConflictResolutionStrategy conflictResolutionStrategy;
+  final int batchSize;
+  final int maxRetries;
+  final Duration retryDelay;
+  final Duration timeout;
+  final bool syncCategories;
+  final bool syncManga;
+  final bool syncChapters;
+  final bool syncProgress;
+  final bool syncReadingProgress;
+  final Duration autoSyncInterval;
+  final bool wifiOnly;
+  final int maxParallelDownloads;
+}
+
+enum ConflictResolutionStrategy {
+  lastWriteWins,
+  serverWins,
+  localWins,
+  crdt,
+  userChoice,
+}
 
 /// A queued mutation is abandoned after this many *counted* failures.
 const int kMaxSyncRetries = 5;
@@ -506,7 +660,7 @@ void mergeSnapshotChapterNode(
   chapter.mangaId = manga.serverId;
   chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber'] ?? ""}';
   chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
-  chapter.pageCount = parseIntSafe(chMap['pageCount'], chapter.pageCount);
+  chapter.pageCount = parseIntSafe(chMap['pageCount']) ?? chapter.pageCount;
 
   // Read-state merge: take the server's value outright unless this
   // chapter has an unsynced outbound mutation queued, in which
@@ -1270,7 +1424,7 @@ class SyncEngine {
                 await IsarService.instance.deleteCategory(localServerId);
                 cat.serverId = remoteId;
                 cat.name = created['name']?.toString() ?? name;
-                cat.order = parseIntSafe(created['order'], order);
+                cat.order = parseIntSafe(created['order']) ?? order;
                 await IsarService.instance.saveCategory(cat);
               }
             }
@@ -1354,7 +1508,7 @@ class SyncEngine {
   static bool _syncRecordReferencesCategory(SyncRecord record, int categoryId) {
     try {
       final payload = jsonDecode(record.payloadJson) as Map<String, dynamic>;
-      final ids = (payload['categoryIds'] as List?)?.map((e) => parseIntSafe(e)).toList() ?? const <int>[];
+      final ids = (payload['categoryIds'] as List?)?.map((e) => int.tryParse(e.toString()) ?? 0).toList() ?? const <int>[];
       return ids.contains(categoryId);
     } catch (ignoredError) {
       return false;
@@ -1553,7 +1707,7 @@ class SyncEngine {
       try {
         final payload = jsonDecode(rec.payloadJson) as Map<String, dynamic>;
         if (payload['op'] != 'assign' || payload['categoryIds'] is! List) continue;
-        final ids = (payload['categoryIds'] as List).map((e) => parseIntSafe(e)).toList();
+        final ids = (payload['categoryIds'] as List).map((e) => int.tryParse(e.toString()) ?? 0).toList();
         final replaced = ids.map((id) => id == localServerId ? remoteId : id).toList();
         if (ids.join(',') != replaced.join(',')) {
           payload['categoryIds'] = replaced;
@@ -2573,7 +2727,7 @@ class SyncEngine {
           chapter.mangaId = mangaServerId;
           chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber'] ?? ""}';
           chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
-          chapter.pageCount = parseIntSafe(chMap['pageCount'], chapter.pageCount);
+          chapter.pageCount = parseIntSafe(chMap['pageCount']) ?? chapter.pageCount;
 
           // Read-state: take the server's value unless this chapter still has
           // an unsynced outbound mutation queued (see _syncAllChaptersForLibrary).
@@ -2599,7 +2753,7 @@ class SyncEngine {
             }
 
             // Also upsert parent manga into Isar if not already there
-            final mServerId = parseIntSafe(mangaMap['id'], mangaServerId);
+            final mServerId = parseIntSafe(mangaMap['id']) ?? mangaServerId;
             var parentManga = parentMangasToSave[mServerId] ?? await IsarService.instance.getMangaByServerId(mServerId);
             parentManga ??= Manga()..serverId = mServerId;
             if (parentManga.title.isEmpty || parentManga.title == 'Untitled') {
@@ -2666,14 +2820,14 @@ class SyncEngine {
         var chapter = await IsarService.instance.getChapterByServerId(chServerId);
         chapter ??= Chapter()..serverId = chServerId;
 
-        chapter.mangaId = parseIntSafe(map['mangaId'], chapter.mangaId);
+        chapter.mangaId = parseIntSafe(map['mangaId']) ?? chapter.mangaId;
         chapter.name = map['name'] as String? ?? chapter.name;
-        chapter.chapterNumber = parseDoubleSafe(map['chapterNumber'], chapter.chapterNumber);
+        chapter.chapterNumber = parseDoubleSafe(map['chapterNumber']) ?? chapter.chapterNumber;
         // pageCount was missing here, and Chapter.applyReadState does
         // `if (read) lastPageRead = pageCount` — so marking a chapter that
         // first arrived through the updates feed read wrote lastPageRead = 0
         // and threw away the resume position.
-        chapter.pageCount = parseIntSafe(map['pageCount'], chapter.pageCount);
+        chapter.pageCount = parseIntSafe(map['pageCount']) ?? chapter.pageCount;
         final serverIsRead = parseBoolSafe(map['isRead']);
         final hasPendingMutation = pendingChapterIds.contains(chServerId.toString());
         if (!hasPendingMutation) {
@@ -2684,7 +2838,7 @@ class SyncEngine {
         // that was still queued for upload.
         chapter.lastPageRead = mergeLastPageRead(
           local: chapter.lastPageRead,
-          server: parseIntSafe(map['lastPageRead'], chapter.lastPageRead),
+          server: parseIntSafe(map['lastPageRead']) ?? chapter.lastPageRead,
           hasPendingMutation: hasPendingMutation,
         );
         // Also missing here: without lastReadAt a chapter that arrives already
@@ -2761,5 +2915,438 @@ class SyncEngine {
     } catch (e) {
       await LoggerService.instance.logError('Recent updates sync error: $e', category: 'SyncEngine');
     }
+  }
+
+  // ─── Delta Sync Support ──────────────────────────────────────────
+
+  /// Fetch delta changes since a specific timestamp (real Suwayomi filters).
+  Future<SyncResult> fetchDelta({
+    required DateTime since,
+    Set<int>? mangaIds,
+    Set<int>? categoryIds,
+  }) async {
+    if (!GraphQLClientService.instance.isConfigured) {
+      return SyncResult(
+        success: false,
+        errors: ['GraphQL client not configured'],
+      );
+    }
+
+    try {
+      final data = await GraphQLClientService.instance.fetchDelta(
+        since: since,
+        mangaIds: mangaIds,
+        categoryIds: categoryIds,
+      );
+
+      if (data == null) {
+        return SyncResult(
+          success: false,
+          errors: ['No delta data returned from server'],
+        );
+      }
+
+      return SyncResult(
+        success: true,
+        mangaUpdated: (data['manga'] as List?)?.length ?? 0,
+        chaptersUpdated: (data['chapters'] as List?)?.length ?? 0,
+        categoriesUpdated: (data['categories'] as List?)?.length ?? 0,
+        // Pass payload through so [applyDeltaChanges] can write rows.
+        data: data,
+      );
+    } catch (e, stack) {
+      await LoggerService.instance.logError('Delta fetch failed: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+      return SyncResult(
+        success: false,
+        errors: ['Delta fetch failed: $e'],
+      );
+    }
+  }
+
+  /// Apply delta changes from server to local database
+  Future<SyncResult> applyDeltaChanges(SyncResult deltaResult) async {
+    if (!deltaResult.success) return deltaResult;
+
+    try {
+      int mangaCount = 0;
+      int chapterCount = 0;
+      int categoryCount = 0;
+
+      // Apply manga changes
+      final mangaData = deltaResult.data?['manga'] as List?;
+      if (mangaData != null && mangaData.isNotEmpty) {
+        final mangaList = mangaData
+          .whereType<Map<String, dynamic>>()
+          .map((m) => parseMangaNode(m))
+          .toList();
+        await IsarService.instance.saveMangas(mangaList);
+        mangaCount = mangaList.length;
+      }
+
+      // Apply chapter changes
+      final chapterData = deltaResult.data?['chapters'] as List?;
+      if (chapterData != null && chapterData.isNotEmpty) {
+        final chapters = chapterData
+          .whereType<Map<String, dynamic>>()
+          .map((c) => parseChapterNode(c))
+          .toList();
+        await IsarService.instance.saveChapters(chapters);
+        chapterCount = chapters.length;
+      }
+
+      // Apply category changes
+      final categoryData = deltaResult.data?['categories'] as List?;
+      if (categoryData != null && categoryData.isNotEmpty) {
+        final categories = parseCategoryNodes(categoryData);
+        await IsarService.instance.saveCategories(categories);
+        categoryCount = categories.length;
+      }
+
+      return SyncResult(
+        success: true,
+        mangaUpdated: mangaCount,
+        chaptersUpdated: chapterCount,
+        categoriesUpdated: categoryCount,
+        lastSyncTimestamp: DateTime.now(),
+      );
+    } catch (e, stack) {
+      await LoggerService.instance.logError('Failed to apply delta changes: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+      return SyncResult(
+        success: false,
+        errors: ['Failed to apply delta changes: $e'],
+      );
+    }
+  }
+
+  /// Sync specific manga by IDs (for selective sync)
+  Future<SyncResult> syncMangaByIds(Set<int> mangaIds) async {
+    if (!GraphQLClientService.instance.isConfigured) {
+      return SyncResult(success: false, errors: ['GraphQL client not configured']);
+    }
+
+    try {
+      final data = await GraphQLClientService.instance.fetchMangaByIds(mangaIds.toList());
+      if (data == null || data.isEmpty) {
+        return SyncResult(success: true, mangaUpdated: 0);
+      }
+
+      final mangaList = data.map((m) => parseMangaNode(m)).toList();
+      await IsarService.instance.saveMangas(mangaList);
+
+      // Also fetch chapters for these manga
+      int chapterCount = 0;
+      for (final manga in mangaList) {
+        if (manga.serverId > 0) {
+          final count = await _syncAllChaptersForManga(manga.serverId);
+          chapterCount += count;
+        }
+      }
+
+      return SyncResult(
+        success: true,
+        mangaUpdated: mangaList.length,
+        chaptersUpdated: chapterCount,
+      );
+    } catch (e, stack) {
+      await LoggerService.instance.logError('Selective manga sync failed: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+      return SyncResult(success: false, errors: ['Selective manga sync failed: $e']);
+    }
+  }
+
+  /// Sync specific categories by IDs
+  Future<SyncResult> syncCategoriesByIds(Set<int> categoryIds) async {
+    if (!GraphQLClientService.instance.isConfigured) {
+      return SyncResult(success: false, errors: ['GraphQL client not configured']);
+    }
+
+    try {
+      final data = await GraphQLClientService.instance.fetchCategoriesByIds(categoryIds.toList());
+      if (data == null || data.isEmpty) {
+        return SyncResult(success: true, categoriesUpdated: 0);
+      }
+
+      final categories = parseCategoryNodes(data);
+      await IsarService.instance.saveCategories(categories);
+
+      return SyncResult(
+        success: true,
+        categoriesUpdated: categories.length,
+      );
+    } catch (e, stack) {
+      await LoggerService.instance.logError('Selective category sync failed: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
+      return SyncResult(success: false, errors: ['Selective category sync failed: $e']);
+    }
+  }
+
+  /// Resolve conflicts using the conflict resolver
+  Future<SyncResult> resolveConflicts(List<SyncConflict> conflicts) async {
+    final resolver = ConflictResolver();
+    var resolved = 0;
+    var skipped = 0;
+
+    for (final conflict in conflicts) {
+      try {
+        final resolvedValue = resolver.resolve(
+          entityType: conflict.entityType,
+          entityId: conflict.entityId,
+          field: conflict.field,
+          localValue: conflict.localData,
+          remoteValue: conflict.remoteData,
+          localTimestamp: conflict.localTimestamp ?? DateTime.fromMillisecondsSinceEpoch(0),
+          remoteTimestamp: conflict.remoteTimestamp ?? DateTime.now(),
+        );
+
+        if (resolvedValue is UserChoiceMarker) {
+          // Requires user intervention - keep as conflict
+          skipped++;
+          continue;
+        }
+
+        await _applyConflictResolution(conflict, resolvedValue);
+        resolved++;
+      } catch (e) {
+        skipped++;
+        await LoggerService.instance.logError('Failed to resolve conflict: $e', category: 'SyncEngine');
+      }
+    }
+
+    return SyncResult(
+      success: skipped == 0,
+      errors: skipped == 0
+          ? const []
+          : ['Resolved $resolved conflict(s); $skipped still need attention'],
+    );
+  }
+
+  Future<void> _applyConflictResolution(SyncConflict conflict, dynamic resolvedValue) async {
+    switch (conflict.entityType) {
+      case 'manga':
+        final manga =
+            await IsarService.instance.getMangaByServerId(conflict.entityId);
+        if (manga == null) return;
+        if (!_applyMangaField(manga, conflict.field, resolvedValue)) return;
+        await IsarService.instance.saveManga(manga);
+        break;
+      case 'chapter':
+        final chapter =
+            await IsarService.instance.getChapterByServerId(conflict.entityId);
+        if (chapter == null) return;
+        if (!_applyChapterField(chapter, conflict.field, resolvedValue)) return;
+        await IsarService.instance.saveChapter(chapter);
+        break;
+      case 'category':
+        final category =
+            await IsarService.instance.getCategoryByServerId(conflict.entityId);
+        if (category == null) return;
+        if (!_applyCategoryField(category, conflict.field, resolvedValue)) {
+          return;
+        }
+        await IsarService.instance.saveCategory(category);
+        break;
+    }
+  }
+
+  bool _applyMangaField(Manga manga, String field, dynamic value) {
+    switch (field) {
+      case 'title':
+        manga.title = value?.toString() ?? manga.title;
+        return true;
+      case 'author':
+        manga.author = value?.toString();
+        return true;
+      case 'artist':
+        manga.artist = value?.toString();
+        return true;
+      case 'description':
+        manga.description = value?.toString();
+        return true;
+      case 'status':
+        manga.status = value?.toString();
+        return true;
+      case 'inLibrary':
+        manga.inLibrary = value == true;
+        return true;
+      case 'readingModeOverride':
+        manga.readingModeOverride = value?.toString();
+        return true;
+      case 'unreadCount':
+        manga.unreadCount = value is num ? value.toInt() : manga.unreadCount;
+        return true;
+      case 'lastReadAt':
+        manga.lastReadAt = value is num ? value.toInt() : manga.lastReadAt;
+        return true;
+      case 'categoryIds':
+        if (value is List) {
+          manga.categoryIds = value
+              .map((e) => parseIntSafe(e))
+              .where((id) => id != 0)
+              .toList();
+          return true;
+        }
+        return false;
+      case 'tagIds':
+        if (value is List) {
+          manga.tagIds
+            ..clear()
+            ..addAll(value.map((e) => parseIntSafe(e)).where((id) => id != 0));
+          return true;
+        }
+        return false;
+      default:
+        return false;
+    }
+  }
+
+  bool _applyChapterField(Chapter chapter, String field, dynamic value) {
+    switch (field) {
+      case 'name':
+        chapter.name = value?.toString() ?? chapter.name;
+        return true;
+      case 'isRead':
+        chapter.isRead = value == true;
+        return true;
+      case 'isBookmarked':
+        chapter.isBookmarked = value == true;
+        return true;
+      case 'lastPageRead':
+        chapter.lastPageRead = value is num ? value.toInt() : chapter.lastPageRead;
+        return true;
+      case 'lastReadAt':
+        chapter.lastReadAt = value is num ? value.toInt() : chapter.lastReadAt;
+        return true;
+      case 'pageCount':
+        chapter.pageCount = value is num ? value.toInt() : chapter.pageCount;
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  bool _applyCategoryField(Category category, String field, dynamic value) {
+    switch (field) {
+      case 'name':
+        category.name = (value?.toString() ?? category.name).trim();
+        return true;
+      case 'order':
+        category.order = value is num ? value.toInt() : category.order;
+        return true;
+      case 'includeInUpdate':
+        category.includeInUpdate = parseIncludeOrExclude(value);
+        return true;
+      case 'includeInDownload':
+        category.includeInDownload = parseIncludeOrExclude(value);
+        return true;
+      case 'default':
+      case 'isDefault':
+        category.isDefault = value == true;
+        return true;
+      case 'isDefaultCategory':
+        category.isDefaultCategory = value == true;
+        category.isDefault = category.isDefault || category.isDefaultCategory;
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // ─── Delta Sync Helper Methods ──────────────────────────────────
+
+  /// Parse a manga node from GraphQL response (Suwayomi MangaType shape).
+  Manga parseMangaNode(Map<String, dynamic> node) {
+    final source = node['source'];
+    String sourceName = node['sourceName']?.toString() ?? '';
+    if (sourceName.isEmpty && source is Map) {
+      sourceName = (source['displayName'] ?? source['name'] ?? '').toString();
+    }
+
+    final categoryIds = <int>[];
+    final rawCategoryIds = node['categoryIds'];
+    if (rawCategoryIds is List) {
+      for (final id in rawCategoryIds) {
+        final parsed = parseIntSafe(id);
+        if (parsed != 0) categoryIds.add(parsed);
+      }
+    } else {
+      final catContainer = node['categories'];
+      final catNodes = catContainer is Map ? catContainer['nodes'] : null;
+      if (catNodes is List) {
+        categoryIds.addAll(parseMangaCategoryIds(catNodes));
+      }
+    }
+
+    final manga = Manga()
+      ..serverId = parseIntSafe(node['id'])
+      ..title = (node['title'] ?? node['name'])?.toString() ?? 'Untitled'
+      ..author = node['author']?.toString() ?? ''
+      ..artist = node['artist']?.toString() ?? ''
+      ..description = node['description']?.toString() ?? ''
+      ..status = node['status']?.toString() ?? ''
+      ..sourceName = sourceName
+      ..url = (node['url'] ?? node['sourceUrl'])?.toString() ?? ''
+      ..thumbnailUrl =
+          (node['thumbnailUrl'] ?? node['coverUrl'])?.toString()
+      ..readingModeOverride = node['readingModeOverride']?.toString()
+      ..inLibrary = node['inLibrary'] == true
+      ..inLibraryAt = parseIntSafe(node['inLibraryAt'])
+      ..unreadCount = node['unreadCount'] == null
+          ? null
+          : parseIntSafe(node['unreadCount'])
+      ..categoryIds = categoryIds;
+
+    return manga;
+  }
+
+  /// Parse a chapter node from GraphQL response (Suwayomi ChapterType shape).
+  Chapter parseChapterNode(Map<String, dynamic> node) {
+    return Chapter()
+      ..serverId = parseIntSafe(node['id'])
+      ..mangaId = parseIntSafe(node['mangaId'])
+      ..name = node['name']?.toString() ?? 'Untitled'
+      ..chapterNumber = parseDoubleSafe(node['chapterNumber'])
+      ..url = node['url']?.toString() ?? ''
+      ..realUrl = node['realUrl']?.toString() ?? ''
+      ..pageCount = parseIntSafe(node['pageCount'])
+      ..isRead = node['isRead'] == true
+      ..isBookmarked = node['isBookmarked'] == true
+      ..lastPageRead = parseIntSafe(node['lastPageRead'])
+      ..lastReadAt = parseIntSafe(node['lastReadAt'])
+      ..isDownloadedLocally = node['isDownloadedLocally'] == true
+      ..isDownloadedOnServer =
+          node['isDownloadedOnServer'] == true || node['isDownloaded'] == true
+      ..uploadDate = parseIntSafe(node['uploadDate'])
+      ..fetchedAt = parseIntSafe(node['fetchedAt']);
+  }
+
+  /// Sync all chapters for a specific manga
+  Future<int> _syncAllChaptersForManga(int mangaServerId) async {
+    final data = await GraphQLClientService.instance.fetchMangaAndChapters(mangaServerId);
+    if (data == null || data['mangaAndChapters'] == null) return 0;
+
+    final chapterNodes = data['mangaAndChapters']['chapters']['nodes'] as List?;
+    if (chapterNodes == null || chapterNodes.isEmpty) return 0;
+
+    final chapters = chapterNodes
+        .whereType<Map<String, dynamic>>()
+        .map((n) => parseChapterNode(Map<String, dynamic>.from(n)))
+        .toList();
+
+    await IsarService.instance.saveChapters(chapters);
+    return chapters.length;
+  }
+
+  /// Parse int safely from dynamic
+  int parseIntSafe(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
+  /// Parse double safely from dynamic
+  double parseDoubleSafe(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    return double.tryParse(value.toString()) ?? 0.0;
   }
 }

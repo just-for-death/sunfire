@@ -8,6 +8,7 @@ import '../logging/logger_service.dart';
 import 'epoch_seconds.dart';
 import 'list_chunks.dart';
 import 'models/category.dart';
+import 'models/tag.dart';
 import 'models/chapter.dart';
 import 'models/manga.dart';
 import 'models/sync_meta.dart';
@@ -133,6 +134,7 @@ class IsarService {
         CategorySchema,
         SyncRecordSchema,
         SyncMetaSchema,
+        TagSchema,
       ],
       directory: dir.path,
       inspector: kDebugMode,
@@ -803,12 +805,47 @@ class IsarService {
     });
   }
 
+  Future<Category?> getCategoryByServerId(int serverId) async {
+    if (!_isInitialized || serverId <= 0) return null;
+    return await _isar.categorys.filter().serverIdEqualTo(serverId).findFirst();
+  }
+
   Future<List<Category>> getCategories() async {
     if (!_isInitialized) return [];
     return await _isar.categorys.where().sortByOrder().findAll();
   }
 
-  // ── SYNC RECORD CRUD ────────────────────────────────────
+  // ─── LAST SYNC TIMESTAMP ─────────────────────────────────────────
+  static const String kLastSyncMetaKey = 'last_sync';
+
+  Future<DateTime?> getLastSyncTimestamp() async {
+    if (!_isInitialized) return null;
+    final meta = await _isar.syncMetas
+        .filter()
+        .keyEqualTo(kLastSyncMetaKey)
+        .findFirst();
+    final timestamp = meta?.lastSyncTimestamp;
+    if (timestamp == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+  }
+
+  Future<void> saveLastSyncTimestamp(DateTime timestamp) async {
+    if (!_isInitialized) return;
+    await _executeWrite('saveLastSyncTimestamp', () async {
+      await _isar.writeTxn(() async {
+        final meta = await _isar.syncMetas
+                .filter()
+                .keyEqualTo(kLastSyncMetaKey)
+                .findFirst() ??
+            (SyncMeta()..key = kLastSyncMetaKey);
+        meta.key = kLastSyncMetaKey;
+        meta.lastSyncTimestamp = timestamp.millisecondsSinceEpoch ~/ 1000;
+        await _isar.syncMetas.put(meta);
+      });
+    });
+  }
+
+  // ── SYNC RECORD CRUD ────────────────────────────────────────────
   Future<void> saveSyncRecord(SyncRecord record) async {
     await _executeWrite('saveSyncRecord', () async {
       await _isar.writeTxn(() async {
@@ -892,6 +929,33 @@ class IsarService {
           .findAll());
     }
     return out;
+  }
+
+  /// Get all sync records (up to limit), sorted by timestamp descending.
+  Future<List<SyncRecord>> getAllSyncRecords({int limit = 1000}) async {
+    if (!_isInitialized) return [];
+    return await _isar.syncRecords
+        .where()
+        .sortByTimestampDesc()
+        .limit(limit)
+        .findAll();
+  }
+
+  /// Get sync records for a specific entity, sorted by timestamp descending.
+  Future<List<SyncRecord>> getSyncRecordsForEntity(
+    String entityType,
+    String entityId, {
+    int limit = 100,
+  }) async {
+    if (!_isInitialized) return [];
+    return await _isar.syncRecords
+        .filter()
+        .entityTypeEqualTo(SyncEntityType.values.byName(entityType))
+        .and()
+        .entityIdEqualTo(entityId)
+        .sortByTimestampDesc()
+        .limit(limit)
+        .findAll();
   }
 
   Future<void> deleteSyncRecord(Id id) async {
