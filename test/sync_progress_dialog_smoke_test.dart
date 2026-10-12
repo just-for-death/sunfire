@@ -24,6 +24,8 @@ void main() {
 
     expect(find.text('Delta Sync'), findsOneWidget);
     expect(find.text('Preparing…'), findsOneWidget);
+    // S1.5: initial SyncProgress is 0/100 — dialog shows counts + percent.
+    expect(find.textContaining('0 / 100'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Cancel (Esc)'));
     await tester.pump();
