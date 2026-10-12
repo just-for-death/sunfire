@@ -18,7 +18,12 @@ const SyncMetaSchema = CollectionSchema(
   id: 7779218425528899915,
   properties: {
     r'key': PropertySchema(id: 0, name: r'key', type: IsarType.string),
-    r'value': PropertySchema(id: 1, name: r'value', type: IsarType.string),
+    r'lastSyncTimestamp': PropertySchema(
+      id: 1,
+      name: r'lastSyncTimestamp',
+      type: IsarType.long,
+    ),
+    r'value': PropertySchema(id: 2, name: r'value', type: IsarType.string),
   },
 
   estimateSize: _syncMetaEstimateSize,
@@ -68,7 +73,8 @@ void _syncMetaSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeString(offsets[0], object.key);
-  writer.writeString(offsets[1], object.value);
+  writer.writeLong(offsets[1], object.lastSyncTimestamp);
+  writer.writeString(offsets[2], object.value);
 }
 
 SyncMeta _syncMetaDeserialize(
@@ -80,7 +86,8 @@ SyncMeta _syncMetaDeserialize(
   final object = SyncMeta();
   object.id = id;
   object.key = reader.readString(offsets[0]);
-  object.value = reader.readString(offsets[1]);
+  object.lastSyncTimestamp = reader.readLongOrNull(offsets[1]);
+  object.value = reader.readString(offsets[2]);
   return object;
 }
 
@@ -94,6 +101,8 @@ P _syncMetaDeserializeProp<P>(
     case 0:
       return (reader.readString(offset)) as P;
     case 1:
+      return (reader.readLongOrNull(offset)) as P;
+    case 2:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -501,6 +510,79 @@ extension SyncMetaQueryFilter
     });
   }
 
+  QueryBuilder<SyncMeta, SyncMeta, QAfterFilterCondition>
+  lastSyncTimestampIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'lastSyncTimestamp'),
+      );
+    });
+  }
+
+  QueryBuilder<SyncMeta, SyncMeta, QAfterFilterCondition>
+  lastSyncTimestampIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'lastSyncTimestamp'),
+      );
+    });
+  }
+
+  QueryBuilder<SyncMeta, SyncMeta, QAfterFilterCondition>
+  lastSyncTimestampEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'lastSyncTimestamp', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<SyncMeta, SyncMeta, QAfterFilterCondition>
+  lastSyncTimestampGreaterThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'lastSyncTimestamp',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<SyncMeta, SyncMeta, QAfterFilterCondition>
+  lastSyncTimestampLessThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'lastSyncTimestamp',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<SyncMeta, SyncMeta, QAfterFilterCondition>
+  lastSyncTimestampBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'lastSyncTimestamp',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
   QueryBuilder<SyncMeta, SyncMeta, QAfterFilterCondition> valueEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -667,6 +749,18 @@ extension SyncMetaQuerySortBy on QueryBuilder<SyncMeta, SyncMeta, QSortBy> {
     });
   }
 
+  QueryBuilder<SyncMeta, SyncMeta, QAfterSortBy> sortByLastSyncTimestamp() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastSyncTimestamp', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SyncMeta, SyncMeta, QAfterSortBy> sortByLastSyncTimestampDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastSyncTimestamp', Sort.desc);
+    });
+  }
+
   QueryBuilder<SyncMeta, SyncMeta, QAfterSortBy> sortByValue() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'value', Sort.asc);
@@ -706,6 +800,18 @@ extension SyncMetaQuerySortThenBy
     });
   }
 
+  QueryBuilder<SyncMeta, SyncMeta, QAfterSortBy> thenByLastSyncTimestamp() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastSyncTimestamp', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SyncMeta, SyncMeta, QAfterSortBy> thenByLastSyncTimestampDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastSyncTimestamp', Sort.desc);
+    });
+  }
+
   QueryBuilder<SyncMeta, SyncMeta, QAfterSortBy> thenByValue() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'value', Sort.asc);
@@ -729,6 +835,12 @@ extension SyncMetaQueryWhereDistinct
     });
   }
 
+  QueryBuilder<SyncMeta, SyncMeta, QDistinct> distinctByLastSyncTimestamp() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'lastSyncTimestamp');
+    });
+  }
+
   QueryBuilder<SyncMeta, SyncMeta, QDistinct> distinctByValue({
     bool caseSensitive = true,
   }) {
@@ -749,6 +861,12 @@ extension SyncMetaQueryProperty
   QueryBuilder<SyncMeta, String, QQueryOperations> keyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'key');
+    });
+  }
+
+  QueryBuilder<SyncMeta, int?, QQueryOperations> lastSyncTimestampProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'lastSyncTimestamp');
     });
   }
 

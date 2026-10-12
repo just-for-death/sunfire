@@ -11,5 +11,8 @@ class SyncMeta {
 
   String value = '';
 
+  /// Unix timestamp (seconds) of the last successful sync
+  int? lastSyncTimestamp;
+
   SyncMeta();
 }
