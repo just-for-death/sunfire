@@ -9,20 +9,24 @@ import '../../core/db/isar_service.dart';
 import '../../core/db/models/category.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
+import '../../core/db/models/tag.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/services/batch_mode_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
+import '../../core/services/tag_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../main_shell.dart';
 import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/components/sunfire_skeleton.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/library_update_progress_banner.dart';
+import 'library_tag_filter.dart';
 
 
 class LibraryScreen extends StatefulWidget {
@@ -43,6 +47,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   int _selectedCategoryIndex = 0;
   List<Manga> _allManga = [];
   List<Category> _categories = [];
+  List<Tag> _tags = const [];
+  /// Null = all tags. Isar tag id when filtering.
+  int? _selectedTagId;
   // Starts TRUE. It was declared false and never set true outside the loader, so
   // the very first frame of the tab unconditionally rendered the "Your Library
   // is Empty" panel with a "Browse Sources" button — a false claim, on every
@@ -141,6 +148,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     try {
       final list = await IsarService.instance.getLibraryManga();
       final cats = await IsarService.instance.getCategories();
+      final tags = await TagService.instance.getAllTags();
 
       // Proactive self-healing: resolve direct CDN covers for any manga pointing to server proxy
       bool hasHealed = false;
@@ -163,7 +171,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         setState(() {
           _allManga = list;
           _categories = cats;
+          _tags = tags;
           _clampCategoryIndex();
+          _clampTagSelection();
           _isLoading = false;
           _loadError = null;
         });
@@ -205,6 +215,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     }
   }
 
+  void _clampTagSelection() {
+    final selected = _selectedTagId;
+    if (selected == null) return;
+    if (!_tags.any((t) => t.id == selected)) {
+      _selectedTagId = null;
+    }
+  }
+
   Future<void> _loadFromIsarOnly() async {
     if (_isLoadingIsar) {
       _reloadQueued = true;
@@ -226,6 +244,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     try {
       final list = await IsarService.instance.getLibraryManga();
       final cats = await IsarService.instance.getCategories();
+      final tags = await TagService.instance.getAllTags();
 
       bool hasHealed = false;
       for (final m in list) {
@@ -251,7 +270,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         setState(() {
           _allManga = list;
           _categories = cats;
+          _tags = tags;
           _clampCategoryIndex();
+          _clampTagSelection();
         });
       }
     } catch (e, stack) {
@@ -269,11 +290,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       );
       final list = await IsarService.instance.getLibraryManga();
       final cats = await IsarService.instance.getCategories();
+      final tags = await TagService.instance.getAllTags();
       if (mounted) {
         setState(() {
           _allManga = list;
           _categories = cats;
+          _tags = tags;
           _clampCategoryIndex();
+          _clampTagSelection();
           _isOffline = false;
         });
       }
@@ -308,11 +332,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       }
       final list = await IsarService.instance.getLibraryManga();
       final cats = await IsarService.instance.getCategories();
+      final tags = await TagService.instance.getAllTags();
       if (mounted) {
         setState(() {
           _allManga = list;
           _categories = cats;
+          _tags = tags;
           _clampCategoryIndex();
+          _clampTagSelection();
           _isOffline = false;
         });
       }
@@ -417,6 +444,16 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     if (_settings.showCategoryTabs && _selectedCategoryIndex > 0 && _selectedCategoryIndex <= _categories.length) {
       final selectedCatId = _categories[_selectedCategoryIndex - 1].serverId;
       list = list.where((m) => mangaBelongsToCategory(m.categoryIds, selectedCatId)).toList();
+    }
+
+    // 1b. Custom tag filter (L10.2)
+    if (_selectedTagId != null) {
+      list = list
+          .where((m) => mangaMatchesTagFilter(
+                mangaTagIds: m.tagIds,
+                selectedTagId: _selectedTagId,
+              ))
+          .toList();
     }
 
     // 2. Smart Search Query Filter (Mihon / Mangayomi Tokens)
@@ -1251,6 +1288,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   /// is active (non-default). Drives the dot on the tune icon.
   bool get _hasCustomDisplay {
     return _statusFilter != 'All' ||
+        _selectedTagId != null ||
         _settings.libraryDisplayMode != 'Comfortable Grid' ||
         _settings.gridColumnCount != 0 ||
         !_settings.showUnreadBadges ||
@@ -1394,6 +1432,62 @@ unawaited(
                         );
                       }).toList(),
                     ),
+                    if (_tags.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      const Text('FILTER BY TAG', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: Text(
+                              'All (${_allManga.length})',
+                            ),
+                            selected: _selectedTagId == null,
+                            selectedColor: primaryColor,
+                            backgroundColor: SunfireTheme.tileSurface(context),
+                            labelStyle: TextStyle(
+                              color: _selectedTagId == null
+                                  ? _cs.onPrimary
+                                  : _cs.onSurfaceVariant,
+                              fontWeight: _selectedTagId == null
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                            onSelected: (_) {
+                              setState(() => _selectedTagId = null);
+                              setSheetState(() {});
+                            },
+                          ),
+                          ..._tags.map((tag) {
+                            final count = countMangaWithTag(
+                              _allManga.map((m) => m.tagIds),
+                              tag.id,
+                            );
+                            final selected = _selectedTagId == tag.id;
+                            return ChoiceChip(
+                              label: Text('${tag.name} ($count)'),
+                              selected: selected,
+                              selectedColor: primaryColor,
+                              backgroundColor: SunfireTheme.tileSurface(context),
+                              labelStyle: TextStyle(
+                                color: selected
+                                    ? _cs.onPrimary
+                                    : _cs.onSurfaceVariant,
+                                fontWeight: selected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                              onSelected: (_) {
+                                setState(() => _selectedTagId = tag.id);
+                                setSheetState(() {});
+                              },
+                            );
+                          }),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1675,8 +1769,14 @@ unawaited(
               RefreshIndicator(
             color: primaryColor,
             onRefresh: _handleRefresh,
-            child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: primaryColor))
+            child: _isLoading && _filteredManga.isEmpty
+                // S6.1: skeleton grid on cold start instead of a bare
+                // spinner, so first paint already shows layout shape.
+                // When refreshing with data visible, keep the list.
+                ? SunfireSkeletonGrid(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: childAspectRatio,
+                  )
                 : CustomScrollView(
                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     scrollCacheExtent: ScrollCacheExtent.pixels(800),

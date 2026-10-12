@@ -92,18 +92,19 @@ const MangaSchema = CollectionSchema(
       type: IsarType.string,
     ),
     r'status': PropertySchema(id: 18, name: r'status', type: IsarType.string),
+    r'tagIds': PropertySchema(id: 19, name: r'tagIds', type: IsarType.longList),
     r'thumbnailUrl': PropertySchema(
-      id: 19,
+      id: 20,
       name: r'thumbnailUrl',
       type: IsarType.string,
     ),
-    r'title': PropertySchema(id: 20, name: r'title', type: IsarType.string),
+    r'title': PropertySchema(id: 21, name: r'title', type: IsarType.string),
     r'unreadCount': PropertySchema(
-      id: 21,
+      id: 22,
       name: r'unreadCount',
       type: IsarType.long,
     ),
-    r'url': PropertySchema(id: 22, name: r'url', type: IsarType.string),
+    r'url': PropertySchema(id: 23, name: r'url', type: IsarType.string),
   },
 
   estimateSize: _mangaEstimateSize,
@@ -206,6 +207,7 @@ int _mangaEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.tagIds.length * 8;
   {
     final value = object.thumbnailUrl;
     if (value != null) {
@@ -242,10 +244,11 @@ void _mangaSerialize(
   writer.writeLong(offsets[16], object.serverId);
   writer.writeString(offsets[17], object.sourceName);
   writer.writeString(offsets[18], object.status);
-  writer.writeString(offsets[19], object.thumbnailUrl);
-  writer.writeString(offsets[20], object.title);
-  writer.writeLong(offsets[21], object.unreadCount);
-  writer.writeString(offsets[22], object.url);
+  writer.writeLongList(offsets[19], object.tagIds);
+  writer.writeString(offsets[20], object.thumbnailUrl);
+  writer.writeString(offsets[21], object.title);
+  writer.writeLong(offsets[22], object.unreadCount);
+  writer.writeString(offsets[23], object.url);
 }
 
 Manga _mangaDeserialize(
@@ -275,10 +278,10 @@ Manga _mangaDeserialize(
   object.serverId = reader.readLong(offsets[16]);
   object.sourceName = reader.readString(offsets[17]);
   object.status = reader.readStringOrNull(offsets[18]);
-  object.thumbnailUrl = reader.readStringOrNull(offsets[19]);
-  object.title = reader.readString(offsets[20]);
-  object.unreadCount = reader.readLongOrNull(offsets[21]);
-  object.url = reader.readString(offsets[22]);
+  object.thumbnailUrl = reader.readStringOrNull(offsets[20]);
+  object.title = reader.readString(offsets[21]);
+  object.unreadCount = reader.readLongOrNull(offsets[22]);
+  object.url = reader.readString(offsets[23]);
   return object;
 }
 
@@ -328,12 +331,14 @@ P _mangaDeserializeProp<P>(
     case 18:
       return (reader.readStringOrNull(offset)) as P;
     case 19:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongList(offset) ?? []) as P;
     case 20:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 21:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 22:
+      return (reader.readLongOrNull(offset)) as P;
+    case 23:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -2971,6 +2976,120 @@ extension MangaQueryFilter on QueryBuilder<Manga, Manga, QFilterCondition> {
     });
   }
 
+  QueryBuilder<Manga, Manga, QAfterFilterCondition> tagIdsElementEqualTo(
+    int value,
+  ) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'tagIds', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<Manga, Manga, QAfterFilterCondition> tagIdsElementGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'tagIds',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Manga, Manga, QAfterFilterCondition> tagIdsElementLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'tagIds',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Manga, Manga, QAfterFilterCondition> tagIdsElementBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'tagIds',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Manga, Manga, QAfterFilterCondition> tagIdsLengthEqualTo(
+    int length,
+  ) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(r'tagIds', length, true, length, true);
+    });
+  }
+
+  QueryBuilder<Manga, Manga, QAfterFilterCondition> tagIdsIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(r'tagIds', 0, true, 0, true);
+    });
+  }
+
+  QueryBuilder<Manga, Manga, QAfterFilterCondition> tagIdsIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(r'tagIds', 0, false, 999999, true);
+    });
+  }
+
+  QueryBuilder<Manga, Manga, QAfterFilterCondition> tagIdsLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(r'tagIds', 0, true, length, include);
+    });
+  }
+
+  QueryBuilder<Manga, Manga, QAfterFilterCondition> tagIdsLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(r'tagIds', length, include, 999999, true);
+    });
+  }
+
+  QueryBuilder<Manga, Manga, QAfterFilterCondition> tagIdsLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagIds',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
+    });
+  }
+
   QueryBuilder<Manga, Manga, QAfterFilterCondition> thumbnailUrlIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(
@@ -4164,6 +4283,12 @@ extension MangaQueryWhereDistinct on QueryBuilder<Manga, Manga, QDistinct> {
     });
   }
 
+  QueryBuilder<Manga, Manga, QDistinct> distinctByTagIds() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'tagIds');
+    });
+  }
+
   QueryBuilder<Manga, Manga, QDistinct> distinctByThumbnailUrl({
     bool caseSensitive = true,
   }) {
@@ -4313,6 +4438,12 @@ extension MangaQueryProperty on QueryBuilder<Manga, Manga, QQueryProperty> {
   QueryBuilder<Manga, String?, QQueryOperations> statusProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'status');
+    });
+  }
+
+  QueryBuilder<Manga, List<int>, QQueryOperations> tagIdsProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'tagIds');
     });
   }
 

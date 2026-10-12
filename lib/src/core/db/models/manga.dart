@@ -78,6 +78,9 @@ class Manga {
   /// Cached JSON string mapping issue numbers to Metron issue IDs (e.g. {"1": 10243, "2": 10244}).
   String? metronIssuesJson;
 
+  /// User-assigned tag IDs (L10.2).
+  final List<int> tagIds = [];
+
   Manga();
 }
 

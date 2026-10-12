@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:app_links/app_links.dart';
 import 'package:dynamic_color/dynamic_color.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'core/logging/logger_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/settings_service.dart';
+import 'core/sync/quick_action_handler.dart';
 import 'features/browse/browse_screen.dart';
 import 'features/downloads/download_queue_screen.dart';
 import 'features/history/history_screen.dart';
@@ -32,6 +34,8 @@ import 'features/settings/server_settings_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/stats/stats_screen.dart';
 import 'features/updates/updates_screen.dart';
+import 'features/library/duplicate_review_screen.dart';
+import 'features/library/tag_management_screen.dart';
 import 'main_shell.dart';
 import 'ui/design_system/sunfire_theme.dart';
 import 'ui/shell/sunfire_breakpoints.dart';
@@ -82,6 +86,17 @@ CustomTransitionPage<void> sunfireTransitionPage({
     transitionDuration: const Duration(milliseconds: 260),
     reverseTransitionDuration: const Duration(milliseconds: 220),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      // I8.1: native-feel transitions per platform. iOS/macOS get the
+      // Cupertino slide-from-right (with edge-swipe back gesture support);
+      // Android keeps the Material 3 emphasized fade+slide.
+      if (isCupertinoPlatform(context)) {
+        return CupertinoPageTransition(
+          primaryRouteAnimation: animation,
+          secondaryRouteAnimation: secondaryAnimation,
+          linearTransition: false,
+          child: child,
+        );
+      }
       final curveAnimation = CurvedAnimation(
         parent: animation,
         curve: Curves.easeOutCubic,
@@ -99,6 +114,22 @@ CustomTransitionPage<void> sunfireTransitionPage({
       );
     },
   );
+}
+
+/// True on Apple platforms where Cupertino transitions feel native.
+/// Visible for testing (I8.1).
+@visibleForTesting
+bool isCupertinoPlatform(BuildContext context) {
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.iOS:
+    case TargetPlatform.macOS:
+      return true;
+    case TargetPlatform.android:
+    case TargetPlatform.fuchsia:
+    case TargetPlatform.linux:
+    case TargetPlatform.windows:
+      return false;
+  }
 }
 
 /// Shell tab path -> [MainShell] tab index.
@@ -205,6 +236,20 @@ GoRouter buildAppRouter({
             ),
           ),
           GoRoute(
+            path: '/settings/library/duplicate-detection',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const DuplicateReviewScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/library/tags',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const TagManagementScreen(),
+            ),
+          ),
+          GoRoute(
             path: '/settings/reader',
             pageBuilder: (context, state) => sunfireTransitionPage(
               state: state,
@@ -288,7 +333,11 @@ GoRouter buildAppRouter({
 
 
 class SunfireApp extends StatefulWidget {
-  const SunfireApp({super.key});
+  const SunfireApp({super.key, this.initialLocation});
+
+  /// Overrides the landing route (D9.4: sub-window engines boot straight
+  /// into a manga/reader route instead of the library).
+  final String? initialLocation;
 
   @override
   State<SunfireApp> createState() => _SunfireAppState();
@@ -303,8 +352,10 @@ class _SunfireAppState extends State<SunfireApp> {
   @override
   void initState() {
     super.initState();
-    _router = buildAppRouter();
+    _router = buildAppRouter(initialLocation: widget.initialLocation);
     _initIncomingLinks();
+    // A7.5: consume a pending Quick Settings tile sync request, if any.
+    unawaited(QuickActionHandler.instance.start());
   }
 
   void _initIncomingLinks() {

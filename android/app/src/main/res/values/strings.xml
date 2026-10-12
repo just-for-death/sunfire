@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A7.3 (App shortcuts): launcher shortcut labels. -->
+<resources>
+    <string name="shortcut_continue_reading">Continue reading</string>
+    <string name="shortcut_continue_reading_long">Continue reading where you left off</string>
+    <string name="shortcut_updates">Updates</string>
+    <string name="shortcut_updates_long">See new chapters</string>
+    <string name="shortcut_browse">Browse</string>
+    <string name="shortcut_browse_long">Browse sources and extensions</string>
+    <string name="shortcut_downloads">Downloads</string>
+    <string name="shortcut_downloads_long">Open the download queue</string>
+    <string name="tile_sync_label">Sync library</string>
+    <string name="tile_sync_subtitle">Check for new chapters</string>
+    <string name="widget_continue_reading">CONTINUE READING</string>
+    <string name="widget_empty_title">Nothing reading yet</string>
+    <string name="widget_empty_subtitle">Open Sunfire to start a manga</string>
+    <string name="widget_description">Continue reading your current manga</string>
+</resources>
