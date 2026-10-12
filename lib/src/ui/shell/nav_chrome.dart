@@ -5,34 +5,24 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../design_system/components/sunfire_nav.dart'
+    show SunfireBottomNav, SunfireNavDestination, SunfireNavRail;
+
+export '../design_system/components/sunfire_nav.dart' show SunfireNavDestination;
+
 /// Platform-adaptive navigation chrome for Sunfire.
 ///
 /// Sunfire's 5 tabs and extras:
 ///
 /// - iOS/iPhone: frosted-glass floating pill tab bar (Sunfire's signature),
 ///   with text-scaler clamping and Semantics.
-/// - Android phone: Material 3 [NavigationBar].
-/// - Android tablet / desktop / wide: Material 3 [NavigationRail].
+/// - Android phone: Material 3 via [SunfireBottomNav] (C5.6).
+/// - Android tablet / desktop / wide: Material 3 via [SunfireNavRail] (C5.6).
 /// - Narrow windows: compact mode — first 4 tabs + a "More" overflow sheet
 ///   (Settings, Downloads, Stats).
 ///
 /// Haptics follow the platform: light impact on iOS, selection click
 /// elsewhere — matching what `MainShell` already did.
-
-/// A single tab destination.
-class SunfireNavDestination {
-  const SunfireNavDestination({
-    required this.label,
-    required this.icon,
-    required this.activeIcon,
-    this.badgeCount,
-  });
-
-  final String label;
-  final IconData icon;
-  final IconData activeIcon;
-  final int? badgeCount;
-}
 
 /// Sunfire's five tabs, in route order.
 List<SunfireNavDestination> sunfireNavDestinations({int? updatesBadge}) => [
@@ -383,52 +373,17 @@ class AndroidPhoneNavBar extends StatelessWidget {
   final bool compact;
   final VoidCallback? onMore;
 
-  int get _displaySelectedIndex {
-    if (!compact) return selectedIndex;
-    if (selectedIndex <= 3) return selectedIndex;
-    return 4;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final items = compact ? destinations.take(4).toList() : destinations;
-
-    void onTap(int displayIndex) {
-      sunfireNavHaptic(context);
-      if (compact && displayIndex == 4) {
-        onMore?.call();
-        return;
-      }
-      onSelect(displayIndex);
-    }
-
-    return NavigationBar(
-      selectedIndex: _displaySelectedIndex,
-      onDestinationSelected: onTap,
-      destinations: [
-        for (var i = 0; i < items.length; i++)
-          NavigationDestination(
-            icon: Badge.count(
-              count: items[i].badgeCount ?? 0,
-              isLabelVisible: (items[i].badgeCount ?? 0) > 0,
-              child: Icon(items[i].icon),
-            ),
-            selectedIcon: Badge.count(
-              count: items[i].badgeCount ?? 0,
-              isLabelVisible: (items[i].badgeCount ?? 0) > 0,
-              child: Icon(items[i].activeIcon),
-            ),
-            label: items[i].label,
-            tooltip: items[i].label,
-          ),
-        if (compact)
-          const NavigationDestination(
-            icon: Icon(Icons.more_horiz_rounded),
-            selectedIcon: Icon(Icons.more_horiz_rounded),
-            label: 'More',
-            tooltip: 'More',
-          ),
-      ],
+    return SunfireBottomNav(
+      destinations: destinations,
+      selectedIndex: selectedIndex,
+      compact: compact,
+      onMore: onMore,
+      onDestinationSelected: (i) {
+        sunfireNavHaptic(context);
+        onSelect(i);
+      },
     );
   }
 }
@@ -454,40 +409,18 @@ class AndroidTabletRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NavigationRail(
+    // C5.6: live tablet/desktop rail is the design-system SunfireNavRail.
+    return SunfireNavRail(
+      destinations: destinations,
       selectedIndex: selectedIndex,
+      extended: extended,
+      leading: leading,
+      trailing: trailing,
+      scrollable: true,
       onDestinationSelected: (i) {
         sunfireNavHaptic(context);
         onSelect(i);
       },
-      extended: extended,
-      minExtendedWidth: 200,
-      labelType:
-          extended ? NavigationRailLabelType.none : NavigationRailLabelType.all,
-      leading: leading,
-      destinations: [
-        for (final d in destinations)
-          NavigationRailDestination(
-            icon: Badge.count(
-              count: d.badgeCount ?? 0,
-              isLabelVisible: (d.badgeCount ?? 0) > 0,
-              child: Icon(d.icon),
-            ),
-            selectedIcon: Badge.count(
-              count: d.badgeCount ?? 0,
-              isLabelVisible: (d.badgeCount ?? 0) > 0,
-              child: Icon(d.activeIcon),
-            ),
-            label: Text(d.label),
-          ),
-      ],
-      trailing: trailing,
-      // UIS-P2-B: header (Continue reading) pinned top, Downloads/Stats
-      // pinned bottom, destinations scroll on short windows (landscape
-      // phones) instead of overflowing.
-      leadingAtTop: true,
-      trailingAtBottom: true,
-      scrollable: true,
     );
   }
 }
