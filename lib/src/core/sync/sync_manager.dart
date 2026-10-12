@@ -1,16 +1,21 @@
 // lib/src/core/sync/sync_manager.dart
 //
-// SyncManager - orchestrates delta sync, conflict resolution, and background scheduling
-// Part of Phase 1.5: Sync Engine Overhaul
+// SyncManager — thin orchestrator over SyncEngine (scheduling/UI progress).
+// Does NOT implement a second sync engine. Production GraphQL work stays in
+// SyncEngine; this layer owns progress streams, cancel flags, and conflict
+// hand-off to the UI.
 
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../db/isar_service.dart';
-import '../db/models/manga.dart';
-import '../db/models/chapter.dart';
-import '../db/models/category.dart';
+import 'conflict_resolver.dart'
+    show ConflictResolver, ConflictResolutionStrategy;
+import 'cross_device_awareness.dart';
+import 'server_auth_helper.dart';
+import 'server_session_service.dart';
+import 'sync_conflict_helpers.dart';
 import 'sync_engine.dart'
     show
         SyncEngine,
@@ -19,206 +24,416 @@ import 'sync_engine.dart'
         SyncPhase,
         SyncConflict,
         ConflictResolution,
-        SyncConfig,
-        ConflictResolutionStrategy;
-import 'server_session_service.dart';
-import 'server_auth_helper.dart';
+        SyncConfig;
 
-/// SyncManager - orchestrates delta sync, conflict resolution, and background scheduling
-/// Part of Phase 1.5: Sync Engine Overhaul
+/// Thin orchestrator that delegates all GraphQL/DB work to [SyncEngine].
 class SyncManager {
-  SyncManager({
-    required this.isarService,
-    required this.syncEngine,
-    required this.serverSessionService,
-    required this.serverAuthHelper,
-    required this.config,
-  });
+  SyncManager._({
+    SyncEngine? syncEngine,
+    IsarService? isarService,
+    ServerSessionService? serverSessionService,
+    SyncConfig? config,
+  })  : _syncEngineOverride = syncEngine,
+        _isarOverride = isarService,
+        _sessionOverride = serverSessionService,
+        config = config ??
+            const SyncConfig(autoSyncInterval: Duration.zero);
 
-  final IsarService isarService;
-  final SyncEngine syncEngine;
-  final ServerSessionService serverSessionService;
-  final ServerAuthHelper serverAuthHelper;
-  final SyncConfig config;
+  static final SyncManager instance = SyncManager._();
 
-  // State
+  /// Test seam — does not replace [instance].
+  factory SyncManager.forTest({
+    required SyncEngine syncEngine,
+    required IsarService isarService,
+    ServerSessionService? serverSessionService,
+    SyncConfig config = const SyncConfig(autoSyncInterval: Duration.zero),
+  }) {
+    return SyncManager._(
+      syncEngine: syncEngine,
+      isarService: isarService,
+      serverSessionService: serverSessionService,
+      config: config,
+    );
+  }
+
+  final SyncEngine? _syncEngineOverride;
+  final IsarService? _isarOverride;
+  final ServerSessionService? _sessionOverride;
+
+  SyncEngine get syncEngine => _syncEngineOverride ?? SyncEngine.instance;
+  IsarService get isarService => _isarOverride ?? IsarService.instance;
+  ServerSessionService get serverSessionService =>
+      _sessionOverride ?? ServerSessionService.instance;
+
+  /// Auto-interval stays zero by default so we do not race [BackgroundService].
+  SyncConfig config;
+
+  bool _initialized = false;
   bool _isSyncing = false;
-  final StreamController<SyncProgress> _progressController = StreamController<SyncProgress>.broadcast();
-  final StreamController<SyncResult> _resultController = StreamController<SyncResult>.broadcast();
+  bool _cancelRequested = false;
+  final StreamController<SyncProgress> _progressController =
+      StreamController<SyncProgress>.broadcast();
+  final StreamController<SyncResult> _resultController =
+      StreamController<SyncResult>.broadcast();
   Timer? _autoSyncTimer;
   DateTime? _lastSyncTimestamp;
+  List<SyncConflict> _pendingConflicts = const [];
 
-  // Getters
+  bool get isInitialized => _initialized;
   bool get isSyncing => _isSyncing;
+  bool get cancelRequested => _cancelRequested;
   Stream<SyncProgress> get progressStream => _progressController.stream;
   Stream<SyncResult> get resultStream => _resultController.stream;
   DateTime? get lastSyncTimestamp => _lastSyncTimestamp;
+  List<SyncConflict> get pendingConflicts =>
+      List.unmodifiable(_pendingConflicts);
 
-  /// Initialize the sync manager
+  /// Initialize once from app startup (after [SyncEngine.initialize]).
   Future<void> initialize() async {
-    _lastSyncTimestamp = await _getLastSyncTimestamp();
-    
+    if (_initialized) return;
+    _lastSyncTimestamp = await isarService.getLastSyncTimestamp();
+    // Ensure session restore has run (main.dart already awaits restore; this is
+    // idempotent if called again).
+    try {
+      await serverSessionService.restore();
+    } catch (e) {
+      debugPrint('[SyncManager] session restore: $e');
+    }
+    CrossDeviceAwarenessService.instance.initialize();
     if (config.autoSyncInterval > Duration.zero) {
       _scheduleAutoSync();
     }
+    _initialized = true;
   }
 
-  /// Perform a delta sync since last sync timestamp
+  /// Delta sync since [since] (defaults to last successful timestamp).
   Future<SyncResult> syncDelta({
-    required DateTime since,
+    DateTime? since,
     Set<int>? mangaIds,
     Set<int>? categoryIds,
   }) async {
-    if (_isSyncing) {
-      return SyncResult(
+    if (_isSyncing || syncEngine.isSyncing) {
+      return const SyncResult(
         success: false,
         errors: ['Sync already in progress'],
       );
     }
 
     _isSyncing = true;
-    _emitProgress(SyncProgress(
+    _cancelRequested = false;
+    final effectiveSince =
+        since ?? _lastSyncTimestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+    _emitProgress(const SyncProgress(
       phase: SyncPhase.initializing,
       current: 0,
       total: 100,
     ));
 
     try {
-      // Verify authentication
       final authValid = await ServerAuthHelper.validateAndRefreshAuth();
       if (!authValid) {
-        return SyncResult(
+        return _finish(const SyncResult(
           success: false,
           errors: ['Authentication failed'],
-        );
+        ));
       }
 
-      // Fetch delta from server
-      _emitProgress(SyncProgress(
+      if (_cancelRequested) {
+        return _finish(const SyncResult(
+          success: false,
+          errors: ['Sync cancelled'],
+        ));
+      }
+
+      _emitProgress(const SyncProgress(
         phase: SyncPhase.fetchingDelta,
-        current: 10,
+        current: 15,
         total: 100,
       ));
 
-      final deltaResult = await _fetchDelta(since, mangaIds, categoryIds);
-      
+      final deltaResult = await syncEngine.fetchDelta(
+        since: effectiveSince,
+        mangaIds: mangaIds,
+        categoryIds: categoryIds,
+      );
+
       if (!deltaResult.success) {
-        return deltaResult;
+        return _finish(deltaResult);
       }
 
-      // Apply changes locally
-      _emitProgress(SyncProgress(
+      if (_cancelRequested) {
+        return _finish(const SyncResult(
+          success: false,
+          errors: ['Sync cancelled'],
+        ));
+      }
+
+      _emitProgress(const SyncProgress(
         phase: SyncPhase.applyingChanges,
-        current: 50,
+        current: 55,
         total: 100,
       ));
 
-      final applyResult = await _applyDeltaChanges(deltaResult);
-      
+      final applyResult = await syncEngine.applyDeltaChanges(deltaResult);
+
       if (!applyResult.success) {
-        return applyResult;
+        return _finish(applyResult);
       }
 
-      // Update last sync timestamp
-      _lastSyncTimestamp = DateTime.now();
-      await _saveLastSyncTimestamp(_lastSyncTimestamp!);
+      if (mangaIds != null && mangaIds.isNotEmpty) {
+        for (final id in mangaIds) {
+          final other = await CrossDeviceAwarenessService.instance
+              .getRecentProcessor('manga', id.toString());
+          if (other != null) {
+            debugPrint(
+              '[SyncManager] manga $id also synced recently by device $other',
+            );
+          }
+        }
+      }
 
-      _emitProgress(SyncProgress(
+      _lastSyncTimestamp = DateTime.now();
+      await isarService.saveLastSyncTimestamp(_lastSyncTimestamp!);
+
+      final conflicts = applyResult.conflicts.isNotEmpty
+          ? applyResult.conflicts
+          : deltaResult.conflicts;
+      _pendingConflicts = conflicts;
+
+      final result = applyResult.copyWith(
+        lastSyncTimestamp: _lastSyncTimestamp,
+        conflicts: conflicts,
+      );
+
+      _emitProgress(const SyncProgress(
         phase: SyncPhase.completed,
         current: 100,
         total: 100,
       ));
 
-      return SyncResult(
-        success: true,
-        lastSyncTimestamp: _lastSyncTimestamp,
-      );
+      return _finish(result);
     } catch (e, stack) {
       debugPrint('[SyncManager] Delta sync failed: $e\n$stack');
-      return SyncResult(
+      _emitProgress(const SyncProgress(
+        phase: SyncPhase.failed,
+        current: 0,
+        total: 100,
+      ));
+      return _finish(SyncResult(
         success: false,
         errors: ['Sync failed: $e'],
-      );
+      ));
     } finally {
       _isSyncing = false;
     }
   }
 
-  /// Perform a full sync (all data)
+  /// Full library delta from epoch (still SyncEngine.fetchDelta + apply).
   Future<SyncResult> syncFull() async {
-    return syncDelta(
-      since: DateTime.fromMillisecondsSinceEpoch(0),
-    );
+    return syncDelta(since: DateTime.fromMillisecondsSinceEpoch(0));
   }
 
-  /// Sync specific manga
+  /// Selective manga sync via SyncEngine (`serverId` ints).
   Future<SyncResult> syncManga(Set<int> mangaIds) async {
-    return syncDelta(
-      since: DateTime.fromMillisecondsSinceEpoch(0),
-      mangaIds: mangaIds,
-    );
+    if (_isSyncing || syncEngine.isSyncing) {
+      return const SyncResult(
+        success: false,
+        errors: ['Sync already in progress'],
+      );
+    }
+
+    _isSyncing = true;
+    _cancelRequested = false;
+    _emitProgress(const SyncProgress(
+      phase: SyncPhase.fetchingManga,
+      current: 10,
+      total: 100,
+      currentManga: 'Selective manga sync',
+    ));
+
+    try {
+      final authValid = await ServerAuthHelper.validateAndRefreshAuth();
+      if (!authValid) {
+        return _finish(const SyncResult(
+          success: false,
+          errors: ['Authentication failed'],
+        ));
+      }
+
+      final result = await syncEngine.syncMangaByIds(mangaIds);
+      if (result.success) {
+        _lastSyncTimestamp = DateTime.now();
+        await isarService.saveLastSyncTimestamp(_lastSyncTimestamp!);
+      }
+      _pendingConflicts = result.conflicts;
+      _emitProgress(SyncProgress(
+        phase: result.success ? SyncPhase.completed : SyncPhase.failed,
+        current: 100,
+        total: 100,
+      ));
+      return _finish(result.copyWith(lastSyncTimestamp: _lastSyncTimestamp));
+    } catch (e, stack) {
+      debugPrint('[SyncManager] syncManga failed: $e\n$stack');
+      return _finish(SyncResult(success: false, errors: ['$e']));
+    } finally {
+      _isSyncing = false;
+    }
   }
 
-  /// Sync specific categories
+  /// Selective category sync via SyncEngine.
   Future<SyncResult> syncCategories(Set<int> categoryIds) async {
-    return syncDelta(
-      since: DateTime.fromMillisecondsSinceEpoch(0),
-      categoryIds: categoryIds,
-    );
+    if (_isSyncing || syncEngine.isSyncing) {
+      return const SyncResult(
+        success: false,
+        errors: ['Sync already in progress'],
+      );
+    }
+
+    _isSyncing = true;
+    _cancelRequested = false;
+    _emitProgress(const SyncProgress(
+      phase: SyncPhase.fetchingCategories,
+      current: 10,
+      total: 100,
+    ));
+
+    try {
+      final result = await syncEngine.syncCategoriesByIds(categoryIds);
+      _pendingConflicts = result.conflicts;
+      _emitProgress(SyncProgress(
+        phase: result.success ? SyncPhase.completed : SyncPhase.failed,
+        current: 100,
+        total: 100,
+      ));
+      return _finish(result);
+    } catch (e, stack) {
+      debugPrint('[SyncManager] syncCategories failed: $e\n$stack');
+      return _finish(SyncResult(success: false, errors: ['$e']));
+    } finally {
+      _isSyncing = false;
+    }
   }
 
-  /// Cancel all ongoing sync operations
-  void cancelAll() {
-    _isSyncing = false;
-    _autoSyncTimer?.cancel();
-  }
-
-  /// Dispose resources
-  void dispose() {
-    cancelAll();
-    _progressController.close();
-    _resultController.close();
-  }
-
-  // ─── Private Methods ─────────────────────────────────────────────
-
-  Future<SyncResult> _fetchDelta(
-    DateTime since,
-    Set<int>? mangaIds,
-    Set<int>? categoryIds,
+  /// Apply per-field user picks from [ConflictResolutionDialog].
+  Future<SyncResult> applyUserResolutions(
+    SyncConflict conflict,
+    Map<String, ConflictResolution> resolutions,
   ) async {
-    // Delegate to SyncEngine for actual GraphQL operations
-    return syncEngine.fetchDelta(
-      since: since,
-      mangaIds: mangaIds,
-      categoryIds: categoryIds,
+    try {
+      if (resolutions.isEmpty && conflict.field.isNotEmpty) {
+        return const SyncResult(success: true);
+      }
+
+      if (conflict.field.isNotEmpty) {
+        final resolution =
+            resolutions[conflict.field] ?? ConflictResolution.userChoice;
+        final value = pickConflictValue(
+          resolution: resolution,
+          localData: conflict.localData,
+          remoteData: conflict.remoteData,
+          entityType: conflict.entityType,
+          field: conflict.field,
+        );
+        if (value != null) {
+          await syncEngine.applyResolvedConflict(conflict, value);
+        }
+      } else if (conflict.localData is Map && conflict.remoteData is Map) {
+        final localMap = conflict.localData as Map;
+        final remoteMap = conflict.remoteData as Map;
+        for (final entry in resolutions.entries) {
+          final field = entry.key;
+          final value = pickConflictValue(
+            resolution: entry.value,
+            localData: localMap[field],
+            remoteData: remoteMap[field],
+            entityType: conflict.entityType,
+            field: field,
+          );
+          if (value == null) continue;
+          await syncEngine.applyResolvedConflict(
+            SyncConflict(
+              entityType: conflict.entityType,
+              entityId: conflict.entityId,
+              field: field,
+              localData: localMap[field],
+              remoteData: remoteMap[field],
+              localTimestamp: conflict.localTimestamp,
+              remoteTimestamp: conflict.remoteTimestamp,
+            ),
+            value,
+          );
+        }
+      }
+
+      _pendingConflicts = _pendingConflicts
+          .where((c) =>
+              !(c.entityType == conflict.entityType &&
+                  c.entityId == conflict.entityId &&
+                  c.field == conflict.field))
+          .toList();
+
+      return const SyncResult(success: true);
+    } catch (e, stack) {
+      debugPrint('[SyncManager] applyUserResolutions failed: $e\n$stack');
+      return SyncResult(success: false, errors: ['$e']);
+    }
+  }
+
+  /// Batch-resolve remaining conflicts with a strategy.
+  Future<SyncResult> resolveAllWithStrategy(
+    ConflictResolutionStrategy strategy,
+  ) async {
+    if (_pendingConflicts.isEmpty) {
+      return const SyncResult(success: true);
+    }
+    _emitProgress(const SyncProgress(
+      phase: SyncPhase.resolvingConflicts,
+      current: 0,
+      total: 100,
+    ));
+    final result = await syncEngine.resolveConflicts(
+      _pendingConflicts,
+      resolver: ConflictResolver(strategy: strategy),
     );
+    if (result.success) {
+      _pendingConflicts = const [];
+    }
+    return result;
   }
 
-  Future<SyncResult> _applyDeltaChanges(SyncResult deltaResult) async {
-    // Delegate to SyncEngine for applying changes
-    return syncEngine.applyDeltaChanges(deltaResult);
+  /// Request cancellation between SyncEngine stages (best-effort).
+  void cancelAll() {
+    _cancelRequested = true;
   }
 
-  Future<DateTime?> _getLastSyncTimestamp() async {
-    // Read from Isar or preferences
-    return await isarService.getLastSyncTimestamp();
+  void dispose() {
+    _autoSyncTimer?.cancel();
+    _autoSyncTimer = null;
+    if (!_progressController.isClosed) _progressController.close();
+    if (!_resultController.isClosed) _resultController.close();
+    _initialized = false;
   }
 
-  Future<void> _saveLastSyncTimestamp(DateTime timestamp) async {
-    await isarService.saveLastSyncTimestamp(timestamp);
+  SyncResult _finish(SyncResult result) {
+    if (!_resultController.isClosed) {
+      _resultController.add(result);
+    }
+    return result;
   }
 
   void _scheduleAutoSync() {
     _autoSyncTimer?.cancel();
     _autoSyncTimer = Timer.periodic(config.autoSyncInterval, (_) async {
-      if (!_isSyncing) {
-        await syncDelta(since: _lastSyncTimestamp ?? DateTime.now());
+      if (!_isSyncing && !syncEngine.isSyncing) {
+        await syncDelta();
       }
     });
   }
 
   void _emitProgress(SyncProgress progress) {
-    _progressController.add(progress);
+    if (!_progressController.isClosed) {
+      _progressController.add(progress);
+    }
   }
 }

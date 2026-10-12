@@ -31,6 +31,8 @@ import '../../core/sync/live_activities_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/widget_sync_service.dart';
 import '../../core/utils/url_sanitizer.dart';
+import 'controller/page_loader.dart';
+import 'controller/smart_zoom.dart';
 import 'double_page_layout.dart';
 import 'reader_chapter_navigation.dart';
 import 'reader_prefetch.dart';
@@ -82,7 +84,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   AnimationController? _zoomAnimController;
   static const double _minZoomScale = 1.0;
   static const double _maxZoomScale = 3.5;
-  static const double _doubleTapZoomScale = 2.5;
   int _zoomGeneration = 0;
   CurvedAnimation? _activeZoomCurve;
 
@@ -147,8 +148,13 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   late bool _cropBorders;
   late bool _invertTaps;
   bool _showTapZoneOverlay = false;
-  /// Intrinsic width/height per page URL for wide-page isolation in double mode.
+  /// Intrinsic width/height per page URL for wide-page isolation in double mode
+  /// and R9.1 smart zoom (column-fit double-tap).
   final Map<String, double> _cachedPageAspects = {};
+
+  /// R1.8 slice: PageLoader owns priority loads for desktop upcoming-page prefetch.
+  /// Recreated when chapter/source identity changes; null when no chapter.
+  PageLoader? _pageLoader;
 
   final ScrollController _scrollController = ScrollController();
   late PageController _pageController;
@@ -726,6 +732,33 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     final prev = _cachedPageHeights[url];
     if (prev != null && (prev - h).abs() < 1.0) return;
     _cachedPageHeights[url] = h;
+    // R1.8: keep PageLoader height cache in sync for layout consumers.
+    _pageLoader?.cacheHeight(url, h);
+  }
+
+  /// Recreate [PageLoader] when chapter/source identity changes (R1.8 slice).
+  void _syncPageLoader() {
+    final ch = _chapter;
+    if (ch == null) {
+      _pageLoader?.dispose();
+      _pageLoader = null;
+      return;
+    }
+    final source = _sourceName ?? '';
+    final targetId = _chapterTargetId(ch);
+    final existing = _pageLoader;
+    if (existing != null &&
+        existing.chapterTargetId == targetId &&
+        existing.mangaId == ch.mangaId &&
+        existing.sourceName == source) {
+      return;
+    }
+    existing?.dispose();
+    _pageLoader = PageLoader(
+      sourceName: source,
+      mangaId: ch.mangaId,
+      chapterTargetId: targetId,
+    );
   }
 
   void _schedulePageHeightCacheForProvider(String url, double width, ImageProvider provider) {
@@ -1109,6 +1142,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _prefetchedChapters.clear();
     _prefetchAttemptedAt.clear();
     _prefetchingChapters.clear();
+    _pageLoader?.dispose();
+    _pageLoader = null;
     _scrollController.removeListener(_onVerticalScroll);
     _scrollController.dispose();
     _pageController.dispose();
@@ -1174,6 +1209,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _failedImageUrls.clear();
     _cachedPageHeights.clear();
     _cachedPageAspects.clear();
+    _pageLoader?.dispose();
+    _pageLoader = null;
     for (final c in _webtoonZoomControllers.values) {
       c.dispose();
     }
@@ -1441,6 +1478,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
     _sourceName = resolved.effectiveSourceName ?? sourceName;
     _pageUrls = resolved.pageUrls;
+    _syncPageLoader();
     if (_chapter != null && _pageUrls.isNotEmpty && _chapter!.pageCount != _pageUrls.length) {
       _chapter!.pageCount = _pageUrls.length;
       unawaited(IsarService.instance.saveChapter(_chapter!));
@@ -1727,6 +1765,23 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
   }
 
+  /// R1.8: priority-warm current/next/prev pages through PageLoader (desktop).
+  void _warmPagesViaLoader(int pageOneBased) {
+    final loader = _pageLoader;
+    if (loader == null || _pageUrls.isEmpty) return;
+    if (kIsWeb || !(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
+      return;
+    }
+    final idx = pageOneBased - 1;
+    void warm(int i, PageLoadPriority priority) {
+      if (i < 0 || i >= _pageUrls.length) return;
+      unawaited(loader.loadPage(url: _pageUrls[i], index: i, priority: priority));
+    }
+    warm(idx, PageLoadPriority.current);
+    warm(idx + 1, PageLoadPriority.next);
+    warm(idx - 1, PageLoadPriority.prev);
+  }
+
   void _onPageChanged(int index) {
     _resetZoom();
     final slots = _currentSpreadSlots();
@@ -1746,6 +1801,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
     _setPageIndicator(page);
     if (mounted) setState(() {});
+
+    _warmPagesViaLoader(page);
 
     // Trigger prefetch early when reaching 65% of pages in paged mode
     if (_pageUrls.isNotEmpty && page >= (_pageUrls.length * 0.65).round() && _nextChapter != null) {
@@ -2123,6 +2180,19 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
   }
 
+  double _smartZoomForCurrentPage({int? pageIndex}) {
+    final idx = pageIndex ?? (_currentPage - 1);
+    final url = (idx >= 0 && idx < _pageUrls.length) ? _pageUrls[idx] : null;
+    final aspect = url == null ? null : _cachedPageAspects[url];
+    final size = MediaQuery.sizeOf(context);
+    return smartZoomScale(
+      viewportWidth: size.width,
+      viewportHeight: size.height,
+      imageAspect: aspect,
+      maxScale: _maxZoomScale,
+    );
+  }
+
   void _handleDoubleTapZoom() {
     final currentScale = _transformationController.value.getMaxScaleOnAxis();
     if (currentScale > 1.05) {
@@ -2130,7 +2200,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       return;
     }
     final pos = _doubleTapDetails?.localPosition ?? Offset.zero;
-    final zoomedMatrix = _zoomMatrixAround(pos, _doubleTapZoomScale);
+    final zoomedMatrix = _zoomMatrixAround(pos, _smartZoomForCurrentPage());
     _animateZoomTo(zoomedMatrix, markZoomed: true);
   }
 
@@ -2920,14 +2990,57 @@ unawaited(
   }
 
   void _prefetchUpcomingPages(int currentIndex) {
-    if (!kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-      for (int i = currentIndex + 1; i <= currentIndex + 4 && i < _pageUrls.length; i++) {
-        final nextUrl = _pageUrls[i];
-        if (!_recoveredImageBytes.containsKey(nextUrl) && !_recoveringUrls.contains(nextUrl) && (nextUrl.startsWith('http://') || nextUrl.startsWith('https://'))) {
-          unawaited(_recoverImage(nextUrl, i));
-        }
-      }
+    if (kIsWeb || !(Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
+      return;
     }
+    _syncPageLoader();
+    final loader = _pageLoader;
+    if (loader == null) return;
+
+    for (int i = currentIndex + 1; i <= currentIndex + 4 && i < _pageUrls.length; i++) {
+      final nextUrl = _pageUrls[i];
+      if (_recoveredImageBytes.containsKey(nextUrl) ||
+          _recoveringUrls.contains(nextUrl) ||
+          _failedImageUrls.contains(nextUrl)) {
+        continue;
+      }
+      if (!(nextUrl.startsWith('http://') || nextUrl.startsWith('https://'))) {
+        continue;
+      }
+      final priority =
+          i == currentIndex + 1 ? PageLoadPriority.next : PageLoadPriority.prefetch;
+      _recoveringUrls.add(nextUrl);
+      unawaited(_prefetchUpcomingViaPageLoader(loader, nextUrl, i, priority));
+    }
+  }
+
+  /// R1.8: priority load via [PageLoader]; fall back to multi-pass [_recoverImage].
+  Future<void> _prefetchUpcomingViaPageLoader(
+    PageLoader loader,
+    String url,
+    int index,
+    PageLoadPriority priority,
+  ) async {
+    try {
+      final result = await loader.loadPage(
+        url: url,
+        index: index,
+        priority: priority,
+        sourceName: _sourceName,
+      );
+      if (!mounted) return;
+      if (result.bytes != null && result.bytes!.isNotEmpty) {
+        setState(() {
+          _recoveredImageBytes[url] = result.bytes!;
+          _recoveringUrls.remove(url);
+        });
+        return;
+      }
+    } catch (e) {
+      debugPrint('[Reader] PageLoader prefetch failed for ${sanitizeUrlForLog(url)}: $e');
+    }
+    _recoveringUrls.remove(url);
+    if (mounted) unawaited(_recoverImage(url, index));
   }
 
   Widget _buildPageWidget(String url, int index, {BoxConstraints? constraints, bool isPaged = false, double? contentWidth, bool enablePerPageZoom = false}) {
@@ -3133,7 +3246,11 @@ unawaited(
             return;
           }
           final pos = _doubleTapDetails?.localPosition ?? Offset.zero;
-          _animateZoomTo(_zoomMatrixAround(pos, _doubleTapZoomScale), markZoomed: true, controllerOverride: transform);
+          _animateZoomTo(
+            _zoomMatrixAround(pos, _smartZoomForCurrentPage(pageIndex: index)),
+            markZoomed: true,
+            controllerOverride: transform,
+          );
         },
         child: InteractiveViewer(
           transformationController: transform,

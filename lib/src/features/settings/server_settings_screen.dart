@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -10,11 +11,13 @@ import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/server_auth_helper.dart';
 import '../../core/sync/server_session_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/sync/sync_manager.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/widgets/dialog_controllers.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/proxy_url_display.dart';
+import '../../ui/widgets/sync_ui_actions.dart';
 import 'server_login_sheet.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
@@ -559,6 +562,41 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
+                const SectionTitle(title: 'Sync'),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  leading: const Icon(Icons.sync_rounded),
+                  title: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      const Text('Delta Sync', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      SunfireBadge.local(),
+                    ],
+                  ),
+                  subtitle: const Text(
+                    'Pull changes since last sync via SyncManager',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  onTap: () => unawaited(runSyncWithProgressDialog(
+                    context,
+                    title: 'Delta Sync',
+                    syncFn: () => SyncManager.instance.syncDelta(),
+                  )),
+                ),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  leading: const Icon(Icons.monitor_heart_outlined),
+                  title: const Text('Sync Health', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                  subtitle: const Text(
+                    'Pending mutations, errors, and other devices',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                  onTap: () => context.push('/settings/sync-health'),
+                ),
+                const Divider(height: 1),
                 const SectionTitle(title: 'Client Connection (App Target)'),
                 if (ServerAuthHelper.insecureFallbackActive ||
                     SecureServerSessionStore.insecureFallbackActive)

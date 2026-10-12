@@ -15,7 +15,11 @@ import 'core/sync/quick_action_handler.dart';
 import 'features/browse/browse_screen.dart';
 import 'features/downloads/download_queue_screen.dart';
 import 'features/history/history_screen.dart';
+import 'features/library/duplicate_review_screen.dart';
+import 'features/library/library_import_export_screen.dart';
 import 'features/library/library_screen.dart';
+import 'features/library/smart_collections_screen.dart';
+import 'features/library/tag_management_screen.dart';
 import 'features/manga_detail/manga_detail_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/reader/reader_screen.dart';
@@ -29,13 +33,13 @@ import 'features/settings/extension_repos_screen.dart';
 import 'features/settings/general_settings_screen.dart';
 import 'features/settings/import_tachibk_screen.dart';
 import 'features/settings/library_settings_screen.dart';
+import 'features/settings/multi_server_settings_screen.dart';
 import 'features/settings/reader_settings_screen.dart';
 import 'features/settings/server_settings_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/settings/sync_health_screen.dart';
 import 'features/stats/stats_screen.dart';
 import 'features/updates/updates_screen.dart';
-import 'features/library/duplicate_review_screen.dart';
-import 'features/library/tag_management_screen.dart';
 import 'main_shell.dart';
 import 'ui/design_system/sunfire_theme.dart';
 import 'ui/shell/sunfire_breakpoints.dart';
@@ -201,6 +205,20 @@ GoRouter buildAppRouter({
             ),
           ),
           GoRoute(
+            path: '/settings/sync-health',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const SyncHealthScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/multi-server',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const MultiServerSettingsScreen(),
+            ),
+          ),
+          GoRoute(
             path: '/settings/library',
             pageBuilder: (context, state) => sunfireTransitionPage(
               state: state,
@@ -247,6 +265,20 @@ GoRouter buildAppRouter({
             pageBuilder: (context, state) => sunfireTransitionPage(
               state: state,
               child: const TagManagementScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/library/smart-collections',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const SmartCollectionsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/library/import-export',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const LibraryImportExportScreen(),
             ),
           ),
           GoRoute(

@@ -4,33 +4,29 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 
-import 'dart:async' as _i15;
+import 'dart:async' as _i14;
 import 'dart:ui' as _i3;
 
-import 'package:flutter/gestures.dart' as _i22;
-import 'package:flutter/material.dart' as _i21;
 import 'package:isar_community/isar.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i18;
+import 'package:mockito/src/dummies.dart' as _i17;
 import 'package:sunfire/src/core/db/isar_service.dart' as _i9;
-import 'package:sunfire/src/core/db/models/category.dart' as _i16;
+import 'package:sunfire/src/core/db/models/category.dart' as _i15;
 import 'package:sunfire/src/core/db/models/chapter.dart' as _i6;
 import 'package:sunfire/src/core/db/models/manga.dart' as _i5;
-import 'package:sunfire/src/core/db/models/sync_record.dart' as _i17;
+import 'package:sunfire/src/core/db/models/sync_record.dart' as _i16;
 import 'package:sunfire/src/core/metron/metron_api_client.dart' as _i7;
 import 'package:sunfire/src/core/metron/metron_models.dart' as _i8;
 import 'package:sunfire/src/core/metron/metron_service.dart' as _i13;
 import 'package:sunfire/src/core/services/settings_service.dart' as _i12;
+import 'package:sunfire/src/core/sync/conflict_resolver.dart' as _i18;
 import 'package:sunfire/src/core/sync/sync_engine.dart' as _i4;
-import 'package:sunfire/src/features/reader/controller/gesture_pipeline.dart'
-    as _i19;
 import 'package:sunfire/src/features/reader/controller/navigation_controller.dart'
-    as _i14;
+    as _i19;
 import 'package:sunfire/src/features/reader/controller/page_loader.dart'
     as _i10;
 import 'package:sunfire/src/features/reader/controller/position_manager.dart'
     as _i11;
-import 'package:sunfire/src/features/reader/reading_mode.dart' as _i20;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -139,12 +135,6 @@ class _FakeMetronService_16 extends _i1.SmartFake
     : super(parent, parentInvocation);
 }
 
-class _FakeNavigationController_17 extends _i1.SmartFake
-    implements _i14.NavigationController {
-  _FakeNavigationController_17(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
-}
-
 /// A class which mocks [IsarService].
 ///
 /// See the documentation for Mockito's code generation for more information.
@@ -167,252 +157,252 @@ class MockIsarService extends _i1.Mock implements _i9.IsarService {
           as bool);
 
   @override
-  _i15.Future<void> initialize() =>
+  _i14.Future<void> initialize() =>
       (super.noSuchMethod(
             Invocation.method(#initialize, []),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<String?> getMeta(String? key) =>
+  _i14.Future<String?> getMeta(String? key) =>
       (super.noSuchMethod(
             Invocation.method(#getMeta, [key]),
-            returnValue: _i15.Future<String?>.value(),
+            returnValue: _i14.Future<String?>.value(),
           )
-          as _i15.Future<String?>);
+          as _i14.Future<String?>);
 
   @override
-  _i15.Future<void> setMeta(String? key, String? value) =>
+  _i14.Future<void> setMeta(String? key, String? value) =>
       (super.noSuchMethod(
             Invocation.method(#setMeta, [key, value]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> saveManga(_i5.Manga? manga) =>
+  _i14.Future<void> saveManga(_i5.Manga? manga) =>
       (super.noSuchMethod(
             Invocation.method(#saveManga, [manga]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> saveMangas(List<_i5.Manga>? mangas) =>
+  _i14.Future<void> saveMangas(List<_i5.Manga>? mangas) =>
       (super.noSuchMethod(
             Invocation.method(#saveMangas, [mangas]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<List<_i5.Manga>> getAllManga() =>
+  _i14.Future<List<_i5.Manga>> getAllManga() =>
       (super.noSuchMethod(
             Invocation.method(#getAllManga, []),
-            returnValue: _i15.Future<List<_i5.Manga>>.value(<_i5.Manga>[]),
+            returnValue: _i14.Future<List<_i5.Manga>>.value(<_i5.Manga>[]),
           )
-          as _i15.Future<List<_i5.Manga>>);
+          as _i14.Future<List<_i5.Manga>>);
 
   @override
-  _i15.Future<List<_i5.Manga>> getLibraryManga() =>
+  _i14.Future<List<_i5.Manga>> getLibraryManga() =>
       (super.noSuchMethod(
             Invocation.method(#getLibraryManga, []),
-            returnValue: _i15.Future<List<_i5.Manga>>.value(<_i5.Manga>[]),
+            returnValue: _i14.Future<List<_i5.Manga>>.value(<_i5.Manga>[]),
           )
-          as _i15.Future<List<_i5.Manga>>);
+          as _i14.Future<List<_i5.Manga>>);
 
   @override
-  _i15.Future<_i5.Manga?> getManga(int? id) =>
+  _i14.Future<_i5.Manga?> getManga(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#getManga, [id]),
-            returnValue: _i15.Future<_i5.Manga?>.value(),
+            returnValue: _i14.Future<_i5.Manga?>.value(),
           )
-          as _i15.Future<_i5.Manga?>);
+          as _i14.Future<_i5.Manga?>);
 
   @override
-  _i15.Future<_i5.Manga?> getMangaByServerId(int? serverId) =>
+  _i14.Future<_i5.Manga?> getMangaByServerId(int? serverId) =>
       (super.noSuchMethod(
             Invocation.method(#getMangaByServerId, [serverId]),
-            returnValue: _i15.Future<_i5.Manga?>.value(),
+            returnValue: _i14.Future<_i5.Manga?>.value(),
           )
-          as _i15.Future<_i5.Manga?>);
+          as _i14.Future<_i5.Manga?>);
 
   @override
-  _i15.Future<List<_i5.Manga>> getMangaByServerIds(List<int>? serverIds) =>
+  _i14.Future<List<_i5.Manga>> getMangaByServerIds(List<int>? serverIds) =>
       (super.noSuchMethod(
             Invocation.method(#getMangaByServerIds, [serverIds]),
-            returnValue: _i15.Future<List<_i5.Manga>>.value(<_i5.Manga>[]),
+            returnValue: _i14.Future<List<_i5.Manga>>.value(<_i5.Manga>[]),
           )
-          as _i15.Future<List<_i5.Manga>>);
+          as _i14.Future<List<_i5.Manga>>);
 
   @override
-  _i15.Future<int> getMangaCount() =>
+  _i14.Future<int> getMangaCount() =>
       (super.noSuchMethod(
             Invocation.method(#getMangaCount, []),
-            returnValue: _i15.Future<int>.value(0),
+            returnValue: _i14.Future<int>.value(0),
           )
-          as _i15.Future<int>);
+          as _i14.Future<int>);
 
   @override
-  _i15.Future<void> saveChapter(_i6.Chapter? chapter) =>
+  _i14.Future<void> saveChapter(_i6.Chapter? chapter) =>
       (super.noSuchMethod(
             Invocation.method(#saveChapter, [chapter]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> saveChapters(List<_i6.Chapter>? chapters) =>
+  _i14.Future<void> saveChapters(List<_i6.Chapter>? chapters) =>
       (super.noSuchMethod(
             Invocation.method(#saveChapters, [chapters]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> deleteChapterRows(List<int>? isarIds) =>
+  _i14.Future<void> deleteChapterRows(List<int>? isarIds) =>
       (super.noSuchMethod(
             Invocation.method(#deleteChapterRows, [isarIds]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> deleteChapters(List<_i6.Chapter>? chapters) =>
+  _i14.Future<void> deleteChapters(List<_i6.Chapter>? chapters) =>
       (super.noSuchMethod(
             Invocation.method(#deleteChapters, [chapters]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<List<_i6.Chapter>> getAllChapters() =>
+  _i14.Future<List<_i6.Chapter>> getAllChapters() =>
       (super.noSuchMethod(
             Invocation.method(#getAllChapters, []),
-            returnValue: _i15.Future<List<_i6.Chapter>>.value(<_i6.Chapter>[]),
+            returnValue: _i14.Future<List<_i6.Chapter>>.value(<_i6.Chapter>[]),
           )
-          as _i15.Future<List<_i6.Chapter>>);
+          as _i14.Future<List<_i6.Chapter>>);
 
   @override
-  _i15.Future<List<_i6.Chapter>> getChaptersForManga(int? mangaId) =>
+  _i14.Future<List<_i6.Chapter>> getChaptersForManga(int? mangaId) =>
       (super.noSuchMethod(
             Invocation.method(#getChaptersForManga, [mangaId]),
-            returnValue: _i15.Future<List<_i6.Chapter>>.value(<_i6.Chapter>[]),
+            returnValue: _i14.Future<List<_i6.Chapter>>.value(<_i6.Chapter>[]),
           )
-          as _i15.Future<List<_i6.Chapter>>);
+          as _i14.Future<List<_i6.Chapter>>);
 
   @override
-  _i15.Future<Map<int, _i6.Chapter>> getChaptersByServerIds(
+  _i14.Future<Map<int, _i6.Chapter>> getChaptersByServerIds(
     List<int>? serverIds,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getChaptersByServerIds, [serverIds]),
-            returnValue: _i15.Future<Map<int, _i6.Chapter>>.value(
+            returnValue: _i14.Future<Map<int, _i6.Chapter>>.value(
               <int, _i6.Chapter>{},
             ),
           )
-          as _i15.Future<Map<int, _i6.Chapter>>);
+          as _i14.Future<Map<int, _i6.Chapter>>);
 
   @override
-  _i15.Future<Map<int, List<_i6.Chapter>>> getChaptersForMangas(
+  _i14.Future<Map<int, List<_i6.Chapter>>> getChaptersForMangas(
     List<int>? mangaIds,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getChaptersForMangas, [mangaIds]),
-            returnValue: _i15.Future<Map<int, List<_i6.Chapter>>>.value(
+            returnValue: _i14.Future<Map<int, List<_i6.Chapter>>>.value(
               <int, List<_i6.Chapter>>{},
             ),
           )
-          as _i15.Future<Map<int, List<_i6.Chapter>>>);
+          as _i14.Future<Map<int, List<_i6.Chapter>>>);
 
   @override
-  _i15.Future<_i6.Chapter?> getChapterByServerId(int? serverId) =>
+  _i14.Future<_i6.Chapter?> getChapterByServerId(int? serverId) =>
       (super.noSuchMethod(
             Invocation.method(#getChapterByServerId, [serverId]),
-            returnValue: _i15.Future<_i6.Chapter?>.value(),
+            returnValue: _i14.Future<_i6.Chapter?>.value(),
           )
-          as _i15.Future<_i6.Chapter?>);
+          as _i14.Future<_i6.Chapter?>);
 
   @override
-  _i15.Future<_i6.Chapter?> getChapterByLocalId(int? id) =>
+  _i14.Future<_i6.Chapter?> getChapterByLocalId(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#getChapterByLocalId, [id]),
-            returnValue: _i15.Future<_i6.Chapter?>.value(),
+            returnValue: _i14.Future<_i6.Chapter?>.value(),
           )
-          as _i15.Future<_i6.Chapter?>);
+          as _i14.Future<_i6.Chapter?>);
 
   @override
-  _i15.Future<List<_i6.Chapter>> getReadingHistory() =>
+  _i14.Future<List<_i6.Chapter>> getReadingHistory() =>
       (super.noSuchMethod(
             Invocation.method(#getReadingHistory, []),
-            returnValue: _i15.Future<List<_i6.Chapter>>.value(<_i6.Chapter>[]),
+            returnValue: _i14.Future<List<_i6.Chapter>>.value(<_i6.Chapter>[]),
           )
-          as _i15.Future<List<_i6.Chapter>>);
+          as _i14.Future<List<_i6.Chapter>>);
 
   @override
-  _i15.Future<List<_i6.Chapter>> getRecentChapters({int? limit = 300}) =>
+  _i14.Future<List<_i6.Chapter>> getRecentChapters({int? limit = 300}) =>
       (super.noSuchMethod(
             Invocation.method(#getRecentChapters, [], {#limit: limit}),
-            returnValue: _i15.Future<List<_i6.Chapter>>.value(<_i6.Chapter>[]),
+            returnValue: _i14.Future<List<_i6.Chapter>>.value(<_i6.Chapter>[]),
           )
-          as _i15.Future<List<_i6.Chapter>>);
+          as _i14.Future<List<_i6.Chapter>>);
 
   @override
-  _i15.Future<void> cleanupMisattributedLocalChapters() =>
+  _i14.Future<void> cleanupMisattributedLocalChapters() =>
       (super.noSuchMethod(
             Invocation.method(#cleanupMisattributedLocalChapters, []),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> cleanupBulkScrapedUpdates() =>
+  _i14.Future<void> cleanupBulkScrapedUpdates() =>
       (super.noSuchMethod(
             Invocation.method(#cleanupBulkScrapedUpdates, []),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<List<_i6.Chapter>> getInProgressChapters({int? limit = 20}) =>
+  _i14.Future<List<_i6.Chapter>> getInProgressChapters({int? limit = 20}) =>
       (super.noSuchMethod(
             Invocation.method(#getInProgressChapters, [], {#limit: limit}),
-            returnValue: _i15.Future<List<_i6.Chapter>>.value(<_i6.Chapter>[]),
+            returnValue: _i14.Future<List<_i6.Chapter>>.value(<_i6.Chapter>[]),
           )
-          as _i15.Future<List<_i6.Chapter>>);
+          as _i14.Future<List<_i6.Chapter>>);
 
   @override
-  _i15.Future<void> deleteManga(int? serverId) =>
+  _i14.Future<void> deleteManga(int? serverId) =>
       (super.noSuchMethod(
             Invocation.method(#deleteManga, [serverId]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> saveCategory(_i16.Category? category) =>
+  _i14.Future<void> saveCategory(_i15.Category? category) =>
       (super.noSuchMethod(
             Invocation.method(#saveCategory, [category]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> saveCategories(
-    List<_i16.Category>? categories, {
+  _i14.Future<void> saveCategories(
+    List<_i15.Category>? categories, {
     bool? replaceAll = true,
   }) =>
       (super.noSuchMethod(
@@ -421,134 +411,134 @@ class MockIsarService extends _i1.Mock implements _i9.IsarService {
               [categories],
               {#replaceAll: replaceAll},
             ),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> deleteCategory(int? serverId) =>
+  _i14.Future<void> deleteCategory(int? serverId) =>
       (super.noSuchMethod(
             Invocation.method(#deleteCategory, [serverId]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<_i16.Category?> getCategoryByServerId(int? serverId) =>
+  _i14.Future<_i15.Category?> getCategoryByServerId(int? serverId) =>
       (super.noSuchMethod(
             Invocation.method(#getCategoryByServerId, [serverId]),
-            returnValue: _i15.Future<_i16.Category?>.value(),
+            returnValue: _i14.Future<_i15.Category?>.value(),
           )
-          as _i15.Future<_i16.Category?>);
+          as _i14.Future<_i15.Category?>);
 
   @override
-  _i15.Future<List<_i16.Category>> getCategories() =>
+  _i14.Future<List<_i15.Category>> getCategories() =>
       (super.noSuchMethod(
             Invocation.method(#getCategories, []),
-            returnValue: _i15.Future<List<_i16.Category>>.value(
-              <_i16.Category>[],
+            returnValue: _i14.Future<List<_i15.Category>>.value(
+              <_i15.Category>[],
             ),
           )
-          as _i15.Future<List<_i16.Category>>);
+          as _i14.Future<List<_i15.Category>>);
 
   @override
-  _i15.Future<DateTime?> getLastSyncTimestamp() =>
+  _i14.Future<DateTime?> getLastSyncTimestamp() =>
       (super.noSuchMethod(
             Invocation.method(#getLastSyncTimestamp, []),
-            returnValue: _i15.Future<DateTime?>.value(),
+            returnValue: _i14.Future<DateTime?>.value(),
           )
-          as _i15.Future<DateTime?>);
+          as _i14.Future<DateTime?>);
 
   @override
-  _i15.Future<void> saveLastSyncTimestamp(DateTime? timestamp) =>
+  _i14.Future<void> saveLastSyncTimestamp(DateTime? timestamp) =>
       (super.noSuchMethod(
             Invocation.method(#saveLastSyncTimestamp, [timestamp]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> saveSyncRecord(_i17.SyncRecord? record) =>
+  _i14.Future<void> saveSyncRecord(_i16.SyncRecord? record) =>
       (super.noSuchMethod(
             Invocation.method(#saveSyncRecord, [record]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<List<_i17.SyncRecord>> getPendingSyncRecords() =>
+  _i14.Future<List<_i16.SyncRecord>> getPendingSyncRecords() =>
       (super.noSuchMethod(
             Invocation.method(#getPendingSyncRecords, []),
-            returnValue: _i15.Future<List<_i17.SyncRecord>>.value(
-              <_i17.SyncRecord>[],
+            returnValue: _i14.Future<List<_i16.SyncRecord>>.value(
+              <_i16.SyncRecord>[],
             ),
           )
-          as _i15.Future<List<_i17.SyncRecord>>);
+          as _i14.Future<List<_i16.SyncRecord>>);
 
   @override
-  _i15.Future<List<_i17.SyncRecord>> getFailedSyncRecords() =>
+  _i14.Future<List<_i16.SyncRecord>> getFailedSyncRecords() =>
       (super.noSuchMethod(
             Invocation.method(#getFailedSyncRecords, []),
-            returnValue: _i15.Future<List<_i17.SyncRecord>>.value(
-              <_i17.SyncRecord>[],
+            returnValue: _i14.Future<List<_i16.SyncRecord>>.value(
+              <_i16.SyncRecord>[],
             ),
           )
-          as _i15.Future<List<_i17.SyncRecord>>);
+          as _i14.Future<List<_i16.SyncRecord>>);
 
   @override
-  _i15.Future<_i17.SyncRecord?> getSyncRecord(int? id) =>
+  _i14.Future<_i16.SyncRecord?> getSyncRecord(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#getSyncRecord, [id]),
-            returnValue: _i15.Future<_i17.SyncRecord?>.value(),
+            returnValue: _i14.Future<_i16.SyncRecord?>.value(),
           )
-          as _i15.Future<_i17.SyncRecord?>);
+          as _i14.Future<_i16.SyncRecord?>);
 
   @override
-  _i15.Future<List<_i17.SyncRecord>> getPendingChapterRecords(
+  _i14.Future<List<_i16.SyncRecord>> getPendingChapterRecords(
     String? chapterEntityId,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getPendingChapterRecords, [chapterEntityId]),
-            returnValue: _i15.Future<List<_i17.SyncRecord>>.value(
-              <_i17.SyncRecord>[],
+            returnValue: _i14.Future<List<_i16.SyncRecord>>.value(
+              <_i16.SyncRecord>[],
             ),
           )
-          as _i15.Future<List<_i17.SyncRecord>>);
+          as _i14.Future<List<_i16.SyncRecord>>);
 
   @override
-  _i15.Future<Set<String>> getPendingChapterEntityIds() =>
+  _i14.Future<Set<String>> getPendingChapterEntityIds() =>
       (super.noSuchMethod(
             Invocation.method(#getPendingChapterEntityIds, []),
-            returnValue: _i15.Future<Set<String>>.value(<String>{}),
+            returnValue: _i14.Future<Set<String>>.value(<String>{}),
           )
-          as _i15.Future<Set<String>>);
+          as _i14.Future<Set<String>>);
 
   @override
-  _i15.Future<List<_i17.SyncRecord>> getPendingCategoryRecords() =>
+  _i14.Future<List<_i16.SyncRecord>> getPendingCategoryRecords() =>
       (super.noSuchMethod(
             Invocation.method(#getPendingCategoryRecords, []),
-            returnValue: _i15.Future<List<_i17.SyncRecord>>.value(
-              <_i17.SyncRecord>[],
+            returnValue: _i14.Future<List<_i16.SyncRecord>>.value(
+              <_i16.SyncRecord>[],
             ),
           )
-          as _i15.Future<List<_i17.SyncRecord>>);
+          as _i14.Future<List<_i16.SyncRecord>>);
 
   @override
-  _i15.Future<List<_i17.SyncRecord>> getAllSyncRecords({int? limit = 1000}) =>
+  _i14.Future<List<_i16.SyncRecord>> getAllSyncRecords({int? limit = 1000}) =>
       (super.noSuchMethod(
             Invocation.method(#getAllSyncRecords, [], {#limit: limit}),
-            returnValue: _i15.Future<List<_i17.SyncRecord>>.value(
-              <_i17.SyncRecord>[],
+            returnValue: _i14.Future<List<_i16.SyncRecord>>.value(
+              <_i16.SyncRecord>[],
             ),
           )
-          as _i15.Future<List<_i17.SyncRecord>>);
+          as _i14.Future<List<_i16.SyncRecord>>);
 
   @override
-  _i15.Future<List<_i17.SyncRecord>> getSyncRecordsForEntity(
+  _i14.Future<List<_i16.SyncRecord>> getSyncRecordsForEntity(
     String? entityType,
     String? entityId, {
     int? limit = 100,
@@ -559,20 +549,20 @@ class MockIsarService extends _i1.Mock implements _i9.IsarService {
               [entityType, entityId],
               {#limit: limit},
             ),
-            returnValue: _i15.Future<List<_i17.SyncRecord>>.value(
-              <_i17.SyncRecord>[],
+            returnValue: _i14.Future<List<_i16.SyncRecord>>.value(
+              <_i16.SyncRecord>[],
             ),
           )
-          as _i15.Future<List<_i17.SyncRecord>>);
+          as _i14.Future<List<_i16.SyncRecord>>);
 
   @override
-  _i15.Future<void> deleteSyncRecord(int? id) =>
+  _i14.Future<void> deleteSyncRecord(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#deleteSyncRecord, [id]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 }
 
 /// A class which mocks [SettingsService].
@@ -603,7 +593,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get serverUrl =>
       (super.noSuchMethod(
             Invocation.getter(#serverUrl),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#serverUrl),
             ),
@@ -614,7 +604,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get cfProxyUrl =>
       (super.noSuchMethod(
             Invocation.getter(#cfProxyUrl),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#cfProxyUrl),
             ),
@@ -622,18 +612,18 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
           as String);
 
   @override
-  _i15.Future<void> get pendingProxyPersist =>
+  _i14.Future<void> get pendingProxyPersist =>
       (super.noSuchMethod(
             Invocation.getter(#pendingProxyPersist),
-            returnValue: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
   String get accentColorName =>
       (super.noSuchMethod(
             Invocation.getter(#accentColorName),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#accentColorName),
             ),
@@ -665,7 +655,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get readingMode =>
       (super.noSuchMethod(
             Invocation.getter(#readingMode),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#readingMode),
             ),
@@ -676,7 +666,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get readerTheme =>
       (super.noSuchMethod(
             Invocation.getter(#readerTheme),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#readerTheme),
             ),
@@ -687,7 +677,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get colorFilter =>
       (super.noSuchMethod(
             Invocation.getter(#colorFilter),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#colorFilter),
             ),
@@ -698,7 +688,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get scaleType =>
       (super.noSuchMethod(
             Invocation.getter(#scaleType),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#scaleType),
             ),
@@ -725,7 +715,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get tapZonePresetPaged =>
       (super.noSuchMethod(
             Invocation.getter(#tapZonePresetPaged),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#tapZonePresetPaged),
             ),
@@ -736,7 +726,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get tapZonePresetWebtoon =>
       (super.noSuchMethod(
             Invocation.getter(#tapZonePresetWebtoon),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#tapZonePresetWebtoon),
             ),
@@ -755,7 +745,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get doublePageDisplayMode =>
       (super.noSuchMethod(
             Invocation.getter(#doublePageDisplayMode),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#doublePageDisplayMode),
             ),
@@ -816,7 +806,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get themeMode =>
       (super.noSuchMethod(
             Invocation.getter(#themeMode),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#themeMode),
             ),
@@ -843,7 +833,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get dateFormat =>
       (super.noSuchMethod(
             Invocation.getter(#dateFormat),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#dateFormat),
             ),
@@ -854,7 +844,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get libraryDisplayMode =>
       (super.noSuchMethod(
             Invocation.getter(#libraryDisplayMode),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#libraryDisplayMode),
             ),
@@ -947,7 +937,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get deleteFinishedChaptersWhileReading =>
       (super.noSuchMethod(
             Invocation.getter(#deleteFinishedChaptersWhileReading),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#deleteFinishedChaptersWhileReading),
             ),
@@ -1014,7 +1004,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get defaultCategoryName =>
       (super.noSuchMethod(
             Invocation.getter(#defaultCategoryName),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#defaultCategoryName),
             ),
@@ -1105,7 +1095,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get appLocale =>
       (super.noSuchMethod(
             Invocation.getter(#appLocale),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#appLocale),
             ),
@@ -1116,7 +1106,7 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   String get startScreen =>
       (super.noSuchMethod(
             Invocation.getter(#startScreen),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#startScreen),
             ),
@@ -1183,6 +1173,17 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
             returnValue: false,
           )
           as bool);
+
+  @override
+  String get smartCollectionRulesJson =>
+      (super.noSuchMethod(
+            Invocation.getter(#smartCollectionRulesJson),
+            returnValue: _i17.dummyValue<String>(
+              this,
+              Invocation.getter(#smartCollectionRulesJson),
+            ),
+          )
+          as String);
 
   @override
   set chapterSortAscending(bool? value) => super.noSuchMethod(
@@ -1599,24 +1600,30 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   );
 
   @override
+  set smartCollectionRulesJson(String? value) => super.noSuchMethod(
+    Invocation.setter(#smartCollectionRulesJson, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   bool get hasListeners =>
       (super.noSuchMethod(Invocation.getter(#hasListeners), returnValue: false)
           as bool);
 
   @override
-  _i15.Future<void> initialize() =>
+  _i14.Future<void> initialize() =>
       (super.noSuchMethod(
             Invocation.method(#initialize, []),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
   String formatDate(DateTime? date) =>
       (super.noSuchMethod(
             Invocation.method(#formatDate, [date]),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.method(#formatDate, [date]),
             ),
@@ -1624,13 +1631,13 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
           as String);
 
   @override
-  _i15.Future<void> togglePinSource(String? sourceName) =>
+  _i14.Future<void> togglePinSource(String? sourceName) =>
       (super.noSuchMethod(
             Invocation.method(#togglePinSource, [sourceName]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
   bool isSourcePinned(String? sourceName) =>
@@ -1646,31 +1653,31 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
           as String?);
 
   @override
-  _i15.Future<void> setDeviceName(String? deviceId, String? name) =>
+  _i14.Future<void> setDeviceName(String? deviceId, String? name) =>
       (super.noSuchMethod(
             Invocation.method(#setDeviceName, [deviceId, name]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> addCustomRepo(String? url) =>
+  _i14.Future<void> addCustomRepo(String? url) =>
       (super.noSuchMethod(
             Invocation.method(#addCustomRepo, [url]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> removeCustomRepo(String? url) =>
+  _i14.Future<void> removeCustomRepo(String? url) =>
       (super.noSuchMethod(
             Invocation.method(#removeCustomRepo, [url]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
   void addListener(_i3.VoidCallback? listener) => super.noSuchMethod(
@@ -1719,58 +1726,58 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
           as int);
 
   @override
-  _i15.Stream<void> get onSyncCycleComplete =>
+  _i14.Stream<void> get onSyncCycleComplete =>
       (super.noSuchMethod(
             Invocation.getter(#onSyncCycleComplete),
-            returnValue: _i15.Stream<void>.empty(),
+            returnValue: _i14.Stream<void>.empty(),
           )
-          as _i15.Stream<void>);
+          as _i14.Stream<void>);
 
   @override
-  _i15.Future<void> initialize({String? deviceId}) =>
+  _i14.Future<void> initialize({String? deviceId}) =>
       (super.noSuchMethod(
             Invocation.method(#initialize, [], {#deviceId: deviceId}),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<int> retryFailedSyncRecords() =>
+  _i14.Future<int> retryFailedSyncRecords() =>
       (super.noSuchMethod(
             Invocation.method(#retryFailedSyncRecords, []),
-            returnValue: _i15.Future<int>.value(0),
+            returnValue: _i14.Future<int>.value(0),
           )
-          as _i15.Future<int>);
+          as _i14.Future<int>);
 
   @override
-  _i15.Future<int> quarantinePendingForServerSwitch() =>
+  _i14.Future<int> quarantinePendingForServerSwitch() =>
       (super.noSuchMethod(
             Invocation.method(#quarantinePendingForServerSwitch, []),
-            returnValue: _i15.Future<int>.value(0),
+            returnValue: _i14.Future<int>.value(0),
           )
-          as _i15.Future<int>);
+          as _i14.Future<int>);
 
   @override
-  _i15.Future<void> forceReconcileWithServer() =>
+  _i14.Future<void> forceReconcileWithServer() =>
       (super.noSuchMethod(
             Invocation.method(#forceReconcileWithServer, []),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> triggerSync() =>
+  _i14.Future<void> triggerSync() =>
       (super.noSuchMethod(
             Invocation.method(#triggerSync, []),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<bool> commitChapterReadState(
+  _i14.Future<bool> commitChapterReadState(
     _i6.Chapter? chapter, {
     required bool? isRead,
     int? lastPageRead,
@@ -1781,12 +1788,12 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
               [chapter],
               {#isRead: isRead, #lastPageRead: lastPageRead},
             ),
-            returnValue: _i15.Future<bool>.value(false),
+            returnValue: _i14.Future<bool>.value(false),
           )
-          as _i15.Future<bool>);
+          as _i14.Future<bool>);
 
   @override
-  _i15.Future<void> syncChapterProgress(
+  _i14.Future<void> syncChapterProgress(
     int? chapterServerId, {
     required bool? isRead,
     required int? lastPageRead,
@@ -1797,22 +1804,22 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
               [chapterServerId],
               {#isRead: isRead, #lastPageRead: lastPageRead},
             ),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> stampLocalReadActivity(_i6.Chapter? chapter) =>
+  _i14.Future<void> stampLocalReadActivity(_i6.Chapter? chapter) =>
       (super.noSuchMethod(
             Invocation.method(#stampLocalReadActivity, [chapter]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> syncChapterBookmark(
+  _i14.Future<void> syncChapterBookmark(
     int? chapterServerId,
     bool? isBookmarked,
   ) =>
@@ -1821,13 +1828,13 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
               chapterServerId,
               isBookmarked,
             ]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> syncMangaLibraryState(
+  _i14.Future<void> syncMangaLibraryState(
     int? mangaServerId,
     bool? inLibrary,
   ) =>
@@ -1836,13 +1843,13 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
               mangaServerId,
               inLibrary,
             ]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> syncCategoryCreate({
+  _i14.Future<void> syncCategoryCreate({
     required String? name,
     required int? localServerId,
     int? order = 0,
@@ -1853,22 +1860,22 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
               #localServerId: localServerId,
               #order: order,
             }),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> syncCategoryDelete(int? categoryServerId) =>
+  _i14.Future<void> syncCategoryDelete(int? categoryServerId) =>
       (super.noSuchMethod(
             Invocation.method(#syncCategoryDelete, [categoryServerId]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> syncMangaCategories(
+  _i14.Future<void> syncMangaCategories(
     int? mangaServerId,
     List<int>? categoryIds, {
     List<int>? existingCategoryIds,
@@ -1879,25 +1886,25 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
               [mangaServerId, categoryIds],
               {#existingCategoryIds: existingCategoryIds},
             ),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> syncCategoryRename(
+  _i14.Future<void> syncCategoryRename(
     int? categoryServerId,
     String? newName,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#syncCategoryRename, [categoryServerId, newName]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> syncMangaTrackerProgress(
+  _i14.Future<void> syncMangaTrackerProgress(
     int? mangaServerId,
     double? chapterNumber,
   ) =>
@@ -1906,22 +1913,22 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
               mangaServerId,
               chapterNumber,
             ]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> debugFlushPendingMutations() =>
+  _i14.Future<void> debugFlushPendingMutations() =>
       (super.noSuchMethod(
             Invocation.method(#debugFlushPendingMutations, []),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<_i4.SyncResult> fetchDelta({
+  _i14.Future<_i4.SyncResult> fetchDelta({
     required DateTime? since,
     Set<int>? mangaIds,
     Set<int>? categoryIds,
@@ -1932,7 +1939,7 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
               #mangaIds: mangaIds,
               #categoryIds: categoryIds,
             }),
-            returnValue: _i15.Future<_i4.SyncResult>.value(
+            returnValue: _i14.Future<_i4.SyncResult>.value(
               _FakeSyncResult_2(
                 this,
                 Invocation.method(#fetchDelta, [], {
@@ -1943,61 +1950,85 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
               ),
             ),
           )
-          as _i15.Future<_i4.SyncResult>);
+          as _i14.Future<_i4.SyncResult>);
 
   @override
-  _i15.Future<_i4.SyncResult> applyDeltaChanges(_i4.SyncResult? deltaResult) =>
+  _i14.Future<_i4.SyncResult> applyDeltaChanges(_i4.SyncResult? deltaResult) =>
       (super.noSuchMethod(
             Invocation.method(#applyDeltaChanges, [deltaResult]),
-            returnValue: _i15.Future<_i4.SyncResult>.value(
+            returnValue: _i14.Future<_i4.SyncResult>.value(
               _FakeSyncResult_2(
                 this,
                 Invocation.method(#applyDeltaChanges, [deltaResult]),
               ),
             ),
           )
-          as _i15.Future<_i4.SyncResult>);
+          as _i14.Future<_i4.SyncResult>);
 
   @override
-  _i15.Future<_i4.SyncResult> syncMangaByIds(Set<int>? mangaIds) =>
+  _i14.Future<_i4.SyncResult> syncMangaByIds(Set<int>? mangaIds) =>
       (super.noSuchMethod(
             Invocation.method(#syncMangaByIds, [mangaIds]),
-            returnValue: _i15.Future<_i4.SyncResult>.value(
+            returnValue: _i14.Future<_i4.SyncResult>.value(
               _FakeSyncResult_2(
                 this,
                 Invocation.method(#syncMangaByIds, [mangaIds]),
               ),
             ),
           )
-          as _i15.Future<_i4.SyncResult>);
+          as _i14.Future<_i4.SyncResult>);
 
   @override
-  _i15.Future<_i4.SyncResult> syncCategoriesByIds(Set<int>? categoryIds) =>
+  _i14.Future<_i4.SyncResult> syncCategoriesByIds(Set<int>? categoryIds) =>
       (super.noSuchMethod(
             Invocation.method(#syncCategoriesByIds, [categoryIds]),
-            returnValue: _i15.Future<_i4.SyncResult>.value(
+            returnValue: _i14.Future<_i4.SyncResult>.value(
               _FakeSyncResult_2(
                 this,
                 Invocation.method(#syncCategoriesByIds, [categoryIds]),
               ),
             ),
           )
-          as _i15.Future<_i4.SyncResult>);
+          as _i14.Future<_i4.SyncResult>);
 
   @override
-  _i15.Future<_i4.SyncResult> resolveConflicts(
-    List<_i4.SyncConflict>? conflicts,
-  ) =>
+  _i14.Future<_i4.SyncResult> resolveConflicts(
+    List<_i4.SyncConflict>? conflicts, {
+    _i18.ConflictResolver? resolver,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#resolveConflicts, [conflicts]),
-            returnValue: _i15.Future<_i4.SyncResult>.value(
+            Invocation.method(
+              #resolveConflicts,
+              [conflicts],
+              {#resolver: resolver},
+            ),
+            returnValue: _i14.Future<_i4.SyncResult>.value(
               _FakeSyncResult_2(
                 this,
-                Invocation.method(#resolveConflicts, [conflicts]),
+                Invocation.method(
+                  #resolveConflicts,
+                  [conflicts],
+                  {#resolver: resolver},
+                ),
               ),
             ),
           )
-          as _i15.Future<_i4.SyncResult>);
+          as _i14.Future<_i4.SyncResult>);
+
+  @override
+  _i14.Future<void> applyResolvedConflict(
+    _i4.SyncConflict? conflict,
+    dynamic resolvedValue,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#applyResolvedConflict, [
+              conflict,
+              resolvedValue,
+            ]),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
+          )
+          as _i14.Future<void>);
 
   @override
   _i5.Manga parseMangaNode(Map<String, dynamic>? node) =>
@@ -2079,22 +2110,22 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
           as bool);
 
   @override
-  _i15.Future<void> initialize() =>
+  _i14.Future<void> initialize() =>
       (super.noSuchMethod(
             Invocation.method(#initialize, []),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
-  _i15.Future<void> saveToken(String? token) =>
+  _i14.Future<void> saveToken(String? token) =>
       (super.noSuchMethod(
             Invocation.method(#saveToken, [token]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
   void configureToken(String? token) => super.noSuchMethod(
@@ -2103,15 +2134,15 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
   );
 
   @override
-  _i15.Future<bool> testConnection(String? token) =>
+  _i14.Future<bool> testConnection(String? token) =>
       (super.noSuchMethod(
             Invocation.method(#testConnection, [token]),
-            returnValue: _i15.Future<bool>.value(false),
+            returnValue: _i14.Future<bool>.value(false),
           )
-          as _i15.Future<bool>);
+          as _i14.Future<bool>);
 
   @override
-  _i15.Future<
+  _i14.Future<
     ({String? nextUrl, List<_i8.MetronSeries> series, int totalCount})
   >
   searchSeries({required String? query, int? page = 1, int? publisherId}) =>
@@ -2122,7 +2153,7 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
               #publisherId: publisherId,
             }),
             returnValue:
-                _i15.Future<
+                _i14.Future<
                   ({
                     String? nextUrl,
                     List<_i8.MetronSeries> series,
@@ -2134,32 +2165,32 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
                   totalCount: 0,
                 )),
           )
-          as _i15.Future<
+          as _i14.Future<
             ({String? nextUrl, List<_i8.MetronSeries> series, int totalCount})
           >);
 
   @override
-  _i15.Future<_i8.MetronSeries> getSeriesDetail(int? seriesId) =>
+  _i14.Future<_i8.MetronSeries> getSeriesDetail(int? seriesId) =>
       (super.noSuchMethod(
             Invocation.method(#getSeriesDetail, [seriesId]),
-            returnValue: _i15.Future<_i8.MetronSeries>.value(
+            returnValue: _i14.Future<_i8.MetronSeries>.value(
               _FakeMetronSeries_7(
                 this,
                 Invocation.method(#getSeriesDetail, [seriesId]),
               ),
             ),
           )
-          as _i15.Future<_i8.MetronSeries>);
+          as _i14.Future<_i8.MetronSeries>);
 
   @override
-  _i15.Future<
+  _i14.Future<
     ({Map<String, int> issueMap, List<_i8.MetronIssueSummary> issues})
   >
   getSeriesIssues(int? seriesId) =>
       (super.noSuchMethod(
             Invocation.method(#getSeriesIssues, [seriesId]),
             returnValue:
-                _i15.Future<
+                _i14.Future<
                   ({
                     Map<String, int> issueMap,
                     List<_i8.MetronIssueSummary> issues,
@@ -2169,12 +2200,12 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
                   issues: <_i8.MetronIssueSummary>[],
                 )),
           )
-          as _i15.Future<
+          as _i14.Future<
             ({Map<String, int> issueMap, List<_i8.MetronIssueSummary> issues})
           >);
 
   @override
-  _i15.Future<bool> scrobbleIssue({
+  _i14.Future<bool> scrobbleIssue({
     required int? issueId,
     DateTime? readDate,
   }) =>
@@ -2183,22 +2214,22 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
               #issueId: issueId,
               #readDate: readDate,
             }),
-            returnValue: _i15.Future<bool>.value(false),
+            returnValue: _i14.Future<bool>.value(false),
           )
-          as _i15.Future<bool>);
+          as _i14.Future<bool>);
 
   @override
-  _i15.Future<List<_i8.MetronPublisher>> getPublishers({int? page = 1}) =>
+  _i14.Future<List<_i8.MetronPublisher>> getPublishers({int? page = 1}) =>
       (super.noSuchMethod(
             Invocation.method(#getPublishers, [], {#page: page}),
-            returnValue: _i15.Future<List<_i8.MetronPublisher>>.value(
+            returnValue: _i14.Future<List<_i8.MetronPublisher>>.value(
               <_i8.MetronPublisher>[],
             ),
           )
-          as _i15.Future<List<_i8.MetronPublisher>>);
+          as _i14.Future<List<_i8.MetronPublisher>>);
 
   @override
-  _i15.Future<bool> scrobbleMangaChapter({
+  _i14.Future<bool> scrobbleMangaChapter({
     required _i5.Manga? manga,
     required _i6.Chapter? chapter,
     DateTime? readDate,
@@ -2209,12 +2240,12 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
               #chapter: chapter,
               #readDate: readDate,
             }),
-            returnValue: _i15.Future<bool>.value(false),
+            returnValue: _i14.Future<bool>.value(false),
           )
-          as _i15.Future<bool>);
+          as _i14.Future<bool>);
 
   @override
-  _i15.Future<bool> scrobbleChapterByMangaId({
+  _i14.Future<bool> scrobbleChapterByMangaId({
     required int? mangaId,
     required _i6.Chapter? chapter,
     DateTime? readDate,
@@ -2225,9 +2256,9 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
               #chapter: chapter,
               #readDate: readDate,
             }),
-            returnValue: _i15.Future<bool>.value(false),
+            returnValue: _i14.Future<bool>.value(false),
           )
-          as _i15.Future<bool>);
+          as _i14.Future<bool>);
 
   @override
   void addListener(_i3.VoidCallback? listener) => super.noSuchMethod(
@@ -2258,7 +2289,7 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockNavigationController extends _i1.Mock
-    implements _i14.NavigationController {
+    implements _i19.NavigationController {
   MockNavigationController() {
     _i1.throwOnMissingStub(this);
   }
@@ -2407,13 +2438,13 @@ class MockNavigationController extends _i1.Mock
   );
 
   @override
-  _i15.Future<void> loadChapterAndPages(int? chapterId) =>
+  _i14.Future<void> loadChapterAndPages(int? chapterId) =>
       (super.noSuchMethod(
             Invocation.method(#loadChapterAndPages, [chapterId]),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
   void setParentManga(_i5.Manga? manga) => super.noSuchMethod(
@@ -2492,7 +2523,7 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
   String get sourceName =>
       (super.noSuchMethod(
             Invocation.getter(#sourceName),
-            returnValue: _i18.dummyValue<String>(
+            returnValue: _i17.dummyValue<String>(
               this,
               Invocation.getter(#sourceName),
             ),
@@ -2550,7 +2581,7 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
   );
 
   @override
-  _i15.Future<_i10.PageLoadResult> loadPage({
+  _i14.Future<_i10.PageLoadResult> loadPage({
     required String? url,
     required int? index,
     _i10.PageLoadPriority? priority = _i10.PageLoadPriority.current,
@@ -2565,7 +2596,7 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
               #sourceName: sourceName,
               #headers: headers,
             }),
-            returnValue: _i15.Future<_i10.PageLoadResult>.value(
+            returnValue: _i14.Future<_i10.PageLoadResult>.value(
               _FakePageLoadResult_14(
                 this,
                 Invocation.method(#loadPage, [], {
@@ -2578,10 +2609,10 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
               ),
             ),
           )
-          as _i15.Future<_i10.PageLoadResult>);
+          as _i14.Future<_i10.PageLoadResult>);
 
   @override
-  _i15.Future<void> prefetchChapter({
+  _i14.Future<void> prefetchChapter({
     required int? chapterServerId,
     required int? chapterTargetId,
     required int? mangaId,
@@ -2598,10 +2629,10 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
               #chapterUrl: chapterUrl,
               #maxPrecacheImages: maxPrecacheImages,
             }),
-            returnValue: _i15.Future<void>.value(),
-            returnValueForMissingStub: _i15.Future<void>.value(),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
           )
-          as _i15.Future<void>);
+          as _i14.Future<void>);
 
   @override
   void cancelAll() => super.noSuchMethod(
@@ -2689,7 +2720,7 @@ class MockPositionManager extends _i1.Mock implements _i11.PositionManager {
           as _i13.MetronService);
 
   @override
-  _i15.Future<bool> updateProgress({
+  _i14.Future<bool> updateProgress({
     required _i6.Chapter? chapterSnapshot,
     required int? totalPages,
     required int? page,
@@ -2702,431 +2733,13 @@ class MockPositionManager extends _i1.Mock implements _i11.PositionManager {
               #page: page,
               #parentManga: parentManga,
             }),
-            returnValue: _i15.Future<bool>.value(false),
+            returnValue: _i14.Future<bool>.value(false),
           )
-          as _i15.Future<bool>);
+          as _i14.Future<bool>);
 
   @override
   void setParentManga(_i5.Manga? manga) => super.noSuchMethod(
     Invocation.method(#setParentManga, [manga]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void dispose() => super.noSuchMethod(
-    Invocation.method(#dispose, []),
-    returnValueForMissingStub: null,
-  );
-}
-
-/// A class which mocks [GesturePipeline].
-///
-/// See the documentation for Mockito's code generation for more information.
-class MockGesturePipeline extends _i1.Mock implements _i19.GesturePipeline {
-  MockGesturePipeline() {
-    _i1.throwOnMissingStub(this);
-  }
-
-  @override
-  _i14.NavigationController get navigationController =>
-      (super.noSuchMethod(
-            Invocation.getter(#navigationController),
-            returnValue: _FakeNavigationController_17(
-              this,
-              Invocation.getter(#navigationController),
-            ),
-          )
-          as _i14.NavigationController);
-
-  @override
-  _i11.PositionManager get positionManager =>
-      (super.noSuchMethod(
-            Invocation.getter(#positionManager),
-            returnValue: _FakePositionManager_10(
-              this,
-              Invocation.getter(#positionManager),
-            ),
-          )
-          as _i11.PositionManager);
-
-  @override
-  _i12.SettingsService get settings =>
-      (super.noSuchMethod(
-            Invocation.getter(#settings),
-            returnValue: _FakeSettingsService_11(
-              this,
-              Invocation.getter(#settings),
-            ),
-          )
-          as _i12.SettingsService);
-
-  @override
-  _i20.ReadingMode get readingMode =>
-      (super.noSuchMethod(
-            Invocation.getter(#readingMode),
-            returnValue: _i20.ReadingMode.longStrip,
-          )
-          as _i20.ReadingMode);
-
-  @override
-  bool get isAutoScrolling =>
-      (super.noSuchMethod(
-            Invocation.getter(#isAutoScrolling),
-            returnValue: false,
-          )
-          as bool);
-
-  @override
-  bool get isUserTouching =>
-      (super.noSuchMethod(
-            Invocation.getter(#isUserTouching),
-            returnValue: false,
-          )
-          as bool);
-
-  @override
-  bool get isZoomed =>
-      (super.noSuchMethod(Invocation.getter(#isZoomed), returnValue: false)
-          as bool);
-
-  @override
-  bool get showTapZoneOverlay =>
-      (super.noSuchMethod(
-            Invocation.getter(#showTapZoneOverlay),
-            returnValue: false,
-          )
-          as bool);
-
-  @override
-  double get autoScrollSpeed =>
-      (super.noSuchMethod(Invocation.getter(#autoScrollSpeed), returnValue: 0.0)
-          as double);
-
-  @override
-  int get currentPage =>
-      (super.noSuchMethod(Invocation.getter(#currentPage), returnValue: 0)
-          as int);
-
-  @override
-  List<String> get pageUrls =>
-      (super.noSuchMethod(Invocation.getter(#pageUrls), returnValue: <String>[])
-          as List<String>);
-
-  @override
-  set onTapZoneOverlayChanged(void Function(bool)? value) => super.noSuchMethod(
-    Invocation.setter(#onTapZoneOverlayChanged, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set onZoomStateChanged(void Function(bool)? value) => super.noSuchMethod(
-    Invocation.setter(#onZoomStateChanged, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set onUserTouchingChanged(void Function(bool)? value) => super.noSuchMethod(
-    Invocation.setter(#onUserTouchingChanged, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set onLoadNextChapter(_i15.Future<void> Function()? value) =>
-      super.noSuchMethod(
-        Invocation.setter(#onLoadNextChapter, value),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  set onLoadPrevChapter(_i15.Future<void> Function()? value) =>
-      super.noSuchMethod(
-        Invocation.setter(#onLoadPrevChapter, value),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  set onToggleControls(void Function()? value) => super.noSuchMethod(
-    Invocation.setter(#onToggleControls, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set onStopAutoScroll(void Function()? value) => super.noSuchMethod(
-    Invocation.setter(#onStopAutoScroll, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set onScrollVerticalBy(void Function(double)? value) => super.noSuchMethod(
-    Invocation.setter(#onScrollVerticalBy, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set onPageChanged(void Function(int)? value) => super.noSuchMethod(
-    Invocation.setter(#onPageChanged, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set onAnimateScroll(
-    void Function(double, {_i21.Curve? curve, Duration? duration})? value,
-  ) => super.noSuchMethod(
-    Invocation.setter(#onAnimateScroll, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set onAnimatePage(
-    void Function({_i21.Curve? curve, Duration? duration})? value,
-  ) => super.noSuchMethod(
-    Invocation.setter(#onAnimatePage, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set getMaxScrollExtent(double Function()? value) => super.noSuchMethod(
-    Invocation.setter(#getMaxScrollExtent, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set getCurrentScrollOffset(double Function()? value) => super.noSuchMethod(
-    Invocation.setter(#getCurrentScrollOffset, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set getScreenHeight(double Function()? value) => super.noSuchMethod(
-    Invocation.setter(#getScreenHeight, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set pageControllerHasClients(bool Function()? value) => super.noSuchMethod(
-    Invocation.setter(#pageControllerHasClients, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set scrollControllerHasClients(bool Function()? value) => super.noSuchMethod(
-    Invocation.setter(#scrollControllerHasClients, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  set pageControllerPage(double Function()? value) => super.noSuchMethod(
-    Invocation.setter(#pageControllerPage, value),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setViewportSize(_i3.Size? size) => super.noSuchMethod(
-    Invocation.method(#setViewportSize, [size]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setCurrentPageAspect(double? aspect) => super.noSuchMethod(
-    Invocation.method(#setCurrentPageAspect, [aspect]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setReadingMode(_i20.ReadingMode? mode) => super.noSuchMethod(
-    Invocation.method(#setReadingMode, [mode]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setIsAutoScrolling(bool? value) => super.noSuchMethod(
-    Invocation.method(#setIsAutoScrolling, [value]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setIsUserTouching(bool? value) => super.noSuchMethod(
-    Invocation.method(#setIsUserTouching, [value]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setIsZoomed(bool? value) => super.noSuchMethod(
-    Invocation.method(#setIsZoomed, [value]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setShowTapZoneOverlay(bool? value) => super.noSuchMethod(
-    Invocation.method(#setShowTapZoneOverlay, [value]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setInvertTaps(bool? value) => super.noSuchMethod(
-    Invocation.method(#setInvertTaps, [value]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setAutoScrollSpeed(double? value) => super.noSuchMethod(
-    Invocation.method(#setAutoScrollSpeed, [value]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setCurrentPage(int? page) => super.noSuchMethod(
-    Invocation.method(#setCurrentPage, [page]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setPageUrls(List<String>? urls) => super.noSuchMethod(
-    Invocation.method(#setPageUrls, [urls]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setNextChapter(_i6.Chapter? chapter) => super.noSuchMethod(
-    Invocation.method(#setNextChapter, [chapter]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setPrevChapter(_i6.Chapter? chapter) => super.noSuchMethod(
-    Invocation.method(#setPrevChapter, [chapter]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setDoubleTapDetails(_i3.Offset? details) => super.noSuchMethod(
-    Invocation.method(#setDoubleTapDetails, [details]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setTransformationController(_i21.TransformationController? controller) =>
-      super.noSuchMethod(
-        Invocation.method(#setTransformationController, [controller]),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void setWebtoonZoomControllers(
-    Map<int, _i21.TransformationController>? controllers,
-  ) => super.noSuchMethod(
-    Invocation.method(#setWebtoonZoomControllers, [controllers]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void setZoomAnimController(_i21.AnimationController? controller) =>
-      super.noSuchMethod(
-        Invocation.method(#setZoomAnimController, [controller]),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void setScrollController(_i21.ScrollController? controller) =>
-      super.noSuchMethod(
-        Invocation.method(#setScrollController, [controller]),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void handleTapZone(
-    _i21.TapUpDetails? details,
-    _i21.BoxConstraints? constraints,
-  ) => super.noSuchMethod(
-    Invocation.method(#handleTapZone, [details, constraints]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void handleDoubleTapZoom({
-    _i21.TransformationController? controllerOverride,
-  }) => super.noSuchMethod(
-    Invocation.method(#handleDoubleTapZoom, [], {
-      #controllerOverride: controllerOverride,
-    }),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  _i21.KeyEventResult handleKeyEvent(_i21.KeyEvent? event) =>
-      (super.noSuchMethod(
-            Invocation.method(#handleKeyEvent, [event]),
-            returnValue: _i21.KeyEventResult.handled,
-          )
-          as _i21.KeyEventResult);
-
-  @override
-  void handlePointerDown(_i21.PointerDownEvent? event) => super.noSuchMethod(
-    Invocation.method(#handlePointerDown, [event]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void handlePointerUp(_i21.PointerUpEvent? event) => super.noSuchMethod(
-    Invocation.method(#handlePointerUp, [event]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void handlePointerCancel(_i21.PointerCancelEvent? event) =>
-      super.noSuchMethod(
-        Invocation.method(#handlePointerCancel, [event]),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void handlePointerSignal(_i22.PointerSignalEvent? event) =>
-      super.noSuchMethod(
-        Invocation.method(#handlePointerSignal, [event]),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void handleInteractionUpdate(_i21.ScaleUpdateDetails? details) =>
-      super.noSuchMethod(
-        Invocation.method(#handleInteractionUpdate, [details]),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void handleInteractionEnd(_i21.ScaleEndDetails? details) =>
-      super.noSuchMethod(
-        Invocation.method(#handleInteractionEnd, [details]),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void updateAutoScroll(Duration? elapsed) => super.noSuchMethod(
-    Invocation.method(#updateAutoScroll, [elapsed]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void startAutoScroll() => super.noSuchMethod(
-    Invocation.method(#startAutoScroll, []),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void stopAutoScroll() => super.noSuchMethod(
-    Invocation.method(#stopAutoScroll, []),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void adjustAutoScrollSpeed(double? delta) => super.noSuchMethod(
-    Invocation.method(#adjustAutoScrollSpeed, [delta]),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void dismissTapZoneOverlay() => super.noSuchMethod(
-    Invocation.method(#dismissTapZoneOverlay, []),
     returnValueForMissingStub: null,
   );
 

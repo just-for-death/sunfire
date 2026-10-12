@@ -1080,6 +1080,17 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
           as bool);
 
   @override
+  String get smartCollectionRulesJson =>
+      (super.noSuchMethod(
+            Invocation.getter(#smartCollectionRulesJson),
+            returnValue: _i15.dummyValue<String>(
+              this,
+              Invocation.getter(#smartCollectionRulesJson),
+            ),
+          )
+          as String);
+
+  @override
   set chapterSortAscending(bool? value) => super.noSuchMethod(
     Invocation.setter(#chapterSortAscending, value),
     returnValueForMissingStub: null,
@@ -1490,6 +1501,12 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   @override
   set metronAutoScrobble(bool? value) => super.noSuchMethod(
     Invocation.setter(#metronAutoScrobble, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set smartCollectionRulesJson(String? value) => super.noSuchMethod(
+    Invocation.setter(#smartCollectionRulesJson, value),
     returnValueForMissingStub: null,
   );
 

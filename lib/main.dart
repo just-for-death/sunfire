@@ -23,6 +23,8 @@ import 'src/core/sync/graphql_client_service.dart';
 import 'src/core/sync/server_auth_helper.dart';
 import 'src/core/sync/server_session_service.dart';
 import 'src/core/sync/sync_engine.dart';
+import 'src/core/sync/sync_health_service.dart';
+import 'src/core/sync/sync_manager.dart';
 import 'src/core/sync/websocket_service.dart';
 
 void main() async {
@@ -169,6 +171,9 @@ unawaited(
       // refresh on 401 / near expiry; WS reconnects with the new token).
       await ServerSessionService.instance.restore();
       unawaited(SyncEngine.instance.initialize());
+      // Thin orchestrator over SyncEngine — progress/UI entry, not a 2nd engine.
+      unawaited(SyncManager.instance.initialize());
+      SyncHealthService.instance.start();
       // D9.4: only the main window owns periodic background sync.
       if (!isSubWindow) {
         await BackgroundService.instance.initialize();
