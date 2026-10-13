@@ -7,28 +7,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:volume_controller/volume_controller.dart';
 
-import '../../constants/app_constants.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
-import '../../core/engine/image_validation.dart';
 import '../../core/engine/javascript/m_client.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
 import '../../core/services/download_manager_service.dart';
-import '../../core/services/safe_curl.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/services/wakelock_coordinator.dart';
 import '../../core/sync/live_activities_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/widget_sync_service.dart';
-import '../../core/utils/url_sanitizer.dart';
 import 'controller/gesture_pipeline.dart';
 import 'controller/navigation_controller.dart';
 import 'controller/page_loader.dart';
@@ -70,12 +65,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   Chapter? _prevChapter;
   List<Chapter> _siblingChapters = [];
   List<String> _pageUrls = [];
-  final Map<String, Uint8List> _recoveredImageBytes = {};
-  final Set<String> _recoveringUrls = {};
-  /// URLs whose automatic recovery already failed. Without this every rebuild
-  /// of a failed page re-ran the full multi-pass fetch (and up to 5 curl
-  /// attempts on desktop). Only an explicit tap on Retry clears an entry.
-  final Set<String> _failedImageUrls = {};
   bool _isLoading = true;
   bool _showControls = true;
   int _currentPage = 1;
@@ -238,8 +227,55 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       zoomAnimController: _zoomAnimController,
       webtoonZoomControllers: _webtoonZoomControllers,
     );
-    // R1.8: all chapter loads enter via ReaderController; implementation stays here.
-    _readerController.onRequestChapterLoad = _loadChapterAndPages;
+    // Reactive callbacks: ReaderScreen listens to controller events rather than
+    // driving chapter loads itself (R1.8 cutover — shim removed).
+    _readerController.onLoadingChanged = (loading) {
+      if (mounted) setState(() => _isLoading = loading);
+    };
+    _readerController.onChapterLoaded = (chapter, siblings, next, prev) {
+      if (!mounted) return;
+      final navCtrl = _readerController.navigationController;
+      final manga = navCtrl?.parentManga ?? _parentManga;
+      setState(() {
+        _chapter = chapter;
+        _siblingChapters = siblings;
+        _nextChapter = next;
+        _prevChapter = prev;
+        _pageUrls = navCtrl?.pageUrls ?? [];
+        _currentPage = navCtrl?.currentPage ?? 1;
+        _parentManga = manga;
+        _applyMangaReadingMode(manga);
+        _isLoading = false;
+      });
+      _syncPageLoader();
+      _syncGestureNavChapters();
+      _mirrorPlatformReadingSession(progress: null);
+      _setPageIndicator(_currentPage);
+      final initialPageIndex = _pagedControllerIndexForPage(_currentPage);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
+        if (isPaged) {
+          if (_pageController.hasClients) {
+            _pageController.jumpToPage(initialPageIndex);
+          } else {
+            final old = _pageController;
+            _pageController = PageController(initialPage: initialPageIndex);
+            old.dispose();
+          }
+        } else if (_scrollController.hasClients) {
+          _jumpToWebtoonPage(_currentPage);
+        }
+      });
+      // Kick off next-chapter prefetch in background
+      if (next != null) unawaited(_prefetchChapter(next));
+    };
+    _readerController.onPageChanged = (page) {
+      if (mounted) {
+        setState(() => _currentPage = page);
+        _setPageIndicator(page);
+      }
+    };
     _initPreferences();
     _wireGesturePipeline();
     if (_settings.keepScreenAwake) {
@@ -892,11 +928,17 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       return;
     }
     existing?.dispose();
-    _pageLoader = PageLoader(
+    final loader = PageLoader(
       sourceName: source,
       mangaId: ch.mangaId,
       chapterTargetId: targetId,
     );
+    // I3: when PageLoader finishes any page, rebuild so _buildPageWidget can
+    // serve the bytes via peekCachedBytes on the next frame.
+    loader.onPageLoaded = (url, _) {
+      if (mounted) setState(() {});
+    };
+    _pageLoader = loader;
     _readerController.setPageLoader(_pageLoader);
   }
 
@@ -904,7 +946,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     // Failed URLs must never be probed again: resolving them would issue a
     // fresh network fetch and, when the stream never completes, leak the
     // ImageStreamListener. Cached heights are already known — skip those too.
-    if (_failedImageUrls.contains(url) || _cachedPageHeights.containsKey(url)) return;
+    if ((_pageLoader?.isUrlFailed(url) ?? false) || _cachedPageHeights.containsKey(url)) return;
     // The only dedup used to be the height cache, which is absent while a page
     // is still LOADING — the normal state. So every rebuild of a loading page
     // attached ANOTHER listener to the same ImageStream, and the stream held
@@ -1189,9 +1231,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     unawaited(LiveActivitiesService.instance.endReading());
     unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     _focusNode.dispose();
-    _recoveredImageBytes.clear();
-    _recoveringUrls.clear();
-    _failedImageUrls.clear();
     _prefetchedChapters.clear();
     _prefetchAttemptedAt.clear();
     _prefetchingChapters.clear();
@@ -1206,26 +1245,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     super.dispose();
   }
 
-  void _storeRecoveredImage(String url, Uint8List bytes) {
-    if (_recoveredImageBytes.length >= 40) {
-      // Never evict bytes for pages currently on screen (current page ±2) just
-      // because they happen to be the oldest — that would force a re-fetch and
-      // a visible flash under memory pressure while paging.
-      String? evictCandidate;
-      for (final key in _recoveredImageBytes.keys) {
-        final idx = _pageUrls.indexOf(key);
-        if (idx == -1 || (idx - (_currentPage - 1)).abs() > 2) {
-          evictCandidate = key;
-          break;
-        }
-      }
-      evictCandidate ??= _recoveredImageBytes.keys.first;
-      _recoveredImageBytes.remove(evictCandidate);
-    }
-    _recoveredImageBytes[url] = bytes;
-    // I3: keep PageLoader LRU in sync so warm/peek can feed visible widgets.
-    _pageLoader?.cacheBytes(url, bytes);
-  }
 
   // Local chapters are persisted with synthetic NEGATIVE serverIds, so `!= 0`
   // (not `> 0`) is the right discriminator — a negative id still resolves via
@@ -1262,9 +1281,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _updateProgress(_currentPage);
     }
     _stopAutoScroll();
-    _recoveredImageBytes.clear();
-    _recoveringUrls.clear();
-    _failedImageUrls.clear();
     _cachedPageHeights.clear();
     _cachedPageAspects.clear();
     _pageLoader?.dispose();
@@ -1521,7 +1537,12 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     // Proactively pre-fetch first 5 pages on desktop to bypass Cloudflare image CDN blocking immediately
     if (!kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
       for (int i = 0; i < _pageUrls.length && i < 5; i++) {
-        unawaited(_recoverImage(_pageUrls[i], i));
+        unawaited(_pageLoader!.loadPage(
+          url: _pageUrls[i],
+          index: i,
+          priority: PageLoadPriority.current,
+          sourceName: _sourceName,
+        ));
       }
     }
 
@@ -1779,14 +1800,22 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
 
     // Prefetch a few previous pages' images when scrolling up (helps placeholder stability).
-    if (computedPage > 1) {
+    if (computedPage > 1 && _pageLoader != null) {
       final start = (computedPage - 4).clamp(1, _pageUrls.length);
       for (int p = start; p < computedPage; p++) {
         final url = _pageUrls[p - 1];
         if (url.startsWith('http') && !_cachedPageHeights.containsKey(url)) {
-          // Warm decode path on desktop via existing recover; mobile uses Image cache.
           if (!kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-            unawaited(_recoverImage(url, p - 1));
+            if (_pageLoader?.peekCachedBytes(url) == null &&
+                !(_pageLoader?.isUrlLoading(url) ?? false) &&
+                !(_pageLoader?.isUrlFailed(url) ?? false)) {
+              unawaited(_pageLoader!.loadPage(
+                url: url,
+                index: p - 1,
+                priority: PageLoadPriority.prev,
+                sourceName: _sourceName,
+              ));
+            }
           }
         }
       }
@@ -1799,9 +1828,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   }
 
   /// R1.8 / I3: priority-warm current/next/prev via PageLoader (all non-web).
-  /// Desktop still owns the heavier curl-based upcoming prefetch separately.
-  /// On success, promote bytes into `_recoveredImageBytes` so visible widgets
-  /// render from memory instead of re-hitting the network.
   void _warmPagesViaLoader(int pageOneBased) {
     final loader = _pageLoader;
     if (loader == null || _pageUrls.isEmpty || kIsWeb) return;
@@ -1809,26 +1835,13 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     void warm(int i, PageLoadPriority priority) {
       if (i < 0 || i >= _pageUrls.length) return;
       final url = _pageUrls[i];
-      if (_recoveredImageBytes.containsKey(url)) return;
-      final cached = loader.peekCachedBytes(url);
-      if (cached != null) {
-        // Promote loader cache into the screen map without another download.
-        if (mounted) setState(() => _storeRecoveredImage(url, cached));
-        return;
-      }
-      unawaited(() async {
-        final result = await loader.loadPage(
-          url: url,
-          index: i,
-          priority: priority,
-          sourceName: _sourceName,
-        );
-        if (!mounted) return;
-        final bytes = result.bytes;
-        if (bytes == null || bytes.isEmpty) return;
-        if (_recoveredImageBytes.containsKey(url)) return;
-        setState(() => _storeRecoveredImage(url, bytes));
-      }());
+      if (loader.peekCachedBytes(url) != null || loader.isUrlLoading(url) || loader.isUrlFailed(url)) return;
+      unawaited(loader.loadPage(
+        url: url,
+        index: i,
+        priority: priority,
+        sourceName: _sourceName,
+      ));
     }
     warm(idx, PageLoadPriority.current);
     warm(idx + 1, PageLoadPriority.next);
@@ -2373,131 +2386,6 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     ));
   }
 
-  /// Delegates to the shared validator.
-  ///
-  /// This private copy required a third JPEG byte, accepted a bare `GIF`
-  /// prefix, and knew nothing about AVIF/HEIC or JPEG XL — so the reader, the
-  /// downloader and the resolver gave three different answers for the same
-  /// bytes. That is the exact drift the shared module exists to end.
-  bool _isMagicImage(List<int> bytes) => looksLikeImageHeader(bytes);
-
-  Future<void> _recoverImage(String url, int index, {bool manual = false}) async {
-    // Every other async write in this file is gated on `_loadGeneration`;
-    // this one was gated only on `mounted`. A chapter switch clears the caches
-    // while up to five desktop prefetches plus four lookahead fetches are still
-    // in flight with 15-30s timeouts, and each one landed in
-    // `_recoveredImageBytes` for a URL that is not in the new `_pageUrls` —
-    // which the eviction logic then classified as evictable. So rapid chapter
-    // switching filled the 40-entry (~20MB) cache with the PREVIOUS chapter's
-    // pages, evicting the current chapter's useful entries and forcing visible
-    // re-fetch and image flicker exactly when the user was paging fastest.
-    final gen = _loadGeneration;
-    if (manual) {
-      _failedImageUrls.remove(url);
-    } else if (_failedImageUrls.contains(url)) {
-      return;
-    }
-    if (_recoveringUrls.contains(url) || _recoveredImageBytes.containsKey(url)) return;
-    _recoveringUrls.add(url);
-    if (manual && mounted) setState(() {});
-    try {
-      final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
-      final cookieHeaders = MClient.getCookiesPref(url);
-
-      // 1. On Desktop: try curl-impersonate FIRST with clean baseHeaders (Referer only)
-      if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
-        final bytes = await runCurlWithSemaphore(
-          url: url,
-          maxTimeSeconds: 15,
-          headers: baseHeaders,
-          skipHeaders: const {'user-agent', 'cookie'},
-          timeout: const Duration(seconds: 30),
-        );
-        if (bytes != null && bytes.length > 200 && _isMagicImage(bytes)) {
-          // Drop the result entirely if the reader moved on — caching it would
-          // evict the current chapter's pages.
-          if (gen != _loadGeneration) return;
-          if (mounted) {
-            setState(() {
-              _storeRecoveredImage(url, bytes);
-            });
-          }
-          return;
-        }
-      }
-
-      // 2. Standard HTTP fetch fallback with multi-pass self-healing
-      final initialHeaders = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
-      final client = MClient.init(showCloudFlareError: false);
-      http.Response? res;
-
-      try {
-        final uri = Uri.tryParse(url) ?? Uri.tryParse(Uri.encodeFull(url));
-        if (uri == null) return;
-
-        // Pass 1: Standard fetch
-        try {
-          res = await client.get(uri, headers: initialHeaders).timeout(const Duration(seconds: 15));
-        } catch (e) {
-          debugPrint('[Reader] HTTP fetch attempt 1 failed: $e');
-        }
-
-        // Pass 2: If failed and had Referer, retry with NO Referer (anti-hotlink bypass)
-        if ((res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) && initialHeaders.containsKey('Referer')) {
-          final noReferer = Map<String, String>.from(initialHeaders)..remove('Referer');
-          try {
-            res = await client.get(uri, headers: noReferer).timeout(const Duration(seconds: 15));
-          } catch (e) {
-            debugPrint('[Reader] HTTP fetch attempt 2 (no referer) failed: $e');
-          }
-        }
-
-        // Pass 3: If still failed, retry with Origin Referer (same-origin requirement bypass)
-        if (res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) {
-          try {
-            final originReferer = Map<String, String>.from(initialHeaders)..['Referer'] = '${uri.origin}/';
-            res = await client.get(uri, headers: originReferer).timeout(const Duration(seconds: 15));
-          } catch (e) {
-            debugPrint('[Reader] HTTP fetch attempt 3 (origin referer) failed: $e');
-          }
-        }
-
-        // Pass 4: Clean Browser User-Agent and Accept headers
-        if (res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) {
-          try {
-            final browserHeaders = Map<String, String>.from(initialHeaders)
-              ..['User-Agent'] = kBrowserUserAgent
-              ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
-            res = await client.get(uri, headers: browserHeaders).timeout(const Duration(seconds: 15));
-          } catch (e) {
-            debugPrint('[Reader] HTTP fetch attempt 4 (browser headers) failed: $e');
-          }
-        }
-
-        if (res != null && res.statusCode == 200 && res.bodyBytes.isNotEmpty && _isMagicImage(res.bodyBytes)) {
-          if (gen != _loadGeneration) return;
-          if (mounted) {
-            setState(() {
-              _storeRecoveredImage(url, res!.bodyBytes);
-            });
-          }
-        } else {
-          debugPrint('[Reader] ❌ Image still failed ${sanitizeUrlForLog(url)} -> ${res?.statusCode}');
-        }
-      } finally {
-        client.close();
-      }
-    } catch (e) {
-      debugPrint('[Reader] Image fetch error for ${sanitizeUrlForLog(url)}: $e');
-    } finally {
-      _recoveringUrls.remove(url);
-      if (!_recoveredImageBytes.containsKey(url)) {
-        _failedImageUrls.add(url);
-        // Swap the spinner for the Retry affordance.
-        if (mounted) setState(() {});
-      }
-    }
-  }
 
   void _prefetchUpcomingPages(int currentIndex) {
     if (kIsWeb || !(Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
@@ -2509,9 +2397,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
     for (int i = currentIndex + 1; i <= currentIndex + 4 && i < _pageUrls.length; i++) {
       final nextUrl = _pageUrls[i];
-      if (_recoveredImageBytes.containsKey(nextUrl) ||
-          _recoveringUrls.contains(nextUrl) ||
-          _failedImageUrls.contains(nextUrl)) {
+      if (loader.peekCachedBytes(nextUrl) != null ||
+          loader.isUrlLoading(nextUrl) ||
+          loader.isUrlFailed(nextUrl)) {
         continue;
       }
       if (!(nextUrl.startsWith('http://') || nextUrl.startsWith('https://'))) {
@@ -2519,38 +2407,13 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       }
       final priority =
           i == currentIndex + 1 ? PageLoadPriority.next : PageLoadPriority.prefetch;
-      _recoveringUrls.add(nextUrl);
-      unawaited(_prefetchUpcomingViaPageLoader(loader, nextUrl, i, priority));
-    }
-  }
-
-  /// R1.8: priority load via [PageLoader]; fall back to multi-pass [_recoverImage].
-  Future<void> _prefetchUpcomingViaPageLoader(
-    PageLoader loader,
-    String url,
-    int index,
-    PageLoadPriority priority,
-  ) async {
-    try {
-      final result = await loader.loadPage(
-        url: url,
-        index: index,
+      unawaited(loader.loadPage(
+        url: nextUrl,
+        index: i,
         priority: priority,
         sourceName: _sourceName,
-      );
-      if (!mounted) return;
-      if (result.bytes != null && result.bytes!.isNotEmpty) {
-        setState(() {
-          _recoveredImageBytes[url] = result.bytes!;
-          _recoveringUrls.remove(url);
-        });
-        return;
-      }
-    } catch (e) {
-      debugPrint('[Reader] PageLoader prefetch failed for ${sanitizeUrlForLog(url)}: $e');
+      ));
     }
-    _recoveringUrls.remove(url);
-    if (mounted) unawaited(_recoverImage(url, index));
   }
 
   Widget _buildPageWidget(String url, int index, {BoxConstraints? constraints, bool isPaged = false, double? contentWidth, bool enablePerPageZoom = false}) {
@@ -2568,9 +2431,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _prefetchUpcomingPages(index);
     }
 
-    // I3: prefer screen recover map, then PageLoader LRU (warm/prefetch).
-    final memoryBytes =
-        _recoveredImageBytes[url] ?? _pageLoader?.peekCachedBytes(url);
+    // I3: use PageLoader LRU as primary cache (includes bytes stored via onPageLoaded).
+    final memoryBytes = _pageLoader?.peekCachedBytes(url);
 
     Widget image;
     if (memoryBytes != null) {
@@ -2608,39 +2470,37 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
           ),
         ),
       );
-    } else if (isDesktop) {
-      // On desktop: fetch directly via curl-impersonate without firing failing Dart Image.network 403s
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_recoverImage(url, index));
-      });
-      image = Container(
-        height: placeholderHeight,
-        width: imageWidth ?? double.infinity,
-        color: _canvasBackgroundColor,
-        child: Center(
-          child: _recoveringUrls.contains(url)
-              ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
-              : IconButton(
-                  icon: const Icon(Icons.refresh_rounded, color: Colors.grey),
-                  tooltip: 'Retry Page ${index + 1}',
-                  onPressed: () => _recoverImage(url, index, manual: true),
-                ),
-        ),
-      );
     } else {
-      // Gate on the known-failed set FIRST so a failed URL renders the static
-      // retry affordance instead of re-issuing an Image.network fetch on every
-      // webtoon item rebuild. _recoverImage(manual:) clears the flag to retry.
-      if (_failedImageUrls.contains(url)) {
+      // I3: All HTTP loads (desktop + mobile) channel through PageLoader.
+      // PageLoader tracks in-flight and failed state; onPageLoaded triggers
+      // setState so peekCachedBytes reflects the new bytes on next build.
+      final loader = _pageLoader;
+      final isFailed = loader?.isUrlFailed(url) ?? false;
+      final isLoading = loader?.isUrlLoading(url) ?? false;
+
+      if (isFailed) {
+        // Show static retry affordance. Tap clears the failed flag and
+        // re-triggers PageLoader; onPageLoaded will setState with fresh bytes.
         image = Container(
           height: isWebtoon ? placeholderHeight : 300.0,
           width: imageWidth ?? double.infinity,
           color: _canvasBackgroundColor,
           child: Center(
-            child: _recoveringUrls.contains(url)
+            child: isLoading
                 ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
                 : InkWell(
-                    onTap: () => _recoverImage(url, index, manual: true),
+                    onTap: () {
+                      loader?.clearFailed(url);
+                      if (loader != null) {
+                        unawaited(loader.loadPage(
+                          url: url,
+                          index: index,
+                          priority: PageLoadPriority.current,
+                          sourceName: _sourceName,
+                        ));
+                      }
+                      if (mounted) setState(() {});
+                    },
                     borderRadius: BorderRadius.circular(12),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -2659,59 +2519,29 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
           ),
         );
       } else {
-        final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
-        final cookieHeaders = MClient.getCookiesPref(url);
-        final headers = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
-
-        image = Image.network(
-          url,
-          headers: headers,
-          width: imageWidth,
-          fit: boxFit,
-          alignment: imageAlignment,
-          gaplessPlayback: true,
-          isAntiAlias: !isWebtoon,
-          filterQuality: isWebtoon ? FilterQuality.low : FilterQuality.medium,
-          loadingBuilder: (_, child, progress) {
-            if (progress == null) return child;
-            return Container(
-              height: placeholderHeight,
-              width: imageWidth ?? double.infinity,
-              color: _canvasBackgroundColor,
-              child: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) unawaited(_recoverImage(url, index));
-            });
-            return Container(
-              height: isWebtoon ? placeholderHeight : 300.0,
-              width: imageWidth ?? double.infinity,
-              color: _canvasBackgroundColor,
-              child: Center(
-                child: _recoveringUrls.contains(url)
-                    ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
-                    : InkWell(
-                        onTap: () => _recoverImage(url, index, manual: true),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.refresh_rounded, size: 28, color: Colors.grey),
-                              const SizedBox(height: 6),
-                              Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              Text('Tap to Retry', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      ),
-              ),
-            );
-          },
+        // Trigger load if not already in flight; onPageLoaded fires setState to
+        // push bytes into peekCachedBytes on the next build cycle.
+        if (!isLoading && loader != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            unawaited(loader.loadPage(
+              url: url,
+              index: index,
+              priority: PageLoadPriority.current,
+              sourceName: _sourceName,
+            ));
+          });
+        }
+        image = Container(
+          height: placeholderHeight,
+          width: imageWidth ?? double.infinity,
+          color: _canvasBackgroundColor,
+          child: Center(
+            child: CircularProgressIndicator(
+              color: Theme.of(context).colorScheme.primary,
+              strokeWidth: 2,
+            ),
+          ),
         );
       }
     }

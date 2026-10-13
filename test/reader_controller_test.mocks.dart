@@ -2588,11 +2588,12 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
 
   @override
   _i14.Future<_i10.PageLoadResult> loadPage({
-    required String? url,
-    required int? index,
-    _i10.PageLoadPriority? priority = _i10.PageLoadPriority.current,
+    required String url,
+    required int index,
+    _i10.PageLoadPriority priority = _i10.PageLoadPriority.current,
     String? sourceName,
     Map<String, String>? headers,
+    bool retry = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#loadPage, [], {
@@ -2601,6 +2602,7 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
               #priority: priority,
               #sourceName: sourceName,
               #headers: headers,
+              #retry: retry,
             }),
             returnValue: _i14.Future<_i10.PageLoadResult>.value(
               _FakePageLoadResult_14(
@@ -2611,6 +2613,7 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
                   #priority: priority,
                   #sourceName: sourceName,
                   #headers: headers,
+                  #retry: retry,
                 }),
               ),
             ),

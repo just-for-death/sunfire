@@ -228,6 +228,10 @@ class ReaderController {
     _webtoonZoomControllers = webtoonZoomControllers;
     _initPreferences();
     _applySettingsToPipeline();
+    if (_subControllersInjected) {
+      _wireNavigationCallbacks();
+      _wireGestureCallbacks();
+    }
   }
 
   /// Keep PageLoader identity in sync when the live reader recreates it.
@@ -349,9 +353,17 @@ class ReaderController {
   }
 
   void _wireNavigationCallbacks() {
+    _navigationController!.onLoadingChanged = (loading) {
+      onLoadingChanged?.call(loading);
+    };
+
     _navigationController!.onChapterLoaded = (chapter, siblings, next, prev) {
-      _currentPage = 1;
-      _gesturePipeline.setCurrentPage(1);
+      // Honour the resume page calculated by NavigationController (lastPageRead
+      // for unread chapters; 1 for finished or first-open). Overwriting with 1
+      // here would drop the user at the beginning of long chapters they were
+      // halfway through.
+      _currentPage = _navigationController!.currentPage;
+      _gesturePipeline.setCurrentPage(_currentPage);
       _gesturePipeline.setPageUrls(_navigationController!.pageUrls);
       _gesturePipeline.setNextChapter(next);
       _gesturePipeline.setPrevChapter(prev);

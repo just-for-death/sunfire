@@ -13,8 +13,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../core/engine/content_resolver_service.dart';
+import '../../../constants/app_constants.dart' show kBrowserUserAgent;
+import '../../../core/engine/image_validation.dart' show looksLikeImageHeader;
 import '../../../core/engine/javascript/m_client.dart';
 import '../../../core/engine/quickjs_service.dart';
 import '../../../core/services/safe_curl.dart';
@@ -112,13 +115,24 @@ class PageLoader {
   });
 
   /// Source name for header generation.
-  final String sourceName;
+  String sourceName;
 
   /// Manga ID for cache keys.
-  final int mangaId;
+  int mangaId;
 
   /// Chapter target ID (server ID or local ID).
-  final int chapterTargetId;
+  int chapterTargetId;
+
+  /// Update context for the currently loaded chapter.
+  void updateContext({
+    required String sourceName,
+    required int mangaId,
+    required int chapterTargetId,
+  }) {
+    this.sourceName = sourceName;
+    this.mangaId = mangaId;
+    this.chapterTargetId = chapterTargetId;
+  }
 
   /// Maximum memory for cached images (bytes).
   final int maxMemoryBytes;
@@ -146,6 +160,21 @@ class PageLoader {
 
   // Closed flag.
   bool _disposed = false;
+
+  // Set of failed URLs to prevent repeated failing requests unless retried.
+  final Set<String> _failedUrls = {};
+
+  /// Callback fired whenever a page finishes loading successfully into cache.
+  void Function(String url, Uint8List bytes)? onPageLoaded;
+
+  /// Check if a URL has failed previously.
+  bool isUrlFailed(String url) => _failedUrls.contains(url);
+
+  /// Check if a URL is currently loading or queued.
+  bool isUrlLoading(String url) => _inFlight.containsKey(url);
+
+  /// Clear failed status for a URL so it can be re-fetched.
+  void clearFailed(String url) => _failedUrls.remove(url);
 
   // ─── I3.4 Metrics: hit rate, memory usage, load time ─────────────
   int _cacheHits = 0;
@@ -186,9 +215,16 @@ class PageLoader {
     PageLoadPriority priority = PageLoadPriority.current,
     String? sourceName,
     Map<String, String>? headers,
+    bool retry = false,
   }) {
     if (_disposed) {
-      return Future.value(PageLoadResult(error: 'PageLoader disposed'));
+      return Future.value(const PageLoadResult(error: 'PageLoader disposed'));
+    }
+
+    if (retry) {
+      _failedUrls.remove(url);
+    } else if (_failedUrls.contains(url)) {
+      return Future.value(const PageLoadResult(error: 'Failed previously'));
     }
 
     // Check cache first
@@ -211,7 +247,7 @@ class PageLoader {
 
     final request = _PageLoadRequest(
       url: url,
-      index: 0, // index not used in loader
+      index: index,
       priority: priority,
       completer: completer,
       sourceName: sourceName,
@@ -292,6 +328,7 @@ class PageLoader {
     cancelAll();
     _cache.clear();
     _cachedHeights.clear();
+    _failedUrls.clear();
     _prefetchedChapters.clear();
     _prefetchingChapters.clear();
     resetMetrics();
@@ -303,9 +340,25 @@ class PageLoader {
     cancelAll();
     _cache.clear();
     _cachedHeights.clear();
+    _failedUrls.clear();
     _prefetchedChapters.clear();
     _prefetchingChapters.clear();
     resetMetrics();
+  }
+
+  /// Take prefetched pages for a chapter if available, removing from cache.
+  List<String>? takePrefetchedPages({
+    required int chapterTargetId,
+    required int mangaId,
+    String? sourceName,
+  }) {
+    final key = '$chapterTargetId|$mangaId';
+    final prefetched = _prefetchedChapters.remove(key);
+    if (prefetched == null) return null;
+    if (sourceName != null && sourceName.isNotEmpty && prefetched.sourceName.isNotEmpty) {
+      if (prefetched.sourceName != sourceName) return null;
+    }
+    return prefetched.urls;
   }
 
   /// Get cached intrinsic height for a URL (for webtoon layout).
@@ -387,14 +440,18 @@ class PageLoader {
       _totalLoadMicroseconds += stopwatch.elapsedMicroseconds;
       if (result.isSuccess) {
         _completedLoads++;
+        _failedUrls.remove(request.url);
         _cache.put(request.url, result.bytes!);
+        onPageLoaded?.call(request.url, result.bytes!);
       } else {
         _failedLoads++;
+        _failedUrls.add(request.url);
       }
       _safeComplete(request, result);
     } catch (e) {
       _totalLoadMicroseconds += stopwatch.elapsedMicroseconds;
       _failedLoads++;
+      _failedUrls.add(request.url);
       _safeComplete(request, PageLoadResult(error: e.toString()));
     } finally {
       _inFlight.remove(request.url);
@@ -408,6 +465,7 @@ class PageLoader {
       final result = await _loadImage(url, sourceName, null);
       if (result.isSuccess) {
         _cache.put(url, result.bytes!);
+        onPageLoaded?.call(url, result.bytes!);
       }
       return result;
     } catch (e) {
@@ -416,7 +474,7 @@ class PageLoader {
   }
 
   Future<PageLoadResult> _loadImage(String url, String? sourceName, Map<String, String>? extraHeaders) async {
-    if (_disposed) return PageLoadResult(error: 'Disposed');
+    if (_disposed) return const PageLoadResult(error: 'Disposed');
 
     // Build headers
     final baseHeaders = QuickJsService.getImageHeaders(sourceName ?? this.sourceName, url);
@@ -428,11 +486,17 @@ class PageLoader {
       ...?extraHeaders,
     };
 
-    // Desktop: try curl-impersonate fallback
+    // 1. Desktop: try curl-impersonate FIRST with clean baseHeaders (Referer only)
     if (!kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
       try {
-        final bytes = await _downloadViaCurl(url, headers);
-        if (bytes != null) {
+        final bytes = await runCurlWithSemaphore(
+          url: url,
+          maxTimeSeconds: 15,
+          headers: baseHeaders,
+          skipHeaders: const {'user-agent', 'cookie'},
+          timeout: const Duration(seconds: 30),
+        );
+        if (bytes != null && bytes.length > 200 && looksLikeImageHeader(bytes)) {
           return PageLoadResult(bytes: bytes);
         }
       } catch (e) {
@@ -440,39 +504,60 @@ class PageLoader {
       }
     }
 
-    // Standard HTTP
+    // 2. Standard HTTP with multi-pass self-healing
     final client = MClient.init(showCloudFlareError: false);
-    final response = await client.get(Uri.parse(url), headers: headers).timeout(loadTimeout);
+    try {
+      final uri = Uri.tryParse(url) ?? Uri.tryParse(Uri.encodeFull(url));
+      if (uri == null) return const PageLoadResult(error: 'Invalid URL');
 
-    if (response.statusCode == 200) {
-      final bytes = response.bodyBytes;
-      if (_isValidImageBytes(bytes)) {
-        return PageLoadResult(bytes: bytes);
+      http.Response? res;
+
+      // Pass 1: Standard fetch
+      try {
+        res = await client.get(uri, headers: headers).timeout(loadTimeout);
+      } catch (e) {
+        debugPrint('[PageLoader] HTTP fetch attempt 1 failed: $e');
       }
-      return PageLoadResult(error: 'Invalid image bytes');
-    } else {
-      return PageLoadResult(error: 'HTTP ${response.statusCode}');
+
+      // Pass 2: If failed and had Referer, retry with NO Referer (anti-hotlink bypass)
+      if ((res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !looksLikeImageHeader(res.bodyBytes)) &&
+          headers.containsKey('Referer')) {
+        final noReferer = Map<String, String>.from(headers)..remove('Referer');
+        try {
+          res = await client.get(uri, headers: noReferer).timeout(const Duration(seconds: 15));
+        } catch (e) {
+          debugPrint('[PageLoader] HTTP fetch attempt 2 (no referer) failed: $e');
+        }
+      }
+
+      // Pass 3: If still failed, retry with Origin Referer (same-origin requirement bypass)
+      if (res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !looksLikeImageHeader(res.bodyBytes)) {
+        try {
+          final originReferer = Map<String, String>.from(headers)..['Referer'] = '${uri.origin}/';
+          res = await client.get(uri, headers: originReferer).timeout(const Duration(seconds: 15));
+        } catch (e) {
+          debugPrint('[PageLoader] HTTP fetch attempt 3 (origin referer) failed: $e');
+        }
+      }
+
+      // Pass 4: Clean Browser User-Agent and Accept headers
+      if (res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !looksLikeImageHeader(res.bodyBytes)) {
+        try {
+          final browserHeaders = Map<String, String>.from(headers)
+            ..['User-Agent'] = kBrowserUserAgent
+            ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
+          res = await client.get(uri, headers: browserHeaders).timeout(const Duration(seconds: 15));
+        } catch (e) {
+          debugPrint('[PageLoader] HTTP fetch attempt 4 (browser headers) failed: $e');
+        }
+      }
+
+      if (res != null && res.statusCode == 200 && res.bodyBytes.isNotEmpty && looksLikeImageHeader(res.bodyBytes)) {
+        return PageLoadResult(bytes: res.bodyBytes);
+      }
+      return PageLoadResult(error: 'HTTP ${res?.statusCode ?? 0}');
+    } finally {
     }
-  }
-
-  Future<Uint8List?> _downloadViaCurl(String url, Map<String, String> headers) async {
-    // Use safe_curl's download capability
-    final result = await runCurlWithSemaphore(
-      url: url,
-      maxTimeSeconds: loadTimeout.inSeconds,
-      headers: headers,
-    );
-    return result;
-  }
-
-  bool _isValidImageBytes(Uint8List bytes) {
-    if (bytes.length < 2) return false;
-    // Check magic bytes for common image formats
-    if (bytes[0] == 0xFF && bytes[1] == 0xD8) return true; // JPEG
-    if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return true; // PNG
-    if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) return true; // GIF
-    if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46) return true; // WEBP
-    return false;
   }
 }
 
