@@ -101,6 +101,32 @@ V5_FIXES_SUMMARY.md
 ISSUES.md
 TEAM_STATUS.md
 AUDIT_FINDINGS.md
+*_PLAN.md
+*_TASKS.md
+*_TASK_BOARD.md
+*_AUDIT.md
+*_AUDIT_FINDINGS.md
+*_FIXES_SUMMARY.md
+*_PLAN.md
+*_TASK.md
+*_TASK_BOARD.md
+*_STATUS.md
+*_REPORT.md
+docs/planning/
+
+# AI / Agent / Assistant related (never commit)
+*.ai-*
+.ai-*
+*_AI.md
+*_AI_*.md
+*_assistant.md
+*_agent.md
+*_cursor*.md
+*_copilot*.md
+*_claude*.md
+*_gpt*.md
+*_gemini*.md
+*.session-protocol
 
 # Agent / Cursor local tooling (skills, rules, plans, task boards)
 .cursor/
