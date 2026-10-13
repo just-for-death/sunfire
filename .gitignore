@@ -112,6 +112,9 @@ V6_TASKS.md
 *_TASK_BOARD.md
 docs/planning/
 
+# AI Session Protocol (AI-to-AI communication)
+.ai-session
+
 # Removed working docs (deleted; do not re-add)
 /PROJECT_KNOWLEDGE_BASE.md
 /docs/releases/
