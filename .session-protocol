@@ -1,5 +1,5 @@
-# AI Session Protocol
-# This file maintains the current AI session state for multi-agent collaboration.
+# Session Protocol (Cross-Agent Communication)
+# This file maintains the current AI session state for cross-agent collaboration.
 # Update this file when starting/ending work sessions.
 
 ## Session Format
@@ -75,7 +75,7 @@ When another agent takes over:
 
 ---
 
-## Method: AI-to-AI Handoff
+## Method: Cross-agent Handoff
 
 ### Standard Handoff Template
 ```markdown
