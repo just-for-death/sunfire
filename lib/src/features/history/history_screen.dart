@@ -13,6 +13,8 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../main_shell.dart';
 import '../../ui/design_system/components/sunfire_chip.dart';
+import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 
 /// S6.7: timeline filter for the History screen.
@@ -268,9 +270,12 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: SunfireColors.error,
+              foregroundColor: Theme.of(dialogCtx).colorScheme.onError,
+            ),
             onPressed: () => Navigator.pop(dialogCtx, true),
-            child: const Text('Clear', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Clear', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -398,10 +403,10 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 4.0),
                                 child: Material(
-                                  color: const Color(0x1F2A2A32),
+                                  color: SunfireTheme.tileSurface(context),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16),
-                                    side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                                    side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                                   ),
                                   child: ListTile(
                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -420,9 +425,9 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                      actions: [
                                        TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Cancel')),
                                        ElevatedButton(
-                                         style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                         style: ElevatedButton.styleFrom(backgroundColor: SunfireColors.error),
                                          onPressed: () => Navigator.pop(dCtx, true),
-                                         child: const Text('Remove', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                         child: const Text('Remove', style: TextStyle(fontWeight: FontWeight.bold)),
                                        ),
                                      ],
                                    ),
@@ -446,7 +451,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                    height: 60,
                                    decoration: BoxDecoration(
                                      borderRadius: BorderRadius.circular(8),
-                                     color: Colors.grey[900],
+                                     color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                    ),
                                    child: ClipRRect(
                                      borderRadius: BorderRadius.circular(8),
@@ -472,12 +477,12 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                      child: LinearProgressIndicator(
                                        value: progressValue,
                                        minHeight: 4,
-                                       backgroundColor: const Color(0x33FFFFFF),
-                                       valueColor: AlwaysStoppedAnimation<Color>(ch.isRead ? Colors.greenAccent : primaryColor),
+                                       backgroundColor: SunfireTheme.overlayFill(context),
+                                       valueColor: AlwaysStoppedAnimation<Color>(ch.isRead ? SunfireColors.success : primaryColor),
                                      ),
                                    ),
                                    const SizedBox(height: 4),
-                                   Text(progressText, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500)),
+                                   Text(progressText, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                                  ],
                                ),
                                trailing: IconButton(

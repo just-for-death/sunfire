@@ -11,7 +11,6 @@ lib/src/features/browse/metron_series_detail_screen.dart 19
 lib/src/features/browse/migrate_search_screen.dart 26
 lib/src/features/browse/source_configuration_screen.dart 11
 lib/src/features/browse/source_manga_grid_screen.dart 27
-lib/src/features/history/history_screen.dart 10
 lib/src/features/library/duplicate_review_screen.dart 4
 lib/src/features/library/library_screen.dart 41
 lib/src/features/library/manga_tag_editor_sheet.dart 1
@@ -26,7 +25,7 @@ lib/src/features/reader/reader_auto_scroll_sheet.dart 10
 lib/src/features/reader/reader_chapter_selector_sheet.dart 9
 lib/src/features/reader/reader_chapter_transition.dart 1
 lib/src/features/reader/reader_overlay_hud.dart 45
-lib/src/features/reader/reader_screen_view.dart 12
+lib/src/features/reader/reader_screen_view.dart 3
 lib/src/features/reader/reader_settings_sheet.dart 11
 lib/src/features/reader/tap_zone_overlay.dart 7
 lib/src/features/settings/about_screen.dart 23
@@ -46,8 +45,6 @@ lib/src/features/settings/settings_screen.dart 12
 lib/src/features/settings/tracking_settings_screen.dart 68
 lib/src/features/settings/widgets/settings_prop_tile.dart 10
 lib/src/features/stats/reading_heatmap.dart 1
-lib/src/features/stats/stats_screen.dart 17
-lib/src/features/updates/updates_screen.dart 24
 lib/src/main_shell.dart 7
 lib/src/ui/shell/nav_chrome.dart 2
 lib/src/ui/widgets/conflict_resolution_dialog.dart 7

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/db/isar_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'reading_heatmap.dart';
 
@@ -149,17 +151,17 @@ class _StatsScreenState extends State<StatsScreen> {
                 // ── SUMMARY CARDS ──
                 Row(
                   children: [
-                    Expanded(child: _buildMetricCard('Reading Streak', _readingStreakDays == 1 ? '1 day' : '$_readingStreakDays days', Icons.local_fire_department_rounded, Colors.orangeAccent)),
+                    Expanded(child: _buildMetricCard(context, 'Reading Streak', _readingStreakDays == 1 ? '1 day' : '$_readingStreakDays days', Icons.local_fire_department_rounded, SunfireColors.warning)),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildMetricCard('Chapters Read', '$_totalReadChapters', Icons.check_circle_rounded, Colors.greenAccent)),
+                    Expanded(child: _buildMetricCard(context, 'Chapters Read', '$_totalReadChapters', Icons.check_circle_rounded, SunfireColors.success)),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _buildMetricCard('Library Manga', '$_totalManga', Icons.auto_stories_rounded, primaryColor)),
+                    Expanded(child: _buildMetricCard(context, 'Library Manga', '$_totalManga', Icons.auto_stories_rounded, primaryColor)),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildMetricCard('Est. Read Time', _formatReadingTime(_totalReadTimeSeconds), Icons.timer_rounded, Colors.cyanAccent)),
+                    Expanded(child: _buildMetricCard(context, 'Est. Read Time', _formatReadingTime(_totalReadTimeSeconds), Icons.timer_rounded, SunfireColors.info)),
                   ],
                 ),
 
@@ -169,10 +171,10 @@ class _StatsScreenState extends State<StatsScreen> {
                 Text('OVERALL READING PROGRESS', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
                 const SizedBox(height: 8),
                 Material(
-                  color: const Color(0x1F2A2A32),
+                  color: SunfireTheme.tileSurface(context),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                    side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -195,7 +197,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           child: LinearProgressIndicator(
                             value: _totalChapters > 0 ? (_totalReadChapters / _totalChapters).clamp(0.0, 1.0) : 0.0,
                             minHeight: 8,
-                            backgroundColor: const Color(0x33FFFFFF),
+                            backgroundColor: SunfireTheme.overlayFill(context),
                             valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                           ),
                         ),
@@ -210,10 +212,10 @@ class _StatsScreenState extends State<StatsScreen> {
                 Text('READING ACTIVITY', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
                 const SizedBox(height: 8),
                 Material(
-                  color: const Color(0x1F2A2A32),
+                  color: SunfireTheme.tileSurface(context),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                    side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -228,10 +230,10 @@ class _StatsScreenState extends State<StatsScreen> {
                   Text('TOP GENRES', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
                   const SizedBox(height: 8),
                   Material(
-                    color: const Color(0x1F2A2A32),
+                    color: SunfireTheme.tileSurface(context),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                      side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
@@ -249,7 +251,7 @@ class _StatsScreenState extends State<StatsScreen> {
                                     child: LinearProgressIndicator(
                                       value: ratio,
                                       minHeight: 6,
-                                      backgroundColor: const Color(0x26FFFFFF),
+                                      backgroundColor: SunfireTheme.overlayFill(context),
                                       valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                                     ),
                                   ),
@@ -271,10 +273,10 @@ class _StatsScreenState extends State<StatsScreen> {
                   Text('SOURCES IN LIBRARY', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
                   const SizedBox(height: 8),
                   Material(
-                    color: const Color(0x1F2A2A32),
+                    color: SunfireTheme.tileSurface(context),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                      side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                     ),
                     child: Column(
                       children: (_sourceCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).map((e) {
@@ -282,7 +284,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           dense: true,
                           leading: Icon(Icons.source_rounded, color: primaryColor, size: 20),
                           title: Text(e.key, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          trailing: Text('${e.value} manga', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                          trailing: Text('${e.value} manga', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
                         );
                       }).toList(),
                     ),
@@ -293,12 +295,12 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Widget _buildMetricCard(String label, String value, IconData icon, Color color) {
+  Widget _buildMetricCard(BuildContext context, String label, String value, IconData icon, Color color) {
     return Material(
-      color: const Color(0x1F2A2A32),
+      color: SunfireTheme.tileSurface(context),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+        side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -309,7 +311,7 @@ class _StatsScreenState extends State<StatsScreen> {
             const SizedBox(height: 12),
             Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color, letterSpacing: -0.5)),
             const SizedBox(height: 4),
-            Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(label, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
         ),
       ),
