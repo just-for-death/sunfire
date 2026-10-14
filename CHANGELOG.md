@@ -172,6 +172,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - **RepoManager version compare** — prerelease identifiers compared
   numerically (e.g., `1.0.0-beta.2` < `1.0.0-beta.10`).
 
+[6.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v6.0.0
 [5.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v5.0.0
 
 ## [4.0.0] — 2026-09-27

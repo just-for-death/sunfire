@@ -23,6 +23,8 @@ import '../../core/sync/offline_monitor.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../main_shell.dart';
+import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../../ui/widgets/library_update_progress_banner.dart';
 import 'updates_feed_grouping.dart';
@@ -881,7 +883,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Update check failed: $e'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: SunfireColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -1066,7 +1068,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -1174,12 +1176,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
+              backgroundColor: SunfireColors.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Clear'),
@@ -1280,8 +1282,8 @@ unawaited(
               ),
               if (isDownloaded)
                 ListTile(
-                  leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                  title: const Text('Delete Download from Server', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                  leading: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error),
+                  title: const Text('Delete Download from Server', style: TextStyle(color: SunfireColors.error, fontWeight: FontWeight.bold)),
                   onTap: () async {
                     Navigator.pop(sheetContext);
                     if (GraphQLClientService.instance.isConfigured) {
@@ -1294,8 +1296,8 @@ unawaited(
                 ),
               if (isLocalDownloaded)
                 ListTile(
-                  leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                  title: const Text('Delete Download from Local Device', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                  leading: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error),
+                  title: const Text('Delete Download from Local Device', style: TextStyle(color: SunfireColors.error, fontWeight: FontWeight.bold)),
                   subtitle: const Text('Free up offline storage space on this device'),
                   onTap: () async {
                     Navigator.pop(sheetContext);
@@ -1343,11 +1345,11 @@ unawaited(
         vertical: 4.0,
       ),
       child: Material(
-        color: const Color(0x1F22222E),
+        color: SunfireTheme.tileSurface(context),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(
-            color: isRead ? const Color(0x15FFFFFF) : const Color(0x28FFFFFF),
+            color: isRead ? SunfireTheme.hairline(context) : SunfireTheme.tileBorder(context),
             width: 0.8,
           ),
         ),
@@ -1366,10 +1368,10 @@ unawaited(
                     height: isTablet ? 72 : 62,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
-                      color: Colors.grey[900],
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.35),
+                          color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.35),
                           blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
@@ -1510,7 +1512,7 @@ unawaited(
                                   : (ch.isDownloadedOnServer || (item['isDownloaded'] as bool? ?? false)
                                       ? Icons.cloud_done_rounded
                                       : Icons.download_rounded),
-                              color: isDownloaded ? Colors.greenAccent : Colors.grey,
+                              color: isDownloaded ? SunfireColors.downloadedBadge : Theme.of(context).colorScheme.onSurfaceVariant,
                               size: isTablet ? 22 : 20,
                             ),
                       tooltip: isLocalDownloaded
@@ -1582,19 +1584,19 @@ unawaited(
                 margin: const EdgeInsets.only(top: 2),
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                 decoration: BoxDecoration(
-                  color: Colors.teal.withValues(alpha: 0.15),
+                  color: SunfireColors.localJsBadge.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4), width: 0.6),
+                  border: Border.all(color: SunfireColors.localJsBadge.withValues(alpha: 0.4), width: 0.6),
                 ),
                 child: const Text(
                   'STANDALONE MODE',
-                  style: TextStyle(fontSize: 9.5, color: Colors.tealAccent, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  style: TextStyle(fontSize: 9.5, color: SunfireColors.localJsBadge, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                 ),
               )
             else if (_isOffline)
               Text(
                 _offlineBannerText,
-                style: const TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 11, color: SunfireColors.warning, fontWeight: FontWeight.w600),
               ),
           ],
         ),
@@ -1657,9 +1659,9 @@ unawaited(
                 value: 'clear_feed',
                 child: Row(
                   children: [
-                    Icon(Icons.clear_all_rounded, size: 20, color: Colors.redAccent),
+                    Icon(Icons.clear_all_rounded, size: 20, color: SunfireColors.error),
                     SizedBox(width: 10),
-                    Text('Clear feed', style: TextStyle(color: Colors.redAccent)),
+                    Text('Clear feed', style: TextStyle(color: SunfireColors.error)),
                   ],
                 ),
               ),
@@ -1713,7 +1715,7 @@ unawaited(
                                 ),
                                 child: Text(
                                   _lastUpdateText!,
-                                  style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                                 ),
                               ),
                             ),
@@ -1737,7 +1739,7 @@ unawaited(
                                           ? 'Pull down to check for updates or\nadd more manga to your library.'
                                           : 'Nothing matches your current filters\n(unread-only, languages, or search).',
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(color: Colors.grey, fontSize: 13),
+                                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
                                     ),
                                     const SizedBox(height: 20),
                                     if (_updatesList.isEmpty)
