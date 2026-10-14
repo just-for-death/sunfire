@@ -7,7 +7,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants/app_constants.dart';
@@ -21,6 +20,9 @@ import '../sync/bandwidth_policy.dart';
 import '../sync/download_foreground_task.dart';
 import '../sync/graphql_client_service.dart';
 import 'battery_state_service.dart';
+import 'cbz_packer.dart';
+import 'download_storage.dart';
+import 'download_throttle.dart';
 import 'notification_service.dart';
 import 'safe_curl.dart';
 import 'server_tls_trust.dart';
@@ -94,6 +96,10 @@ class LocalDownloadTask {
 
 class DownloadManagerService extends ChangeNotifier {
   static final DownloadManagerService instance = DownloadManagerService._();
+
+  /// IMP-037: shared per-source page-fetch throttle.
+  final SourceThrottle sourceThrottle =
+      SourceThrottle(limit: () => SettingsService.instance.downloadPerSourceLimit);
   DownloadManagerService._() {
     _configureDio();
     _initConnectivityListener();
@@ -248,15 +254,15 @@ class DownloadManagerService extends ChangeNotifier {
     try {
       final conn = await BandwidthPolicy.instance.currentClass();
       if (conn != ConnectionClass.metered) return;
-      final docs = await getApplicationDocumentsDirectory();
-      final dir = Directory('${docs.path}/downloads/$chapterId');
-      if (!await dir.exists()) return;
+      final dirs = await DownloadStorage.existingChapterDirs(chapterId);
+      if (dirs.isEmpty) return;
+      final dir = dirs.first;
       var total = 0;
       await for (final e in dir.list()) {
         if (e is File) total += await e.length();
       }
       await BandwidthPolicy.instance.recordBytes(total);
-    } catch (_) {}
+    } catch (e) { debugPrint('[download_manager_service] ignored: $e'); }
   }
 
   /// Serializes every queue-state write into a single chain.
@@ -874,8 +880,8 @@ class DownloadManagerService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       const doneKey = 'downloads_completion_marker_migrated_v1';
       if (prefs.getBool(doneKey) == true) return;
-      final appDir = await getApplicationDocumentsDirectory();
-      final downloadsDir = Directory('${appDir.path}/downloads');
+      // Legacy folders predate IMP-035, so they only live in the default root.
+      final downloadsDir = await DownloadStorage.defaultRoot();
       if (await downloadsDir.exists()) {
         final queuedIds = _localTasks.map((t) => t.chapterId).toSet();
         await for (final entity in downloadsDir.list()) {
@@ -944,9 +950,11 @@ class DownloadManagerService extends ChangeNotifier {
 
   Future<void> _scanDownloadedLocalChapters() async {
     try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final downloadsDir = Directory('${appDir.path}/downloads');
-      final ids = await scanCompleteChapterFolders(downloadsDir);
+      // IMP-035: both the chosen location and the default root.
+      final ids = <int>{};
+      for (final root in await DownloadStorage.roots()) {
+        ids.addAll(await scanCompleteChapterFolders(root));
+      }
       for (final id in ids) {
         _downloadedLocalChapterIds.add(id);
         final ch = await IsarService.instance.getChapterByServerId(id);
@@ -1314,8 +1322,9 @@ unawaited(
       throw Exception('No pages found for chapter ${task.chapterName}');
     }
 
-    final appDir = await getApplicationDocumentsDirectory();
-    final chapterDir = Directory('${appDir.path}/downloads/${task.chapterId}');
+    // IMP-035: refuse to start when the volume is below the reserve.
+    await DownloadStorage.ensureFreeSpace();
+    final chapterDir = await DownloadStorage.chapterDirForWrite(task.chapterId);
     if (!await chapterDir.exists()) {
       await chapterDir.create(recursive: true);
     }
@@ -1329,23 +1338,29 @@ unawaited(
       // so running several in parallel cuts total chapter time roughly by the
       // concurrency factor (e.g. a 50-page chapter at ~1s/page sequentially
       // takes ~50s; at 5-way concurrency it takes closer to ~10s).
-      const concurrency = 5;
+      // IMP-037: user setting (1-8) via a sliding worker pool, plus a
+      // process-wide per-source throttle against hotlink bans.
+      final concurrency = SettingsService.instance.downloadConcurrency;
+      bool stopped() =>
+          task.status == LocalDownloadStatus.failed ||
+          task.status == LocalDownloadStatus.paused ||
+          _isQueuePaused ||
+          cancelToken.isCancelled;
       var completed = 0;
-      for (var start = 0; start < totalPages; start += concurrency) {
-        final end = (start + concurrency < totalPages) ? start + concurrency : totalPages;
-        if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused || _isQueuePaused || cancelToken.isCancelled) {
-          throw Exception('Cancelled or paused');
-        }
-        await Future.wait(List.generate(end - start, (offset) async {
-          if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused || _isQueuePaused || cancelToken.isCancelled) return;
-          final i = start + offset;
-          await _downloadSinglePage(chapterDir, effectiveSource, rawPages[i], i, cancelToken: cancelToken);
+      await runBoundedPool(
+        count: totalPages,
+        concurrency: concurrency,
+        shouldStop: stopped,
+        job: (i) async {
+          await sourceThrottle.run(effectiveSource, () =>
+              _downloadSinglePage(chapterDir, effectiveSource, rawPages[i], i, cancelToken: cancelToken));
           if (task.status == LocalDownloadStatus.failed || task.status == LocalDownloadStatus.paused || cancelToken.isCancelled) return;
           completed++;
           task.progress = completed / totalPages;
           notifyListeners();
-        }));
-      }
+        },
+      );
+      if (stopped()) throw Exception('Cancelled or paused');
       // UIX-11: async listing + header-only probe. Reading every page in full
       // with `readAsBytesSync` on the UI isolate (tens of MB per chapter)
       // janked the UI during background downloads; the check only ever needed
@@ -1381,6 +1396,11 @@ unawaited(
       // reader back online. Writing the measured count keeps the two in
       // agreement by construction.
       await File('${chapterDir.path}/$kDownloadCompleteMarkerName').writeAsString('$validCount');
+      // IMP-036: optionally store the finished chapter as one CBZ.
+      if (SettingsService.instance.downloadAsCbz) {
+        final packed = await packChapterFolderAsCbz(chapterDir);
+        if (packed == 0) debugPrint('[DownloadManager] CBZ packing skipped for ${task.chapterId}; kept loose pages');
+      }
     } finally {
       // `_cancelTokens` is owned and cleaned up by _downloadChapterLocally, so
       // that the entry is registered across the page-list resolve too.
@@ -1417,7 +1437,7 @@ unawaited(
     } finally {
       try {
         await raf?.close();
-      } catch (_) {}
+      } catch (e) { debugPrint('[download_manager_service] ignored: $e'); }
     }
   }
 
@@ -1601,9 +1621,7 @@ unawaited(
         task.error = 'Cancelled';
       }
 
-      final appDir = await getApplicationDocumentsDirectory();
-      final chapterDir = Directory('${appDir.path}/downloads/$chapterId');
-      if (await chapterDir.exists()) {
+      for (final chapterDir in await DownloadStorage.existingChapterDirs(chapterId)) {
         await chapterDir.delete(recursive: true);
       }
       _downloadedLocalChapterIds.remove(chapterId);
@@ -1660,10 +1678,15 @@ unawaited(
     }
   }
 
+  /// IMP-035 (UIS picker): where new chapters are written.
+  Future<Directory> downloadDirectory() => DownloadStorage.downloadDirectory();
+
+  /// IMP-035 (UIS banner): true while the volume is below the freeSpace reserve.
+  ValueListenable<bool> get lowFreeSpace => DownloadStorage.lowStorage;
+
   Future<void> _cleanupIncompleteDownload(int chapterId) async {
     try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final chapterDir = Directory('${appDir.path}/downloads/$chapterId');
+      final chapterDir = await DownloadStorage.chapterDirForWrite(chapterId);
       if (await chapterDir.exists()) {
         await chapterDir.delete(recursive: true);
       }
@@ -1712,15 +1735,17 @@ unawaited(
   /// sync (which updates `chapter.isDownloadedOnServer`), and the local
   /// cache is rebuilt from the DB on startup.
   Future<void> enqueueServerDownload(int chapterId) async {
-    if (GraphQLClientService.instance.isConfigured) {
+    // IMP-002: negative ids are local-only chapters; nothing to ask the server.
+    if (chapterId > 0 && GraphQLClientService.instance.isConfigured) {
       await GraphQLClientService.instance.enqueueChapterDownload(chapterId);
     }
   }
 
   /// Batch enqueue for server downloads. No optimistic local marking.
   Future<void> enqueueServerDownloads(List<int> chapterIds) async {
-    if (GraphQLClientService.instance.isConfigured) {
-      await GraphQLClientService.instance.enqueueChapterDownloads(chapterIds);
+    final ids = chapterIds.where((id) => id > 0).toList(); // IMP-002
+    if (ids.isNotEmpty && GraphQLClientService.instance.isConfigured) {
+      await GraphQLClientService.instance.enqueueChapterDownloads(ids);
     }
   }
 
@@ -1733,17 +1758,26 @@ unawaited(
     }
   }
 
+  /// ISS-069: delete many server downloads in one `deleteDownloadedChapters`
+  /// round trip. Returns false (and keeps the local cache) when the server
+  /// call failed.
+  Future<bool> deleteServerDownloads(List<int> chapterIds) async {
+    if (!GraphQLClientService.instance.isConfigured || chapterIds.isEmpty) return false;
+    final ok = await GraphQLClientService.instance.deleteAllDownloadedChapters(chapterIds);
+    if (!ok) return false;
+    _downloadedServerChapterIds.removeAll(chapterIds);
+    await _rebuildServerMangaIds();
+    notifyListeners();
+    return true;
+  }
+
   /// Rebuilds the server-downloaded chapter/manga sets from the local DB.
   /// Call on startup and after sync to reconcile with the server's truth.
   Future<void> rebuildServerDownloadCache() async {
     _downloadedServerChapterIds.clear();
     _downloadedServerMangaIds.clear();
-    final chapters = await IsarService.instance.getAllChapters();
-    for (final ch in chapters) {
-      if (ch.isDownloadedOnServer) {
-        _downloadedServerChapterIds.add(ch.serverId);
-      }
-    }
+    // IMP-024: ids only, filtered in the DB.
+    _downloadedServerChapterIds.addAll(await IsarService.instance.getServerDownloadedChapterIds());
     await _rebuildServerMangaIds();
   }
 

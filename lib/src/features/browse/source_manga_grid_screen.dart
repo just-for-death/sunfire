@@ -13,6 +13,7 @@ import '../../core/logging/logger_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
@@ -55,6 +56,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   bool _isFilterApplied = false;
   List<SourceFilterChange> _serverFilterChanges = const [];
   bool _hasServerFilters = false;
+  List<SourceFilter>? _serverFilterPack;
 
   bool get _isServerSource =>
       GraphQLClientService.instance.isConfigured &&
@@ -82,6 +84,10 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
 
   Future<void> _fetchFiltersAndManga() async {
     // Check QuickJS availability before attempting to use local extensions
+    if (widget.sourceId.startsWith('local_js_')) {
+      await QuickJsService.instance.whenReady; // IMP-025: wait for startup
+      if (!mounted) return;
+    }
     final quickJsError = QuickJsService.instance.availabilityError;
     final isAndroid = !kIsWeb && Platform.isAndroid;
     if (quickJsError != null && isAndroid && widget.sourceId.startsWith('local_js_')) {
@@ -94,15 +100,18 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
 
     _dynamicFilters = await QuickJsService.instance.fetchSourceFiltersLocal(widget.sourceName);
     _hasDynamicFilters = _dynamicFilters.isNotEmpty;
+    // Load the first page right away; probe server filters in parallel.
+    unawaited(_fetchSourceManga());
     if (_isServerSource) {
       try {
         final pack = await GraphQLClientService.instance.fetchSourceFiltersAndPreferences(widget.sourceId);
-        _hasServerFilters = pack?.filters.any((f) => f.isInteractive) ?? false;
+        final has = pack?.filters.any((f) => f.isInteractive) ?? false;
+        _serverFilterPack = pack?.filters;
+        if (mounted) setState(() => _hasServerFilters = has);
       } catch (_) {
         _hasServerFilters = false;
       }
     }
-    unawaited(_fetchSourceManga());
   }
 
   @override
@@ -117,6 +126,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
       context,
       sourceId: widget.sourceId,
       initialChanges: _serverFilterChanges,
+      preloadedFilters: _serverFilterPack,
     );
     if (!mounted || changes == null) return;
     setState(() {
@@ -128,6 +138,10 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
 
   Future<void> _fetchSourceManga() async {
     // Check QuickJS availability for local JS extensions
+    if (widget.sourceId.startsWith('local_js_')) {
+      await QuickJsService.instance.whenReady; // IMP-025: wait for startup
+      if (!mounted) return;
+    }
     final quickJsError = QuickJsService.instance.availabilityError;
     final isAndroid = !kIsWeb && Platform.isAndroid;
     if (quickJsError != null && isAndroid && widget.sourceId.startsWith('local_js_')) {
@@ -147,7 +161,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
     });
 
     try {
-      _mangaList = await ContentResolverService.instance.resolveSourceManga(
+      final res = await ContentResolverService.instance.resolveSourceMangaPage(
         sourceId: widget.sourceId,
         sourceName: widget.sourceName,
         isLatest: _isLatestMode,
@@ -159,9 +173,11 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
         dynamicFilters: (_hasDynamicFilters && (_isFilterApplied || _searchQuery.trim().isNotEmpty)) ? _dynamicFilters : null,
         filters: _serverFilterChanges.isEmpty ? null : _serverFilterChanges,
       );
-      if (_mangaList.length < 10) {
-        _hasNextPage = false;
-      }
+      _mangaList = res.items;
+      _hasNextPage = ContentResolverService.computeHasNextPage(
+        serverHasNextPage: res.hasNextPage,
+        pageLength: res.items.length,
+      );
     } catch (e, stack) {
       await LoggerService.instance.logError('Failed to fetch source manga: $e', exception: e, stackTrace: stack, category: 'SourceGrid');
     } finally {
@@ -176,7 +192,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
 
     try {
       final nextPage = _currentPage + 1;
-      final newManga = await ContentResolverService.instance.resolveSourceManga(
+      final pageRes = await ContentResolverService.instance.resolveSourceMangaPage(
         sourceId: widget.sourceId,
         sourceName: widget.sourceName,
         isLatest: _isLatestMode,
@@ -189,6 +205,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
         filters: _serverFilterChanges.isEmpty ? null : _serverFilterChanges,
       );
 
+      final newManga = pageRes.items;
       if (mounted) {
         setState(() {
           if (newManga.isEmpty) {
@@ -215,7 +232,11 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
             } else {
               _currentPage = nextPage;
               _mangaList.addAll(uniqueNewManga);
-              if (newManga.length < 8) _hasNextPage = false;
+              _hasNextPage = ContentResolverService.computeHasNextPage(
+                serverHasNextPage: pageRes.hasNextPage,
+                pageLength: newManga.length,
+                localMinPageSize: 8,
+              );
             }
           }
         });
@@ -894,6 +915,41 @@ unawaited(
                 title: const Text('Add to Library (Default Category)', style: TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () async {
                   Navigator.pop(sheetContext);
+                  // H1: server first; only commit locally if the server applied it.
+                  // UIS6-15: if the server is unreachable, queue via the outbox,
+                  // keep the local add and offer Undo.
+                  int? queuedToken;
+                  if (GraphQLClientService.instance.isConfigured && isServerSourced) {
+                    final defId = SettingsService.instance.defaultCategoryId;
+                    try {
+                      await GraphQLClientService.instance.addMangaToLibraryOrThrow(
+                        mangaId,
+                        categoryIds: defId != null ? [defId] : const [],
+                      );
+                    } on ServerMutationException catch (e) {
+                      OutboxResult? q;
+                      if (e.isTransportFailure) {
+                        try {
+                          q = await SyncEngine.instance.setMangaInLibraryWithOutbox(
+                            mangaId,
+                            true,
+                            categoryIds: defId != null ? [defId] : null,
+                          );
+                        } on ServerMutationException {
+                          q = null;
+                        }
+                      }
+                      if (q == null || !q.queued) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to add "$title" to library. ${e.userMessage}')),
+                          );
+                        }
+                        return;
+                      }
+                      queuedToken = q.undoToken;
+                    }
+                  }
                   var localManga = await IsarService.instance.getMangaByServerId(mangaId);
                   if (localManga == null) {
                     localManga = Manga()
@@ -922,15 +978,35 @@ unawaited(
                     }
                     await IsarService.instance.saveManga(localManga);
                   }
-                  if (GraphQLClientService.instance.isConfigured && isServerSourced) {
-                    await GraphQLClientService.instance.updateMangaLibraryState(mangaId, true);
-                    if (SettingsService.instance.defaultCategoryId != null) {
-                      await GraphQLClientService.instance.updateMangaCategories(mangaId, [SettingsService.instance.defaultCategoryId!]);
-                    }
-                  }
                   if (mounted) {
+                    final token = queuedToken;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Added "$title" to library')),
+                      SnackBar(
+                        content: Text(token == null
+                            ? 'Added "$title" to library'
+                            : 'Added "$title" — will sync when the server is reachable'),
+                        action: token == null
+                            ? null
+                            : SnackBarAction(
+                                label: 'Undo',
+                                onPressed: () async {
+                                  final ok = await SyncEngine.instance.undoQueuedMutation(token);
+                                  if (!ok) {
+                                    try {
+                                      await SyncEngine.instance.setMangaInLibraryWithOutbox(mangaId, false);
+                                    } on ServerMutationException {
+                                      // Rejected: leave the local state as-is.
+                                      return;
+                                    }
+                                  }
+                                  final m = await IsarService.instance.getMangaByServerId(mangaId);
+                                  if (m != null) {
+                                    m.inLibrary = false;
+                                    await IsarService.instance.saveManga(m);
+                                  }
+                                },
+                              ),
+                      ),
                     );
                   }
                 },

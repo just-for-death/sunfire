@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show immutable, kDebugMode, listEquals, kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, immutable, kDebugMode, kIsWeb, listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,12 +16,14 @@ import '../../core/logging/logger_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/server_auth_helper.dart';
+import '../../core/sync/suwayomi_parse_helpers.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'extension_details_screen.dart';
 import 'global_search_screen.dart';
+import 'local_source_screen.dart';
 import 'migrate_search_screen.dart';
 import 'source_manga_grid_screen.dart';
 
@@ -118,7 +120,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         if (lang != null && lang.isNotEmpty) _selectedLangFilter = lang;
         if (source != null && source.isNotEmpty) _selectedSourceFilter = source;
       });
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) debugPrint('[browse] load filters failed: $e');
+    }
   }
 
   Future<void> _savePersistentFilters() async {
@@ -126,7 +130,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kLangFilterPref, _selectedLangFilter);
       await prefs.setString(_kSourceFilterPref, _selectedSourceFilter);
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) debugPrint('[browse] save filters failed: $e');
+    }
   }
 
   Future<void> _fetchServerSources() async {
@@ -212,7 +218,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               final m = n as Map<String, dynamic>;
               final id = m['id'].toString();
               final name = m['displayName'] as String? ?? m['name'] as String? ?? 'Source';
-              final isNsfw = m['isNsfw'] == true || m['nsfw'] == true || (m['isNsfw'] == 1) || (m['nsfw'] == 1) || name.toLowerCase().contains('18+') || name.toLowerCase().contains('hentai');
+              final isNsfw = isSourceNsfw(m);
               if (!SettingsService.instance.showNsfwSources && isNsfw) continue;
               final rawIcon = m['iconUrl'] as String?;
               final iconUrl = (rawIcon != null && rawIcon.isNotEmpty)
@@ -288,7 +294,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 final name = map['name'] as String? ?? 'Extension';
                 final lang = (map['lang'] as String? ?? 'en').toLowerCase();
                 final pkgName = (map['pkgName'] ?? map['name']).toString();
-                final isNsfw = map['isNsfw'] == true || map['nsfw'] == true || (map['isNsfw'] == 1) || (map['nsfw'] == 1) || name.toLowerCase().contains('18+') || name.toLowerCase().contains('hentai');
+                final isNsfw = isSourceNsfw(map);
                 if (!SettingsService.instance.showNsfwSources && isNsfw) continue;
                 final key = 'apk_$pkgName'.toLowerCase();
                 if (!seenKeys.add(key)) continue;
@@ -530,6 +536,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
     // Prevent installing/updating JS extensions when QuickJS is not available
     if (isJs && (!isInstalled || isUpdate)) {
+      await QuickJsService.instance.whenReady; // IMP-025
+      if (!mounted) return;
       final quickJsError = QuickJsService.instance.availabilityError;
       final isAndroid = !kIsWeb && Platform.isAndroid;
       if (quickJsError != null && isAndroid) {
@@ -934,6 +942,21 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     // and only for the rows actually on screen.
     final rows = <Object>[
       <Widget>[
+        // IMP-002: on-device folders and CBZ.
+        Card(
+          key: const ValueKey('localSourceEntry'),
+          margin: const EdgeInsets.only(bottom: 12),
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            leading: Icon(Icons.folder_special_rounded, color: primaryColor),
+            title: const Text('Local source'),
+            subtitle: const Text('Read folders and CBZ files on this device'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => unawaited(Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const LocalSourceScreen()),
+            )),
+          ),
+        ),
         Row(
           children: [
             Expanded(
@@ -1318,6 +1341,15 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     // Check QuickJS availability — on Android the flutter_qjs plugin may not
     // bundle native libraries, causing silent failures. Show a clear error
     // instead of a confusing empty/broken state.
+    // IMP-025: QuickJS starts in the background; show loading, not an error.
+    if (QuickJsService.instance.isStarting) {
+      return FutureBuilder<void>(
+        future: QuickJsService.instance.whenReady,
+        builder: (context, snap) => snap.connectionState == ConnectionState.done
+            ? _buildExtensionsTab()
+            : Center(child: CircularProgressIndicator(color: primaryColor)),
+      );
+    }
     final quickJsError = QuickJsService.instance.availabilityError;
     final isAndroid = !kIsWeb && Platform.isAndroid;
     if (quickJsError != null && isAndroid) {

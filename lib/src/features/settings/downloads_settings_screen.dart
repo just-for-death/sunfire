@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,7 +16,8 @@ class DownloadsSettingsScreen extends StatefulWidget {
   const DownloadsSettingsScreen({super.key});
 
   @override
-  State<DownloadsSettingsScreen> createState() => _DownloadsSettingsScreenState();
+  State<DownloadsSettingsScreen> createState() =>
+      _DownloadsSettingsScreenState();
 }
 
 class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
@@ -47,10 +50,22 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
           _isConnected = true;
           _downloadsPath = (s['downloadsPath'] as String?) ?? '';
           _downloadAsCbz = parseBoolSafe(s['downloadAsCbz'], true);
-          _autoDownloadNewChapters = parseBoolSafe(s['autoDownloadNewChapters'], true);
-          _autoDownloadLimit = parseIntSafe(s['autoDownloadNewChaptersLimit'], 0);
-          _excludeEntryWithUnreadChapters = parseBoolSafe(s['excludeEntryWithUnreadChapters'], false);
-          _autoDownloadIgnoreReUploads = parseBoolSafe(s['autoDownloadIgnoreReUploads'], true);
+          _autoDownloadNewChapters = parseBoolSafe(
+            s['autoDownloadNewChapters'],
+            true,
+          );
+          _autoDownloadLimit = parseIntSafe(
+            s['autoDownloadNewChaptersLimit'],
+            0,
+          );
+          _excludeEntryWithUnreadChapters = parseBoolSafe(
+            s['excludeEntryWithUnreadChapters'],
+            false,
+          );
+          _autoDownloadIgnoreReUploads = parseBoolSafe(
+            s['autoDownloadIgnoreReUploads'],
+            true,
+          );
         });
       } else {
         if (mounted) setState(() => _isConnected = false);
@@ -99,35 +114,49 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   void _showDeleteWhileReadingDialog() {
     final options = ['Disabled', 'Immediately', 'When next chapter opens'];
-    unawaited(showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Delete finished chapters while reading', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: options.map((opt) {
-              final isSelected = _settings.deleteFinishedChaptersWhileReading == opt;
-              return ListTile(
-                title: Text(opt),
-                trailing: isSelected ? const Icon(Icons.check_rounded, color: Colors.greenAccent) : null,
-                onTap: () {
-                  setState(() => _settings.deleteFinishedChaptersWhileReading = opt);
-                  Navigator.pop(context);
-                },
-              );
-            }).toList(),
-          ),
-        );
-      },
-    ));
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text(
+              'Delete finished chapters while reading',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((opt) {
+                final isSelected =
+                    _settings.deleteFinishedChaptersWhileReading == opt;
+                return ListTile(
+                  title: Text(opt),
+                  trailing: isSelected
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: Colors.greenAccent,
+                        )
+                      : null,
+                  onTap: () {
+                    setState(
+                      () => _settings.deleteFinishedChaptersWhileReading = opt,
+                    );
+                    Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -146,30 +175,49 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                     Container(
                       margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                        color: Theme.of(context).colorScheme.primary
+                            .withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35),
+                          color: Theme.of(context).colorScheme.primary
+                              .withValues(alpha: 0.35),
                           width: 1,
                         ),
                       ),
-                      child: ListTile(
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: ListTile(
                         leading: Container(
                           width: 38,
                           height: 38,
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                            color: Theme.of(context).colorScheme.primary
+                                .withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Icon(Icons.download_rounded, color: Theme.of(context).colorScheme.primary, size: 22),
+                          child: Icon(
+                            Icons.download_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 22,
+                          ),
                         ),
-                        title: const Text('View Active Download Queue', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                        title: const Text(
+                          'View Active Download Queue',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14.5,
+                          ),
+                        ),
                         subtitle: const Text(
                           'Monitor real-time progress for both Local Device and Suwayomi Server',
                           style: TextStyle(fontSize: 12, color: Colors.white60),
                         ),
-                        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+                        trailing: const Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.white54,
+                        ),
                         onTap: () => context.push('/downloads'),
+                      ),
                       ),
                     ),
 
@@ -181,7 +229,9 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       scope: SettingScope.server,
                       kind: SettingsPropKind.textField,
                       stringValue: _downloadsPath,
-                      subtitle: _downloadsPath.isNotEmpty ? _downloadsPath : 'Default (Server data/downloads)',
+                      subtitle: _downloadsPath.isNotEmpty
+                          ? _downloadsPath
+                          : 'Default (Server data/downloads)',
                       onStringChanged: (v) {
                         setState(() => _downloadsPath = v);
                         unawaited(_update('downloadsPath', v));
@@ -198,6 +248,15 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                         unawaited(_update('downloadAsCbz', v));
                       },
                     ),
+                    // IMP-036: on-device downloads packed as CBZ.
+                    SettingsPropTile(
+                      title: 'Save on-device downloads as CBZ',
+                      subtitle: 'Pack each chapter downloaded to this device into one .cbz file',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.switchTile,
+                      boolValue: _settings.downloadAsCbz,
+                      onBoolChanged: (v) => setState(() => _settings.downloadAsCbz = v),
+                    ),
 
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
 
@@ -208,20 +267,36 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       scope: SettingScope.local,
                       kind: SettingsPropKind.switchTile,
                       boolValue: _settings.deleteChapterAfterMarkedRead,
-                      onBoolChanged: (v) => _settings.deleteChapterAfterMarkedRead = v,
+                      onBoolChanged: (v) =>
+                          _settings.deleteChapterAfterMarkedRead = v,
                     ),
                     ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 2,
+                      ),
                       title: Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
                         spacing: 6,
                         runSpacing: 4,
                         children: [
-                          const Text('Delete finished chapters while reading', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          const Text(
+                            'Delete finished chapters while reading',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                           SunfireBadge.local(),
                         ],
                       ),
-                      subtitle: Text(_settings.deleteFinishedChaptersWhileReading, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      subtitle: Text(
+                        _settings.deleteFinishedChaptersWhileReading,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
                       onTap: _showDeleteWhileReadingDialog,
                     ),
                     SettingsPropTile(
@@ -229,10 +304,152 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       scope: SettingScope.local,
                       kind: SettingsPropKind.switchTile,
                       boolValue: _settings.allowDeletingBookmarkedChapters,
-                      onBoolChanged: (v) => _settings.allowDeletingBookmarkedChapters = v,
+                      onBoolChanged: (v) =>
+                          _settings.allowDeletingBookmarkedChapters = v,
+                    ),
+                    // IMP-038: keep the last N read chapters before deleting.
+                    SettingsPropTile(
+                      title: 'Keep recently read chapters',
+                      subtitle: _settings.deleteAfterReadOffset == 0
+                          ? 'Delete the chapter just read'
+                          : 'Keep the last ${_settings.deleteAfterReadOffset} read',
+                      description: 'How many read chapters to keep before deleting older ones',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.numberSlider,
+                      intValue: _settings.deleteAfterReadOffset,
+                      min: 0,
+                      max: 4,
+                      unit: ' Chapters',
+                      onIntChanged: (v) =>
+                          setState(() => _settings.deleteAfterReadOffset = v),
                     ),
 
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
+
+                    // ── IMP-037: DOWNLOAD SPEED ──
+                    // IMP-035: download folder + free-space reserve.
+                    const SectionTitle(title: 'Storage'),
+                    ValueListenableBuilder<bool>(
+                      valueListenable:
+                          DownloadManagerService.instance.lowFreeSpace,
+                      builder: (context, low, _) => !low
+                          ? const SizedBox.shrink()
+                          : Padding(
+                              key: const ValueKey('lowFreeSpaceBanner'),
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.errorContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.sd_card_alert_rounded,
+                                        color: Theme.of(context).colorScheme.onErrorContainer),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Low storage: downloads paused. Free up space or lower the reserve below.',
+                                        style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                    ),
+                    ListTile(
+                      key: const ValueKey('downloadFolderTile'),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 2,
+                      ),
+                      title: const Text(
+                        'Download folder',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      subtitle: Text(
+                        _settings.localDownloadDirectory.trim().isEmpty
+                            ? 'App default'
+                            : _settings.localDownloadDirectory,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      trailing: _settings.localDownloadDirectory.trim().isEmpty
+                          ? const Icon(Icons.folder_open_rounded)
+                          : IconButton(
+                              tooltip: 'Use app default',
+                              icon: const Icon(Icons.restart_alt_rounded),
+                              onPressed: () => setState(
+                                () => _settings.localDownloadDirectory = '',
+                              ),
+                            ),
+                      onTap: () async {
+                        final dir = await FilePicker.platform.getDirectoryPath(
+                          dialogTitle: 'Choose download folder',
+                        );
+                        if (!mounted || dir == null || dir.isEmpty) return;
+                        setState(() => _settings.localDownloadDirectory = dir);
+                      },
+                    ),
+                    SettingsPropTile(
+                      title: 'Keep free space',
+                      subtitle: '${_settings.downloadMinFreeSpaceMb} MB',
+                      description:
+                          'Downloads pause when free space drops below this',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.numberSlider,
+                      intValue: _settings.downloadMinFreeSpaceMb,
+                      min: 0,
+                      max: 2000,
+                      unit: ' MB',
+                      onIntChanged: (v) =>
+                          setState(() => _settings.downloadMinFreeSpaceMb = v),
+                    ),
+                    Divider(
+                      height: 1,
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+
+                    const SectionTitle(title: 'Download speed'),
+                    SettingsPropTile(
+                      title: 'Pages at once',
+                      subtitle: '${_settings.downloadConcurrency} at a time',
+                      description:
+                          'Total pages this device downloads in parallel',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.numberSlider,
+                      intValue: _settings.downloadConcurrency,
+                      min: 1,
+                      max: 8,
+                      unit: '',
+                      onIntChanged: (v) =>
+                          setState(() => _settings.downloadConcurrency = v),
+                    ),
+                    SettingsPropTile(
+                      title: 'Pages at once per source',
+                      subtitle: '${_settings.downloadPerSourceLimit} at a time',
+                      description: 'Higher values can trigger rate limits on some sources',
+                      scope: SettingScope.local,
+                      kind: SettingsPropKind.numberSlider,
+                      intValue: _settings.downloadPerSourceLimit,
+                      min: 1,
+                      max: 8,
+                      unit: '',
+                      onIntChanged: (v) =>
+                          setState(() => _settings.downloadPerSourceLimit = v),
+                    ),
+
+                    Divider(
+                      height: 1,
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
 
                     // ── 3. AUTO-DOWNLOAD ──
                     const SectionTitle(title: 'Auto-download'),
@@ -248,7 +465,9 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                     ),
                     SettingsPropTile(
                       title: 'Chapter download limit',
-                      subtitle: _autoDownloadLimit == 0 ? 'None' : '$_autoDownloadLimit Chapters',
+                      subtitle: _autoDownloadLimit == 0
+                          ? 'None'
+                          : '$_autoDownloadLimit Chapters',
                       description: 'Maximum number of chapters to automatically download per series',
                       scope: SettingScope.server,
                       kind: SettingsPropKind.numberSlider,
@@ -295,12 +514,14 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       scope: SettingScope.local,
                       kind: SettingsPropKind.switchTile,
                       boolValue: _settings.autoDownloadWhileReading,
-                      onBoolChanged: (v) => _settings.autoDownloadWhileReading = v,
+                      onBoolChanged: (v) =>
+                          _settings.autoDownloadWhileReading = v,
                     ),
                     if (_settings.autoDownloadWhileReading)
                       SettingsPropTile(
                         title: 'Number of unread chapters to download',
-                        subtitle: '${_settings.downloadAheadChapterCount} Chapters',
+                        subtitle:
+                            '${_settings.downloadAheadChapterCount} Chapters',
                         description: 'How many subsequent chapters to download ahead of current reading position',
                         scope: SettingScope.local,
                         kind: SettingsPropKind.numberSlider,
@@ -308,7 +529,8 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                         min: 1,
                         max: 10,
                         unit: ' Chapters',
-                        onIntChanged: (v) => _settings.downloadAheadChapterCount = v,
+                        onIntChanged: (v) =>
+                            _settings.downloadAheadChapterCount = v,
                       ),
 
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
@@ -321,7 +543,8 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       scope: SettingScope.local,
                       kind: SettingsPropKind.switchTile,
                       boolValue: _settings.downloadNotificationsEnabled,
-                      onBoolChanged: (v) => _settings.downloadNotificationsEnabled = v,
+                      onBoolChanged: (v) =>
+                          _settings.downloadNotificationsEnabled = v,
                     ),
                     if (Theme.of(context).platform == TargetPlatform.android)
                       SettingsPropTile(
@@ -333,7 +556,8 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                         onBoolChanged: (v) {
                           _settings.backgroundDownloadsEnabled = v;
                           if (!v) {
-                            DownloadManagerService.instance.stopBackgroundNotifier();
+                            DownloadManagerService.instance
+                                .stopBackgroundNotifier();
                           }
                         },
                       ),
@@ -344,7 +568,8 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                     const SectionTitle(title: 'Network Restrictions'),
                     SettingsPropTile(
                       title: 'Download only on Wi-Fi',
-                      subtitle: 'Prevent downloading manga over cellular mobile data',
+                      subtitle:
+                          'Prevent downloading manga over cellular mobile data',
                       scope: SettingScope.local,
                       kind: SettingsPropKind.switchTile,
                       boolValue: _settings.downloadOnlyOnWifi,
@@ -354,7 +579,9 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                         // until the running chapter happened to finish, so
                         // turning it on while on cellular kept burning mobile
                         // data for up to ~12 minutes with no way to stop it.
-                        unawaited(DownloadManagerService.instance.applyResourceGates());
+                        unawaited(
+                          DownloadManagerService.instance.applyResourceGates(),
+                        );
                       },
                     ),
                     SettingsPropTile(
@@ -365,7 +592,9 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       boolValue: _settings.downloadOnlyWhileCharging,
                       onBoolChanged: (v) {
                         _settings.downloadOnlyWhileCharging = v;
-                        unawaited(DownloadManagerService.instance.applyResourceGates());
+                        unawaited(
+                          DownloadManagerService.instance.applyResourceGates(),
+                        );
                       },
                     ),
                   ],

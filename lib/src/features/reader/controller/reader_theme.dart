@@ -29,6 +29,13 @@ Color canvasBackgroundColor(ReaderThemeMode mode) {
   }
 }
 
+/// Readable text/icon colour on a reader canvas background (white on dark
+/// canvases, near-black on the white canvas).
+Color canvasForegroundColor(Color background) =>
+    ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+        ? canvasBackgroundColor(ReaderThemeMode.white)
+        : canvasBackgroundColor(ReaderThemeMode.black).withValues(alpha: 0.87);
+
 /// Active color filter for a given mode.
 /// Returns null for [ReaderColorFilter.none].
 ColorFilter? activeColorFilter(ReaderColorFilter mode) {

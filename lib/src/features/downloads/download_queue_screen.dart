@@ -194,6 +194,39 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                     );
                   },
                 ),
+                ListenableBuilder(
+                  listenable: _downloadService,
+                  builder: (context, _) {
+                    final hasFailed = _downloadService.localTasks.any(
+                      (t) => t.status == LocalDownloadStatus.failed,
+                    );
+                    if (!hasFailed) return const SizedBox.shrink();
+                    return IconButton(
+                      icon: const Icon(Icons.refresh_rounded),
+                      tooltip: 'Retry all failed',
+                      onPressed: () {
+                        final failedTasks = _downloadService.localTasks
+                            .where((t) => t.status == LocalDownloadStatus.failed)
+                            .toList();
+                        for (final task in failedTasks) {
+                          unawaited(_downloadService.enqueueLocalDownload(
+                            chapterId: task.chapterId,
+                            mangaId: task.mangaId,
+                            chapterName: task.chapterName,
+                            mangaTitle: task.mangaTitle,
+                            chapterNumber: task.chapterNumber,
+                          ));
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Retrying ${failedTasks.length} failed downloads'),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
                 IconButton(
                   icon: const Icon(Icons.clear_all_rounded),
                   tooltip: 'Clear completed',

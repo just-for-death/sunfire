@@ -6,11 +6,14 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../constants/app_constants.dart';
 import '../logging/logger_service.dart';
+import '../utils/app_identity.dart';
 import 'chapter_url_attribution.dart';
 import 'headers_lru_cache.dart';
 import 'javascript/js_extension_service.dart';
 import 'javascript/m_client.dart';
+import 'local_source.dart' show LocalSource;
 import 'repo_manager.dart';
+import 'runtime_pool.dart';
 import 'source_icon_helper.dart';
 import 'source_preferences.dart';
 
@@ -71,9 +74,16 @@ class QuickJsService {
   final Map<String, String> _installedIcons = {};
 
   // JS runtime pool — reuse live JsExtensionService instances (LRU, max 5)
-  final Map<String, JsExtensionService> _runtimePool = {};
-  final List<String> _poolAccessOrder = []; // tracks LRU order
+  // IMP-029: per-source runtimes; busy ones are never evicted or disposed.
   static const int _poolMaxSize = 5;
+  final RuntimePool<JsExtensionService> _runtimePool = RuntimePool<JsExtensionService>(
+    maxSize: _poolMaxSize,
+    dispose: (r) => r.dispose(),
+    isDisposed: (r) => r.isDisposed,
+  );
+
+  @visibleForTesting
+  RuntimePool<JsExtensionService> get debugRuntimePool => _runtimePool;
 
   final Map<String, _AsyncLock> _sourceLocks = {};
 
@@ -118,7 +128,10 @@ class QuickJsService {
   /// User-friendly error message when QuickJS is not available.
   String? get availabilityError {
     if (!isSupported) return 'QuickJS is not supported on this platform (web).';
-    if (!_initialized) return 'QuickJS has not been initialized yet.';
+    if (!_initialized) {
+      if (!_initInFlight && _initError != null) return 'QuickJS failed to initialize: $_initError';
+      return _initInFlight ? 'Extensions are still loading…' : 'QuickJS has not been initialized yet.';
+    }
     if (_initError != null) return 'QuickJS failed to initialize: $_initError';
     return null;
   }
@@ -143,11 +156,15 @@ class QuickJsService {
     return _getLockFor(lockKey).synchronized(() async {
       final service = overran
           ? _createEphemeralRuntime(sourceName, jsCode)
-          : _getOrCreateRuntime(sourceName, jsCode);
+          : _runtimePool.acquire(lockKey, jsCode.hashCode, () => _createEphemeralRuntime(sourceName, jsCode));
       try {
         return await action(service);
       } finally {
-        if (overran) service.dispose();
+        if (overran) {
+          service.dispose();
+        } else {
+          _runtimePool.release(lockKey, service);
+        }
       }
     }, onOverrun: () {
       overran = true;
@@ -163,31 +180,6 @@ class QuickJsService {
     );
   }
 
-  /// Get or create a pooled JsExtensionService runtime for [sourceName].
-  JsExtensionService _getOrCreateRuntime(String sourceName, String jsCode) {
-    if (_runtimePool.containsKey(sourceName)) {
-      final existing = _runtimePool[sourceName]!;
-      if (!existing.isDisposed) {
-        _poolAccessOrder.remove(sourceName);
-        _poolAccessOrder.add(sourceName);
-        return existing;
-      }
-      _runtimePool.remove(sourceName);
-      _poolAccessOrder.remove(sourceName);
-    }
-    if (_runtimePool.length >= _poolMaxSize && _poolAccessOrder.isNotEmpty) {
-      final oldest = _poolAccessOrder.removeAt(0);
-      _runtimePool.remove(oldest)?.dispose();
-    }
-    final runtime = JsExtensionService(
-      sourceMeta: _sourceMetaFor(jsCode, sourceName),
-      sourceCode: jsCode,
-    );
-    _runtimePool[sourceName] = runtime;
-    _poolAccessOrder.add(sourceName);
-    return runtime;
-  }
-
   Map<String, dynamic> _sourceMetaFor(String jsCode, [String? sourceName]) {
     final meta = extractSourceMetadata(jsCode);
     final name = (sourceName != null && sourceName.isNotEmpty)
@@ -198,8 +190,7 @@ class QuickJsService {
 
   /// Invalidate a pooled runtime (e.g. when JS code is updated).
   void _invalidateRuntime(String sourceName) {
-    _runtimePool.remove(sourceName)?.dispose();
-    _poolAccessOrder.remove(sourceName);
+    _runtimePool.invalidate(_canonicalizeKey(sourceName));
   }
 
   /// Public invalidate when source preferences (mirror URL) change.
@@ -221,9 +212,33 @@ class QuickJsService {
   /// in tearDown.
   static List<String>? testOnlyExtensionDirs;
 
-  Future<void> initialize() async {
+  /// IMP-025: startup no longer awaits [initialize]; local-source calls
+  /// await this so they never run against a half-loaded extension set.
+  /// Never throws: a failed start leaves [availabilityError] set instead.
+  Future<void> get whenReady =>
+      _initFuture?.catchError((Object _) {}) ?? Future<void>.value();
+
+  /// Test-only: replaces the on-disk extension scan inside [initialize]
+  /// (e.g. to simulate a startup failure). Reset to null in tearDown.
+  @visibleForTesting
+  static Future<void> Function()? debugInitLoadOverride;
+  Future<void>? _initFuture;
+
+  /// True while [initialize] is still loading extensions.
+  bool get isStarting => _initInFlight;
+  bool _initInFlight = false;
+
+  Future<void> initialize() {
+    final f = _initialize();
+    _initFuture = f;
+    return f;
+  }
+
+  Future<void> _initialize() async {
+    _initInFlight = true;
     try {
-      await _loadInstalledExtensionsFromDisk();
+      final loadOverride = debugInitLoadOverride;
+      await (loadOverride != null ? loadOverride() : _loadInstalledExtensionsFromDisk());
       // Auto-install extensions from remote repos on first run if no extensions are installed
       if (!deferAutoInstall) {
         await _autoInstallExtensionsFromRemoteRepos();
@@ -234,6 +249,8 @@ class QuickJsService {
       _initialized = false;
       _initError = e.toString();
       await LoggerService.instance.logError('Failed to initialize QuickJS: $e', exception: e, stackTrace: stack, category: 'QuickJS');
+    } finally {
+      _initInFlight = false;
     }
   }
 
@@ -347,7 +364,7 @@ class QuickJsService {
     if (!kIsWeb && Platform.isLinux) {
       final home = Platform.environment['HOME'];
       if (home != null) {
-        candidateDirs.add('$home/.local/share/com.sunfire.sunfire/extensions');
+        candidateDirs.add('$home/.local/share/$kLinuxApplicationId/extensions');
         candidateDirs.add('$home/Documents/extensions');
       }
     }
@@ -872,6 +889,9 @@ class QuickJsService {
 
   String? getExtensionCode(String sourceName) {
     if (sourceName.isEmpty) return null;
+    // IMP-002: the on-device Local source is never a JS extension (and must
+    // not fuzzy-match one, which would scrape `localfs:` paths over the net).
+    if (sourceName == LocalSource.sourceName) return null;
     if (_installedJsSources.isEmpty) {
       // Extensions are loaded from remote repos on first run or from user-installed extensions on disk.
       // No bundled fallback available.
@@ -1012,6 +1032,14 @@ class QuickJsService {
   @visibleForTesting
   static Future<List<String>> Function(String sourceName, String jsCode, String chapterUrl)? debugPageListOverride;
 
+  /// Test isolation (ISS-140): clears every process-global test seam.
+  @visibleForTesting
+  static void debugResetTestOverrides() {
+    debugInitLoadOverride = null;
+    debugScrapeOverride = null;
+    debugPageListOverride = null;
+  }
+
   Future<List<Map<String, dynamic>>> fetchSourceMangaLocal(
     String sourceName, {
     bool isLatest = false,
@@ -1022,6 +1050,7 @@ class QuickJsService {
     String? selectedType,
     List<dynamic>? dynamicFilters,
   }) async {
+    await whenReady; // IMP-025
     final jsCode = getExtensionCode(sourceName);
     if (jsCode == null || jsCode.isEmpty) {
       return [];
@@ -1105,6 +1134,7 @@ class QuickJsService {
 
   /// ── SCRAPE MANGA DETAILS & CHAPTER LIST VIA MANGAYOMI RUNTIME ──
   Future<Map<String, dynamic>> fetchMangaDetailsLocal(String sourceName, String mangaUrl) async {
+    await whenReady; // IMP-025
     final jsCode = getExtensionCode(sourceName);
     if (jsCode == null || jsCode.isEmpty || mangaUrl.isEmpty) {
       return {};
@@ -1152,6 +1182,7 @@ class QuickJsService {
   }
 
   Future<List<String>> fetchChapterPagesLocal(String sourceName, String chapterUrl) async {
+    await whenReady; // IMP-025
     final jsCode = getExtensionCode(sourceName);
     if (jsCode == null || jsCode.isEmpty) {
       return [];
@@ -1203,6 +1234,7 @@ class QuickJsService {
 
   /// ── RETRIEVE SOURCE DYNAMIC FILTERS ───────────────────────────
   Future<List<dynamic>> fetchSourceFiltersLocal(String sourceName) async {
+    await whenReady; // IMP-025
     final jsCode = getExtensionCode(sourceName);
     if (jsCode == null || jsCode.isEmpty) return [];
 
@@ -1218,11 +1250,7 @@ class QuickJsService {
 
   void dispose() {
     // Drain pool and release all JS runtimes
-    for (final s in _runtimePool.values) {
-      try { s.dispose(); } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
-    }
-    _runtimePool.clear();
-    _poolAccessOrder.clear();
+    _runtimePool.disposeAll();
     _sourceLocks.clear();
   }
 }

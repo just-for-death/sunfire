@@ -106,12 +106,12 @@ class ReaderSettingsSheet {
                         segments: const [
                           ButtonSegment(
                             value: ReaderSettingsScope.manga,
-                            label: Text('Manga'),
+                            label: Text('This series'),
                             icon: Icon(Icons.menu_book_rounded, size: 16),
                           ),
                           ButtonSegment(
                             value: ReaderSettingsScope.global,
-                            label: Text('Global'),
+                            label: Text('All'),
                             icon: Icon(Icons.public_rounded, size: 16),
                           ),
                         ],
@@ -136,8 +136,8 @@ class ReaderSettingsSheet {
                       const SizedBox(height: 8),
                       Text(
                         model.scope == ReaderSettingsScope.manga
-                            ? 'Reading mode applies to this series only'
-                            : 'Reading mode applies to all series',
+                            ? 'Mode, scale, crop and tap zones apply to this series only'
+                            : 'Mode, scale, crop and tap zones apply to all series',
                         style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                       ),
                       const SizedBox(height: 16),

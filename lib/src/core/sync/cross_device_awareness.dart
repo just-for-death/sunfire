@@ -50,10 +50,15 @@ class CrossDeviceAwarenessService {
     _refresh(); // ignore: discarded_futures
   }
 
-  /// Stop periodic refresh.
-  void dispose() {
+  /// Stop periodic refresh timer without closing controller.
+  void stopTimer() {
     _refreshTimer?.cancel();
     _refreshTimer = null;
+  }
+
+  /// Stop periodic refresh.
+  void dispose() {
+    stopTimer();
     _controller.close(); // ignore: discarded_futures
   }
 

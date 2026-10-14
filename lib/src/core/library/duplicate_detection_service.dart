@@ -10,12 +10,13 @@
 import 'dart:async';
 import 'dart:math' show min, max;
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 
 import '../db/isar_service.dart';
 import '../db/models/manga.dart';
 import '../engine/source_migration_service.dart'
     show SourceMigrationService;
+import '../services/library_matching.dart';
 
 /// Result of duplicate detection scan.
 class DuplicateScanResult {
@@ -203,7 +204,8 @@ class DuplicateDetectionService {
       final chaptersB = b.chapterCount;
       if (chaptersA > 0 && chaptersB > 0) {
         final overlap = min(chaptersA, chaptersB) / max(chaptersA, chaptersB);
-        if (overlap > 0.7 && _normalizeTitle(a.title) == _normalizeTitle(b.title)) return true;
+        final ta = _normalizeTitle(a.title);
+        if (overlap > 0.7 && ta.isNotEmpty && ta == _normalizeTitle(b.title)) return true;
       }
     }
 
@@ -221,14 +223,21 @@ class DuplicateDetectionService {
 
     final titleA = _normalizeTitle(a.title);
     final titleB = _normalizeTitle(b.title);
-    if (titleA == titleB) return 'Exact title match';
+    if (titleA.isNotEmpty && titleA == titleB) return 'Exact title match';
     if (_titleSimilarity(titleA, titleB) >= _titleSimilarityThreshold) return 'Fuzzy title match';
 
     return 'Source fuzzy + chapter overlap';
   }
 
-  String _normalizeTitle(String title) =>
-      title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '').trim();
+  /// ISS-143: shared [normalizeMangaTitle] (keeps kana/CJK/Hangul, folds
+  /// full-width forms) with spaces removed, as before. Empty means "no
+  /// usable title" and never counts as a match.
+  String _normalizeTitle(String title) => normalizeMangaTitle(title).replaceAll(' ', '');
+
+  /// Test hook: [_areDuplicates] with every strategy enabled.
+  @visibleForTesting
+  bool debugAreDuplicates(Manga a, Manga b) => _areDuplicates(a, b,
+      includeExactUrl: true, includeUrlContainment: true, includeTitleMatch: true, includeSourceFuzzy: true);
 
   double _titleSimilarity(String a, String b) {
     if (a.isEmpty || b.isEmpty) return 0.0;

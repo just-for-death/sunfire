@@ -111,7 +111,9 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
     try {
       final ts = await IsarService.instance.getLastSyncTimestamp();
       if (mounted) setState(() => _lastSyncAt = ts);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[history] last sync time unavailable: $e');
+    }
   }
 
   /// S6.7: timeline items after applying the active filter.

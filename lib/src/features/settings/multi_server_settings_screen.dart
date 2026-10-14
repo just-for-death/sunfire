@@ -57,6 +57,7 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
   Future<void> _addServer() async {
     final nameCtrl = TextEditingController(text: 'Extra server');
     final urlCtrl = TextEditingController(text: 'http://');
+    final tokenCtrl = TextEditingController();
     var type = ServerType.kavita;
 
     final ok = await showSunfireSheet<bool>(
@@ -79,6 +80,14 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
                 TextField(
                   controller: urlCtrl,
                   decoration: const InputDecoration(labelText: 'Base URL'),
+                ),
+                TextField(
+                  controller: tokenCtrl,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'API Key / Token (optional)',
+                    hintText: 'Bearer token or API key',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<ServerType>(
@@ -118,13 +127,14 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
         ),
       ),
     ).then((v) {
-      unawaited(disposeAfterDialog([nameCtrl, urlCtrl]));
+      unawaited(disposeAfterDialog([nameCtrl, urlCtrl, tokenCtrl]));
       return v;
     });
 
     if (ok != true) return;
     final name = nameCtrl.text.trim();
     final url = urlCtrl.text.trim();
+    final token = tokenCtrl.text.trim();
     if (name.isEmpty || url.isEmpty) return;
 
     final config = ServerConfig(
@@ -132,6 +142,8 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
       name: name,
       type: type,
       baseUrl: url,
+      authMode: token.isNotEmpty ? AuthMode.apiKey : AuthMode.none,
+      authToken: token.isNotEmpty ? token : null,
       isPrimary: false,
       isEnabled: true,
     );
@@ -212,12 +224,75 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
                       title: Text(s.name),
                       subtitle: Text(
                         '${s.type.name} · ${s.baseUrl}'
-                        '${s.isPrimary ? " · primary" : ""}',
+                        '${s.capabilities?['version'] != null ? " · v${s.capabilities!['version']}" : ""}'
+                        '${s.isPrimary ? " · primary" : ""}'
+                        '${s.isEnabled ? "" : " (disabled)"}',
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded),
-                        onPressed: () => unawaited(_remove(s)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.network_check_rounded, size: 20),
+                            tooltip: 'Test connection',
+                            onPressed: () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final adapter = MultiServerManager.instance.getAdapter(s.id);
+                              final ok = adapter != null ? await adapter.isReachable() : false;
+                              if (!mounted) return;
+                              setState(() => _reachability[s.id] = ok);
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(ok ? '${s.name} is reachable' : '${s.name} is unreachable'),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.info_outline_rounded, size: 20),
+                            tooltip: 'Probe capabilities',
+                            onPressed: () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final adapter = MultiServerManager.instance.getAdapter(s.id);
+                              if (adapter == null) {
+                                messenger.showSnackBar(
+                                  const SnackBar(content: Text('Server adapter not loaded (enable server first)')),
+                                );
+                                return;
+                              }
+                              final caps = await adapter.probeCapabilities();
+                              if (!mounted) return;
+                              await _bootstrap();
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(caps.probed
+                                      ? '${s.name} probed: v${caps.version ?? "unknown"}'
+                                      : 'Capability probe failed for ${s.name}'),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                          ),
+                          Switch(
+                            value: s.isEnabled,
+                            onChanged: (val) async {
+                              final updated = s.copyWith(isEnabled: val);
+                              await ServerConfigManager.instance.updateServer(updated);
+                              if (val) {
+                                await MultiServerManager.instance.addAdapter(updated);
+                              } else {
+                                await MultiServerManager.instance.removeAdapter(s.id);
+                              }
+                              if (mounted) await _bootstrap();
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded),
+                            tooltip: 'Remove',
+                            onPressed: () => unawaited(_remove(s)),
+                          ),
+                        ],
                       ),
                     );
                   }),

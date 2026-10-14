@@ -25,7 +25,8 @@ void main() {
   final dynDark =
       ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.dark);
 
-  setUpAll(() async {
+  // ISS-140: per test, because the global hook resets SettingsService.
+  setUp(() async {
     FlutterSecureStorage.setMockInitialValues({});
     SharedPreferences.setMockInitialValues({});
     await SettingsService.instance.initialize();

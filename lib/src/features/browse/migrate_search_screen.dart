@@ -13,6 +13,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../ui/widgets/dialog_title.dart';
+import 'migrate_track_copy.dart';
 
 /// Coerce a source map's display/name field to a non-null String. Extension
 /// lists come from mixed origins (GraphQL nodes, repo JSON, GQL metadata) and
@@ -383,6 +384,7 @@ unawaited(
     ));
 
     bool migrationSuccess = false;
+    int trackCopyFailures = 0; // ISS-088: -1 = fetch failed
     try {
       // If target manga came from a local JS scraper (no server ID) but Suwayomi is connected,
       // resolve or create the manga on the Suwayomi server so both client and server stay in sync.
@@ -796,14 +798,13 @@ unawaited(
         try {
           final existingTracks = await GraphQLClientService.instance.fetchTrackRecords(widget.manga.serverId);
           final nodes = existingTracks?['trackRecords']?['nodes'] as List<dynamic>? ?? [];
-          for (final tr in nodes) {
-            final trackerId = parseIntSafe(tr['trackerId']);
-            final remoteId = tr['remoteId']?.toString() ?? tr['id']?.toString();
-            if (trackerId > 0 && remoteId != null) {
-              await GraphQLClientService.instance.bindTrack(targetMangaId, trackerId, remoteId);
-            }
+          final r = await copyTrackBindings(nodes, (tid, rid) => GraphQLClientService.instance.bindTrack(targetMangaId, tid, rid));
+          trackCopyFailures = r.failures.length;
+          for (final f in r.failures) {
+            await LoggerService.instance.logWarning('Failed to copy track record: $f', 'Migrate');
           }
         } catch (e) {
+          trackCopyFailures = -1;
           await LoggerService.instance.logWarning('Failed to copy track records: $e', 'Migrate');
         }
       }
@@ -840,7 +841,9 @@ unawaited(
       if (migrationSuccess) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully migrated "${widget.manga.title}" to $targetSourceName!'),
+            content: Text(trackCopyFailures == 0
+                ? 'Successfully migrated "${widget.manga.title}" to $targetSourceName!'
+                : 'Migrated "${widget.manga.title}" to $targetSourceName, but some tracking couldn\'t be copied.'),
             backgroundColor: primaryColor,
           ),
         );

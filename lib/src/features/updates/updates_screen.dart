@@ -13,6 +13,7 @@ import '../../core/db/models/manga.dart';
 import '../../core/db/models/sync_record.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
+import '../../core/services/delete_after_read.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/library_update_service.dart';
@@ -323,7 +324,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       if (pending.length != _pendingCount) {
         setState(() => _pendingCount = pending.length);
       }
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) debugPrint('[updates_screen] pending count failed: $e');
+    }
   }
 
   /// Builds mangaId → language cache from the local library so update feed items
@@ -940,9 +943,24 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
   Future<void> _applyMarkedReadSideEffects(Chapter ch) async {
     try {
       final settings = SettingsService.instance;
-      if (settings.deleteChapterAfterMarkedRead && ch.isDownloaded) {
-        if (!ch.isBookmarked || settings.allowDeletingBookmarkedChapters) {
-          unawaited(DownloadManagerService.instance.deleteLocalDownload(ch.serverId != 0 ? ch.serverId : ch.id));
+      if (settings.deleteChapterAfterMarkedRead) {
+        // IMP-038: keep-last-N offset needs the manga's chapters in order.
+        final siblings = ch.mangaId > 0
+            ? (await IsarService.instance.getChaptersForManga(ch.mangaId))
+            : <Chapter>[ch];
+        siblings.sort((a, b) {
+          final n = a.chapterNumber.compareTo(b.chapterNumber);
+          return n != 0 ? n : a.id.compareTo(b.id);
+        });
+        final target = chapterToDeleteAfterRead(
+          finished: ch,
+          sortedSiblings: siblings,
+          offset: settings.deleteAfterReadOffset,
+          excludeBookmarked: settings.deleteAfterReadExcludeBookmarked,
+        );
+        if (target != null && target.isDownloaded) {
+          unawaited(DownloadManagerService.instance
+              .deleteLocalDownload(target.serverId != 0 ? target.serverId : target.id));
         }
       }
       if (settings.metronAutoScrobble && ch.mangaId > 0) {
@@ -1123,15 +1141,11 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
     for (final ch in chaptersToUpdate) {
       await SyncEngine.instance.stampLocalReadActivity(ch);
-      if (ch.serverId > 0) {
-        unawaited(
-          SyncEngine.instance.syncChapterProgress(
-            ch.serverId,
-            isRead: true,
-            lastPageRead: ch.lastPageRead,
-          ),
-        );
-      }
+    }
+    // ISS-069: one bulk server call instead of one per chapter.
+    final serverIds = [for (final ch in chaptersToUpdate) if (ch.serverId > 0) ch.serverId];
+    if (serverIds.isNotEmpty) {
+      unawaited(SyncEngine.instance.syncChaptersProgressBulk(serverIds, isRead: true));
     }
 
     if (mounted) {

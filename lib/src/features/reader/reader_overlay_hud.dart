@@ -425,9 +425,11 @@ class _BottomBar extends StatelessWidget {
                                     Icon(
                                       _isWebtoon
                                           ? Icons.swap_vert_rounded
-                                          : (readingMode == ReadingMode.pagedRtl
-                                              ? Icons.arrow_back_rounded
-                                              : Icons.arrow_forward_rounded),
+                                          : readingMode == ReadingMode.pagedVertical
+                                              ? Icons.arrow_downward_rounded
+                                              : (readingMode == ReadingMode.pagedRtl
+                                                  ? Icons.arrow_back_rounded
+                                                  : Icons.arrow_forward_rounded),
                                       size: 13,
                                       color: primaryColor,
                                     ),

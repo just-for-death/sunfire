@@ -188,7 +188,7 @@ class SuwayomiAdapter extends ServerAdapter {
               ..url = m['url']?.toString() ?? ''
               ..sourceName = sourceId);
           }
-        } catch (_) {}
+        } catch (e) { debugPrint('[suwayomi_adapter] ignored: $e'); }
       }
     } catch (e) {
       debugPrint('[SuwayomiAdapter] searchManga failed: $e');
@@ -408,12 +408,13 @@ class SuwayomiAdapter extends ServerAdapter {
       final recordId =
           (nodes.first as Map)['id'] as int? ?? 0;
       if (recordId <= 0) return false;
-      final res = await _client.updateTrack(
+      // Throws ServerMutationException on failure (caught below → false).
+      await _client.updateTrack(
         recordId: recordId,
         lastChapterRead:
             (progress.lastChapterRead ?? progress.progress ?? 0).toDouble(),
       );
-      return res != null;
+      return true;
     } catch (e) {
       debugPrint('[SuwayomiAdapter] updateTrackerProgress failed: $e');
       return false;

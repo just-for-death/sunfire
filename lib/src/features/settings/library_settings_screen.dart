@@ -678,6 +678,53 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       onTap: _showSkipUpdatingDialog,
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    // IMP-003: app-side smart update restrictions.
+                    const SectionTitle(title: 'Smart Update Skips (Local)'),
+                    SwitchListTile(
+                      key: const ValueKey('updateSkipCompleted'),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        children: [
+                          const Text('Skip completed series', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: Text('Do not check series marked completed', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                      value: _settings.updateSkipCompleted,
+                      onChanged: (v) => setState(() => _settings.updateSkipCompleted = v),
+                    ),
+                    SwitchListTile(
+                      key: const ValueKey('updateSkipWithUnread'),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        children: [
+                          const Text('Skip series with unread chapters', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: Text('Only update once you have caught up', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                      value: _settings.updateSkipWithUnread,
+                      onChanged: (v) => setState(() => _settings.updateSkipWithUnread = v),
+                    ),
+                    SwitchListTile(
+                      key: const ValueKey('updateSkipNotStarted'),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        children: [
+                          const Text('Skip series not started', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: Text('Do not update series you have not read yet', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                      value: _settings.updateSkipNotStarted,
+                      onChanged: (v) => setState(() => _settings.updateSkipNotStarted = v),
+                    ),
                     const SectionTitle(title: 'Automated Updates & Notifications (Mihon Parity)'),
                     if (!kIsWeb && !Platform.isAndroid)
                       Padding(
@@ -968,6 +1015,24 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       ),
                       subtitle: const Text('JSON/CSV metadata; Tachiyomi .tachibk via Backup', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       onTap: () => context.push('/settings/library/import-export'),
+                    ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      leading: const Icon(Icons.copy_rounded),
+                      title: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          const Text('Possible Duplicates', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                          SunfireBadge.local(),
+                        ],
+                      ),
+                      subtitle: Text(
+                        'Find and review duplicate series across sources',
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
+                      onTap: () => context.push('/settings/library/duplicates'),
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
                     SectionTitle(title: _isConnected ? 'Categories (Server Synced)' : 'Categories (Local)'),

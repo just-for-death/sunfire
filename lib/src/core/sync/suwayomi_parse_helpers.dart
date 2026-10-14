@@ -21,6 +21,22 @@ bool isNsfwFromSourceNode(Map<dynamic, dynamic> map) {
   return v == true || v == 1 || v == 'true' || v == '1';
 }
 
+/// ISS-070 UI helper: should this source/extension be treated as NSFW?
+///
+/// `contentWarning` (NSFW/MIXED/SAFE) decides when present; otherwise the
+/// legacy `isNsfw`/`nsfw` flag; only when neither is present, the name
+/// heuristic ("18+", "hentai") used by browse_screen.
+bool isSourceNsfw(Map<dynamic, dynamic> source) {
+  if (parseContentWarning(source['contentWarning']) != null ||
+      source.containsKey('isNsfw') ||
+      source.containsKey('nsfw')) {
+    if (isNsfwFromSourceNode(source)) return true;
+    if (parseContentWarning(source['contentWarning']) != null) return false;
+  }
+  final name = '${source['displayName'] ?? ''} ${source['name'] ?? ''}'.toLowerCase();
+  return name.contains('18+') || name.contains('hentai');
+}
+
 /// Copy `manga.user {…}` fields onto the top-level map under existing keys
 /// so callers keep reading `inLibrary` / `unreadCount` / etc. (ISS-072).
 ///
@@ -44,7 +60,10 @@ Map<String, dynamic> flattenMangaUserFields(Map<String, dynamic> manga) {
   }
   // Nested chapter pointers: expose under stable aliases when useful.
   for (final k in ['firstUnreadChapter', 'lastReadChapter', 'latestReadChapter']) {
-    if (user.containsKey(k)) out[k] = user[k];
+    if (user.containsKey(k)) {
+      final v = user[k];
+      out[k] = v is Map ? flattenChapterUserFields(Map<String, dynamic>.from(v)) : v;
+    }
   }
   return out;
 }
@@ -75,4 +94,38 @@ String parseIncludeOrExclude(dynamic raw, {String fallback = 'UNSET'}) {
   final s = raw.toString().trim().toUpperCase();
   if (s == 'INCLUDE' || s == 'EXCLUDE' || s == 'UNSET') return s;
   return fallback;
+}
+
+/// Keys a `user { … }` sub-selection (MangaUserType / ChapterUserType) may
+/// carry that callers historically read from the parent object.
+const Set<String> kUserScopedKeys = {
+  'inLibrary', 'inLibraryAt', 'unreadCount', 'bookmarkCount', 'downloadCount',
+  'firstUnreadChapter', 'lastReadChapter', 'latestReadChapter',
+  'isRead', 'isBookmarked', 'isDownloaded', 'lastPageRead', 'lastReadAt',
+};
+
+/// UIX6-03: walks a GraphQL response in place and copies known keys from any
+/// nested `user { … }` map onto its parent (user values win when non-null),
+/// so documents can select only the non-deprecated user-scoped fields.
+Map<String, dynamic>? flattenUserScopedFields(Map<String, dynamic>? data) {
+  void walk(Object? node) {
+    if (node is List) {
+      for (final e in node) {
+        walk(e);
+      }
+    } else if (node is Map) {
+      for (final v in node.values) {
+        walk(v);
+      }
+      final user = node['user'];
+      if (user is Map) {
+        for (final k in kUserScopedKeys) {
+          if (user[k] != null) node[k] = user[k];
+        }
+      }
+    }
+  }
+
+  walk(data);
+  return data;
 }

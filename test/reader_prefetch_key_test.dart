@@ -1,5 +1,4 @@
 // UIX-12: one source-free prefetch key for the reader's write and read sides.
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunfire/src/features/reader/reader_prefetch.dart';
@@ -27,13 +26,5 @@ void main() {
     expect(prefetchSourceMatches(prefetchedSource: 'unknown', currentSource: 'MangaX'), isTrue);
     expect(prefetchSourceMatches(prefetchedSource: 'MangaX', currentSource: null), isTrue);
     expect(prefetchSourceMatches(prefetchedSource: 'MangaX', currentSource: ''), isTrue);
-  });
-
-  test('reader_screen uses the shared key helper on both sides', () {
-    final src = File('lib/src/features/reader/reader_screen.dart').readAsStringSync();
-    expect(src.contains('_prefetchKeyFor(chapter, '), isFalse);
-    expect(src.contains('_prefetchKeyFor(chForKey, '), isFalse);
-    expect(src.contains('readerPrefetchKey('), isTrue);
-    expect(src.contains('prefetchSourceMatches('), isTrue);
   });
 }

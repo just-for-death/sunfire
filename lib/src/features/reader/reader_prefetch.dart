@@ -25,3 +25,13 @@ bool prefetchSourceMatches({required String? prefetchedSource, required String? 
   if (unknown(prefetchedSource) || unknown(currentSource)) return true;
   return prefetchedSource == currentSource;
 }
+
+/// Fraction of a chapter after which the next chapter is prefetched (ISS-032).
+const double kNextChapterPrefetchThreshold = 0.65;
+
+/// Webtoon: scroll ratio (0..1) past the threshold.
+bool shouldPrefetchNextChapterAtRatio(double ratio) => ratio >= kNextChapterPrefetchThreshold;
+
+/// Paged: 1-based [page] of [totalPages] past the threshold.
+bool shouldPrefetchNextChapterAtPage(int page, int totalPages) =>
+    totalPages > 0 && page >= (totalPages * kNextChapterPrefetchThreshold).round();

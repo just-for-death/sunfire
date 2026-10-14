@@ -26,6 +26,10 @@ http.Client _createNativeEngineClient() {
 
 class MClient {
   static final Map<String, String> _cookies = {};
+
+  /// Test isolation (ISS-140): forget cookies captured by earlier tests.
+  @visibleForTesting
+  static void debugClearCookies() => _cookies.clear();
   static String _userAgent = kMobileUserAgent;
   static String cfProxyUrl = '';
 
