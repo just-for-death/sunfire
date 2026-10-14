@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting, debugPrint, kDebugMode;
 import 'package:isar_community/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+
 import '../db/epoch_seconds.dart';
 import '../db/isar_service.dart';
 import '../db/models/category.dart';
@@ -15,23 +17,41 @@ import '../engine/quickjs_service.dart';
 import '../engine/repo_manager.dart';
 import '../engine/source_migration_service.dart';
 import '../logging/logger_service.dart';
-
 import '../services/download_manager_service.dart';
 import '../services/image_cache_helper.dart';
 import '../services/settings_service.dart';
 import '../services/wakelock_coordinator.dart';
-import 'graphql_client_service.dart';
-import 'suwayomi_parse_helpers.dart';
-import 'websocket_service.dart';
 import 'conflict_resolver.dart'
     show ConflictResolver, ConflictResolutionStrategy, UserChoiceMarker;
-export 'conflict_resolver.dart' show ConflictResolutionStrategy;
+import 'graphql_client_service.dart';
+import 'read_state_merge.dart';
+import 'suwayomi_parse_helpers.dart';
+import 'websocket_service.dart';
 
 // Re-exported so the many existing `sync_engine.dart` importers of this helper
 // keep working, and so the DB layer can reach it without a circular import.
 export '../db/epoch_seconds.dart';
+export 'conflict_resolver.dart' show ConflictResolutionStrategy;
 
 /// Result of a sync operation
+/// Outcome of an outbox-backed server action (UIX6-06).
+class OutboxResult {
+  /// Applied on the server right away.
+  final bool applied;
+
+  /// Isar id of the queued SyncRecord when [queued]; pass to
+  /// `SyncEngine.undoQueuedMutation` for Undo.
+  final int? undoToken;
+  bool get queued => undoToken != null;
+
+  const OutboxResult.applied()
+      : applied = true,
+        undoToken = null;
+  const OutboxResult.queued(int token)
+      : applied = false,
+        undoToken = token;
+}
+
 class SyncResult {
   const SyncResult({
     required this.success,
@@ -207,6 +227,7 @@ const double kCategoryPullRatio = 0.5;
 /// retry a rejected mutation forever. Pure so tests can check it directly.
 @visibleForTesting
 bool isTransientSyncError(Object e) {
+  if (e is ServerMutationException) return e.isTransportFailure;
   if (e is SocketException || e is TimeoutException) return true;
   final s = e.toString().toLowerCase();
   return s.contains('socketexception') ||
@@ -338,6 +359,20 @@ bool isPureChapterProgressPayload(String payloadJson) {
     return false;
   }
 }
+
+/// ISS-142: automatic progress never goes below the server's current value
+/// (page max, read OR). Unknown server state leaves the push unchanged.
+@visibleForTesting
+({bool isRead, int lastPageRead}) clampAutomaticProgress({
+  required bool isRead,
+  required int lastPageRead,
+  bool? serverIsRead,
+  int? serverPage,
+}) =>
+    (
+      isRead: isRead || (serverIsRead ?? false),
+      lastPageRead: (serverPage != null && serverPage > lastPageRead) ? serverPage : lastPageRead,
+    );
 
 /// Merges a chapter's local `lastPageRead` with the server's during a pull.
 ///
@@ -653,24 +688,20 @@ void mergeSnapshotChapterNode(
   chapter.mangaId = manga.serverId;
   chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber'] ?? ""}';
   chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
-  chapter.pageCount = parseIntSafe(chMap['pageCount']) ?? chapter.pageCount;
+  chapter.pageCount = parseIntSafe(chMap['pageCount']);
 
   // Read-state merge: take the server's value outright unless this
   // chapter has an unsynced outbound mutation queued, in which
   // case keep the local value until that mutation replays — the
   // old "OR true, never false" rule meant an unread-on-another-
   // -device never made it back here.
-  final serverIsRead = parseBoolSafe(chMap['isRead']);
-  if (!hasPendingMutation) {
-    chapter.isRead = serverIsRead;
-  }
-
-  // lastPageRead merge — the server's page only wins when it
-  // represents strictly more progress (see mergeLastPageRead).
-  final serverLastPageRead = parseIntSafe(chMap['lastPageRead']);
-  chapter.lastPageRead = mergeLastPageRead(
-    local: chapter.lastPageRead,
-    server: serverLastPageRead,
+  // ISS-141: newest explicit action wins (Sunfire meta or an outside change
+  // vs the last-synced snapshot); otherwise the furthest page.
+  applyServerReadState(
+    chapter,
+    serverIsRead: parseBoolSafe(chMap['isRead']),
+    serverPage: parseIntSafe(chMap['lastPageRead']),
+    serverMetaActionAt: readActionAtFromNode(chMap),
     hasPendingMutation: hasPendingMutation,
   );
 
@@ -722,6 +753,73 @@ void mergeSnapshotChapterNode(
   if (seriesThumb != null && seriesThumb.isNotEmpty) {
     chapter.mangaThumbnailUrl = seriesThumb;
   }
+}
+
+// ── IMP-005: per-series reader settings roam via Suwayomi manga meta ─────
+
+/// Manga-meta key (in the ISS-077 `sunfire_` namespace) holding the
+/// per-series reader override as `{"v":1,"t":<epoch ms>,"o":{...}}`.
+const String kReaderSettingsMetaKey = 'sunfire_reader_settings';
+
+String encodeReaderSettingsMeta(Map<String, Object>? override, int updatedAtMs) =>
+    jsonEncode({'v': 1, 't': updatedAtMs, 'o': override ?? const <String, Object>{}});
+
+/// Tolerant decode; null for missing/garbled values.
+({Map<String, Object> o, int t})? decodeReaderSettingsMeta(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  try {
+    final v = jsonDecode(raw);
+    if (v is! Map) return null;
+    final t = v['t'];
+    final o = v['o'];
+    if (t is! int || o is! Map) return null;
+    return (
+      o: {
+        for (final e in o.entries)
+          if (e.value is String || e.value is bool || e.value is num) e.key.toString(): e.value as Object,
+      },
+      t: t,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+enum ReaderSettingsMetaSync { none, pulled, pushed }
+
+/// IMP-005: reconcile the local per-series override of [manga] with its
+/// server manga meta. Newest change wins (local stamp vs meta `t`): a newer
+/// server value is saved locally (pulled), a newer local one goes up through
+/// `setMangaMeta`, or `deleteMangaMeta` for a reset to "All" (pushed).
+/// No-op in incognito, without a configured server, or for local-only manga.
+Future<ReaderSettingsMetaSync> syncReaderSettingsMeta({
+  required Manga manga,
+  required SettingsService settings,
+  GraphQLClientService? client,
+}) async {
+  if (settings.incognitoMode) return ReaderSettingsMetaSync.none;
+  final c = client ?? GraphQLClientService.instance;
+  if (!c.isConfigured || manga.serverId <= 0) return ReaderSettingsMetaSync.none;
+  final remoteMeta = await c.fetchSunfireMangaMeta(manga.serverId);
+  if (remoteMeta == null) return ReaderSettingsMetaSync.none; // unreachable: retry next open
+  final remote = decodeReaderSettingsMeta(remoteMeta[kReaderSettingsMetaKey]);
+  final localT = settings.readerOverrideUpdatedAt(manga.id);
+  if (remote != null && remote.t > localT) {
+    await settings.setReaderOverrideJson(manga.id, remote.o.isEmpty ? null : remote.o, updatedAtMs: remote.t);
+    return ReaderSettingsMetaSync.pulled;
+  }
+  if (localT > (remote?.t ?? 0)) {
+    final local = settings.readerOverrideJson(manga.id);
+    final ok = (local == null || local.isEmpty)
+        ? (remote == null || await c.deleteMangaMeta(manga.serverId, kReaderSettingsMetaKey))
+        : await c.setMangaMeta(
+            manga.serverId,
+            kReaderSettingsMetaKey,
+            encodeReaderSettingsMeta(local.map((k, v) => MapEntry(k, v as Object)), localT),
+          );
+    return ok ? ReaderSettingsMetaSync.pushed : ReaderSettingsMetaSync.none;
+  }
+  return ReaderSettingsMetaSync.none;
 }
 
 /// Global-meta keys earlier builds wrote by mistake (ISS-077): `lastSync_null`
@@ -809,17 +907,8 @@ int? updatesWindowSince({
 class SyncEngine {
   static SyncEngine? _instance;
   final SyncCycleGate _cycleGate = SyncCycleGate();
-  bool get _isSyncing => _cycleGate.isSyncing;
   /// Whether a sync cycle (including a queued follow-up pass) is in flight.
   bool get isSyncing => _cycleGate.isSyncing;
-  set _isSyncing(bool v) {
-    // forceReconcile and a few early-return paths still flip the flag directly.
-    if (v) {
-      _cycleGate.isSyncing = true;
-    } else {
-      _cycleGate.end();
-    }
-  }
   String? _deviceId;
   Completer<void>? _cycleCompleter;
   final StreamController<void> _syncCompleteController =
@@ -965,9 +1054,13 @@ class SyncEngine {
 
   /// Bypass wipe-guard and apply server library removals (Settings → Advanced).
   Future<void> forceReconcileWithServer() async {
-    if (_isSyncing) return;
     if (!GraphQLClientService.instance.isConfigured) return;
-    _isSyncing = true;
+    // ISS-051: a request while a cycle runs is queued (one-deep) and replayed
+    // once that cycle ends, instead of being silently dropped.
+    if (!_cycleGate.tryBegin()) {
+      final pending = _pendingForceReconcile ??= Completer<void>();
+      return pending.future;
+    }
     try {
       final online = await GraphQLClientService.instance.checkServerReachable(force: true);
       if (!online) return;
@@ -976,8 +1069,23 @@ class SyncEngine {
       await _performFullSync(forceLibraryRemovals: true);
       await _syncSourcesAndReplicate();
     } finally {
-      _isSyncing = false;
+      final rerun = _cycleGate.needsAnotherPass();
+      _cycleGate.end();
+      // A triggerSync that arrived during the reconcile is replayed, not lost.
+      if (rerun && _pendingForceReconcile == null) unawaited(triggerSync());
+      _drainPendingForceReconcile();
     }
+  }
+
+  Completer<void>? _pendingForceReconcile;
+
+  void _drainPendingForceReconcile() {
+    final pending = _pendingForceReconcile;
+    if (pending == null || _cycleGate.isSyncing) return;
+    _pendingForceReconcile = null;
+    unawaited(forceReconcileWithServer().whenComplete(() {
+      if (!pending.isCompleted) pending.complete();
+    }));
   }
 
   /// Runs one sync cycle. Every log line from the cycle carries the same
@@ -1038,6 +1146,7 @@ class SyncEngine {
     } finally {
       _cycleGate.end();
       if (!cycleDone.isCompleted) cycleDone.complete();
+      _drainPendingForceReconcile(); // ISS-051
       if (identical(_cycleCompleter, cycleDone)) {
         _cycleCompleter = null;
       }
@@ -1087,6 +1196,9 @@ class SyncEngine {
       await stampLocalReadActivity(chapter);
     }
     if (chapter.serverId > 0) {
+      // ISS-141: publish the explicit action's stamp as chapter meta.
+      final actionAt = chapter.readStateActionAt;
+      if (actionAt != null) unawaited(pushReadActionMeta([chapter.serverId], actionAt));
       // Intentionally not awaited: the offline path queues a SyncRecord and
       // the online path does a network round-trip, neither of which the UI
       // should block on. Matches every previous call site.
@@ -1095,6 +1207,7 @@ class SyncEngine {
           chapter.serverId,
           isRead: isRead,
           lastPageRead: chapter.lastPageRead,
+          explicit: true,
         ),
       );
     }
@@ -1115,10 +1228,94 @@ class SyncEngine {
   /// stale queued page can never overwrite newer server state on replay.
   final Map<int, int> _lastDirectPage = {};
 
+  /// ISS-069: multi-chapter mark read/unread in one `updateChapters` call.
+  /// Falls back to per-chapter [syncChapterProgress] (which queues for replay
+  /// offline) when the bulk call fails. Honors Incognito like the single path.
+  Future<void> syncChaptersProgressBulk(
+    List<int> chapterServerIds, {
+    required bool isRead,
+    int lastPageRead = 0,
+  }) async {
+    final ids = chapterServerIds.where((id) => id > 0).toSet().toList();
+    if (ids.isEmpty || SettingsService.instance.incognitoMode) return;
+    // ISS-141: bulk mark read/unread is an explicit action (library batch,
+    // manga detail, updates).
+    unawaited(pushReadActionMeta(ids, DateTime.now().millisecondsSinceEpoch ~/ 1000));
+    if (GraphQLClientService.instance.isConfigured && ids.length > 1) {
+      final res = await GraphQLClientService.instance
+          .updateChapters(ids, isRead: isRead, lastPageRead: lastPageRead);
+      if (res != null) return;
+    }
+    for (final id in ids) {
+      await syncChapterProgress(id, isRead: isRead, lastPageRead: lastPageRead, explicit: true);
+    }
+  }
+
+  /// ISS-142: floors an AUTOMATIC push at the server's current read state
+  /// (fetched; the last-synced snapshot when the fetch fails). When the
+  /// server is ahead, the local chapter adopts the server values so this
+  /// device ends up at the newer progress too.
+  Future<({bool isRead, int lastPageRead})> floorAutomaticProgress(
+    int chapterServerId, {
+    required bool isRead,
+    required int lastPageRead,
+  }) async {
+    ({bool isRead, int lastPageRead})? server;
+    try {
+      server = await GraphQLClientService.instance.fetchChapterReadState(chapterServerId);
+    } catch (_) {}
+    Chapter? local;
+    try {
+      local = await IsarService.instance.getChapterByServerId(chapterServerId);
+    } catch (_) {}
+    final out = clampAutomaticProgress(
+      isRead: isRead,
+      lastPageRead: lastPageRead,
+      serverIsRead: server?.isRead ?? local?.syncedIsRead,
+      serverPage: server?.lastPageRead ?? local?.syncedLastPageRead,
+    );
+    if (local != null && (out.isRead != isRead || out.lastPageRead != lastPageRead)) {
+      local
+        ..isRead = out.isRead || local.isRead
+        ..lastPageRead = out.lastPageRead > local.lastPageRead ? out.lastPageRead : local.lastPageRead;
+      if (server != null) {
+        local
+          ..syncedIsRead = server.isRead
+          ..syncedLastPageRead = server.lastPageRead;
+      }
+      try {
+        await IsarService.instance.saveChapter(local);
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  /// ISS-141: best-effort `sunfire_read_action_at` chapter meta for explicit
+  /// read-state actions. When it can't be written (offline, old server) other
+  /// devices still see the change through the snapshot rule, stamped when
+  /// they detect it.
+  Future<void> pushReadActionMeta(List<int> chapterServerIds, int actionAtSeconds) async {
+    if (SettingsService.instance.incognitoMode) return;
+    final client = GraphQLClientService.instance;
+    if (!client.isConfigured) return;
+    for (final id in chapterServerIds) {
+      if (id <= 0) continue;
+      try {
+        await client.setChapterMeta(id, kReadActionMetaKey, '$actionAtSeconds');
+      } catch (e) {
+        debugPrint('[SyncEngine] read action meta push skipped for $id: $e');
+      }
+    }
+  }
+
+  /// [explicit] marks a deliberate read-state action (Mark read/unread,
+  /// reset, restart). Only explicit pushes may LOWER the server's progress;
+  /// automatic ones are floored at the server's current value (ISS-142).
   Future<void> syncChapterProgress(
     int chapterServerId, {
     required bool isRead,
     required int lastPageRead,
+    bool explicit = false,
   }) async {
     if (chapterServerId <= 0) return;
     // Defence in depth for [commitChapterReadState]. Anything that reaches the
@@ -1135,6 +1332,7 @@ class SyncEngine {
           chapterServerId,
           isRead: isRead,
           lastPageRead: lastPageRead,
+          explicit: explicit,
         )));
     // The stored chain must never complete with an error, or every later
     // waiter for this chapter would throw without doing work.
@@ -1154,12 +1352,19 @@ class SyncEngine {
     int chapterServerId, {
     required bool isRead,
     required int lastPageRead,
+    bool explicit = false,
   }) async {
 
     if (GraphQLClientService.instance.isConfigured) {
       final isOnline = await GraphQLClientService.instance.checkServerReachable();
       if (isOnline) {
         try {
+          if (!explicit) {
+            // ISS-142: never push automatic progress below the server's.
+            final floored = await floorAutomaticProgress(chapterServerId, isRead: isRead, lastPageRead: lastPageRead);
+            isRead = floored.isRead;
+            lastPageRead = floored.lastPageRead;
+          }
           final res = await GraphQLClientService.instance
               .updateChapterReadStatusWithClassification(
                 chapterServerId,
@@ -1189,10 +1394,12 @@ class SyncEngine {
     // redundant since only the final lastPageRead matters. Coalesce onto an
     // existing pending, not-yet-attempted progress record for this chapter
     // instead of piling up a new one each time.
-    final existing = (await IsarService.instance.getPendingChapterRecords(chapterServerId.toString()))
-        .where((r) =>
-            r.action == SyncAction.update && r.retryCount == 0 && isPureChapterProgressPayload(r.payloadJson))
-        .toList();
+    final existing = explicit
+        ? const <SyncRecord>[]
+        : (await IsarService.instance.getPendingChapterRecords(chapterServerId.toString()))
+            .where((r) =>
+                r.action == SyncAction.update && r.retryCount == 0 && isPureChapterProgressPayload(r.payloadJson))
+            .toList();
 
     if (existing.isNotEmpty) {
       final record = existing.first;
@@ -1235,6 +1442,10 @@ class SyncEngine {
         'chapterId': chapterServerId,
         'isRead': isRead,
         'lastPageRead': lastPageRead,
+        // ISS-142: an explicit action replays as-is (and is never coalesced
+        // with automatic progress, see isPureChapterProgressPayload).
+        if (explicit) 'explicit': true,
+        if (explicit) 'actionAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
       })
       ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000
       ..deviceId = _deviceId ?? 'default_device'
@@ -1367,6 +1578,130 @@ class SyncEngine {
     await IsarService.instance.saveSyncRecord(record);
   }
 
+  // ── UIX6-06: optimistic actions with an outbox + undo ────────────────
+
+  Future<OutboxResult> _applyOrQueue(
+    Future<void> Function() send,
+    SyncRecord Function() buildRecord,
+  ) async {
+    try {
+      await send();
+      return const OutboxResult.applied();
+    } on ServerMutationException catch (e) {
+      if (!e.isTransportFailure) rethrow;
+      final rec = buildRecord()
+        ..recordId = const Uuid().v4()
+        ..timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000
+        ..deviceId = _deviceId ?? 'default_device'
+        ..state = SyncRecordState.pending;
+      await IsarService.instance.saveSyncRecord(rec);
+      return OutboxResult.queued(rec.id);
+    }
+  }
+
+  /// Sets a manga's server library state. Transport failure → queued for
+  /// replay (result.queued, keep the optimistic local change, offer Undo).
+  /// Server rejection → throws [ServerMutationException] (roll back locally).
+  ///
+  /// [categoryIds] (adds only; ignored when removing): applied with an
+  /// add-to-categories patch (never the clear+set assign), both directly and
+  /// when a queued add is replayed, so the default category survives offline.
+  Future<OutboxResult> setMangaInLibraryWithOutbox(
+    int mangaServerId,
+    bool inLibrary, {
+    List<int>? categoryIds,
+  }) {
+    final cats = inLibrary ? (categoryIds ?? const <int>[]) : const <int>[];
+    return _applyOrQueue(
+      () => cats.isEmpty
+          ? GraphQLClientService.instance.setMangaInLibraryOrThrow(mangaServerId, inLibrary)
+          : GraphQLClientService.instance.addMangaToLibraryOrThrow(mangaServerId, categoryIds: cats),
+      () => SyncRecord()
+        ..entityType = SyncEntityType.manga
+        ..entityId = mangaServerId.toString()
+        ..action = inLibrary ? SyncAction.update : SyncAction.delete
+        ..payloadJson = jsonEncode({
+          'mangaId': mangaServerId,
+          'inLibrary': inLibrary,
+          if (cats.isNotEmpty) 'categoryIds': cats,
+        }),
+    );
+  }
+
+  /// Binds a tracker; queued on transport failure.
+  Future<OutboxResult> bindTrackWithOutbox(int mangaServerId, int trackerId, Object remoteId, {bool? isPrivate}) =>
+      _applyOrQueue(
+        () => GraphQLClientService.instance.bindTrack(mangaServerId, trackerId, remoteId, isPrivate: isPrivate),
+        () => SyncRecord()
+          ..entityType = SyncEntityType.tracker
+          ..entityId = 'manga_$mangaServerId'
+          ..action = SyncAction.update
+          ..payloadJson = jsonEncode({
+            'op': 'bind',
+            'mangaId': mangaServerId,
+            'trackerId': trackerId,
+            'remoteId': remoteId.toString(),
+            if (isPrivate != null) 'private': isPrivate,
+          }),
+      );
+
+  /// Unbinds a track record; queued on transport failure.
+  Future<OutboxResult> unbindTrackWithOutbox(int recordId) => _applyOrQueue(
+        () => GraphQLClientService.instance.unbindTrack(recordId),
+        () => SyncRecord()
+          ..entityType = SyncEntityType.tracker
+          ..entityId = 'record_$recordId'
+          ..action = SyncAction.update
+          ..payloadJson = jsonEncode({'op': 'unbind', 'recordId': recordId}),
+      );
+
+  /// ISS-105: adds a manga to [categoryIds] (add-only patch, never the
+  /// clear+set assign, so replay cannot wipe other categories). Queued on
+  /// transport failure; server rejection throws [ServerMutationException].
+  Future<OutboxResult> addMangaToCategoriesWithOutbox(int mangaServerId, List<int> categoryIds) {
+    final cats = List<int>.of(categoryIds);
+    return _applyOrQueue(
+      () => GraphQLClientService.instance.addMangaToCategoriesOrThrow(mangaServerId, cats),
+      () => SyncRecord()
+        ..entityType = SyncEntityType.category
+        ..entityId = 'manga_$mangaServerId'
+        ..action = SyncAction.update
+        ..payloadJson = jsonEncode({'op': 'addTo', 'mangaId': mangaServerId, 'categoryIds': cats}),
+    );
+  }
+
+  /// ISS-105: removes an extension store (by index URL). Queued on transport
+  /// failure; server rejection throws [ServerMutationException].
+  Future<OutboxResult> removeExtensionStoreWithOutbox(String indexUrl) {
+    final url = indexUrl.trim();
+    return _applyOrQueue(
+      () => _removeExtensionStoreOrThrow(url),
+      () => SyncRecord()
+        ..entityType = SyncEntityType.source
+        ..entityId = 'store_$url'
+        ..action = SyncAction.delete
+        ..payloadJson = jsonEncode({'op': 'removeStore', 'indexUrl': url}),
+    );
+  }
+
+  Future<void> _removeExtensionStoreOrThrow(String url) async {
+    final c = GraphQLClientService.instance;
+    final ok = await c.removeExtensionStore(url);
+    if (!ok) {
+      throw ServerMutationException('removeExtensionStore', isTransportFailure: c.lastRequestWasTransportFailure);
+    }
+  }
+
+  /// Undo for a queued action: removes the outbox record if it has not been
+  /// dispatched yet. Returns false when it was already sent / gone (the UI
+  /// must then issue the inverse action instead).
+  Future<bool> undoQueuedMutation(int undoToken) async {
+    final rec = await IsarService.instance.getSyncRecord(undoToken);
+    if (rec == null || rec.state != SyncRecordState.pending) return false;
+    await IsarService.instance.deleteSyncRecord(undoToken);
+    return true;
+  }
+
   Future<void> syncMangaLibraryState(int mangaServerId, bool inLibrary) async {
     if (mangaServerId <= 0) return;
 
@@ -1417,7 +1752,7 @@ class SyncEngine {
                 await IsarService.instance.deleteCategory(localServerId);
                 cat.serverId = remoteId;
                 cat.name = created['name']?.toString() ?? name;
-                cat.order = parseIntSafe(created['order']) ?? order;
+                cat.order = parseIntSafe(created['order']);
                 await IsarService.instance.saveCategory(cat);
               }
             }
@@ -1578,7 +1913,7 @@ class SyncEngine {
           await IsarService.instance.deleteSyncRecord(r.id);
         }
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('[sync_engine] ignored: $e'); }
     await IsarService.instance.saveSyncRecord(record);
   }
 
@@ -1679,7 +2014,12 @@ class SyncEngine {
     final nodes = data['trackRecords']?['nodes'];
     if (nodes is! List || nodes.isEmpty) return true; // nothing bound — treat as success
     final res = await GraphQLClientService.instance.trackProgress(mangaServerId);
-    return res != null;
+    if (res == null) {
+      // ISS-098: carry the transport classification out via the exception.
+      throw ServerMutationException('trackProgress',
+          isTransportFailure: GraphQLClientService.instance.lastRequestWasTransportFailure);
+    }
+    return true;
   }
 
   /// Rewrites pending offline 'assign' records that still reference the local
@@ -1784,6 +2124,8 @@ class SyncEngine {
           continue;
         }
         bool success = false;
+        // ISS-098: set by branches that know whether the failure was transport.
+        var failTransient = false;
 
         switch (record.entityType) {
           case SyncEntityType.chapter:
@@ -1803,12 +2145,24 @@ class SyncEngine {
                 }
                 if (chapterMutationNeedsReadProgress(payload)) {
                   attempted = true;
-                  final isRead = parseBoolSafe(payload['isRead']);
-                  final lastPageRead = parseIntSafe(payload['lastPageRead']);
+                  var isRead = parseBoolSafe(payload['isRead']);
+                  var lastPageRead = parseIntSafe(payload['lastPageRead']);
+                  final explicitAction = payload['explicit'] == true;
+                  if (!explicitAction) {
+                    // ISS-142: a stale queued automatic update must not
+                    // rewind progress another device already pushed.
+                    final floored = await floorAutomaticProgress(chapterId, isRead: isRead, lastPageRead: lastPageRead);
+                    isRead = floored.isRead;
+                    lastPageRead = floored.lastPageRead;
+                  }
                   final res = await GraphQLClientService.instance
                       .updateChapterReadStatusWithClassification(chapterId, isRead, lastPageRead);
                   allOk = allOk && res.data != null;
                   wasTransportFailure = wasTransportFailure || res.wasTransportFailure;
+                  final actionAt = payload['actionAt'];
+                  if (explicitAction && res.data != null && actionAt is num) {
+                    unawaited(pushReadActionMeta([chapterId], actionAt.toInt()));
+                  }
                 }
                 success = attempted && allOk;
                 // Capture the transport failure classification for this dispatch.
@@ -1845,10 +2199,23 @@ class SyncEngine {
               if (op == 'mangaProgress') {
                 final mangaId = parseIntSafe(payload['mangaId']);
                 success = await _pushTrackerProgressForManga(mangaId);
+                if (!success) failTransient = GraphQLClientService.instance.lastRequestWasTransportFailure;
+              } else if (op == 'bind') {
+                await GraphQLClientService.instance.bindTrack(
+                  parseIntSafe(payload['mangaId']),
+                  parseIntSafe(payload['trackerId']),
+                  payload['remoteId'],
+                  isPrivate: payload['private'] is bool ? payload['private'] as bool : null,
+                );
+                success = true;
+              } else if (op == 'unbind') {
+                await GraphQLClientService.instance.unbindTrack(parseIntSafe(payload['recordId']));
+                success = true;
               } else {
                 final mangaId = parseIntSafe(payload['mangaId']);
                 final res = await GraphQLClientService.instance.trackProgress(mangaId);
                 success = res != null;
+                if (!success) failTransient = GraphQLClientService.instance.lastRequestWasTransportFailure;
               }
             }
             break;
@@ -1856,8 +2223,17 @@ class SyncEngine {
             if (record.action == SyncAction.update || record.action == SyncAction.delete) {
               final mangaId = parseIntSafe(payload['mangaId']);
               final inLibrary = parseBoolSafe(payload['inLibrary']);
-              final res = await GraphQLClientService.instance.updateMangaLibraryState(mangaId, inLibrary);
-              success = res != null;
+              final cats = inLibrary && payload['categoryIds'] is List
+                  ? (payload['categoryIds'] as List).map(parseIntSafe).toList()
+                  : const <int>[];
+              // Throws ServerMutationException (classified) on failure.
+              if (cats.isEmpty) {
+                await GraphQLClientService.instance.setMangaInLibraryOrThrow(mangaId, inLibrary);
+              } else {
+                // Add-to-categories replay (never the set-list assign).
+                await GraphQLClientService.instance.addMangaToLibraryOrThrow(mangaId, categoryIds: cats);
+              }
+              success = true;
             }
             break;
           case SyncEntityType.category:
@@ -1954,6 +2330,16 @@ class SyncEngine {
               final categoryId = parseIntSafe(payload['categoryId'] ?? record.entityId);
               final res = await GraphQLClientService.instance.deleteCategory(categoryId);
               success = res != null;
+              // ISS-098: a transport failure must not burn the retry budget.
+              if (!success) failTransient = GraphQLClientService.instance.lastRequestWasTransportFailure;
+            } else if (op == 'addTo') {
+              // ISS-105: add-only replay; throws → classified in the catch.
+              final mangaId = parseIntSafe(payload['mangaId']);
+              final ids = (payload['categoryIds'] as List?)?.map((e) => parseIntSafe(e)).toList() ?? <int>[];
+              if (mangaId > 0 && ids.isNotEmpty) {
+                await GraphQLClientService.instance.addMangaToCategoriesOrThrow(mangaId, ids);
+              }
+              success = true;
             } else if (op == 'assign') {
               final mangaId = parseIntSafe(payload['mangaId']);
               final ids = (payload['categoryIds'] as List?)?.map((e) => parseIntSafe(e)).toList() ?? <int>[];
@@ -1977,17 +2363,21 @@ class SyncEngine {
             }
             break;
           case SyncEntityType.source:
+            if (payload['op'] == 'removeStore') {
+              // ISS-105: throws → classified (transient vs permanent) below.
+              await _removeExtensionStoreOrThrow(payload['indexUrl']?.toString() ?? '');
+              success = true;
+            }
             break;
         }
 
         if (success) {
           await _completeDispatchedRecord(record);
         } else {
-          // For entity types without WithClassification helpers (tracker, source),
-          // we conservatively treat the failure as non-transient (false) so it
-          // burns retry budget and is abandoned if it's a permanent error.
-          // TODO: add WithClassification helpers for remaining mutations.
-          await _recordDispatchFailure(record, transient: false);
+          // ISS-098: branches report transport failures via [failTransient] or
+          // by throwing ServerMutationException (classified in the catch below
+          // via isTransientSyncError). Anything else burns retry budget.
+          await _recordDispatchFailure(record, transient: failTransient);
         }
       } catch (e, stack) {
         await _recordDispatchFailure(record, transient: isTransientSyncError(e));
@@ -2059,7 +2449,7 @@ class SyncEngine {
         }
         await prefs.setString(_dispatchAttemptsPrefKey,
             jsonEncode({for (final e in entries) e.key.toString(): e.value}));
-      } catch (_) {}
+      } catch (e) { debugPrint('[sync_engine] ignored: $e'); }
     });
     return _attemptsSaveChain;
   }
@@ -2089,7 +2479,7 @@ class SyncEngine {
           _dispatchAttempts[id] = n;
         }
       });
-    } catch (_) {}
+    } catch (e) { debugPrint('[sync_engine] ignored: $e'); }
   }
 
   /// Applies retry accounting after a failed dispatch. Re-reads the record so
@@ -2507,7 +2897,7 @@ class SyncEngine {
       for (final junk in kLegacyLastSyncMetaKeys) {
         try {
           await GraphQLClientService.instance.deleteGlobalMeta(junk);
-        } catch (_) {}
+        } catch (e) { debugPrint('[sync_engine] ignored: $e'); }
       }
     }
   }
@@ -2720,17 +3110,16 @@ class SyncEngine {
           chapter.mangaId = mangaServerId;
           chapter.name = chMap['name'] as String? ?? 'Chapter ${chMap['chapterNumber'] ?? ""}';
           chapter.chapterNumber = parseDoubleSafe(chMap['chapterNumber']);
-          chapter.pageCount = parseIntSafe(chMap['pageCount']) ?? chapter.pageCount;
+          chapter.pageCount = parseIntSafe(chMap['pageCount']);
 
           // Read-state: take the server's value unless this chapter still has
           // an unsynced outbound mutation queued (see _syncAllChaptersForLibrary).
           final hasPendingMutation = pendingChapterIds.contains(chServerId.toString());
-          if (!hasPendingMutation) {
-            chapter.isRead = serverIsRead;
-          }
-          chapter.lastPageRead = mergeLastPageRead(
-            local: chapter.lastPageRead,
-            server: serverLastPageRead,
+          applyServerReadState(
+            chapter,
+            serverIsRead: serverIsRead,
+            serverPage: serverLastPageRead,
+            serverMetaActionAt: readActionAtFromNode(chMap),
             hasPendingMutation: hasPendingMutation,
           );
           mergeLastReadAt(chapter, chMap);
@@ -2746,7 +3135,7 @@ class SyncEngine {
             }
 
             // Also upsert parent manga into Isar if not already there
-            final mServerId = parseIntSafe(mangaMap['id']) ?? mangaServerId;
+            final mServerId = parseIntSafe(mangaMap['id']);
             var parentManga = parentMangasToSave[mServerId] ?? await IsarService.instance.getMangaByServerId(mServerId);
             parentManga ??= Manga()..serverId = mServerId;
             if (parentManga.title.isEmpty || parentManga.title == 'Untitled') {
@@ -2813,25 +3202,22 @@ class SyncEngine {
         var chapter = await IsarService.instance.getChapterByServerId(chServerId);
         chapter ??= Chapter()..serverId = chServerId;
 
-        chapter.mangaId = parseIntSafe(map['mangaId']) ?? chapter.mangaId;
+        chapter.mangaId = parseIntSafe(map['mangaId']);
         chapter.name = map['name'] as String? ?? chapter.name;
-        chapter.chapterNumber = parseDoubleSafe(map['chapterNumber']) ?? chapter.chapterNumber;
+        chapter.chapterNumber = parseDoubleSafe(map['chapterNumber']);
         // pageCount was missing here, and Chapter.applyReadState does
         // `if (read) lastPageRead = pageCount` — so marking a chapter that
         // first arrived through the updates feed read wrote lastPageRead = 0
         // and threw away the resume position.
-        chapter.pageCount = parseIntSafe(map['pageCount']) ?? chapter.pageCount;
+        chapter.pageCount = parseIntSafe(map['pageCount']);
         final serverIsRead = parseBoolSafe(map['isRead']);
         final hasPendingMutation = pendingChapterIds.contains(chServerId.toString());
-        if (!hasPendingMutation) {
-          chapter.isRead = serverIsRead;
-        }
-        // Same merge as the snapshot/history pulls: this used to take the
-        // server's page outright, which discarded offline reading progress
-        // that was still queued for upload.
-        chapter.lastPageRead = mergeLastPageRead(
-          local: chapter.lastPageRead,
-          server: parseIntSafe(map['lastPageRead']) ?? chapter.lastPageRead,
+        // Same merge as the snapshot/history pulls (ISS-141).
+        applyServerReadState(
+          chapter,
+          serverIsRead: serverIsRead,
+          serverPage: parseIntSafe(map['lastPageRead']),
+          serverMetaActionAt: readActionAtFromNode(map),
           hasPendingMutation: hasPendingMutation,
         );
         // Also missing here: without lastReadAt a chapter that arrives already

@@ -35,6 +35,7 @@ import 'features/settings/import_tachibk_screen.dart';
 import 'features/settings/library_settings_screen.dart';
 import 'features/settings/multi_server_settings_screen.dart';
 import 'features/settings/reader_settings_screen.dart';
+import 'features/settings/selective_sync_screen.dart';
 import 'features/settings/server_settings_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/settings/sync_health_screen.dart';
@@ -212,6 +213,13 @@ GoRouter buildAppRouter({
             ),
           ),
           GoRoute(
+            path: '/settings/selective-sync',
+            pageBuilder: (context, state) => sunfireTransitionPage(
+              state: state,
+              child: const SelectiveSyncScreen(),
+            ),
+          ),
+          GoRoute(
             path: '/settings/multi-server',
             pageBuilder: (context, state) => sunfireTransitionPage(
               state: state,
@@ -340,7 +348,7 @@ GoRouter buildAppRouter({
           GoRoute(
             path: '/manga/:id',
             pageBuilder: (context, state) {
-              final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
+              final id = parseRouteId(state.pathParameters['id']);
               return sunfireTransitionPage(
                 state: state,
                 child: MangaDetailScreen(mangaServerId: id),
@@ -350,7 +358,7 @@ GoRouter buildAppRouter({
           GoRoute(
             path: '/reader/:id',
             pageBuilder: (context, state) {
-              final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
+              final id = parseRouteId(state.pathParameters['id']);
               return sunfireTransitionPage(
                 state: state,
                 child: ReaderScreen(chapterServerId: id),
@@ -566,3 +574,7 @@ class _NavigationLogger extends NavigatorObserver {
     unawaited(LoggerService.instance.logInfo('Popped from ${route.settings.name ?? route.runtimeType}', 'Navigation'));
   }
 }
+
+/// Route `:id` → int. Negative ids are valid: local-only series and chapters
+/// (Local source, standalone scrapes) use negative synthetic ids (IMP-002).
+int parseRouteId(String? raw) => int.tryParse(raw?.trim() ?? '') ?? 0;

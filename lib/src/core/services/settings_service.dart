@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show ValueListenable, listEquals, mapEquals, setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../engine/javascript/m_client.dart';
 import '../engine/repo_manager.dart';
 import '../logging/logger_service.dart';
+import 'download_throttle.dart';
 
 class SettingsService extends ChangeNotifier {
   static SettingsService? _instance;
@@ -26,6 +29,36 @@ class SettingsService extends ChangeNotifier {
     _instance ??= SettingsService._();
     return _instance!;
   }
+
+  /// Test isolation (ISS-140): drop the singleton so the next test gets a
+  /// fresh, uninitialised instance (no cached prefs / proxy / listeners).
+  @visibleForTesting
+  static void debugResetInstance() => _instance = null;
+
+  // ── IMP-026: per-key listenables ─────────────────────────────────────
+  final Map<String, _SettingSelector<Object?>> _selectors = {};
+
+  /// A listenable that notifies ONLY when `read(this)` changes (by `==`, or
+  /// element-wise for lists/sets/maps), so a widget can rebuild for the one
+  /// setting it shows instead of on every SettingsService change. Cached per
+  /// [key]; the same key must always use the same [read] and type.
+  ///
+  ///   ValueListenableBuilder(
+  ///     valueListenable: settings.select('readerTheme', (s) => s.readerTheme),
+  ///     builder: ...)
+  ValueListenable<T> select<T>(String key, T Function(SettingsService s) read) {
+    final existing = _selectors[key];
+    if (existing != null) {
+      assert(existing is _SettingSelector<T>, 'select("$key") reused with another type');
+      return existing as _SettingSelector<T>;
+    }
+    final sel = _SettingSelector<T>(this, read);
+    _selectors[key] = sel as _SettingSelector<Object?>;
+    return sel;
+  }
+
+  @visibleForTesting
+  int get debugSelectorCount => _selectors.length;
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
@@ -347,6 +380,58 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// IMP-014: paged page-turn transition: 'slide' (default), 'fade' or 'none'.
+  static const List<String> pageTransitionModes = ['slide', 'fade', 'none'];
+  String get pageTransition {
+    final v = _prefs?.getString('page_transition');
+    return pageTransitionModes.contains(v) ? v! : 'slide';
+  }
+
+  set pageTransition(String value) {
+    if (!pageTransitionModes.contains(value)) return;
+    unawaited(_prefs?.setString('page_transition', value));
+    notifyListeners();
+  }
+
+  /// IMP-015: rotate wide (landscape) pages a quarter turn in paged modes.
+  bool get rotateWidePages => _prefs?.getBool('rotate_wide_pages') ?? false;
+  set rotateWidePages(bool value) {
+    unawaited(_prefs?.setBool('rotate_wide_pages', value));
+    notifyListeners();
+  }
+
+  /// IMP-013: raw per-series reader override JSON (see
+  /// ReaderSettingsOverride in reader_settings_scope.dart). Null = none.
+  Map<String, dynamic>? readerOverrideJson(int mangaId) {
+    final raw = _prefs?.getString('reader_override_$mangaId');
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final v = jsonDecode(raw);
+      return v is Map<String, dynamic> ? v : null;
+    } catch (e) {
+      debugPrint('[Settings] bad reader_override_$mangaId: $e');
+      return null;
+    }
+  }
+
+  /// Empty / null [json] removes the override.
+  /// [updatedAtMs] stamps the change (IMP-005 roaming: newest wins); a local
+  /// edit leaves it null and gets "now".
+  Future<void> setReaderOverrideJson(int mangaId, Map<String, Object>? json, {int? updatedAtMs}) async {
+    final key = 'reader_override_$mangaId';
+    if (json == null || json.isEmpty) {
+      await _prefs?.remove(key);
+    } else {
+      await _prefs?.setString(key, jsonEncode(json));
+    }
+    await _prefs?.setInt('reader_override_ts_$mangaId', updatedAtMs ?? DateTime.now().millisecondsSinceEpoch);
+    notifyListeners();
+  }
+
+  /// IMP-005: when the per-series override of [mangaId] last changed (epoch
+  /// ms, including a reset to "All"); 0 if never.
+  int readerOverrideUpdatedAt(int mangaId) => _prefs?.getInt('reader_override_ts_$mangaId') ?? 0;
+
   bool get cropBorders => _prefs?.getBool('crop_borders') ?? false;
   set cropBorders(bool value) {
     unawaited(_prefs?.setBool('crop_borders', value));
@@ -504,6 +589,93 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// IMP-037: page downloads in flight per chapter (1-8, default 5).
+  int get downloadConcurrency =>
+      clampDownloadConcurrency(_prefs?.getInt('download_concurrency') ?? kDefaultDownloadConcurrency);
+  set downloadConcurrency(int value) {
+    unawaited(_prefs?.setInt('download_concurrency', clampDownloadConcurrency(value)));
+    notifyListeners();
+  }
+
+  /// IMP-037: simultaneous page fetches against one source (1-8, default 2),
+  /// protects against hotlink bans. Applies on top of [downloadConcurrency].
+  int get downloadPerSourceLimit =>
+      clampDownloadConcurrency(_prefs?.getInt('download_per_source_limit') ?? kDefaultPerSourceDownloadLimit);
+  set downloadPerSourceLimit(int value) {
+    unawaited(_prefs?.setInt('download_per_source_limit', clampDownloadConcurrency(value)));
+    notifyListeners();
+  }
+
+  /// IMP-038: which read chapter "delete after read" removes. 0 = the chapter
+  /// just finished; N = the read chapter N places before it (keeps the N
+  /// latest read chapters). Range 0-4.
+  int get deleteAfterReadOffset => (_prefs?.getInt('delete_after_read_offset') ?? 0).clamp(0, 4);
+  set deleteAfterReadOffset(int value) {
+    unawaited(_prefs?.setInt('delete_after_read_offset', value.clamp(0, 4)));
+    notifyListeners();
+  }
+
+  /// IMP-036: store finished local downloads as one CBZ per chapter.
+  bool get downloadAsCbz => _prefs?.getBool('download_as_cbz') ?? false;
+  set downloadAsCbz(bool value) {
+    unawaited(_prefs?.setBool('download_as_cbz', value));
+    notifyListeners();
+  }
+
+  /// IMP-007: saved library filter presets (JSON list; see library_matching.dart).
+  String get savedLibraryFiltersJson => _prefs?.getString('saved_library_filters') ?? '';
+  set savedLibraryFiltersJson(String value) {
+    unawaited(_prefs?.setString('saved_library_filters', value));
+    notifyListeners();
+  }
+
+  /// IMP-002: folder scanned by the Local source ('' = unset).
+  String get localSourceRoot => _prefs?.getString('local_source_root') ?? '';
+  set localSourceRoot(String value) {
+    final v = value.trim();
+    unawaited(v.isEmpty ? _prefs?.remove('local_source_root') : _prefs?.setString('local_source_root', v));
+    notifyListeners();
+  }
+
+  /// IMP-035: on-device download folder ('' = app documents/downloads).
+  String get localDownloadDirectory => _prefs?.getString('local_download_directory') ?? '';
+  set localDownloadDirectory(String value) {
+    final v = value.trim();
+    unawaited(v.isEmpty ? _prefs?.remove('local_download_directory') : _prefs?.setString('local_download_directory', v));
+    notifyListeners();
+  }
+
+  /// IMP-035: downloads pause below this much free space (MB, 0-10240).
+  int get downloadMinFreeSpaceMb => (_prefs?.getInt('download_min_free_space_mb') ?? 200).clamp(0, 10240);
+  set downloadMinFreeSpaceMb(int value) {
+    unawaited(_prefs?.setInt('download_min_free_space_mb', value.clamp(0, 10240)));
+    notifyListeners();
+  }
+
+  /// IMP-003: smart update restrictions (see update_restrictions.dart).
+  bool get updateSkipCompleted => _prefs?.getBool('update_skip_completed') ?? false;
+  set updateSkipCompleted(bool value) {
+    unawaited(_prefs?.setBool('update_skip_completed', value));
+    notifyListeners();
+  }
+
+  bool get updateSkipWithUnread => _prefs?.getBool('update_skip_with_unread') ?? false;
+  set updateSkipWithUnread(bool value) {
+    unawaited(_prefs?.setBool('update_skip_with_unread', value));
+    notifyListeners();
+  }
+
+  bool get updateSkipNotStarted => _prefs?.getBool('update_skip_not_started') ?? false;
+  set updateSkipNotStarted(bool value) {
+    unawaited(_prefs?.setBool('update_skip_not_started', value));
+    notifyListeners();
+  }
+
+  /// IMP-038: "exclude bookmarked" for delete-after-read. Same stored value as
+  /// [allowDeletingBookmarkedChapters] (inverted) so the two never disagree.
+  bool get deleteAfterReadExcludeBookmarked => !allowDeletingBookmarkedChapters;
+  set deleteAfterReadExcludeBookmarked(bool value) => allowDeletingBookmarkedChapters = !value;
+
   bool get allowDeletingBookmarkedChapters => _prefs?.getBool('allow_deleting_bookmarked_chapters') ?? false;
   set allowDeletingBookmarkedChapters(bool value) {
     unawaited(_prefs?.setBool('allow_deleting_bookmarked_chapters', value));
@@ -525,6 +697,23 @@ class SettingsService extends ChangeNotifier {
   bool get downloadOnlyOnWifi => _prefs?.getBool('download_only_on_wifi') ?? true;
   set downloadOnlyOnWifi(bool value) {
     unawaited(_prefs?.setBool('download_only_on_wifi', value));
+    notifyListeners();
+  }
+
+  // ISS-130: "Prefetch next chapter" — always / wifiOnly / off (default always).
+  static const String prefetchAlways = 'always';
+  static const String prefetchWifiOnly = 'wifiOnly';
+  static const String prefetchOff = 'off';
+  static const List<String> prefetchNextChapterModes = [prefetchAlways, prefetchWifiOnly, prefetchOff];
+
+  String get prefetchNextChapter {
+    final v = _prefs?.getString('prefetch_next_chapter');
+    return prefetchNextChapterModes.contains(v) ? v! : prefetchAlways;
+  }
+
+  set prefetchNextChapter(String value) {
+    if (!prefetchNextChapterModes.contains(value)) return;
+    unawaited(_prefs?.setString('prefetch_next_chapter', value));
     notifyListeners();
   }
 
@@ -763,3 +952,25 @@ class SettingsService extends ChangeNotifier {
   // auto-match. Legacy `metron_auto_match` pref is left unread.
 }
 
+/// IMP-026: one cached per-key view of [SettingsService].
+class _SettingSelector<T> extends ValueNotifier<T> {
+  _SettingSelector(this._settings, this._read) : super(_read(_settings)) {
+    _settings.addListener(_onSettingsChanged);
+  }
+
+  final SettingsService _settings;
+  final T Function(SettingsService) _read;
+
+  void _onSettingsChanged() {
+    final next = _read(_settings);
+    if (!_settingValuesEqual(next, value)) value = next;
+  }
+}
+
+bool _settingValuesEqual(Object? a, Object? b) {
+  if (identical(a, b) || a == b) return true;
+  if (a is List && b is List) return listEquals(a, b);
+  if (a is Set && b is Set) return setEquals(a, b);
+  if (a is Map && b is Map) return mapEquals(a, b);
+  return false;
+}

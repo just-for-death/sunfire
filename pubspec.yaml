@@ -2,7 +2,7 @@ name: sunfire
 description: Sunfire - A local-first, server-synced manga reader.
 
 publish_to: "none"
-version: 5.0.0+1
+version: 6.0.0+33
 
 environment:
   sdk: ">=3.13.0 <4.0.0"
@@ -68,6 +68,7 @@ dev_dependencies:
   isar_community_generator: ^3.3.2
   mocktail: ^1.0.4
   mockito: ^5.4.5
+  flutter_secure_storage_platform_interface: ^1.1.2
 
 dependency_overrides:
   ffi: ^2.1.3

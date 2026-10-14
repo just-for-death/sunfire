@@ -130,7 +130,7 @@ extension GraphQLServerCompatApi on GraphQLClientService {
           extensionStores { $_storeFields }
           extensions {
             pkgName name versionName lang isInstalled isObsolete hasUpdate
-            iconUrl isNsfw contentWarning repo storeIndexUrl
+            iconUrl contentWarning repo storeIndexUrl
           }
         }
       }
@@ -161,7 +161,7 @@ extension GraphQLServerCompatApi on GraphQLClientService {
         extensions(condition: { storeIndexUrl: $url }) {
           nodes {
             pkgName name versionName lang isInstalled isObsolete hasUpdate
-            iconUrl isNsfw contentWarning storeIndexUrl
+            iconUrl contentWarning storeIndexUrl
           }
         }
       }
@@ -460,14 +460,14 @@ extension GraphQLServerCompatApi on GraphQLClientService {
 
   /// Pulls remote KOReader progress for [chapterId] into the server.
   Future<KoSyncPullResult?> pullKoSyncProgress(int chapterId) async {
-    const doc = r'''
+    final doc = r'''
       mutation PullKoSync($chapterId: Int!) {
         pullKoSyncProgress(input: { chapterId: $chapterId }) {
-          chapter { id lastPageRead isRead lastReadAt }
+          chapter { id #STATE# }
           syncConflict { deviceName remotePage }
         }
       }
-    ''';
+    '''.replaceFirst('#STATE#', _chapterState(const ['lastPageRead', 'isRead', 'lastReadAt']));
     final res = await query(doc, variables: {'chapterId': chapterId}, label: 'pullKoSyncProgress', op: GraphQLOp.write);
     if (res == null || !res.containsKey('pullKoSyncProgress')) return null;
     final p = res['pullKoSyncProgress'];

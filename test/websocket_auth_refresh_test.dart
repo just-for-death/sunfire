@@ -193,8 +193,8 @@ void main() {
     final types = received.map((m) => m['type']).toList();
     final subs = received.where((m) => m['type'] == 'subscribe').toList();
     expect(types, contains('connection_init'));
-    expect(subs, hasLength(2), reason: 'libraryUpdate + downloadStatus');
-    expect(subs.map((m) => m['id']).toSet(), {'1', '2'});
+    expect(subs, hasLength(3), reason: 'libraryUpdate + downloadStatus + syncStatus (IMP-006)');
+    expect(subs.map((m) => m['id']).toSet(), {'1', '2', '3'});
   }, timeout: const Timeout(Duration(seconds: 30)));
 
   test('a server that accepts TCP but never acks is not reported connected', () async {

@@ -71,8 +71,41 @@
 		</array>
 		<key>NSAppTransportSecurity</key>
 		<dict>
+			<!-- IMP-047: unqualified + .local hosts. On iOS 17+ this no longer
+			     covers IP addresses, so the private / Tailscale ranges and
+			     MagicDNS (*.ts.net) are listed explicitly below. -->
 			<key>NSAllowsLocalNetworking</key>
 			<true/>
+			<key>NSExceptionDomains</key>
+			<dict>
+				<key>10.0.0.0/8</key>
+				<dict>
+					<key>NSExceptionAllowsInsecureHTTPLoads</key>
+					<true/>
+				</dict>
+				<key>172.16.0.0/12</key>
+				<dict>
+					<key>NSExceptionAllowsInsecureHTTPLoads</key>
+					<true/>
+				</dict>
+				<key>192.168.0.0/16</key>
+				<dict>
+					<key>NSExceptionAllowsInsecureHTTPLoads</key>
+					<true/>
+				</dict>
+				<key>100.64.0.0/10</key>
+				<dict>
+					<key>NSExceptionAllowsInsecureHTTPLoads</key>
+					<true/>
+				</dict>
+				<key>ts.net</key>
+				<dict>
+					<key>NSExceptionAllowsInsecureHTTPLoads</key>
+					<true/>
+					<key>NSIncludesSubdomains</key>
+					<true/>
+				</dict>
+			</dict>
 		</dict>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>

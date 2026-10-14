@@ -7,7 +7,7 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 
 import '../db/isar_service.dart';
 import 'conflict_resolver.dart'
@@ -107,17 +107,34 @@ class SyncManager {
   }
 
   /// Delta sync since [since] (defaults to last successful timestamp).
+  ///
+  /// ISS-051: a call while a sync is running (here or in [SyncEngine]) is not
+  /// dropped. Every busy caller joins ONE queued follow-up per kind
+  /// (arguments merged), run once the current sync ends.
   Future<SyncResult> syncDelta({
     DateTime? since,
     Set<int>? mangaIds,
     Set<int>? categoryIds,
-  }) async {
-    if (_isSyncing || syncEngine.isSyncing) {
-      return const SyncResult(
-        success: false,
-        errors: ['Sync already in progress'],
-      );
+  }) {
+    if (_busy) {
+      final q = _queued['delta'];
+      final resolved = since ?? _lastSyncTimestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+      if (q == null) {
+        return _enqueue('delta', _QueuedSync(since: resolved, mangaIds: mangaIds, categoryIds: categoryIds));
+      }
+      q.since = q.since!.isBefore(resolved) ? q.since : resolved;
+      q.mangaIds = _mergeIds(q.mangaIds, mangaIds);
+      q.categoryIds = _mergeIds(q.categoryIds, categoryIds);
+      return q.done.future;
     }
+    return _runDelta(since: since, mangaIds: mangaIds, categoryIds: categoryIds);
+  }
+
+  Future<SyncResult> _runDelta({
+    DateTime? since,
+    Set<int>? mangaIds,
+    Set<int>? categoryIds,
+  }) async {
 
     _isSyncing = true;
     _cancelRequested = false;
@@ -169,10 +186,15 @@ class SyncManager {
         ));
       }
 
-      _emitProgress(const SyncProgress(
+      final deltaManga = deltaResult.mangaUpdated;
+      final deltaChapters = deltaResult.chaptersUpdated;
+      _emitProgress(SyncProgress(
         phase: SyncPhase.applyingChanges,
         current: 55,
         total: 100,
+        currentManga: deltaManga + deltaChapters > 0
+            ? 'Applying $deltaManga manga · $deltaChapters chapters'
+            : null,
       ));
 
       final applyResult = await syncEngine.applyDeltaChanges(deltaResult);
@@ -206,10 +228,13 @@ class SyncManager {
         conflicts: conflicts,
       );
 
-      _emitProgress(const SyncProgress(
+      // S1.5: surface per-run manga/chapter counts on the progress dialog.
+      _emitProgress(SyncProgress(
         phase: SyncPhase.completed,
         current: 100,
         total: 100,
+        currentManga:
+            '${result.mangaUpdated} manga · ${result.chaptersUpdated} chapters updated',
       ));
 
       return _finish(result);
@@ -226,6 +251,7 @@ class SyncManager {
       ));
     } finally {
       _isSyncing = false;
+      _scheduleDrain(); // ISS-051
     }
   }
 
@@ -235,21 +261,40 @@ class SyncManager {
   }
 
   /// Selective manga sync via SyncEngine (`serverId` ints).
-  Future<SyncResult> syncManga(Set<int> mangaIds) async {
-    if (_isSyncing || syncEngine.isSyncing) {
-      return const SyncResult(
-        success: false,
-        errors: ['Sync already in progress'],
-      );
+  /// ISS-051: queued (ids merged) instead of dropped while busy.
+  Future<SyncResult> syncManga(Set<int> mangaIds) {
+    if (_busy) {
+      final q = _queued['manga'];
+      if (q == null) return _enqueue('manga', _QueuedSync(mangaIds: {...mangaIds}));
+      q.mangaIds = {...?q.mangaIds, ...mangaIds};
+      return q.done.future;
     }
+    return _runManga(mangaIds);
+  }
+
+  Future<SyncResult> _runManga(Set<int> mangaIds) async {
 
     _isSyncing = true;
     _cancelRequested = false;
-    _emitProgress(const SyncProgress(
+    final idList = mangaIds.toList();
+    final labels = <String>[];
+    for (final id in idList) {
+      final manga = await isarService.getMangaByServerId(id);
+      labels.add(manga?.title.trim().isNotEmpty == true
+          ? manga!.title
+          : 'Manga $id');
+    }
+    final preview = labels.isEmpty
+        ? null
+        : (labels.length <= 2
+            ? labels.join(', ')
+            : '${labels.first} (+${labels.length - 1} more)');
+    // S1.5: item-scale progress (not opaque 10→100%) for selective sync.
+    _emitProgress(SyncProgress(
       phase: SyncPhase.fetchingManga,
-      current: 10,
-      total: 100,
-      currentManga: 'Selective manga sync',
+      current: 0,
+      total: idList.isEmpty ? 1 : idList.length,
+      currentManga: preview,
     ));
 
     try {
@@ -269,8 +314,11 @@ class SyncManager {
       _pendingConflicts = result.conflicts;
       _emitProgress(SyncProgress(
         phase: result.success ? SyncPhase.completed : SyncPhase.failed,
-        current: 100,
-        total: 100,
+        current: idList.isEmpty ? 1 : idList.length,
+        total: idList.isEmpty ? 1 : idList.length,
+        currentManga: result.success
+            ? '${result.mangaUpdated} manga · ${result.chaptersUpdated} chapters'
+            : preview,
       ));
       return _finish(result.copyWith(lastSyncTimestamp: _lastSyncTimestamp));
     } catch (e, stack) {
@@ -278,17 +326,23 @@ class SyncManager {
       return _finish(SyncResult(success: false, errors: ['$e']));
     } finally {
       _isSyncing = false;
+      _scheduleDrain(); // ISS-051
     }
   }
 
   /// Selective category sync via SyncEngine.
-  Future<SyncResult> syncCategories(Set<int> categoryIds) async {
-    if (_isSyncing || syncEngine.isSyncing) {
-      return const SyncResult(
-        success: false,
-        errors: ['Sync already in progress'],
-      );
+  /// ISS-051: queued (ids merged) instead of dropped while busy.
+  Future<SyncResult> syncCategories(Set<int> categoryIds) {
+    if (_busy) {
+      final q = _queued['categories'];
+      if (q == null) return _enqueue('categories', _QueuedSync(categoryIds: {...categoryIds}));
+      q.categoryIds = {...?q.categoryIds, ...categoryIds};
+      return q.done.future;
     }
+    return _runCategories(categoryIds);
+  }
+
+  Future<SyncResult> _runCategories(Set<int> categoryIds) async {
 
     _isSyncing = true;
     _cancelRequested = false;
@@ -312,6 +366,7 @@ class SyncManager {
       return _finish(SyncResult(success: false, errors: ['$e']));
     } finally {
       _isSyncing = false;
+      _scheduleDrain(); // ISS-051
     }
   }
 
@@ -410,9 +465,77 @@ class SyncManager {
   void dispose() {
     _autoSyncTimer?.cancel();
     _autoSyncTimer = null;
-    if (!_progressController.isClosed) _progressController.close();
-    if (!_resultController.isClosed) _resultController.close();
+    if (!_progressController.isClosed) {
+      unawaited(_progressController.close());
+    }
+    if (!_resultController.isClosed) {
+      unawaited(_resultController.close());
+    }
     _initialized = false;
+  }
+
+  // ── ISS-051: one-deep follow-up queue ─────────────────────────────────
+  // Waits on SyncEngine.onSyncCycleComplete when the engine (not this
+  // manager) is busy, instead of calling triggerSync — so a queued manager
+  // run never adds a second pass to the engine's SyncCycleGate.
+  final Map<String, _QueuedSync> _queued = {};
+  StreamSubscription<void>? _engineWait;
+  bool _drainScheduled = false;
+
+  bool get _busy => _isSyncing || syncEngine.isSyncing;
+
+  /// Pending follow-up kinds ('delta' / 'manga' / 'categories'), for tests.
+  @visibleForTesting
+  Set<String> get queuedFollowUps => _queued.keys.toSet();
+
+  static Set<int>? _mergeIds(Set<int>? a, Set<int>? b) =>
+      (a == null || b == null) ? null : {...a, ...b};
+
+  Future<SyncResult> _enqueue(String kind, _QueuedSync q) {
+    _queued[kind] = q;
+    if (!_isSyncing) _waitForEngine();
+    return q.done.future;
+  }
+
+  void _waitForEngine() {
+    _engineWait ??= syncEngine.onSyncCycleComplete.listen((_) => _scheduleDrain());
+  }
+
+  void _scheduleDrain() {
+    if (_queued.isEmpty || _drainScheduled) return;
+    _drainScheduled = true;
+    scheduleMicrotask(() {
+      _drainScheduled = false;
+      _drain();
+    });
+  }
+
+  void _drain() {
+    if (_queued.isEmpty) {
+      unawaited(_engineWait?.cancel());
+      _engineWait = null;
+      return;
+    }
+    if (_busy) {
+      if (!_isSyncing) _waitForEngine();
+      return; // drained again from the running sync's finally / engine event
+    }
+    unawaited(_engineWait?.cancel());
+    _engineWait = null;
+    final kind = _queued.keys.first;
+    final q = _queued.remove(kind)!;
+    unawaited(() async {
+      try {
+        final r = await switch (kind) {
+          'delta' => _runDelta(since: q.since, mangaIds: q.mangaIds, categoryIds: q.categoryIds),
+          'manga' => _runManga(q.mangaIds ?? const {}),
+          _ => _runCategories(q.categoryIds ?? const {}),
+        };
+        q.done.complete(r);
+      } catch (e) {
+        q.done.complete(SyncResult(success: false, errors: ['$e']));
+      }
+    }());
   }
 
   SyncResult _finish(SyncResult result) {
@@ -436,4 +559,13 @@ class SyncManager {
       _progressController.add(progress);
     }
   }
+}
+
+/// ISS-051: one queued follow-up (merged arguments) and its shared result.
+class _QueuedSync {
+  _QueuedSync({this.since, this.mangaIds, this.categoryIds});
+  DateTime? since;
+  Set<int>? mangaIds;
+  Set<int>? categoryIds;
+  final Completer<SyncResult> done = Completer<SyncResult>();
 }

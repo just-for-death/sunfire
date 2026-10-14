@@ -20,6 +20,9 @@ import 'dart:io';
 
 const String kDownloadCompleteMarkerName = '.download_complete';
 
+/// IMP-036: a finished download packed as one archive (see cbz_packer.dart).
+const String kChapterCbzName = 'chapter.cbz';
+
 /// File extensions treated as chapter page images.
 const Set<String> kImagePageExtensions = <String>{
   '.jpg',
@@ -144,6 +147,12 @@ Future<bool> isDownloadFolderComplete(Directory chapterDir, {int? expectedPageCo
   if (expectedPageCount != null) {
     return markedCount == expectedPageCount;
   }
+
+  // IMP-036: the packer verifies the archive's page count before it renames
+  // it into place and removes the loose pages, so a present, non-empty
+  // archive plus a valid marker is a complete download.
+  final cbz = File('${chapterDir.path}/$kChapterCbzName');
+  if (await cbz.exists() && await cbz.length() > 0) return true;
 
   var validCount = 0;
   var yielded = 0;

@@ -1,22 +1,23 @@
 // Integration tests for chapter navigation flow (T2.4).
 // Sub-controllers are injected via ReaderController constructor.
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import 'package:mockito/mockito.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
-
-import 'package:sunfire/src/features/reader/controller/reader_controller.dart';
+import 'package:mockito/mockito.dart';
+import 'package:sunfire/src/core/db/isar_service.dart';
+import 'package:sunfire/src/core/db/models/chapter.dart';
+import 'package:sunfire/src/core/metron/metron_service.dart';
+import 'package:sunfire/src/core/services/settings_service.dart';
+import 'package:sunfire/src/core/sync/sync_engine.dart';
+import 'package:sunfire/src/features/reader/controller/gesture_pipeline.dart';
 import 'package:sunfire/src/features/reader/controller/navigation_controller.dart';
 import 'package:sunfire/src/features/reader/controller/page_loader.dart';
 import 'package:sunfire/src/features/reader/controller/position_manager.dart';
-import 'package:sunfire/src/core/db/models/chapter.dart';
-import 'package:sunfire/src/core/services/settings_service.dart';
-import 'package:sunfire/src/core/sync/sync_engine.dart';
-import 'package:sunfire/src/core/metron/metron_service.dart';
-import 'package:sunfire/src/core/db/isar_service.dart';
-import 'package:sunfire/src/features/reader/reading_mode.dart';
+import 'package:sunfire/src/features/reader/controller/reader_controller.dart';
 import 'package:sunfire/src/features/reader/controller/reader_theme.dart';
+import 'package:sunfire/src/features/reader/reading_mode.dart';
+
 import 'reader_controller_test.mocks.dart';
 
 @GenerateMocks([
@@ -31,6 +32,7 @@ import 'reader_controller_test.mocks.dart';
 void main() {
   group('ReaderController Integration - Chapter Navigation', () {
     late ReaderController controller;
+    late GesturePipeline gesturePipeline;
     late MockIsarService mockIsarService;
     late MockSettingsService mockSettings;
     late MockSyncEngine mockSyncEngine;
@@ -96,6 +98,8 @@ void main() {
       when(mockSettings.autoScrollPauseOnTouch).thenReturn(true);
       when(mockSettings.autoScrollSmoothEaseIn).thenReturn(true);
       when(mockSettings.doublePageDisplayMode).thenReturn('Automatic');
+      when(mockSettings.invertDoublePages).thenReturn(false);
+      when(mockSettings.doublePageOffset).thenReturn(false);
       when(mockSettings.seamlessTransitions).thenReturn(true);
       when(mockSettings.showEndOfChapterDialog).thenReturn(true);
       when(mockSettings.cropBorders).thenReturn(false);
@@ -125,6 +129,8 @@ void main() {
       when(mockNavigationController.canGoToPrevChapterFromTop()).thenReturn(false);
       when(mockNavigationController.loadChapterAndPages(any)).thenAnswer((_) async {});
       when(mockNavigationController.setCurrentPage(any)).thenReturn(null);
+      when(mockNavigationController.parentManga).thenReturn(null); // IMP-013 open path
+      when(mockIsarService.getManga(any)).thenAnswer((_) async => null);
 
       controller = ReaderController(
         chapterServerId: 100,
@@ -135,11 +141,17 @@ void main() {
         navigationController: mockNavigationController,
         pageLoader: mockPageLoader,
         positionManager: mockPositionManager,
+        gesturePipeline: gesturePipeline = GesturePipeline(
+          navigationController: mockNavigationController,
+          positionManager: mockPositionManager,
+          settings: mockSettings,
+        ),
       );
     });
 
     tearDown(() {
       controller.dispose();
+      gesturePipeline.dispose();
     });
 
     group('Chapter Navigation Flow', () {
@@ -151,6 +163,69 @@ void main() {
         expect(controller.readingMode, equals(ReadingMode.longStrip));
         expect(controller.navigationController, same(mockNavigationController));
         verify(mockNavigationController.loadChapterAndPages(100)).called(1);
+      });
+
+      testWidgets('IMP-012: stripChapters holds only the current chapter before prefetch',
+          (WidgetTester tester) async {
+        await initController(tester);
+        final cur = chapter1();
+        when(mockNavigationController.chapter).thenReturn(cur);
+        when(mockNavigationController.pageUrls).thenReturn(const ['p1', 'p2']);
+        final next = chapter2();
+        when(mockNavigationController.nextChapter).thenReturn(next);
+        when(mockNavigationController.peekPrefetchedPages(next)).thenReturn(null);
+        controller.refreshStripChapters();
+        expect(controller.stripChapters.length, 1);
+        expect(controller.stripChapters.single.chapter, same(cur));
+        expect(controller.stripChapters.single.urls, ['p1', 'p2']);
+        final items = buildReaderItems(controller.stripChapters);
+        final t = PositionManager.progressTargetForItem(items, 1)!;
+        expect(t.chapter, same(cur));
+        expect((t.page, t.totalPages), (2, 2));
+      });
+
+      testWidgets('IMP-012: stripChapters appends the prefetched next chapter and notifies',
+          (WidgetTester tester) async {
+        await initController(tester);
+        final cur = chapter1();
+        final next = chapter2();
+        when(mockNavigationController.chapter).thenReturn(cur);
+        when(mockNavigationController.pageUrls).thenReturn(const ['p1', 'p2']);
+        when(mockNavigationController.nextChapter).thenReturn(next);
+        when(mockNavigationController.peekPrefetchedPages(next)).thenReturn(null);
+        controller.refreshStripChapters();
+        var notified = 0;
+        controller.stripChaptersListenable.addListener(() => notified++);
+
+        // Prefetch finishes: NavigationController fires onNextChapterPagesReady.
+        when(mockNavigationController.peekPrefetchedPages(next)).thenReturn(const ['n1', 'n2', 'n3']);
+        final ready = verify(mockNavigationController.onNextChapterPagesReady = captureAny)
+            .captured
+            .last as void Function(Chapter, List<String>);
+        ready(next, const ['n1', 'n2', 'n3']);
+
+        expect(notified, 1);
+        expect(controller.stripChapters.map((c) => c.chapter.id), [cur.id, next.id]);
+        controller.refreshStripChapters(); // unchanged → no extra notify
+        expect(notified, 1);
+
+        final items = buildReaderItems(controller.stripChapters);
+        // p1 p2 | boundary | n1 n2 n3 | boundary
+        final t = PositionManager.progressTargetForItem(items, 4)!; // n2
+        expect(t.chapter, same(next));
+        expect((t.page, t.totalPages), (2, 3));
+        final b = PositionManager.progressTargetForItem(items, 2)!;
+        expect(b.chapter, same(cur));
+        expect((b.page, b.totalPages), (2, 2));
+      });
+
+      testWidgets('ISS-122: loading finished fires even when the load throws', (WidgetTester tester) async {
+        await initController(tester);
+        final events = <bool>[];
+        controller.onLoadingChanged = events.add;
+        when(mockNavigationController.loadChapterAndPages(any)).thenThrow(StateError('boom'));
+        await controller.loadChapter(101);
+        expect(events, [true, false]);
       });
 
       testWidgets('navigates to next chapter', (WidgetTester tester) async {

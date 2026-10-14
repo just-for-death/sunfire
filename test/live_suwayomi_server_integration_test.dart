@@ -1,5 +1,5 @@
 // ignore_for_file: avoid_print
-// Opt-in: needs a live Suwayomi server on localhost:4567.
+// Opt-in: needs the THROWAWAY Suwayomi (tool/start_throwaway_suwayomi.sh, 127.0.0.1:4590).
 @Tags(['network'])
 library;
 
@@ -9,11 +9,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sunfire/src/core/services/settings_service.dart';
 import 'package:sunfire/src/core/sync/graphql_client_service.dart';
 
+import 'support/live_server_guard.dart';
+
 class _RealHttpOverrides extends HttpOverrides {}
 
-const _liveUrl = 'http://localhost:4567';
+// SAFETY: live tests are opt-in. localhost:4567 on Zoro is Jane's REAL
+// Suwayomi server (same host as 100.71.46.98), and these tests mutate state
+// (library toggle, chapter progress, updateExtension). Point
+// SUNFIRE_LIVE_URL at a throwaway server to run them; unset → they skip
+// (port 1 is never listening).
+// ISS-134: the URL is only accepted after requireThrowawayServer() (loopback,
+// not :4567, not Tailscale, Docker marker present); otherwise port 1 → skip.
+String _liveUrl = 'http://127.0.0.1:1';
 
 void main() {
+  setUpAll(() async {
+    _liveUrl = await requireThrowawayServer(Platform.environment['SUNFIRE_LIVE_URL']) ?? 'http://127.0.0.1:1';
+  });
   HttpOverrides.global = _RealHttpOverrides();
   late bool up;
 

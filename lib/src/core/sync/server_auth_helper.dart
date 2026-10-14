@@ -4,9 +4,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'graphql_client_service.dart';
-import '../engine/quickjs_service.dart';
-import '../logging/logger_service.dart';
-import '../services/settings_service.dart';
 
 enum ServerAuthType {
   none,

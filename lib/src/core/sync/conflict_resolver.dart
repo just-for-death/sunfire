@@ -6,6 +6,7 @@
 import '../db/models/category.dart';
 import '../db/models/chapter.dart';
 import '../db/models/manga.dart';
+import 'read_state_merge.dart' show mergeChapterReadState;
 
 /// Conflict resolver using various strategies
 class ConflictResolver {
@@ -41,6 +42,14 @@ class ConflictResolver {
       if (result != null) return result;
     }
 
+    // IMP-032: field-wise merge. Monotonic progress fields never regress under
+    // the automatic strategies (LWW / CRDT); explicit server/local/user
+    // choices still apply as asked.
+    if (strategy == ConflictResolutionStrategy.lastWriteWins || strategy == ConflictResolutionStrategy.crdt) {
+      final merged = mergeProgress(field, localValue, remoteValue);
+      if (merged != null) return merged;
+    }
+
     // Apply strategy
     switch (strategy) {
       case ConflictResolutionStrategy.lastWriteWins:
@@ -59,6 +68,27 @@ class ConflictResolver {
         // Return special marker for user to decide
         return const UserChoiceMarker();
     }
+  }
+
+  /// Fields that only move forward (reading progress / timestamps).
+  static const Set<String> kMonotonicProgressFields = {
+    'lastPageRead', 'progress', 'readCount', 'lastReadAt', 'inLibraryAt', 'lastChapterRead',
+  };
+
+  /// IMP-032: per-field merge for [kMonotonicProgressFields] (the higher value
+  /// wins, so a stale device can't roll progress back). Null for any other
+  /// field, or when neither side is numeric, so the caller's strategy decides.
+  static Object? mergeProgress(String field, Object? local, Object? remote) {
+    if (!kMonotonicProgressFields.contains(field)) return null;
+    if (local is! num && remote is! num) return null;
+    return maxProgress(local is num ? local : null, remote is num ? remote : null);
+  }
+
+  /// Larger of two progress values; null-tolerant.
+  static num? maxProgress(num? a, num? b) {
+    if (a == null) return b;
+    if (b == null) return a;
+    return a >= b ? a : b;
   }
 
   /// Resolve using last-write-wins (LWW) timestamp comparison
@@ -133,6 +163,7 @@ class ConflictResolver {
     required Chapter local,
     required Chapter remote,
   }) {
+    final readState = mergeChapterReadState(local, remote);
     return Chapter()
       ..id = local.id
       ..serverId = remote.serverId > 0 ? remote.serverId : local.serverId
@@ -142,8 +173,11 @@ class ConflictResolver {
       ..url = _resolveString(local.url, remote.url)
       ..realUrl = _resolveString(local.realUrl, remote.realUrl)
       ..pageCount = _resolveInt(local.pageCount, remote.pageCount)
-      ..isRead = local.isRead || remote.isRead
-      ..lastPageRead = _resolveInt(local.lastPageRead, remote.lastPageRead)
+      // ISS-141: newest explicit action wins outright; otherwise automatic
+      // progress (read OR, furthest page).
+      ..isRead = readState.isRead
+      ..lastPageRead = readState.lastPageRead
+      ..readStateActionAt = readState.actionAt
       ..lastReadAt = _maxDateInt(local.lastReadAt, remote.lastReadAt)
       ..isDownloadedLocally = local.isDownloadedLocally || remote.isDownloadedLocally
       ..isDownloadedOnServer = local.isDownloadedOnServer || remote.isDownloadedOnServer

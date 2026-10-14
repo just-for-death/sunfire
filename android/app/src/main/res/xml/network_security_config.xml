@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- FOSS: no cleartext by default. Do not set usesCleartextTraffic on
-         <application> (scanners treat that as a dangerous manifest bit). -->
-    <base-config cleartextTrafficPermitted="false">
+    <!-- IMP-047: Sunfire talks to a USER-ENTERED self-hosted Suwayomi, which
+         is usually plain HTTP on a LAN (192.168.x.x:4567) or a Tailscale
+         address (100.64.0.0/10). Android NSC cannot express IP/CIDR ranges,
+         so cleartext is permitted app-wide via this file (referenced from the
+         manifest's android:networkSecurityConfig); we still do NOT set
+         usesCleartextTraffic on <application>. Use HTTPS when the server
+         supports it. -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
 
-    <!-- Loopback / emulator host only. Android NSC cannot express RFC1918
-         CIDR; use HTTPS or a reverse proxy for LAN Suwayomi on private IPs. -->
+    <!-- Loopback / emulator host (kept explicit; already covered above). -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>

@@ -8,8 +8,9 @@
 
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart' show ValueListenable, listEquals;
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../../core/db/isar_service.dart';
 import '../../../core/db/models/chapter.dart';
@@ -17,7 +18,7 @@ import '../../../core/db/models/manga.dart';
 import '../../../core/metron/metron_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/sync/sync_engine.dart'
-    show SyncEngine;
+    show SyncEngine, syncReaderSettingsMeta;
 import '../reader_scroll_utils.dart';
 import '../reader_settings_scope.dart';
 import '../reading_mode.dart';
@@ -27,6 +28,7 @@ import 'page_loader.dart'
     show PageLoader;
 import 'position_manager.dart';
 import 'reader_theme.dart';
+import 'webtoon_item_registry.dart';
 
 /// ReaderController — central state orchestrator for the reader.
 ///
@@ -39,28 +41,43 @@ import 'reader_theme.dart';
 /// Designed to be independent of UI — no BuildContext, no setState.
 /// All state changes are communicated via callbacks to the UI layer.
 class ReaderController {
-  ReaderController({
+  factory ReaderController({
+    required int chapterServerId,
+    required IsarService isarService,
+    required SettingsService settings,
+    required SyncEngine syncEngine,
+    required MetronService metronService,
+    PageLoader? pageLoader,
+    PositionManager? positionManager,
+    NavigationController? navigationController,
+    required GesturePipeline gesturePipeline,
+  }) =>
+      // IMP-049a: the pipeline is always injected; ReaderInputPipeline
+      // (screen) or the test builds the only instance and owns its dispose.
+      ReaderController._(
+        chapterServerId: chapterServerId,
+        isarService: isarService,
+        settings: settings,
+        syncEngine: syncEngine,
+        metronService: metronService,
+        pageLoader: pageLoader,
+        positionManager: positionManager,
+        navigationController: navigationController,
+        gesturePipeline: gesturePipeline,
+      );
+
+  ReaderController._({
     required this.chapterServerId,
     required this.isarService,
     required this.settings,
     required this.syncEngine,
     required this.metronService,
-    PageLoader? pageLoader,
-    PositionManager? positionManager,
+    this._pageLoader,
+    this._positionManager,
     NavigationController? navigationController,
-    GesturePipeline? gesturePipeline,
-  })  : _pageLoader = pageLoader,
-        _positionManager = positionManager,
-        _navigationController = navigationController,
+    required this._gesturePipeline,
+  })  : _navigationController = navigationController,
         _subControllersInjected = navigationController != null,
-        _gesturePipeline = gesturePipeline ??
-            GesturePipeline(
-              navigationController:
-                  navigationController ?? _placeholderNavigationController,
-              positionManager:
-                  positionManager ?? _placeholderPositionManager,
-              settings: settings,
-            ),
         _tickerProvider = _TickerProvider();
 
   final int chapterServerId;
@@ -74,31 +91,6 @@ class ReaderController {
   /// When true, sub-controllers were provided by the caller (tests / DI) and
   /// must not be replaced or double-disposed.
   final bool _subControllersInjected;
-
-  // Placeholder for early initialization
-  static final NavigationController _placeholderNavigationController =
-      NavigationController(
-    isarService: IsarService.instance,
-    pageLoader: PageLoader(
-      sourceName: '',
-      mangaId: 0,
-      chapterTargetId: 0,
-    ),
-    positionManager: PositionManager(
-      settings: SettingsService.instance,
-      isarService: IsarService.instance,
-      syncEngine: SyncEngine.instance,
-      metronService: MetronService.instance,
-    ),
-    settings: SettingsService.instance,
-  );
-
-  static final PositionManager _placeholderPositionManager = PositionManager(
-    settings: SettingsService.instance,
-    isarService: IsarService.instance,
-    syncEngine: SyncEngine.instance,
-    metronService: MetronService.instance,
-  );
 
   // Sub-controllers (initialized after chapter load, or injected via ctor)
   PageLoader? _pageLoader;
@@ -116,7 +108,7 @@ class ReaderController {
   bool _cropBorders = false;
   bool _invertTaps = false;
   bool _showTapZoneOverlay = false;
-  bool _showTransitionCard = false;
+  final bool _showTransitionCard = false;
   bool _isZoomed = false;
 
   // Auto-scroll state
@@ -164,6 +156,10 @@ class ReaderController {
   /// Called when settings should be persisted
   void Function()? onSettingsChanged;
 
+  /// When false the owner (ReaderScreen) restores the start page itself from
+  /// [onChapterLoaded]; the controller then skips [_restoreProgress].
+  bool restoreProgressOnLoad = true;
+
   // ─── Getters ──────────────────────────────────────────────────────
   ReadingMode get readingMode => _readingMode;
   Manga? get parentManga => _parentManga;
@@ -187,7 +183,9 @@ class ReaderController {
 
   // Webtoon zoom controllers
   Map<int, TransformationController> get webtoonZoomControllers => _webtoonZoomControllers;
-  Map<int, GlobalKey> get webtoonPageKeys => _webtoonZoomControllers.keys.fold({}, (map, key) => map..[key] = GlobalKey());
+
+  /// IMP-028: laid-out webtoon items (GlobalKey-free), filled by ReaderCanvas.
+  final WebtoonItemRegistry webtoonItemRegistry = WebtoonItemRegistry();
 
   // Controllers
   ScrollController? get scrollController => _scrollController;
@@ -205,6 +203,63 @@ class ReaderController {
 
   // ─── Initialization ──────────────────────────────────────────────
 
+  /// Bind UI-owned scroll/page/zoom controllers without loading a chapter.
+  ///
+  /// Used by the live [ReaderScreen] cutover: chapter load stays on the screen
+  /// while this orchestrator owns theme/gesture/progress sub-controllers.
+  void attachUiControllers({
+    required ScrollController scrollController,
+    required PageController pageController,
+    required TransformationController transformationController,
+    AnimationController? zoomAnimController,
+    required Map<int, TransformationController> webtoonZoomControllers,
+  }) {
+    _scrollController = scrollController;
+    _pageController = pageController;
+    _transformationController = transformationController;
+    _zoomAnimController = zoomAnimController;
+    _webtoonZoomControllers = webtoonZoomControllers;
+    _initPreferences();
+    _applySettingsToPipeline();
+    // Review H1: the live screen injects sub-controllers and never calls
+    // initialize(), so wire NavigationController -> owner callbacks here.
+    // Gesture callbacks stay owner-wired (ReaderInputPipeline.wirePipelineCallbacks).
+    if (_subControllersInjected) _wireNavigationCallbacksOnce();
+  }
+
+  bool _navWired = false;
+  void _wireNavigationCallbacksOnce() {
+    if (_navWired) return;
+    _navWired = true;
+    _wireNavigationCallbacks();
+  }
+
+  /// Keep PageLoader identity in sync when the live reader recreates it.
+  void setPageLoader(PageLoader? loader) {
+    _pageLoader = loader;
+  }
+
+  /// Mirror live reading-mode / theme for canvas consumers.
+  void syncPresentation({
+    required ReadingMode readingMode,
+    required ReaderThemeMode readerTheme,
+    required ReaderColorFilter colorFilter,
+    required ImageScaleType scaleType,
+    required bool cropBorders,
+    required bool invertTaps,
+    required bool isZoomed,
+    required int currentPage,
+  }) {
+    _readingMode = readingMode;
+    _readerTheme = readerTheme;
+    _colorFilter = colorFilter;
+    _scaleType = scaleType;
+    _cropBorders = cropBorders;
+    _invertTaps = invertTaps;
+    _isZoomed = isZoomed;
+    _currentPage = currentPage;
+  }
+
   /// Initialize the controller and load the initial chapter.
   Future<void> initialize({
     required ScrollController scrollController,
@@ -213,28 +268,26 @@ class ReaderController {
     AnimationController? zoomAnimController,
     required Map<int, TransformationController> webtoonZoomControllers,
   }) async {
-    _scrollController = scrollController;
-    _pageController = pageController;
-    _transformationController = transformationController;
-    _zoomAnimController =
-        zoomAnimController ??
-        AnimationController(
-          vsync: _tickerProvider,
-          duration: const Duration(milliseconds: 200),
-        );
-    _webtoonZoomControllers = webtoonZoomControllers;
-
-    _initPreferences();
-    _applySettingsToPipeline();
+    attachUiControllers(
+      scrollController: scrollController,
+      pageController: pageController,
+      transformationController: transformationController,
+      zoomAnimController: zoomAnimController ??
+          AnimationController(
+            vsync: _tickerProvider,
+            duration: const Duration(milliseconds: 200),
+          ),
+      webtoonZoomControllers: webtoonZoomControllers,
+    );
 
     // Injected sub-controllers skip the Isar-backed _initSubControllers path,
     // so wire callbacks here once.
     if (_subControllersInjected) {
-      _wireNavigationCallbacks();
+      _wireNavigationCallbacksOnce();
       _wireGestureCallbacks();
     }
 
-    unawaited(_loadChapterAndPages(chapterServerId));
+    unawaited(loadChapter(chapterServerId));
   }
 
   void _initPreferences() {
@@ -253,7 +306,9 @@ class ReaderController {
   }
 
   void _applySettingsToPipeline() {
-    _gesturePipeline.setReadingMode(_readingMode);
+    _gesturePipeline
+      ..setReadingMode(_readingMode)
+      ..setInvertTaps(_invertTaps);
     _gesturePipeline.setInvertTaps(_invertTaps);
     _gesturePipeline.setAutoScrollSpeed(_autoScrollSpeed);
     _gesturePipeline.setIsAutoScrolling(_isAutoScrolling);
@@ -269,7 +324,7 @@ class ReaderController {
 
   void _initSubControllers(Chapter chapter) {
     if (_subControllersInjected) {
-      _wireNavigationCallbacks();
+      _wireNavigationCallbacksOnce();
       _wireGestureCallbacks();
       return;
     }
@@ -300,6 +355,7 @@ class ReaderController {
   }
 
   void _wireNavigationCallbacks() {
+    _navWired = true;
     _navigationController!.onChapterLoaded = (chapter, siblings, next, prev) {
       _currentPage = 1;
       _gesturePipeline.setCurrentPage(1);
@@ -312,6 +368,9 @@ class ReaderController {
       onZoomStateChanged?.call(false);
 
       onChapterLoaded?.call(chapter, siblings, next, prev);
+      _stripLog = const []; // a real load starts a fresh strip
+      _stripExtents.clear();
+      refreshStripChapters();
 
       // Auto-scroll resume logic
       final nextChapterId = next != null
@@ -334,12 +393,22 @@ class ReaderController {
 
     _navigationController!.onNextChapterPrefetched = (chapter) {
       _gesturePipeline.setNextChapter(chapter);
+      refreshStripChapters();
+    };
+
+    // IMP-012: the strip grows once the next chapter's pages are ready.
+    _navigationController!.onNextChapterPagesReady = (chapter, urls) {
+      refreshStripChapters();
+    };
+
+    _navigationController!.onLoadingChanged = (loading) {
+      onLoadingChanged?.call(loading);
     };
   }
 
   void _wireGestureCallbacks() {
-    _gesturePipeline.onLoadNextChapter = () => _loadNextChapter();
-    _gesturePipeline.onLoadPrevChapter = () => _loadPrevChapter();
+    _gesturePipeline.onLoadNextChapter = () => loadNextChapter();
+    _gesturePipeline.onLoadPrevChapter = () => loadPrevChapter();
     _gesturePipeline.onToggleControls = _toggleControls;
     _gesturePipeline.onStopAutoScroll = _stopAutoScroll;
     _gesturePipeline.onScrollVerticalBy = (delta) {
@@ -395,49 +464,288 @@ class ReaderController {
 
   // ─── Public API: Chapter Loading ─────────────────────────────────
 
-  /// Load a chapter and its pages.
-  Future<void> _loadChapterAndPages(int chapterId) async {
+  /// Load a chapter and its pages via NavigationController.
+  Future<void> loadChapter(int chapterId) async {
+    await _loadChapterAndPagesViaNavigation(chapterId);
+  }
+
+  /// Scaffold / test path: NavigationController owns resolve + sibling sync.
+  int _controllerLoadGen = 0;
+
+  Future<void> _loadChapterAndPagesViaNavigation(int chapterId) async {
+    final gen = ++_controllerLoadGen;
     onLoadingChanged?.call(true);
 
-    // If sub-controllers not initialized yet, load chapter first to get source info
-    if (_navigationController == null) {
-      final loadedChapter = await isarService.getChapterByServerId(chapterId);
-      if (loadedChapter == null) {
-        final byLocalId = await isarService.getChapterByLocalId(chapterId);
-        if (byLocalId != null && byLocalId.id == chapterId && byLocalId.serverId <= 0) {
-          _initSubControllers(byLocalId);
+    try {
+      // If sub-controllers not initialized yet, load chapter first to get source info
+      if (_navigationController == null) {
+        final loadedChapter = await isarService.getChapterByServerId(chapterId);
+        if (loadedChapter == null) {
+          final byLocalId = await isarService.getChapterByLocalId(chapterId);
+          if (byLocalId != null && byLocalId.id == chapterId && byLocalId.serverId <= 0) {
+            _initSubControllers(byLocalId);
+          }
+        } else {
+          _initSubControllers(loadedChapter);
         }
-      } else {
-        _initSubControllers(loadedChapter);
       }
+      if (_navigationController != null) {
+        await _navigationController!.loadChapterAndPages(chapterId);
+      }
+    } catch (e) {
+      // Never leave a permanent spinner: the owner renders the empty state.
+      debugPrint('[ReaderController] Chapter load failed: $e');
+    } finally {
+      // ISS-122: "loading finished" always fires (even if the catch itself
+      // throws); a superseded load must not clear the newer load's spinner.
+      if (gen == _controllerLoadGen) onLoadingChanged?.call(false);
     }
+    if (gen != _controllerLoadGen) return;
 
-    if (_navigationController != null) {
-      await _navigationController!.loadChapterAndPages(chapterId);
-    }
-
-    onLoadingChanged?.call(false);
+    // IMP-013: apply the per-series override at chapter open. The controller
+    // never had a parent manga before, so overrides were saved but not read.
+    await _applySeriesOverrideOnOpen();
+    if (gen != _controllerLoadGen) return;
 
     // Restore progress after chapter loads
-    if (_navigationController?.chapter != null && _navigationController!.pageUrls.isNotEmpty) {
+    if (restoreProgressOnLoad &&
+        _navigationController?.chapter != null &&
+        _navigationController!.pageUrls.isNotEmpty) {
       await _restoreProgress();
     }
   }
 
-  /// Load the next chapter.
-  Future<void> _loadNextChapter() async {
+  Future<void> _applySeriesOverrideOnOpen() async {
+    try {
+      final nav = _navigationController;
+      var manga = nav?.parentManga ?? _parentManga;
+      final mangaId = nav?.chapter?.mangaId ?? 0;
+      if (manga == null && mangaId != 0) manga = await isarService.getManga(mangaId);
+      if (manga == null) return;
+      _parentManga = manga;
+      onParentMangaLoaded?.call(manga);
+      // IMP-005: pull/push the roaming per-series override first (bounded).
+      try {
+        await syncReaderSettingsMeta(manga: manga, settings: settings)
+            .timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('[ReaderController] reader settings meta sync skipped: $e');
+      }
+      applySeriesSettings(manga);
+    } catch (e) {
+      debugPrint('[ReaderController] Series override not applied: $e');
+    }
+  }
+
+  /// IMP-013: effective reader values for [manga] (series override where set,
+  /// global settings otherwise).
+  static ReaderSettingsValues resolveSeriesSettings(SettingsService s, Manga manga) =>
+      loadReaderSettingsOverride(s, manga.id, readingModeOverride: manga.readingModeOverride)
+          .resolve(ReaderSettingsValues.fromSettings(s));
+
+  /// IMP-013: applies [resolveSeriesSettings] to the controller state.
+  void applySeriesSettings(Manga manga) {
+    final v = resolveSeriesSettings(settings, manga);
+    _readingMode = parseReadingMode(v.readingMode);
+    _scaleType = parseScaleType(v.scaleType);
+    _cropBorders = v.cropBorders;
+    _invertTaps = v.invertTapZones;
+    _gesturePipeline
+      ..setReadingMode(_readingMode)
+      ..setInvertTaps(_invertTaps);
+  }
+
+  // ─── IMP-012: seamless webtoon strip source ──────────────────────
+
+  bool _stripDisposed = false;
+  final ValueNotifier<List<ReaderChapterPages>> _stripChapters =
+      ValueNotifier<List<ReaderChapterPages>>(const <ReaderChapterPages>[]);
+
+  /// Chapters for the webtoon strip: the current chapter's pages, plus the
+  /// next chapter's once its prefetch has finished. Feed to [buildReaderItems].
+  List<ReaderChapterPages> get stripChapters => _stripChapters.value;
+
+  /// Notifies when [stripChapters] changes (chapter change / prefetch done).
+  ValueListenable<List<ReaderChapterPages>> get stripChaptersListenable => _stripChapters;
+
+  /// Rebuilds [stripChapters] from the NavigationController; only notifies
+  /// when the content actually changed.
+  ///
+  /// After an inline chapter switch ([onStripItemVisible]) the chapters
+  /// already in the strip are KEPT in order, so item indices never shift
+  /// under the reader; a real [loadChapter] starts a fresh strip.
+  void refreshStripChapters() {
+    if (_stripDisposed) return;
+    final nav = _navigationController;
+    final current = nav?.chapter;
+    final urls = nav?.pageUrls ?? const <String>[];
+    if (nav == null || current == null || urls.isEmpty) {
+      _stripLog = [];
+    } else {
+      final ci = _stripIndexOf(current);
+      if (ci < 0) {
+        _stripLog = [ReaderChapterPages(current, List.unmodifiable(urls))];
+      }
+      final next = nav.nextChapter;
+      final nextUrls = next == null ? null : nav.peekPrefetchedPages(next);
+      if (next != null &&
+          nextUrls != null &&
+          _stripIndexOf(next) < 0 &&
+          _stripIndexOf(current) == _stripLog.length - 1) {
+        _stripLog = [..._stripLog, ReaderChapterPages(next, nextUrls)];
+      }
+    }
+    if (!_sameStrip(_stripLog, _stripChapters.value)) {
+      _stripChapters.value = List.unmodifiable(_stripLog);
+      _stripItemsCache = null;
+    }
+  }
+
+  List<ReaderChapterPages> _stripLog = const [];
+  List<ReaderItem>? _stripItemsCache;
+
+  int _stripIndexOf(Chapter c) {
+    final id = NavigationController.targetIdOf(c);
+    return _stripLog.indexWhere((e) => NavigationController.targetIdOf(e.chapter) == id);
+  }
+
+  /// IMP-012: the items the webtoon view shows when a strip is active (same
+  /// rule as the view: seamless transitions on and 2+ chapters), else null.
+  List<ReaderItem>? get activeStripItems {
+    final strip = _stripChapters.value;
+    if (_stripDisposed || strip.length < 2 || !settings.seamlessTransitions) return null;
+    return _stripItemsCache ??= buildReaderItems(strip);
+  }
+
+  /// IMP-012: item index of the current chapter's first page in
+  /// [activeStripItems] (0 before any inline switch). Null without a strip.
+  int? get stripCurrentChapterOffset {
+    final items = activeStripItems;
+    final cur = _navigationController?.chapter;
+    if (items == null || cur == null) return null;
+    final id = NavigationController.targetIdOf(cur);
+    final i = items.indexWhere(
+        (e) => e is ReaderPageItem && NavigationController.targetIdOf(e.chapter) == id);
+    return i < 0 ? null : i;
+  }
+
+  /// Fired after an inline strip chapter switch (no reload): the view should
+  /// update its chapter/next/prev/page-count state WITHOUT scrolling.
+  void Function(Chapter chapter, Chapter? next, Chapter? prev)? onStripChapterSwitched;
+
+  /// IMP-012: measured extents of strip items (by item index), recorded by
+  /// the input pipeline while scanning visible pages. Used to correct the
+  /// scroll offset exactly when finished chapters are trimmed.
+  final Map<int, double> _stripExtents = {};
+  void recordStripItemExtent(int index, double extent) => _stripExtents[index] = extent;
+
+  /// Measured extent of strip item [index], or null if never laid out.
+  double? recordedStripItemExtent(int index) => _stripExtents[index];
+
+  /// IMP-012: the webtoon item [itemIndex] of [activeStripItems] is the most
+  /// visible one.
+  /// 1. Saves progress to the chapter owning it (no-op in incognito).
+  /// 2. Once it belongs to another chapter, switches the current chapter in
+  ///    place (no reload/jump), moves the ISS-135 pinned cache set to it (via
+  ///    NavigationController.setPageUrls), and when moving forward completes
+  ///    the chapter that was left through the normal end-of-chapter path.
+  /// 3. When the reader is 2+ pages into the current chapter, earlier
+  ///    chapters are trimmed ([A,B]+C -> [B,C]); the caller must shift its
+  ///    index-keyed maps by `removedItems` and correct the scroll offset by
+  ///    `removedExtent` in the same frame (no jump or flash).
+  ({int page, int removedItems, double removedExtent})? onStripItemVisible(
+    int itemIndex, {
+    double contentWidth = 0,
+  }) {
+    final items = activeStripItems;
+    final nav = _navigationController;
+    if (items == null || nav == null) return null;
+    final target = PositionManager.progressTargetForItem(items, itemIndex);
+    if (target == null) return null;
+    nav.debouncedUpdateProgressForItem(items, itemIndex);
+    final cur = nav.chapter;
+    final item = items[itemIndex];
+    if (item is ReaderPageItem &&
+        (cur == null ||
+            NavigationController.targetIdOf(cur) != NavigationController.targetIdOf(item.chapter))) {
+      final from = cur == null ? -1 : _stripIndexOf(cur);
+      final to = _stripIndexOf(item.chapter);
+      if (cur != null && from >= 0 && to > from) {
+        // Forward across the separator: every chapter left behind is done.
+        for (var c = from; c < to; c++) {
+          final e = _stripLog[c];
+          unawaited(nav.completeChapterNow(e.chapter, e.urls.length));
+        }
+      }
+      final entry = _stripLog[to];
+      nav.adoptStripChapter(entry.chapter, entry.urls);
+      _gesturePipeline
+        ..setPageUrls(nav.pageUrls)
+        ..setNextChapter(nav.nextChapter)
+        ..setPrevChapter(nav.prevChapter);
+      refreshStripChapters();
+      onStripChapterSwitched?.call(entry.chapter, nav.nextChapter, nav.prevChapter);
+      final next = nav.nextChapter;
+      if (next != null) unawaited(nav.prefetchChapter(next));
+    }
+    _currentPage = target.page;
+    _gesturePipeline.setCurrentPage(target.page);
+
+    var removedItems = 0;
+    var removedExtent = 0.0;
+    final curIdx = nav.chapter == null ? -1 : _stripIndexOf(nav.chapter!);
+    if (item is ReaderPageItem && item.pageIndex >= 2 && curIdx > 0) {
+      for (var c = 0; c < curIdx; c++) {
+        final e = _stripLog[c];
+        for (var i = 0; i < e.urls.length; i++) {
+          removedExtent += _stripExtents[removedItems] ?? _estimatePageExtent(e.urls[i], contentWidth);
+          removedItems++;
+        }
+        removedExtent += _stripExtents[removedItems] ?? kReaderChapterBoundaryExtent;
+        removedItems++;
+      }
+      _stripLog = _stripLog.sublist(curIdx);
+      final shifted = <int, double>{
+        for (final e in _stripExtents.entries)
+          if (e.key >= removedItems) e.key - removedItems: e.value,
+      };
+      _stripExtents
+        ..clear()
+        ..addAll(shifted);
+      _stripChapters.value = List.unmodifiable(_stripLog);
+      _stripItemsCache = null;
+    }
+    return (page: target.page, removedItems: removedItems, removedExtent: removedExtent);
+  }
+
+  static bool _sameStrip(List<ReaderChapterPages> a, List<ReaderChapterPages> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!identical(a[i].chapter, b[i].chapter) || !listEquals(a[i].urls, b[i].urls)) return false;
+    }
+    return true;
+  }
+
+  double _estimatePageExtent(String url, double contentWidth) {
+    final w = contentWidth > 0 ? contentWidth : 400.0;
+    final cached = _pageLoader?.getCachedHeight(url) ?? 0.0;
+    return estimateWebtoonPlaceholderHeight(w, cachedHeight: cached) + webtoonPageGap(_readingMode);
+  }
+
+  /// Load the next chapter (uses synced [NavigationController.nextChapter]).
+  Future<void> loadNextChapter() async {
     final next = _navigationController?.nextChapter;
     if (next == null) return;
     final id = next.serverId != 0 ? next.serverId : next.id;
-    await _loadChapterAndPages(id);
+    await loadChapter(id);
   }
 
   /// Load the previous chapter.
-  Future<void> _loadPrevChapter() async {
+  Future<void> loadPrevChapter() async {
     final prev = _navigationController?.prevChapter;
     if (prev == null) return;
     final id = prev.serverId != 0 ? prev.serverId : prev.id;
-    await _loadChapterAndPages(id);
+    await loadChapter(id);
   }
 
   /// Restore reading progress for current chapter.
@@ -456,7 +764,7 @@ class ReaderController {
       _gesturePipeline.setCurrentPage(_currentPage);
 
       // Jump to position
-      final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
+      final isPaged = isPagedReadingMode(_readingMode);
       if (isPaged && _pageController != null && _pageController!.hasClients) {
         final targetPage = _pagedControllerIndexForPage(_currentPage);
         _pageController!.jumpToPage(targetPage);
@@ -534,7 +842,7 @@ class ReaderController {
   }
 
   void _restoreReaderPositionForMode() {
-    final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
+    final isPaged = isPagedReadingMode(_readingMode);
     if (isPaged && _pageController != null && _pageController!.hasClients) {
       final targetPage = _pagedControllerIndexForPage(_currentPage);
       _pageController!.jumpToPage(targetPage);
@@ -713,12 +1021,6 @@ class ReaderController {
 
   // ─── Public API for Canvas ────────────────────────────────────────
 
-  /// Load the next chapter (public for canvas).
-  Future<void> loadNextChapter() => _loadNextChapter();
-
-  /// Load the previous chapter (public for canvas).
-  Future<void> loadPrevChapter() => _loadPrevChapter();
-
   /// Stop auto-scroll (public for canvas).
   void stopAutoScroll() => _stopAutoScroll();
 
@@ -732,16 +1034,14 @@ class ReaderController {
   // ─── Dispose ──────────────────────────────────────────────────────
 
   void dispose() {
-    try {
-      _gesturePipeline.dispose();
-    } catch (_) {}
-    // Injected sub-controllers are owned by the caller (tests) — do not dispose.
-    // Production NavigationController.dispose() also disposes pageLoader +
-    // positionManager, so do not dispose those twice.
+    // The injected GesturePipeline is owned (and disposed) by the caller.
+    // Injected NavigationController (and its PageLoader/PositionManager) are
+    // owned by the caller — do not dispose. Production NavigationController
+    // dispose() also tears down pageLoader + positionManager.
     if (!_subControllersInjected) {
       try {
         _navigationController?.dispose();
-      } catch (_) {}
+      } catch (e) { debugPrint('[reader_controller] ignored: $e'); }
     }
     _navigationController = null;
     _pageLoader = null;
@@ -754,6 +1054,10 @@ class ReaderController {
     _zoomAnimController = null;
     _webtoonZoomControllers = {};
     _resumeAutoScrollForChapter.clear();
+    if (!_stripDisposed) {
+      _stripDisposed = true;
+      _stripChapters.dispose();
+    }
   }
 }
 
@@ -761,9 +1065,6 @@ class ReaderController {
 class _TickerProvider implements TickerProvider {
   @override
   Ticker createTicker(TickerCallback onTick) => _TestTicker(onTick);
-
-  @override
-  void dispose() {}
 }
 
 class _TestTicker extends Ticker {

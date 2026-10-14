@@ -1,17 +1,20 @@
 // Widget smoke / behavior tests for ReaderCanvas (T2.1).
 // Prefer real asserts over golden screenshots — CI-stable and API-honest.
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import 'package:mockito/mockito.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
-
-import 'package:sunfire/src/features/reader/controller/reader_canvas.dart';
-import 'package:sunfire/src/features/reader/controller/reader_controller.dart';
-import 'package:sunfire/src/features/reader/reading_mode.dart';
-import 'package:sunfire/src/features/reader/controller/reader_theme.dart';
+import 'package:mockito/mockito.dart';
 import 'package:sunfire/src/core/db/models/chapter.dart';
 import 'package:sunfire/src/core/services/settings_service.dart';
+import 'package:sunfire/src/features/reader/controller/navigation_controller.dart';
+import 'package:sunfire/src/features/reader/controller/reader_canvas.dart';
+import 'package:sunfire/src/features/reader/controller/reader_controller.dart';
+import 'package:sunfire/src/features/reader/controller/reader_theme.dart';
+import 'package:sunfire/src/features/reader/controller/webtoon_item_registry.dart';
+import 'package:sunfire/src/features/reader/reading_mode.dart';
+
 import 'reader_canvas_test.mocks.dart';
 
 @GenerateMocks([ReaderController, SettingsService])
@@ -23,7 +26,7 @@ void main() {
     late PageController pageController;
     late TransformationController transformationController;
     late Map<int, TransformationController> webtoonZoomControllers;
-    late Map<int, GlobalKey> webtoonPageKeys;
+    late WebtoonItemRegistry registry;
 
     setUp(() {
       mockController = MockReaderController();
@@ -32,7 +35,7 @@ void main() {
       pageController = PageController();
       transformationController = TransformationController();
       webtoonZoomControllers = {};
-      webtoonPageKeys = {};
+      registry = WebtoonItemRegistry();
 
       when(mockController.readingMode).thenReturn(ReadingMode.longStrip);
       when(mockController.pageUrls).thenReturn(['https://example.com/page1.jpg']);
@@ -46,7 +49,7 @@ void main() {
       when(mockController.pageController).thenReturn(pageController);
       when(mockController.transformationController).thenReturn(transformationController);
       when(mockController.webtoonZoomControllers).thenReturn(webtoonZoomControllers);
-      when(mockController.webtoonPageKeys).thenReturn(webtoonPageKeys);
+      when(mockController.webtoonItemRegistry).thenReturn(registry);
       when(mockController.showTransitionCard).thenReturn(false);
       when(mockController.nextChapter).thenReturn(null);
       when(mockController.chapter).thenReturn(null);
@@ -56,6 +59,7 @@ void main() {
       when(mockController.showTapZoneOverlay).thenReturn(false);
       when(mockController.settings).thenReturn(mockSettings);
 
+      when(mockSettings.pageTransition).thenReturn('slide'); // IMP-014
       when(mockSettings.readingMode).thenReturn('Long Strip');
       when(mockSettings.tapZonesEnabled).thenReturn(true);
       when(mockSettings.tapZonePresetPaged).thenReturn('Default');
@@ -65,6 +69,8 @@ void main() {
       when(mockSettings.autoScrollPauseOnTouch).thenReturn(true);
       when(mockSettings.autoScrollSmoothEaseIn).thenReturn(true);
       when(mockSettings.doublePageDisplayMode).thenReturn('Automatic');
+      when(mockSettings.invertDoublePages).thenReturn(false);
+      when(mockSettings.doublePageOffset).thenReturn(false);
       when(mockSettings.seamlessTransitions).thenReturn(true);
       when(mockSettings.showEndOfChapterDialog).thenReturn(true);
       when(mockSettings.cropBorders).thenReturn(false);
@@ -91,6 +97,7 @@ void main() {
       bool showTransitionCard = false,
       Chapter? nextChapter,
       Chapter? chapter,
+      List<ReaderItem>? webtoonItems,
     }) {
       return MaterialApp(
         home: ReaderCanvas(
@@ -99,7 +106,6 @@ void main() {
           pageController: pageController,
           transformationController: transformationController,
           webtoonZoomControllers: webtoonZoomControllers,
-          webtoonPageKeys: webtoonPageKeys,
           readingMode: readingMode,
           pageUrls: pageUrls,
           currentPage: 1,
@@ -110,9 +116,84 @@ void main() {
           showTransitionCard: showTransitionCard,
           nextChapter: nextChapter,
           chapter: chapter,
+          webtoonItems: webtoonItems,
+          pageBuilder: webtoonItems == null && readingMode != ReadingMode.pagedVertical
+              ? null
+              : (context, url, index,
+                      {required isPaged, contentWidth, enablePerPageZoom = false}) =>
+                  SizedBox(height: 40, child: Text('page:$url')),
         ),
       );
     }
+
+    testWidgets('IMP-028: webtoon list has no GlobalKeys, a viewport-relative cache, and registers items',
+        (WidgetTester tester) async {
+      when(mockController.readingMode).thenReturn(ReadingMode.longStrip);
+      final c1 = Chapter()
+        ..id = 1
+        ..name = 'Ch 1';
+      await tester.pumpWidget(buildCanvas(
+        pageUrls: const ['a', 'b', 'c'],
+        webtoonItems: buildReaderItems([ReaderChapterPages(c1, const ['a', 'b', 'c'])]),
+      ));
+      await tester.pump();
+      // Only the list's items count (MaterialApp/Scrollable own framework keys).
+      final globalKeyed = find.descendant(
+        of: find.byType(SliverList),
+        matching: find.byWidgetPredicate((w) => w.key is GlobalKey),
+      );
+      expect(globalKeyed, findsNothing, reason: 'no per-page GlobalKey');
+      final list = tester.widget<ListView>(find.byType(ListView));
+      expect(list.scrollCacheExtent, const ScrollCacheExtent.viewport(1.5));
+      expect(registry.contextOf(0), isNotNull);
+      expect(registry.contextOf(3), isNotNull, reason: 'separator registered too');
+      expect(registry.contextOf(0)!.findRenderObject(), isA<RenderBox>());
+    });
+
+    testWidgets('IMP-011: pagedVertical uses a vertical, non-reversed PageView',
+        (WidgetTester tester) async {
+      when(mockController.readingMode).thenReturn(ReadingMode.pagedVertical);
+      when(mockSettings.doublePageDisplayMode).thenReturn('Always');
+      await tester.binding.setSurfaceSize(const Size(1200, 800)); // landscape
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(buildCanvas(
+        readingMode: ReadingMode.pagedVertical,
+        pageUrls: const ['a', 'b', 'c'],
+      ));
+      await tester.pump();
+      final pv = tester.widget<PageView>(find.byType(PageView));
+      expect(pv.scrollDirection, Axis.vertical);
+      expect(pv.reverse, isFalse);
+      // Spreads are horizontal-only: one page per item even when "Always".
+      expect(find.text('page:a'), findsOneWidget);
+      expect(find.text('page:b'), findsNothing);
+    });
+
+    testWidgets('IMP-012: webtoonItems render two chapters with an inline chapterBoundary',
+        (WidgetTester tester) async {
+      final c1 = Chapter()
+        ..id = 1
+        ..name = 'Ch 1';
+      final c2 = Chapter()
+        ..id = 2
+        ..name = 'Ch 2';
+      final items = buildReaderItems([
+        ReaderChapterPages(c1, const ['a1']),
+        ReaderChapterPages(c2, const ['b1']),
+      ]);
+      await tester.pumpWidget(buildCanvas(
+        pageUrls: const ['a1'],
+        showTransitionCard: true,
+        nextChapter: c2,
+        webtoonItems: items,
+      ));
+      await tester.pump();
+      expect(find.text('page:a1'), findsOneWidget);
+      expect(find.text('page:b1'), findsOneWidget);
+      expect(find.text('Finished: Ch 1'), findsOneWidget);
+      expect(find.text('Next: Ch 2'), findsOneWidget);
+      expect(find.text('No next chapter'), findsOneWidget);
+    });
 
     testWidgets('renders webtoon mode with ListView', (WidgetTester tester) async {
       await tester.pumpWidget(buildCanvas());

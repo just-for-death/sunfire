@@ -7,6 +7,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 
+import '../db/models/category.dart';
+import '../db/models/chapter.dart';
+import '../db/models/manga.dart';
+import 'graphql_client_service.dart' show GraphQLClientService;
 import 'server_adapter.dart'
     show
         ServerAdapter,
@@ -14,14 +18,9 @@ import 'server_adapter.dart'
         LibrarySnapshot,
         ChapterPagesResult,
         TrackerProgress;
-import 'server_type.dart' show ServerConfig;
 import 'server_capabilities.dart' show ServerCapabilities;
 import 'server_type.dart' show ServerConfigManager;
-import 'graphql_client_service.dart' show GraphQLClientService;
 import 'sync_engine.dart' show SyncEngine, parseCategoryNodes;
-import '../db/models/manga.dart';
-import '../db/models/chapter.dart';
-import '../db/models/category.dart';
 
 /// Suwayomi/Tachidesk server adapter using GraphQL API.
 class SuwayomiAdapter extends ServerAdapter {
@@ -94,7 +93,7 @@ class SuwayomiAdapter extends ServerAdapter {
       final mangaList = <Manga>[];
       final nodes = libData?['mangas']?['nodes'] as List?;
       if (nodes != null) {
-        for (final n in nodes.whereType<Map>()) {
+        for (final n in nodes.whereType<Map<dynamic, dynamic>>()) {
           mangaList.add(SyncEngine.instance
               .parseMangaNode(Map<String, dynamic>.from(n)));
         }
@@ -141,7 +140,7 @@ class SuwayomiAdapter extends ServerAdapter {
       final nodes = data?['chapters']?['nodes'] as List?;
       if (nodes == null) return [];
       return nodes
-          .whereType<Map>()
+          .whereType<Map<dynamic, dynamic>>()
           .map((n) => SyncEngine.instance
               .parseChapterNode(Map<String, dynamic>.from(n)))
           .toList();
@@ -180,7 +179,7 @@ class SuwayomiAdapter extends ServerAdapter {
           final res = await _client.fetchSourceManga(sourceId,
               searchQuery: query);
           final mangas = res?['fetchSourceManga']?['mangas'] as List? ?? [];
-          for (final m in mangas.whereType<Map>()) {
+          for (final m in mangas.whereType<Map<dynamic, dynamic>>()) {
             if (results.length >= limit) break;
             results.add(Manga()
               ..serverId = 0
@@ -189,7 +188,7 @@ class SuwayomiAdapter extends ServerAdapter {
               ..url = m['url']?.toString() ?? ''
               ..sourceName = sourceId);
           }
-        } catch (_) {}
+        } catch (e) { debugPrint('[suwayomi_adapter] ignored: $e'); }
       }
     } catch (e) {
       debugPrint('[SuwayomiAdapter] searchManga failed: $e');
@@ -409,12 +408,13 @@ class SuwayomiAdapter extends ServerAdapter {
       final recordId =
           (nodes.first as Map)['id'] as int? ?? 0;
       if (recordId <= 0) return false;
-      final res = await _client.updateTrack(
+      // Throws ServerMutationException on failure (caught below → false).
+      await _client.updateTrack(
         recordId: recordId,
         lastChapterRead:
             (progress.lastChapterRead ?? progress.progress ?? 0).toDouble(),
       );
-      return res != null;
+      return true;
     } catch (e) {
       debugPrint('[SuwayomiAdapter] updateTrackerProgress failed: $e');
       return false;

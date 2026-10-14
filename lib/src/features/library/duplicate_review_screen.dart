@@ -7,10 +7,10 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 
-import 'package:sunfire/src/core/db/models/manga.dart';
-import 'package:sunfire/src/core/library/duplicate_detection_service.dart'
+import '../../core/db/models/manga.dart';
+import '../../core/library/duplicate_detection_service.dart'
     show DuplicateDetectionService, DuplicateScanResult;
-import 'package:sunfire/src/ui/design_system/components/components.dart'
+import '../../ui/design_system/components/components.dart'
     show SunfireCard;
 
 /// Duplicate review screen for reviewing and merging duplicates.
@@ -348,7 +348,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(d.title, style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text('${d.chapterCount ?? 0} chapters • ${d.sourceName}',
+                Text('${d.chapterCount} chapters • ${d.sourceName}',
                     style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ],
             ),

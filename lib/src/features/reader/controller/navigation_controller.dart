@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 
 import '../../../core/db/isar_service.dart';
@@ -7,11 +9,20 @@ import '../../../core/db/models/chapter.dart';
 import '../../../core/db/models/manga.dart';
 import '../../../core/engine/content_resolver_service.dart'
     show ChapterPagesResult, ContentSourceType, ContentResolverService;
+import '../../../core/engine/javascript/m_client.dart';
 import '../../../core/engine/quickjs_service.dart';
+import '../../../core/services/delete_after_read.dart';
+import '../../../core/services/download_manager_service.dart';
 import '../../../core/services/settings_service.dart';
+import '../../../core/sync/live_activities_service.dart'
+    show LiveActivitiesService, SiriShortcutsService;
 import '../../../core/sync/widget_sync_service.dart';
-import '../reader_chapter_navigation.dart';
-import 'page_loader.dart';
+import '../reader_chapter_navigation.dart' show findSiblingChapterIndex, siblingChapterAt, sortSiblingChapters;
+import '../reader_chapter_resolve.dart';
+import '../reader_download_ahead.dart';
+import '../reader_prefetch.dart' show prefetchSourceMatches, readerPrefetchKey;
+import 'page_loader.dart'
+    show PageLoader, PageLoadPriority, PageLoadResult;
 import 'position_manager.dart';
 
 /// NavigationController — orchestrates chapter/page navigation, sibling management,
@@ -32,9 +43,9 @@ class NavigationController {
   final PositionManager positionManager;
   final SettingsService settings;
 
-  // Navigation debouncing
-  DateTime? _lastNextChapterNavAt;
-  DateTime? _lastPrevChapterNavAt;
+  // Navigation debouncing (single copy; the screen reads/writes these).
+  DateTime? lastNextChapterNavAt;
+  DateTime? lastPrevChapterNavAt;
 
   // State getters (set by owner via callbacks)
   Chapter? _chapter;
@@ -51,6 +62,9 @@ class NavigationController {
   void Function(bool loading)? onLoadingChanged;
   void Function(String url, int index)? onImageRecovered;
   void Function(Chapter chapter)? onNextChapterPrefetched;
+  /// IMP-012: fires when a prefetched chapter's page URLs are cached and
+  /// ready (unlike [onNextChapterPrefetched], which fires once `next` is known).
+  void Function(Chapter chapter, List<String> urls)? onNextChapterPagesReady;
 
   // Getters for external state
   Chapter? get chapter => _chapter;
@@ -60,136 +74,206 @@ class NavigationController {
   List<String> get pageUrls => _pageUrls;
   int get currentPage => _currentPage;
   int get currentChapterId => _currentChapterId;
+  /// Effective source name of the loaded chapter (drives image headers).
+  String? get sourceName => _sourceName;
 
   // Setters for external state (called by owner)
-  void setChapter(Chapter chapter) => _chapter = chapter;
+  void setChapter(Chapter? chapter) => _chapter = chapter;
   void setSiblingChapters(List<Chapter> chapters) => _siblingChapters = chapters;
   void setNextChapter(Chapter? chapter) => _nextChapter = chapter;
   void setPrevChapter(Chapter? chapter) => _prevChapter = chapter;
-  void setPageUrls(List<String> urls) => _pageUrls = urls;
+  void setPageUrls(List<String> urls) {
+    _pageUrls = urls;
+    pageLoader.setCurrentChapterPages(urls);
+  }
   void setCurrentPage(int page) => _currentPage = page;
   void setCurrentChapterId(int id) => _currentChapterId = id;
 
   // Load a chapter and its pages, updating sibling chapters and next/prev.
+  /// Timeouts for every await in the load path (review H/MED). Tests shrink them.
+  static Duration ioTimeout = const Duration(seconds: 10);
+  @visibleForTesting
+  static Duration resolveTimeout = const Duration(seconds: 30);
+  @visibleForTesting
+  static Duration selfHealTimeout = const Duration(seconds: 20);
+  @visibleForTesting
+  static Duration prefetchTimeout = const Duration(seconds: 20);
+  @visibleForTesting
+  static Duration prefetchFailureCooldown = const Duration(minutes: 1);
+
+  /// Test seam: replaces ContentResolverService.resolveChapterPages for both
+  /// the main resolve and next-chapter prefetch.
+  @visibleForTesting
+  static Future<ChapterPagesResult> Function({
+    required int chapterServerId,
+    String? chapterUrl,
+    String? sourceName,
+  })? debugResolveOverride;
+
+  static Future<ChapterPagesResult> _resolve({
+    required int chapterServerId,
+    String? chapterUrl,
+    String? sourceName,
+  }) =>
+      (debugResolveOverride ?? ContentResolverService.instance.resolveChapterPages)(
+        chapterServerId: chapterServerId,
+        chapterUrl: chapterUrl,
+        sourceName: sourceName,
+      );
+
+  @visibleForTesting
+  static Future<SiblingChapterNav> Function(Chapter chapter)? debugSiblingNavOverride;
+  @visibleForTesting
+  static Future<Map<String, dynamic>> Function(String source, String url)? debugSelfHealFetchOverride;
+
+  /// Restores every static timeout and test seam. Tests that touch any of
+  /// them MUST call this in tearDown (they are process-global).
+  @visibleForTesting
+  static void debugResetTestOverrides() {
+    ioTimeout = const Duration(seconds: 10);
+    resolveTimeout = const Duration(seconds: 30);
+    selfHealTimeout = const Duration(seconds: 20);
+    prefetchTimeout = const Duration(seconds: 20);
+    prefetchFailureCooldown = const Duration(minutes: 1);
+    debugResolveOverride = null;
+    debugSiblingNavOverride = null;
+    debugSelfHealFetchOverride = null;
+  }
+
+  /// Whether [loadGen] is still the newest load.
+  bool isCurrentLoad(int loadGen) => loadGen == _loadGeneration;
+  int get loadGeneration => _loadGeneration;
+
+  Future<Manga?> _mangaFor(int mangaId) async {
+    try {
+      return await IsarService.instance.getMangaByServerId(mangaId).timeout(ioTimeout);
+    } catch (e) {
+      debugPrint('[NavigationController] manga lookup failed: $e');
+      return null;
+    }
+  }
+
+  // Load a chapter and its pages, updating sibling chapters and next/prev.
+  // Always ends with onLoadingChanged(false) for the current generation; a
+  // superseded load emits nothing (the newer load owns the spinner).
+  Completer<ChapterPagesResult>? _resolveCancel;
+
+  /// Completes the in-flight resolve await of a superseded load.
+  void _cancelInFlightResolve() {
+    final c = _resolveCancel;
+    _resolveCancel = null;
+    if (c != null && !c.isCompleted) {
+      c.complete(ChapterPagesResult(pageUrls: const <String>[], source: ContentSourceType.fallback));
+    }
+  }
+
   Future<void> loadChapterAndPages(int chapterId) async {
+    _cancelInFlightResolve();
     final loadGen = ++_loadGeneration;
     _currentChapterId = chapterId;
+    onLoadingChanged?.call(true);
+    try {
+      await _loadChapterAndPagesInner(chapterId, loadGen);
+    } catch (e) {
+      debugPrint('[NavigationController] load failed: $e');
+    } finally {
+      if (loadGen == _loadGeneration) onLoadingChanged?.call(false);
+    }
+  }
 
+  Future<void> _loadChapterAndPagesInner(int chapterId, int loadGen) async {
     // Flush pending progress write for outgoing chapter before tearing it down
     if (_chapter != null && _pageUrls.isNotEmpty) {
-      await positionManager.updateProgress(
-        chapterSnapshot: _chapter!,
-        totalPages: _pageUrls.length,
-        page: _currentPage,
-        parentManga: _parentManga,
-      );
+      try {
+        await positionManager
+            .updateProgress(
+              chapterSnapshot: _chapter!,
+              totalPages: _pageUrls.length,
+              page: _currentPage,
+              parentManga: _parentManga,
+            )
+            .timeout(ioTimeout);
+      } catch (e) {
+        debugPrint('[NavigationController] progress flush failed: $e');
+      }
     }
 
-    // Reset state
     _clearChapterState();
 
-    // Load chapter
-    final loadedChapter = await _loadChapter(chapterId);
+    final loadedChapter = await _loadChapter(chapterId).timeout(ioTimeout);
     if (loadGen != _loadGeneration) return;
     _chapter = loadedChapter;
     if (_chapter == null) return;
 
-    // A7.4: mirror the session to the home-screen widget (best-effort,
-    // never blocks chapter load). Skipped in incognito.
-    if (!settings.incognitoMode) {
-      unawaited(WidgetSyncService.instance.updateContinueReading(
-        mangaTitle: _chapter!.mangaTitle.isNotEmpty
-            ? _chapter!.mangaTitle
-            : (_parentManga?.title ?? 'Unknown'),
-        chapterName: _chapter!.name,
-        mangaId: _chapter!.mangaId,
-        chapterId: _currentChapterId,
-      ));
-    }
-
-    // Load sibling chapters and determine next/prev
     await _loadSiblingChapters(loadGen);
     if (loadGen != _loadGeneration) return;
 
-    // Resolve chapter pages
     final pageUrls = await _resolveChapterPages(loadGen);
     if (loadGen != _loadGeneration) return;
 
-    // Update state
     _pageUrls = pageUrls;
+    pageLoader.setCurrentChapterPages(pageUrls);
     _currentPage = 1;
+    final ch = _chapter!;
+    if (pageUrls.isNotEmpty && ch.pageCount != pageUrls.length) {
+      ch.pageCount = pageUrls.length;
+      unawaited(IsarService.instance.saveChapter(ch));
+    }
 
-    // Notify owner
     onChapterLoaded?.call(_chapter!, _siblingChapters, _nextChapter, _prevChapter);
+
+    if (_nextChapter != null) {
+      unawaited(_prefetchNextChapter(_nextChapter!));
+    }
   }
 
   int _loadGeneration = 0;
   Manga? _parentManga;
 
   void setParentManga(Manga? manga) => _parentManga = manga;
+  Manga? get parentManga => _parentManga;
 
   // Clear chapter-related state (keep PageLoader)
   void _clearChapterState() {
     _pageUrls = [];
+    pageLoader.setCurrentChapterPages(const []);
     _currentPage = 1;
     _nextChapter = null;
     _prevChapter = null;
     _siblingChapters = [];
-    _pageUrls = [];
-    _cachedPageHeights.clear();
-    _cachedPageAspects.clear();
-    for (final c in _webtoonZoomControllers.values) {
-      c.dispose();
-    }
-    _webtoonZoomControllers.clear();
-    _resetZoom();
   }
 
-  // Load chapter from Isar
-  Future<Chapter?> _loadChapter(int chapterId) async {
-    Chapter? loadedChapter = await IsarService.instance.getChapterByServerId(chapterId);
-    if (loadedChapter == null) {
-      // Local-id fallback
-      final byLocalId = await IsarService.instance.getChapterByLocalId(chapterId);
-      if (byLocalId != null && byLocalId.id == chapterId && byLocalId.serverId <= 0) {
-        loadedChapter = byLocalId;
-      }
-    }
-    return loadedChapter;
-  }
+  // Load chapter from Isar (shared resolve with live ReaderScreen).
+  Future<Chapter?> _loadChapter(int chapterId) =>
+      resolveChapterRecord(IsarService.instance, chapterId);
 
-  // Load sibling chapters and determine next/prev
+  // Load sibling chapters and determine next/prev.
   Future<void> _loadSiblingChapters(int loadGen) async {
     if (_chapter == null) return;
 
-    final mId = _chapter!.mangaId > 0 ? _chapter!.mangaId : (_parentManga?.serverId ?? _parentManga?.id ?? 0);
-    var siblings = await IsarService.instance.getChaptersForManga(mId);
-    if (siblings.isEmpty && _parentManga != null) {
-      if (_parentManga!.id > 0 && _parentManga!.id != mId) {
-        siblings = await IsarService.instance.getChaptersForManga(_parentManga!.id);
-      }
-      if (siblings.isEmpty && _parentManga!.serverId > 0 && _parentManga!.serverId != mId) {
-        siblings = await IsarService.instance.getChaptersForManga(_parentManga!.serverId);
-      }
+    // ISS-121: bounded; a lookup that timed out is DISCARDED (its late result
+    // can never set siblings/next/prev), the chapter opens without them.
+    final SiblingChapterNav nav;
+    try {
+      nav = await (debugSiblingNavOverride?.call(_chapter!) ??
+              resolveSiblingChapterNav(
+                isar: IsarService.instance,
+                chapter: _chapter!,
+                parentManga: _parentManga,
+              ))
+          .timeout(ioTimeout);
+    } catch (e) {
+      debugPrint('[NavigationController] sibling lookup failed/timed out: $e');
+      return;
     }
     if (loadGen != _loadGeneration) return;
 
-    _siblingChapters = sortSiblingChapters(siblings);
+    _siblingChapters = nav.siblings;
+    _nextChapter = nav.next;
+    _prevChapter = nav.prev;
 
-    final idx = findSiblingChapterIndex(_siblingChapters, _chapter!);
-    Chapter? nextCh;
-    Chapter? prevCh;
-    if (idx != -1) {
-      nextCh = siblingChapterAt(_siblingChapters, idx, 1);
-      prevCh = siblingChapterAt(_siblingChapters, idx, -1);
-    }
-
-    _nextChapter = nextCh;
-    _prevChapter = prevCh;
-
-    // Notify next chapter prefetch
-    if (nextCh != null) {
-      onNextChapterPrefetched?.call(nextCh);
+    if (nav.next != null) {
+      onNextChapterPrefetched?.call(nav.next!);
     }
   }
 
@@ -198,7 +282,8 @@ class NavigationController {
 
     String? sourceName;
     if (_chapter != null) {
-      final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
+      final manga = await _mangaFor(_chapter!.mangaId);
+      if (loadGen != _loadGeneration) return <String>[];
       sourceName = manga?.sourceName;
     }
 
@@ -208,35 +293,186 @@ class NavigationController {
 
     // On-demand self-healing: If chapter has empty/blank URL in DB, scrape parent manga details immediately!
     if ((chapterUrlToResolve == null || chapterUrlToResolve.isEmpty) && _chapter != null) {
-      final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
-      final effectiveSource = sourceName ?? manga?.sourceName ?? '';
-      if (manga != null && effectiveSource.isNotEmpty) {
-        final String? resolvedUrl = await _selfHealChapterUrl(effectiveSource, _chapter!, loadGen);
-        if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
-          chapterUrlToResolve = resolvedUrl;
+      try {
+        final manga = await _mangaFor(_chapter!.mangaId);
+        final effectiveSource = sourceName ?? manga?.sourceName ?? '';
+        if (manga != null && effectiveSource.isNotEmpty) {
+          final String? resolvedUrl = await _selfHealChapterUrl(effectiveSource, _chapter!, loadGen);
+          if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
+            chapterUrlToResolve = resolvedUrl;
+            // Write through a captured local, never `_chapter!`.
+            // The generation guard above sits BEFORE this block, but the
+            // `saveChapter` await below re-opens the window: a stale
+            // continuation resuming after the user switched chapters would
+            // read the NEW `_chapter` and persist the OLD chapter's
+            // resolved URL onto it. That chapter then resolved against a
+            // foreign URL and could never load again — permanent Isar
+            // corruption requiring a re-scrape of the whole series.
+            final target = _chapter!;
+            target.url = resolvedUrl;
+            target.realUrl = resolvedUrl;
+            await IsarService.instance.saveChapter(target).timeout(ioTimeout);
+            // Re-check after the await: nothing below may act on a
+            // generation that has already been superseded.
+            if (loadGen != _loadGeneration) return <String>[];
+          }
         }
+      } catch (e) {
+        debugPrint('[NavigationController] Chapter URL resolution error: $e');
       }
     }
 
-    // Resolve chapter pages via ContentResolverService
-    final resolved = await ContentResolverService.instance.resolveChapterPages(
-      chapterServerId: _chapter!.serverId > 0 ? _chapter!.serverId : _chapterTargetId(_chapter!),
-      chapterUrl: chapterUrlToResolve,
-      sourceName: _sourceName ?? '',
-    ).timeout(const Duration(seconds: 30), onTimeout: () => ChapterPagesResult(
-      pageUrls: const <String>[],
-      source: ContentSourceType.fallback,
-    ));
+    // Auto-detect source name from URL if missing
+    if ((sourceName == null || sourceName.isEmpty) && chapterUrlToResolve != null && chapterUrlToResolve.isNotEmpty) {
+      final installed = QuickJsService.instance.getInstalledExtensionNames();
+      final urlLower = chapterUrlToResolve.toLowerCase();
+      for (final name in installed) {
+        final code = QuickJsService.instance.getExtensionCode(name);
+        if (code != null) {
+          final baseUrl = QuickJsService.instance.extractBaseUrl(code);
+          if (baseUrl != null && baseUrl.isNotEmpty) {
+            try {
+              final host = Uri.parse(baseUrl).host.replaceAll('www.', '').toLowerCase();
+              if (host.isNotEmpty && urlLower.contains(host)) {
+                sourceName = name;
+                break;
+              }
+            } catch (e) {
+              debugPrint('[NavigationController] Source matching error: $e');
+            }
+          }
+        }
+      }
+    }
+    // Guarded, unlike every other write in this load path. `_sourceName` drives
+    // the image Referer/auth headers via
+    // `QuickJsService.getImageHeaders(_sourceName ?? '', url)`, so a stale value
+    // left here by a superseded load makes EVERY image in the currently
+    // displayed chapter 403 — the whole chapter renders as "Failed to Load"
+    // until the user navigates away and back.
+    if (loadGen != _loadGeneration) return <String>[];
+    _sourceName = sourceName;
 
-    return resolved.pageUrls;
+    // Pre-warm FlareSolverr session for this source immediately before resolving,
+    // so cookies are ready when images start loading.
+    if (chapterUrlToResolve != null && chapterUrlToResolve.startsWith('http')) {
+      try {
+        final uri = Uri.parse(chapterUrlToResolve);
+        unawaited(MClient.prewarmSession('${uri.scheme}://${uri.host}'));
+      } catch (e) {
+        debugPrint('[NavigationController] Pre-warm session error: $e');
+      }
+    }
+
+    // Use prefetched pages if available (instant next-chapter open), unless
+    // the source changed since the prefetch (migration / corrected source).
+    final prefetched = pageLoader.takePrefetchedChapter(_prefetchKey(_chapter!));
+    ChapterPagesResult resolved;
+    if (prefetched != null &&
+        prefetched.urls.isNotEmpty &&
+        prefetchSourceMatches(
+          prefetchedSource: prefetched.sourceName,
+          currentSource: (sourceName != null && sourceName.isNotEmpty) ? sourceName : _parentManga?.sourceName,
+        )) {
+      resolved = ChapterPagesResult(
+        pageUrls: prefetched.urls,
+        source: prefetched.sourceType,
+        // Review MED: keep the source the prefetch resolved when ours is unknown.
+        effectiveSourceName: prefetched.sourceName.isNotEmpty ? prefetched.sourceName : sourceName,
+      );
+    } else {
+      try {
+        // Resolve chapter pages via ContentResolverService
+        // Low (review): a chapter change abandons this await immediately via
+        // [_resolveCancel] instead of waiting out the resolver/timeout. (The
+        // resolver itself has no cancel token, so its network work finishes
+        // in the background and is discarded.)
+        final cancel = _resolveCancel = Completer<ChapterPagesResult>();
+        resolved = await Future.any([
+          _resolve(
+            chapterServerId: _chapter!.serverId > 0 ? _chapter!.serverId : _chapterTargetId(_chapter!),
+            chapterUrl: chapterUrlToResolve,
+            sourceName: _sourceName ?? '',
+          ).timeout(resolveTimeout, onTimeout: () => ChapterPagesResult(
+            pageUrls: const <String>[],
+            source: ContentSourceType.fallback,
+          )),
+          cancel.future,
+        ]);
+      } catch (e) {
+        debugPrint('[NavigationController] Resolution threw: $e');
+        resolved = ChapterPagesResult(pageUrls: const <String>[], source: ContentSourceType.fallback);
+      }
+    }
+
+    // Generation guard: a stale resolution (e.g. a 30s timeout fired after the
+    // user moved on) must not clobber the CURRENT chapter's state. Checked
+    // before ANY field write below.
+    if (loadGen != _loadGeneration) return <String>[];
+
+    _sourceName = resolved.effectiveSourceName ?? sourceName;
+    final pageUrls = resolved.pageUrls;
+
+    // Update PageLoader with the effective source name for headers
+    pageLoader.setSourceName(_sourceName ?? '');
+
+    // Proactively pre-fetch first 5 pages on desktop to bypass Cloudflare image CDN blocking immediately
+    if (!kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
+      for (int i = 0; i < pageUrls.length && i < 5; i++) {
+        // Local files render via Image.file; only remote pages need warming.
+        if (!pageUrls[i].startsWith('http')) continue;
+        unawaited(pageLoader.loadPage(
+          url: pageUrls[i],
+          index: i,
+          priority: PageLoadPriority.prefetch,
+          sourceName: _sourceName,
+        ));
+      }
+    }
+
+    // Platform mirrors after parent manga is known (widget / Live Activities / Siri).
+    if (_chapter != null && !settings.incognitoMode) {
+      final manga = await _mangaFor(_chapter!.mangaId) ?? _parentManga;
+      if (loadGen != _loadGeneration || _chapter == null) return pageUrls;
+      final mangaTitle = _chapter!.mangaTitle.isNotEmpty
+          ? _chapter!.mangaTitle
+          : (manga?.title ?? 'Unknown');
+      final chapterName = _chapter!.name;
+      final mangaId = _chapter!.mangaId != 0
+          ? _chapter!.mangaId
+          : (manga?.canonicalKey ?? 0);
+      final chapterId = _chapter!.serverId != 0 ? _chapter!.serverId : _chapter!.id;
+
+      unawaited(WidgetSyncService.instance.updateContinueReading(
+        mangaTitle: mangaTitle,
+        chapterName: chapterName,
+        mangaId: mangaId,
+        chapterId: chapterId,
+      ));
+
+      unawaited(LiveActivitiesService.instance.startReading(
+        mangaTitle: mangaTitle,
+        chapterName: chapterName,
+      ));
+
+      if (mangaId != 0) {
+        unawaited(SiriShortcutsService.instance.donateContinueReading(
+          mangaTitle: mangaTitle,
+          chapterName: chapterName,
+          mangaId: mangaId,
+        ));
+      }
+    }
+
+    return pageUrls;
   }
 
   Future<String?> _selfHealChapterUrl(String effectiveSource, Chapter targetChapter, int loadGen) async {
     try {
-      final details = await QuickJsService.instance.fetchMangaDetailsLocal(
+      final details = await (debugSelfHealFetchOverride ?? QuickJsService.instance.fetchMangaDetailsLocal)(
         effectiveSource,
         targetChapter.url.isNotEmpty ? targetChapter.url : targetChapter.name,
-      );
+      ).timeout(selfHealTimeout);
       if (loadGen != _loadGeneration) return null;
       final chList = (details['chapters'] ?? details['chapterList'] ?? details['epList']) as List<dynamic>?;
       if (chList != null && chList.isNotEmpty) {
@@ -269,14 +505,153 @@ class NavigationController {
 
   void setSourceName(String? sourceName) => _sourceName = sourceName;
 
-  int _chapterTargetId(Chapter ch) => ch.serverId != 0 ? ch.serverId : ch.id;
+  int _chapterTargetId(Chapter ch) => targetIdOf(ch);
+
+  /// Local chapters carry synthetic NEGATIVE serverIds, so `!= 0` (not `> 0`)
+  /// is the discriminator.
+  static int targetIdOf(Chapter ch) => ch.serverId != 0 ? ch.serverId : ch.id;
+
+  // ── Reading session (moved from ReaderScreen; ISS-125) ───────────────
+
+  Timer? _progressDebounceTimer;
+
+  /// Debounced progress write. Snapshots chapter + page count now so a rapid
+  /// chapter switch never writes the page to the WRONG chapter.
+  void debouncedUpdateProgress(int page) {
+    final chapterSnapshot = _chapter;
+    final totalPagesSnapshot = _pageUrls.length;
+    if (chapterSnapshot == null) return;
+    _progressDebounceTimer?.cancel();
+    _progressDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      unawaited(_updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot));
+    });
+  }
+
+  void cancelProgressDebounce() => _progressDebounceTimer?.cancel();
+
+  /// IMP-012: debounced progress for item [index] of a multi-chapter webtoon
+  /// strip. Writes to the chapter that owns the item (never the chapter the
+  /// reader was opened on), so crossing a chapterBoundary keeps per-chapter
+  /// progress correct.
+  void debouncedUpdateProgressForItem(List<ReaderItem> items, int index) {
+    final target = PositionManager.progressTargetForItem(items, index);
+    if (target == null) return;
+    _progressDebounceTimer?.cancel();
+    _progressDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      unawaited(_updateProgressWithSnapshot(target.page, target.chapter, target.totalPages));
+    });
+  }
+
+  /// Immediate progress write (exit / lifecycle).
+  void updateProgressNow(int page) {
+    final chapterSnapshot = _chapter;
+    final totalPagesSnapshot = _pageUrls.length;
+    if (chapterSnapshot == null || totalPagesSnapshot == 0) return;
+    unawaited(_updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot));
+  }
+
+  Future<void> _updateProgressWithSnapshot(int page, Chapter chapterSnapshot, int totalPagesSnapshot) async {
+    final result = await positionManager.updateProgress(
+      chapterSnapshot: chapterSnapshot,
+      totalPages: totalPagesSnapshot,
+      page: page,
+      parentManga: _parentManga,
+    );
+    if (!result.updated) return;
+    if (identical(chapterSnapshot, _chapter) && result.totalPages > 0) {
+      mirrorPlatformReadingSession(progress: result.clampedPage / result.totalPages);
+    }
+    if (result.becameComplete && settings.deleteFinishedChaptersWhileReading == 'Immediately') {
+      _deleteAfterRead(chapterSnapshot);
+    }
+  }
+
+  /// A7.4 / I8.3 / I8.4: mirror the session to home widget, Live Activities
+  /// and Siri. Best-effort; skipped in incognito.
+  void mirrorPlatformReadingSession({required double? progress}) {
+    if (settings.incognitoMode) return;
+    final chapter = _chapter;
+    if (chapter == null) return;
+    final manga = _parentManga;
+    final mangaTitle = chapter.mangaTitle.isNotEmpty ? chapter.mangaTitle : (manga?.title ?? 'Unknown');
+    final chapterName = chapter.name;
+    final mangaId = chapter.mangaId != 0 ? chapter.mangaId : (manga?.canonicalKey ?? 0);
+    final chapterId = chapter.serverId != 0 ? chapter.serverId : chapter.id;
+    unawaited(WidgetSyncService.instance.updateContinueReading(
+      mangaTitle: mangaTitle,
+      chapterName: chapterName,
+      mangaId: mangaId,
+      chapterId: chapterId,
+    ));
+    if (progress == null) {
+      unawaited(LiveActivitiesService.instance.startReading(mangaTitle: mangaTitle, chapterName: chapterName));
+      if (mangaId != 0) {
+        unawaited(SiriShortcutsService.instance.donateContinueReading(
+          mangaTitle: mangaTitle,
+          chapterName: chapterName,
+          mangaId: mangaId,
+        ));
+      }
+    } else {
+      unawaited(LiveActivitiesService.instance.updateProgress(progress));
+    }
+  }
+
+  /// Post-load housekeeping: download-ahead and "when next chapter opens"
+  /// deletion of the previous read chapter.
+  void runPostLoadHousekeeping() {
+    if (settings.autoDownloadWhileReading) unawaited(triggerDownloadAhead());
+    final prev = _prevChapter;
+    if (settings.deleteFinishedChaptersWhileReading == 'When next chapter opens' && prev != null && prev.isRead) {
+      _deleteAfterRead(prev);
+    }
+  }
+
+  /// IMP-038: applies the offset ("keep N latest read") and the
+  /// exclude-bookmarked option before deleting.
+  void _deleteAfterRead(Chapter finished) {
+    final target = chapterToDeleteAfterRead(
+      finished: finished,
+      sortedSiblings: sortSiblingChapters(_siblingChapters),
+      offset: settings.deleteAfterReadOffset,
+      excludeBookmarked: settings.deleteAfterReadExcludeBookmarked,
+    );
+    if (target == null) return;
+    unawaited(DownloadManagerService.instance.deleteLocalDownload(targetIdOf(target)));
+  }
+
+  Future<void> triggerDownloadAhead() async {
+    final count = settings.downloadAheadChapterCount;
+    final current = _chapter;
+    if (count <= 0 || current == null) return;
+    final loadGen = _loadGeneration;
+    final upcoming = downloadAheadCandidates(
+      siblings: _siblingChapters,
+      current: current,
+      count: count,
+      isDownloaded: (c) => DownloadManagerService.instance.isChapterDownloadedLocally(targetIdOf(c)),
+    );
+    if (upcoming.isEmpty) return;
+    final manga = await _mangaFor(current.mangaId);
+    final mangaTitle = manga?.title ?? 'Manga';
+    if (loadGen != _loadGeneration) return;
+    for (final ch in upcoming) {
+      unawaited(DownloadManagerService.instance.enqueueLocalDownload(
+        chapterId: targetIdOf(ch),
+        mangaId: ch.mangaId,
+        chapterName: ch.name,
+        mangaTitle: mangaTitle,
+        chapterNumber: ch.chapterNumber,
+      ));
+    }
+  }
 
   // Navigation debouncing
   bool _canAdvanceToNextChapter() {
     if (_nextChapter == null) return false;
     final now = DateTime.now();
-    if (_lastNextChapterNavAt != null &&
-        now.difference(_lastNextChapterNavAt!) < const Duration(milliseconds: 700)) {
+    if (lastNextChapterNavAt != null &&
+        now.difference(lastNextChapterNavAt!) < const Duration(milliseconds: 700)) {
       return false;
     }
     return true;
@@ -285,8 +660,8 @@ class NavigationController {
   bool _canGoToPrevChapterFromTop() {
     if (_prevChapter == null) return false;
     final now = DateTime.now();
-    if (_lastPrevChapterNavAt != null &&
-        now.difference(_lastPrevChapterNavAt!) < const Duration(milliseconds: 700)) {
+    if (lastPrevChapterNavAt != null &&
+        now.difference(lastPrevChapterNavAt!) < const Duration(milliseconds: 700)) {
       return false;
     }
     return true;
@@ -300,11 +675,11 @@ class NavigationController {
   void goToNextPage() {
     if (_pageUrls.isEmpty) return;
     if (_currentPage < _pageUrls.length) {
-      _lastNextChapterNavAt = DateTime.now();
+      lastNextChapterNavAt = DateTime.now();
       _currentPage++;
       onPageChanged?.call(_currentPage);
     } else if (_nextChapter != null && _canAdvanceToNextChapter()) {
-      _lastNextChapterNavAt = DateTime.now();
+      lastNextChapterNavAt = DateTime.now();
       unawaited(loadChapterAndPages(_chapterTargetId(_nextChapter!)));
     }
   }
@@ -312,11 +687,11 @@ class NavigationController {
   void goToPrevPage() {
     if (_pageUrls.isEmpty) return;
     if (_currentPage > 1) {
-      _lastPrevChapterNavAt = DateTime.now();
+      lastPrevChapterNavAt = DateTime.now();
       _currentPage--;
       onPageChanged?.call(_currentPage);
     } else if (_prevChapter != null && _canGoToPrevChapterFromTop()) {
-      _lastPrevChapterNavAt = DateTime.now();
+      lastPrevChapterNavAt = DateTime.now();
       unawaited(loadChapterAndPages(_chapterTargetId(_prevChapter!)));
     }
   }
@@ -335,36 +710,224 @@ class NavigationController {
     }
   }
 
-  // Prefetch a specific chapter
-  Future<void> _prefetchNextChapter(Chapter chapter) async {
-    // Implementation would go here - uses PageLoader.prefetchChapter
-    // For now, delegate to PageLoader
-    await pageLoader.prefetchChapter(
-      chapterServerId: chapter.serverId > 0 ? chapter.serverId : _chapterTargetId(chapter),
-      chapterTargetId: _chapterTargetId(chapter),
-      mangaId: chapter.mangaId,
-      sourceName: _sourceName ?? '',
-      chapterUrl: chapter.url.isNotEmpty ? chapter.url : chapter.realUrl,
-    );
+  /// Source-free prefetch key shared by writer and reader (UIX-12).
+  String _prefetchKey(Chapter chapter) =>
+      readerPrefetchKey(chapterTargetId: _chapterTargetId(chapter), mangaId: chapter.mangaId);
+
+  /// IMP-012: [chapter] was left by scrolling past its chapterBoundary.
+  /// Writes its last page immediately through the SAME path as a normal end
+  /// of chapter (mark read, delete-after-read, sync); PositionManager makes it
+  /// a no-op in incognito. Immediate, because the single debounce timer would
+  /// otherwise be replaced by the next chapter's page and lose this write.
+  Future<void> completeChapterNow(Chapter chapter, int totalPages) async {
+    if (totalPages <= 0) return;
+    await _updateProgressWithSnapshot(totalPages, chapter, totalPages);
   }
 
-  // Recovery and cleanup
-  final Map<int, double> _cachedPageHeights = {};
-  final Map<String, double> _cachedPageAspects = {};
-  final Map<int, TransformationController> _webtoonZoomControllers = {};
+  /// IMP-012: make [chapter] (already shown inline in the webtoon strip) the
+  /// current chapter WITHOUT reloading: no resolve, no load generation bump,
+  /// no onChapterLoaded (so the view does not restore/jump). next/prev come
+  /// from the known siblings; if [chapter] is not among them, the previous
+  /// current chapter becomes prev and next stays unknown.
+  void adoptStripChapter(Chapter chapter, List<String> urls) {
+    final old = _chapter;
+    if (old != null && targetIdOf(old) == targetIdOf(chapter)) return;
+    _chapter = chapter;
+    _currentChapterId = targetIdOf(chapter);
+    setPageUrls(urls);
+    final sorted = sortSiblingChapters(_siblingChapters);
+    final i = findSiblingChapterIndex(sorted, chapter);
+    if (i >= 0) {
+      _nextChapter = siblingChapterAt(sorted, i, 1);
+      _prevChapter = siblingChapterAt(sorted, i, -1);
+    } else {
+      _prevChapter = old;
+      _nextChapter = null;
+    }
+  }
 
-  void _resetZoom() {
-    // To be implemented by owner
+  /// IMP-012: page URLs of [chapter] if its prefetch has finished, else null.
+  /// Does not consume the cache entry (opening the chapter still takes it).
+  List<String>? peekPrefetchedPages(Chapter chapter) {
+    final urls = pageLoader.peekPrefetchedUrls(_prefetchKey(chapter));
+    return (urls == null || urls.isEmpty) ? null : List.unmodifiable(urls);
+  }
+
+  /// Public entry for next-chapter prefetch (e.g. near the end of a chapter).
+  Future<void> prefetchChapter(Chapter chapter) => _prefetchNextChapter(chapter);
+
+  // Prefetch a specific chapter — mirrors reader_screen._prefetchChapter logic
+  Future<void> _prefetchNextChapter(Chapter chapter) async {
+    // Capture the generation BEFORE the first await.
+    final loadGen = _loadGeneration;
+
+    // Key first (cheap, synchronous in-flight guard), then read the manga for
+    // its source inside the guarded section.
+    final compositeKey = _prefetchKey(chapter);
+
+    if (pageLoader.isPrefetched(compositeKey) || pageLoader.isPrefetching(compositeKey)) return;
+
+    final lastAttempt = pageLoader.getPrefetchAttemptTime(compositeKey);
+    final kPrefetchFailureCooldown = prefetchFailureCooldown;
+    if (lastAttempt != null &&
+        DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(lastAttempt * 1000)) < kPrefetchFailureCooldown) {
+      return;
+    }
+
+    pageLoader.markPrefetching(compositeKey);
+    try {
+      // ISS-130: honour the "Prefetch next chapter" setting (off / Wi-Fi only).
+      if (!await pageLoader.isPrefetchAllowed()) return;
+      final manga = await _mangaFor(chapter.mangaId);
+      final sourceName = manga?.sourceName ?? 'unknown';
+      if (loadGen != _loadGeneration) return;
+      final url = chapter.url.isNotEmpty ? chapter.url : chapter.realUrl;
+      // Bounded, like the main resolve path.
+      final resolved = await _resolve(
+        chapterServerId: chapter.serverId > 0 ? chapter.serverId : _chapterTargetId(chapter),
+        chapterUrl: url.isNotEmpty ? url : null,
+        sourceName: sourceName,
+      ).timeout(
+        prefetchTimeout,
+        onTimeout: () => ChapterPagesResult(
+          pageUrls: const <String>[],
+          source: ContentSourceType.fallback,
+        ),
+      );
+      // Guard against stale prefetch: if generation changed, discard results
+      if (loadGen != _loadGeneration) return;
+      if (!pageLoader.isAlive) return;
+      if (resolved.pageUrls.isEmpty) {
+        // Nothing to cache, so this would otherwise re-fire on every frame.
+        pageLoader.setPrefetchAttemptTime(compositeKey, DateTime.now().millisecondsSinceEpoch ~/ 1000);
+        debugPrint('[NavigationController] Prefetch for chapter ${_chapterTargetId(chapter)} resolved to no pages; '
+            'suppressing re-attempts for ${kPrefetchFailureCooldown.inSeconds}s');
+      }
+      if (resolved.pageUrls.isNotEmpty) {
+        // Enforce max cache size: evict oldest if over limit
+        while (pageLoader.getPrefetchCount() >= 3) {
+          pageLoader.evictOldestPrefetch();
+        }
+        // Precache first 3 image bitmaps into Flutter memory cache for 0ms transition
+        final effectiveSource = resolved.effectiveSourceName ?? sourceName;
+        pageLoader.setPrefetchedChapter(compositeKey, effectiveSource, resolved.pageUrls, sourceType: resolved.source);
+        // Succeeded — drop any prior failure mark so a later legitimate
+        // re-prefetch is not suppressed.
+        pageLoader.clearPrefetchAttemptTime(compositeKey);
+        onNextChapterPagesReady?.call(chapter, List.unmodifiable(resolved.pageUrls));
+        debugPrint('[NavigationController] Prefetched ${resolved.pageUrls.length} pages for next chapter '
+            '${_chapterTargetId(chapter)} (key: $compositeKey)');
+        for (final pUrl in resolved.pageUrls.take(3)) {
+          if (pUrl.startsWith('http')) {
+            try {
+              final headers = QuickJsService.getImageHeaders(effectiveSource, pUrl);
+              unawaited(pageLoader.loadPage(
+                url: pUrl,
+                index: 0,
+                priority: PageLoadPriority.prefetch,
+                sourceName: effectiveSource,
+                headers: headers,
+              ).catchError((Object e) {
+                debugPrint('[NavigationController] Image precache error: $e');
+                return PageLoadResult(error: e.toString());
+              }));
+            } catch (e) {
+              debugPrint('[NavigationController] Prefetch headers error: $e');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      pageLoader.setPrefetchAttemptTime(compositeKey, DateTime.now().millisecondsSinceEpoch ~/ 1000);
+      debugPrint('[NavigationController] Prefetch failed for chapter ${_chapterTargetId(chapter)}: $e');
+    } finally {
+      pageLoader.unmarkPrefetching(compositeKey);
+    }
   }
 
   // Dispose
   void dispose() {
+    _progressDebounceTimer?.cancel();
+    _cancelInFlightResolve();
     pageLoader.dispose();
     positionManager.dispose();
-    cancelAll();
   }
+}
+// ── IMP-012: seamless webtoon chapters (multi-chapter item model) ─────
 
-  void cancelAll() {
-    // Cancel any in-flight loads
+/// IMP-012: fixed layout extent of a chapterBoundary separator in the strip,
+/// so trimming a finished chapter can correct the scroll offset exactly.
+const double kReaderChapterBoundaryExtent = 112.0;
+
+/// One chapter's resolved pages, as fed into [buildReaderItems].
+class ReaderChapterPages {
+  const ReaderChapterPages(this.chapter, this.urls);
+  final Chapter chapter;
+  final List<String> urls;
+}
+
+/// An entry of the webtoon strip: either a page of some chapter or a
+/// chapterBoundary separator between two chapters.
+sealed class ReaderItem {
+  const ReaderItem();
+}
+
+/// A page: [pageIndex] is 0-based inside [chapter]; [chapterPageCount] is that
+/// chapter's page total so progress is tracked per chapter.
+class ReaderPageItem extends ReaderItem {
+  const ReaderPageItem({
+    required this.chapter,
+    required this.pageIndex,
+    required this.chapterPageCount,
+    required this.url,
+  });
+  final Chapter chapter;
+  final int pageIndex;
+  final int chapterPageCount;
+  final String url;
+}
+
+/// chapterBoundary: the separator after [previous]. [next] is null at the end
+/// of the strip when there is no further chapter (or it is not loaded yet).
+class ReaderChapterBoundary extends ReaderItem {
+  const ReaderChapterBoundary({required this.previous, this.next});
+  final Chapter previous;
+  final Chapter? next;
+}
+
+/// Flattens [chapters] (in reading order) into one strip. A chapterBoundary
+/// goes between consecutive chapters and after the last one, whose `next` is
+/// [trailingNext]. Chapters with no pages are skipped.
+List<ReaderItem> buildReaderItems(
+  List<ReaderChapterPages> chapters, {
+  Chapter? trailingNext,
+}) {
+  final nonEmpty = chapters.where((c) => c.urls.isNotEmpty).toList();
+  final items = <ReaderItem>[];
+  for (var c = 0; c < nonEmpty.length; c++) {
+    final entry = nonEmpty[c];
+    for (var i = 0; i < entry.urls.length; i++) {
+      items.add(ReaderPageItem(
+        chapter: entry.chapter,
+        pageIndex: i,
+        chapterPageCount: entry.urls.length,
+        url: entry.urls[i],
+      ));
+    }
+    final next = c + 1 < nonEmpty.length ? nonEmpty[c + 1].chapter : trailingNext;
+    items.add(ReaderChapterBoundary(previous: entry.chapter, next: next));
   }
+  return items;
+}
+
+/// Index of the first item at or after [index] that belongs to a different
+/// chapter than the item at [index] (i.e. just past the next chapterBoundary),
+/// or -1 when there is none.
+int nextChapterStartIndex(List<ReaderItem> items, int index) {
+  for (var i = index; i < items.length; i++) {
+    if (items[i] is ReaderChapterBoundary) {
+      return i + 1 < items.length ? i + 1 : -1;
+    }
+  }
+  return -1;
 }

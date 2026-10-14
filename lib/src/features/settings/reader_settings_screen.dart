@@ -12,6 +12,18 @@ import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
 
+const Map<String, String> _pageTransitionLabels = {
+  'slide': 'Slide',
+  'fade': 'Fade',
+  'none': 'None',
+};
+
+const Map<String, String> _prefetchLabels = {
+  SettingsService.prefetchAlways: 'Always',
+  SettingsService.prefetchWifiOnly: 'Wi-Fi only',
+  SettingsService.prefetchOff: 'Off',
+};
+
 class ReaderSettingsScreen extends StatefulWidget {
   const ReaderSettingsScreen({super.key});
 
@@ -96,7 +108,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                 onTap: () {
                   _showRadioDialog(
                     title: 'Default Reading Mode',
-                    options: const ['Long Strip', 'Long Strip (Gaps)', 'Paged LTR', 'Paged RTL (Manga)'],
+                    options: const ['Long Strip', 'Long Strip (Gaps)', 'Paged LTR', 'Paged RTL (Manga)', 'Paged Vertical'],
                     currentValue: _settings.readingMode,
                     onSelected: (val) => _settings.readingMode = val,
                   );
@@ -168,6 +180,34 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                   );
                 },
               ),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                leading: const Icon(Icons.downloading_outlined),
+                title: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    const Text('Prefetch next chapter', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    SunfireBadge.local(),
+                  ],
+                ),
+                subtitle: Text(
+                  _prefetchLabels[_settings.prefetchNextChapter] ?? 'Always',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                onTap: () {
+                  _showRadioDialog(
+                    title: 'Prefetch next chapter',
+                    options: _prefetchLabels.values.toList(),
+                    currentValue: _prefetchLabels[_settings.prefetchNextChapter] ?? 'Always',
+                    onSelected: (label) {
+                      final mode = _prefetchLabels.entries.firstWhere((e) => e.value == label).key;
+                      _settings.prefetchNextChapter = mode;
+                    },
+                  );
+                },
+              ),
 
               const Divider(height: 1, color: Color(0x1AFFFFFF)),
 
@@ -180,6 +220,42 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                 kind: SettingsPropKind.switchTile,
                 boolValue: _settings.tapZonesEnabled,
                 onBoolChanged: (val) => _settings.tapZonesEnabled = val,
+              ),
+              SettingsPropTile(
+                title: 'Rotate wide pages',
+                subtitle: 'Turn double-width pages sideways in paged mode',
+                scope: SettingScope.local,
+                kind: SettingsPropKind.switchTile,
+                boolValue: _settings.rotateWidePages,
+                onBoolChanged: (val) => _settings.rotateWidePages = val,
+              ),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                leading: const Icon(Icons.animation_outlined),
+                title: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    const Text('Page transition', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    SunfireBadge.local(),
+                  ],
+                ),
+                subtitle: Text(
+                  _pageTransitionLabels[_settings.pageTransition] ?? 'Slide',
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+                onTap: () {
+                  _showRadioDialog(
+                    title: 'Page transition',
+                    options: [for (final m in SettingsService.pageTransitionModes) _pageTransitionLabels[m] ?? m],
+                    currentValue: _pageTransitionLabels[_settings.pageTransition] ?? 'Slide',
+                    onSelected: (label) {
+                      final mode = _pageTransitionLabels.entries.firstWhere((e) => e.value == label).key;
+                      _settings.pageTransition = mode;
+                    },
+                  );
+                },
               ),
               SettingsPropTile(
                 title: 'Tap Zones (Paged)',

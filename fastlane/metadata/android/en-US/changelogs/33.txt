@@ -1,0 +1,8 @@
+Sunfire v6.0.0:
+• Rebuilt reader: more reliable page loading, retry and chapter switching.
+• Tap-zone presets and double-page spreads with wide-page handling.
+• Smart double-tap zoom.
+• Prefetch next chapter: Always, Wi-Fi only or Off.
+• Library tags, smart collections, duplicate detection, import/export.
+• Sync Health screen; offline category and store changes now sync.
+• Material 3 with dynamic colour and predictive back.

@@ -148,7 +148,25 @@ class ServerVersionBundle {
   const ServerVersionBundle({this.aboutServer, this.webUI, this.webUIUpdateStatus, this.serverUpdates});
   String? get serverVersion => aboutServer?['version']?.toString();
   String? get buildType => aboutServer?['buildType']?.toString();
-  String? get serverPlatform => aboutServer?['platform']?.toString();
+  /// `aboutServer.platformInfo` (os/arch/jvm/headless) when the server has it.
+  Map<String, dynamic>? get platformInfo {
+    final p = aboutServer?['platformInfo'];
+    return p is Map ? Map<String, dynamic>.from(p) : null;
+  }
+
+  /// Human label such as "linux (amd64)", from `platformInfo`; falls back to
+  /// a legacy plain `platform` string if present.
+  String? get serverPlatform {
+    final p = platformInfo;
+    if (p != null) {
+      final os = p['os']?.toString();
+      final arch = p['arch']?.toString();
+      if (os != null && os.isNotEmpty) {
+        return (arch != null && arch.isNotEmpty) ? '$os ($arch)' : os;
+      }
+    }
+    return aboutServer?['platform']?.toString();
+  }
   bool get hasServerUpdate => serverUpdates != null && serverUpdates!.isNotEmpty;
 }
 

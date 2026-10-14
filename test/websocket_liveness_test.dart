@@ -337,7 +337,7 @@ void main() {
       expect(subsAfterLastConnect, hasLength(greaterThanOrEqualTo(2)),
           reason: 'a recycled socket must re-subscribe to both event streams, '
               'otherwise the app silently stops receiving updates after a reclaim');
-      expect(subsAfterLastConnect.toSet(), {'1', '2'});
+      expect(subsAfterLastConnect.toSet(), {'1', '2', '3'});
     }, timeout: const Timeout(Duration(seconds: 30)));
   });
 

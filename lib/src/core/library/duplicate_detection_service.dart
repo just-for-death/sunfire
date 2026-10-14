@@ -8,16 +8,15 @@
 // Provides a UI for reviewing and confirming merges.
 
 import 'dart:async';
-import 'dart:collection';
 import 'dart:math' show min, max;
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 
 import '../db/isar_service.dart';
 import '../db/models/manga.dart';
-import '../db/models/chapter.dart';
 import '../engine/source_migration_service.dart'
     show SourceMigrationService;
+import '../services/library_matching.dart';
 
 /// Result of duplicate detection scan.
 class DuplicateScanResult {
@@ -184,7 +183,9 @@ class DuplicateDetectionService {
       final urlA = _sourceMigration.normalizeUrlForMatch(a.url);
       final urlB = _sourceMigration.normalizeUrlForMatch(b.url);
       if (urlA.isNotEmpty && urlB.isNotEmpty &&
-          (urlA.contains(urlB) || urlB.contains(urlA))) return true;
+          (urlA.contains(urlB) || urlB.contains(urlA))) {
+        return true;
+      }
     }
 
     // 3. Normalized title equality (when URLs missing/different)
@@ -199,11 +200,12 @@ class DuplicateDetectionService {
 
     // 4. Source fuzzy + chapter count overlap
     if (includeSourceFuzzy) {
-      final chaptersA = a.chapterCount ?? 0;
-      final chaptersB = b.chapterCount ?? 0;
+      final chaptersA = a.chapterCount;
+      final chaptersB = b.chapterCount;
       if (chaptersA > 0 && chaptersB > 0) {
         final overlap = min(chaptersA, chaptersB) / max(chaptersA, chaptersB);
-        if (overlap > 0.7 && _normalizeTitle(a.title) == _normalizeTitle(b.title)) return true;
+        final ta = _normalizeTitle(a.title);
+        if (overlap > 0.7 && ta.isNotEmpty && ta == _normalizeTitle(b.title)) return true;
       }
     }
 
@@ -215,26 +217,39 @@ class DuplicateDetectionService {
     final urlB = _sourceMigration.normalizeUrlForMatch(b.url);
     if (urlA.isNotEmpty && urlB.isNotEmpty && urlA == urlB) return 'Exact URL match';
     if (urlA.isNotEmpty && urlB.isNotEmpty &&
-        (urlA.contains(urlB) || urlB.contains(urlA))) return 'URL containment';
+        (urlA.contains(urlB) || urlB.contains(urlA))) {
+      return 'URL containment';
+    }
 
     final titleA = _normalizeTitle(a.title);
     final titleB = _normalizeTitle(b.title);
-    if (titleA == titleB) return 'Exact title match';
+    if (titleA.isNotEmpty && titleA == titleB) return 'Exact title match';
     if (_titleSimilarity(titleA, titleB) >= _titleSimilarityThreshold) return 'Fuzzy title match';
 
     return 'Source fuzzy + chapter overlap';
   }
 
-  String _normalizeTitle(String title) =>
-      title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '').trim();
+  /// ISS-143: shared [normalizeMangaTitle] (keeps kana/CJK/Hangul, folds
+  /// full-width forms) with spaces removed, as before. Empty means "no
+  /// usable title" and never counts as a match.
+  String _normalizeTitle(String title) => normalizeMangaTitle(title).replaceAll(' ', '');
+
+  /// Test hook: [_areDuplicates] with every strategy enabled.
+  @visibleForTesting
+  bool debugAreDuplicates(Manga a, Manga b) => _areDuplicates(a, b,
+      includeExactUrl: true, includeUrlContainment: true, includeTitleMatch: true, includeSourceFuzzy: true);
 
   double _titleSimilarity(String a, String b) {
     if (a.isEmpty || b.isEmpty) return 0.0;
     // Jaccard similarity on bigrams
     final setA = <String>{};
     final setB = <String>{};
-    for (var i = 0; i < a.length - 1; i++) setA.add(a.substring(i, i + 2));
-    for (var i = 0; i < b.length - 1; i++) setB.add(b.substring(i, i + 2));
+    for (var i = 0; i < a.length - 1; i++) {
+      setA.add(a.substring(i, i + 2));
+    }
+    for (var i = 0; i < b.length - 1; i++) {
+      setB.add(b.substring(i, i + 2));
+    }
     final intersection = setA.intersection(setB).length;
     final union = setA.union(setB).length;
     return union == 0 ? 0.0 : intersection / union;
@@ -258,7 +273,7 @@ class DuplicateDetectionService {
 
       // Update canonical manga stats
       final canon = group.canonical;
-      canon.chapterCount = (canon.chapterCount ?? 0) + (dupe.chapterCount ?? 0);
+      canon.chapterCount = canon.chapterCount + dupe.chapterCount;
       canon.unreadCount = (canon.unreadCount ?? 0) + (dupe.unreadCount ?? 0);
       await IsarService.instance.saveManga(canon);
 

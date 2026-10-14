@@ -1,0 +1,155 @@
+# Session Protocol (Cross-Agent Communication)
+# This file maintains the current AI session state for cross-agent collaboration.
+# Update this file when starting/ending work sessions.
+
+## Session Format
+```json
+{
+  "session_id": "uuid",
+  "agent": "agent_name",
+  "started_at": "ISO8601_timestamp",
+  "ended_at": "ISO8601_timestamp|null",
+  "status": "active|paused|completed|failed",
+  "branch": "git_branch_name",
+  "commit_base": "commit_sha",
+  "objective": "description of what this session aims to accomplish",
+  "progress": [
+    {"step": "description", "status": "completed|in_progress|blocked", "timestamp": "ISO8601"}
+  ],
+  "blockers": [
+    {"description": "blocker description", "severity": "low|medium|high", "resolved": false}
+  ],
+  "next_steps": [
+    "next action 1",
+    "next action 2"
+  ],
+  "context": {
+    "files_modified": ["file1.dart", "file2.dart"],
+    "tests_added": ["test_file.dart"],
+    "tests_passing": true,
+    "analyze_passed": true,
+    "build_status": "success|failed|pending"
+  },
+  "handoff_notes": "Critical context for the next agent picking up this work"
+}
+```
+
+## Active Sessions
+<!-- Active sessions are appended here by agents -->
+
+---
+
+## Session History
+<!-- Completed sessions are archived here -->
+
+---
+# AI Communication Protocol
+
+## How to Use This File
+
+### Starting a Session
+1. Generate a unique session_id (UUID v4)
+2. Create a new entry in "Active Sessions" with status "active"
+2. Fill in all fields accurately
+3. Update progress in real-time
+
+### During Work
+- Update `progress` array after each significant step
+- Add `blockers` immediately when encountered
+- Update `context` as files change
+- Keep `handoff_notes` current for seamless handoff
+
+### Ending a Session
+1. Set `ended_at` to current timestamp
+2. Set `status` to "completed", "paused", or "failed"
+2. Move entry from "Active Sessions" to "Session History"
+3. Ensure `handoff_notes` is comprehensive
+
+### Handoff Protocol
+When another agent takes over:
+1. Read the latest session in "Active Sessions" or latest in "Session History"
+2. Read `handoff_notes` carefully
+3. Check `blockers` and `context`
+4. Continue from `next_steps`
+5. Create a new session entry referencing the previous session_id
+
+---
+
+## Method: Cross-agent Handoff
+
+### Standard Handoff Template
+```markdown
+## Handoff from [agent_name] to [next_agent_name]
+
+### Session Reference
+- Previous Session ID: xxx
+- Branch: v6-reader-rewrite
+- Commit: abc1234
+
+### What Was Done
+- Fixed X bug in file.dart
+- Refactored Y component
+- Added tests for Z
+
+### Current State
+- All tests passing (1297/1297)
+- Build: passing
+- Analyze: 99 style lints (pre-existing)
+
+### Blockers
+- None
+
+### Next Steps
+1. Implement feature X in file.dart
+2. Add tests for Y
+3. Update documentation
+
+### Critical Context
+- Platform shells: iOS glass / Android M3 / Desktop rail
+- Design system tokens in lib/src/ui/design_system/tokens/
+- Reader R1.8 refactor complete: NavigationController + PageLoader
+- Platform shells: iOS glass / Android M3 / Desktop rail
+```
+
+---
+
+## Method: Cross-Agent Context Sharing
+
+### Context Files to Monitor
+These files contain critical cross-agent context:
+- `lib/src/app.dart` - App bootstrap, theme, routing
+- `lib/src/main.dart` - App entry point
+- `lib/src/main_shell.dart` - Platform shell routing
+- `lib/src/ui/design_system/sunfire_theme.dart` - Theme system
+- `lib/src/ui/design_system/tokens/` - Design tokens
+- `lib/src/core/sync/sync_engine.dart` - Sync engine
+- `lib/src/features/reader/` - Reader screens
+- `lib/src/core/sync/sync_engine.dart` - Sync logic
+
+### Key Patterns to Follow
+1. **Platform detection**: Use `SunfireBreakpoints` + `Platform.isIOS` / `Platform.isAndroid`
+2. **Generation guards**: Use `_loadGeneration` pattern for race-free async
+3. **Result type**: Use `Result<T, E>` from `lib/src/core/result/result.dart`
+4. **Correlation IDs**: Use `LoggerService.withCorrelation()` for tracing
+5. **URL sanitization**: Use `sanitizeUrlForLog()` from `url_sanitizer.dart`
+
+---
+
+## AI Session Log
+
+### 2026-10-01 - Sunfire v5 Release
+- **Agent**: Primary development agent
+- **Branch**: v6-reader-rewrite
+- **Commit**: c411d16
+- **Status**: Completed
+- **Summary**: Fixed Default category (id=0) sync bug, R1.8/I3 reader refactor, platform shells, design system, secure storage, cert pinning, correlation IDs
+- **Tests**: 1297 passing
+- **Build**: Passing
+- **Analyze**: 99 style lints (pre-existing)
+
+### Next Recommended Session
+- Implement repository layer extraction (MangaRepository, ChapterRepository)
+- Add Result<T,E> usage throughout codebase
+- Add correlation ID middleware for GraphQL/WebSocket
+- Create Certificate Pinning UI in Advanced Settings
+- Add Golden tests for design system components

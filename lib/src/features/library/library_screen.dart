@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -15,14 +16,15 @@ import '../../core/logging/logger_service.dart';
 import '../../core/services/batch_mode_service.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
+import '../../core/services/library_matching.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/services/tag_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../main_shell.dart';
-import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/components/sunfire_skeleton.dart';
+import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/library_update_progress_banner.dart';
@@ -86,6 +88,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   /// changes, which is handled because a changed row produces a new key.
   final Set<String> _coverHealFailed = {};
   StreamSubscription<void>? _syncCompleteSub;
+  StreamSubscription<void>? _mangaWatchSub;
 
   @override
   void initState() {
@@ -94,6 +97,12 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     // ISS-059: when a mid-flight triggerSync was queued behind another cycle,
     // reload Isar once the gate finishes so the grid is not left empty.
     _syncCompleteSub = SyncEngine.instance.onSyncCycleComplete.listen((_) {
+      if (!mounted) return;
+      unawaited(_loadFromIsarOnly());
+    });
+    // UIX6-07: live library — reload when any manga row changes (debounced),
+    // e.g. Add to Library from Browse or a queued outbox change.
+    _mangaWatchSub = IsarService.instance.watchMangaLazy().listen((_) {
       if (!mounted) return;
       unawaited(_loadFromIsarOnly());
     });
@@ -134,6 +143,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
 
   @override
   void dispose() {
+    unawaited(_mangaWatchSub?.cancel());
     _tabReloadTimer?.cancel();
     unawaited(_syncCompleteSub?.cancel());
     _settings.removeListener(_onSettingsChanged);
@@ -793,15 +803,11 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         // Advance the read stamp for freshly-read chapters so History and
         // Library "Last Read" sorting pick the action up without a resync.
         if (isRead) await SyncEngine.instance.stampLocalReadActivity(ch);
-        if (ch.serverId > 0) {
-          unawaited(
-            SyncEngine.instance.syncChapterProgress(
-              ch.serverId,
-              isRead: isRead,
-              lastPageRead: ch.lastPageRead,
-            ),
-          );
-        }
+      }
+      // ISS-069: one bulk server call per manga instead of one per chapter.
+      final serverIds = [for (final ch in chapters) if (ch.serverId > 0) ch.serverId];
+      if (serverIds.isNotEmpty) {
+        unawaited(SyncEngine.instance.syncChaptersProgressBulk(serverIds, isRead: isRead));
       }
       await IsarService.instance.saveChapters(chapters);
       final m = await _resolveManga(id);
@@ -1329,7 +1335,97 @@ unawaited(
                         ),
                       ),
                     ),
-                    const Text('Library View & Sort', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Library View & Sort', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        TextButton.icon(
+                          icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                          label: const Text('Save Preset', style: TextStyle(fontSize: 12)),
+                          onPressed: () async {
+                            final nameCtrl = TextEditingController();
+                            final name = await showDialog<String>(
+                              context: context,
+                              builder: (dCtx) => AlertDialog(
+                                title: const Text('Save Filter Preset'),
+                                content: TextField(
+                                  controller: nameCtrl,
+                                  autofocus: true,
+                                  decoration: const InputDecoration(hintText: 'Preset name (e.g. Unread Action)'),
+                                ),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(dCtx, nameCtrl.text.trim()),
+                                    child: const Text('Save'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (name != null && name.isNotEmpty) {
+                              await saveLibraryFilter(
+                                _settings,
+                                SavedLibraryFilter(name, {
+                                  'status': _statusFilter,
+                                  'tagId': _selectedTagId,
+                                  'displayMode': _settings.libraryDisplayMode,
+                                  'columns': _settings.gridColumnCount,
+                                  'showUnread': _settings.showUnreadBadges,
+                                  'showDownloaded': _settings.showDownloadedBadges,
+                                  'sortBy': _sortBy,
+                                  'isSortAscending': _isSortAscending,
+                                }),
+                              );
+                              setSheetState(() {});
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    Builder(
+                      builder: (ctx) {
+                        final presets = loadSavedLibraryFilters(_settings);
+                        if (presets.isEmpty) return const SizedBox.shrink();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'SAVED PRESETS',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _cs.onSurfaceVariant, letterSpacing: 1),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: [
+                                for (final p in presets)
+                                  InputChip(
+                                    label: Text(p.name),
+                                    onPressed: () {
+                                      final q = p.query;
+                                      setState(() {
+                                        if (q['status'] is String) _statusFilter = q['status'] as String;
+                                        _selectedTagId = q['tagId'] as int?;
+                                        if (q['displayMode'] is String) _settings.libraryDisplayMode = q['displayMode'] as String;
+                                        if (q['columns'] is int) _settings.gridColumnCount = q['columns'] as int;
+                                        if (q['showUnread'] is bool) _settings.showUnreadBadges = q['showUnread'] as bool;
+                                        if (q['showDownloaded'] is bool) _settings.showDownloadedBadges = q['showDownloaded'] as bool;
+                                        if (q['sortBy'] is String) _sortBy = q['sortBy'] as String;
+                                        if (q['isSortAscending'] is bool) _isSortAscending = q['isSortAscending'] as bool;
+                                      });
+                                      setSheetState(() {});
+                                    },
+                                    onDeleted: () async {
+                                      await deleteLibraryFilter(_settings, p.name);
+                                      setSheetState(() {});
+                                    },
+                                  ),
+                              ],
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                     const SizedBox(height: 16),
                     const Text('DISPLAY MODE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
                     const SizedBox(height: 8),
@@ -1810,6 +1906,18 @@ unawaited(
                           vertical: 6,
                         ),
                       ),
+                      // S6.1: hero stats strip — total titles, unread chapter
+                      // count, reading-progress bar. Shown only when the
+                      // library is non-empty and no text search query is active
+                      // (search replaces it with result-count which is more
+                      // informative in that state).
+                      if (_allManga.isNotEmpty && _searchQuery.isEmpty)
+                        SliverToBoxAdapter(
+                          child: _LibraryHeroStats(
+                            allManga: _allManga,
+                            horizontalPadding: horizontalPadding,
+                          ),
+                        ),
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 6),
@@ -2235,6 +2343,160 @@ unawaited(
           ),
         ),
       ),
+    );
+  }
+}
+
+/// S6.1: Hero stats header for the library screen.
+/// Displays total manga count, unread chapters count, and reading progress summary.
+/// Uses only theme tokens (ColorScheme/Theme) to strictly obey raw color lint rules.
+class _LibraryHeroStats extends StatelessWidget {
+  final List<Manga> allManga;
+  final double horizontalPadding;
+
+  const _LibraryHeroStats({
+    required this.allManga,
+    required this.horizontalPadding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final totalTitles = allManga.length;
+
+    int totalUnread = 0;
+    int totalChapters = 0;
+    int completedTitles = 0;
+
+    for (final m in allManga) {
+      totalUnread += m.unreadCount ?? 0;
+      totalChapters += m.chapterCount;
+      if ((m.status ?? '').toLowerCase() == 'completed') {
+        completedTitles++;
+      }
+    }
+
+    final readChapters = (totalChapters - totalUnread).clamp(0, totalChapters);
+    final readPercentage = totalChapters > 0
+        ? (readChapters / totalChapters).clamp(0.0, 1.0)
+        : 0.0;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 6.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: SunfireTheme.tileSurface(context),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: SunfireTheme.tileBorder(context),
+            width: 0.8,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _StatColumn(
+                    label: 'Titles',
+                    value: '$totalTitles',
+                    subtext: completedTitles > 0 ? '$completedTitles done' : null,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 32,
+                  color: cs.outlineVariant.withValues(alpha: 0.4),
+                ),
+                Expanded(
+                  child: _StatColumn(
+                    label: 'Unread',
+                    value: '$totalUnread',
+                    valueColor: totalUnread > 0 ? cs.primary : null,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 32,
+                  color: cs.outlineVariant.withValues(alpha: 0.4),
+                ),
+                Expanded(
+                  child: _StatColumn(
+                    label: 'Progress',
+                    value: '${(readPercentage * 100).toInt()}%',
+                    subtext: '$readChapters/$totalChapters ch',
+                  ),
+                ),
+              ],
+            ),
+            if (totalChapters > 0) ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: readPercentage,
+                  minHeight: 4,
+                  backgroundColor: cs.surfaceContainerHighest,
+                  valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatColumn extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
+  final String? subtext;
+
+  const _StatColumn({
+    required this.label,
+    required this.value,
+    this.valueColor,
+    this.subtext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: valueColor ?? cs.onSurface,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: cs.onSurfaceVariant,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        if (subtext != null) ...[
+          const SizedBox(height: 1),
+          Text(
+            subtext!,
+            style: TextStyle(
+              fontSize: 10,
+              color: cs.outline,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

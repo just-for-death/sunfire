@@ -40,7 +40,8 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
   bool _includeHistory = true;
   bool _includeManga = true;
   bool _includeTracking = true;
-  bool _includeServerSettings = true;
+  // ISS-100: unticked by default to prevent accidentally overwriting server settings.
+  bool _includeServerSettings = false;
   bool _includeClientData = true;
 
   @override
@@ -68,7 +69,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
           _includeHistory = parseBoolSafe(s['autoBackupIncludeHistory'], true);
           _includeManga = parseBoolSafe(s['autoBackupIncludeManga'], true);
           _includeTracking = parseBoolSafe(s['autoBackupIncludeTracking'], true);
-          _includeServerSettings = parseBoolSafe(s['autoBackupIncludeServerSettings'], true);
+          _includeServerSettings = parseBoolSafe(s['autoBackupIncludeServerSettings'], false);
           _includeClientData = parseBoolSafe(s['autoBackupIncludeClientData'], true);
         });
       } else {
@@ -422,6 +423,7 @@ unawaited(
       status = await GraphQLClientService.instance.restoreBackupAndWait(
         bytes,
         filename: filename,
+        flags: const BackupFlags(includeServerSettings: false),
         onProgress: (st) {
           progressNotifier.value = st.totalManga > 0
               ? '${st.state} · ${st.mangaProgress}/${st.totalManga}'

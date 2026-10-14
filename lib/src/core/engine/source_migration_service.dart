@@ -5,6 +5,7 @@ import '../db/isar_service.dart';
 import '../db/models/manga.dart';
 import '../logging/logger_service.dart';
 import '../sync/server_auth_helper.dart';
+import 'local_source_service.dart' show kLocalSourceName;
 
 class ReplicationReport {
   final List<String> newlyInstalledLocalScrapers;
@@ -366,6 +367,8 @@ unawaited(
         if (currentLibraryManga != null) {
           final modifiedManga = <Manga>[];
           for (final manga in currentLibraryManga) {
+            // IMP-002: on-device Local-source series never move to an extension.
+            if (manga.sourceName == kLocalSourceName) continue;
             if (normalizeSourceName(manga.sourceName) == srvNorm) {
               manga.sourceName = 'local_js_${matchedJs.replaceAll('.js', '')}';
               remappedMangaCount++;

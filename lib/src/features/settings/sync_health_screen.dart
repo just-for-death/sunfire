@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../../core/sync/cross_device_awareness.dart';
 import '../../core/sync/sync_health_service.dart';
 import '../../core/sync/sync_manager.dart';
+import '../../core/sync/websocket_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/widgets/sync_ui_actions.dart';
 
@@ -21,7 +22,10 @@ class SyncHealthScreen extends StatefulWidget {
 
 class _SyncHealthScreenState extends State<SyncHealthScreen> {
   StreamSubscription<SyncHealth>? _sub;
+  StreamSubscription<Map<String, dynamic>>? _wsSyncSub;
   SyncHealth _health = SyncHealthService.instance.current;
+  String? _liveSyncState;
+  String? _liveSyncError;
 
   @override
   void initState() {
@@ -32,11 +36,22 @@ class _SyncHealthScreenState extends State<SyncHealthScreen> {
     _sub = SyncHealthService.instance.stream.listen((h) {
       if (mounted) setState(() => _health = h);
     });
+    // UIS6-23: listen to live server syncStatusChanged frames from WebSocket.
+    _wsSyncSub = WebSocketService.instance.onSyncStatus.listen((msg) {
+      if (!mounted) return;
+      setState(() {
+        _liveSyncState = msg['state'] as String?;
+        _liveSyncError = msg['errorMessage'] as String?;
+      });
+    });
   }
 
   @override
   void dispose() {
+    unawaited(_wsSyncSub?.cancel() ?? Future<void>.value());
     unawaited(_sub?.cancel() ?? Future<void>.value());
+    SyncHealthService.instance.stop();
+    CrossDeviceAwarenessService.instance.stopTimer();
     super.dispose();
   }
 
@@ -64,6 +79,18 @@ class _SyncHealthScreenState extends State<SyncHealthScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (_liveSyncState != null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.wifi_tethering_rounded, color: Theme.of(context).colorScheme.primary),
+              title: const Text('Live server sync state'),
+              subtitle: Text(
+                _liveSyncError != null && _liveSyncError!.isNotEmpty
+                    ? '$_liveSyncState ($_liveSyncError)'
+                    : _liveSyncState!,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Last successful sync'),

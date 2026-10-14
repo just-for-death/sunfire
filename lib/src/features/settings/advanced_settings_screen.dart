@@ -43,7 +43,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
     setState(() => _isLoadingStats = true);
     try {
       final manga = await IsarService.instance.getAllManga();
-      final chapters = await IsarService.instance.getAllChapters();
+      final chapterCount = await IsarService.instance.countChapters(); // IMP-024
       final cats = await IsarService.instance.getCategories();
       String versionDisplay = '';
       try {
@@ -57,7 +57,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
       if (mounted) {
         setState(() {
           _mangaCount = manga.length;
-          _chapterCount = chapters.length;
+          _chapterCount = chapterCount;
           _categoryCount = cats.length;
           _versionStr = versionDisplay;
           _isLoadingStats = false;

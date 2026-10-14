@@ -209,8 +209,27 @@ class Chapter {
     }
   }
 
-  /// Aligns local progress with the reader complete-chapter path.
+  /// ISS-141: epoch SECONDS of the last explicit read-state action (Mark
+  /// read / Mark unread / reset / restart), or of the server-side action a
+  /// pull adopted. The newest action beats automatic progress (which only
+  /// ever keeps the max) and older actions. Null = never.
+  int? readStateActionAt;
+
+  /// ISS-141: server read state as of the last pull Sunfire applied. A pull
+  /// whose values differ from this snapshot (with no newer Sunfire action
+  /// meta) is an outside change, e.g. Suwayomi web or another client.
+  bool? syncedIsRead;
+  int? syncedLastPageRead;
+
+  /// ISS-141: stamp an explicit read-state action (now, unless [atSeconds]).
+  void markReadStateAction([int? atSeconds]) {
+    readStateActionAt = atSeconds ?? DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  }
+
+  /// Aligns local progress with the reader complete-chapter path. Every
+  /// caller is an explicit action, so it is stamped (ISS-141).
   void applyReadState(bool read) {
+    markReadStateAction();
     isRead = read;
     if (read) {
       if (pageCount > 0) lastPageRead = pageCount;

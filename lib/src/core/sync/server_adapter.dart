@@ -5,13 +5,11 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show debugPrint;
-
-import 'server_type.dart';
-import '../db/models/manga.dart';
-import '../db/models/chapter.dart';
 import '../db/models/category.dart';
+import '../db/models/chapter.dart';
+import '../db/models/manga.dart';
 import 'server_capabilities.dart';
+import 'server_type.dart';
 
 /// Abstract interface for server adapters.
 ///

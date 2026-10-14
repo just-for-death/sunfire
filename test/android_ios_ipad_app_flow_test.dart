@@ -68,11 +68,12 @@ void main() {
       expect(cycleReadingMode(ReadingMode.longStrip), ReadingMode.longStripGaps);
       expect(cycleReadingMode(ReadingMode.longStripGaps), ReadingMode.pagedRtl);
       expect(cycleReadingMode(ReadingMode.pagedRtl), ReadingMode.pagedLtr);
-      expect(cycleReadingMode(ReadingMode.pagedLtr), ReadingMode.longStrip);
+      expect(cycleReadingMode(ReadingMode.pagedLtr), ReadingMode.pagedVertical);
+      expect(cycleReadingMode(ReadingMode.pagedVertical), ReadingMode.longStrip);
 
       var mode = ReadingMode.longStrip;
       final seen = <ReadingMode>{};
-      for (var i = 0; i < 4; i++) {
+      for (var i = 0; i < ReadingMode.values.length; i++) {
         seen.add(mode);
         mode = cycleReadingMode(mode);
       }
@@ -116,9 +117,9 @@ void main() {
     });
 
     test('configured URL is trimmed and graphql path is used as base', () {
-      GraphQLClientService.instance.initialize(' http://192.168.1.50:4567/ ');
+      GraphQLClientService.instance.initialize(' http://192.168.1.50:4599/ ');
       expect(GraphQLClientService.instance.isConfigured, isTrue);
-      expect(GraphQLClientService.instance.baseUrl, 'http://192.168.1.50:4567');
+      expect(GraphQLClientService.instance.baseUrl, 'http://192.168.1.50:4599');
     });
 
     test('chapter replay payload can carry both bookmark and read progress', () {
@@ -480,9 +481,9 @@ void main() {
       const creds = ServerAuthCredentials(type: ServerAuthType.bearer, token: 'test-token-xyz');
       final header = creds.toHeaderValue();
       expect(header, contains('Bearer'));
-      GraphQLClientService.instance.initialize('http://192.168.1.10:4567', authToken: header);
+      GraphQLClientService.instance.initialize('http://192.168.1.10:4599', authToken: header);
       expect(GraphQLClientService.instance.isConfigured, isTrue);
-      expect(GraphQLClientService.instance.baseUrl, 'http://192.168.1.10:4567');
+      expect(GraphQLClientService.instance.baseUrl, 'http://192.168.1.10:4599');
     });
 
     test('history clear uses null timestamp helper', () {

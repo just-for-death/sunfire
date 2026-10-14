@@ -112,6 +112,9 @@ V6_TASKS.md
 *_TASK_BOARD.md
 docs/planning/
 
+# Session Protocol (Cross-Agent Communication)
+.session-protocol
+
 # Removed working docs (deleted; do not re-add)
 /PROJECT_KNOWLEDGE_BASE.md
 /docs/releases/

@@ -1,6 +1,5 @@
 // lib/src/features/reader/controller/page_loader.dart priority queue unit tests
 
-import 'dart:async' show unawaited;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -271,6 +270,25 @@ void main() {
       loader.clear();
       expect(loader.getCachedHeight('https://example.com/a.jpg'), equals(0.0));
       expect(loader.metrics.totalRequests, equals(0));
+
+      loader.dispose();
+    });
+
+    test('cacheBytes / peekCachedBytes round-trip (I3)', () {
+      final loader = PageLoader(
+        sourceName: 'TestSource',
+        mangaId: 1,
+        chapterTargetId: 2,
+      );
+      const url = 'https://example.com/page.jpg';
+      final bytes = Uint8List.fromList(List<int>.generate(64, (i) => i));
+
+      expect(loader.peekCachedBytes(url), isNull);
+      loader.cacheBytes(url, bytes);
+      expect(loader.peekCachedBytes(url), orderedEquals(bytes));
+
+      loader.clear();
+      expect(loader.peekCachedBytes(url), isNull);
 
       loader.dispose();
     });
