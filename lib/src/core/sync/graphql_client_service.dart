@@ -11,6 +11,8 @@ import 'server_api_models.dart';
 import 'server_auth_refresher.dart';
 import 'server_capabilities.dart';
 import 'server_compat_models.dart';
+import 'server_mutation_exception.dart';
+import 'server_result.dart';
 import 'source_filters.dart';
 import 'suwayomi_parse_helpers.dart';
 import 'suwayomi_settings_fields.dart';
@@ -18,9 +20,14 @@ import 'suwayomi_settings_fields.dart';
 export 'server_api_models.dart';
 export 'server_auth_refresher.dart';
 export 'server_compat_models.dart';
+export 'server_mutation_exception.dart';
 export 'source_filters.dart';
 
 part 'graphql_server_compat_api.dart';
+part 'graphql_sources_library_api.dart';
+part 'graphql_updates_downloads_api.dart';
+part 'graphql_chapters_tracking_api.dart';
+part 'graphql_results_settings_api.dart';
 
 int parseIntSafe(dynamic value, [int fallback = 0]) {
   if (value == null) return fallback;
@@ -95,21 +102,15 @@ const String kSnapshotCompleteKey = '__complete';
 /// forgets to stamp this fails safe — keeping local data — rather than open.
 bool isCompleteSnapshot(Map<String, dynamic>? data) => data?[kSnapshotCompleteKey] == true;
 
-class GraphQLClientService {
-  static GraphQLClientService? _instance;
+/// IMP-034: instance state, transport and query core. Public API lives on
+/// [GraphQLClientService]; the endpoint groups are private mixins in parts.
+abstract class _GraphQLClientCore {
   late Dio _dio;
 
   /// Whether [_dio] has been assigned yet. `late` fields throw on first read,
   /// so this distinguishes "no client yet" from "client failed to close".
   bool _dioInitialized = false;
   String? _baseUrl;
-
-  GraphQLClientService._();
-
-  static GraphQLClientService get instance {
-    _instance ??= GraphQLClientService._();
-    return _instance!;
-  }
 
   String? _authToken;
 
@@ -166,6 +167,7 @@ class GraphQLClientService {
 
   void initialize(String baseUrl, {String? authToken}) {
     final clean = baseUrl.trim();
+    if (clean.isNotEmpty) GraphQLClientService.debugHostGuard?.call(clean);
     if (clean.isEmpty) {
       _baseUrl = null;
       _authToken = null;
@@ -346,7 +348,7 @@ class GraphQLClientService {
         // Only real transport failures vote unreachable: a 400/404/422 means
         // the server answered and rejected the request shape, which says
         // nothing about the transport. (Mirrors _queryOnce's classifier.)
-        if (_isTransportFailure(e)) {
+        if (GraphQLClientService._isTransportFailure(e)) {
           _lastReachableStatus = false;
           lastRequestWasTransportFailure = true;
           OfflineMonitor.instance.reportTransportFailure();
@@ -402,7 +404,7 @@ class GraphQLClientService {
       version = a?['version']?.toString();
       buildType = a?['buildType']?.toString();
       buildTime = a?['buildTime']?.toString();
-    } catch (_) {}
+    } catch (e) { debugPrint('[graphql_client_service] ignored: $e'); }
 
     // Suwayomi's introspection guard rejects any request that names
     // `__type` more than once ("not asking for introspection in good faith"),
@@ -509,7 +511,9 @@ class GraphQLClientService {
           continue;
         }
       }
-      if (!outcome.retryable || attempt >= policy.maxRetries) return outcome.data;
+      if (!outcome.retryable || attempt >= policy.maxRetries) {
+        return flattenUserScopedFields(outcome.data);
+      }
       final delay = retryDelay(attempt + 1);
       if (kDebugMode) {
         debugPrint('[graphql_client_service] retry ${attempt + 1}/${policy.maxRetries} [$label] in ${delay.inMilliseconds}ms');
@@ -582,7 +586,7 @@ class GraphQLClientService {
           // with an `errors` payload) must surface the reconnect prompt just
           // like an HTTP 401/403 does. Without this, bad credentials silently
           // null-out every mutation while the UI claims the server is fine.
-          if (_looksLikeAuthError(errorMsg.toString())) {
+          if (GraphQLClientService._looksLikeAuthError(errorMsg.toString())) {
             notifyAuthError();
             return unauthorized;
           }
@@ -592,7 +596,7 @@ class GraphQLClientService {
       }
       return noRetry;
     } on DioException catch (e) {
-      if (_isTransportFailure(e)) {
+      if (GraphQLClientService._isTransportFailure(e)) {
         _lastReachableStatus = false;
         _lastReachableCheck = DateTime.now();
         lastRequestWasTransportFailure = true;
@@ -610,7 +614,7 @@ class GraphQLClientService {
       if (e.message != null && !e.message!.contains('Connection refused')) {
         await LoggerService.instance.logWarning('GraphQL request failed [$label]: ${e.message}', 'GraphQL');
       }
-      return (data: null, retryable: isRetryableTransportFailure(e), unauthorized: wasUnauthorized);
+      return (data: null, retryable: GraphQLClientService.isRetryableTransportFailure(e), unauthorized: wasUnauthorized);
     } catch (e, stack) {
       // The server ANSWERED — we are inside the success path of the HTTP
       // exchange, and reachability was already set true a few lines above.
@@ -633,6 +637,171 @@ class GraphQLClientService {
       return noRetry;
     }
   }
+
+  /// UIX6-03: per-user state selections. With `user { … }` support the
+  /// deprecated top-level fields are not requested at all; responses are
+  /// flattened back onto the parent by [flattenUserScopedFields] in [query],
+  /// so callers keep reading `chapter['isRead']` / `manga['inLibrary']`.
+  String _userScoped(List<String> keys) =>
+      capabilities.hasUserField ? 'user { ${keys.join(' ')} }' : keys.join('\n');
+
+  /// Chapter state (read / bookmark / progress / download).
+  /// ISS-141: selections carrying read state also fetch chapter meta (on the
+  /// chapter node, never user-scoped) for the `sunfire_read_action_at` stamp.
+  String _chapterState([List<String> keys = const ['isRead', 'isBookmarked', 'lastPageRead', 'lastReadAt']]) =>
+      keys.contains('isRead') ? '${_userScoped(keys)}\nmeta { key value }' : _userScoped(keys);
+
+  /// Manga library state.
+  String _mangaState([List<String> keys = const ['inLibrary', 'inLibraryAt', 'unreadCount']]) =>
+      _userScoped(keys);
+
+  /// Test hook: current chapter/manga state selections.
+  @visibleForTesting
+  String debugStateSelections() => '${_chapterState()}|${_mangaState()}';
+
+  /// Internal helper: calls [query] and captures the transport-failure
+  /// classification of the final attempt atomically. Returns a record of
+  /// (data, wasTransportFailure). This avoids the race where a concurrent
+  /// request overwrites [lastRequestWasTransportFailure] between the caller's
+  /// `await query(...)` and its read of the shared flag.
+  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
+      _queryAndClassify(
+    String document, {
+    Map<String, dynamic>? variables,
+    String? label,
+    GraphQLOp? op,
+  }) async {
+    final data = await query(
+      document,
+      variables: variables,
+      label: label,
+      op: op,
+    );
+    // Capture immediately: no await between query returning and this read.
+    final wasTransportFailure = lastRequestWasTransportFailure;
+    return (data: data, wasTransportFailure: wasTransportFailure);
+  }
+
+
+  // IMP-034: cross-group calls; implemented by the mixins on GraphQLClientService.
+  Future<Map<String, dynamic>?> fetchLibrary();
+  Future<Map<String, dynamic>?> fetchCategories();
+  Future<Map<String, dynamic>?> triggerServerLibraryUpdate({List<int>? categoryIds});
+  Future<Map<String, dynamic>?> enqueueChapterDownloads(List<int> chapterIds);
+  Future<Map<String, dynamic>?> deleteDownloadedChapter(int chapterId);
+  Future<Map<String, dynamic>?> dequeueChapterDownloads(List<int> chapterIds);
+  Future<Map<String, dynamic>?> fetchChapterPages(int chapterId);
+  Future<Map<String, dynamic>?> trackProgress(int mangaId);
+  Future<Map<String, dynamic>?> updateMangaCategories(int mangaId, List<int> categoryIds);
+  Future<Map<String, dynamic>?> updateMangaLibraryState(int mangaId, bool inLibrary);
+  Future<Map<String, dynamic>?> updateCategoryOrder(int categoryId, int position);
+  Future<Map<String, dynamic>?> deleteDownloadedChapters(List<int> ids);
+  Future<Map<String, dynamic>?> startDownloader();
+  Future<Map<String, dynamic>?> stopDownloader();
+  Future<Map<String, dynamic>?> clearDownloader();
+}
+
+/// Chapter node fields shared by the detail query and the paginated root
+/// `chapters` query, so the two can never drift apart.
+const String _mangaChapterFieldsBase = '''
+      id
+      name
+      chapterNumber
+      url
+      realUrl
+      pageCount
+      fetchedAt
+      uploadDate
+      scanlator
+''';
+
+const String _mangaChapterUserFields = '''
+      user {
+        isRead
+        isBookmarked
+        isDownloaded
+        lastPageRead
+        lastReadAt
+      }
+''';
+
+/// Cheap per-manga change markers for targeted chapter refresh (ISS-076).
+/// `chapterStats` is aliased so nothing mistakes it for a chapter list.
+const String _chapterFetchMarkerFields = '''
+      chaptersLastFetchedAt
+      latestFetchedChapter { id fetchedAt }
+      chapterStats: chapters { totalCount }
+      bookmarkCount
+      downloadCount
+      lastReadChapter { id lastPageRead lastReadAt isRead }
+''';
+
+/// M5: marker fields without the deprecated `MangaType` counters /
+/// `lastReadChapter`; those come from `user { … }` instead (merged with
+/// [_mangaUserFields] by GraphQL field merging, flattened client-side).
+const String _chapterFetchMarkerFieldsUserScoped = '''
+      chaptersLastFetchedAt
+      latestFetchedChapter { id fetchedAt }
+      chapterStats: chapters { totalCount }
+      user { lastReadChapter { id user { lastPageRead lastReadAt isRead } } }
+''';
+
+const String _mangaUserFields = '''
+      user {
+        inLibrary
+        inLibraryAt
+        unreadCount
+        bookmarkCount
+        downloadCount
+      }
+''';
+
+
+class GraphQLClientService extends _GraphQLClientCore
+    with _GraphQLSourcesLibraryApi, _GraphQLUpdatesDownloadsApi, _GraphQLChaptersTrackingApi, _GraphQLResultsSettingsApi {
+  static GraphQLClientService? _instance;
+  GraphQLClientService._();
+
+  /// Test-only constructor so tests can subclass with a fake
+  /// (`class _Fake extends GraphQLClientService { _Fake() : super.forTesting(); }`).
+  @visibleForTesting
+  GraphQLClientService.forTesting();
+
+  static GraphQLClientService? _debugInstance;
+
+  /// Test-only: when set, [instance] returns [v] instead of the real
+  /// singleton. Set back to null in tearDown. The ISS-134 [debugHostGuard]
+  /// still applies: it runs in [initialize], which a fake inherits, and it is
+  /// checked here against the fake's base URL when the fake is installed.
+  @visibleForTesting
+  static set debugInstance(GraphQLClientService? v) {
+    final url = v?._baseUrl;
+    if (url != null && url.isNotEmpty) debugHostGuard?.call(url);
+    _debugInstance = v;
+  }
+
+  @visibleForTesting
+  static GraphQLClientService? get debugInstance => _debugInstance;
+
+  /// Test isolation (ISS-140): clears the injected fake. [debugHostGuard]
+  /// (the ISS-134 real-server deny hook) is deliberately kept.
+  @visibleForTesting
+  static void debugResetTestOverrides() {
+    _debugInstance = null;
+  }
+
+  static GraphQLClientService get instance {
+    final fake = _debugInstance;
+    if (fake != null) return fake;
+    _instance ??= GraphQLClientService._();
+    return _instance!;
+  }
+
+  /// ISS-134: test-only host guard. `flutter_test_config.dart` installs one
+  /// that throws for Jane's real server (100.71.46.98 / any :4567), so no
+  /// test can ever point the client at production. Null in the app.
+  @visibleForTesting
+  static void Function(String baseUrl)? debugHostGuard;
 
   /// Whether a failed attempt is worth retrying (ISS-075): timeouts, 502/503/504
   /// and dropped connections. A refused connection means the server is down —
@@ -687,554 +856,6 @@ class GraphQLClientService {
         m.contains('bearer token');
   }
 
-  Future<Map<String, dynamic>?> fetchSources() async {
-    const queryStr = '''
-      {
-        sources {
-          nodes {
-            id
-            name
-            displayName
-            lang
-            supportsLatest
-            iconUrl
-            isConfigurable
-            isNsfw
-            contentWarning
-          }
-        }
-      }
-    ''';
-    final data = await query(queryStr, label: 'fetchSources');
-    return _normalizeSourceOrExtensionNodes(data, rootKey: 'sources');
-  }
-
-  Future<Map<String, dynamic>?> fetchExtensions() async {
-    const queryStr = '''
-      {
-        extensions {
-          nodes {
-            pkgName
-            name
-            versionName
-            lang
-            isInstalled
-            isObsolete
-            hasUpdate
-            iconUrl
-            isNsfw
-            contentWarning
-          }
-        }
-      }
-    ''';
-    final data = await query(queryStr, label: 'fetchExtensions');
-    return _normalizeSourceOrExtensionNodes(data, rootKey: 'extensions');
-  }
-
-  /// ISS-070: stamp `isNsfw` from `contentWarning` (fallback `isNsfw`); no name heuristic.
-  Map<String, dynamic>? _normalizeSourceOrExtensionNodes(
-    Map<String, dynamic>? data, {
-    required String rootKey,
-  }) {
-    if (data == null || data[rootKey] is! Map) return data;
-    final nodes = (data[rootKey] as Map)['nodes'];
-    if (nodes is! List) return data;
-    final normalized = <dynamic>[];
-    for (final n in nodes) {
-      if (n is! Map) {
-        normalized.add(n);
-        continue;
-      }
-      final m = Map<String, dynamic>.from(n);
-      m['isNsfw'] = isNsfwFromSourceNode(m);
-      final cw = parseContentWarning(m['contentWarning']);
-      if (cw != null) m['contentWarning'] = cw;
-      normalized.add(m);
-    }
-    return {
-      ...data,
-      rootKey: {
-        ...(data[rootKey] as Map),
-        'nodes': normalized,
-      },
-    };
-  }
-
-  Future<bool> installServerExtension(String pkgName) async {
-    const mutStr = r'''
-      mutation($id: String!, $patch: UpdateExtensionPatchInput!) {
-        updateExtension(input: { id: $id, patch: $patch }) {
-          extension {
-            pkgName
-            isInstalled
-          }
-        }
-      }
-    ''';
-    final res = await query(mutStr, variables: {
-      'id': pkgName,
-      'patch': {'install': true},
-    }, label: 'installServerExtension');
-    return res != null;
-  }
-
-  Future<bool> uninstallServerExtension(String pkgName) async {
-    const mutStr = r'''
-      mutation($id: String!, $patch: UpdateExtensionPatchInput!) {
-        updateExtension(input: { id: $id, patch: $patch }) {
-          extension {
-            pkgName
-            isInstalled
-          }
-        }
-      }
-    ''';
-    final res = await query(mutStr, variables: {
-      'id': pkgName,
-      'patch': {'uninstall': true},
-    }, label: 'uninstallServerExtension');
-    return res != null;
-  }
-
-  Future<bool> updateServerExtension(String pkgName) async {
-    const mutStr = r'''
-      mutation($id: String!, $patch: UpdateExtensionPatchInput!) {
-        updateExtension(input: { id: $id, patch: $patch }) {
-          extension {
-            pkgName
-            isInstalled
-          }
-        }
-      }
-    ''';
-    final res = await query(mutStr, variables: {
-      'id': pkgName,
-      'patch': {'update': true},
-    }, label: 'updateServerExtension');
-    return res != null;
-  }
-
-  Future<Map<String, dynamic>?> updateExtension(String pkgName, String action) async {
-    final act = action.toUpperCase();
-    bool success;
-    if (act == 'INSTALL') {
-      success = await installServerExtension(pkgName);
-    } else if (act == 'UNINSTALL') {
-      success = await uninstallServerExtension(pkgName);
-    } else if (act == 'UPDATE') {
-      success = await updateServerExtension(pkgName);
-    } else {
-      return null;
-    }
-    // Propagate failure (null on a swallowed network/GraphQL error) so the
-    // caller can roll back its optimistic UI instead of reporting success.
-    return success ? {'status': 'ok'} : null;
-  }
-
-  /// Browse / search a server source.
-  ///
-  /// [filters] (ISS-079) are `FilterChangeInput`s built from
-  /// [fetchSourceFilters]; when present the request is a SEARCH (that is how
-  /// Suwayomi applies filters) with [searchQuery] as an optional query.
-  Future<Map<String, dynamic>?> fetchSourceManga(
-    String sourceId, {
-    bool isLatest = false,
-    int page = 1,
-    String? searchQuery,
-    List<SourceFilterChange>? filters,
-  }) async {
-    final q = searchQuery?.trim() ?? '';
-    final hasFilters = filters != null && filters.isNotEmpty;
-    final isSearch = q.isNotEmpty || hasFilters;
-    final typeStr = isSearch ? 'SEARCH' : (isLatest ? 'LATEST' : 'POPULAR');
-    const doc = r'''
-      mutation($source: LongString!, $type: FetchSourceMangaType!, $page: Int!, $query: String, $filters: [FilterChangeInput!]) {
-        fetchSourceManga(input: {
-          source: $source,
-          type: $type,
-          page: $page,
-          query: $query,
-          filters: $filters
-        }) {
-          mangas {
-            id
-            title
-            thumbnailUrl
-            url
-          }
-          hasNextPage
-        }
-      }
-    ''';
-    return await query(doc, variables: {
-      'source': sourceId,
-      'type': typeStr,
-      'page': page,
-      if (q.isNotEmpty) 'query': q,
-      if (hasFilters) 'filters': filterChangesToInput(filters),
-    }, label: 'fetchSourceManga', op: GraphQLOp.scrapeRead);
-  }
-
-  Future<Map<String, dynamic>?> fetchLibrary() async {
-    final userSel = capabilities.hasUserField ? _mangaUserFields : '';
-    final markerSel = capabilities.hasChapterFetchMarkers ? _chapterFetchMarkerFields : '';
-    String pageQuery(bool useCursor) => '''
-      query(\$first: Int!, ${useCursor ? '\$after: Cursor' : '\$offset: Int!'}) {
-        mangas(condition: { inLibrary: true }, first: \$first, ${useCursor ? 'after: \$after' : 'offset: \$offset'}) {
-          totalCount
-          pageInfo { endCursor hasNextPage }
-          nodes {
-            id
-            title
-            author
-            description
-            thumbnailUrl
-            inLibrary
-            inLibraryAt
-            sourceId
-            unreadCount
-            url
-            realUrl
-            $userSel
-            $markerSel
-            source {
-              id
-              name
-              displayName
-              iconUrl
-              lang
-            }
-            categories {
-              nodes {
-                id
-                name
-              }
-            }
-          }
-        }
-      }
-    ''';
-
-    const pageSize = 200;
-    // Cursor pagination (ISS-074). Whether pagination ran to a genuine end:
-    // a page failing after the first is NOT a short library — it is a
-    // transport failure, and the caller must not treat the pages it did get
-    // as the complete server state.
-    final page = await paginateConnection(
-      pageSize: pageSize,
-      fetchPage: ({String? after, int? offset, required bool useCursor}) async {
-        final res = await query(
-          pageQuery(useCursor),
-          variables: {
-            'first': pageSize,
-            if (useCursor) 'after': after else 'offset': offset ?? 0,
-          },
-          label: 'fetchLibrary',
-          op: GraphQLOp.read,
-        );
-        final m = res?['mangas'];
-        return m is Map ? Map<String, dynamic>.from(m) : null;
-      },
-    );
-    if (page.firstPageFailed) return null;
-    if (!page.complete) {
-      await LoggerService.instance.logWarning(
-        'fetchLibrary: pagination stopped after ${page.nodes.length} nodes; '
-        'reporting an INCOMPLETE snapshot',
-        'GraphQL',
-      );
-    }
-
-    final flatNodes = <dynamic>[
-      for (final n in page.nodes)
-        if (n is Map)
-          flattenMangaUserFields(Map<String, dynamic>.from(n))
-        else
-          n,
-    ];
-    return {
-      'mangas': {
-        'totalCount': page.totalCount ?? flatNodes.length,
-        'nodes': flatNodes,
-      },
-      kSnapshotCompleteKey: page.complete,
-    };
-  }
-
-  /// Chapter node fields shared by the detail query and the paginated root
-  /// `chapters` query, so the two can never drift apart.
-  static const String _mangaChapterFieldsBase = '''
-        id
-        name
-        chapterNumber
-        url
-        realUrl
-        isRead
-        isBookmarked
-        lastPageRead
-        lastReadAt
-        pageCount
-        fetchedAt
-        uploadDate
-        scanlator
-''';
-
-  static const String _mangaChapterUserFields = '''
-        user {
-          isRead
-          isBookmarked
-          isDownloaded
-          lastPageRead
-          lastReadAt
-        }
-''';
-
-  /// When [capabilities.hasUserField], also select `chapter.user {…}` (ISS-072).
-  String get _mangaChapterFields => capabilities.hasUserField
-      ? '$_mangaChapterFieldsBase$_mangaChapterUserFields'
-      : _mangaChapterFieldsBase;
-
-  /// Cheap per-manga change markers for targeted chapter refresh (ISS-076).
-  /// `chapterStats` is aliased so nothing mistakes it for a chapter list.
-  static const String _chapterFetchMarkerFields = '''
-        chaptersLastFetchedAt
-        latestFetchedChapter { id fetchedAt }
-        chapterStats: chapters { totalCount }
-        bookmarkCount
-        downloadCount
-        lastReadChapter { id lastPageRead lastReadAt isRead }
-''';
-
-  static const String _mangaUserFields = '''
-        user {
-          inLibrary
-          inLibraryAt
-          unreadCount
-          bookmarkCount
-          downloadCount
-        }
-''';
-
-  Future<Map<String, dynamic>?> fetchMangaDetails(int mangaServerId) async {
-    // Manga block first, WITHOUT chapters: the nested `manga.chapters`
-    // connection takes no pagination args on most Suwayomi builds, so very
-    // long series silently truncate there. Chapters are fetched from the root
-    // paginated `chapters` query, then merged into the same response shape.
-    final userSel = capabilities.hasUserField ? _mangaUserFields : '';
-    final mangaQueryStr = '''
-      query(\$id: Int!) {
-        manga(id: \$id) {
-          id
-          title
-          artist
-          author
-          description
-          genre
-          status
-          inLibrary
-          thumbnailUrl
-          url
-          realUrl
-          $userSel
-          source {
-            id
-            name
-            displayName
-            lang
-          }
-        }
-      }
-    ''';
-    final mangaResRaw = await query(mangaQueryStr, variables: {'id': mangaServerId}, label: 'fetchMangaDetails');
-    Map<String, dynamic>? mangaRes;
-    if (mangaResRaw != null && mangaResRaw['manga'] is Map) {
-      mangaRes = {
-        ...mangaResRaw,
-        'manga': flattenMangaUserFields(
-          Map<String, dynamic>.from(mangaResRaw['manga'] as Map),
-        ),
-      };
-    } else {
-      mangaRes = mangaResRaw;
-    }
-    if (mangaRes == null || mangaRes['manga'] == null) {
-      return _fetchMangaDetailsLegacy(mangaServerId);
-    }
-
-    const pageSize = 500;
-    // See kSnapshotCompleteKey: a page failing after the first must not be
-    // mistaken for "the server deleted these chapters", because the caller
-    // hard-deletes chapters the server no longer reports. Cursor-paginated
-    // (ISS-074); an empty page with hasNextPage: true is treated as the end.
-    final chapterPage = await paginateConnection(
-      pageSize: pageSize,
-      fetchPage: ({String? after, int? offset, required bool useCursor}) async {
-        final pageQueryStr = '''
-          query(\$mangaId: Int!, \$first: Int!, ${useCursor ? '\$after: Cursor' : '\$offset: Int!'}) {
-            chapters(condition: { mangaId: \$mangaId }, first: \$first, ${useCursor ? 'after: \$after' : 'offset: \$offset'}) {
-              pageInfo { endCursor hasNextPage }
-              nodes { $_mangaChapterFields }
-            }
-          }
-        ''';
-        final pageRes = await query(
-          pageQueryStr,
-          variables: {
-            'mangaId': mangaServerId,
-            'first': pageSize,
-            if (useCursor) 'after': after else 'offset': offset ?? 0,
-          },
-          label: 'fetchMangaDetails.chapters',
-          op: GraphQLOp.read,
-        );
-        final m = pageRes?['chapters'];
-        return m is Map ? Map<String, dynamic>.from(m) : null;
-      },
-    );
-    // Schema without the paginated root `chapters` query (older/alternate
-    // Suwayomi builds): fall back to the single combined query. Best-effort
-    // — such servers may still truncate very long series.
-    if (chapterPage.firstPageFailed) return _fetchMangaDetailsLegacy(mangaServerId);
-    final allNodes = chapterPage.nodes;
-    final chaptersComplete = chapterPage.complete;
-    if (!chaptersComplete) {
-      await LoggerService.instance.logWarning(
-        'fetchMangaDetails: chapter pagination for manga $mangaServerId stopped '
-        'after ${allNodes.length} nodes; reporting an INCOMPLETE snapshot',
-        'GraphQL',
-      );
-    }
-
-    // Reassemble data['manga']['chapters']['nodes'] — the shape all callers
-    // (detail screen, full chapter snapshot) consume.
-    final mangaMap = Map<String, dynamic>.from(mangaRes['manga'] as Map<String, dynamic>);
-    final flatNodes = <dynamic>[
-      for (final n in allNodes)
-        if (n is Map)
-          flattenChapterUserFields(Map<String, dynamic>.from(n))
-        else
-          n,
-    ];
-    mangaMap['chapters'] = {'nodes': flatNodes};
-    return {
-      'manga': flattenMangaUserFields(mangaMap),
-      kSnapshotCompleteKey: chaptersComplete,
-    };
-  }
-
-  /// Single-query fallback used when the root paginated `chapters` query (or
-  /// the manga query) is unavailable. Kept byte-for-byte identical to the
-  /// original combined query.
-  Future<Map<String, dynamic>?> _fetchMangaDetailsLegacy(int mangaServerId) async {
-    const queryStr = r'''
-      query($id: Int!) {
-        manga(id: $id) {
-          id
-          title
-          artist
-          author
-          description
-          genre
-          status
-          inLibrary
-          thumbnailUrl
-          url
-          realUrl
-          source {
-            id
-            name
-            displayName
-            lang
-          }
-          chapters {
-            nodes {
-              id
-              name
-              chapterNumber
-              url
-              realUrl
-              isRead
-              isBookmarked
-              lastPageRead
-              lastReadAt
-              pageCount
-              fetchedAt
-              uploadDate
-              scanlator
-            }
-          }
-        }
-      }
-    ''';
-    return await query(queryStr, variables: {'id': mangaServerId}, label: 'fetchMangaDetails');
-  }
-
-  Future<Map<String, dynamic>?> fetchMangaAndChapters(int mangaServerId) async {
-    const mutStr = r'''
-      mutation($id: Int!) {
-        fetchMangaAndChapters(input: { id: $id, fetchManga: true, fetchChapters: true }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return await query(mutStr, variables: {'id': mangaServerId}, label: 'fetchMangaAndChapters', op: GraphQLOp.scrapeRead);
-  }
-
-  /// Resolves the server manga id for a series URL on [sourceId] — the path
-  /// used by source migration and `.tachibk` restore to keep a local-only
-  /// series server-synced. Modern Suwayomi dropped the `addManga` mutation, so
-  /// this first tries legacy `addManga` (older servers), then falls back to
-  /// searching the source — preferring the caller's [title], then a query
-  /// derived from [url] — and matching the best result by normalized URL or
-  /// title. Returns the server manga id, or null when the series cannot be
-  /// resolved on this server.
-  Future<int?> fetchMangaIdByUrl(String sourceId, String url, {String? title}) async {
-    if (url.trim().isEmpty) return null;
-
-    // 1) Legacy Tachidesk/Suwayomi servers still expose the addManga mutation.
-    // Skip when the capability probe already proved it missing (ISS-066).
-    if (!capabilities.probed || capabilities.hasAddManga) {
-      try {
-        const mutStr = r'''
-          mutation($sourceId: LongString!, $url: String!) {
-            addManga(input: { sourceId: $sourceId, url: $url }) {
-              id
-            }
-          }
-        ''';
-        final res = await query(mutStr, variables: {'sourceId': sourceId, 'url': url}, label: 'addMangaByUrl');
-        final id = res?['addManga']?['id'];
-        if (id is int && id > 0) return id;
-        if (id is num && id.toInt() > 0) return id.toInt();
-      } catch (e) {
-        await LoggerService.instance
-            .logWarning('addManga unsupported on this server, falling back to search: $e', 'GraphQL');
-      }
-    }
-
-
-    // 2) Modern Suwayomi: search the source and pick the best match by URL/title.
-    // Title-first — URL-slug words often fuzzy-match unrelated series (e.g.
-    // webtoons indexes series under their localized titles, not their slugs).
-    try {
-      final queries = <String>{};
-      if (title != null && title.trim().length >= 3) queries.add(title.trim());
-      final derived = urlToSearchQuery(url);
-      if (derived.isNotEmpty) queries.add(derived);
-      for (final q in queries) {
-        final searchRes = await fetchSourceManga(sourceId, searchQuery: q);
-        final mangas = searchRes?['fetchSourceManga']?['mangas'] as List<dynamic>?;
-        final id = pickBestSourceMangaId(mangas, url: url, title: q);
-        if (id != null) return id;
-      }
-      return null;
-    } catch (e) {
-      await LoggerService.instance.logWarning('Source search fallback failed for $url: $e', 'GraphQL');
-      return null;
-    }
-  }
-
   /// Derives a search query from a manga URL: strips scheme/host/query, keeps the
   /// last meaningful path segment, and turns separators into spaces
   /// (e.g. ".../tower-of-god/list?title_no=95" -> "tower of god").
@@ -1255,1204 +876,6 @@ class GraphQLClientService {
     return q.length >= 3 ? q : '';
   }
 
-  /// Picks the best id from a [fetchSourceManga] `mangas` list for [url]/[title]:
-  /// exact normalized URL, URL path-alias (containment), then normalized-title
-  /// equality. Returns null when nothing is a confident match.
-  int? pickBestSourceMangaId(List<dynamic>? mangas, {required String url, required String title}) {
-    if (mangas == null || mangas.isEmpty) return null;
-    final normTargetUrl = url
-        .toLowerCase()
-        .replaceAll(RegExp(r'^https?://[^/]+'), '')
-        .replaceAll(RegExp(r'[/?#]+$'), '');
-    final normAlphaTitle = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    int? titleFallbackId;
-    for (final m in mangas) {
-      final mMap = m is Map<String, dynamic> ? m : null;
-      if (mMap == null) continue;
-      final rawId = mMap['id'];
-      final sid = rawId is int ? rawId : (rawId is num ? rawId.toInt() : null);
-      if (sid == null || sid <= 0) continue;
-
-      final mUrl = (mMap['url'] ?? '').toString().toLowerCase();
-      final mTitle = (mMap['title'] ?? '').toString().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-      final normMUrl = mUrl.replaceAll(RegExp(r'^https?://[^/]+'), '').replaceAll(RegExp(r'[/?#]+$'), '');
-      if (normTargetUrl.isNotEmpty && normMUrl.isNotEmpty) {
-        if (normMUrl == normTargetUrl ||
-            (normMUrl.length >= 6 && (normMUrl.contains(normTargetUrl) || normTargetUrl.contains(normMUrl)))) {
-          return sid;
-        }
-      }
-      if (mTitle.isNotEmpty && mTitle == normAlphaTitle) {
-        titleFallbackId ??= sid;
-      }
-    }
-    return titleFallbackId;
-  }
-
-  /// Fuzzy-matches [sourceName] (display name from a local JS extension) against
-  /// installed Suwayomi server sources and returns the matching server source ID
-  /// string, or null when no match is found.
-  Future<String?> resolveServerSourceId(String sourceName) async {
-    try {
-      final sourcesData = await fetchSources();
-      final nodes = sourcesData?['sources']?['nodes'] as List<dynamic>?;
-      if (nodes == null) return null;
-
-      String normalize(String n) => n
-          .toLowerCase()
-          .replaceAll(RegExp(r'[\(\[{].*?[\)\]}]'), '')
-          .replaceAll(RegExp(r'[^a-z0-9\s]'), '')
-          .replaceAll(RegExp(r'\s+'), ' ')
-          .trim();
-
-      final targetNorm = normalize(sourceName);
-      if (targetNorm.isEmpty) return null;
-
-      for (final n in nodes) {
-        final map = n as Map<String, dynamic>;
-        final nameNorm = normalize(map['name'] as String? ?? '');
-        final dispNorm = normalize(map['displayName'] as String? ?? '');
-        if (nameNorm == targetNorm ||
-            dispNorm == targetNorm ||
-            nameNorm.contains(targetNorm) ||
-            targetNorm.contains(nameNorm)) {
-          return map['id'].toString();
-        }
-      }
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<Map<String, dynamic>?> fetchCategories() async {
-    // `isDefaultCategory` exists only on server v2.4.2366+. Requesting an
-    // unknown field fails the whole query (validation error → null data),
-    // which would silently stop category sync on older servers — so it is
-    // interpolated only when the capability probe saw it.
-    final defaultCatSel =
-        capabilities.hasCategoryIsDefaultCategory ? 'isDefaultCategory' : '';
-    final queryStr = '''
-      {
-        categories {
-          totalCount
-          nodes {
-            id
-            name
-            order
-            default
-            includeInUpdate
-            includeInDownload
-            $defaultCatSel
-          }
-        }
-      }
-    ''';
-    final data = await query(queryStr, label: 'fetchCategories');
-    if (data == null || data['categories'] is! Map) return data;
-    // This query is not paginated, so reaching here means the server answered
-    // in full. Stamping it lets `_syncCategories` distinguish "the user deleted
-    // a category" from "the response was short" before running the
-    // `replaceAll` delete — the category path had no completeness guard at all,
-    // so a truncated response erased the user's shelf and orphaned every
-    // `Manga.categoryIds` entry pointing at it.
-    final catMap = data['categories'] as Map<String, dynamic>;
-    final nodes = catMap['nodes'];
-    final total = parseIntSafe(catMap['totalCount']);
-    final list = nodes is List ? nodes : const <dynamic>[];
-    if (total > 0) {
-      data[kSnapshotCompleteKey] = list.length >= total;
-    }
-    // If the server omitted `totalCount`, deliberately leave the key UNSET.
-    // `isCompleteSnapshot` defaults to false for an unmarked map, so the caller
-    // keeps its local categories. Marking a non-empty-but-possibly-truncated
-    // list "complete" would let the `replaceAll` delete run — which is the
-    // catastrophe the guard exists to prevent. Failing safe here costs one
-    // sync cycle of category refresh; guessing wrong costs the user's shelf.
-    return data;
-  }
-
-  Future<Map<String, dynamic>?> fetchTrackers() async {
-    const queryStr = '''
-      {
-        trackers {
-          nodes {
-            id
-            name
-            isLoggedIn
-            authUrl
-          }
-        }
-      }
-    ''';
-    return await query(queryStr, label: 'fetchTrackers');
-  }
-
-  Future<Map<String, dynamic>?> fetchHistoryChapters(int offset) async {
-    // Paginate the whole read history (not just the first 500) and order by
-    // last-read so the most recent history is always kept when the server
-    // truncates. Cursor-paginated (ISS-074): LAST_READ_AT ordering reshuffles
-    // while another device reads, which made offset paging skip/duplicate.
-    // An empty page is the end even when hasNextPage claims otherwise.
-    const pageSize = 500;
-    String pageQuery(bool useCursor) => '''
-      query(\$first: Int!, ${useCursor ? '\$after: Cursor' : '\$offset: Int!'}) {
-        chapters(
-          condition: { isRead: true }
-          order: [{ by: LAST_READ_AT, byType: DESC }]
-          first: \$first
-          ${useCursor ? 'after: \$after' : 'offset: \$offset'}
-        ) {
-          totalCount
-          pageInfo { endCursor hasNextPage }
-          nodes {
-            id
-            name
-            chapterNumber
-            isRead
-            isBookmarked
-            lastPageRead
-            lastReadAt
-            mangaId
-            manga {
-              id
-              title
-              thumbnailUrl
-            }
-          }
-        }
-      }
-    ''';
-    final page = await paginateConnection(
-      pageSize: pageSize,
-      maxNodes: 5000, // hard ceiling: never balloon memory
-      startOffset: offset < 0 ? 0 : offset,
-      fetchPage: ({String? after, int? offset, required bool useCursor}) async {
-        final res = await query(
-          pageQuery(useCursor),
-          variables: {
-            'first': pageSize,
-            if (useCursor) 'after': after else 'offset': offset ?? 0,
-          },
-          label: 'fetchHistoryChapters',
-          op: GraphQLOp.read,
-        );
-        final m = res?['chapters'];
-        return m is Map ? Map<String, dynamic>.from(m) : null;
-      },
-    );
-    if (page.firstPageFailed) return null;
-    return {
-      'chapters': {'totalCount': page.totalCount ?? page.nodes.length, 'nodes': page.nodes},
-      kSnapshotCompleteKey: page.complete,
-    };
-  }
-
-  /// Updates feed, newest `fetchedAt` first.
-  ///
-  /// [sinceFetchedAt] (epoch seconds) narrows to a time window
-  /// (`fetchedAt > since`, ISS-074) so incremental syncs only pull what is new
-  /// instead of re-reading the top-N every cycle.
-  Future<Map<String, dynamic>?> fetchUpdatesChapters({int first = 100, int? sinceFetchedAt}) async {
-    final windowFilter = sinceFetchedAt != null && sinceFetchedAt > 0
-        ? ', fetchedAt: { greaterThan: "$sinceFetchedAt" }'
-        : '';
-    final queryStr = '''
-      {
-        chapters(
-          filter: { inLibrary: { equalTo: true }$windowFilter }
-          order: [{ by: FETCHED_AT, byType: DESC }]
-          first: $first
-        ) {
-          totalCount
-          pageInfo { endCursor hasNextPage }
-          nodes {
-            id
-            name
-            chapterNumber
-            isRead
-            isBookmarked
-            lastPageRead
-            isDownloaded
-            fetchedAt
-            uploadDate
-            scanlator
-            mangaId
-            manga {
-              id
-              title
-              thumbnailUrl
-              inLibrary
-              inLibraryAt
-              source {
-                displayName
-              }
-            }
-          }
-        }
-      }
-    ''';
-    return await query(queryStr, label: 'fetchUpdatesChapters', op: GraphQLOp.read);
-  }
-
-  Future<String?> fetchLastUpdateTimestamp() async {
-    const queryStr = '''
-      {
-        lastUpdateTimestamp {
-          timestamp
-        }
-      }
-    ''';
-    final data = await query(queryStr, label: 'fetchLastUpdateTimestamp');
-    if (data != null && data.containsKey('lastUpdateTimestamp')) {
-      final payload = data['lastUpdateTimestamp'] as Map<String, dynamic>?;
-      return payload?['timestamp']?.toString();
-    }
-    return null;
-  }
-
-  /// Triggers a server library update.
-  ///
-  /// When [categoryIds] is non-null/non-empty, only those categories are
-  /// updated (`updateLibrary(input: { categories: [...] })`) — ISS-071
-  /// "Update this category".
-  Future<Map<String, dynamic>?> triggerServerLibraryUpdate({
-    List<int>? categoryIds,
-  }) async {
-    if (categoryIds != null && categoryIds.isNotEmpty) {
-      const mutStr = r'''
-        mutation($categories: [Int!]!) {
-          updateLibrary(input: { categories: $categories }) {
-            clientMutationId
-          }
-        }
-      ''';
-      return await query(
-        mutStr,
-        variables: {'categories': categoryIds},
-        label: 'triggerServerLibraryUpdate.categories',
-      );
-    }
-    const mutStr = r'''
-      mutation {
-        updateLibrary(input: {}) {
-          clientMutationId
-        }
-      }
-    ''';
-    return await query(mutStr, label: 'triggerServerLibraryUpdate');
-  }
-
-  Future<Map<String, dynamic>?> fetchServerUpdateStatus() async {
-    // `updateStatus` is deprecated server-side; `libraryUpdateStatus.jobsInfo`
-    // exposes the equivalent counters (isRunning / totalJobs / finishedJobs).
-    const queryStr = r'''
-      {
-        libraryUpdateStatus {
-          jobsInfo {
-            isRunning
-            finishedJobs
-            totalJobs
-            skippedCategoriesCount
-            skippedMangasCount
-          }
-        }
-      }
-    ''';
-    return await query(queryStr, label: 'fetchServerUpdateStatus');
-  }
-
-  Future<Map<String, dynamic>?> enqueueChapterDownload(int chapterId) async {
-    const mutStr = r'''
-      mutation($chapterId: Int!) {
-        enqueueChapterDownload(input: { id: $chapterId }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'chapterId': chapterId},
-      label: 'enqueueChapterDownload',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> enqueueChapterDownloads(List<int> chapterIds) async {
-    const mutStr = r'''
-      mutation($chapterIds: [Int!]!) {
-        enqueueChapterDownloads(input: { ids: $chapterIds }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'chapterIds': chapterIds},
-      label: 'enqueueChapterDownloads',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> deleteDownloadedChapter(int chapterId) async {
-    const mutStr = r'''
-      mutation($chapterId: Int!) {
-        deleteDownloadedChapter(input: { id: $chapterId }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'chapterId': chapterId},
-      label: 'deleteDownloadedChapter',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> fetchDownloadStatus() async {
-    // Keep selection aligned with downloadStatusChanged WS (ISS-086 / ISS-067)
-    // so the Downloads screen has position/tries/manga titles on initial open.
-    const queryStr = r'''
-      {
-        downloadStatus {
-          state
-          queue {
-            position
-            progress
-            state
-            tries
-            chapter {
-              id
-              name
-              isDownloaded
-            }
-            manga {
-              id
-              title
-            }
-          }
-        }
-      }
-    ''';
-    return await query(queryStr, label: 'fetchDownloadStatus');
-  }
-
-  // ── ISS-080 B5: download queue dequeue / reorder ──────────────────────
-  //
-  // Each returns the server's resulting `downloadStatus` (same selection as
-  // [fetchDownloadStatus]) or null on failure. Per-item `state` is
-  // QUEUED | DOWNLOADING | FINISHED | ERROR; `tries` is the retry count.
-
-  static const String _downloadStatusSelection = '''
-          downloadStatus {
-            state
-            queue {
-              position
-              progress
-              state
-              tries
-              chapter { id name isDownloaded }
-              manga { id title }
-            }
-          }
-''';
-
-  /// Remove one chapter from the server download queue.
-  Future<Map<String, dynamic>?> dequeueChapterDownload(int chapterId) async {
-    const mutStr = '''
-      mutation(\$id: Int!) {
-        dequeueChapterDownload(input: { id: \$id }) {
-          $_downloadStatusSelection
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'id': chapterId},
-      label: 'dequeueChapterDownload',
-    )).data;
-  }
-
-  /// Remove many chapters from the server download queue in one round-trip.
-  /// Falls back to per-id [dequeueChapterDownload] when the bulk call fails.
-  Future<Map<String, dynamic>?> dequeueChapterDownloads(List<int> chapterIds) async {
-    if (chapterIds.isEmpty) return null;
-    if (chapterIds.length == 1) return dequeueChapterDownload(chapterIds.first);
-    const mutStr = '''
-      mutation(\$ids: [Int!]!) {
-        dequeueChapterDownloads(input: { ids: \$ids }) {
-          $_downloadStatusSelection
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'ids': chapterIds},
-      label: 'dequeueChapterDownloads',
-    )).data;
-  }
-
-  /// Move [chapterId] to queue index [to] (0-based, clamped at 0).
-  Future<Map<String, dynamic>?> reorderChapterDownload(int chapterId, int to) async {
-    const mutStr = '''
-      mutation(\$chapterId: Int!, \$to: Int!) {
-        reorderChapterDownload(input: { chapterId: \$chapterId, to: \$to }) {
-          $_downloadStatusSelection
-        }
-      }
-    ''';
-    return await query(
-      mutStr,
-      variables: {'chapterId': chapterId, 'to': to < 0 ? 0 : to},
-      label: 'reorderChapterDownload',
-    );
-  }
-
-  /// Bulk reorder; each record is `(chapterId: id, to: index)`. Falls back to
-  /// sequential [reorderChapterDownload] calls when the bulk mutation fails.
-  Future<Map<String, dynamic>?> reorderChapterDownloads(
-    List<({int chapterId, int to})> reorders,
-  ) async {
-    if (reorders.isEmpty) return null;
-    if (reorders.length == 1) {
-      return reorderChapterDownload(reorders.first.chapterId, reorders.first.to);
-    }
-    const mutStr = '''
-      mutation(\$reorders: [ChapterDownloadReorderInput!]!) {
-        reorderChapterDownloads(input: { reorders: \$reorders }) {
-          $_downloadStatusSelection
-        }
-      }
-    ''';
-    final res = await query(
-      mutStr,
-      variables: {'reorders': buildDownloadReorderVariables(reorders)},
-      label: 'reorderChapterDownloads',
-    );
-    if (res != null) return res;
-    Map<String, dynamic>? last;
-    for (final r in reorders) {
-      last = await reorderChapterDownload(r.chapterId, r.to);
-    }
-    return last;
-  }
-
-  // ── ISS-084 B13: server / WebUI version + update info ─────────────────
-
-  /// `checkForServerUpdates` → list of `{channel, tag, url}` (empty when up
-  /// to date). Null on failure. Server calls GitHub, so uses the slow timeout.
-  Future<List<ServerUpdateInfo>?> checkForServerUpdates() async {
-    const q = '{ checkForServerUpdates { channel tag url } }';
-    final res = await query(q, label: 'checkForServerUpdates', op: GraphQLOp.slowRead);
-    final list = res?['checkForServerUpdates'];
-    if (list is! List) return null;
-    return [
-      for (final e in list)
-        if (e is Map) ServerUpdateInfo.fromMap(Map<String, dynamic>.from(e)),
-    ];
-  }
-
-  /// `aboutWebUI` → `{channel, tag, updateTimestamp}`.
-  Future<WebUIInfo?> fetchAboutWebUI() async {
-    const q = '{ aboutWebUI { channel tag updateTimestamp } }';
-    final res = await query(q, label: 'aboutWebUI', op: GraphQLOp.read);
-    final m = res?['aboutWebUI'];
-    return m is Map ? WebUIInfo.fromMap(Map<String, dynamic>.from(m)) : null;
-  }
-
-  /// `getWebUIUpdateStatus` → `{state, progress, info{channel, tag}}`.
-  /// state: IDLE | DOWNLOADING | FINISHED | ERROR.
-  Future<WebUIUpdateStatusInfo?> getWebUIUpdateStatus() async {
-    const q = '{ getWebUIUpdateStatus { state progress info { channel tag } } }';
-    final res = await query(q, label: 'getWebUIUpdateStatus', op: GraphQLOp.read);
-    final m = res?['getWebUIUpdateStatus'];
-    return m is Map ? WebUIUpdateStatusInfo.fromMap(Map<String, dynamic>.from(m)) : null;
-  }
-
-  /// `checkForWebUIUpdate` → `{channel, tag, updateAvailable}`.
-  Future<WebUIUpdateCheckInfo?> checkForWebUIUpdate() async {
-    const q = '{ checkForWebUIUpdate { channel tag updateAvailable } }';
-    final res = await query(q, label: 'checkForWebUIUpdate', op: GraphQLOp.slowRead);
-    final m = res?['checkForWebUIUpdate'];
-    return m is Map ? WebUIUpdateCheckInfo.fromMap(Map<String, dynamic>.from(m)) : null;
-  }
-
-  /// One-shot bundle for About / Server settings: aboutServer + aboutWebUI +
-  /// WebUI update status (+ optional server update check). Failing parts are null.
-  Future<ServerVersionBundle> fetchServerVersionBundle({bool includeUpdateCheck = false}) async {
-    Map<String, dynamic>? res;
-    // `platform` exists only on server v2.4.2366+. An unknown field fails the
-    // whole query (validation error → null data), so retry without it: one
-    // extra round trip on old servers, full data on new ones.
-    const withPlatform = '''
-      {
-        aboutServer { name version buildType buildTime github discord platform }
-        aboutWebUI { channel tag updateTimestamp }
-        getWebUIUpdateStatus { state progress info { channel tag } }
-      }
-    ''';
-    const legacy = '''
-      {
-        aboutServer { name version buildType buildTime github discord }
-        aboutWebUI { channel tag updateTimestamp }
-        getWebUIUpdateStatus { state progress info { channel tag } }
-      }
-    ''';
-    res = await query(withPlatform, label: 'fetchServerVersionBundle', op: GraphQLOp.read);
-    res ??= await query(legacy, label: 'fetchServerVersionBundle.legacy', op: GraphQLOp.read);
-    final about = res?['aboutServer'];
-    final web = res?['aboutWebUI'];
-    final st = res?['getWebUIUpdateStatus'];
-    return ServerVersionBundle(
-      aboutServer: about is Map ? Map<String, dynamic>.from(about) : null,
-      webUI: web is Map ? WebUIInfo.fromMap(Map<String, dynamic>.from(web)) : null,
-      webUIUpdateStatus:
-          st is Map ? WebUIUpdateStatusInfo.fromMap(Map<String, dynamic>.from(st)) : null,
-      serverUpdates: includeUpdateCheck ? await checkForServerUpdates() : null,
-    );
-  }
-
-  // ── ISS-073 B3: clear server cookies + cache ──────────────────────────
-
-  /// `clearCookiesAndCache` — for the reader/source "Clear cookies" button
-  /// (e.g. after a Cloudflare loop). Returns true on success.
-  Future<bool> clearCookiesAndCache() async {
-    const mutStr = '''
-      mutation {
-        clearCookiesAndCache(input: {}) {
-          clientMutationId
-        }
-      }
-    ''';
-    final res = await query(mutStr, label: 'clearCookiesAndCache');
-    return res != null;
-  }
-
-  Future<Map<String, dynamic>?> fetchChapterPages(int chapterId) async {
-    const mutStr = r'''
-      mutation($chapterId: Int!) {
-        fetchChapterPages(input: { chapterId: $chapterId }) {
-          pages
-        }
-      }
-    ''';
-    return await query(mutStr, variables: {'chapterId': chapterId}, label: 'fetchChapterPages', op: GraphQLOp.scrapeRead);
-  }
-
-  /// Internal helper: calls [query] and captures the transport-failure
-  /// classification of the final attempt atomically. Returns a record of
-  /// (data, wasTransportFailure). This avoids the race where a concurrent
-  /// request overwrites [lastRequestWasTransportFailure] between the caller's
-  /// `await query(...)` and its read of the shared flag.
-  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
-      _queryAndClassify(
-    String document, {
-    Map<String, dynamic>? variables,
-    String? label,
-    GraphQLOp? op,
-  }) async {
-    final data = await query(
-      document,
-      variables: variables,
-      label: label,
-      op: op,
-    );
-    // Capture immediately: no await between query returning and this read.
-    final wasTransportFailure = lastRequestWasTransportFailure;
-    return (data: data, wasTransportFailure: wasTransportFailure);
-  }
-
-  /// Public version of [updateChapterReadStatus] that returns the transport
-  /// failure classification atomically captured from the final attempt.
-  /// Use this instead of [updateChapterReadStatus] when the caller needs to
-  /// distinguish transport failures from GraphQL rejections for retry logic.
-  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
-      updateChapterReadStatusWithClassification(
-    int chapterId,
-    bool isRead,
-    int lastPageRead,
-  ) async {
-    const mutStr = r'''
-      mutation($id: Int!, $isRead: Boolean, $lastPageRead: Int) {
-        updateChapter(input: { id: $id, patch: { isRead: $isRead, lastPageRead: $lastPageRead } }) {
-          chapter {
-            id
-            isRead
-            lastPageRead
-          }
-        }
-      }
-    ''';
-    return _queryAndClassify(
-      mutStr,
-      variables: {'id': chapterId, 'isRead': isRead, 'lastPageRead': lastPageRead},
-      label: 'updateChapterReadStatus',
-    );
-  }
-
-  /// Public version of [updateChapterBookmark] with transport classification.
-  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
-      updateChapterBookmarkWithClassification(
-    int chapterId,
-    bool isBookmarked,
-  ) async {
-    const mutStr = r'''
-      mutation($id: Int!, $isBookmarked: Boolean) {
-        updateChapter(input: { id: $id, patch: { isBookmarked: $isBookmarked } }) {
-          chapter {
-            id
-            isBookmarked
-          }
-        }
-      }
-    ''';
-    return _queryAndClassify(
-      mutStr,
-      variables: {'id': chapterId, 'isBookmarked': isBookmarked},
-      label: 'updateChapterBookmark',
-    );
-  }
-
-  /// Public version of [createCategory] with transport classification.
-  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
-      createCategoryWithClassification(String name) async {
-    const mutStr = r'''
-      mutation($name: String!) {
-        createCategory(input: { name: $name }) {
-          category {
-            id
-            name
-            order
-          }
-        }
-      }
-    ''';
-    return _queryAndClassify(
-      mutStr,
-      variables: {'name': name},
-      label: 'createCategory',
-    );
-  }
-
-  /// Public version of [updateCategoryName] with transport classification.
-  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
-      updateCategoryNameWithClassification(int categoryId, String newName) async {
-    const mutStr = r'''
-      mutation($id: Int!, $name: String!) {
-        updateCategory(input: { id: $id, patch: { name: $name } }) {
-          category {
-            id
-            name
-          }
-        }
-      }
-    ''';
-    return _queryAndClassify(
-      mutStr,
-      variables: {'id': categoryId, 'name': newName},
-      label: 'updateCategoryName',
-    );
-  }
-
-  /// Public version of [setMangaCategories] with transport classification.
-  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
-      setMangaCategoriesWithClassification(
-    int mangaId,
-    List<int> categoryIds, {
-    List<int>? existingCategoryIds,
-  }) async {
-    if (existingCategoryIds != null) {
-      final toAdd = categoryIds.where((c) => !existingCategoryIds.contains(c)).toList();
-      final toRemove = existingCategoryIds.where((c) => !categoryIds.contains(c)).toList();
-      if (toAdd.isNotEmpty || toRemove.isNotEmpty) {
-        const patchMut = r'''
-          mutation($id: Int!, $add: [Int!]!, $remove: [Int!]!) {
-            updateMangaCategories(input: { id: $id, patch: { addToCategories: $add, removeFromCategories: $remove } }) {
-              clientMutationId
-            }
-          }
-        ''';
-        final res = await _queryAndClassify(
-          patchMut,
-          variables: {'id': mangaId, 'add': toAdd, 'remove': toRemove},
-          label: 'updateMangaCategories',
-        );
-        if (res.data != null) return res;
-      }
-    }
-    // Modern Suwayomi's UpdateMangaCategoriesPatchInput has no `categories`
-    // field — only addToCategories / clearCategories / removeFromCategories.
-    // "Replace all" is therefore a clear + add (verified against live schema).
-    const mutStr = r'''
-      mutation($id: Int!, $categories: [Int!]!) {
-        updateMangaCategories(input: { id: $id, patch: { clearCategories: true, addToCategories: $categories } }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return _queryAndClassify(
-      mutStr,
-      variables: {'id': mangaId, 'categories': categoryIds},
-      label: 'setMangaCategories',
-    );
-  }
-
-  Future<Map<String, dynamic>?> updateChapterReadStatus(int chapterId, bool isRead, int lastPageRead) async {
-    const mutStr = r'''
-      mutation($id: Int!, $isRead: Boolean, $lastPageRead: Int) {
-        updateChapter(input: { id: $id, patch: { isRead: $isRead, lastPageRead: $lastPageRead } }) {
-          chapter {
-            id
-            isRead
-            lastPageRead
-          }
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'id': chapterId, 'isRead': isRead, 'lastPageRead': lastPageRead},
-      label: 'updateChapterReadStatus',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> trackProgress(int mangaId) async {
-    return await query(
-      kTrackProgressMutation,
-      variables: {'mangaId': mangaId},
-      label: 'trackProgress',
-    );
-  }
-
-  Future<Map<String, dynamic>?> fetchTrackRecords(int mangaId) async {
-    const queryStr = r'''
-      query($mangaId: Int!) {
-        trackRecords(condition: { mangaId: $mangaId }) {
-          nodes {
-            id
-            mangaId
-            trackerId
-            remoteId
-            remoteUrl
-            title
-            status
-            lastChapterRead
-            totalChapters
-            score
-            startDate
-            finishDate
-          }
-        }
-      }
-    ''';
-    return await query(queryStr, variables: {'mangaId': mangaId}, label: 'fetchTrackRecords');
-  }
-
-  Future<Map<String, dynamic>?> searchTracker(int trackerId, String queryStr) async {
-    const query = r'''
-      query($trackerId: Int!, $query: String!) {
-        searchTracker(input: { trackerId: $trackerId, query: $query }) {
-          trackSearches {
-            id
-            title
-            totalChapters
-            score
-            coverUrl
-            trackingUrl
-            summary
-            remoteId
-          }
-        }
-      }
-    ''';
-    return await this.query(query, variables: {'trackerId': trackerId, 'query': queryStr}, label: 'searchTracker');
-  }
-
-  Future<Map<String, dynamic>?> bindTrack(int mangaId, int trackerId, dynamic remoteId, {bool? isPrivate}) async {
-    final privVar = isPrivate == null ? '' : r', $private: Boolean';
-    final privArg = isPrivate == null ? '' : r', private: $private';
-    final mutStr = '''
-      mutation(\$mangaId: Int!, \$trackerId: Int!, \$remoteId: LongString!$privVar) {
-        bindTrack(input: { mangaId: \$mangaId, trackerId: \$trackerId, remoteId: \$remoteId$privArg }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return await query(mutStr, variables: {
-      'mangaId': mangaId,
-      'trackerId': trackerId,
-      'remoteId': remoteId.toString(),
-      if (isPrivate != null) 'private': isPrivate,
-    }, label: 'bindTrack');
-  }
-
-  Future<Map<String, dynamic>?> unbindTrack(int recordId) async {
-    const mutStr = r'''
-      mutation($recordId: Int!) {
-        unbindTrack(input: { recordId: $recordId, deleteRemoteTrack: false }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return await query(mutStr, variables: {'recordId': recordId}, label: 'unbindTrack');
-  }
-
-  Future<Map<String, dynamic>?> updateTrack({
-    required int recordId,
-    required double lastChapterRead,
-    int? status,
-    String? scoreString,
-    String? startDate,
-    String? finishDate,
-    bool? isPrivate,
-  }) async {
-    // `private` (ISS-083) is only named when set, so servers predating
-    // private tracking still accept the mutation.
-    final privVar = isPrivate == null ? '' : r', $private: Boolean';
-    final privArg = isPrivate == null ? '' : r', private: $private';
-    final mutStr = '''
-      mutation(\$recordId: Int!, \$lastChapterRead: Float, \$status: Int, \$scoreString: String, \$startDate: LongString, \$finishDate: LongString$privVar) {
-        updateTrack(input: {
-          recordId: \$recordId,
-          lastChapterRead: \$lastChapterRead,
-          status: \$status,
-          scoreString: \$scoreString,
-          startDate: \$startDate,
-          finishDate: \$finishDate$privArg
-        }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return await query(mutStr, variables: {
-      'recordId': recordId,
-      'lastChapterRead': lastChapterRead,
-      'status': status,
-      'scoreString': scoreString,
-      'startDate': startDate,
-      'finishDate': finishDate,
-      if (isPrivate != null) 'private': isPrivate,
-    }, label: 'updateTrack');
-  }
-
-  Future<Map<String, dynamic>?> updateMangaCategories(int mangaId, List<int> categoryIds) async {
-    const mutStr = r'''
-      mutation($id: Int!, $categoryIds: [Int!]!) {
-        updateMangaCategories(input: { id: $id, patch: { addToCategories: $categoryIds } }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return await query(mutStr, variables: {'id': mangaId, 'categoryIds': categoryIds}, label: 'updateMangaCategories');
-  }
-
-  Future<Map<String, dynamic>?> updateChapterBookmark(int chapterId, bool isBookmarked) async {
-    const mutStr = r'''
-      mutation($id: Int!, $isBookmarked: Boolean) {
-        updateChapter(input: { id: $id, patch: { isBookmarked: $isBookmarked } }) {
-          chapter {
-            id
-            isBookmarked
-          }
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'id': chapterId, 'isBookmarked': isBookmarked},
-      label: 'updateChapterBookmark',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> updateMangaLibraryState(int mangaId, bool inLibrary) async {
-    const mutStr = r'''
-      mutation($id: Int!, $inLibrary: Boolean) {
-        updateManga(input: { id: $id, patch: { inLibrary: $inLibrary } }) {
-          manga {
-            id
-            inLibrary
-          }
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'id': mangaId, 'inLibrary': inLibrary},
-      label: 'updateMangaLibraryState',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> createCategory(String name) async {
-    const mutStr = r'''
-      mutation($name: String!) {
-        createCategory(input: { name: $name }) {
-          category {
-            id
-            name
-            order
-          }
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'name': name},
-      label: 'createCategory',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> updateCategoryName(int categoryId, String newName) async {
-    const mutStr = r'''
-      mutation($id: Int!, $name: String!) {
-        updateCategory(input: { id: $id, patch: { name: $name } }) {
-          category {
-            id
-            name
-          }
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'id': categoryId, 'name': newName},
-      label: 'updateCategoryName',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> updateCategoryOrder(int categoryId, int position) async {
-    const mutStr = r'''
-      mutation($id: Int!, $position: Int!) {
-        updateCategoryOrder(input: { id: $id, position: $position }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'id': categoryId, 'position': position},
-      label: 'updateCategoryOrder',
-    )).data;
-  }
-
-
-  /// Bulk `updateChapters` (ISS-069). Falls back to per-id `updateChapter*`
-  /// when [ids] has a single element or the bulk mutation fails.
-  Future<Map<String, dynamic>?> updateChapters(
-    List<int> ids, {
-    bool? isRead,
-    bool? isBookmarked,
-    int? lastPageRead,
-  }) async {
-    if (ids.isEmpty) return {'chapters': <dynamic>[]};
-    final patch = <String, dynamic>{};
-    if (isRead != null) patch['isRead'] = isRead;
-    if (isBookmarked != null) patch['isBookmarked'] = isBookmarked;
-    if (lastPageRead != null) patch['lastPageRead'] = lastPageRead;
-    if (patch.isEmpty) return null;
-
-    if (ids.length == 1) {
-      final id = ids.first;
-      if (isBookmarked != null && isRead == null && lastPageRead == null) {
-        return updateChapterBookmark(id, isBookmarked);
-      }
-      if (isRead != null || lastPageRead != null) {
-        return updateChapterReadStatus(id, isRead ?? false, lastPageRead ?? 0);
-      }
-    }
-
-    const mutStr = r'''
-      mutation($ids: [Int!]!, $patch: UpdateChapterPatchInput!) {
-        updateChapters(input: { ids: $ids, patch: $patch }) {
-          chapters { id isRead isBookmarked lastPageRead }
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'ids': ids, 'patch': patch},
-      label: 'updateChapters',
-    )).data;
-  }
-
-  /// Bulk delete downloaded chapters (ISS-069). Per-id fallback on failure.
-  Future<Map<String, dynamic>?> deleteDownloadedChapters(List<int> ids) async {
-    if (ids.isEmpty) return {'chapters': <dynamic>[]};
-    if (ids.length == 1) {
-      return deleteDownloadedChapter(ids.first);
-    }
-    const mutStr = r'''
-      mutation($ids: [Int!]!) {
-        deleteDownloadedChapters(input: { ids: $ids }) {
-          chapters { id isDownloaded }
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'ids': ids},
-      label: 'deleteDownloadedChapters',
-    )).data;
-  }
-
-  /// Mark many chapters read in one round-trip (UIS mark-previous-read).
-  Future<bool> markChaptersRead(List<int> ids, {int lastPageRead = 0}) async {
-    final res = await updateChapters(ids, isRead: true, lastPageRead: lastPageRead);
-    return res != null;
-  }
-
-  /// Delete all given downloaded chapter ids (UIS delete-all downloads).
-  Future<bool> deleteAllDownloadedChapters(List<int> ids) async {
-    final res = await deleteDownloadedChapters(ids);
-    return res != null;
-  }
-
-  /// Patch category include flags / name (ISS-071). [includeInUpdate] /
-  /// [includeInDownload] are INCLUDE | EXCLUDE | UNSET.
-  Future<Map<String, dynamic>?> updateCategoryPatch(
-    int categoryId, {
-    String? name,
-    String? includeInUpdate,
-    String? includeInDownload,
-    bool? isDefault,
-  }) async {
-    final patch = <String, dynamic>{};
-    if (name != null) patch['name'] = name;
-    if (includeInUpdate != null) {
-      patch['includeInUpdate'] = parseIncludeOrExclude(includeInUpdate);
-    }
-    if (includeInDownload != null) {
-      patch['includeInDownload'] = parseIncludeOrExclude(includeInDownload);
-    }
-    if (isDefault != null) patch['default'] = isDefault;
-    if (patch.isEmpty) return null;
-    const mutStr = r'''
-      mutation($id: Int!, $patch: UpdateCategoryPatchInput!) {
-        updateCategory(input: { id: $id, patch: $patch }) {
-          category {
-            id
-            name
-            default
-            includeInUpdate
-            includeInDownload
-          }
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'id': categoryId, 'patch': patch},
-      label: 'updateCategoryPatch',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> setCategoryIncludeInUpdate(
-    int categoryId,
-    String value,
-  ) =>
-      updateCategoryPatch(categoryId, includeInUpdate: value);
-
-  Future<Map<String, dynamic>?> setCategoryIncludeInDownload(
-    int categoryId,
-    String value,
-  ) =>
-      updateCategoryPatch(categoryId, includeInDownload: value);
-
-  /// "Update this category" — thin alias for [triggerServerLibraryUpdate].
-  Future<Map<String, dynamic>?> updateLibraryForCategories(List<int> categoryIds) =>
-      triggerServerLibraryUpdate(categoryIds: categoryIds);
-
-  Future<Map<String, dynamic>?> startDownloader() async {
-    const mutStr = r'''
-      mutation {
-        startDownloader(input: {}) {
-          clientMutationId
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      label: 'startDownloader',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> stopDownloader() async {
-    const mutStr = r'''
-      mutation {
-        stopDownloader(input: {}) {
-          clientMutationId
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      label: 'stopDownloader',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> clearDownloader() async {
-    const mutStr = r'''
-      mutation {
-        clearDownloader(input: {}) {
-          clientMutationId
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      label: 'clearDownloader',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> deleteCategory(int categoryId) async {
-    const mutStr = r'''
-      mutation($categoryId: Int!) {
-        deleteCategory(input: { categoryId: $categoryId }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'categoryId': categoryId},
-      label: 'deleteCategory',
-    )).data;
-  }
-
-  Future<Map<String, dynamic>?> setMangaCategories(
-    int mangaId,
-    List<int> categoryIds, {
-    List<int>? existingCategoryIds,
-  }) async {
-    if (existingCategoryIds != null) {
-      final toAdd = categoryIds.where((c) => !existingCategoryIds.contains(c)).toList();
-      final toRemove = existingCategoryIds.where((c) => !categoryIds.contains(c)).toList();
-      const patchMut = r'''
-        mutation($id: Int!, $add: [Int!], $remove: [Int!]) {
-          updateMangaCategories(input: { id: $id, patch: { addToCategories: $add, removeFromCategories: $remove } }) {
-            clientMutationId
-          }
-        }
-      ''';
-      final res = await _queryAndClassify(patchMut, variables: {'id': mangaId, 'add': toAdd, 'remove': toRemove}, label: 'updateMangaCategories');
-      if (res.data != null) return res.data;
-    }
-    // Modern Suwayomi's UpdateMangaCategoriesPatchInput has no `categories`
-    // field — only addToCategories / clearCategories / removeFromCategories.
-    // "Replace all" is therefore a clear + add (verified against live schema).
-    const mutStr = r'''
-      mutation($id: Int!, $categories: [Int!]!) {
-        updateMangaCategories(input: { id: $id, patch: { clearCategories: true, addToCategories: $categories } }) {
-          clientMutationId
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {'id': mangaId, 'categories': categoryIds},
-      label: 'setMangaCategories',
-    )).data;
-  }
-
-  // ── ISS-077 B9: per-manga meta (sunfire_* namespace) ───────────────────
-
   /// Namespace for every key Sunfire writes into Suwayomi manga meta, so it
   /// never collides with the WebUI's `webUI_*` / other clients' keys.
   static const String kSunfireMetaPrefix = 'sunfire_';
@@ -2461,560 +884,4 @@ class GraphQLClientService {
   static String sunfireMetaKey(String key) =>
       key.startsWith(kSunfireMetaPrefix) ? key : '$kSunfireMetaPrefix$key';
 
-  /// `setMangaMeta` with the key forced into the `sunfire_` namespace.
-  /// Returns true on success.
-  Future<bool> setMangaMeta(int mangaId, String key, String value) async {
-    if (mangaId <= 0 || key.trim().isEmpty) return false;
-    const mutStr = r'''
-      mutation($mangaId: Int!, $key: String!, $value: String!) {
-        setMangaMeta(input: { meta: { mangaId: $mangaId, key: $key, value: $value } }) {
-          meta { key value }
-        }
-      }
-    ''';
-    final res = await _queryAndClassify(
-      mutStr,
-      variables: {'mangaId': mangaId, 'key': sunfireMetaKey(key.trim()), 'value': value},
-      label: 'setMangaMeta',
-    );
-    return res.data != null;
-  }
-
-  /// `deleteMangaMeta` (key namespaced like [setMangaMeta]).
-  Future<bool> deleteMangaMeta(int mangaId, String key) async {
-    if (mangaId <= 0 || key.trim().isEmpty) return false;
-    const mutStr = r'''
-      mutation($mangaId: Int!, $key: String!) {
-        deleteMangaMeta(input: { mangaId: $mangaId, key: $key }) {
-          clientMutationId
-        }
-      }
-    ''';
-    final res = await _queryAndClassify(
-      mutStr,
-      variables: {'mangaId': mangaId, 'key': sunfireMetaKey(key.trim())},
-      label: 'deleteMangaMeta',
-    );
-    return res.data != null;
-  }
-
-  /// All `sunfire_*` meta for a manga as `{key: value}` (prefix kept).
-  /// Null on failure.
-  Future<Map<String, String>?> fetchSunfireMangaMeta(int mangaId) async {
-    const q = r'''
-      query($id: Int!) {
-        manga(id: $id) { meta { key value } }
-      }
-    ''';
-    final res = await query(q, variables: {'id': mangaId}, label: 'fetchSunfireMangaMeta', op: GraphQLOp.read);
-    final metas = (res?['manga'] as Map?)?['meta'];
-    if (metas is! List) return null;
-    return {
-      for (final m in metas)
-        if (m is Map && (m['key']?.toString() ?? '').startsWith(kSunfireMetaPrefix))
-          m['key'].toString(): m['value']?.toString() ?? '',
-    };
-  }
-
-  /// `deleteGlobalMeta(key)`. Returns true on success.
-  Future<bool> deleteGlobalMeta(String key) async {
-    const mutStr = r'''
-      mutation($key: String!) {
-        deleteGlobalMeta(input: { key: $key }) {
-          clientMutationId
-        }
-      }
-    ''';
-    final res = await query(mutStr, variables: {'key': key}, label: 'deleteGlobalMeta');
-    return res != null;
-  }
-
-  Future<Map<String, dynamic>?> setGlobalMeta(String key, String value) async {
-    try {
-      const mutStr = r'''
-        mutation($key: String!, $value: String!) {
-          setGlobalMeta(input: { meta: { key: $key, value: $value } }) {
-            meta {
-              key
-              value
-            }
-          }
-        }
-      ''';
-      return await query(mutStr, variables: {'key': key, 'value': value}, label: 'setGlobalMeta');
-    } catch (_) {
-      return null;
-    }
-  }
-
-  // ── SERVER SETTINGS INTEGRATION ────────────────────────────────────────
-
-  /// Fetch server + per-user settings (ISS-064/065).
-  ///
-  /// Secrets (`authPassword`, `socksProxyPassword`, `syncYomiApiKey`,
-  /// `databasePassword`) are intentionally not selected — screens show
-  /// set/not-set from empty placeholders. Per-user keys are read from
-  /// `userSettings` and merged into the returned `settings` map for
-  /// existing callers.
-  Future<Map<String, dynamic>?> fetchServerSettings() async {
-    const queryStr = '''
-      query {
-        settings {
-          authMode
-          authUsername
-          autoBackupIncludeCategories
-          autoBackupIncludeChapters
-          autoBackupIncludeClientData
-          autoBackupIncludeHistory
-          autoBackupIncludeManga
-          autoBackupIncludeServerSettings
-          autoBackupIncludeTracking
-          backupInterval
-          backupPath
-          backupTTL
-          backupTime
-          debugLogsEnabled
-          downloadAsCbz
-          downloadsPath
-          electronPath
-          flareSolverrAsResponseFallback
-          flareSolverrEnabled
-          flareSolverrSessionName
-          flareSolverrSessionTtl
-          flareSolverrTimeout
-          flareSolverrUrl
-          globalUpdateInterval
-          initialOpenInBrowserEnabled
-          ip
-          kcefEnabled
-          localSourcePath
-          maxLogFiles
-          maxLogFileSize
-          maxLogFolderSize
-          maxSourcesInParallel
-          port
-          socksProxyEnabled
-          socksProxyHost
-          socksProxyPort
-          socksProxyUsername
-          socksProxyVersion
-          systemTrayEnabled
-          useHikariConnectionPool
-          webUIChannel
-          webUIFlavor
-          webUIInterface
-          webUIUpdateCheckInterval
-        }
-        userSettings {
-          autoDownloadIgnoreReUploads
-          autoDownloadNewChapters
-          autoDownloadNewChaptersLimit
-          excludeCompleted
-          excludeEntryWithUnreadChapters
-          excludeNotStarted
-          excludeUnreadChapters
-          opdsEnablePageReadProgress
-          opdsItemsPerPage
-          opdsMarkAsReadOnDownload
-          opdsShowOnlyDownloadedChapters
-          opdsShowOnlyUnreadChapters
-          opdsSkipChapterMetadataFeed
-          opdsUseBinaryFileSizes
-          syncDataCategories
-          syncDataChapters
-          syncDataHistory
-          syncDataManga
-          syncDataTracking
-          syncYomiEnabled
-          syncYomiHost
-          updateMangas
-        }
-        aboutServer {
-          version
-          buildTime
-        }
-      }
-    ''';
-    final res = await query(queryStr, label: 'fetchServerSettings');
-    if (res == null) return null;
-    final settings = Map<String, dynamic>.from(
-      (res['settings'] as Map?)?.cast<String, dynamic>() ?? const {},
-    );
-    final fsTimeout = settings['flareSolverrTimeout'];
-    if (fsTimeout is num && fsTimeout > 0) {
-      flareSolverrTimeoutSeconds = fsTimeout.toInt();
-    }
-    final user = (res['userSettings'] as Map?)?.cast<String, dynamic>();
-    if (user != null) {
-      settings.addAll(user);
-    }
-    return {
-      'settings': settings,
-      if (user != null) 'userSettings': user,
-      if (res['aboutServer'] != null) 'aboutServer': res['aboutServer'],
-    };
-  }
-
-  /// Update server-wide settings via `setSettings` (PartialSettingsTypeInput).
-  Future<Map<String, dynamic>?> updateServerSettings(Map<String, dynamic> partialSettings) async {
-    // Reject accidental per-user or unknown keys before they hit GraphQL validation.
-    final cleaned = <String, dynamic>{};
-    for (final e in partialSettings.entries) {
-      if (isServerSettingsInputField(e.key)) {
-        cleaned[e.key] = e.value;
-      }
-    }
-    if (cleaned.isEmpty) return null;
-    const mutStr = r'''
-      mutation SetServerSettings($settings: PartialSettingsTypeInput!) {
-        setSettings(input: { settings: $settings }) {
-          settings {
-            authMode
-            authUsername
-            debugLogsEnabled
-            downloadAsCbz
-            downloadsPath
-            flareSolverrEnabled
-            globalUpdateInterval
-            ip
-            localSourcePath
-            maxSourcesInParallel
-            port
-            socksProxyEnabled
-            systemTrayEnabled
-            webUIChannel
-            webUIFlavor
-            webUIInterface
-            webUIUpdateCheckInterval
-          }
-        }
-      }
-    ''';
-    return await query(mutStr, variables: {'settings': cleaned}, label: 'updateServerSettings');
-  }
-
-  /// Update per-user settings via `setUserSettings` (PartialUserSettingsTypeInput).
-  Future<Map<String, dynamic>?> updateUserSettings(Map<String, dynamic> partialSettings) async {
-    final cleaned = <String, dynamic>{};
-    for (final e in partialSettings.entries) {
-      if (isUserSettingsInputField(e.key)) {
-        cleaned[e.key] = e.value;
-      }
-    }
-    if (cleaned.isEmpty) return null;
-    const mutStr = r'''
-      mutation SetUserSettings($userSettings: PartialUserSettingsTypeInput!) {
-        setUserSettings(input: { userSettings: $userSettings }) {
-          userSettings {
-            autoDownloadIgnoreReUploads
-            autoDownloadNewChapters
-            autoDownloadNewChaptersLimit
-            excludeCompleted
-            excludeEntryWithUnreadChapters
-            excludeNotStarted
-            excludeUnreadChapters
-            opdsEnablePageReadProgress
-            opdsItemsPerPage
-            opdsMarkAsReadOnDownload
-            opdsShowOnlyDownloadedChapters
-            opdsShowOnlyUnreadChapters
-            opdsSkipChapterMetadataFeed
-            opdsUseBinaryFileSizes
-            syncYomiEnabled
-            syncYomiHost
-            updateMangas
-          }
-        }
-      }
-    ''';
-    return await query(mutStr, variables: {'userSettings': cleaned}, label: 'updateUserSettings');
-  }
-
-  /// Route a single key to setSettings or setUserSettings (ISS-064).
-  /// Returns the GraphQL data map on success, or null on failure.
-  Future<Map<String, dynamic>?> persistSetting(String key, dynamic val) async {
-    if (isUserSettingsInputField(key)) {
-      return updateUserSettings({key: val});
-    }
-    if (isServerSettingsInputField(key)) {
-      return updateServerSettings({key: val});
-    }
-    await LoggerService.instance.logWarning(
-      'persistSetting: unknown settings key "$key"',
-      'GraphQL',
-    );
-    return null;
-  }
-
-  /// Trigger global library update on server
-  Future<Map<String, dynamic>?> triggerGlobalLibraryUpdate() async {
-    const mutStr = '''
-      mutation {
-        updateLibrary(input: {}) {
-          clientMutationId
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      label: 'updateLibrary',
-    )).data;
-  }
-
-  /// Clear cached images on server
-  Future<Map<String, dynamic>?> clearServerCachedImages() async {
-    const mutStr = '''
-      mutation {
-        clearCachedImages(input: {}) {
-          clientMutationId
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      label: 'clearCachedImages',
-    )).data;
-  }
-
-  /// Create immediate backup on server with options
-  Future<Map<String, dynamic>?> createServerBackup({
-    bool includeCategories = true,
-    bool includeChapters = true,
-    bool includeHistory = true,
-    bool includeTracking = true,
-    bool includeClientData = true,
-  }) async {
-    const mutStr = r'''
-      mutation CreateBackup($flags: PartialBackupFlagsInput) {
-        createBackup(input: { flags: $flags }) {
-          clientMutationId
-          url
-        }
-      }
-    ''';
-    return (await _queryAndClassify(
-      mutStr,
-      variables: {
-        'flags': {
-          'includeManga': true,
-          'includeCategories': includeCategories,
-          'includeChapters': includeChapters,
-          'includeHistory': includeHistory,
-          'includeTracking': includeTracking,
-          'includeClientData': includeClientData,
-        },
-      },
-      label: 'createBackup',
-    )).data;
-  }
-
-  /// Query restore status for ongoing backup restoration
-  Future<Map<String, dynamic>?> fetchRestoreStatus(String restoreId) async {
-    const queryStr = r'''
-      query RestoreStatus($restoreId: String!) {
-        restoreStatus(id: $restoreId) {
-          mangaProgress
-          state
-          totalManga
-        }
-      }
-    ''';
-    return await query(queryStr, variables: {'restoreId': restoreId}, label: 'fetchRestoreStatus');
-  }
-
-  /// Fetch library changes since [since] using real Suwayomi filters.
-  ///
-  /// There is no `delta` / `mangaByIds` root field on Suwayomi. This uses
-  /// `mangas(filter: lastFetchedAt/chaptersLastFetchedAt > since)` and
-  /// `chapters(filter: fetchedAt > since, inLibrary)` — the same filter
-  /// surface as [fetchUpdatesChapters].
-  ///
-  /// Returns `{ manga: [...nodes], chapters: [...nodes], categories: [...] }`.
-  Future<Map<String, dynamic>?> fetchDelta({
-    required DateTime since,
-    Set<int>? mangaIds,
-    Set<int>? categoryIds,
-  }) async {
-    final sinceSec = since.millisecondsSinceEpoch ~/ 1000;
-    if (sinceSec <= 0) {
-      // Epoch zero means "full sync" — refuse invent-delta theater; callers
-      // should use the existing full library sync path instead.
-      await LoggerService.instance.logWarning(
-        'fetchDelta: since=$since is a full-history request; use fetchLibrary',
-        'GraphQL',
-      );
-      return null;
-    }
-
-    final mangaIdFilter = (mangaIds != null && mangaIds.isNotEmpty)
-        ? ', id: { in: [${mangaIds.join(',')}] }'
-        : '';
-    final chapterMangaIdFilter = (mangaIds != null && mangaIds.isNotEmpty)
-        ? ', mangaId: { in: [${mangaIds.join(',')}] }'
-        : '';
-    final categoryFilter = (categoryIds != null && categoryIds.isNotEmpty)
-        ? ', categoryId: { in: [${categoryIds.join(',')}] }'
-        : '';
-
-    final mangaQuery = '''
-      {
-        mangas(
-          filter: {
-            inLibrary: { equalTo: true }
-            or: [
-              { lastFetchedAt: { greaterThan: "$sinceSec" } }
-              { chaptersLastFetchedAt: { greaterThan: "$sinceSec" } }
-            ]
-            $mangaIdFilter
-            $categoryFilter
-          }
-          first: 200
-        ) {
-          nodes {
-            id
-            title
-            author
-            artist
-            description
-            thumbnailUrl
-            status
-            inLibrary
-            inLibraryAt
-            url
-            realUrl
-            unreadCount
-            source { displayName name }
-            categories { nodes { id } }
-          }
-        }
-      }
-    ''';
-
-    final chapterQuery = '''
-      {
-        chapters(
-          filter: {
-            inLibrary: { equalTo: true }
-            fetchedAt: { greaterThan: "$sinceSec" }
-            $chapterMangaIdFilter
-          }
-          order: [{ by: FETCHED_AT, byType: DESC }]
-          first: 500
-        ) {
-          nodes {
-            id
-            name
-            chapterNumber
-            url
-            realUrl
-            pageCount
-            isRead
-            isBookmarked
-            lastPageRead
-            lastReadAt
-            isDownloaded
-            uploadDate
-            fetchedAt
-            mangaId
-          }
-        }
-      }
-    ''';
-
-    final mangaData = await query(mangaQuery, label: 'fetchDelta.mangas', op: GraphQLOp.read);
-    final chapterData =
-        await query(chapterQuery, label: 'fetchDelta.chapters', op: GraphQLOp.read);
-
-    if (mangaData == null && chapterData == null) return null;
-
-    final mangaNodes = (mangaData?['mangas'] is Map)
-        ? ((mangaData!['mangas'] as Map)['nodes'] as List? ?? const <dynamic>[])
-        : const <dynamic>[];
-    final chapterNodes = (chapterData?['chapters'] is Map)
-        ? ((chapterData!['chapters'] as Map)['nodes'] as List? ??
-            const <dynamic>[])
-        : const <dynamic>[];
-
-    return {
-      'manga': mangaNodes
-          .whereType<Map<dynamic, dynamic>>()
-          .map((m) => Map<String, dynamic>.from(m))
-          .toList(),
-      'chapters': chapterNodes
-          .whereType<Map<dynamic, dynamic>>()
-          .map((c) => Map<String, dynamic>.from(c))
-          .toList(),
-      'categories': <Map<String, dynamic>>[],
-    };
-  }
-
-  /// Fetch specific manga by IDs via `mangas(filter: { id: { in: ... } })`.
-  Future<List<Map<String, dynamic>>?> fetchMangaByIds(List<int> mangaIds) async {
-    if (mangaIds.isEmpty) return [];
-    final ids = mangaIds.where((id) => id > 0).toList();
-    if (ids.isEmpty) return [];
-
-    final queryStr = '''
-      {
-        mangas(filter: { id: { in: [${ids.join(',')}] } }, first: ${ids.length}) {
-          nodes {
-            id
-            title
-            author
-            artist
-            description
-            thumbnailUrl
-            status
-            inLibrary
-            inLibraryAt
-            url
-            realUrl
-            unreadCount
-            source { displayName name }
-            categories { nodes { id } }
-          }
-        }
-      }
-    ''';
-
-    final data = await query(queryStr, label: 'fetchMangaByIds', op: GraphQLOp.read);
-    if (data == null || data['mangas'] == null) return null;
-    final nodes = (data['mangas'] as Map)['nodes'] as List?;
-    return nodes
-        ?.whereType<Map<dynamic, dynamic>>()
-        .map((m) => Map<String, dynamic>.from(m))
-        .toList();
-  }
-
-  /// Fetch specific categories by IDs via `categories(filter: { id: { in: ... } })`.
-  Future<List<Map<String, dynamic>>?> fetchCategoriesByIds(List<int> categoryIds) async {
-    if (categoryIds.isEmpty) return [];
-    final ids = categoryIds.where((id) => id > 0).toList();
-    if (ids.isEmpty) return [];
-
-    final queryStr = '''
-      {
-        categories(filter: { id: { in: [${ids.join(',')}] } }, first: ${ids.length}) {
-          nodes {
-            id
-            name
-            order
-            default
-            includeInUpdate
-            includeInDownload
-            isDefaultCategory
-          }
-        }
-      }
-    ''';
-
-    final data =
-        await query(queryStr, label: 'fetchCategoriesByIds', op: GraphQLOp.read);
-    if (data == null || data['categories'] == null) return null;
-    final nodes = (data['categories'] as Map)['nodes'] as List?;
-    return nodes
-        ?.whereType<Map<dynamic, dynamic>>()
-        .map((m) => Map<String, dynamic>.from(m))
-        .toList();
-  }
 }

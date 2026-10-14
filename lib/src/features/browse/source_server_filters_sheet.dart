@@ -10,31 +10,53 @@ Future<List<SourceFilterChange>?> showSourceServerFiltersSheet(
   BuildContext context, {
   required String sourceId,
   List<SourceFilterChange>? initialChanges,
+  List<SourceFilter>? preloadedFilters,
 }) async {
   return showModalBottomSheet<List<SourceFilterChange>>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (ctx) => _SourceServerFiltersSheet(
+    builder: (ctx) => SourceServerFiltersSheet(
       sourceId: sourceId,
       initialChanges: initialChanges ?? const [],
+      preloadedFilters: preloadedFilters,
     ),
   );
 }
 
-class _SourceServerFiltersSheet extends StatefulWidget {
-  const _SourceServerFiltersSheet({required this.sourceId, required this.initialChanges});
+class SourceServerFiltersSheet extends StatefulWidget {
+  const SourceServerFiltersSheet({
+    super.key,
+    required this.sourceId,
+    required this.initialChanges,
+    this.preloadedFilters,
+  });
   final String sourceId;
   final List<SourceFilterChange> initialChanges;
 
+  /// Filters already fetched by the caller; skips a second network fetch.
+  final List<SourceFilter>? preloadedFilters;
+
   @override
-  State<_SourceServerFiltersSheet> createState() => _SourceServerFiltersSheetState();
+  State<SourceServerFiltersSheet> createState() => _SourceServerFiltersSheetState();
 }
 
-class _SourceServerFiltersSheetState extends State<_SourceServerFiltersSheet> {
+class _SourceServerFiltersSheetState extends State<SourceServerFiltersSheet> {
   bool _loading = true;
   List<SourceFilter> _filters = const [];
   final Map<int, Object?> _values = {};
+  final Map<int, TextEditingController> _textControllers = {};
+
+  TextEditingController _textCtrl(int key) =>
+      _textControllers.putIfAbsent(key, () => TextEditingController(text: '${_values[key] ?? ''}'));
+
+  @override
+  void dispose() {
+    for (final c in _textControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -43,20 +65,36 @@ class _SourceServerFiltersSheetState extends State<_SourceServerFiltersSheet> {
   }
 
   Future<void> _load() async {
-    final data = await GraphQLClientService.instance.fetchSourceFiltersAndPreferences(widget.sourceId);
+    final pre = widget.preloadedFilters;
+    final List<SourceFilter> loaded;
+    if (pre != null) {
+      loaded = pre;
+    } else {
+      final data = await GraphQLClientService.instance.fetchSourceFiltersAndPreferences(widget.sourceId);
+      loaded = data?.filters ?? const [];
+    }
     if (!mounted) return;
     setState(() {
-      _filters = data?.filters ?? const [];
+      _filters = loaded;
       for (final f in _filters) {
         _values[f.position] = _defaultFor(f);
       }
       // Overlay prior applied changes roughly for checkBox/text/select/triState/sort.
+      // Restore prior changes, including group children (e.g. genres).
+      void restore(SourceFilterChange c, int key) {
+        if (c.checkBoxState != null) _values[key] = c.checkBoxState;
+        if (c.triState != null) _values[key] = c.triState;
+        if (c.textState != null) _values[key] = c.textState;
+        if (c.selectState != null) _values[key] = c.selectState;
+        if (c.sortState != null) _values[key] = c.sortState;
+      }
       for (final c in widget.initialChanges) {
-        if (c.checkBoxState != null) _values[c.position] = c.checkBoxState;
-        if (c.triState != null) _values[c.position] = c.triState;
-        if (c.textState != null) _values[c.position] = c.textState;
-        if (c.selectState != null) _values[c.position] = c.selectState;
-        if (c.sortState != null) _values[c.position] = c.sortState;
+        final g = c.groupChange;
+        if (g != null) {
+          restore(g, _groupKey(c.position, g.position));
+        } else {
+          restore(c, c.position);
+        }
       }
       _loading = false;
     });
@@ -117,6 +155,10 @@ class _SourceServerFiltersSheetState extends State<_SourceServerFiltersSheet> {
                 if (cv is String && cv.isNotEmpty) inner = SourceFilterChange.text(child.position, cv);
               case SourceFilterKind.select:
                 if (cv is int) inner = SourceFilterChange.select(child.position, cv);
+              case SourceFilterKind.sort:
+                if (cv is SortSelectionValue) {
+                  inner = SourceFilterChange.sort(child.position, index: cv.index, ascending: cv.ascending);
+                }
               default:
                 break;
             }
@@ -218,14 +260,15 @@ class _SourceServerFiltersSheetState extends State<_SourceServerFiltersSheet> {
         final key = groupPos == null ? f.position : _groupKey(groupPos, f.position);
         final v = _values[key] is TriStateValue ? _values[key] as TriStateValue : TriStateValue.ignore;
         return [
-          ListTile(
-            title: Text(f.name),
-            subtitle: Text(v.wire),
-            trailing: SegmentedButton<TriStateValue>(
+          ListTile(title: Text(f.name), dense: true),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: SegmentedButton<TriStateValue>(
+              showSelectedIcon: false,
               segments: const [
-                ButtonSegment(value: TriStateValue.ignore, label: Text('—')),
-                ButtonSegment(value: TriStateValue.include, label: Text('In')),
-                ButtonSegment(value: TriStateValue.exclude, label: Text('Ex')),
+                ButtonSegment(value: TriStateValue.ignore, label: Text('Any')),
+                ButtonSegment(value: TriStateValue.include, label: Text('Include')),
+                ButtonSegment(value: TriStateValue.exclude, label: Text('Exclude')),
               ],
               selected: {v},
               onSelectionChanged: (s) => setState(() => _values[key] = s.first),
@@ -239,12 +282,15 @@ class _SourceServerFiltersSheetState extends State<_SourceServerFiltersSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: TextField(
               decoration: InputDecoration(labelText: f.name),
-              controller: TextEditingController(text: '${_values[key] ?? ''}'),
+              controller: _textCtrl(key),
               onChanged: (s) => _values[key] = s,
             ),
           ),
         ];
       case SourceFilterKind.select:
+        if (f.values.isEmpty) {
+          return [ListTile(title: Text(f.name), subtitle: const Text('No options'), enabled: false)];
+        }
         final key = groupPos == null ? f.position : _groupKey(groupPos, f.position);
         final idx = _values[key] is int ? _values[key] as int : 0;
         return [
@@ -263,7 +309,10 @@ class _SourceServerFiltersSheetState extends State<_SourceServerFiltersSheet> {
           ),
         ];
       case SourceFilterKind.sort:
-        final key = f.position;
+        if (f.values.isEmpty) {
+          return [ListTile(title: Text(f.name), subtitle: const Text('No options'), enabled: false)];
+        }
+        final key = groupPos == null ? f.position : _groupKey(groupPos, f.position);
         final cur = _values[key] is SortSelectionValue
             ? _values[key] as SortSelectionValue
             : const SortSelectionValue(index: 0, ascending: true);

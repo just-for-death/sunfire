@@ -40,7 +40,6 @@ class _StatsScreenState extends State<StatsScreen> {
       final mangas = await IsarService.instance.getLibraryManga();
       final historyChapters = await IsarService.instance.getReadingHistory();
 
-      final allChapters = await IsarService.instance.getAllChapters();
 
       _totalManga = mangas.length;
       final genres = <String, int>{};
@@ -49,10 +48,9 @@ class _StatsScreenState extends State<StatsScreen> {
       // ISS-060: Stats read totals include every chapter with read evidence,
       // including non-library manga (History already surfaces them). Library
       // size (_totalManga / genres / sources) stays library-scoped.
-      final allChCount = allChapters.length;
-      final readChCount = allChapters
-          .where((c) => c.isRead || c.lastPageRead > 0 || (c.lastReadAt ?? 0) > 0)
-          .length;
+      // IMP-024: counted in the DB instead of loading every chapter.
+      final allChCount = await IsarService.instance.countChapters();
+      final readChCount = await IsarService.instance.countChaptersWithReadEvidence();
 
       for (final m in mangas) {
         for (final g in m.genres) {

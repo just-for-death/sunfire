@@ -5,7 +5,7 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint;
+import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint, visibleForTesting;
 
 import '../db/models/category.dart';
 import '../db/models/manga.dart';
@@ -109,6 +109,11 @@ class MultiServerManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// IMP-049b: the only construction site of the Kavita/Mihon adapters
+  /// (audit regression hook).
+  @visibleForTesting
+  ServerAdapter? debugCreateAdapter(ServerConfig config) => _createAdapter(config);
+
   ServerAdapter? _createAdapter(ServerConfig config) {
     switch (config.type) {
       case ServerType.suwayomi:
@@ -205,7 +210,7 @@ class MultiServerManager extends ChangeNotifier {
       bool reachable = false;
       try {
         reachable = await adapter.isReachable();
-      } catch (_) {}
+      } catch (e) { debugPrint('[multi_server_manager] ignored: $e'); }
       summaries[entry.key] = ServerSyncSummary(
         serverId: entry.key,
         serverName: adapter.name,

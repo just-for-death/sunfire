@@ -1,4 +1,6 @@
 // ignore_for_file: avoid_print
+@Tags(['network'])
+library;
 // End-to-end verification of the extension update pipeline:
 //   1. The official repo index exposes the newest Mangago (1.3.5) to the app.
 //   2. updateInstalledExtensions safely upgrades an older local install and
@@ -15,7 +17,16 @@ import 'package:sunfire/src/core/engine/quickjs_service.dart';
 import 'package:sunfire/src/core/engine/repo_manager.dart';
 import 'package:sunfire/src/core/sync/graphql_client_service.dart';
 
-const _liveUrl = 'http://localhost:4567';
+import 'support/live_server_guard.dart';
+
+// SAFETY: live tests are opt-in. localhost:4567 on Zoro is Jane's REAL
+// Suwayomi server (same host as 100.71.46.98), and these tests mutate state
+// (library toggle, chapter progress, updateExtension). Point
+// SUNFIRE_LIVE_URL at a throwaway server to run them; unset → they skip
+// (port 1 is never listening).
+// ISS-134: the URL is only accepted after requireThrowawayServer() (loopback,
+// not :4567, not Tailscale, Docker marker present); otherwise port 1 → skip.
+String _liveUrl = 'http://127.0.0.1:1';
 
 Future<bool> _serverUp(String base) async {
   try {
@@ -33,6 +44,9 @@ Future<bool> _serverUp(String base) async {
 }
 
 void main() {
+  setUpAll(() async {
+    _liveUrl = await requireThrowawayServer(Platform.environment['SUNFIRE_LIVE_URL']) ?? 'http://127.0.0.1:1';
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() {

@@ -15,9 +15,11 @@ import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/db/models/tag.dart';
 import '../../core/engine/content_resolver_service.dart' show preferServerScrape;
+import '../../core/engine/local_source_service.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
+import '../../core/services/delete_after_read.dart';
 import '../../core/services/download_manager_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/multi_window_service.dart';
@@ -34,6 +36,7 @@ import '../browse/global_search_screen.dart';
 import '../browse/migrate_search_screen.dart';
 import '../library/manga_tag_editor_sheet.dart';
 import 'manga_detail_layout.dart';
+import 'more_like_this_row.dart';
 import 'tracking_bottom_sheet.dart';
 
 class MangaDetailScreen extends StatefulWidget {
@@ -472,7 +475,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     //    - Chapters list is empty or has blank names/URLs
     final chaptersNeedEnrichment = _chapters.isEmpty ||
         _chapters.every((c) => c.name.trim().isEmpty || c.url.trim().isEmpty);
-    if (((isLocalExtension && !serverFirst) || chaptersNeedEnrichment) && _manga != null && _manga!.sourceName.isNotEmpty) {
+    if (((isLocalExtension && !serverFirst) || chaptersNeedEnrichment) && _manga != null && !_isLocalSource && _manga!.sourceName.isNotEmpty) {
       try {
         final localData = await QuickJsService.instance.fetchMangaDetailsLocal(
           _manga!.sourceName,
@@ -761,6 +764,77 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
   void _toggleInLibrary() async {
     if (_manga == null) return;
     final newState = !_manga!.inLibrary;
+    final prevAt = _manga!.inLibraryAt;
+    final prevCats = List<int>.of(_manga!.categoryIds);
+    _applyLocalLibraryState(newState);
+    await IsarService.instance.saveManga(_manga!);
+
+    // UIS6-01/15: server via outbox. Rejected -> roll back; unreachable ->
+    // keep local change, queued; either success path offers Undo.
+    int? undoToken;
+    if (widget.mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
+      try {
+        final defId = SettingsService.instance.defaultCategoryId;
+        final r = await SyncEngine.instance.setMangaInLibraryWithOutbox(
+          widget.mangaServerId,
+          newState,
+          categoryIds: newState && defId != null ? _manga!.categoryIds : null,
+        );
+        undoToken = r.undoToken;
+      } on ServerMutationException catch (e) {
+        if (_manga != null) {
+          _manga!
+            ..inLibrary = !newState
+            ..inLibraryAt = prevAt
+            ..categoryIds = prevCats;
+          await IsarService.instance.saveManga(_manga!);
+        }
+        if (mounted) {
+          setState(() {});
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${newState ? "Couldn't add to library" : "Couldn't remove from library"}. ${e.userMessage}'),
+          ));
+        }
+        return;
+      }
+    }
+
+    if (mounted) {
+      final defCatName = SettingsService.instance.defaultCategoryId != null
+          ? SettingsService.instance.defaultCategoryName
+          : null;
+      final base = newState
+          ? defCatName != null
+              ? 'Added to library ($defCatName)'
+              : 'Added to library'
+          : 'Removed from library';
+      final token = undoToken;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(token != null ? '$base — will sync when the server is reachable' : base),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () async {
+              if (token != null && await SyncEngine.instance.undoQueuedMutation(token)) {
+                if (_manga == null) return;
+                _manga!
+                  ..inLibrary = !newState
+                  ..inLibraryAt = prevAt
+                  ..categoryIds = prevCats;
+                await IsarService.instance.saveManga(_manga!);
+                if (mounted) setState(() {});
+                return;
+              }
+              // Already applied: run the inverse action.
+              if (mounted && _manga != null && _manga!.inLibrary == newState) _toggleInLibrary();
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  void _applyLocalLibraryState(bool newState) {
     setState(() {
       _manga!.inLibrary = newState;
       if (newState) {
@@ -777,36 +851,6 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         _manga!.inLibraryAt = null;
       }
     });
-    await IsarService.instance.saveManga(_manga!);
-
-    try {
-      await SyncEngine.instance.syncMangaLibraryState(widget.mangaServerId, newState);
-
-      // If newly added to library and a default category is set, assign it on server!
-      if (newState && SettingsService.instance.defaultCategoryId != null && widget.mangaServerId > 0) {
-        await SyncEngine.instance.syncMangaCategories(
-          widget.mangaServerId,
-          _manga!.categoryIds,
-        );
-      }
-    } catch (ignoredError) { if (kDebugMode) debugPrint('[manga_detail_screen] ignored error: $ignoredError'); }
-
-    if (mounted) {
-      final defCatName = SettingsService.instance.defaultCategoryId != null
-          ? SettingsService.instance.defaultCategoryName
-          : null;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            newState
-                ? defCatName != null
-                    ? 'Added to library ($defCatName)'
-                    : 'Added to library'
-                : 'Removed from library',
-          ),
-        ),
-      );
-    }
   }
 
   Future<void> _reloadTags() async {
@@ -937,6 +981,19 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     );
   }
 
+  /// IMP-002: on-device folder/CBZ series (negative id, never synced).
+  bool get _isLocalSource => _manga?.sourceName == kLocalSourceName;
+
+  Future<void> _rescanLocal() async {
+    final res = await LocalSourceService.instance.scan();
+    if (!mounted) return;
+    await _loadLocalDataOnly();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(res.error ?? 'Rescanned: ${res.addedChapters} new, ${res.removedChapters} removed'),
+    ));
+  }
+
   Future<void> _loadLocalDataOnly() async {
     // Same two-step resolution as the main loader. This used to assign the
     // getMangaByServerId result unconditionally, and standalone series are
@@ -998,6 +1055,26 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
 
   // Never pass a raw auto-increment id as a chapter target: local chapters
   // carry synthetic negative serverIds and resolve through them.
+  /// IMP-038: honours "delete after marked read" with the keep-last-N offset
+  /// and the bookmarked exclusion, against the chapters in reading order.
+  void _deleteAfterMarkedRead(Chapter ch) {
+    if (!_settings.deleteChapterAfterMarkedRead) return;
+    final ordered = List<Chapter>.of(_chapters)
+      ..sort((a, b) {
+        final n = a.chapterNumber.compareTo(b.chapterNumber);
+        return n != 0 ? n : a.id.compareTo(b.id);
+      });
+    final target = chapterToDeleteAfterRead(
+      finished: ch,
+      sortedSiblings: ordered,
+      offset: _settings.deleteAfterReadOffset,
+      excludeBookmarked: _settings.deleteAfterReadExcludeBookmarked,
+    );
+    if (target != null && target.isDownloaded) {
+      unawaited(DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(target)));
+    }
+  }
+
   int _targetChapterId(Chapter ch) => ch.serverId != 0 ? ch.serverId : ch.id;
 
   /// Resolves the manga id used for local-download tasks. For server manga this
@@ -1114,11 +1191,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     if (mounted) setState(() {});
     await _refreshUnreadCount();
 
-    if (newState && _settings.deleteChapterAfterMarkedRead && ch.isDownloaded) {
-      if (!ch.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-        unawaited(DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(ch)));
-      }
-    }
+    if (newState) _deleteAfterMarkedRead(ch);
 
     if (newState && _manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
       unawaited(MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: ch).catchError((Object e, StackTrace st) {
@@ -1173,21 +1246,19 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         ordered.take(targetIdx).where((c) => !c.isRead).toList();
     for (final p in prevs) {
       p.applyReadState(true);
-      if (_settings.deleteChapterAfterMarkedRead && p.isDownloaded) {
-        if (!p.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-          unawaited(DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(p)));
-        }
-      }
+      _deleteAfterMarkedRead(p);
       await SyncEngine.instance.stampLocalReadActivity(p);
-      if (p.serverId > 0) {
-        unawaited(SyncEngine.instance.syncChapterProgress(p.serverId, isRead: true, lastPageRead: p.lastPageRead));
-      }
       if (_manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
         unawaited(MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: p).catchError((Object e, StackTrace st) {
           unawaited(LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron'));
           return false;
         }));
       }
+    }
+    // ISS-069: one bulk server call instead of one per previous chapter.
+    final prevServerIds = [for (final p in prevs) if (p.serverId > 0) p.serverId];
+    if (prevServerIds.isNotEmpty) {
+      unawaited(SyncEngine.instance.syncChaptersProgressBulk(prevServerIds, isRead: true));
     }
     await IsarService.instance.saveChapters(prevs);
     await _refreshUnreadCount();
@@ -1261,27 +1332,19 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     }
     for (final c in targets) {
       c.applyReadState(read);
-      if (read && _settings.deleteChapterAfterMarkedRead && c.isDownloaded) {
-        if (!c.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-          unawaited(DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(c)));
-        }
-      }
+      if (read) _deleteAfterMarkedRead(c);
       if (read) await SyncEngine.instance.stampLocalReadActivity(c);
-      if (c.serverId > 0) {
-        unawaited(
-          SyncEngine.instance.syncChapterProgress(
-            c.serverId,
-            isRead: read,
-            lastPageRead: c.lastPageRead,
-          ),
-        );
-      }
       if (read && _manga != null && _manga!.metronSeriesId != null && _settings.metronAutoScrobble) {
         unawaited(MetronService.instance.scrobbleMangaChapter(manga: _manga!, chapter: c).catchError((Object e, StackTrace st) {
           unawaited(LoggerService.instance.logError('Metron scrobble failed', exception: e, stackTrace: st, category: 'Metron'));
           return false;
         }));
       }
+    }
+    // ISS-069: one bulk server call instead of one per chapter.
+    final readServerIds = [for (final c in targets) if (c.serverId > 0) c.serverId];
+    if (readServerIds.isNotEmpty) {
+      unawaited(SyncEngine.instance.syncChaptersProgressBulk(readServerIds, isRead: read));
     }
     await IsarService.instance.saveChapters(targets);
     await _refreshUnreadCount();
@@ -1333,9 +1396,11 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final targets = _chapters.where((c) => _selectedChapterIds.contains(_targetChapterId(c))).toList();
     for (final c in targets) {
       await DownloadManagerService.instance.deleteLocalDownload(_targetChapterId(c));
-      if (c.serverId > 0) {
-        await DownloadManagerService.instance.deleteServerDownload(c.serverId);
-      }
+    }
+    // ISS-069: one bulk server delete instead of one per chapter.
+    final serverIds = [for (final c in targets) if (c.serverId > 0) c.serverId];
+    if (serverIds.isNotEmpty) {
+      await DownloadManagerService.instance.deleteServerDownloads(serverIds);
     }
     if (mounted) {
       setState(() => _selectedChapterIds.clear());
@@ -1807,7 +1872,14 @@ unawaited(
                         tooltip: 'Edit Categories',
                         onPressed: _showCategoryPickerDialog,
                       ),
-                    IconButton(
+                    if (_isLocalSource)
+                      IconButton(
+                        icon: const Icon(Icons.refresh_rounded),
+                        tooltip: 'Rescan folder',
+                        onPressed: _rescanLocal,
+                      )
+                    else
+                      IconButton(
                       icon: const Icon(Icons.download_rounded),
                       tooltip: 'Download Chapters',
                       onPressed: _showBatchDownloadModal,
@@ -1948,6 +2020,7 @@ unawaited(
                   ),
                   const SizedBox(height: 12),
                 ],
+                MoreLikeThisRow(manga: manga),
                 if (_tags.isNotEmpty) ...[
                   Wrap(
                     spacing: 8,
@@ -2020,6 +2093,7 @@ unawaited(
                             }
                           },
                         ),
+                        if (!_isLocalSource)
                         IconButton(
                           icon: const Icon(Icons.download_for_offline_rounded),
                           tooltip: 'Batch Download',
@@ -2160,7 +2234,14 @@ unawaited(
                 tooltip: manga.inLibrary ? 'In Library (Tap to remove)' : 'Add to Library',
                 onPressed: _toggleInLibrary,
               ),
-              IconButton(
+              if (_isLocalSource)
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded),
+                  tooltip: 'Rescan folder',
+                  onPressed: _rescanLocal,
+                )
+              else
+                IconButton(
                 icon: Icon(Icons.download_rounded, color: cs.onSurface),
                 tooltip: 'Download Chapters',
                 onPressed: _showBatchDownloadModal,
@@ -2450,6 +2531,7 @@ unawaited(
                   ),
                   const SizedBox(height: 12),
                 ],
+                MoreLikeThisRow(manga: manga),
                 if (_tags.isNotEmpty) ...[
                   Wrap(
                     spacing: 8,
@@ -2541,6 +2623,7 @@ unawaited(
                             }
                           },
                         ),
+                        if (!_isLocalSource)
                         IconButton(
                           icon: const Icon(Icons.download_for_offline_rounded),
                           tooltip: 'Batch Download',
@@ -2751,7 +2834,7 @@ unawaited(
                     padding: EdgeInsets.only(right: 2.0),
                     child: Icon(Icons.phone_android_rounded, color: Colors.greenAccent, size: 16),
                   )
-                else
+                else if (!_isLocalSource)
                   IconButton(
                     icon: const Icon(Icons.download_rounded, color: Colors.grey, size: 18),
                     padding: EdgeInsets.zero,

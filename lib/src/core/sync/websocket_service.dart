@@ -56,6 +56,7 @@ class WebSocketService {
 
   final _updateStatusController = StreamController<Map<String, dynamic>>.broadcast();
   final _downloadStatusController = StreamController<Map<String, dynamic>>.broadcast();
+  final _syncStatusController = StreamController<Map<String, dynamic>>.broadcast();
 
   WebSocketService._();
 
@@ -66,6 +67,15 @@ class WebSocketService {
 
   Stream<Map<String, dynamic>> get onUpdateStatus => _updateStatusController.stream;
   Stream<Map<String, dynamic>> get onDownloadStatus => _downloadStatusController.stream;
+
+  /// IMP-006: server sync job status (`syncStatusChanged`: state, startDate,
+  /// endDate, errorMessage, backupRestoreId). Servers without the field reply
+  /// with an error for subscription id 3 only; the others keep streaming.
+  Stream<Map<String, dynamic>> get onSyncStatus => _syncStatusController.stream;
+
+  /// Test seam: feed one raw graphql-ws frame through the message handler.
+  @visibleForTesting
+  void debugHandleMessage(String raw) => _handleMessage(raw);
   bool get isConnected => _isConnected;
 
   void initialize(String httpUrl, {String? authToken}) {
@@ -253,6 +263,16 @@ class WebSocketService {
   @visibleForTesting
   static Duration reconnectMaxDelay = const Duration(seconds: 300);
 
+  /// Test isolation (ISS-140): restores every static timing knob.
+  @visibleForTesting
+  static void debugResetTestOverrides() {
+    pingInterval = const Duration(seconds: 25);
+    watchdogInterval = const Duration(seconds: 15);
+    livenessSilenceTimeout = const Duration(seconds: 75);
+    reconnectBaseDelay = const Duration(seconds: 5);
+    reconnectMaxDelay = const Duration(seconds: 300);
+  }
+
   /// Current reconnect delay in seconds (escalated backoff). Test-only.
   @visibleForTesting
   int get debugReconnectDelaySeconds => _reconnectDelaySeconds;
@@ -364,6 +384,8 @@ class WebSocketService {
               _updateStatusController.add(innerData['updateStatusChanged'] as Map<String, dynamic>);
             } else if (innerData.containsKey('downloadStatusChanged') && innerData['downloadStatusChanged'] is Map<String, dynamic>) {
               _downloadStatusController.add(innerData['downloadStatusChanged'] as Map<String, dynamic>);
+            } else if (innerData['syncStatusChanged'] is Map<String, dynamic>) {
+              _syncStatusController.add(innerData['syncStatusChanged'] as Map<String, dynamic>);
             }
           }
         }
@@ -419,6 +441,16 @@ class WebSocketService {
               'initial { position progress state tries chapter { id name isDownloaded } manga { id title } } '
               'updates { type download { position progress state tries chapter { id name isDownloaded } manga { id title } } } '
               '} }'
+        }
+      }));
+
+      // 3. syncStatusChanged — server sync job progress (IMP-006). The
+      //    deprecated `downloadChanged` is not used: #2 replaces it.
+      sink.add(jsonEncode({
+        'id': '3',
+        'type': 'subscribe',
+        'payload': {
+          'query': 'subscription { syncStatusChanged { state startDate endDate errorMessage backupRestoreId } }'
         }
       }));
     } catch (e) {
@@ -514,7 +546,7 @@ unawaited(
       var refreshed = false;
       try {
         refreshed = await session.onUnauthorized();
-      } catch (_) {}
+      } catch (e) { debugPrint('[websocket_service] ignored: $e'); }
       if (_isDisposed || _wsUrl == null) return;
       final base = _httpBase;
       final override = base == null ? null : session.authHeaderOverride(base);

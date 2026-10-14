@@ -9,6 +9,23 @@ import '../../ui/shell/sunfire_breakpoints.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
 
+/// ISS-099: asks before removing a server store. Returns true on Remove.
+@visibleForTesting
+Future<bool> confirmRemoveStore(BuildContext context, String label) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Remove store?'),
+      content: Text("Extensions from $label won't show up anymore."),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
+      ],
+    ),
+  );
+  return ok == true;
+}
+
 class ExtensionReposScreen extends StatefulWidget {
   const ExtensionReposScreen({super.key});
 
@@ -236,6 +253,9 @@ unawaited(
   }
 
   Future<void> _removeServerStore(ExtensionStoreInfo store) async {
+    final label = store.name.isEmpty ? store.indexUrl : store.name;
+    final confirm = await confirmRemoveStore(context, label);
+    if (confirm != true || !mounted) return;
     final ok = await GraphQLClientService.instance.removeExtensionStore(store.indexUrl);
     if (!mounted) return;
     if (!ok) {
@@ -247,7 +267,16 @@ unawaited(
     await _loadServerStores();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Removed ${store.name.isEmpty ? store.indexUrl : store.name}')),
+        SnackBar(
+          content: Text('Removed $label'),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () async {
+              await GraphQLClientService.instance.addExtensionStore(store.indexUrl);
+              if (mounted) await _loadServerStores();
+            },
+          ),
+        ),
       );
     }
   }

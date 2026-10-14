@@ -1,5 +1,7 @@
 // ignore_for_file: avoid_print
-// Practical online (Docker Suwayomi :4567) + offline flow tests that mirror
+@Tags(['network'])
+library;
+// Practical online (throwaway Docker Suwayomi, 127.0.0.1:4590) + offline flow tests that mirror
 // how the app syncs, loads library/trackers/thumbnails, and queues mutations.
 import 'dart:convert';
 import 'dart:io';
@@ -18,9 +20,18 @@ import 'package:sunfire/src/features/reader/reading_mode.dart';
 import 'package:sunfire/src/main_shell.dart';
 import 'package:sunfire/src/ui/shell/sunfire_breakpoints.dart';
 
+import 'support/live_server_guard.dart';
+
 class _RealHttpOverrides extends HttpOverrides {}
 
-const _liveUrl = 'http://localhost:4567';
+// SAFETY: live tests are opt-in. localhost:4567 on Zoro is Jane's REAL
+// Suwayomi server (same host as 100.71.46.98), and these tests mutate state
+// (library toggle, chapter progress, updateExtension). Point
+// SUNFIRE_LIVE_URL at a throwaway server to run them; unset → they skip
+// (port 1 is never listening).
+// ISS-134: the URL is only accepted after requireThrowawayServer() (loopback,
+// not :4567, not Tailscale, Docker marker present); otherwise port 1 → skip.
+String _liveUrl = 'http://127.0.0.1:1';
 const _deadUrl = 'http://127.0.0.1:45999';
 
 Future<bool> _serverUp(String base) async {
@@ -41,6 +52,9 @@ Future<bool> _serverUp(String base) async {
 }
 
 void main() {
+  setUpAll(() async {
+    _liveUrl = await requireThrowawayServer(Platform.environment['SUNFIRE_LIVE_URL']) ?? 'http://127.0.0.1:1';
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = _RealHttpOverrides();
 
@@ -264,7 +278,7 @@ void main() {
       const mangaId = 42;
       final thumbUrl = '$_liveUrl/api/v1/manga/$mangaId/thumbnail';
       expect(thumbUrl, contains('/api/v1/manga/'));
-      expect(thumbUrl, 'http://localhost:4567/api/v1/manga/42/thumbnail');
+      expect(thumbUrl, '$_liveUrl/api/v1/manga/42/thumbnail');
 
       Future<void> assertStatus(int status, List<int> body) async {
         final client = MockClient((request) async {

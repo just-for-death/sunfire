@@ -119,7 +119,7 @@ class OcrService {
       final prefs = await SharedPreferences.getInstance();
       final name = prefs.getString(_kScriptPref);
       if (name != null) return OcrScript.values.byName(name);
-    } catch (_) {}
+    } catch (e) { debugPrint('[ocr_service] ignored: $e'); }
     return OcrScript.japanese;
   }
 
@@ -127,7 +127,7 @@ class OcrService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kScriptPref, script.name);
-    } catch (_) {}
+    } catch (e) { debugPrint('[ocr_service] ignored: $e'); }
     // Script change invalidates cached results.
     _memoryCache.clear();
   }
@@ -265,7 +265,7 @@ class OcrService {
     } finally {
       try {
         await tmpDir.delete(recursive: true);
-      } catch (_) {}
+      } catch (e) { debugPrint('[ocr_service] ignored: $e'); }
     }
   }
 
@@ -279,7 +279,7 @@ class OcrService {
           if (e is File) await e.delete();
         }
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('[ocr_service] ignored: $e'); }
   }
 
   void _putMemory(String key, OcrPageResult result) {
@@ -317,7 +317,7 @@ class OcrService {
       final dir = await _cacheDir();
       final file = File('${dir.path}/${_diskName(key)}.json');
       await file.writeAsString(jsonEncode(result.toJson()));
-    } catch (_) {}
+    } catch (e) { debugPrint('[ocr_service] ignored: $e'); }
   }
 
   TextRecognitionScript _toMlKit(OcrScript script) {
@@ -340,7 +340,7 @@ class OcrService {
     for (final r in _recognizers.values) {
       try {
         await r.close();
-      } catch (_) {}
+      } catch (e) { debugPrint('[ocr_service] ignored: $e'); }
     }
     _recognizers.clear();
     _memoryCache.clear();

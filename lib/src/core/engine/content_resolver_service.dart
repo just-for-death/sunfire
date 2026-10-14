@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
-import 'package:path_provider/path_provider.dart';
 
 import '../db/isar_service.dart';
 import '../logging/logger_service.dart';
+import '../services/download_storage.dart';
 import '../sync/graphql_client_service.dart';
 import 'image_validation.dart';
 import 'javascript/m_client.dart';
+import 'local_source_service.dart';
 import 'quickjs_service.dart';
 import 'source_migration_service.dart';
 
@@ -97,14 +98,29 @@ class ContentResolverService {
     // ── PRIORITY 1: LOCAL DOWNLOADS (Instant Offline Storage) ─────────────
     if (allowLocalDownload && chapterServerId != 0) {
       try {
-        final appDir = await getApplicationDocumentsDirectory();
-        final chapterDir = Directory('${appDir.path}/downloads/$chapterServerId');
+        // IMP-035: chosen location first, then the default root.
+        final found = await DownloadStorage.existingChapterDirs(chapterServerId);
+        final chapterDir = found.isNotEmpty ? found.first : await DownloadStorage.chapterDirForWrite(chapterServerId);
         // Only trust this folder if the download that wrote it finished and
         // verified every page (see kDownloadCompleteMarkerName). Otherwise
         // it's a partial/corrupt leftover from a failed, cancelled, or
         // paused attempt and must fall through to extension/server so the
         // remaining pages actually get fetched.
         if (await chapterDir.exists() && await isDownloadFolderComplete(chapterDir)) {
+          // IMP-036: a CBZ-packed download reads through the Local-source
+          // extractor (cached per archive).
+          final cbz = File('${chapterDir.path}/$kChapterCbzName');
+          if (await cbz.exists()) {
+            final paths = await LocalSourceService.instance.pagePathsForChapterUrl('$kLocalChapterUrlScheme${cbz.path}');
+            if (paths.isNotEmpty) {
+              return ChapterPagesResult(
+                pageUrls: paths,
+                source: ContentSourceType.localDownload,
+                effectiveSourceName: effectiveSourceName,
+                isLocalFiles: true,
+              );
+            }
+          }
           final files = await chapterDir.list().toList();
           final localImages = files
               .whereType<File>()
@@ -165,6 +181,19 @@ class ContentResolverService {
           }
         }
       } catch (ignoredError) { if (kDebugMode) debugPrint('[content_resolver_service] ignored error: $ignoredError'); }
+    }
+
+    // ── IMP-002: Local source (folders / CBZ on device) ─────────────────
+    // Never reaches the server or an extension; errors surface to the reader.
+    if (isLocalChapterUrl(effectiveChapterUrl)) {
+      final paths = await LocalSourceService.instance.pagePathsForChapterUrl(effectiveChapterUrl!);
+      if (paths.isEmpty) throw Exception('No pages found in local chapter');
+      return ChapterPagesResult(
+        pageUrls: paths,
+        source: ContentSourceType.localDownload,
+        effectiveSourceName: kLocalSourceName,
+        isLocalFiles: true,
+      );
     }
 
     // Auto-detect source name from URL domain if still missing
@@ -324,7 +353,48 @@ class ContentResolverService {
     return ok;
   }
 
+  /// Decides whether another page exists (M3). When the server reported
+  /// `hasNextPage` it wins (an empty page always ends paging so a server that
+  /// over-reports cannot loop). Only local JS sources ([serverHasNextPage] ==
+  /// null) fall back to the "short page means end" heuristic.
+  static bool computeHasNextPage({
+    required bool? serverHasNextPage,
+    required int pageLength,
+    int localMinPageSize = 10,
+  }) {
+    if (pageLength == 0) return false;
+    if (serverHasNextPage != null) return serverHasNextPage;
+    return pageLength >= localMinPageSize;
+  }
+
   Future<List<Map<String, dynamic>>> resolveSourceManga({
+    required String sourceId,
+    required String sourceName,
+    bool isLatest = false,
+    int page = 1,
+    String? searchQuery,
+    String? selectedSort,
+    String? selectedStatus,
+    String? selectedType,
+    List<dynamic>? dynamicFilters,
+    List<SourceFilterChange>? filters,
+  }) async =>
+      (await resolveSourceMangaPage(
+        sourceId: sourceId,
+        sourceName: sourceName,
+        isLatest: isLatest,
+        page: page,
+        searchQuery: searchQuery,
+        selectedSort: selectedSort,
+        selectedStatus: selectedStatus,
+        selectedType: selectedType,
+        dynamicFilters: dynamicFilters,
+        filters: filters,
+      )).items;
+
+  /// Like [resolveSourceManga] but also returns the server's
+  /// `fetchSourceManga.hasNextPage` (null for local extensions / no data).
+  Future<({List<Map<String, dynamic>> items, bool? hasNextPage})> resolveSourceMangaPage({
     required String sourceId,
     required String sourceName,
     bool isLatest = false,
@@ -350,7 +420,7 @@ class ContentResolverService {
       );
       if (localResults.isNotEmpty) {
         await LoggerService.instance.logInfo('Fetched ${localResults.length} titles via Local Extension ($sourceName)', 'ContentResolver');
-        return localResults;
+        return (items: localResults, hasNextPage: null);
       }
     } catch (e) {
       await LoggerService.instance.logWarning('Local extension manga listing failed for $sourceName: $e', 'ContentResolver');
@@ -395,7 +465,8 @@ class ContentResolverService {
             final nodes = payload['mangas'] as List<dynamic>?;
             if (nodes != null) {
               final serverUrl = GraphQLClientService.instance.baseUrl ?? '';
-              return nodes.map((n) {
+              final hasNext = payload['hasNextPage'];
+              final items = nodes.map((n) {
                 final map = n as Map<String, dynamic>;
                 final rawThumb = map['thumbnailUrl'] as String?;
                 final thumb = (rawThumb != null && rawThumb.isNotEmpty)
@@ -410,6 +481,7 @@ class ContentResolverService {
                   'origin': 'server',
                 };
               }).toList();
+              return (items: items, hasNextPage: hasNext is bool ? hasNext : null);
             }
           }
         }
@@ -418,6 +490,6 @@ class ContentResolverService {
       }
     }
 
-    return [];
+    return (items: const <Map<String, dynamic>>[], hasNextPage: null);
   }
 }

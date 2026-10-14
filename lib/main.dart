@@ -104,9 +104,9 @@ unawaited(
     );
   }
 
-  try {
-    await MetronService.instance.initialize();
-  } catch (e, st) {
+  // IMP-025: off the critical path (secure-storage token read only); the
+  // tracker UI reads isConfigured when opened, long after this settles.
+  unawaited(MetronService.instance.initialize().catchError((Object e, StackTrace st) async {
     // Release-visible for the same reason as the settings init above: a silent
     // Metron failure means tracking-linked scrobbles stop working with no
     // indication that anything is wrong.
@@ -116,7 +116,7 @@ unawaited(
       stackTrace: st,
       category: 'Startup',
     );
-  }
+  }));
 
   try {
     await SourcePreferences.hydrate();
@@ -135,11 +135,9 @@ unawaited(
   // community scrapers on first launch. Onboarding completion calls
   // ensureAutoInstalled() once the user has chosen server vs standalone.
   QuickJsService.instance.deferAutoInstall = !SettingsService.instance.onboardingCompleted;
-  try {
-    await QuickJsService.instance.initialize();
-  } catch (e) {
-    debugPrint('QuickJsService init error: $e');
-  }
+  // IMP-025: loads extensions in the background; local-source calls await
+  // QuickJsService.whenReady. initialize() catches and logs its own errors.
+  unawaited(QuickJsService.instance.initialize());
 
   try {
     ImageTransportService.instance.initialize();

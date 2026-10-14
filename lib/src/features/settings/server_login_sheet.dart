@@ -77,7 +77,7 @@ class _ServerLoginSheetState extends State<_ServerLoginSheet> {
       _error = null;
     });
     final result = await ServerSessionService.instance.login(
-      username: _user.text,
+      username: _user.text.trim(),
       password: _pass.text,
       mode: widget.mode,
       baseUrl: widget.baseUrl,

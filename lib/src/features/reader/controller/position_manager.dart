@@ -13,6 +13,7 @@ import '../../../core/metron/metron_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/sync/sync_engine.dart';
 import '../reader_scroll_utils.dart' show shouldPersistProgressPage;
+import 'navigation_controller.dart' show ReaderItem, ReaderPageItem, ReaderChapterBoundary;
 
 /// Outcome of a [PositionManager.updateProgress] call.
 class ProgressUpdateResult {
@@ -216,6 +217,37 @@ class PositionManager {
 
   /// Set parent manga for scrobbling / unread badge context.
   void setParentManga(Manga? manga) => _parentManga = manga;
+
+  /// IMP-012: which chapter/page a webtoon strip item stands for. A page item
+  /// maps to its own chapter (1-based page); a chapterBoundary counts as the
+  /// last page of the chapter it closes. Null when [index] is out of range.
+  static ({Chapter chapter, int page, int totalPages})? progressTargetForItem(
+    List<ReaderItem> items,
+    int index,
+  ) {
+    if (index < 0 || index >= items.length) return null;
+    final item = items[index];
+    switch (item) {
+      case ReaderPageItem():
+        return (
+          chapter: item.chapter,
+          page: item.pageIndex + 1,
+          totalPages: item.chapterPageCount,
+        );
+      case ReaderChapterBoundary():
+        for (var i = index - 1; i >= 0; i--) {
+          final prev = items[i];
+          if (prev is ReaderPageItem && identical(prev.chapter, item.previous)) {
+            return (
+              chapter: prev.chapter,
+              page: prev.chapterPageCount,
+              totalPages: prev.chapterPageCount,
+            );
+          }
+        }
+        return null;
+    }
+  }
 
   void dispose() {
     _parentManga = null;

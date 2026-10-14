@@ -20,8 +20,13 @@ import '../../../core/engine/javascript/m_client.dart';
 import '../../../core/engine/quickjs_service.dart';
 import '../double_page_layout.dart';
 import '../reading_mode.dart';
+import 'navigation_controller.dart'
+    show ReaderItem, ReaderPageItem, ReaderChapterBoundary, kReaderChapterBoundaryExtent;
+import 'page_transition.dart';
 import 'reader_controller.dart';
+import 'reader_decode_size.dart';
 import 'reader_theme.dart';
+import 'webtoon_item_registry.dart';
 
 /// Builds a page widget for [ReaderCanvas].
 ///
@@ -54,7 +59,6 @@ class ReaderCanvas extends StatefulWidget {
     required this.pageController,
     required this.transformationController,
     required this.webtoonZoomControllers,
-    required this.webtoonPageKeys,
     required this.readingMode,
     required this.pageUrls,
     required this.currentPage,
@@ -71,6 +75,7 @@ class ReaderCanvas extends StatefulWidget {
     this.transitionBuilder,
     this.onRequestNextChapter,
     this.spreadSlots,
+    this.webtoonItems,
   });
 
   final ReaderController controller;
@@ -78,7 +83,6 @@ class ReaderCanvas extends StatefulWidget {
   final PageController pageController;
   final TransformationController transformationController;
   final Map<int, TransformationController> webtoonZoomControllers;
-  final Map<int, GlobalKey> webtoonPageKeys;
   final ReadingMode readingMode;
   final List<String> pageUrls;
   final int currentPage;
@@ -100,6 +104,11 @@ class ReaderCanvas extends StatefulWidget {
   /// When non-null, use these spread slots (live reader wide-page isolation).
   /// An empty list forces single-page paged layout.
   final List<SpreadSlot>? spreadSlots;
+  /// IMP-012: when non-null in webtoon mode, the strip renders these items
+  /// (pages of several chapters plus thin chapterBoundary separators) instead
+  /// of [pageUrls] + end-of-chapter transition card. Index keys of
+  /// [webtoonZoomControllers] keys are item indices.
+  final List<ReaderItem>? webtoonItems;
 
   @override
   State<ReaderCanvas> createState() => _ReaderCanvasState();
@@ -146,29 +155,37 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
   // ─── Paged Mode ──────────────────────────────────────────────────
 
   Widget _buildPagedView(BuildContext context, bool isRtl) {
-    final useDouble = _shouldUseDoublePages(context);
+    // IMP-011: vertical paged turns top-to-bottom; spreads stay horizontal-only.
+    final isVertical = isVerticalPagedReadingMode(widget.readingMode);
+    final useDouble = !isVertical && _shouldUseDoublePages(context);
     final slots = useDouble ? _currentSpreadSlots() : const <SpreadSlot>[];
     final contentCount = useDouble ? slots.length : widget.pageUrls.length;
     final withTransition = widget.showTransitionCard && widget.pageUrls.isNotEmpty;
     final itemCount = widget.pageUrls.isEmpty ? 0 : (withTransition ? contentCount + 1 : contentCount);
+    final fade = parsePageTransition(widget.controller.settings.pageTransition) ==
+        PageTransitionMode.fade;
 
     return PageView.builder(
       controller: widget.pageController,
       physics: widget.controller.isZoomed
           ? const NeverScrollableScrollPhysics()
           : const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-      reverse: isRtl,
+      scrollDirection: isVertical ? Axis.vertical : Axis.horizontal,
+      reverse: isRtl && !isVertical,
       itemCount: itemCount,
       onPageChanged: widget.onPageChanged,
       itemBuilder: (context, index) {
+        final Widget item;
         if (withTransition && index == contentCount) {
-          return widget.transitionBuilder?.call(context) ??
+          item = widget.transitionBuilder?.call(context) ??
               _buildTransitionCard(context);
+        } else if (useDouble) {
+          item = _buildSpreadItem(context, slots[index], index);
+        } else {
+          item = _buildSinglePageItem(context, index);
         }
-        if (useDouble) {
-          return _buildSpreadItem(context, slots[index], index);
-        }
-        return _buildSinglePageItem(context, index);
+        if (fade) return ReaderPageFadeIn(key: ValueKey(index), child: item);
+        return item;
       },
     );
   }
@@ -220,8 +237,18 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
     final isWideScreen = MediaQuery.of(context).size.width > 800;
     final contentWidth = isWideScreen ? 780.0 : MediaQuery.of(context).size.width;
     final gap = webtoonPageGap(widget.readingMode);
-    final withTransition = widget.showTransitionCard && widget.pageUrls.isNotEmpty;
-    final itemCount = widget.pageUrls.isEmpty ? 0 : (withTransition ? widget.pageUrls.length + 1 : widget.pageUrls.length);
+    final items = widget.webtoonItems;
+    final withTransition =
+        items == null && widget.showTransitionCard && widget.pageUrls.isNotEmpty;
+    final itemCount = items != null
+        ? items.length
+        : widget.pageUrls.isEmpty
+            ? 0
+            : (withTransition ? widget.pageUrls.length + 1 : widget.pageUrls.length);
+
+    final itemIndexByKey = <String, int>{
+      for (var i = 0; i < itemCount; i++) webtoonItemKey(items, i): i,
+    };
 
     final dragDevices = <PointerDeviceKind>{
       PointerDeviceKind.touch,
@@ -240,7 +267,16 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
           controller: widget.scrollController,
           padding: EdgeInsets.zero,
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          scrollCacheExtent: ScrollCacheExtent.pixels(2500),
+          // IMP-028: ~1.5 screens of look-ahead, scaled to the device
+          // (was a fixed 2500px, i.e. 4+ screens on phones).
+          scrollCacheExtent: const ScrollCacheExtent.viewport(1.5),
+          // IMP-028: stable per-item keys let the list keep each page's
+          // element when a strip trim shifts indices (no reload/flash).
+          findChildIndexCallback: (key) {
+            if (key is! ValueKey<String>) return null;
+            final i = itemIndexByKey[key.value];
+            return i;
+          },
           addRepaintBoundaries: false,
           clipBehavior: Clip.none,
           itemCount: itemCount,
@@ -249,18 +285,27 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
               return widget.transitionBuilder?.call(context) ??
                   _buildTransitionCard(context);
             }
+            final readerItem = items?[index];
+            if (readerItem is ReaderChapterBoundary) {
+              return WebtoonItemSlot(
+                key: ValueKey<String>(webtoonItemKey(items, index)),
+                index: index,
+                registry: widget.controller.webtoonItemRegistry,
+                child: _buildChapterBoundary(context, readerItem, contentWidth),
+              );
+            }
             final pageWidget = _buildPageWidget(
               context,
-              widget.pageUrls[index],
+              readerItem is ReaderPageItem ? readerItem.url : widget.pageUrls[index],
               index,
               isPaged: false,
               contentWidth: contentWidth,
               enablePerPageZoom: true,
             );
-            final itemKey = widget.webtoonPageKeys.putIfAbsent(index, () => GlobalKey());
-
-            Widget item = KeyedSubtree(
-              key: itemKey,
+            // IMP-028: no GlobalKey per page; the slot registers its context.
+            Widget item = WebtoonItemSlot(
+              index: index,
+              registry: widget.controller.webtoonItemRegistry,
               child: RepaintBoundary(
                 child: Center(
                   child: SizedBox(
@@ -271,15 +316,63 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
               ),
             );
 
+            final itemKey = ValueKey<String>(webtoonItemKey(items, index));
             if (gap > 0) {
-              return Padding(padding: EdgeInsets.only(bottom: gap), child: item);
+              return Padding(key: itemKey, padding: EdgeInsets.only(bottom: gap), child: item);
             }
 
-            if (webtoonShouldOverlapPrevious(widget.readingMode, index)) {
+            final prevIsBoundary =
+                items != null && index > 0 && items[index - 1] is ReaderChapterBoundary;
+            if (!prevIsBoundary && webtoonShouldOverlapPrevious(widget.readingMode, index)) {
               item = Transform.translate(offset: const Offset(0, -1), child: item);
             }
-            return item;
+            return KeyedSubtree(key: itemKey, child: item);
           },
+        ),
+      ),
+    );
+  }
+
+  /// IMP-012: thin inline separator between two chapters in the strip.
+  Widget _buildChapterBoundary(
+    BuildContext context,
+    ReaderChapterBoundary boundary,
+    double contentWidth,
+  ) {
+    final name = boundary.next?.name;
+    // Follow the reader theme so the separator stays readable on white too.
+    final fg = canvasForegroundColor(canvasBackgroundColor(widget.readerTheme));
+    return Center(
+      key: ValueKey('chapterBoundary-${boundary.previous.id}'),
+      child: SizedBox(
+        width: contentWidth,
+        // Fixed extent: lets the controller correct the scroll offset exactly
+        // when a finished chapter is trimmed from the strip.
+        height: kReaderChapterBoundaryExtent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'Finished: ${boundary.previous.name}',
+                style: TextStyle(color: fg.withValues(alpha: 0.54), fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Divider(color: fg.withValues(alpha: 0.24), height: 1),
+              const SizedBox(height: 8),
+              Text(
+                name == null ? 'No next chapter' : 'Next: $name',
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -312,6 +405,8 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
     Widget image = Image.network(
       url,
       headers: _buildHeaders(url),
+      // IMP-009: decode near display width (null = full size, as before).
+      cacheWidth: readerDecodeCacheWidth(contentWidth, MediaQuery.devicePixelRatioOf(context)),
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) {
           return child;
@@ -584,7 +679,43 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
         .toList();
     for (final k in evict) {
       widget.webtoonZoomControllers.remove(k)?.dispose();
-      widget.webtoonPageKeys.remove(k);
     }
   }
+}
+/// IMP-014: fades a paged item in when it is first built (fade transition).
+@visibleForTesting
+class ReaderPageFadeIn extends StatefulWidget {
+  const ReaderPageFadeIn({super.key, required this.child});
+  final Widget child;
+
+  @override
+  State<ReaderPageFadeIn> createState() => _ReaderPageFadeInState();
+}
+
+class _ReaderPageFadeInState extends State<ReaderPageFadeIn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 180),
+  )..forward();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      FadeTransition(opacity: _c, child: widget.child);
+}
+
+/// IMP-028: stable identity of webtoon item [index]: chapter + page for strip
+/// items (survives index shifts on trim), the index otherwise.
+@visibleForTesting
+String webtoonItemKey(List<ReaderItem>? items, int index) {
+  final item = (items != null && index >= 0 && index < items.length) ? items[index] : null;
+  if (item is ReaderPageItem) return 'p:${item.chapter.id}:${item.chapter.serverId}:${item.pageIndex}';
+  if (item is ReaderChapterBoundary) return 'b:${item.previous.id}:${item.previous.serverId}';
+  return 'i:$index';
 }

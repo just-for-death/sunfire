@@ -121,7 +121,8 @@ void main() {
   });
 
   test('fetchServerSettings source does not select secret fields', () {
-    final gql = File('lib/src/core/sync/graphql_client_service.dart')
+    // IMP-034: fetchServerSettings lives in a part of the client library.
+    final gql = File('lib/src/core/sync/graphql_results_settings_api.dart')
         .readAsStringSync();
     // Narrow to fetchServerSettings body.
     final start = gql.indexOf('Future<Map<String, dynamic>?> fetchServerSettings');

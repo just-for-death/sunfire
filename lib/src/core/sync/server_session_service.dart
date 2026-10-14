@@ -169,7 +169,7 @@ class SecureServerSessionStore implements ServerSessionStore {
     try {
       final v = await _storage.read(key: storageKey);
       if (v != null && v.isNotEmpty) return v;
-    } catch (_) {}
+    } catch (e) { debugPrint('[server_session_service] ignored: $e'); }
     try {
       final prefs = await SharedPreferences.getInstance();
       final v = prefs.getString(storageKey);
@@ -231,7 +231,7 @@ DateTime? jwtExpiry(String token) {
     final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
     final exp = payload is Map ? payload['exp'] : null;
     if (exp is num) return DateTime.fromMillisecondsSinceEpoch((exp * 1000).toInt(), isUtc: true);
-  } catch (_) {}
+  } catch (e) { debugPrint('[server_session_service] ignored: $e'); }
   return null;
 }
 
@@ -339,7 +339,7 @@ class ServerSessionService implements ServerAuthRefresher {
     try {
       final raw = await store.read();
       if (raw != null && raw.isNotEmpty) loaded = ServerSession.fromJson(jsonDecode(raw));
-    } catch (_) {}
+    } catch (e) { debugPrint('[server_session_service] ignored: $e'); }
     if (loaded == null || base == null || _normalizeBase(loaded.baseUrl) != _normalizeBase(base)) {
       _session = null;
       isLoggedInNotifier.value = false;
@@ -439,7 +439,7 @@ class ServerSessionService implements ServerAuthRefresher {
     if (_session == null || !isNearExpiry || _inCooldown) return;
     try {
       await refresh();
-    } catch (_) {}
+    } catch (e) { debugPrint('[server_session_service] ignored: $e'); }
   }
 
   @override
@@ -471,7 +471,7 @@ class ServerSessionService implements ServerAuthRefresher {
     final s = _session;
     try {
       await store.write(s == null ? null : jsonEncode(s.toJson()));
-    } catch (_) {}
+    } catch (e) { debugPrint('[server_session_service] ignored: $e'); }
   }
 
   void _applyToTransports() {

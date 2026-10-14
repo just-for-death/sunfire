@@ -7,6 +7,38 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [6.0.0] — 2026-10-14
+
+### Added
+
+- Tap-zone presets with a first-run overlay, and double-page spreads
+  (Single / Double / Automatic, page offset, wide-page isolation).
+- Smart double-tap zoom that fits the column.
+- Library custom tags, smart collections, duplicate detection and
+  JSON/CSV import-export.
+- Sync Health screen, sync conflict dialogs and selective sync.
+- "Prefetch next chapter" setting: Always, Wi-Fi only or Off.
+- Migrating a manga to another source now copies its tracking.
+
+### Changed
+
+- The reader was rebuilt into separate parts for page loading, navigation
+  and gestures. It now loads, retries and switches chapters more reliably.
+- Android uses Material 3 with dynamic colour, predictive back and
+  edge-to-edge.
+
+### Fixed
+
+- Pages that fail to load or decode show a working Retry.
+- Pages appear as soon as their images arrive on desktop.
+- Rapid chapter switching no longer shows a stale chapter or an error
+  flash.
+- Sync no longer drops a request made while another sync is running.
+- Category changes and extension-store removals made offline now sync once
+  you are back online.
+
+---
+
 ## [5.0.0] — 2026-10-08
 
 ### Added

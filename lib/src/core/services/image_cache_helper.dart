@@ -13,6 +13,7 @@ import '../engine/image_validation.dart';
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/graphql_client_service.dart';
+import '../utils/app_identity.dart';
 import 'in_flight_mutex.dart';
 import 'safe_curl.dart';
 import 'server_tls_trust.dart';
@@ -67,7 +68,7 @@ class ImageCacheHelper {
         final home = Platform.environment['HOME'];
         if (home != null) {
           paths.add('$home/Documents/covers');
-          paths.add('$home/.local/share/com.sunfire.sunfire/covers');
+          paths.add('$home/.local/share/$kLinuxApplicationId/covers');
           paths.add('$home/.local/share/sunfire/covers');
         }
       }
@@ -186,16 +187,16 @@ class ImageCacheHelper {
       for (final f in files.cast<File>()) {
         try {
           withTime.add((file: f, modified: await f.lastModified()));
-        } catch (_) {}
+        } catch (e) { debugPrint('[image_cache_helper] ignored: $e'); }
       }
       withTime.sort((a, b) => a.modified.compareTo(b.modified));
       for (var i = 0; i < withTime.length - kDiskCoverFileCap; i++) {
         try {
           await withTime[i].file.delete();
           _localPathCache.removeWhere((_, v) => v == withTime[i].file.path);
-        } catch (_) {}
+        } catch (e) { debugPrint('[image_cache_helper] ignored: $e'); }
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('[image_cache_helper] ignored: $e'); }
   }
 
   /// Empties the memory and on-disk cover caches.

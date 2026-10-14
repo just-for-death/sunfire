@@ -4,25 +4,32 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 
-import 'dart:async' as _i14;
-import 'dart:ui' as _i7;
+import 'dart:async' as _i18;
+import 'dart:ui' as _i9;
 
-import 'package:flutter/widgets.dart' as _i12;
+import 'package:flutter/foundation.dart' as _i8;
+import 'package:flutter/widgets.dart' as _i14;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i15;
+import 'package:mockito/src/dummies.dart' as _i19;
 import 'package:sunfire/src/core/db/isar_service.dart' as _i2;
-import 'package:sunfire/src/core/db/models/chapter.dart' as _i11;
-import 'package:sunfire/src/core/db/models/manga.dart' as _i13;
+import 'package:sunfire/src/core/db/models/chapter.dart' as _i13;
+import 'package:sunfire/src/core/db/models/manga.dart' as _i16;
 import 'package:sunfire/src/core/metron/metron_service.dart' as _i5;
 import 'package:sunfire/src/core/services/settings_service.dart' as _i3;
 import 'package:sunfire/src/core/sync/sync_engine.dart' as _i4;
 import 'package:sunfire/src/features/reader/controller/gesture_pipeline.dart'
-    as _i6;
+    as _i7;
+import 'package:sunfire/src/features/reader/controller/navigation_controller.dart'
+    as _i15;
+import 'package:sunfire/src/features/reader/controller/page_loader.dart'
+    as _i17;
 import 'package:sunfire/src/features/reader/controller/reader_controller.dart'
-    as _i8;
-import 'package:sunfire/src/features/reader/controller/reader_theme.dart'
     as _i10;
-import 'package:sunfire/src/features/reader/reading_mode.dart' as _i9;
+import 'package:sunfire/src/features/reader/controller/reader_theme.dart'
+    as _i12;
+import 'package:sunfire/src/features/reader/controller/webtoon_item_registry.dart'
+    as _i6;
+import 'package:sunfire/src/features/reader/reading_mode.dart' as _i11;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -60,21 +67,33 @@ class _FakeMetronService_3 extends _i1.SmartFake implements _i5.MetronService {
     : super(parent, parentInvocation);
 }
 
-class _FakeGesturePipeline_4 extends _i1.SmartFake
-    implements _i6.GesturePipeline {
-  _FakeGesturePipeline_4(Object parent, Invocation parentInvocation)
+class _FakeWebtoonItemRegistry_4 extends _i1.SmartFake
+    implements _i6.WebtoonItemRegistry {
+  _FakeWebtoonItemRegistry_4(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeColor_5 extends _i1.SmartFake implements _i7.Color {
-  _FakeColor_5(Object parent, Invocation parentInvocation)
+class _FakeGesturePipeline_5 extends _i1.SmartFake
+    implements _i7.GesturePipeline {
+  _FakeGesturePipeline_5(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeValueListenable_6<T> extends _i1.SmartFake
+    implements _i8.ValueListenable<T> {
+  _FakeValueListenable_6(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeColor_7 extends _i1.SmartFake implements _i9.Color {
+  _FakeColor_7(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
 /// A class which mocks [ReaderController].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockReaderController extends _i1.Mock implements _i8.ReaderController {
+class MockReaderController extends _i1.Mock implements _i10.ReaderController {
   MockReaderController() {
     _i1.throwOnMissingStub(this);
   }
@@ -129,36 +148,44 @@ class MockReaderController extends _i1.Mock implements _i8.ReaderController {
           as _i5.MetronService);
 
   @override
-  _i9.ReadingMode get readingMode =>
+  bool get restoreProgressOnLoad =>
+      (super.noSuchMethod(
+            Invocation.getter(#restoreProgressOnLoad),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  _i11.ReadingMode get readingMode =>
       (super.noSuchMethod(
             Invocation.getter(#readingMode),
-            returnValue: _i9.ReadingMode.longStrip,
+            returnValue: _i11.ReadingMode.longStrip,
           )
-          as _i9.ReadingMode);
+          as _i11.ReadingMode);
 
   @override
-  _i10.ReaderThemeMode get readerTheme =>
+  _i12.ReaderThemeMode get readerTheme =>
       (super.noSuchMethod(
             Invocation.getter(#readerTheme),
-            returnValue: _i10.ReaderThemeMode.black,
+            returnValue: _i12.ReaderThemeMode.black,
           )
-          as _i10.ReaderThemeMode);
+          as _i12.ReaderThemeMode);
 
   @override
-  _i10.ReaderColorFilter get colorFilter =>
+  _i12.ReaderColorFilter get colorFilter =>
       (super.noSuchMethod(
             Invocation.getter(#colorFilter),
-            returnValue: _i10.ReaderColorFilter.none,
+            returnValue: _i12.ReaderColorFilter.none,
           )
-          as _i10.ReaderColorFilter);
+          as _i12.ReaderColorFilter);
 
   @override
-  _i10.ImageScaleType get scaleType =>
+  _i12.ImageScaleType get scaleType =>
       (super.noSuchMethod(
             Invocation.getter(#scaleType),
-            returnValue: _i10.ImageScaleType.fitWidth,
+            returnValue: _i12.ImageScaleType.fitWidth,
           )
-          as _i10.ImageScaleType);
+          as _i12.ImageScaleType);
 
   @override
   bool get cropBorders =>
@@ -223,49 +250,70 @@ class MockReaderController extends _i1.Mock implements _i8.ReaderController {
           as List<String>);
 
   @override
-  List<_i11.Chapter> get siblingChapters =>
+  List<_i13.Chapter> get siblingChapters =>
       (super.noSuchMethod(
             Invocation.getter(#siblingChapters),
-            returnValue: <_i11.Chapter>[],
+            returnValue: <_i13.Chapter>[],
           )
-          as List<_i11.Chapter>);
+          as List<_i13.Chapter>);
 
   @override
-  Map<int, _i12.TransformationController> get webtoonZoomControllers =>
+  Map<int, _i14.TransformationController> get webtoonZoomControllers =>
       (super.noSuchMethod(
             Invocation.getter(#webtoonZoomControllers),
-            returnValue: <int, _i12.TransformationController>{},
+            returnValue: <int, _i14.TransformationController>{},
           )
-          as Map<int, _i12.TransformationController>);
+          as Map<int, _i14.TransformationController>);
 
   @override
-  Map<int, _i12.GlobalKey<_i12.State<_i12.StatefulWidget>>>
-  get webtoonPageKeys =>
+  _i6.WebtoonItemRegistry get webtoonItemRegistry =>
       (super.noSuchMethod(
-            Invocation.getter(#webtoonPageKeys),
-            returnValue:
-                <int, _i12.GlobalKey<_i12.State<_i12.StatefulWidget>>>{},
+            Invocation.getter(#webtoonItemRegistry),
+            returnValue: _FakeWebtoonItemRegistry_4(
+              this,
+              Invocation.getter(#webtoonItemRegistry),
+            ),
           )
-          as Map<int, _i12.GlobalKey<_i12.State<_i12.StatefulWidget>>>);
+          as _i6.WebtoonItemRegistry);
 
   @override
-  _i6.GesturePipeline get gesturePipeline =>
+  _i7.GesturePipeline get gesturePipeline =>
       (super.noSuchMethod(
             Invocation.getter(#gesturePipeline),
-            returnValue: _FakeGesturePipeline_4(
+            returnValue: _FakeGesturePipeline_5(
               this,
               Invocation.getter(#gesturePipeline),
             ),
           )
-          as _i6.GesturePipeline);
+          as _i7.GesturePipeline);
+
+  @override
+  List<_i15.ReaderChapterPages> get stripChapters =>
+      (super.noSuchMethod(
+            Invocation.getter(#stripChapters),
+            returnValue: <_i15.ReaderChapterPages>[],
+          )
+          as List<_i15.ReaderChapterPages>);
+
+  @override
+  _i8.ValueListenable<List<_i15.ReaderChapterPages>>
+  get stripChaptersListenable =>
+      (super.noSuchMethod(
+            Invocation.getter(#stripChaptersListenable),
+            returnValue: _FakeValueListenable_6<List<_i15.ReaderChapterPages>>(
+              this,
+              Invocation.getter(#stripChaptersListenable),
+            ),
+          )
+          as _i8.ValueListenable<List<_i15.ReaderChapterPages>>);
 
   @override
   set onChapterLoaded(
     void Function(
-      _i11.Chapter,
-      List<_i11.Chapter>,
-      _i11.Chapter?,
-      _i11.Chapter?,
+      _i13.Chapter,
+      List<_i13.Chapter>,
+      _i13.Chapter?,
+      _i13.Chapter?,
     )?
     value,
   ) => super.noSuchMethod(
@@ -311,14 +359,14 @@ class MockReaderController extends _i1.Mock implements _i8.ReaderController {
   );
 
   @override
-  set onReadingModeChanged(void Function(_i9.ReadingMode)? value) =>
+  set onReadingModeChanged(void Function(_i11.ReadingMode)? value) =>
       super.noSuchMethod(
         Invocation.setter(#onReadingModeChanged, value),
         returnValueForMissingStub: null,
       );
 
   @override
-  set onParentMangaLoaded(void Function(_i13.Manga?)? value) =>
+  set onParentMangaLoaded(void Function(_i16.Manga?)? value) =>
       super.noSuchMethod(
         Invocation.setter(#onParentMangaLoaded, value),
         returnValueForMissingStub: null,
@@ -331,18 +379,80 @@ class MockReaderController extends _i1.Mock implements _i8.ReaderController {
   );
 
   @override
-  void setDoubleTapDetails(_i7.Offset? details) => super.noSuchMethod(
+  set restoreProgressOnLoad(bool? value) => super.noSuchMethod(
+    Invocation.setter(#restoreProgressOnLoad, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set onStripChapterSwitched(
+    void Function(_i13.Chapter, _i13.Chapter?, _i13.Chapter?)? value,
+  ) => super.noSuchMethod(
+    Invocation.setter(#onStripChapterSwitched, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void setDoubleTapDetails(_i9.Offset? details) => super.noSuchMethod(
     Invocation.method(#setDoubleTapDetails, [details]),
     returnValueForMissingStub: null,
   );
 
   @override
-  _i14.Future<void> initialize({
-    required _i12.ScrollController? scrollController,
-    required _i12.PageController? pageController,
-    required _i12.TransformationController? transformationController,
-    _i12.AnimationController? zoomAnimController,
-    required Map<int, _i12.TransformationController>? webtoonZoomControllers,
+  void attachUiControllers({
+    required _i14.ScrollController? scrollController,
+    required _i14.PageController? pageController,
+    required _i14.TransformationController? transformationController,
+    _i14.AnimationController? zoomAnimController,
+    required Map<int, _i14.TransformationController>? webtoonZoomControllers,
+  }) => super.noSuchMethod(
+    Invocation.method(#attachUiControllers, [], {
+      #scrollController: scrollController,
+      #pageController: pageController,
+      #transformationController: transformationController,
+      #zoomAnimController: zoomAnimController,
+      #webtoonZoomControllers: webtoonZoomControllers,
+    }),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void setPageLoader(_i17.PageLoader? loader) => super.noSuchMethod(
+    Invocation.method(#setPageLoader, [loader]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void syncPresentation({
+    required _i11.ReadingMode? readingMode,
+    required _i12.ReaderThemeMode? readerTheme,
+    required _i12.ReaderColorFilter? colorFilter,
+    required _i12.ImageScaleType? scaleType,
+    required bool? cropBorders,
+    required bool? invertTaps,
+    required bool? isZoomed,
+    required int? currentPage,
+  }) => super.noSuchMethod(
+    Invocation.method(#syncPresentation, [], {
+      #readingMode: readingMode,
+      #readerTheme: readerTheme,
+      #colorFilter: colorFilter,
+      #scaleType: scaleType,
+      #cropBorders: cropBorders,
+      #invertTaps: invertTaps,
+      #isZoomed: isZoomed,
+      #currentPage: currentPage,
+    }),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  _i18.Future<void> initialize({
+    required _i14.ScrollController? scrollController,
+    required _i14.PageController? pageController,
+    required _i14.TransformationController? transformationController,
+    _i14.AnimationController? zoomAnimController,
+    required Map<int, _i14.TransformationController>? webtoonZoomControllers,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#initialize, [], {
@@ -352,22 +462,86 @@ class MockReaderController extends _i1.Mock implements _i8.ReaderController {
               #zoomAnimController: zoomAnimController,
               #webtoonZoomControllers: webtoonZoomControllers,
             }),
-            returnValue: _i14.Future<void>.value(),
-            returnValueForMissingStub: _i14.Future<void>.value(),
+            returnValue: _i18.Future<void>.value(),
+            returnValueForMissingStub: _i18.Future<void>.value(),
           )
-          as _i14.Future<void>);
+          as _i18.Future<void>);
 
   @override
-  _i14.Future<void> setReadingMode(
-    _i9.ReadingMode? mode, {
+  _i18.Future<void> loadChapter(int? chapterId) =>
+      (super.noSuchMethod(
+            Invocation.method(#loadChapter, [chapterId]),
+            returnValue: _i18.Future<void>.value(),
+            returnValueForMissingStub: _i18.Future<void>.value(),
+          )
+          as _i18.Future<void>);
+
+  @override
+  void applySeriesSettings(_i16.Manga? manga) => super.noSuchMethod(
+    Invocation.method(#applySeriesSettings, [manga]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void refreshStripChapters() => super.noSuchMethod(
+    Invocation.method(#refreshStripChapters, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void recordStripItemExtent(int? index, double? extent) => super.noSuchMethod(
+    Invocation.method(#recordStripItemExtent, [index, extent]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  double? recordedStripItemExtent(int? index) =>
+      (super.noSuchMethod(Invocation.method(#recordedStripItemExtent, [index]))
+          as double?);
+
+  @override
+  ({int page, double removedExtent, int removedItems})? onStripItemVisible(
+    int? itemIndex, {
+    double? contentWidth = 0.0,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #onStripItemVisible,
+              [itemIndex],
+              {#contentWidth: contentWidth},
+            ),
+          )
+          as ({int page, double removedExtent, int removedItems})?);
+
+  @override
+  _i18.Future<void> loadNextChapter() =>
+      (super.noSuchMethod(
+            Invocation.method(#loadNextChapter, []),
+            returnValue: _i18.Future<void>.value(),
+            returnValueForMissingStub: _i18.Future<void>.value(),
+          )
+          as _i18.Future<void>);
+
+  @override
+  _i18.Future<void> loadPrevChapter() =>
+      (super.noSuchMethod(
+            Invocation.method(#loadPrevChapter, []),
+            returnValue: _i18.Future<void>.value(),
+            returnValueForMissingStub: _i18.Future<void>.value(),
+          )
+          as _i18.Future<void>);
+
+  @override
+  _i18.Future<void> setReadingMode(
+    _i11.ReadingMode? mode, {
     bool? showSnack = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#setReadingMode, [mode], {#showSnack: showSnack}),
-            returnValue: _i14.Future<void>.value(),
-            returnValueForMissingStub: _i14.Future<void>.value(),
+            returnValue: _i18.Future<void>.value(),
+            returnValueForMissingStub: _i18.Future<void>.value(),
           )
-          as _i14.Future<void>);
+          as _i18.Future<void>);
 
   @override
   void toggleAutoScroll() => super.noSuchMethod(
@@ -382,19 +556,19 @@ class MockReaderController extends _i1.Mock implements _i8.ReaderController {
   );
 
   @override
-  void updateTheme(_i10.ReaderThemeMode? theme) => super.noSuchMethod(
+  void updateTheme(_i12.ReaderThemeMode? theme) => super.noSuchMethod(
     Invocation.method(#updateTheme, [theme]),
     returnValueForMissingStub: null,
   );
 
   @override
-  void updateColorFilter(_i10.ReaderColorFilter? filter) => super.noSuchMethod(
+  void updateColorFilter(_i12.ReaderColorFilter? filter) => super.noSuchMethod(
     Invocation.method(#updateColorFilter, [filter]),
     returnValueForMissingStub: null,
   );
 
   @override
-  void updateScaleType(_i10.ImageScaleType? type) => super.noSuchMethod(
+  void updateScaleType(_i12.ImageScaleType? type) => super.noSuchMethod(
     Invocation.method(#updateScaleType, [type]),
     returnValueForMissingStub: null,
   );
@@ -424,24 +598,6 @@ class MockReaderController extends _i1.Mock implements _i8.ReaderController {
   );
 
   @override
-  _i14.Future<void> loadNextChapter() =>
-      (super.noSuchMethod(
-            Invocation.method(#loadNextChapter, []),
-            returnValue: _i14.Future<void>.value(),
-            returnValueForMissingStub: _i14.Future<void>.value(),
-          )
-          as _i14.Future<void>);
-
-  @override
-  _i14.Future<void> loadPrevChapter() =>
-      (super.noSuchMethod(
-            Invocation.method(#loadPrevChapter, []),
-            returnValue: _i14.Future<void>.value(),
-            returnValueForMissingStub: _i14.Future<void>.value(),
-          )
-          as _i14.Future<void>);
-
-  @override
   void stopAutoScroll() => super.noSuchMethod(
     Invocation.method(#stopAutoScroll, []),
     returnValueForMissingStub: null,
@@ -455,7 +611,7 @@ class MockReaderController extends _i1.Mock implements _i8.ReaderController {
 
   @override
   void handleDoubleTapZoom({
-    _i12.TransformationController? controllerOverride,
+    _i14.TransformationController? controllerOverride,
   }) => super.noSuchMethod(
     Invocation.method(#handleDoubleTapZoom, [], {
       #controllerOverride: controllerOverride,
@@ -498,7 +654,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get serverUrl =>
       (super.noSuchMethod(
             Invocation.getter(#serverUrl),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#serverUrl),
             ),
@@ -509,7 +665,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get cfProxyUrl =>
       (super.noSuchMethod(
             Invocation.getter(#cfProxyUrl),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#cfProxyUrl),
             ),
@@ -517,18 +673,18 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
           as String);
 
   @override
-  _i14.Future<void> get pendingProxyPersist =>
+  _i18.Future<void> get pendingProxyPersist =>
       (super.noSuchMethod(
             Invocation.getter(#pendingProxyPersist),
-            returnValue: _i14.Future<void>.value(),
+            returnValue: _i18.Future<void>.value(),
           )
-          as _i14.Future<void>);
+          as _i18.Future<void>);
 
   @override
   String get accentColorName =>
       (super.noSuchMethod(
             Invocation.getter(#accentColorName),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#accentColorName),
             ),
@@ -536,12 +692,12 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
           as String);
 
   @override
-  _i7.Color get accentColor =>
+  _i9.Color get accentColor =>
       (super.noSuchMethod(
             Invocation.getter(#accentColor),
-            returnValue: _FakeColor_5(this, Invocation.getter(#accentColor)),
+            returnValue: _FakeColor_7(this, Invocation.getter(#accentColor)),
           )
-          as _i7.Color);
+          as _i9.Color);
 
   @override
   bool get tabletSidebarExpanded =>
@@ -560,7 +716,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get readingMode =>
       (super.noSuchMethod(
             Invocation.getter(#readingMode),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#readingMode),
             ),
@@ -571,7 +727,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get readerTheme =>
       (super.noSuchMethod(
             Invocation.getter(#readerTheme),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#readerTheme),
             ),
@@ -582,7 +738,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get colorFilter =>
       (super.noSuchMethod(
             Invocation.getter(#colorFilter),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#colorFilter),
             ),
@@ -593,7 +749,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get scaleType =>
       (super.noSuchMethod(
             Invocation.getter(#scaleType),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#scaleType),
             ),
@@ -620,7 +776,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get tapZonePresetPaged =>
       (super.noSuchMethod(
             Invocation.getter(#tapZonePresetPaged),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#tapZonePresetPaged),
             ),
@@ -631,7 +787,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get tapZonePresetWebtoon =>
       (super.noSuchMethod(
             Invocation.getter(#tapZonePresetWebtoon),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#tapZonePresetWebtoon),
             ),
@@ -650,7 +806,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get doublePageDisplayMode =>
       (super.noSuchMethod(
             Invocation.getter(#doublePageDisplayMode),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#doublePageDisplayMode),
             ),
@@ -695,6 +851,25 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
           as bool);
 
   @override
+  String get pageTransition =>
+      (super.noSuchMethod(
+            Invocation.getter(#pageTransition),
+            returnValue: _i19.dummyValue<String>(
+              this,
+              Invocation.getter(#pageTransition),
+            ),
+          )
+          as String);
+
+  @override
+  bool get rotateWidePages =>
+      (super.noSuchMethod(
+            Invocation.getter(#rotateWidePages),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
   bool get cropBorders =>
       (super.noSuchMethod(Invocation.getter(#cropBorders), returnValue: false)
           as bool);
@@ -711,7 +886,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get themeMode =>
       (super.noSuchMethod(
             Invocation.getter(#themeMode),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#themeMode),
             ),
@@ -738,7 +913,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get dateFormat =>
       (super.noSuchMethod(
             Invocation.getter(#dateFormat),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#dateFormat),
             ),
@@ -749,7 +924,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get libraryDisplayMode =>
       (super.noSuchMethod(
             Invocation.getter(#libraryDisplayMode),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#libraryDisplayMode),
             ),
@@ -842,12 +1017,98 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get deleteFinishedChaptersWhileReading =>
       (super.noSuchMethod(
             Invocation.getter(#deleteFinishedChaptersWhileReading),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#deleteFinishedChaptersWhileReading),
             ),
           )
           as String);
+
+  @override
+  int get downloadConcurrency =>
+      (super.noSuchMethod(
+            Invocation.getter(#downloadConcurrency),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  int get downloadPerSourceLimit =>
+      (super.noSuchMethod(
+            Invocation.getter(#downloadPerSourceLimit),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  int get deleteAfterReadOffset =>
+      (super.noSuchMethod(
+            Invocation.getter(#deleteAfterReadOffset),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  String get localSourceRoot =>
+      (super.noSuchMethod(
+            Invocation.getter(#localSourceRoot),
+            returnValue: _i19.dummyValue<String>(
+              this,
+              Invocation.getter(#localSourceRoot),
+            ),
+          )
+          as String);
+
+  @override
+  String get localDownloadDirectory =>
+      (super.noSuchMethod(
+            Invocation.getter(#localDownloadDirectory),
+            returnValue: _i19.dummyValue<String>(
+              this,
+              Invocation.getter(#localDownloadDirectory),
+            ),
+          )
+          as String);
+
+  @override
+  int get downloadMinFreeSpaceMb =>
+      (super.noSuchMethod(
+            Invocation.getter(#downloadMinFreeSpaceMb),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  bool get updateSkipCompleted =>
+      (super.noSuchMethod(
+            Invocation.getter(#updateSkipCompleted),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool get updateSkipWithUnread =>
+      (super.noSuchMethod(
+            Invocation.getter(#updateSkipWithUnread),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool get updateSkipNotStarted =>
+      (super.noSuchMethod(
+            Invocation.getter(#updateSkipNotStarted),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool get deleteAfterReadExcludeBookmarked =>
+      (super.noSuchMethod(
+            Invocation.getter(#deleteAfterReadExcludeBookmarked),
+            returnValue: false,
+          )
+          as bool);
 
   @override
   bool get allowDeletingBookmarkedChapters =>
@@ -882,6 +1143,17 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
           as bool);
 
   @override
+  String get prefetchNextChapter =>
+      (super.noSuchMethod(
+            Invocation.getter(#prefetchNextChapter),
+            returnValue: _i19.dummyValue<String>(
+              this,
+              Invocation.getter(#prefetchNextChapter),
+            ),
+          )
+          as String);
+
+  @override
   bool get downloadOnlyWhileCharging =>
       (super.noSuchMethod(
             Invocation.getter(#downloadOnlyWhileCharging),
@@ -909,7 +1181,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get defaultCategoryName =>
       (super.noSuchMethod(
             Invocation.getter(#defaultCategoryName),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#defaultCategoryName),
             ),
@@ -1000,7 +1272,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get appLocale =>
       (super.noSuchMethod(
             Invocation.getter(#appLocale),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#appLocale),
             ),
@@ -1011,7 +1283,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get startScreen =>
       (super.noSuchMethod(
             Invocation.getter(#startScreen),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#startScreen),
             ),
@@ -1083,7 +1355,7 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   String get smartCollectionRulesJson =>
       (super.noSuchMethod(
             Invocation.getter(#smartCollectionRulesJson),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.getter(#smartCollectionRulesJson),
             ),
@@ -1223,6 +1495,18 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   );
 
   @override
+  set pageTransition(String? value) => super.noSuchMethod(
+    Invocation.setter(#pageTransition, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set rotateWidePages(bool? value) => super.noSuchMethod(
+    Invocation.setter(#rotateWidePages, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   set cropBorders(bool? value) => super.noSuchMethod(
     Invocation.setter(#cropBorders, value),
     returnValueForMissingStub: null,
@@ -1331,6 +1615,66 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   );
 
   @override
+  set downloadConcurrency(int? value) => super.noSuchMethod(
+    Invocation.setter(#downloadConcurrency, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set downloadPerSourceLimit(int? value) => super.noSuchMethod(
+    Invocation.setter(#downloadPerSourceLimit, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set deleteAfterReadOffset(int? value) => super.noSuchMethod(
+    Invocation.setter(#deleteAfterReadOffset, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set localSourceRoot(String? value) => super.noSuchMethod(
+    Invocation.setter(#localSourceRoot, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set localDownloadDirectory(String? value) => super.noSuchMethod(
+    Invocation.setter(#localDownloadDirectory, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set downloadMinFreeSpaceMb(int? value) => super.noSuchMethod(
+    Invocation.setter(#downloadMinFreeSpaceMb, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set updateSkipCompleted(bool? value) => super.noSuchMethod(
+    Invocation.setter(#updateSkipCompleted, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set updateSkipWithUnread(bool? value) => super.noSuchMethod(
+    Invocation.setter(#updateSkipWithUnread, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set updateSkipNotStarted(bool? value) => super.noSuchMethod(
+    Invocation.setter(#updateSkipNotStarted, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set deleteAfterReadExcludeBookmarked(bool? value) => super.noSuchMethod(
+    Invocation.setter(#deleteAfterReadExcludeBookmarked, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   set allowDeletingBookmarkedChapters(bool? value) => super.noSuchMethod(
     Invocation.setter(#allowDeletingBookmarkedChapters, value),
     returnValueForMissingStub: null,
@@ -1351,6 +1695,12 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   @override
   set downloadOnlyOnWifi(bool? value) => super.noSuchMethod(
     Invocation.setter(#downloadOnlyOnWifi, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set prefetchNextChapter(String? value) => super.noSuchMethod(
+    Invocation.setter(#prefetchNextChapter, value),
     returnValueForMissingStub: null,
   );
 
@@ -1516,19 +1866,49 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
           as bool);
 
   @override
-  _i14.Future<void> initialize() =>
+  _i18.Future<void> initialize() =>
       (super.noSuchMethod(
             Invocation.method(#initialize, []),
-            returnValue: _i14.Future<void>.value(),
-            returnValueForMissingStub: _i14.Future<void>.value(),
+            returnValue: _i18.Future<void>.value(),
+            returnValueForMissingStub: _i18.Future<void>.value(),
           )
-          as _i14.Future<void>);
+          as _i18.Future<void>);
+
+  @override
+  Map<String, dynamic>? readerOverrideJson(int? mangaId) =>
+      (super.noSuchMethod(Invocation.method(#readerOverrideJson, [mangaId]))
+          as Map<String, dynamic>?);
+
+  @override
+  _i18.Future<void> setReaderOverrideJson(
+    int? mangaId,
+    Map<String, Object>? json, {
+    int? updatedAtMs,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #setReaderOverrideJson,
+              [mangaId, json],
+              {#updatedAtMs: updatedAtMs},
+            ),
+            returnValue: _i18.Future<void>.value(),
+            returnValueForMissingStub: _i18.Future<void>.value(),
+          )
+          as _i18.Future<void>);
+
+  @override
+  int readerOverrideUpdatedAt(int? mangaId) =>
+      (super.noSuchMethod(
+            Invocation.method(#readerOverrideUpdatedAt, [mangaId]),
+            returnValue: 0,
+          )
+          as int);
 
   @override
   String formatDate(DateTime? date) =>
       (super.noSuchMethod(
             Invocation.method(#formatDate, [date]),
-            returnValue: _i15.dummyValue<String>(
+            returnValue: _i19.dummyValue<String>(
               this,
               Invocation.method(#formatDate, [date]),
             ),
@@ -1536,13 +1916,13 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
           as String);
 
   @override
-  _i14.Future<void> togglePinSource(String? sourceName) =>
+  _i18.Future<void> togglePinSource(String? sourceName) =>
       (super.noSuchMethod(
             Invocation.method(#togglePinSource, [sourceName]),
-            returnValue: _i14.Future<void>.value(),
-            returnValueForMissingStub: _i14.Future<void>.value(),
+            returnValue: _i18.Future<void>.value(),
+            returnValueForMissingStub: _i18.Future<void>.value(),
           )
-          as _i14.Future<void>);
+          as _i18.Future<void>);
 
   @override
   bool isSourcePinned(String? sourceName) =>
@@ -1558,40 +1938,40 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
           as String?);
 
   @override
-  _i14.Future<void> setDeviceName(String? deviceId, String? name) =>
+  _i18.Future<void> setDeviceName(String? deviceId, String? name) =>
       (super.noSuchMethod(
             Invocation.method(#setDeviceName, [deviceId, name]),
-            returnValue: _i14.Future<void>.value(),
-            returnValueForMissingStub: _i14.Future<void>.value(),
+            returnValue: _i18.Future<void>.value(),
+            returnValueForMissingStub: _i18.Future<void>.value(),
           )
-          as _i14.Future<void>);
+          as _i18.Future<void>);
 
   @override
-  _i14.Future<void> addCustomRepo(String? url) =>
+  _i18.Future<void> addCustomRepo(String? url) =>
       (super.noSuchMethod(
             Invocation.method(#addCustomRepo, [url]),
-            returnValue: _i14.Future<void>.value(),
-            returnValueForMissingStub: _i14.Future<void>.value(),
+            returnValue: _i18.Future<void>.value(),
+            returnValueForMissingStub: _i18.Future<void>.value(),
           )
-          as _i14.Future<void>);
+          as _i18.Future<void>);
 
   @override
-  _i14.Future<void> removeCustomRepo(String? url) =>
+  _i18.Future<void> removeCustomRepo(String? url) =>
       (super.noSuchMethod(
             Invocation.method(#removeCustomRepo, [url]),
-            returnValue: _i14.Future<void>.value(),
-            returnValueForMissingStub: _i14.Future<void>.value(),
+            returnValue: _i18.Future<void>.value(),
+            returnValueForMissingStub: _i18.Future<void>.value(),
           )
-          as _i14.Future<void>);
+          as _i18.Future<void>);
 
   @override
-  void addListener(_i7.VoidCallback? listener) => super.noSuchMethod(
+  void addListener(_i9.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#addListener, [listener]),
     returnValueForMissingStub: null,
   );
 
   @override
-  void removeListener(_i7.VoidCallback? listener) => super.noSuchMethod(
+  void removeListener(_i9.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#removeListener, [listener]),
     returnValueForMissingStub: null,
   );

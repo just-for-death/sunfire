@@ -89,7 +89,7 @@ class SyncHealthService {
           final error = payload.split('"error":"').last.split('"').first;
           failedByEntity[error] = (failedByEntity[error] ?? 0) + 1;
         }
-      } catch (_) {}
+      } catch (e) { debugPrint('[sync_health_service] ignored: $e'); }
     }
 
     final lastSync = await IsarService.instance.getLastSyncTimestamp();

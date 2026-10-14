@@ -43,7 +43,7 @@ class WidgetSyncService {
       // Push a widget refresh (no-op where the channel is absent).
       try {
         await _channel.invokeMethod('refreshWidget');
-      } catch (_) {}
+      } catch (e) { debugPrint('[widget_sync_service] ignored: $e'); }
     } catch (e) {
       debugPrint('[WidgetSync] update failed: $e');
     }

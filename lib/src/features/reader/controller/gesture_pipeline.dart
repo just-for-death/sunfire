@@ -716,10 +716,10 @@ class GesturePipeline {
 
     try {
       _autoScrollTicker?.stop();
-    } catch (_) {}
+    } catch (e) { debugPrint('[gesture_pipeline] ignored: $e'); }
     try {
       _autoScrollTicker?.dispose();
-    } catch (_) {}
+    } catch (e) { debugPrint('[gesture_pipeline] ignored: $e'); }
     _autoScrollTicker = null;
 
     // Do not dispose webtoon zoom controllers — UI owns the map.

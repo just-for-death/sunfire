@@ -1,10 +1,16 @@
-enum ReadingMode { longStrip, longStripGaps, pagedLtr, pagedRtl }
+/// IMP-011: [pagedVertical] is a paged mode whose pages turn top-to-bottom.
+enum ReadingMode { longStrip, longStripGaps, pagedLtr, pagedRtl, pagedVertical }
 
 bool isWebtoonReadingMode(ReadingMode mode) =>
     mode == ReadingMode.longStrip || mode == ReadingMode.longStripGaps;
 
 bool isPagedReadingMode(ReadingMode mode) =>
-    mode == ReadingMode.pagedLtr || mode == ReadingMode.pagedRtl;
+    mode == ReadingMode.pagedLtr ||
+    mode == ReadingMode.pagedRtl ||
+    mode == ReadingMode.pagedVertical;
+
+/// IMP-011: paged modes that turn along the vertical axis.
+bool isVerticalPagedReadingMode(ReadingMode mode) => mode == ReadingMode.pagedVertical;
 
 ReadingMode parseReadingMode(String str) {
   switch (str.toLowerCase().trim()) {
@@ -19,6 +25,11 @@ ReadingMode parseReadingMode(String str) {
     case 'paged rtl (manga)':
     case 'paged right-to-left':
       return ReadingMode.pagedRtl;
+    case 'paged vertical':
+    case 'vertical (paged)':
+    case 'vertical paged':
+    case 'vertical':
+      return ReadingMode.pagedVertical;
     case 'long strip':
     case 'webtoon':
     default:
@@ -35,6 +46,8 @@ ReadingMode cycleReadingMode(ReadingMode current) {
     case ReadingMode.pagedRtl:
       return ReadingMode.pagedLtr;
     case ReadingMode.pagedLtr:
+      return ReadingMode.pagedVertical;
+    case ReadingMode.pagedVertical:
       return ReadingMode.longStrip;
   }
 }
@@ -49,6 +62,8 @@ String readingModeSettingsValue(ReadingMode mode) {
       return 'Paged LTR';
     case ReadingMode.pagedRtl:
       return 'Paged RTL (Manga)';
+    case ReadingMode.pagedVertical:
+      return 'Paged Vertical';
   }
 }
 
@@ -62,6 +77,8 @@ String readingModeHudLabel(ReadingMode mode) {
       return 'RTL';
     case ReadingMode.pagedLtr:
       return 'LTR';
+    case ReadingMode.pagedVertical:
+      return 'VERT';
   }
 }
 
@@ -75,6 +92,8 @@ String readingModeSnackLabel(ReadingMode mode) {
       return 'Manga (Right to Left)';
     case ReadingMode.pagedLtr:
       return 'Comic (Left to Right)';
+    case ReadingMode.pagedVertical:
+      return 'Vertical (Paged)';
   }
 }
 

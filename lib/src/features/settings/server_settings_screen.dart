@@ -264,7 +264,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
         }
         _lastSyncYomiState = last?['state']?.toString();
       });
-    } catch (_) {}
+    } catch (e) { debugPrint('[server_settings_screen] ignored: $e'); }
   }
 
   Future<void> _showKoSyncDialog() async {
@@ -323,7 +323,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
         if (bundle.buildType != null) _serverBuildType = bundle.buildType!;
         _serverUpdates = bundle.serverUpdates ?? const [];
       });
-    } catch (_) {}
+    } catch (e) { debugPrint('[server_settings_screen] ignored: $e'); }
   }
 
   Future<void> _openWebUI() async {

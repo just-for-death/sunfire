@@ -306,14 +306,23 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     }
 
     try {
-      await GraphQLClientService.instance.bindTrack(widget.mangaServerId, trackerId, remoteId);
+      final r = await SyncEngine.instance.bindTrackWithOutbox(widget.mangaServerId, trackerId, remoteId as Object);
+      if (r.queued) {
+        _showQueuedUndo('Tracker link saved — will sync when the server is reachable.', r.undoToken, () async {
+          await _loadTrackingData();
+          final rec = _boundRecords.where((b) => parseIntSafe(b['trackerId']) == trackerId).firstOrNull;
+          if (rec != null) await _unbindRecord(parseIntSafe(rec['id']));
+        });
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
       await _loadTrackingData();
     } catch (e, st) {
       unawaited(LoggerService.instance.logError('Failed to bind tracker: $e', exception: e, stackTrace: st, category: 'Tracking'));
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Failed to link this series to the tracker.'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(trackingFailureMessage("Couldn't link tracker", e)),
           backgroundColor: Colors.redAccent,
         ));
       }
@@ -391,14 +400,23 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     if (!mounted || _isLoading) return;
     setState(() => _isLoading = true);
     try {
-      await GraphQLClientService.instance.unbindTrack(recordId);
+      final prev = _boundRecords.where((b) => parseIntSafe(b['id']) == recordId).firstOrNull;
+      final r = await SyncEngine.instance.unbindTrackWithOutbox(recordId);
+      if (r.queued) {
+        _showQueuedUndo('Tracker unlink saved — will sync when the server is reachable.', r.undoToken, () async {
+          final remote = prev?['remoteId'];
+          if (prev != null && remote != null) await _bindManga(parseIntSafe(prev['trackerId']), remote);
+        });
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
       await _loadTrackingData();
     } catch (e, st) {
       unawaited(LoggerService.instance.logError('Failed to unbind tracker: $e', exception: e, stackTrace: st, category: 'Tracking'));
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Failed to unlink the tracking record.'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(trackingFailureMessage("Couldn't unlink tracker", e)),
           backgroundColor: Colors.redAccent,
         ));
       }
@@ -763,8 +781,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       unawaited(LoggerService.instance.logError('Failed to update tracking record: $e', exception: e, stackTrace: st, category: 'Tracking'));
                       if (mounted) {
                         setState(() => _isLoading = false);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text('Failed to save tracking changes.'),
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(trackingFailureMessage("Couldn't update tracker", e)),
                           backgroundColor: Colors.redAccent,
                         ));
                       }
@@ -777,6 +795,25 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
           },
         );
       },
+    ));
+  }
+
+  /// UIS6-15: queued (offline) tracker change — offer Undo that drops the
+  /// pending outbox record.
+  void _showQueuedUndo(String text, int? token, Future<void> Function() inverse) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(text),
+      action: token == null
+          ? null
+          : SnackBarAction(
+              label: 'Undo',
+              onPressed: () async {
+                final ok = await SyncEngine.instance.undoQueuedMutation(token);
+                // Already sent to the server: undo by running the inverse action.
+                if (!ok) await inverse();
+              },
+            ),
     ));
   }
 
@@ -1902,3 +1939,11 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
   }
 }
 
+
+/// UIS6-01: user-facing tracker failure text. Uses the server's message when
+/// available and distinguishes "couldn't reach server" from a rejection.
+@visibleForTesting
+String trackingFailureMessage(String lead, Object e) {
+  if (e is ServerMutationException) return '$lead. ${e.userMessage}';
+  return '$lead. Please try again.';
+}

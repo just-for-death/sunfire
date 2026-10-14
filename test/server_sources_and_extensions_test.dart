@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sunfire/src/core/engine/quickjs_service.dart';
 import 'package:sunfire/src/core/services/settings_service.dart';
 import 'package:sunfire/src/core/sync/graphql_client_service.dart';
 import 'package:sunfire/src/features/browse/browse_screen.dart';
@@ -9,21 +12,34 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('SERVER SOURCES & EXTENSIONS VERIFICATION', () {
+    // Flake fix: BrowseScreen touches the QuickJsService singleton. Pin its
+    // extension scan to an empty temp dir (never the developer's HOME) and
+    // reset the test-only state so no state leaks into other files.
+    late Directory extDir;
     setUp(() async {
+      extDir = await Directory.systemTemp.createTemp('sunfire_ssx');
+      QuickJsService.testOnlyExtensionDirs = [extDir.path];
+      QuickJsService.instance.deferAutoInstall = true;
       SharedPreferences.setMockInitialValues({
-        'server_url': 'http://127.0.0.1:4567',
-        'sunfire_server_url': 'http://127.0.0.1:4567',
+        'server_url': 'http://127.0.0.1:45999',
+        'sunfire_server_url': 'http://127.0.0.1:45999',
         'onboarding_completed': true,
         'sunfire_onboarding_completed': true,
       });
       await SettingsService.instance.initialize();
-      GraphQLClientService.instance.initialize('http://127.0.0.1:4567');
+      GraphQLClientService.instance.initialize('http://127.0.0.1:45999');
+    });
+
+    tearDown(() async {
+      QuickJsService.testOnlyExtensionDirs = null;
+      QuickJsService.debugInitLoadOverride = null;
+      await extDir.delete(recursive: true);
     });
 
     test('1. GraphQLClientService generates correct server extension mutation payloads', () async {
       final client = GraphQLClientService.instance;
       expect(client.isConfigured, isTrue);
-      expect(client.baseUrl, equals('http://127.0.0.1:4567'));
+      expect(client.baseUrl, equals('http://127.0.0.1:45999'));
 
       // Verify mutation methods exist and accept pkgNames
       expect(client.installServerExtension, isNotNull);

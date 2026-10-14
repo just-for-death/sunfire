@@ -91,6 +91,33 @@ Future<void> _eventually(
   expect(await condition(), isTrue, reason: reason);
 }
 
+/// Root cause of the 9101/9201 flake: updateProgress dispatches the sync
+/// write UNAWAITED, so a test that returns right after it can land its
+/// SyncRecord after the next test's setUp cleared the store. Wait until the
+/// store has been quiet for [quiet] (bounded by [timeout]) before clearing.
+Future<void> _settleSyncDispatch({
+  Duration quiet = const Duration(milliseconds: 250),
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  var last = await IsarService.instance.isar.syncRecords.count();
+  var stableSince = DateTime.now();
+  while (DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    final now = await IsarService.instance.isar.syncRecords.count();
+    if (now != last) {
+      last = now;
+      stableSince = DateTime.now();
+    } else if (DateTime.now().difference(stableSince) >= quiet) {
+      return;
+    }
+  }
+}
+
+Future<void> _clearStore() => IsarService.instance.isar.writeTxn(() async {
+      await IsarService.instance.isar.clear();
+    });
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -123,12 +150,16 @@ void main() {
     await SettingsService.instance.initialize();
     SettingsService.instance.incognitoMode = false;
     OfflineMonitor.instance.debugReset();
-    await IsarService.instance.isar.writeTxn(() async {
-      await IsarService.instance.isar.clear();
-    });
+    await _clearStore();
   });
 
-  tearDown(() => OfflineMonitor.instance.debugReset());
+  // Drain each test's unawaited sync dispatch, then wipe, so no record can
+  // leak into the next test.
+  tearDown(() async {
+    await _settleSyncDispatch();
+    await _clearStore();
+    OfflineMonitor.instance.debugReset();
+  });
 
   group('progress persists locally while offline', () {
     test('page turn writes lastPageRead to Isar', () async {
@@ -217,8 +248,11 @@ void main() {
         reason: 'offline progress must be queued for replay, otherwise it is lost',
       );
 
+      // Leak guard: the store holds only this test's chapter.
       final records = await _pendingRecords();
       expect(records, isNotEmpty);
+      expect(records.where((r) => r.payloadJson.contains('9101')), isEmpty,
+          reason: 'a previous test leaked its SyncRecord into this one');
       final payload = records.first.payloadJson;
       expect(payload, contains('9201'));
       expect(payload, contains('lastPageRead'));

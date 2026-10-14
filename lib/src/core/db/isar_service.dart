@@ -328,6 +328,44 @@ class IsarService {
     });
   }
 
+  /// IMP-024: total chapter rows, without loading them.
+  Future<int> countChapters() async {
+    if (!_isInitialized) return 0;
+    return _isar.chapters.count();
+  }
+
+  /// IMP-024: chapters with any read evidence (isRead, a page position, or a
+  /// read timestamp), counted in the DB.
+  Future<int> countChaptersWithReadEvidence() async {
+    if (!_isInitialized) return 0;
+    return _isar.chapters
+        .filter()
+        .isReadEqualTo(true)
+        .or()
+        .lastPageReadGreaterThan(0)
+        .or()
+        .lastReadAtGreaterThan(0)
+        .count();
+  }
+
+  /// IMP-024: serverIds of chapters downloaded on the server (ids only).
+  Future<List<int>> getServerDownloadedChapterIds() async {
+    if (!_isInitialized) return [];
+    return _isar.chapters.filter().isDownloadedOnServerEqualTo(true).serverIdProperty().findAll();
+  }
+
+  /// IMP-024: chapters of the given manga ids plus orphan chapters
+  /// (mangaId <= 0), instead of the whole table.
+  Future<List<Chapter>> getChaptersForMangaIdsAndOrphans(Set<int> mangaIds) async {
+    if (!_isInitialized) return [];
+    return _isar.chapters
+        .filter()
+        .mangaIdLessThan(1)
+        .or()
+        .anyOf<int, Chapter>(mangaIds, (q, id) => q.mangaIdEqualTo(id))
+        .findAll();
+  }
+
   Future<List<Chapter>> getAllChapters() async {
     if (!_isInitialized) return [];
     return await _isar.chapters.where().findAll();
@@ -844,6 +882,39 @@ class IsarService {
         await _isar.syncMetas.put(meta);
       });
     });
+  }
+
+  // ── UIX6-07: live library ───────────────────────────────────────
+  /// Emits (debounced) whenever any Manga row changes — writes from sync,
+  /// other tabs, or quick actions. Subscribe in the library screen instead of
+  /// waiting for `onSyncCycleComplete`; cancel the subscription in dispose.
+  Stream<void> watchMangaLazy({Duration debounce = const Duration(milliseconds: 300)}) =>
+      debounceLazyStream(_isar.mangas.watchLazy(fireImmediately: false), debounce);
+
+  /// Collapses bursts of [source] events into one event per quiet [window].
+  @visibleForTesting
+  static Stream<void> debounceLazyStream(Stream<void> source, Duration window) {
+    late StreamController<void> ctrl;
+    StreamSubscription<void>? sub;
+    Timer? timer;
+    ctrl = StreamController<void>(
+      onListen: () {
+        sub = source.listen((_) {
+          timer?.cancel();
+          timer = Timer(window, () {
+            if (!ctrl.isClosed) ctrl.add(null);
+          });
+        }, onError: ctrl.addError, onDone: () {
+          timer?.cancel();
+          unawaited(ctrl.close());
+        });
+      },
+      onCancel: () async {
+        timer?.cancel();
+        await sub?.cancel();
+      },
+    );
+    return ctrl.stream;
   }
 
   // ── SYNC RECORD CRUD ────────────────────────────────────────────

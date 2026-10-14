@@ -4,45 +4,34 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:volume_controller/volume_controller.dart';
 
-import '../../constants/app_constants.dart';
 import '../../core/db/isar_service.dart';
 import '../../core/db/models/chapter.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
-import '../../core/engine/image_validation.dart';
-import '../../core/engine/javascript/m_client.dart';
 import '../../core/engine/quickjs_service.dart';
-import '../../core/logging/logger_service.dart';
 import '../../core/metron/metron_service.dart';
-import '../../core/services/download_manager_service.dart';
-import '../../core/services/safe_curl.dart';
 import '../../core/services/settings_service.dart';
-import '../../core/services/wakelock_coordinator.dart';
 import '../../core/sync/live_activities_service.dart';
 import '../../core/sync/sync_engine.dart';
-import '../../core/sync/widget_sync_service.dart';
-import '../../core/utils/url_sanitizer.dart';
 import 'controller/gesture_pipeline.dart';
 import 'controller/navigation_controller.dart';
 import 'controller/page_loader.dart';
 import 'controller/position_manager.dart';
 import 'controller/reader_canvas.dart';
 import 'controller/reader_controller.dart';
+import 'controller/reader_input_pipeline.dart';
+import 'controller/reader_page_widget.dart';
 import 'controller/reader_theme.dart';
 import 'double_page_layout.dart';
 import 'listen_sheet.dart';
-import 'reader_chapter_resolve.dart';
 import 'reader_chapter_selector_sheet.dart';
 import 'reader_chapter_transition.dart';
 import 'reader_overlay_hud.dart';
-import 'reader_prefetch.dart';
 import 'reader_scroll_utils.dart';
 import 'reader_settings_scope.dart';
 import 'reader_settings_sheet.dart';
@@ -54,6 +43,9 @@ export 'controller/reader_theme.dart'
     show ReaderThemeMode, ReaderColorFilter, ImageScaleType;
 export 'reading_mode.dart' show ReadingMode;
 
+part 'reader_screen_gestures.dart';
+part 'reader_screen_view.dart';
+
 class ReaderScreen extends StatefulWidget {
   final int chapterServerId;
   const ReaderScreen({super.key, required this.chapterServerId});
@@ -62,20 +54,21 @@ class ReaderScreen extends StatefulWidget {
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
+class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMixin, WidgetsBindingObserver
+    implements ReaderInputHost {
   final SettingsService _settings = SettingsService.instance;
-  String? _sourceName;
-  Chapter? _chapter;
-  Chapter? _nextChapter;
-  Chapter? _prevChapter;
-  List<Chapter> _siblingChapters = [];
-  List<String> _pageUrls = [];
-  final Map<String, Uint8List> _recoveredImageBytes = {};
-  final Set<String> _recoveringUrls = {};
-  /// URLs whose automatic recovery already failed. Without this every rebuild
-  /// of a failed page re-ran the full multi-pass fetch (and up to 5 curl
-  /// attempts on desktop). Only an explicit tap on Retry clears an entry.
-  final Set<String> _failedImageUrls = {};
+  // Chapter state lives ONLY in NavigationController; these forward to it.
+  String? get _sourceName => _gestureNav.sourceName;
+  Chapter? get _chapter => _gestureNav.chapter;
+  Chapter? get _nextChapter => _gestureNav.nextChapter;
+  Chapter? get _prevChapter => _gestureNav.prevChapter;
+  List<Chapter> get _siblingChapters => _gestureNav.siblingChapters;
+  List<String> get _pageUrls => _gestureNav.pageUrls;
+  Manga? get _parentManga => _gestureNav.parentManga;
+  set _parentManga(Manga? v) => _gestureNav.setParentManga(v);
+  // Page bytes + display state live ONLY in PageLoader (ISS-125).
+  Set<String> get _recoveringUrls => _gestureNav.pageLoader.recoveringUrls;
+  Set<String> get _failedImageUrls => _gestureNav.pageLoader.displayFailedUrls;
   bool _isLoading = true;
   bool _showControls = true;
   int _currentPage = 1;
@@ -83,76 +76,28 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   double? _sliderDragValue;
 
   // Zoom & Gestures
-  bool _isZoomed = false;
-  TapDownDetails? _doubleTapDetails;
+  bool get _isZoomed => _input.isZoomed;
+  set _doubleTapDetails(TapDownDetails? v) => _input.doubleTapDetails = v;
   final TransformationController _transformationController = TransformationController();
   AnimationController? _zoomAnimController;
   static const double _minZoomScale = 1.0;
   static const double _maxZoomScale = 3.5;
-  int _zoomGeneration = 0;
-  CurvedAnimation? _activeZoomCurve;
 
   // Floating scroll indicator for Webtoon mode
-  Timer? _scrollIndicatorTimer;
   final ValueNotifier<bool> _scrollIndicatorVisible = ValueNotifier(false);
   final ValueNotifier<int> _pageIndicator = ValueNotifier(1);
-  final Map<int, GlobalKey> _webtoonPageKeys = {};
   final Map<String, double> _cachedPageHeights = {};
   final Map<int, TransformationController> _webtoonZoomControllers = {};
   int _loadGeneration = 0;
-  DateTime? _lastPrevChapterNavAt;
-  DateTime? _lastNextChapterNavAt;
-  DateTime? _lastPrevPageNavAt;
-  DateTime? _lastNextPageNavAt;
-
-  // Prefetch cache: composite key (chapterId|mangaId) → resolved page URLs
-  // Uses composite key to avoid collisions across different manga/sources that
-  // might share the same chapter serverId (e.g., local chapters with negative IDs).
-  static const int _maxPrefetchedChapters = 3;
-  /// A prefetched chapter's page URLs, tagged with the source they were
-  /// resolved for so the reader can refuse a prefetch that belongs to a
-  /// different source than the one it is about to resolve against.
-  final Map<String, ({String sourceName, List<String> urls})> _prefetchedChapters = {};
-  final Set<String> _prefetchingChapters = {};
-
-  /// Prefetch attempts that produced nothing, keyed like [prefetchedChapters],
-  /// valued with the epoch second of the attempt.
-  ///
-  /// The dedup above covered only the in-flight and the succeeded cases. A
-  /// prefetch that resolved to zero pages, or that threw, left no trace — and
-  /// both call sites fire on every position change, so once the reader was past
-  /// 65% of the chapter the full `resolveChapterPages` round trip was re-issued
-  /// on EVERY scroll frame, for the rest of the chapter. A source that is
-  /// genuinely page-less (a paywalled chapter, a login wall) therefore burned
-  /// continuous network for minutes at a time.
-  ///
-  /// A time-bounded negative cache rather than a permanent one: the failure is
-  /// frequently transient (the session cookie was not yet warm, the source was
-  /// briefly down), and a permanent mark would make the next-chapter navigation
-  /// as slow as if nothing had been prefetched. One minute is long enough to
-  /// cover the scrolling that triggers the storm, and short enough that coming
-  /// back to the chapter re-attempts.
-  final Map<String, int> _prefetchAttemptedAt = {};
-
-  /// How long a failed prefetch suppresses re-attempts for the same chapter.
-  static const Duration _kPrefetchFailureCooldown = Duration(minutes: 1);
-
-  /// Ceiling on a single prefetch resolve.
-  ///
-  /// Shorter than the main path's 30s: this is speculative work for a chapter
-  /// the user has not opened yet, so it should never compete with the page they
-  /// are actually reading.
-  static const Duration _kPrefetchTimeout = Duration(seconds: 20);
 
   late ReadingMode _readingMode;
-  Manga? _parentManga;
   ReaderSettingsScope _readerSettingsScope = ReaderSettingsScope.global;
   late ReaderThemeMode _readerTheme;
   late ReaderColorFilter _colorFilter;
   late ImageScaleType _scaleType;
   late bool _cropBorders;
   late bool _invertTaps;
-  bool _showTapZoneOverlay = false;
+  bool get _showTapZoneOverlay => _input.showTapZoneOverlay;
   /// Intrinsic width/height per page URL for wide-page isolation in double mode
   /// and R9.1 smart zoom (column-fit double-tap).
   final Map<String, double> _cachedPageAspects = {};
@@ -177,11 +122,15 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     positionManager: _positionManager,
     settings: _settings,
   );
-  late final GesturePipeline _gesturePipeline = GesturePipeline(
+  /// ISS-132: screen-owned input pipeline; it owns the single
+  /// [GesturePipeline] (IMP-049a) injected into [ReaderController].
+  late final ReaderInputPipeline _input = ReaderInputPipeline(
+    host: this,
     navigationController: _gestureNav,
     positionManager: _positionManager,
     settings: _settings,
   );
+  GesturePipeline get _gesturePipeline => _input.gesturePipeline;
 
   /// R1.5: orchestrator holding the live PositionManager / Navigation /
   /// GesturePipeline. Chapter load stays on this screen; canvas may consume
@@ -190,25 +139,14 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
 
   final ScrollController _scrollController = ScrollController();
   late PageController _pageController;
-  Timer? _progressDebounceTimer;
   late int _currentChapterId;
 
-  // iOS Hardware Volume Rocker Turn
-  double? _lastIosVolume;
-  DateTime _lastIosVolumeTurnTime = DateTime.now();
-  bool _isRecenteringVolume = false;
-
-  // Hands-free Webtoon Auto-Scroll (Vsync Synchronized)
-  bool _isAutoScrolling = false;
-  // Set when auto-scroll advances to the next chapter so hands-free scrolling
-  // resumes once that chapter has loaded (loading stops the ticker).
-  // Per-chapter flag: chapterServerId -> shouldResumeAutoScroll
-  final Map<int, bool> _resumeAutoScrollForChapter = {};
-  double _autoScrollSpeed = 50.0; // px/sec
-  Ticker? _autoScrollTicker;
-  Duration? _lastAutoScrollElapsed;
-  DateTime? _autoScrollStartTime;
-  bool _isUserTouching = false;
+  bool get _isAutoScrolling => _input.isAutoScrolling;
+  set _isAutoScrolling(bool v) => _input.isAutoScrolling = v;
+  Map<int, bool> get _resumeAutoScrollForChapter => _input.resumeAutoScrollForChapter;
+  double get _autoScrollSpeed => _input.autoScrollSpeed;
+  set _autoScrollSpeed(double v) => _input.autoScrollSpeed = v;
+  bool get _isUserTouching => _input.isUserTouching;
   bool _isAutoScrollHudCollapsed = false;
 
   @override
@@ -231,6 +169,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       navigationController: _gestureNav,
       gesturePipeline: _gesturePipeline,
     );
+    _input.readerController = _readerController;
     _readerController.attachUiControllers(
       scrollController: _scrollController,
       pageController: _pageController,
@@ -238,10 +177,20 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       zoomAnimController: _zoomAnimController,
       webtoonZoomControllers: _webtoonZoomControllers,
     );
-    // R1.8: all chapter loads enter via ReaderController; implementation stays here.
-    _readerController.onRequestChapterLoad = _loadChapterAndPages;
+    // Step 8: NavigationController owns resolve/prefetch/platform mirrors;
+    // the screen only reacts to load start / completion.
+    _readerController.restoreProgressOnLoad = false;
+    _readerController.onLoadingChanged = _onLoadingChanged;
+    // IMP-012: inline strip switch — adopt the new chapter without scrolling.
+    _readerController.onStripChapterSwitched = (_, __, ___) {
+      if (!mounted) return;
+      _rebuild(() => _currentChapterId = _gestureNav.currentChapterId);
+    };
+    _readerController.onChapterLoaded = (_, __, ___, ____) => _pendingPublish = _onChapterLoaded();
+    // ISS-131: PageLoader display changes (bytes landed / failed) rebuild pages.
+    _gestureNav.pageLoader.onDisplayChanged = () => _rebuild(() {});
     _initPreferences();
-    _wireGesturePipeline();
+    _wirePipelineCallbacks();
     if (_settings.keepScreenAwake) {
       _safeSetWakelock(true);
     }
@@ -251,914 +200,27 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     }
     unawaited(_readerController.loadChapter(widget.chapterServerId));
   }
-
-  /// R1.8: bind GesturePipeline callbacks to live reader actions once.
-  void _wireGesturePipeline() {
-    final gp = _gesturePipeline;
-    gp.onToggleControls = _toggleControls;
-    gp.onStopAutoScroll = () {
-      _stopAutoScroll();
-      if (mounted) setState(() => _isAutoScrolling = false);
-    };
-    gp.onScrollVerticalBy = _scrollVerticalBy;
-    gp.onGoToNextPage = _goToNextPage;
-    gp.onGoToPrevPage = _goToPrevPage;
-    gp.canAdvanceToNextChapterOverride = _canAdvanceToNextChapter;
-    gp.canGoToPrevChapterFromTopOverride = _canGoToPrevChapterFromTop;
-    gp.onLoadNextChapter = () async {
-      if (_nextChapter == null) return;
-      _lastNextChapterNavAt = DateTime.now();
-      await _readerController.loadChapter(_chapterTargetId(_nextChapter!));
-    };
-    gp.onLoadPrevChapter = () async {
-      if (_prevChapter == null) return;
-      _lastPrevChapterNavAt = DateTime.now();
-      await _readerController.loadChapter(_chapterTargetId(_prevChapter!));
-    };
-    gp.onTapZoneOverlayChanged = (show) {
-      if (mounted) setState(() => _showTapZoneOverlay = show);
-    };
-    gp.onZoomStateChanged = (zoomed) {
-      if (mounted) setState(() => _isZoomed = zoomed);
-    };
-    gp.onUserTouchingChanged = (touching) {
-      if (!mounted) return;
-      setState(() {
-        _isUserTouching = touching;
-        // Ease-in restart lives on the reader ticker, not GesturePipeline's.
-        if (!touching) _autoScrollStartTime = DateTime.now();
-      });
-    };
-    gp.onAnimateScroll = (offset, {duration, curve}) {
-      if (!_scrollController.hasClients) return;
-      if (duration != null) {
-        unawaited(_scrollController.animateTo(
-          offset,
-          duration: duration,
-          curve: curve ?? Curves.easeOutCubic,
-        ));
-      } else {
-        _scrollController.jumpTo(offset);
-      }
-    };
-    gp.getMaxScrollExtent = () =>
-        _scrollController.hasClients
-            ? _scrollController.position.maxScrollExtent
-            : 0.0;
-    gp.getCurrentScrollOffset =
-        () => _scrollController.hasClients ? _scrollController.offset : 0.0;
-    gp.getScreenHeight =
-        () => mounted ? MediaQuery.sizeOf(context).height : 800.0;
-    gp.scrollControllerHasClients = () => _scrollController.hasClients;
-    gp.pageControllerHasClients = () => _pageController.hasClients;
-    gp.pageControllerPage = () =>
-        _pageController.hasClients ? (_pageController.page ?? 0.0) : 0.0;
-  }
-
-  /// Push live reader state into GesturePipeline before handling input.
-  void _syncGesturePipelineState({int? pageIndexForAspect}) {
-    final gp = _gesturePipeline;
-    gp.setReadingMode(_readingMode);
-    gp.setIsAutoScrolling(_isAutoScrolling);
-    gp.setIsUserTouching(_isUserTouching);
-    gp.setIsZoomed(_isZoomed);
-    gp.setShowTapZoneOverlay(_showTapZoneOverlay);
-    gp.setInvertTaps(_invertTaps);
-    gp.setAutoScrollSpeed(_autoScrollSpeed);
-    gp.setCurrentPage(_currentPage);
-    gp.setPageUrls(_pageUrls);
-    gp.setNextChapter(_nextChapter);
-    gp.setPrevChapter(_prevChapter);
-    gp.setTransformationController(_transformationController);
-    gp.setWebtoonZoomControllers(_webtoonZoomControllers);
-    gp.setZoomAnimController(_zoomAnimController);
-    gp.setScrollController(_scrollController);
-    if (!mounted) return;
-    gp.setViewportSize(MediaQuery.sizeOf(context));
-    final idx = pageIndexForAspect ?? (_currentPage - 1);
-    final url = (idx >= 0 && idx < _pageUrls.length) ? _pageUrls[idx] : null;
-    gp.setCurrentPageAspect(url == null ? null : _cachedPageAspects[url]);
-  }
-
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // `hidden` and `detached` are handled alongside `paused`/`inactive` on
-    // purpose. The volume-key feature sets VolumeController.showSystemUI =
-    // false, which is a *global* OS flag, not a per-window one: if it is not
-    // restored before the engine detaches, the user's volume HUD stays hidden
-    // system-wide after the app is killed, and nothing ever puts it back.
-    // `detached` is the terminal state on Android engine-detach and on desktop
-    // window close, and it is NOT preceded by `paused` on every path, so
-    // handling only paused/inactive left that flag set.
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.hidden ||
-        state == AppLifecycleState.detached) {
-      if (_isAutoScrolling) {
-        _stopAutoScroll();
-        if (mounted) setState(() => _isAutoScrolling = false);
-      }
-      if (!kIsWeb && (Platform.isIOS || Platform.isMacOS || Platform.isAndroid)) {
-        try {
-          VolumeController.instance.showSystemUI = true;
-        } catch (e) {
-          debugPrint('[Reader] Failed to restore system UI on $state: $e');
-        }
-      }
-    } else if (state == AppLifecycleState.resumed) {
-      if (!kIsWeb &&
-          (Platform.isIOS || Platform.isMacOS || Platform.isAndroid) &&
-          _settings.volumeKeyTurn) {
-        try {
-          VolumeController.instance.showSystemUI = false;
-        } catch (e) {
-          debugPrint('[Reader] Failed to hide system UI on resume: $e');
-        }
-      }
-    }
-  }
+  void didChangeAppLifecycleState(AppLifecycleState state) => _onLifecycleChanged(state);
 
-  void _initVolumeKeyListener() {
-    try {
-      // On Android, _handleKeyEvent consumes volume keys (LogicalKeyboardKey.audioVolumeUp/Down)
-      // so the VolumeController listener would cause DOUBLE page turns.
-      // Only install the listener on iOS/macOS where we need the volume-level-based detection.
-      if (Platform.isAndroid) {
-        VolumeController.instance.showSystemUI = false;
-        return;
-      }
-      VolumeController.instance.showSystemUI = false;
-      unawaited(VolumeController.instance.getVolume().then((v) => _lastIosVolume = v).catchError((Object e) {
-        _lastIosVolume = 0.0;
-        debugPrint('[Reader] Failed to get initial volume: $e');
-        return 0.0;
-      }));
-      VolumeController.instance.addListener((volume) {
-        if (!_settings.volumeKeyTurn || !mounted) return;
-        // Ignore the callback our own _recenterVolume() call below triggers,
-        // so recentering never registers as a page turn.
-        if (_isRecenteringVolume) {
-          _isRecenteringVolume = false;
-          _lastIosVolume = volume;
-          return;
-        }
-        final now = DateTime.now();
-        if (now.difference(_lastIosVolumeTurnTime).inMilliseconds < 280) return;
-        if (_lastIosVolume != null) {
-          bool turned = false;
-          if (volume > _lastIosVolume!) {
-            _lastIosVolumeTurnTime = now;
-            _goToPrevPage();
-            turned = true;
-          } else if (volume < _lastIosVolume!) {
-            _lastIosVolumeTurnTime = now;
-            _goToNextPage();
-            turned = true;
-          }
-          // At/near min or max volume there's no headroom left to detect the
-          // NEXT turn in that direction (volume can't go lower than 0 or
-          // higher than 1), so button presses silently stop working. Nudge
-          // back to the middle after every turn so there's always room on
-          // both sides; the listener suppression above keeps this silent.
-          // Android is excluded: there _handleKeyEvent consumes the volume
-          // keys, so the level never hits a bound and recentering would only
-          // change the user's media volume for no benefit.
-          if (turned && (Platform.isIOS || Platform.isMacOS) && (volume <= 0.05 || volume >= 0.95)) {
-            _recenterVolume();
-            return;
-          }
-        }
-        _lastIosVolume = volume;
-      });
-    } catch (e) {
-      debugPrint('[Reader] Failed to initialize volume key listener: $e');
-    }
-  }
+  /// IMP-010: shed cached page bytes on an OS memory warning (Flutter's
+  /// PaintingBinding already clears the decoded imageCache itself).
+  @override
+  void didHaveMemoryPressure() => _gestureNav.pageLoader.handleMemoryPressure();
 
-  Timer? _recenterGuardTimer;
-  int _recenterGeneration = 0;
-
-  void _recenterVolume() {
-    final currentGen = ++_recenterGeneration;
-    _isRecenteringVolume = true;
-    _lastIosVolume = 0.5;
-    // If the platform never reports our own setVolume back (or reports it
-    // late), the suppression flag would otherwise stay set and swallow the
-    // next real page turn. Clear it after a short grace period regardless.
-    // Use generation token to prevent stale timer callbacks from clearing
-    // the flag after a newer recenter call has started.
-    _recenterGuardTimer?.cancel();
-    _recenterGuardTimer = Timer(const Duration(milliseconds: 600), () {
-      if (_recenterGeneration == currentGen) {
-        _isRecenteringVolume = false;
-      }
-    });
-    try {
-      unawaited(VolumeController.instance.setVolume(0.5));
-    } catch (e) {
-      _isRecenteringVolume = false;
-      _recenterGuardTimer?.cancel();
-      debugPrint('[Reader] Failed to recenter volume: $e');
-    }
-  }
-
-  void _toggleAutoScroll() {
-    setState(() {
-      _isAutoScrolling = !_isAutoScrolling;
-      if (_isAutoScrolling) {
-        _startAutoScroll();
-      } else {
-        _stopAutoScroll();
-      }
-    });
-  }
-
-  void _startAutoScroll() {
-    _resetZoom();
-    _autoScrollTicker?.stop();
-    _autoScrollTicker?.dispose();
-    _lastAutoScrollElapsed = null;
-    _isUserTouching = false;
-    _autoScrollStartTime = DateTime.now();
-
-    _autoScrollTicker = createTicker((Duration elapsed) {
-      if (!_isAutoScrolling || !mounted || !_scrollController.hasClients) {
-        _stopAutoScroll();
-        return;
-      }
-
-      // Check if user is touching/holding or dragging the screen
-      if (_isUserTouching && _settings.autoScrollPauseOnTouch) {
-        // Keep elapsed benchmark updated while holding so release doesn't jump
-        _lastAutoScrollElapsed = elapsed;
-        return;
-      }
-
-      if (_lastAutoScrollElapsed == null) {
-        _lastAutoScrollElapsed = elapsed;
-        return;
-      }
-
-      final dt = (elapsed - _lastAutoScrollElapsed!).inMicroseconds / 1000000.0;
-      _lastAutoScrollElapsed = elapsed;
-
-      // Clamp delta time to 50ms (20fps minimum) to prevent sudden jumps if frame drops
-      final safeDt = dt.clamp(0.0, 0.05);
-      if (safeDt <= 0.0) return;
-
-      final max = _scrollController.position.maxScrollExtent;
-      final cur = _scrollController.offset;
-
-      // Check bottom of chapter. Chapters shorter than one viewport
-      // (max <= 50) can never satisfy the threshold below — treat them as
-      // already at bottom so the ticker terminates (and auto-advance fires)
-      // instead of clamping to max forever.
-      if (max <= 50 || cur >= max - 8) {
-        _stopAutoScroll();
-        if (_settings.autoScrollAutoNextChapter && _nextChapter != null) {
-          final nextChapterId = _chapterTargetId(_nextChapter!);
-          _resumeAutoScrollForChapter[nextChapterId] = true;
-          unawaited(_readerController.loadChapter(nextChapterId));
-        }
-        return;
-      }
-
-      // Smooth ease-in multiplier (from 0.15 to 1.0 over first 400ms)
-      double easeMultiplier = 1.0;
-      if (_settings.autoScrollSmoothEaseIn && _autoScrollStartTime != null) {
-        final elapsedMs = DateTime.now().difference(_autoScrollStartTime!).inMilliseconds;
-        if (elapsedMs < 400) {
-          easeMultiplier = 0.15 + (elapsedMs / 400.0) * 0.85;
-        }
-      }
-
-      final step = _autoScrollSpeed * safeDt * easeMultiplier;
-      final target = (cur + step).clamp(0.0, max);
-      _scrollController.jumpTo(target);
-    });
-
-    _autoScrollTicker?.start();
-  }
-
-  void _stopAutoScroll() {
-    _autoScrollTicker?.stop();
-    _autoScrollTicker?.dispose();
-    _autoScrollTicker = null;
-    _lastAutoScrollElapsed = null;
-    _autoScrollStartTime = null;
-    _isUserTouching = false;
-    if (_isAutoScrolling && mounted) {
-      setState(() => _isAutoScrolling = false);
-    }
-  }
-
-  void _showAutoScrollSpeedDialog() {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    unawaited(showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF141419),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Auto-Scroll Speed',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: primaryColor.withValues(alpha: 0.4)),
-                          ),
-                          child: Text(
-                            '${_autoScrollSpeed.round()} px/s',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: primaryColor),
-                          ),
-                        ),
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          onPressed: () {
-                            _settings.defaultAutoScrollSpeed = _autoScrollSpeed;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Default auto-scroll speed set to ${_autoScrollSpeed.round()} px/s'),
-                                duration: const Duration(seconds: 1),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          },
-                          child: const Text('Save Default', style: TextStyle(fontSize: 11, color: Colors.amberAccent)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        IconButton.filledTonal(
-                          style: IconButton.styleFrom(
-                            backgroundColor: const Color(0x22FFFFFF),
-                            minimumSize: const Size(36, 36),
-                            padding: EdgeInsets.zero,
-                          ),
-                          icon: const Icon(Icons.remove_rounded, size: 18),
-                          onPressed: () {
-                            unawaited(HapticFeedback.selectionClick());
-                            setState(() => _autoScrollSpeed = (_autoScrollSpeed - 10.0).clamp(10.0, 2000.0));
-                            setSheetState(() {});
-                          },
-                        ),
-                        Expanded(
-                          child: Slider(
-                            value: _autoScrollSpeed.clamp(10.0, 2000.0),
-                            min: 10.0,
-                            max: 2000.0,
-                            divisions: 199,
-                            activeColor: primaryColor,
-                            label: '${_autoScrollSpeed.round()} px/s',
-                            onChanged: (val) {
-                              setState(() => _autoScrollSpeed = val);
-                              setSheetState(() {});
-                            },
-                          ),
-                        ),
-                        IconButton.filledTonal(
-                          style: IconButton.styleFrom(
-                            backgroundColor: const Color(0x22FFFFFF),
-                            minimumSize: const Size(36, 36),
-                            padding: EdgeInsets.zero,
-                          ),
-                          icon: const Icon(Icons.add_rounded, size: 18),
-                          onPressed: () {
-                            unawaited(HapticFeedback.selectionClick());
-                            setState(() => _autoScrollSpeed = (_autoScrollSpeed + 10.0).clamp(10.0, 2000.0));
-                            setSheetState(() {});
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text('Quick Presets', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _buildSpeedChip('Slow (25 px/s)', 25.0, primaryColor, setSheetState),
-                        _buildSpeedChip('Normal (50 px/s)', 50.0, primaryColor, setSheetState),
-                        _buildSpeedChip('Fast (120 px/s)', 120.0, primaryColor, setSheetState),
-                        _buildSpeedChip('Faster (250 px/s)', 250.0, primaryColor, setSheetState),
-                        _buildSpeedChip('Turbo (500 px/s)', 500.0, primaryColor, setSheetState),
-                        _buildSpeedChip('Hyper (800 px/s)', 800.0, primaryColor, setSheetState),
-                        _buildSpeedChip('Warp (1200 px/s)', 1200.0, primaryColor, setSheetState),
-                        _buildSpeedChip('Light (1600 px/s)', 1600.0, primaryColor, setSheetState),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    ));
-  }
-
-  Widget _buildSpeedChip(String label, double speed, Color primaryColor, StateSetter setSheetState) {
-    final isSelected = (_autoScrollSpeed - speed).abs() < 5.0;
-    return ChoiceChip(
-      label: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : Colors.white70)),
-      selected: isSelected,
-      selectedColor: primaryColor.withValues(alpha: 0.35),
-      backgroundColor: const Color(0x1FFFFFFF),
-      side: BorderSide(color: isSelected ? primaryColor : Colors.white24, width: 0.8),
-      onSelected: (_) {
-        setState(() => _autoScrollSpeed = speed);
-        setSheetState(() {});
-      },
-    );
-  }
-
-  void _safeSetWakelock(bool enable) {
-    try {
-      if (enable) {
-        unawaited(WakelockCoordinator.instance.acquire('reader').catchError((Object e) {
-          debugPrint('[Reader] Failed to enable wakelock: $e');
-        }));
-      } else {
-        unawaited(WakelockCoordinator.instance.release('reader').catchError((Object e) {
-          debugPrint('[Reader] Failed to disable wakelock: $e');
-        }));
-      }
-    } catch (e) {
-      debugPrint('[Reader] Wakelock toggle error: $e');
-    }
-  }
-
-  void _scrollVerticalBy(double delta) {
-    if (!_scrollController.hasClients) return;
-    try {
-      final maxScroll = _scrollController.position.maxScrollExtent;
-      final currentOffset = _scrollController.offset;
-      final target = (currentOffset + delta).clamp(0.0, maxScroll);
-      _scrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      );
-    } catch (e) {
-      debugPrint('[Reader] Zoom animation error: $e');
-    }
-  }
-
-  /// Shared webtoon "page" step for side taps, volume keys, and keyboard.
-  double _webtoonPageStep() => MediaQuery.of(context).size.height * 0.85;
-
-  void _resetZoom({bool animate = false}) {
-    _cancelZoomAnimation();
-    for (final c in _webtoonZoomControllers.values) {
-      c.value = Matrix4.identity();
-    }
-    if (!animate || _zoomAnimController == null) {
-      _transformationController.value = Matrix4.identity();
-      if (_isZoomed && mounted) {
-        setState(() => _isZoomed = false);
-      } else {
-        _isZoomed = false;
-      }
-      return;
-    }
-    _animateZoomTo(Matrix4.identity(), markZoomed: false);
-  }
-
-  TransformationController _webtoonZoomControllerFor(int index) {
-    return _webtoonZoomControllers.putIfAbsent(index, TransformationController.new);
-  }
-
-  /// Keep per-page zoom state only for pages inside a small window around the
-  /// active page. Without this, very long (300–1000 page) webtoon chapters grow
-  /// one TransformationController + GlobalKey per page with no pruning.
-  void _pruneWebtoonZoomState(int activeIndex) {
-    const keepWindow = 40;
-    final evict = <int>[
-      for (final k in _webtoonZoomControllers.keys)
-        if ((k - activeIndex).abs() > keepWindow) k,
-    ];
-    if (evict.isEmpty) return;
-    for (final k in evict) {
-      _webtoonZoomControllers.remove(k)?.dispose();
-      _webtoonPageKeys.remove(k);
-    }
-  }
-
-  void _setPageIndicator(int page) {
-    _currentPage = page;
-    if (_pageIndicator.value != page) {
-      _pageIndicator.value = page;
-    }
-  }
-
-  void _applyReadingMode(ReadingMode mode, {bool showSnack = false}) {
-    _stopAutoScroll();
-    _resetZoom();
-    setState(() => _readingMode = mode);
-    unawaited(_persistReadingMode(mode));
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _restoreReaderPositionForMode();
-    });
-
-    if (showSnack) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Reading Mode: ${readingModeSnackLabel(_readingMode)}'),
-          duration: const Duration(milliseconds: 1200),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  void _restoreReaderPositionForMode() {
-    final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
-    if (isPaged && _pageController.hasClients) {
-      final targetPage = _pagedControllerIndexForPage(_currentPage);
-      _pageController.jumpToPage(targetPage);
-      return;
-    }
-    if (!isPaged && _scrollController.hasClients && _pageUrls.isNotEmpty) {
-      _jumpToWebtoonPage(_currentPage);
-    }
-  }
-
-  void _jumpToWebtoonPage(int page) {
-    if (!_scrollController.hasClients || _pageUrls.isEmpty) return;
-    final key = _webtoonPageKeys[page - 1];
-    final ctx = key?.currentContext;
-    if (ctx != null) {
-      Scrollable.ensureVisible(ctx, alignment: 0.0, duration: Duration.zero);
-      return;
-    }
-    final width = MediaQuery.of(context).size.width;
-    final contentWidth = width > 800 ? 780.0 : width;
-    final offset = resumeOffsetForPage(
-      targetPage: page,
-      pageCount: _pageUrls.length,
-      heightForIndex: (i) {
-        final url = _pageUrls[i];
-        return estimateWebtoonPlaceholderHeight(contentWidth, cachedHeight: _cachedPageHeights[url]);
-      },
-      gapAfterIndex: (i) => webtoonPageGap(_readingMode),
-    );
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    _scrollController.jumpTo(maxScroll > 0 ? offset.clamp(0.0, maxScroll) : offset);
-  }
-
-  bool _canAdvanceToNextChapter() {
-    if (_nextChapter == null || !_scrollController.hasClients) return false;
-    final now = DateTime.now();
-    if (_lastNextChapterNavAt != null &&
-        now.difference(_lastNextChapterNavAt!) < const Duration(milliseconds: 700)) {
-      return false;
-    }
-    return true;
-  }
-
-  bool _canGoToPrevChapterFromTop() {
-    if (_prevChapter == null || !_scrollController.hasClients) return false;
-    final pos = _scrollController.position;
-    if (pos.maxScrollExtent <= 50) return false;
-    if (pos.pixels > 20) return false;
-    // Ignore while user is actively dragging / a fling is in progress.
-    if (pos.isScrollingNotifier.value) return false;
-    final now = DateTime.now();
-    if (_lastPrevChapterNavAt != null &&
-        now.difference(_lastPrevChapterNavAt!) < const Duration(milliseconds: 700)) {
-      return false;
-    }
-    return true;
-  }
-
-  void _rememberPageHeight(String url, double width, Size intrinsic) {
-    final h = fittedHeightForWidth(intrinsic, width);
-    if (intrinsic.height > 0) {
-      _cachedPageAspects[url] = intrinsic.width / intrinsic.height;
-    }
-    final prev = _cachedPageHeights[url];
-    if (prev != null && (prev - h).abs() < 1.0) return;
-    _cachedPageHeights[url] = h;
-    // R1.8: keep PageLoader height cache in sync for layout consumers.
-    _pageLoader?.cacheHeight(url, h);
-  }
-
-  /// Recreate [PageLoader] when chapter/source identity changes (R1.8 slice).
-  void _syncPageLoader() {
-    final ch = _chapter;
-    if (ch == null) {
-      _pageLoader?.dispose();
-      _pageLoader = null;
-      _readerController.setPageLoader(null);
-      return;
-    }
-    final source = _sourceName ?? '';
-    final targetId = _chapterTargetId(ch);
-    final existing = _pageLoader;
-    if (existing != null &&
-        existing.chapterTargetId == targetId &&
-        existing.mangaId == ch.mangaId &&
-        existing.sourceName == source) {
-      return;
-    }
-    existing?.dispose();
-    _pageLoader = PageLoader(
-      sourceName: source,
-      mangaId: ch.mangaId,
-      chapterTargetId: targetId,
-    );
-    _readerController.setPageLoader(_pageLoader);
-  }
-
-  void _schedulePageHeightCacheForProvider(String url, double width, ImageProvider provider) {
-    // Failed URLs must never be probed again: resolving them would issue a
-    // fresh network fetch and, when the stream never completes, leak the
-    // ImageStreamListener. Cached heights are already known — skip those too.
-    if (_failedImageUrls.contains(url) || _cachedPageHeights.containsKey(url)) return;
-    // The only dedup used to be the height cache, which is absent while a page
-    // is still LOADING — the normal state. So every rebuild of a loading page
-    // attached ANOTHER listener to the same ImageStream, and the stream held
-    // them all: neither the closure nor the ImageStreamCompleter was
-    // collectable, so memory grew for the life of the chapter and each
-    // notifyListeners fanned out to N listeners. On a slow CDN, scrolling back
-    // and forth over one page added one per frame per visit.
-    if (!_heightProbesInFlight.add(url)) return;
-
-    final stream = provider.resolve(ImageConfiguration(size: Size(width, width * 2)));
-    late final ImageStreamListener listener;
-    var released = false;
-    void release() {
-      // Idempotent. An ImageStream can deliver onError and then onImage for the
-      // same key (Flutter's completer transitions loading -> error, and a
-      // subsequent resolve of the same key creates a new completer). A second
-      // call would remove a NEWER probe's dedup entry for this url, after
-      // which a rebuild could stack a second listener — reintroducing exactly
-      // the leak this guard exists to prevent.
-      if (released) return;
-      released = true;
-      _heightProbesInFlight.remove(url);
-      stream.removeListener(listener);
-    }
-
-    listener = ImageStreamListener((info, _) {
-      _rememberPageHeight(url, width, Size(info.image.width.toDouble(), info.image.height.toDouble()));
-      release();
-    }, onError: (_, __) {
-      release();
-    });
-    stream.addListener(listener);
-  }
 
   /// URLs with a live height probe, so a rebuild cannot stack listeners.
   final Set<String> _heightProbesInFlight = {};
 
-  VoidCallback? _zoomTickListener;
-
-  void _cancelZoomAnimation() {
-    final controller = _zoomAnimController;
-    if (controller != null && _zoomTickListener != null) {
-      controller.removeListener(_zoomTickListener!);
-      _zoomTickListener = null;
-    }
-    controller?.stop();
-    _activeZoomCurve?.dispose();
-    _activeZoomCurve = null;
-    _zoomGeneration++;
-  }
-
-  void _animateZoomTo(Matrix4 end, {required bool markZoomed, TransformationController? controllerOverride}) {
-    final transform = controllerOverride ?? _transformationController;
-    final controller = _zoomAnimController;
-    if (controller == null) {
-      transform.value = end;
-      if (mounted) setState(() => _isZoomed = markZoomed);
-      return;
-    }
-    _cancelZoomAnimation();
-    final begin = Matrix4.copy(transform.value);
-    controller.reset();
-    final curved = CurvedAnimation(parent: controller, curve: Curves.easeOutCubic);
-    final animation = Matrix4Tween(begin: begin, end: end).animate(curved);
-    _activeZoomCurve = curved;
-    final gen = _zoomGeneration;
-    void tick() {
-      transform.value = animation.value;
-    }
-    _zoomTickListener = tick;
-    controller.addListener(tick);
-    unawaited(controller.forward().whenComplete(() {
-      if (gen != _zoomGeneration) return;
-      if (_zoomTickListener != null) {
-        controller.removeListener(_zoomTickListener!);
-        _zoomTickListener = null;
-      }
-      _activeZoomCurve?.dispose();
-      _activeZoomCurve = null;
-      if (!mounted) return;
-      setState(() => _isZoomed = markZoomed);
-    }));
-  }
-
-  void _initPreferences() {
-    _readingMode = parseReadingMode(_settings.readingMode);
-    _readerTheme = parseReaderTheme(_settings.readerTheme);
-    _colorFilter = parseColorFilter(_settings.colorFilter);
-    _scaleType = parseScaleType(_settings.scaleType);
-    _cropBorders = _settings.cropBorders;
-    _invertTaps = _settings.invertTapZones;
-    _autoScrollSpeed = _settings.defaultAutoScrollSpeed;
-    // Mihon-style: flash zone map the first time the reader opens.
-    if (!_settings.tapZonesOverlaySeen && _settings.tapZonesEnabled) {
-      _showTapZoneOverlay = true;
-    }
-  }
-
-  /// A7.4 / I8.3 / I8.4: mirror the live session to home-screen widget,
-  /// Live Activities, and Siri suggestions. Best-effort; never blocks reading.
-  /// Skipped in incognito so private sessions do not leak to the OS shell.
-  void _mirrorPlatformReadingSession({required double? progress}) {
-    if (_settings.incognitoMode) return;
-    final chapter = _chapter;
-    if (chapter == null) return;
-    final manga = _parentManga;
-    final mangaTitle = chapter.mangaTitle.isNotEmpty
-        ? chapter.mangaTitle
-        : (manga?.title ?? 'Unknown');
-    final chapterName = chapter.name;
-    final mangaId = chapter.mangaId != 0
-        ? chapter.mangaId
-        : (manga?.canonicalKey ?? 0);
-    final chapterId =
-        chapter.serverId != 0 ? chapter.serverId : chapter.id;
-
-    unawaited(WidgetSyncService.instance.updateContinueReading(
-      mangaTitle: mangaTitle,
-      chapterName: chapterName,
-      mangaId: mangaId,
-      chapterId: chapterId,
-    ));
-
-    if (progress == null) {
-      unawaited(LiveActivitiesService.instance.startReading(
-        mangaTitle: mangaTitle,
-        chapterName: chapterName,
-      ));
-      if (mangaId != 0) {
-        unawaited(SiriShortcutsService.instance.donateContinueReading(
-          mangaTitle: mangaTitle,
-          chapterName: chapterName,
-          mangaId: mangaId,
-        ));
-      }
-    } else {
-      unawaited(LiveActivitiesService.instance.updateProgress(progress));
-    }
-  }
-
-  void _applyMangaReadingMode(Manga? manga) {
-    _parentManga = manga;
-    _positionManager.setParentManga(manga);
-    final override = manga?.readingModeOverride?.trim();
-    _readerSettingsScope = initialReaderSettingsScope(override);
-    if (override != null && override.isNotEmpty) {
-      _readingMode = parseReadingMode(override);
-    }
-  }
-
-  Future<void> _persistReadingMode(ReadingMode mode) async {
-    final value = readingModeSettingsValue(mode);
-    final plan = planReadingModePersist(
-      scope: _readerSettingsScope,
-      modeValue: value,
-      hasManga: _parentManga != null,
-    );
-    if (plan.globalValue != null) {
-      _settings.readingMode = plan.globalValue!;
-    }
-    if (_parentManga != null) {
-      if (plan.clearMangaOverride) {
-        _parentManga!.readingModeOverride = null;
-        await IsarService.instance.saveManga(_parentManga!);
-      } else if (plan.mangaOverride != null) {
-        _parentManga!.readingModeOverride = plan.mangaOverride;
-        await IsarService.instance.saveManga(_parentManga!);
-      }
-    }
-  }
-
   final FocusNode _focusNode = FocusNode();
-
-  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-
-    final key = event.logicalKey;
-
-    // R1.8: nav / scroll keys via GesturePipeline; reader keeps volume / HUD keys.
-    if (key == LogicalKeyboardKey.arrowRight ||
-        key == LogicalKeyboardKey.keyD ||
-        key == LogicalKeyboardKey.arrowLeft ||
-        key == LogicalKeyboardKey.keyA ||
-        key == LogicalKeyboardKey.space ||
-        key == LogicalKeyboardKey.pageDown ||
-        key == LogicalKeyboardKey.pageUp ||
-        key == LogicalKeyboardKey.arrowDown ||
-        key == LogicalKeyboardKey.arrowUp ||
-        key == LogicalKeyboardKey.home ||
-        key == LogicalKeyboardKey.end) {
-      _syncGesturePipelineState();
-      return _gesturePipeline.handleKeyEvent(event);
-    }
-
-    if (key == LogicalKeyboardKey.escape) {
-      _safeExitReader();
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.audioVolumeDown && _settings.volumeKeyTurn) {
-      // Debounce with the same window as the platform volume listener so a
-      // single physical press isn't turned twice (keyboard event + listener).
-      final now = DateTime.now();
-      if (now.difference(_lastIosVolumeTurnTime).inMilliseconds >= 280) {
-        _lastIosVolumeTurnTime = now;
-        _goToNextPage();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.audioVolumeUp && _settings.volumeKeyTurn) {
-      final now = DateTime.now();
-      if (now.difference(_lastIosVolumeTurnTime).inMilliseconds >= 280) {
-        _lastIosVolumeTurnTime = now;
-        _goToPrevPage();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.keyS) {
-      if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) {
-        _toggleAutoScroll();
-        return KeyEventResult.handled;
-      }
-    } else if (key == LogicalKeyboardKey.equal || key == LogicalKeyboardKey.numpadAdd) {
-      if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) {
-        setState(() => _autoScrollSpeed = (_autoScrollSpeed + 10.0).clamp(10.0, 2000.0));
-        return KeyEventResult.handled;
-      }
-    } else if (key == LogicalKeyboardKey.minus || key == LogicalKeyboardKey.numpadSubtract) {
-      if (_readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps) {
-        setState(() => _autoScrollSpeed = (_autoScrollSpeed - 10.0).clamp(10.0, 2000.0));
-        return KeyEventResult.handled;
-      }
-    }
-
-    return KeyEventResult.ignored;
-  }
-
-  void _safeExitReader() {
-    if (context.canPop()) {
-      context.pop();
-    } else if (Navigator.canPop(context)) {
-      Navigator.pop(context);
-    } else if (_chapter?.mangaId != null) {
-      context.go('/manga/${_chapter!.mangaId}');
-    } else {
-      context.go('/library');
-    }
-  }
 
   @override
   void dispose() {
     // Invalidate any in-flight chapter load so it stops touching state.
     _loadGeneration++;
-    _recenterGuardTimer?.cancel();
+    _input.cancelRecenterGuard();
     WidgetsBinding.instance.removeObserver(this);
-    _autoScrollTicker?.stop();
-    _autoScrollTicker?.dispose();
-    _autoScrollTicker = null;
+    _input.disposeAutoScrollTicker();
     if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
       try {
         VolumeController.instance.removeListener();
@@ -1167,8 +229,11 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
         debugPrint('[Reader] Failed to cleanup volume controller: $e');
       }
     }
-    _progressDebounceTimer?.cancel();
-    _scrollIndicatorTimer?.cancel();
+    _gestureNav.cancelProgressDebounce();
+    _input.cancelScrollIndicatorTimer();
+    // Dispose the pipeline first: it stops the shared zoom AnimationController,
+    // which asserted when that controller was already disposed below.
+    _gesturePipeline.dispose();
     _cancelZoomAnimation();
     _zoomAnimController?.dispose();
     _zoomAnimController = null;
@@ -1189,353 +254,134 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     unawaited(LiveActivitiesService.instance.endReading());
     unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     _focusNode.dispose();
-    _recoveredImageBytes.clear();
-    _recoveringUrls.clear();
-    _failedImageUrls.clear();
-    _prefetchedChapters.clear();
-    _prefetchAttemptedAt.clear();
-    _prefetchingChapters.clear();
-    _pageLoader?.dispose();
-    _pageLoader = null;
     _readerController.dispose();
-    _gesturePipeline.dispose();
-    _positionManager.dispose();
+    // Explicit ownership: the screen created _gestureNav, so it disposes it;
+    // that disposes its PageLoader and PositionManager exactly once.
+    // ReaderController skips injected sub-controllers.
+    _gestureNav.pageLoader.onDisplayChanged = null;
+    _gestureNav.dispose();
+    _pageLoader = null;
     _scrollController.removeListener(_onVerticalScroll);
     _scrollController.dispose();
     _pageController.dispose();
     super.dispose();
   }
 
-  void _storeRecoveredImage(String url, Uint8List bytes) {
-    if (_recoveredImageBytes.length >= 40) {
-      // Never evict bytes for pages currently on screen (current page ±2) just
-      // because they happen to be the oldest — that would force a re-fetch and
-      // a visible flash under memory pressure while paging.
-      String? evictCandidate;
-      for (final key in _recoveredImageBytes.keys) {
-        final idx = _pageUrls.indexOf(key);
-        if (idx == -1 || (idx - (_currentPage - 1)).abs() > 2) {
-          evictCandidate = key;
-          break;
-        }
-      }
-      evictCandidate ??= _recoveredImageBytes.keys.first;
-      _recoveredImageBytes.remove(evictCandidate);
+  /// Load start/finish from [ReaderController] / [NavigationController].
+  /// Fires more than once per load (controller + navigation), so the
+  /// teardown is idempotent via [_loadInFlight].
+  bool _loadInFlight = false;
+
+  /// In-flight [_onChapterLoaded] publish, awaited before the spinner clears.
+  Future<void>? _pendingPublish;
+  @override
+  Widget build(BuildContext context) => _buildScreen(context);
+
+
+  // ─── Controller callbacks (UI reaction only; logic lives in the controllers) ───
+
+  /// Share NavigationController's [PageLoader] (its desktop preload and
+  /// next-chapter warm-up land in the same LRU) and keep its source current.
+  void _syncPageLoader() {
+    if (_chapter == null) {
+      _pageLoader = null;
+      _readerController.setPageLoader(null);
+      return;
     }
-    _recoveredImageBytes[url] = bytes;
-    // I3: keep PageLoader LRU in sync so warm/peek can feed visible widgets.
-    _pageLoader?.cacheBytes(url, bytes);
-  }
-
-  // Local chapters are persisted with synthetic NEGATIVE serverIds, so `!= 0`
-  // (not `> 0`) is the right discriminator — a negative id still resolves via
-  // the unique serverId index and can never be confused with a real Suwayomi id.
-  int _chapterTargetId(Chapter ch) => ch.serverId != 0 ? ch.serverId : ch.id;
-
-  Future<void> _loadChapterAndPages(int chapterId) async {
-    try {
-      await _loadChapterAndPagesInner(chapterId);
-    } catch (e, st) {
-      unawaited(LoggerService.instance.logError('Chapter load failed: $e', exception: e, stackTrace: st, category:'Reader'));
-      // Never leave a permanent spinner: clear the loading state and the page
-      // list so the empty-state screen (with its Retry button) renders instead.
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _pageUrls = [];
-        });
-      }
+    final loader = _gestureNav.pageLoader;
+    if ((_sourceName ?? '') != loader.sourceName) loader.setSourceName(_sourceName ?? '');
+    if (!identical(_pageLoader, loader)) {
+      _pageLoader = loader;
+      _readerController.setPageLoader(loader);
     }
   }
 
-  Future<void> _loadChapterAndPagesInner(int chapterId) async {
-    final loadGen = ++_loadGeneration;
-    _currentChapterId = chapterId;
-    final resumeAutoScroll = _resumeAutoScrollForChapter.remove(chapterId) ?? false;
-    // Flush any pending (debounced) progress write for the outgoing chapter
-    // BEFORE tearing it down. Without this, quickly advancing within the
-    // debounce window (e.g. reading the last page and immediately moving on)
-    // drops the final page — the chapter is never marked read, the tracker is
-    // never pushed, and the "delete finished chapter" rules never run.
-    _progressDebounceTimer?.cancel();
-    if (_chapter != null && _pageUrls.isNotEmpty) {
-      _updateProgress(_currentPage);
+  void _onLoadingChanged(bool loading) {
+    if (!mounted) return;
+    if (loading) {
+      if (_loadInFlight) return;
+      _loadInFlight = true;
+      _onChapterLoadStarted();
+    } else {
+      _loadInFlight = false;
+      // Review MED (ISS-120): never drop the spinner while _onChapterLoaded is
+      // still publishing pages, or the empty/error screen flashes.
+      final pending = _pendingPublish;
+      final gen = _loadGeneration;
+      if (pending != null) {
+        unawaited(pending.catchError((Object e) {
+          debugPrint('[Reader] publish failed: $e');
+        }).whenComplete(() {
+          if (identical(_pendingPublish, pending)) _pendingPublish = null;
+          if (mounted && gen == _loadGeneration && !_loadInFlight && _isLoading) {
+            setState(() => _isLoading = false);
+          }
+        }));
+        return;
+      }
+      if (_isLoading) setState(() => _isLoading = false);
     }
+  }
+
+  /// UI teardown before a chapter switch. Progress for the outgoing chapter
+  /// is flushed by NavigationController (synced to our current page here).
+  void _onChapterLoadStarted() {
+    ++_loadGeneration;
+    _gestureNav.cancelProgressDebounce();
+    _gestureNav.setCurrentPage(_currentPage);
     _stopAutoScroll();
-    _recoveredImageBytes.clear();
-    _recoveringUrls.clear();
-    _failedImageUrls.clear();
+    _gestureNav.pageLoader.resetDisplayState();
     _cachedPageHeights.clear();
     _cachedPageAspects.clear();
-    _pageLoader?.dispose();
-    _pageLoader = null;
     for (final c in _webtoonZoomControllers.values) {
       c.dispose();
     }
     _webtoonZoomControllers.clear();
     _resetZoom();
-
     setState(() {
       _isLoading = true;
-      _pageUrls = [];
+      // Chapter state is NavigationController's; it clears it after the
+      // outgoing chapter's progress flush.
       _currentPage = 1;
-      _nextChapter = null;
-      _prevChapter = null;
-      _webtoonPageKeys.clear();
     });
     _pageIndicator.value = 1;
+  }
 
-    // Resolve into a LOCAL first and only publish it to `_chapter` after the
-    // generation check. Assigning `_chapter` before the check let a slower,
-    // older load overwrite the newer load's chapter and every later step
-    // (progress, next/prev, page resolve) then ran against the wrong chapter.
-    final loadedChapter =
-        await resolveChapterRecord(IsarService.instance, chapterId);
-    if (loadGen != _loadGeneration) return;
-    _chapter = loadedChapter;
-
-    if (_chapter != null) {
-      // A newer load may have already replaced `_chapter` while these awaits
-      // were in flight — bail before writing sibling/next/prev for a stale gen.
-      final nav = await resolveSiblingChapterNav(
-        isar: IsarService.instance,
-        chapter: _chapter!,
-        parentManga: _parentManga,
-      );
-      if (loadGen != _loadGeneration) return;
-      _siblingChapters = nav.siblings;
-
-      final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId) ?? _parentManga;
-      if (loadGen != _loadGeneration) return;
-      if (mounted) {
-        setState(() {
-          _nextChapter = nav.next;
-          _prevChapter = nav.prev;
-          _applyMangaReadingMode(manga);
-        });
-      } else {
-        _nextChapter = nav.next;
-        _prevChapter = nav.prev;
-        _applyMangaReadingMode(manga);
-      }
-      _syncGestureNavChapters();
-      // Platform mirrors after parent manga is known (widget / Live Activities / Siri).
-      _mirrorPlatformReadingSession(progress: null);
+  /// Publishes NavigationController's freshly loaded chapter into UI state.
+  Future<void> _onChapterLoaded() async {
+    final loadGen = _loadGeneration;
+    final chapter = _gestureNav.chapter;
+    if (chapter == null || !mounted) return;
+    _currentChapterId = _gestureNav.currentChapterId;
+    final resumeAutoScroll = _resumeAutoScrollForChapter.remove(_currentChapterId) ?? false;
+    Manga? manga;
+    try {
+      manga = await IsarService.instance
+              .getMangaByServerId(chapter.mangaId)
+              .timeout(NavigationController.ioTimeout) ??
+          _parentManga;
+    } catch (e) {
+      // A failed lookup must not hide pages that already resolved.
+      debugPrint('[Reader] manga lookup failed after load: $e');
+      manga = _parentManga;
     }
+    if (loadGen != _loadGeneration || !mounted) return;
 
-    // ── 3-TIER RESOLVER: 1. Local Extension -> 2. Local Download -> 3. Server ──
-    String? sourceName;
-    if (_chapter != null) {
-      final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
-      sourceName = manga?.sourceName;
-    }
-
-    var chapterUrlToResolve = (_chapter?.url.isNotEmpty == true)
-        ? _chapter!.url
-        : ((_chapter?.realUrl.isNotEmpty == true)
-            ? _chapter!.realUrl
-            : _chapter?.localPath);
-
-    // On-demand self-healing: If chapter has empty/blank URL in DB, scrape parent manga details immediately!
-    if ((chapterUrlToResolve == null || chapterUrlToResolve.isEmpty) && _chapter != null) {
-      try {
-        final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
-        final effectiveSource = sourceName ?? manga?.sourceName ?? '';
-        if (manga != null && effectiveSource.isNotEmpty) {
-          final target = manga.url.isNotEmpty ? manga.url : manga.title;
-          final details = await QuickJsService.instance.fetchMangaDetailsLocal(effectiveSource, target);
-          // This scrape can take a while; if the user has since opened a
-          // different chapter, `_chapter` now points at THAT chapter. Writing
-          // the URL we just resolved for the OLD chapter onto it here would
-          // silently corrupt the new chapter's URL in Isar.
-          if (loadGen != _loadGeneration) return;
-          final chList = (details['chapters'] ?? details['chapterList'] ?? details['epList']) as List<dynamic>?;
-          if (chList != null && chList.isNotEmpty) {
-            // Match chapters by URL first (most reliable), then by chapterNumber + URL,
-            // then by chapterNumber alone. Never match by title alone.
-            final targetChapter = _chapter!;
-            final match = chList.cast<dynamic>().where((c) {
-              final cUrl = (c['url'] ?? c['link'] ?? '').toString().trim();
-              final cNum = (c['chapterNumber'] as num?)?.toDouble();
-              // Priority 1: Exact URL match (most reliable)
-              if (targetChapter.url.isNotEmpty) {
-                final targetUrl = targetChapter.url.trim();
-                final cUrlTrim = cUrl.trim();
-                if (targetUrl == cUrlTrim) return true;
-              }
-              // Priority 2: Chapter number + URL match (if both have URLs)
-              if (targetChapter.url.isNotEmpty && cUrl.isNotEmpty) {
-                final targetUrl = targetChapter.url.trim();
-                final cUrlTrim = cUrl.trim();
-                if (targetUrl == cUrlTrim && cNum == targetChapter.chapterNumber) return true;
-              }
-              // Priority 3: Exact chapter number match (fallback when URLs unavailable)
-              if (cNum != null && cNum == targetChapter.chapterNumber) return true;
-              return false;
-            }).cast<dynamic>().toList();
-            if (match.isNotEmpty) {
-              final freshUrl = (match.first['url'] ?? match.first['link'] ?? '').toString();
-              if (freshUrl.isNotEmpty) {
-                chapterUrlToResolve = freshUrl;
-                // Write through a captured local, never `_chapter!`.
-                //
-                // The generation guard above sits BEFORE this block, but the
-                // `saveChapter` await below re-opens the window: a stale
-                // continuation resuming after the user switched chapters would
-                // read the NEW `_chapter` and persist the OLD chapter's
-                // resolved URL onto it. That chapter then resolved against a
-                // foreign URL and could never load again — permanent Isar
-                // corruption requiring a re-scrape of the whole series.
-                final target = targetChapter;
-                target.url = freshUrl;
-                target.realUrl = freshUrl;
-                await IsarService.instance.saveChapter(target);
-                // Re-check after the await: nothing below may act on a
-                // generation that has already been superseded.
-                if (loadGen != _loadGeneration) return;
-              }
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('[Reader] Chapter URL resolution error: $e');
-      }
-    }
-
-    // Auto-detect source name from URL if missing
-    if ((sourceName == null || sourceName.isEmpty) && chapterUrlToResolve != null && chapterUrlToResolve.isNotEmpty) {
-      final installed = QuickJsService.instance.getInstalledExtensionNames();
-      final urlLower = chapterUrlToResolve.toLowerCase();
-      for (final name in installed) {
-        final code = QuickJsService.instance.getExtensionCode(name);
-        if (code != null) {
-          final baseUrl = QuickJsService.instance.extractBaseUrl(code);
-          if (baseUrl != null && baseUrl.isNotEmpty) {
-            try {
-              final host = Uri.parse(baseUrl).host.replaceAll('www.', '').toLowerCase();
-              if (host.isNotEmpty && urlLower.contains(host)) {
-                sourceName = name;
-                break;
-              }
-            } catch (e) {
-              debugPrint('[Reader] Source matching error: $e');
-            }
-          }
-        }
-      }
-    }
-    // Guarded, unlike every other write in this load path. `_sourceName` drives
-    // the image Referer/auth headers via
-    // `QuickJsService.getImageHeaders(_sourceName ?? '', url)`, so a stale value
-    // left here by a superseded load makes EVERY image in the currently
-    // displayed chapter 403 — the whole chapter renders as "Failed to Load"
-    // until the user navigates away and back.
-    if (loadGen != _loadGeneration) return;
-    _sourceName = sourceName;
-
-    // Pre-warm FlareSolverr session for this source immediately before resolving,
-    // so cookies are ready when images start loading.
-    if (chapterUrlToResolve != null && chapterUrlToResolve.startsWith('http')) {
-      try {
-        final uri = Uri.parse(chapterUrlToResolve);
-        unawaited(MClient.prewarmSession('${uri.scheme}://${uri.host}'));
-      } catch (e) {
-        debugPrint('[Reader] Pre-warm session error: $e');
-      }
-    }
-
-    // Use prefetched pages if already available (instant load on next-chapter nav)
-    final chForKey = _chapter;
-    final prefetched = chForKey != null ? _prefetchedChapters.remove(_prefetchKeyFor(chForKey)) : null;
-    var prefetchedUrls = prefetched?.urls;
-    // The prefetch was resolved against a specific source. If the source
-    // changed under us (a migration, or a manga whose sourceName was
-    // corrected) those URLs belong to a different site and must not be served.
-    // Compare against the source resolved for THIS load (possibly
-    // auto-detected from the URL above), falling back to the parent manga's.
-    if (prefetchedUrls != null && prefetched != null) {
-      final currentSource = (sourceName != null && sourceName.isNotEmpty) ? sourceName : _parentManga?.sourceName;
-      if (!prefetchSourceMatches(prefetchedSource: prefetched.sourceName, currentSource: currentSource)) {
-        debugPrint('[Reader] Discarding prefetch for chapter $chapterId: source changed '
-            '(${prefetched.sourceName} -> $currentSource)');
-        prefetchedUrls = null;
-      }
-    }
-
-    ChapterPagesResult resolved;
-    if (prefetchedUrls != null && prefetchedUrls.isNotEmpty) {
-      debugPrint('[Reader] Using prefetched ${prefetchedUrls.length} pages for chapter $chapterId');
-      resolved = ChapterPagesResult(
-        pageUrls: prefetchedUrls,
-        source: ContentSourceType.localExtension,
-        effectiveSourceName: sourceName,
-        isLocalFiles: false,
-      );
-    } else {
-      try {
-        resolved = await ContentResolverService.instance.resolveChapterPages(
-          chapterServerId: chapterId,
-          chapterUrl: chapterUrlToResolve,
-          sourceName: sourceName,
-        ).timeout(const Duration(seconds: 30), onTimeout: () {
-          debugPrint('[Reader] ⏱️ Resolution timed out for chapter $chapterId');
-          return ChapterPagesResult(
-            pageUrls: [],
-            source: ContentSourceType.fallback,
-            effectiveSourceName: sourceName,
-            isLocalFiles: false,
-          );
-        });
-      } catch (e) {
-        debugPrint('[Reader] ❌ Resolution threw: $e');
-        resolved = ChapterPagesResult(
-          pageUrls: [],
-          source: ContentSourceType.fallback,
-          effectiveSourceName: sourceName,
-          isLocalFiles: false,
-        );
-      }
-    }
-
-    // Generation guard: a stale resolution (e.g. a 30s timeout fired after the
-    // user moved on) must not clobber the CURRENT chapter's state. Checked
-    // before ANY field write below.
-    if (loadGen != _loadGeneration) return;
-
-    // Clear prefetch cache on chapter change to prevent stale data and limit memory
-    _prefetchedChapters.clear();
-    _prefetchAttemptedAt.clear();
-    _prefetchingChapters.clear();
-    debugPrint('[Reader] Cleared prefetch cache on chapter load');
-
-    _sourceName = resolved.effectiveSourceName ?? sourceName;
-    _pageUrls = resolved.pageUrls;
-    _syncPageLoader();
-    _syncGestureNavChapters();
-    if (_chapter != null && _pageUrls.isNotEmpty && _chapter!.pageCount != _pageUrls.length) {
-      _chapter!.pageCount = _pageUrls.length;
-      unawaited(IsarService.instance.saveChapter(_chapter!));
-    }
-    debugPrint('[Reader] Resolved ${_pageUrls.length} pages for source=$_sourceName: ${_pageUrls.take(3).toList()}');
-
-    // Proactively pre-fetch first 5 pages on desktop to bypass Cloudflare image CDN blocking immediately
-    if (!kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-      for (int i = 0; i < _pageUrls.length && i < 5; i++) {
-        unawaited(_recoverImage(_pageUrls[i], i));
-      }
-    }
-
+    final urls = _gestureNav.pageUrls;
     // A finished chapter re-opens at page 1. Restoring lastPageRead (which is
     // the last page for a completed chapter) would drop the user on the final
     // page and immediately trigger the end-of-chapter dialog.
-    _currentPage = (_chapter != null &&
-            !_chapter!.isRead &&
-            _chapter!.lastPageRead > 0 &&
-            _chapter!.lastPageRead <= _pageUrls.length)
-        ? _chapter!.lastPageRead
+    final startPage = (!chapter.isRead && chapter.lastPageRead > 0 && chapter.lastPageRead <= urls.length)
+        ? chapter.lastPageRead
         : 1;
-
-    if (loadGen != _loadGeneration) return;
+    setState(() {
+      _applyMangaReadingMode(manga);
+      _currentPage = startPage;
+      _isLoading = false;
+    });
+    _syncPageLoader();
+    _gestureNav.setCurrentPage(_currentPage);
+    debugPrint('[Reader] Resolved ${_pageUrls.length} pages for source=$_sourceName');
 
     final initialPageIndex = _pagedControllerIndexForPage(_currentPage);
     if (_pageController.hasClients) {
@@ -1545,1538 +391,122 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
       _pageController = PageController(initialPage: initialPageIndex);
       oldController.dispose();
     }
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      _setPageIndicator(_currentPage);
-    }
+    _setPageIndicator(_currentPage);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (loadGen != _loadGeneration || !mounted) return;
-      if (!mounted) return;
-      final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
+      _fetchPagesAround(_currentPage); // ISS-128
+      final isPaged = isPagedReadingMode(_readingMode);
       if (isPaged && _pageController.hasClients) {
-        final targetPage = _pagedControllerIndexForPage(_currentPage);
-        _pageController.jumpToPage(targetPage);
+        _pageController.jumpToPage(_pagedControllerIndexForPage(_currentPage));
       } else if (!isPaged && _scrollController.hasClients) {
         _jumpToWebtoonPage(_currentPage);
       }
-      final isWebtoon = !isPaged;
-      if (resumeAutoScroll && isWebtoon && _scrollController.hasClients && !_isAutoScrolling) {
+      if (resumeAutoScroll && !isPaged && _scrollController.hasClients && !_isAutoScrolling) {
         setState(() => _isAutoScrolling = true);
         _startAutoScroll();
       }
     });
 
-    // Kick off next-chapter prefetch in background after current chapter is displayed
-    if (_nextChapter != null) {
-      unawaited(_prefetchChapter(_nextChapter!));
-    }
-
     // Single-page chapters: persist progress as soon as the chapter opens so a
-    // mid-read app kill never loses it. Flows through the normal pipeline so
-    // delete-finished, scrobble-on-read and server sync rules all apply.
-    if (_pageUrls.length == 1 && _chapter != null && !_chapter!.isRead) {
+    // mid-read app kill never loses it.
+    if (_pageUrls.length == 1 && !chapter.isRead) {
       _debouncedUpdateProgress(1);
     }
 
-    // Auto-download ahead trigger
-    if (_settings.autoDownloadWhileReading) {
-      _triggerDownloadAhead();
-    }
-
-    // "When next chapter opens" deletion check for previous read chapters
-    if (_settings.deleteFinishedChaptersWhileReading == 'When next chapter opens' && _prevChapter != null) {
-      if (_prevChapter!.isRead) {
-        if (!_prevChapter!.isBookmarked || _settings.allowDeletingBookmarkedChapters) {
-          unawaited(DownloadManagerService.instance.deleteLocalDownload(_chapterTargetId(_prevChapter!)));
-        }
-      }
-    }
+    _gestureNav.runPostLoadHousekeeping();
   }
 
-  void _triggerDownloadAhead() async {
-    final count = _settings.downloadAheadChapterCount;
-    if (count <= 0 || _chapter == null) return;
-    final currentIdx = _siblingChapters.indexWhere((c) => (c.id == _chapter!.id) || (c.serverId != 0 && c.serverId == _chapter!.serverId));
-    if (currentIdx == -1) return;
-
-    final loadGen = _loadGeneration; // Capture generation at start
-    final upcoming = _siblingChapters
-        .skip(currentIdx + 1)
-        .where((c) => !c.isRead && !DownloadManagerService.instance.isChapterDownloadedLocally(_chapterTargetId(c)))
-        .take(count)
-        .toList();
-
-    final manga = await IsarService.instance.getMangaByServerId(_chapter!.mangaId);
-    final mangaTitle = manga?.title ?? 'Manga';
-
-    // Guard against stale sibling data: if generation changed, discard
-    if (loadGen != _loadGeneration) return;
-
-    for (final ch in upcoming) {
-      unawaited(DownloadManagerService.instance.enqueueLocalDownload(
-        chapterId: _chapterTargetId(ch),
-        mangaId: ch.mangaId,
-        chapterName: ch.name,
-        mangaTitle: mangaTitle,
-        chapterNumber: ch.chapterNumber,
-      ));
-    }
+  /// setState for the part-file extensions (setState is @protected).
+  void _rebuild(VoidCallback fn) {
+    if (mounted) setState(fn);
   }
 
-  /// Prefetch the next chapter's page URLs into cache and precache image bitmaps into memory
-  /// The single prefetch cache key for [chapter]; see [readerPrefetchKey].
-  ///
-  /// Both the write and the read side MUST go through this. The key is
-  /// source-free (UIX-12): the writer only knows the stored manga sourceName
-  /// while the reader may auto-detect it from the URL, so a source-bearing key
-  /// made the lookup miss and the prefetch dead code again. Source mismatches
-  /// are rejected on the value side via [prefetchSourceMatches].
-  String _prefetchKeyFor(Chapter chapter) =>
-      readerPrefetchKey(chapterTargetId: _chapterTargetId(chapter), mangaId: chapter.mangaId);
+  // Thin delegates into the controllers (ISS-125).
+  int _chapterTargetId(Chapter ch) => NavigationController.targetIdOf(ch);
+  void _debouncedUpdateProgress(int page) => _gestureNav.debouncedUpdateProgress(page);
+  void _updateProgress(int page) => _gestureNav.updateProgressNow(page);
+  Future<void> _recoverImage(String url, int index, {bool manual = false}) =>
+      _gestureNav.pageLoader.recoverPage(url, index, manual: manual);
 
-  Future<void> _prefetchChapter(Chapter chapter) async {
-    // Capture the generation BEFORE the first await. Capturing it after meant
-    // the guard compared the current generation against itself, so a prefetch
-    // for the previous chapter's target happily wrote into the cache and warmed
-    // the image cache for a chapter the user was no longer reading.
-    final loadGen = _loadGeneration;
-
-    // Key first (cheap, synchronous in-flight guard), then read the manga for
-    // its source inside the guarded section.
-    final compositeKey = _prefetchKeyFor(chapter);
-    if (_prefetchedChapters.containsKey(compositeKey) || _prefetchingChapters.contains(compositeKey)) return;
-    final lastAttempt = _prefetchAttemptedAt[compositeKey];
-    if (lastAttempt != null &&
-        DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(lastAttempt * 1000)) < _kPrefetchFailureCooldown) {
-      return;
-    }
-    _prefetchingChapters.add(compositeKey);
-    try {
-      final manga = await IsarService.instance.getMangaByServerId(chapter.mangaId);
-      final sourceName = manga?.sourceName ?? 'unknown';
-      if (loadGen != _loadGeneration) return;
-      final url = chapter.url.isNotEmpty ? chapter.url : chapter.realUrl;
-      // Bounded, like the main resolve path. Without it a source that accepts
-      // the connection and never responds hung here forever: the key stayed in
-      // `_prefetchingChapters` for the rest of the session, which blocks the
-      // in-flight guard, and `_prefetchAttemptedAt` was never written because
-      // both write sites sit past this await, so the failure cooldown could not
-      // engage either. Net effect: one hung source permanently disabled prefetch
-      // for that chapter, and every next-chapter navigation paid a full scrape
-      // with no recovery until the app restarted.
-      final resolved = await ContentResolverService.instance
-          .resolveChapterPages(
-            chapterServerId: chapter.serverId > 0 ? chapter.serverId : _chapterTargetId(chapter),
-            chapterUrl: url.isNotEmpty ? url : null,
-            sourceName: sourceName,
-          )
-          .timeout(
-            _kPrefetchTimeout,
-            onTimeout: () => ChapterPagesResult(
-              pageUrls: const <String>[],
-              source: ContentSourceType.fallback,
-            ),
-          );
-      // Guard against stale prefetch: if generation changed, discard results
-      if (loadGen != _loadGeneration) return;
-      // Also guard against dispose: don't pollute cache after widget is gone
-      if (!mounted) return;
-      if (resolved.pageUrls.isEmpty) {
-        // Nothing to cache, so this would otherwise re-fire on every frame.
-        _prefetchAttemptedAt[compositeKey] = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-        debugPrint('[Reader] Prefetch for chapter ${_prefetchKeyFor(chapter)} resolved to no pages; '
-            'suppressing re-attempts for ${_kPrefetchFailureCooldown.inSeconds}s');
-      }
-      if (resolved.pageUrls.isNotEmpty) {
-        // Enforce max cache size: evict oldest if over limit
-        while (_prefetchedChapters.length >= _maxPrefetchedChapters) {
-          final oldestKey = _prefetchedChapters.keys.first;
-          _prefetchedChapters.remove(oldestKey);
-          debugPrint('[Reader] Prefetch cache full, evicted oldest chapter');
-        }
-        // Precache first 3 image bitmaps into Flutter memory cache for 0ms transition
-        // Use the PREFETCHED chapter's effective source for headers, not current chapter's.
-        final effectiveSource = resolved.effectiveSourceName ?? sourceName;
-        _prefetchedChapters[compositeKey] = (sourceName: effectiveSource, urls: resolved.pageUrls);
-        // Succeeded — drop any prior failure mark so a later legitimate
-        // re-prefetch is not suppressed.
-        _prefetchAttemptedAt.remove(compositeKey);
-        debugPrint('[Reader] Prefetched ${resolved.pageUrls.length} pages for next chapter '
-            '${_chapterTargetId(chapter)} (key: $compositeKey)');
-        for (final pUrl in resolved.pageUrls.take(3)) {
-          if (mounted && pUrl.startsWith('http')) {
-            try {
-              final headers = QuickJsService.getImageHeaders(effectiveSource, pUrl);
-              unawaited(precacheImage(
-                NetworkImage(pUrl, headers: headers),
-                context,
-              ).catchError((Object e) {
-                debugPrint('[Reader] Image precache error: $e');
-              }));
-            } catch (e) {
-              debugPrint('[Reader] Prefetch headers error: $e');
-            }
-          }
-        }
-      }
-    } catch (e) {
-      _prefetchAttemptedAt[compositeKey] = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      debugPrint('[Reader] Prefetch failed for chapter ${_chapterTargetId(chapter)}: $e');
-    } finally {
-      _prefetchingChapters.remove(compositeKey);
-    }
-  }
-
-  void _onVerticalScroll() {
-    if (_isDraggingSlider) return;
-    if (_pageUrls.isEmpty || !_scrollController.hasClients) return;
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final currentScroll = _scrollController.offset;
-    if (maxScroll <= 0) return;
-
-    // Reveal controls when reaching the end of the chapter
-    if (currentScroll >= maxScroll - 30 && !_showControls) {
-      _showControls = true;
-      if (mounted) setState(() {});
-    }
-
-    // Show floating page indicator when scrolling with controls hidden
-    if (!_showControls) {
-      if (!_scrollIndicatorVisible.value) {
-        _scrollIndicatorVisible.value = true;
-      }
-      _scrollIndicatorTimer?.cancel();
-      _scrollIndicatorTimer = Timer(const Duration(milliseconds: 1500), () {
-        _scrollIndicatorVisible.value = false;
-      });
-    }
-
-    final media = MediaQuery.of(context);
-    final viewportHeight = media.size.height;
-    final candidates = <({int page, double top, double bottom})>[];
-    for (int i = 0; i < _pageUrls.length; i++) {
-      final key = _webtoonPageKeys[i];
-      final ctx = key?.currentContext;
-      if (ctx == null) continue;
-      final box = ctx.findRenderObject() as RenderBox?;
-      if (box == null || !box.hasSize) continue;
-      final pos = box.localToGlobal(Offset.zero);
-      final top = pos.dy;
-      final bottom = pos.dy + box.size.height;
-      if (top <= viewportHeight && bottom >= 0) {
-        candidates.add((page: i + 1, top: top, bottom: bottom));
-      }
-    }
-
-    final detectedPage = detectBestVisiblePage(viewportHeight: viewportHeight, pages: candidates);
-    final pageRatio = (currentScroll / maxScroll).clamp(0.0, 1.0);
-    final computedPage = detectedPage ?? (((pageRatio * (_pageUrls.length - 1)) + 1).round().clamp(1, _pageUrls.length));
-
-    if (pageRatio >= 0.65 && _nextChapter != null) {
-      unawaited(_prefetchChapter(_nextChapter!));
-    }
-
-    // Prefetch a few previous pages' images when scrolling up (helps placeholder stability).
-    if (computedPage > 1) {
-      final start = (computedPage - 4).clamp(1, _pageUrls.length);
-      for (int p = start; p < computedPage; p++) {
-        final url = _pageUrls[p - 1];
-        if (url.startsWith('http') && !_cachedPageHeights.containsKey(url)) {
-          // Warm decode path on desktop via existing recover; mobile uses Image cache.
-          if (!kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-            unawaited(_recoverImage(url, p - 1));
-          }
-        }
-      }
-    }
-
-    if (computedPage != _currentPage) {
-      _setPageIndicator(computedPage);
-      _debouncedUpdateProgress(computedPage);
-    }
-  }
-
-  /// R1.8 / I3: priority-warm current/next/prev via PageLoader (all non-web).
-  /// Desktop still owns the heavier curl-based upcoming prefetch separately.
-  /// On success, promote bytes into `_recoveredImageBytes` so visible widgets
-  /// render from memory instead of re-hitting the network.
-  void _warmPagesViaLoader(int pageOneBased) {
-    final loader = _pageLoader;
-    if (loader == null || _pageUrls.isEmpty || kIsWeb) return;
-    final idx = pageOneBased - 1;
-    void warm(int i, PageLoadPriority priority) {
-      if (i < 0 || i >= _pageUrls.length) return;
+  /// ISS-128: page fetches run from load/page-change/scroll, never from build.
+  /// Desktop renders remote pages from fetched bytes (curl), so fetch the
+  /// visible window and look ahead; other platforms warm the LRU.
+  void _fetchPagesAround(int page) {
+    if (kIsWeb || _pageUrls.isEmpty) return;
+    final loader = _gestureNav.pageLoader;
+    loader.warmAround(_pageUrls, page);
+    if (!(Platform.isLinux || Platform.isMacOS || Platform.isWindows)) return;
+    final idx = page - 1;
+    for (int i = idx - 1; i <= idx + 2; i++) {
+      if (i < 0 || i >= _pageUrls.length) continue;
       final url = _pageUrls[i];
-      if (_recoveredImageBytes.containsKey(url)) return;
-      final cached = loader.peekCachedBytes(url);
-      if (cached != null) {
-        // Promote loader cache into the screen map without another download.
-        if (mounted) setState(() => _storeRecoveredImage(url, cached));
-        return;
-      }
-      unawaited(() async {
-        final result = await loader.loadPage(
-          url: url,
-          index: i,
-          priority: priority,
-          sourceName: _sourceName,
-        );
-        if (!mounted) return;
-        final bytes = result.bytes;
-        if (bytes == null || bytes.isEmpty) return;
-        if (_recoveredImageBytes.containsKey(url)) return;
-        setState(() => _storeRecoveredImage(url, bytes));
-      }());
+      if (url.startsWith('http')) unawaited(loader.recoverPage(url, i));
     }
-    warm(idx, PageLoadPriority.current);
-    warm(idx + 1, PageLoadPriority.next);
-    warm(idx - 1, PageLoadPriority.prev);
+    loader.prefetchUpcoming(_pageUrls, idx);
   }
 
-  /// R1.3: keep GesturePipeline's NavigationController sibling state in sync.
-  void _syncGestureNavChapters() {
-    _gestureNav.setSiblingChapters(_siblingChapters);
-    _gestureNav.setNextChapter(_nextChapter);
-    _gestureNav.setPrevChapter(_prevChapter);
-    _gestureNav.setPageUrls(_pageUrls);
-    _gestureNav.setCurrentPage(_currentPage);
-    _gestureNav.setCurrentChapterId(_currentChapterId);
-    if (_chapter != null) _gestureNav.setChapter(_chapter!);
-  }
-
-  void _onPageChanged(int index) {
-    _resetZoom();
-    final slots = _currentSpreadSlots();
-    final useDouble = slots.isNotEmpty &&
-        shouldUseDoublePages(
-          mode: parseDoublePageDisplayMode(_settings.doublePageDisplayMode),
-          isLandscape: MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height,
-        );
-    final int page;
-    if (useDouble && index < slots.length) {
-      page = pageNumberForSpread(slots, index, pageCount: _pageUrls.length);
-    } else if (useDouble && index >= slots.length) {
-      // Transition card after last spread
-      page = _pageUrls.isNotEmpty ? _pageUrls.length : 1;
-    } else {
-      page = (index + 1).clamp(1, _pageUrls.isNotEmpty ? _pageUrls.length : 1);
-    }
-    _setPageIndicator(page);
-    if (mounted) setState(() {});
-
-    _warmPagesViaLoader(page);
-
-    // Trigger prefetch early when reaching 65% of pages in paged mode
-    if (_pageUrls.isNotEmpty && page >= (_pageUrls.length * 0.65).round() && _nextChapter != null) {
-      unawaited(_prefetchChapter(_nextChapter!));
-    }
-
-    _debouncedUpdateProgress(page);
-  }
-
-  void _debouncedUpdateProgress(int page) {
-    // Snapshot the chapter and its page count at debounce time so a rapid
-    // chapter switch doesn't cause the debounced callback to write progress
-    // to the WRONG chapter (stale _chapter/_pageUrls with old page number).
-    final chapterSnapshot = _chapter;
-    final totalPagesSnapshot = _pageUrls.length;
-    if (chapterSnapshot == null) return;
-    _progressDebounceTimer?.cancel();
-    _progressDebounceTimer = Timer(const Duration(milliseconds: 500), () {
-      unawaited(_updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot));
-    });
-  }
-
-  /// Internal progress update using a snapshot to prevent cross-chapter pollution.
-  /// R1.8: delegates persistence/sync/scrobble to [PositionManager].
-  Future<void> _updateProgressWithSnapshot(int page, Chapter chapterSnapshot, int totalPagesSnapshot) async {
-    final result = await _positionManager.updateProgress(
-      chapterSnapshot: chapterSnapshot,
-      totalPages: totalPagesSnapshot,
-      page: page,
-      parentManga: _parentManga,
-    );
-    if (!result.updated) return;
-
-    // I8.3: keep Dynamic Island / lock-screen progress in sync (UI/platform only).
-    if (identical(chapterSnapshot, _chapter) && result.totalPages > 0) {
-      _mirrorPlatformReadingSession(
-        progress: result.clampedPage / result.totalPages,
-      );
-    }
-
-    if (result.becameComplete &&
-        _settings.deleteFinishedChaptersWhileReading == 'Immediately') {
-      if (!chapterSnapshot.isBookmarked ||
-          _settings.allowDeletingBookmarkedChapters) {
-        unawaited(DownloadManagerService.instance
-            .deleteLocalDownload(_chapterTargetId(chapterSnapshot)));
-      }
-    }
-  }
-
-  void _updateProgress(int page) {
-    // Public API: capture snapshot and delegate to internal method.
-    // This prevents cross-chapter pollution when called from debounced callbacks.
-    final chapterSnapshot = _chapter;
-    final totalPagesSnapshot = _pageUrls.length;
-    if (chapterSnapshot == null || totalPagesSnapshot == 0) return;
-    unawaited(_updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot));
-  }
-
-  Future<void> _clearCookiesAndCache() async {
-    final ok = await ContentResolverService.instance.clearCookiesAndCache();
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          ok
-              ? 'Cookies and cache cleared. Tap Retry to reload.'
-              : 'Could not clear cookies. Check the server connection.',
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openChapterInBrowser() async {
-    String? rawUrl = (_chapter?.url.isNotEmpty == true)
-        ? _chapter!.url
-        : ((_chapter?.realUrl.isNotEmpty == true) ? _chapter!.realUrl : null);
-
-    final manga = _chapter != null ? await IsarService.instance.getMangaByServerId(_chapter!.mangaId) : null;
-    rawUrl ??= manga?.url;
-
-    if (rawUrl == null || rawUrl.trim().isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No web URL available for this chapter')),
-        );
-      }
-      return;
-    }
-
-    var effectiveUrl = rawUrl.trim();
-    if (!effectiveUrl.startsWith('http://') && !effectiveUrl.startsWith('https://')) {
-      final sourceName = _sourceName ?? manga?.sourceName ?? '';
-      final baseUrl = QuickJsService.instance.getSourceBaseUrl(sourceName);
-      if (baseUrl != null && baseUrl.isNotEmpty) {
-        final cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
-        final cleanPath = effectiveUrl.startsWith('/') ? effectiveUrl : '/$effectiveUrl';
-        effectiveUrl = '$cleanBase$cleanPath';
-      } else if (effectiveUrl.contains('.') && !effectiveUrl.contains(' ')) {
-        effectiveUrl = 'https://$effectiveUrl';
-      }
-    }
-
-    final uri = Uri.tryParse(effectiveUrl);
-    if (uri != null) {
-      try {
-        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-        if (!launched && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not open $effectiveUrl')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not open $effectiveUrl: $e')),
-          );
-        }
-      }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open $effectiveUrl')),
-        );
-      }
-    }
-  }
-
-  void _toggleControls() {
-    unawaited(HapticFeedback.selectionClick());
-    setState(() {
-      _showControls = !_showControls;
-      if (!_showControls) {
-        unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky));
-      } else {
-        unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
-      }
-    });
-  }
-
-  TapZonePreset _activeTapZonePreset() {
-    final isPaged = isPagedReadingMode(_readingMode);
-    final raw = isPaged ? _settings.tapZonePresetPaged : _settings.tapZonePresetWebtoon;
-    return parseTapZonePreset(raw);
-  }
-
-  bool _doublePagesActive(BoxConstraints constraints) {
-    if (!isPagedReadingMode(_readingMode)) return false;
-    final mode = parseDoublePageDisplayMode(_settings.doublePageDisplayMode);
-    final landscape = constraints.maxWidth > constraints.maxHeight;
-    return shouldUseDoublePages(mode: mode, isLandscape: landscape);
-  }
-
-  List<bool> _wideFlagsForPages() {
-    return [
-      for (final url in _pageUrls) isWidePage(_cachedPageAspects[url]),
-    ];
-  }
-
-  List<SpreadSlot> _currentSpreadSlots() {
-    if (!isPagedReadingMode(_readingMode)) return const [];
-    return buildSpreadSlots(
-      pageCount: _pageUrls.length,
-      pageOffset: _settings.doublePageOffset,
-      wideFlags: _wideFlagsForPages(),
-    );
-  }
-
-  /// PageView index for a 1-based page number (spread index when double is on).
-  int _pagedControllerIndexForPage(int page1Based) {
-    final pageIndex = (page1Based - 1).clamp(0, _pageUrls.isEmpty ? 0 : _pageUrls.length - 1);
-    final slots = _currentSpreadSlots();
-    final useDouble = slots.isNotEmpty &&
-        shouldUseDoublePages(
-          mode: parseDoublePageDisplayMode(_settings.doublePageDisplayMode),
-          isLandscape: MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height,
-        );
-    if (!useDouble) return pageIndex;
-    return spreadIndexForPage(slots, pageIndex);
-  }
-
-  void _dismissTapZoneOverlay() {
-    if (!_showTapZoneOverlay) return;
-    setState(() => _showTapZoneOverlay = false);
-    _settings.tapZonesOverlaySeen = true;
-  }
-
-  void _handleTapZone(TapUpDetails details, BoxConstraints constraints) {
-    // R1.8: GesturePipeline owns tap-zone routing.
-    _syncGesturePipelineState();
-    _gesturePipeline.handleTapZone(details, constraints);
-  }
-
-  void _syncReaderControllerPresentation() {
-    _readerController.syncPresentation(
-      readingMode: _readingMode,
-      readerTheme: _readerTheme,
-      colorFilter: _colorFilter,
-      scaleType: _scaleType,
-      cropBorders: _cropBorders,
-      invertTaps: _invertTaps,
-      isZoomed: _isZoomed,
-      currentPage: _currentPage,
-    );
-  }
-
-  ReaderPageBuilder _livePageBuilder(BoxConstraints constraints) {
-    return (context, url, index,
-        {required bool isPaged,
-        double? contentWidth,
-        bool enablePerPageZoom = false}) {
-      return _buildPageWidget(
-        url,
-        index,
-        constraints: constraints,
-        isPaged: isPaged,
-        contentWidth: contentWidth,
-        enablePerPageZoom: enablePerPageZoom,
-      );
-    };
-  }
-
-  /// R1.6: webtoon layout via [ReaderCanvas]; pages still built by live recover path.
-  Widget _buildLiveWebtoonCanvas(BoxConstraints constraints) {
-    _syncReaderControllerPresentation();
-    final showTransition =
-        _pageUrls.isNotEmpty &&
-        _settings.seamlessTransitions &&
-        _settings.showEndOfChapterDialog;
-    return ReaderCanvas(
-      controller: _readerController,
-      scrollController: _scrollController,
-      pageController: _pageController,
-      transformationController: _transformationController,
-      webtoonZoomControllers: _webtoonZoomControllers,
-      webtoonPageKeys: _webtoonPageKeys,
-      readingMode: _readingMode,
-      pageUrls: _pageUrls,
-      currentPage: _currentPage,
-      colorFilter: _colorFilter,
-      cropBorders: _cropBorders,
-      scaleType: _scaleType,
-      readerTheme: _readerTheme,
-      chapter: _chapter,
-      nextChapter: _nextChapter,
-      showTransitionCard: showTransition,
-      transitionBuilder: (_) => _buildChapterTransitionCard(),
-      onRequestNextChapter: () {
-        if (_nextChapter == null) return;
-        unawaited(_readerController.loadChapter(_chapterTargetId(_nextChapter!)));
-      },
-      pageBuilder: _livePageBuilder(constraints),
-    );
-  }
-
-  /// R1.6: paged layout via [ReaderCanvas] with live spread isolation + pageBuilder.
-  Widget _buildLivePagedCanvas(BoxConstraints constraints) {
-    _syncReaderControllerPresentation();
-    final useDouble = _doublePagesActive(constraints);
-    final slots = useDouble ? _currentSpreadSlots() : const <SpreadSlot>[];
-    final showTransition =
-        _pageUrls.isNotEmpty &&
-        _settings.seamlessTransitions &&
-        _settings.showEndOfChapterDialog;
-    return ReaderCanvas(
-      controller: _readerController,
-      scrollController: _scrollController,
-      pageController: _pageController,
-      transformationController: _transformationController,
-      webtoonZoomControllers: _webtoonZoomControllers,
-      webtoonPageKeys: _webtoonPageKeys,
-      readingMode: _readingMode,
-      pageUrls: _pageUrls,
-      currentPage: _currentPage,
-      colorFilter: _colorFilter,
-      cropBorders: _cropBorders,
-      scaleType: _scaleType,
-      readerTheme: _readerTheme,
-      chapter: _chapter,
-      nextChapter: _nextChapter,
-      showTransitionCard: showTransition,
-      spreadSlots: slots,
-      onPageChanged: _onPageChanged,
-      transitionBuilder: (_) => Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(vertical: 40),
-          child: _buildChapterTransitionCard(),
-        ),
-      ),
-      onRequestNextChapter: () {
-        if (_nextChapter == null) return;
-        unawaited(_readerController.loadChapter(_chapterTargetId(_nextChapter!)));
-      },
-      pageBuilder: _livePageBuilder(constraints),
-    );
-  }
-
-  void _handleDoubleTapZoom({TransformationController? controllerOverride, int? pageIndex}) {
-    // R1.8: GesturePipeline owns double-tap smart zoom.
-    _syncGesturePipelineState(pageIndexForAspect: pageIndex);
-    _gesturePipeline.setDoubleTapDetails(
-        _doubleTapDetails?.localPosition ?? Offset.zero);
-    _gesturePipeline.handleDoubleTapZoom(
-        controllerOverride: controllerOverride);
-  }
-
-  void _goToNextPage() {
-    if (_pageUrls.isEmpty) return; // No pages loaded; don't auto-advance to next chapter
-    final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
-    if (isPaged) {
-      final slots = _currentSpreadSlots();
-      final useDouble = slots.isNotEmpty &&
-          shouldUseDoublePages(
-            mode: parseDoublePageDisplayMode(_settings.doublePageDisplayMode),
-            isLandscape: MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height,
-          );
-      final hasMoreViewport = useDouble
-          ? (_pageController.hasClients &&
-              (_pageController.page ?? 0) <
-                  (slots.length - 1 +
-                      (_settings.seamlessTransitions && _settings.showEndOfChapterDialog ? 1 : 0)))
-          : _currentPage < _pageUrls.length;
-      if (hasMoreViewport && _pageController.hasClients) {
-        // Throttle rapid taps so one tap never double-advances a paged chapter.
-        final now = DateTime.now();
-        if (_lastNextPageNavAt != null &&
-            now.difference(_lastNextPageNavAt!) < const Duration(milliseconds: 250)) {
-          return;
-        }
-        _lastNextPageNavAt = now;
-        unawaited(HapticFeedback.lightImpact());
-        _pageController.nextPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
-      } else if (_nextChapter != null) {
-        unawaited(_readerController.loadChapter(_chapterTargetId(_nextChapter!)));
-      }
-    } else {
-      if (_scrollController.hasClients) {
-        final maxScroll = _scrollController.position.maxScrollExtent;
-        final currentOffset = _scrollController.offset;
-        if (maxScroll > 50 && currentOffset >= maxScroll - 20) {
-          if (_nextChapter != null) {
-            unawaited(_readerController.loadChapter(_chapterTargetId(_nextChapter!)));
-          }
-        } else {
-          final targetOffset = (currentOffset + _webtoonPageStep()).clamp(0.0, maxScroll);
-          _scrollController.animateTo(
-            targetOffset,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-          );
-        }
-      }
-    }
-  }
-
-  void _goToPrevPage() {
-    if (_pageUrls.isEmpty) return;
-    final isPaged = _readingMode == ReadingMode.pagedLtr || _readingMode == ReadingMode.pagedRtl;
-    if (isPaged) {
-      final slots = _currentSpreadSlots();
-      final useDouble = slots.isNotEmpty &&
-          shouldUseDoublePages(
-            mode: parseDoublePageDisplayMode(_settings.doublePageDisplayMode),
-            isLandscape: MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height,
-          );
-      final hasPrevViewport = useDouble
-          ? (_pageController.hasClients && (_pageController.page ?? 0) > 0.01)
-          : _currentPage > 1;
-      if (hasPrevViewport && _pageController.hasClients) {
-        // Throttle rapid taps so one tap never double-advances a paged chapter.
-        final now = DateTime.now();
-        if (_lastPrevPageNavAt != null &&
-            now.difference(_lastPrevPageNavAt!) < const Duration(milliseconds: 250)) {
-          return;
-        }
-        _lastPrevPageNavAt = now;
-        unawaited(HapticFeedback.lightImpact());
-        _pageController.previousPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
-      } else if (_prevChapter != null) {
-        unawaited(_readerController.loadChapter(_chapterTargetId(_prevChapter!)));
-      }
-    } else {
-      if (_scrollController.hasClients) {
-        final maxScroll = _scrollController.position.maxScrollExtent;
-        final currentOffset = _scrollController.offset;
-        if (currentOffset <= 20) {
-          if (_canGoToPrevChapterFromTop()) {
-            _lastPrevChapterNavAt = DateTime.now();
-            unawaited(_readerController.loadChapter(_chapterTargetId(_prevChapter!)));
-          }
-        } else {
-          final targetOffset = (currentOffset - _webtoonPageStep()).clamp(0.0, maxScroll);
-          _scrollController.animateTo(
-            targetOffset,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-          );
-        }
-      }
-    }
-  }
-
-  // R1.7: theme/filter/scale helpers live in reader_theme.dart.
-  Color get _canvasBackgroundColor => canvasBackgroundColor(_readerTheme);
-  ColorFilter? get _activeColorFilter => activeColorFilter(_colorFilter);
-  BoxFit get _imageBoxFit => imageBoxFit(_scaleType);
-
-  void _cycleReadingMode() {
-    _applyReadingMode(cycleReadingMode(_readingMode), showSnack: true);
-  }
-
-  Future<void> _toggleReaderBookmark() async {
-    final target = _chapter;
-    if (target == null) return;
-    // Snapshot: _chapter is reassigned by chapter loads; saving/syncing the
-    // live field after the await below could persist and push the WRONG
-    // (newly loaded) chapter's state.
-    final newState = !target.isBookmarked;
-    setState(() => target.isBookmarked = newState);
-    await IsarService.instance.saveChapter(target);
-    if (target.serverId > 0) {
-      unawaited(SyncEngine.instance.syncChapterBookmark(target.serverId, newState));
-    }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(newState ? 'Bookmark added' : 'Bookmark removed'),
-        duration: const Duration(seconds: 1),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _showReaderSettingsSheet() {
-    unawaited(ReaderSettingsSheet.show(
-      context: context,
-      model: ReaderSettingsSheetModel(
-        settings: _settings,
-        hasParentManga: _parentManga != null,
-        scope: _readerSettingsScope,
-        readingMode: _readingMode,
-        readerTheme: _readerTheme,
-        colorFilter: _colorFilter,
-        scaleType: _scaleType,
-        invertTaps: _invertTaps,
-        cropBorders: _cropBorders,
-        onScopeChanged: (next) {
-          setState(() => _readerSettingsScope = next);
-          unawaited(_persistReadingMode(_readingMode));
-        },
-        onApplyReadingMode: _applyReadingMode,
-        onThemeChanged: (theme) {
-          setState(() => _readerTheme = theme);
-          _settings.readerTheme = themeModeLabel(theme);
-        },
-        onColorFilterChanged: (filter) {
-          setState(() => _colorFilter = filter);
-          _settings.colorFilter = colorFilterLabel(filter);
-        },
-        onScaleTypeChanged: (scale) {
-          setState(() => _scaleType = scale);
-          _settings.scaleType = scaleTypeLabel(scale);
-        },
-        onInvertTapsChanged: (val) {
-          setState(() => _invertTaps = val);
-          _settings.invertTapZones = val;
-        },
-        onCropBordersChanged: (val) {
-          setState(() => _cropBorders = val);
-          _settings.cropBorders = val;
-        },
-        onKeepScreenAwakeChanged: (val) {
-          setState(() => _settings.keepScreenAwake = val);
-          _safeSetWakelock(val);
-        },
-      ),
-    ));
-  }
-
-  void _showChapterSelectorSheet() {
-    unawaited(ReaderChapterSelectorSheet.show(
-      context: context,
-      siblings: _siblingChapters,
-      current: _chapter,
-      onSelect: (ch) {
-        unawaited(_readerController.loadChapter(_chapterTargetId(ch)));
-      },
-    ));
-  }
-
-  /// R9.3/R9.4: Listen sheet - OCR transcript with TTS playback.
-  void _showListenSheet() {
-    if (_pageUrls.isEmpty) return;
-    final currentUrl = _pageUrls[_currentPage - 1];
-    final headers = QuickJsService.getImageHeaders(_sourceName ?? '', currentUrl);
-    unawaited(ListenSheet.show(
-      context,
-      pageUrl: currentUrl,
-      headers: headers,
-      title: _chapter?.name ?? 'Page $_currentPage',
-    ));
-  }
-
-  /// Delegates to the shared validator.
-  ///
-  /// This private copy required a third JPEG byte, accepted a bare `GIF`
-  /// prefix, and knew nothing about AVIF/HEIC or JPEG XL — so the reader, the
-  /// downloader and the resolver gave three different answers for the same
-  /// bytes. That is the exact drift the shared module exists to end.
-  bool _isMagicImage(List<int> bytes) => looksLikeImageHeader(bytes);
-
-  Future<void> _recoverImage(String url, int index, {bool manual = false}) async {
-    // Every other async write in this file is gated on `_loadGeneration`;
-    // this one was gated only on `mounted`. A chapter switch clears the caches
-    // while up to five desktop prefetches plus four lookahead fetches are still
-    // in flight with 15-30s timeouts, and each one landed in
-    // `_recoveredImageBytes` for a URL that is not in the new `_pageUrls` —
-    // which the eviction logic then classified as evictable. So rapid chapter
-    // switching filled the 40-entry (~20MB) cache with the PREVIOUS chapter's
-    // pages, evicting the current chapter's useful entries and forcing visible
-    // re-fetch and image flicker exactly when the user was paging fastest.
-    final gen = _loadGeneration;
-    if (manual) {
-      _failedImageUrls.remove(url);
-    } else if (_failedImageUrls.contains(url)) {
-      return;
-    }
-    if (_recoveringUrls.contains(url) || _recoveredImageBytes.containsKey(url)) return;
-    _recoveringUrls.add(url);
-    if (manual && mounted) setState(() {});
-    try {
-      final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
-      final cookieHeaders = MClient.getCookiesPref(url);
-
-      // 1. On Desktop: try curl-impersonate FIRST with clean baseHeaders (Referer only)
-      if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
-        final bytes = await runCurlWithSemaphore(
-          url: url,
-          maxTimeSeconds: 15,
-          headers: baseHeaders,
-          skipHeaders: const {'user-agent', 'cookie'},
-          timeout: const Duration(seconds: 30),
-        );
-        if (bytes != null && bytes.length > 200 && _isMagicImage(bytes)) {
-          // Drop the result entirely if the reader moved on — caching it would
-          // evict the current chapter's pages.
-          if (gen != _loadGeneration) return;
-          if (mounted) {
-            setState(() {
-              _storeRecoveredImage(url, bytes);
-            });
-          }
-          return;
-        }
-      }
-
-      // 2. Standard HTTP fetch fallback with multi-pass self-healing
-      final initialHeaders = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
-      final client = MClient.init(showCloudFlareError: false);
-      http.Response? res;
-
-      try {
-        final uri = Uri.tryParse(url) ?? Uri.tryParse(Uri.encodeFull(url));
-        if (uri == null) return;
-
-        // Pass 1: Standard fetch
-        try {
-          res = await client.get(uri, headers: initialHeaders).timeout(const Duration(seconds: 15));
-        } catch (e) {
-          debugPrint('[Reader] HTTP fetch attempt 1 failed: $e');
-        }
-
-        // Pass 2: If failed and had Referer, retry with NO Referer (anti-hotlink bypass)
-        if ((res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) && initialHeaders.containsKey('Referer')) {
-          final noReferer = Map<String, String>.from(initialHeaders)..remove('Referer');
-          try {
-            res = await client.get(uri, headers: noReferer).timeout(const Duration(seconds: 15));
-          } catch (e) {
-            debugPrint('[Reader] HTTP fetch attempt 2 (no referer) failed: $e');
-          }
-        }
-
-        // Pass 3: If still failed, retry with Origin Referer (same-origin requirement bypass)
-        if (res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) {
-          try {
-            final originReferer = Map<String, String>.from(initialHeaders)..['Referer'] = '${uri.origin}/';
-            res = await client.get(uri, headers: originReferer).timeout(const Duration(seconds: 15));
-          } catch (e) {
-            debugPrint('[Reader] HTTP fetch attempt 3 (origin referer) failed: $e');
-          }
-        }
-
-        // Pass 4: Clean Browser User-Agent and Accept headers
-        if (res == null || res.statusCode != 200 || res.bodyBytes.isEmpty || !_isMagicImage(res.bodyBytes)) {
-          try {
-            final browserHeaders = Map<String, String>.from(initialHeaders)
-              ..['User-Agent'] = kBrowserUserAgent
-              ..['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
-            res = await client.get(uri, headers: browserHeaders).timeout(const Duration(seconds: 15));
-          } catch (e) {
-            debugPrint('[Reader] HTTP fetch attempt 4 (browser headers) failed: $e');
-          }
-        }
-
-        if (res != null && res.statusCode == 200 && res.bodyBytes.isNotEmpty && _isMagicImage(res.bodyBytes)) {
-          if (gen != _loadGeneration) return;
-          if (mounted) {
-            setState(() {
-              _storeRecoveredImage(url, res!.bodyBytes);
-            });
-          }
-        } else {
-          debugPrint('[Reader] ❌ Image still failed ${sanitizeUrlForLog(url)} -> ${res?.statusCode}');
-        }
-      } finally {
-        client.close();
-      }
-    } catch (e) {
-      debugPrint('[Reader] Image fetch error for ${sanitizeUrlForLog(url)}: $e');
-    } finally {
-      _recoveringUrls.remove(url);
-      if (!_recoveredImageBytes.containsKey(url)) {
-        _failedImageUrls.add(url);
-        // Swap the spinner for the Retry affordance.
-        if (mounted) setState(() {});
-      }
-    }
-  }
-
-  void _prefetchUpcomingPages(int currentIndex) {
-    if (kIsWeb || !(Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-      return;
-    }
-    _syncPageLoader();
-    final loader = _pageLoader;
-    if (loader == null) return;
-
-    for (int i = currentIndex + 1; i <= currentIndex + 4 && i < _pageUrls.length; i++) {
-      final nextUrl = _pageUrls[i];
-      if (_recoveredImageBytes.containsKey(nextUrl) ||
-          _recoveringUrls.contains(nextUrl) ||
-          _failedImageUrls.contains(nextUrl)) {
-        continue;
-      }
-      if (!(nextUrl.startsWith('http://') || nextUrl.startsWith('https://'))) {
-        continue;
-      }
-      final priority =
-          i == currentIndex + 1 ? PageLoadPriority.next : PageLoadPriority.prefetch;
-      _recoveringUrls.add(nextUrl);
-      unawaited(_prefetchUpcomingViaPageLoader(loader, nextUrl, i, priority));
-    }
-  }
-
-  /// R1.8: priority load via [PageLoader]; fall back to multi-pass [_recoverImage].
-  Future<void> _prefetchUpcomingViaPageLoader(
-    PageLoader loader,
-    String url,
-    int index,
-    PageLoadPriority priority,
-  ) async {
-    try {
-      final result = await loader.loadPage(
-        url: url,
-        index: index,
-        priority: priority,
-        sourceName: _sourceName,
-      );
-      if (!mounted) return;
-      if (result.bytes != null && result.bytes!.isNotEmpty) {
-        setState(() {
-          _recoveredImageBytes[url] = result.bytes!;
-          _recoveringUrls.remove(url);
-        });
-        return;
-      }
-    } catch (e) {
-      debugPrint('[Reader] PageLoader prefetch failed for ${sanitizeUrlForLog(url)}: $e');
-    }
-    _recoveringUrls.remove(url);
-    if (mounted) unawaited(_recoverImage(url, index));
-  }
-
-  Widget _buildPageWidget(String url, int index, {BoxConstraints? constraints, bool isPaged = false, double? contentWidth, bool enablePerPageZoom = false}) {
-    final isWebtoon = _readingMode == ReadingMode.longStrip || _readingMode == ReadingMode.longStripGaps;
-    final boxFit = isWebtoon ? BoxFit.fitWidth : _imageBoxFit;
-    final imageAlignment = isWebtoon ? Alignment.topCenter : Alignment.center;
-    final resolvedWidth = contentWidth ?? constraints?.maxWidth ?? MediaQuery.of(context).size.width;
-    final imageWidth = isWebtoon ? resolvedWidth : null;
-    final placeholderHeight = isWebtoon
-        ? estimateWebtoonPlaceholderHeight(resolvedWidth, cachedHeight: _cachedPageHeights[url])
-        : 400.0;
-
-    final isDesktop = !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
-    if (isDesktop) {
-      _prefetchUpcomingPages(index);
-    }
-
-    // I3: prefer screen recover map, then PageLoader LRU (warm/prefetch).
-    final memoryBytes =
-        _recoveredImageBytes[url] ?? _pageLoader?.peekCachedBytes(url);
-
-    Widget image;
-    if (memoryBytes != null) {
-      image = Image.memory(
-        memoryBytes,
-        width: imageWidth,
-        fit: boxFit,
-        alignment: imageAlignment,
-        gaplessPlayback: true,
-        isAntiAlias: !isWebtoon,
-        filterQuality: isWebtoon ? FilterQuality.low : FilterQuality.medium,
-        errorBuilder: (_, __, ___) => Container(
-          height: isWebtoon ? placeholderHeight : 300.0,
-          color: const Color(0xFF1A1A22),
-          child: Center(
-            child: Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.grey)),
-          ),
-        ),
-      );
-    } else if (url.startsWith('/')) {
-      image = Image.file(
-        File(url),
-        width: imageWidth,
-        fit: boxFit,
-        alignment: imageAlignment,
-        gaplessPlayback: true,
-        isAntiAlias: !isWebtoon,
-        filterQuality: isWebtoon ? FilterQuality.low : FilterQuality.medium,
-        errorBuilder: (_, __, ___) => Container(
-          height: isWebtoon ? placeholderHeight : 300,
-          width: imageWidth ?? double.infinity,
-          color: const Color(0xFF1A1A22),
-          child: Center(
-            child: Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.grey)),
-          ),
-        ),
-      );
-    } else if (isDesktop) {
-      // On desktop: fetch directly via curl-impersonate without firing failing Dart Image.network 403s
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_recoverImage(url, index));
-      });
-      image = Container(
-        height: placeholderHeight,
-        width: imageWidth ?? double.infinity,
-        color: _canvasBackgroundColor,
-        child: Center(
-          child: _recoveringUrls.contains(url)
-              ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
-              : IconButton(
-                  icon: const Icon(Icons.refresh_rounded, color: Colors.grey),
-                  tooltip: 'Retry Page ${index + 1}',
-                  onPressed: () => _recoverImage(url, index, manual: true),
-                ),
-        ),
-      );
-    } else {
-      // Gate on the known-failed set FIRST so a failed URL renders the static
-      // retry affordance instead of re-issuing an Image.network fetch on every
-      // webtoon item rebuild. _recoverImage(manual:) clears the flag to retry.
-      if (_failedImageUrls.contains(url)) {
-        image = Container(
-          height: isWebtoon ? placeholderHeight : 300.0,
-          width: imageWidth ?? double.infinity,
-          color: _canvasBackgroundColor,
-          child: Center(
-            child: _recoveringUrls.contains(url)
-                ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
-                : InkWell(
-                    onTap: () => _recoverImage(url, index, manual: true),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.refresh_rounded, size: 28, color: Colors.grey),
-                          const SizedBox(height: 6),
-                          Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),
-                          Text('Tap to Retry', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ),
-          ),
-        );
-      } else {
-        final baseHeaders = QuickJsService.getImageHeaders(_sourceName ?? '', url);
-        final cookieHeaders = MClient.getCookiesPref(url);
-        final headers = {...baseHeaders, ...cookieHeaders, 'User-Agent': MClient.userAgent};
-
-        image = Image.network(
-          url,
-          headers: headers,
-          width: imageWidth,
-          fit: boxFit,
-          alignment: imageAlignment,
-          gaplessPlayback: true,
-          isAntiAlias: !isWebtoon,
-          filterQuality: isWebtoon ? FilterQuality.low : FilterQuality.medium,
-          loadingBuilder: (_, child, progress) {
-            if (progress == null) return child;
-            return Container(
-              height: placeholderHeight,
-              width: imageWidth ?? double.infinity,
-              color: _canvasBackgroundColor,
-              child: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) unawaited(_recoverImage(url, index));
-            });
-            return Container(
-              height: isWebtoon ? placeholderHeight : 300.0,
-              width: imageWidth ?? double.infinity,
-              color: _canvasBackgroundColor,
-              child: Center(
-                child: _recoveringUrls.contains(url)
-                    ? CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2)
-                    : InkWell(
-                        onTap: () => _recoverImage(url, index, manual: true),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.refresh_rounded, size: 28, color: Colors.grey),
-                              const SizedBox(height: 6),
-                              Text('Page ${index + 1} Failed to Load', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              Text('Tap to Retry', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      ),
-              ),
-            );
-          },
-        );
-      }
-    }
-
-    // Capture the provider BEFORE any wrapping.
-    //
-    // The height probe used to be handed the widget *after* the colour filter
-    // and crop were applied, and it does `if (imageWidget is! Image) return;`.
-    // With invert/grayscale/night-amber/sepia on, or crop-borders on, `image` is
-    // a ColorFiltered/ClipRect and never an Image — so `_cachedPageHeights`
-    // stayed permanently empty and every consumer fell back to the crude
-    // `contentWidth * 1.5` estimate. That broke two things: `resumeOffsetForPage`
-    // summed 1.5x width for every page, so `_jumpToWebtoonPage` (the only path
-    // used on chapter open, since the page-key shortcut misses on first load)
-    // landed a long webtoon dozens of pages off; and the per-page placeholder
-    // height was wrong, so the strip visibly reflowed as images streamed in.
-    final webtoonImageProvider = isWebtoon && image is Image ? image.image : null;
-
-    if (_activeColorFilter != null) {
-      image = ColorFiltered(colorFilter: _activeColorFilter!, child: image);
-    }
-
-    if (_cropBorders) {
-      image = ClipRect(child: image);
-    }
-
-    if (webtoonImageProvider != null) {
-      _schedulePageHeightCacheForProvider(url, resolvedWidth, webtoonImageProvider);
-    }
-
-    final useZoom = isPaged || enablePerPageZoom;
-    if (useZoom) {
-      if (enablePerPageZoom) _pruneWebtoonZoomState(index);
-      final transform = enablePerPageZoom ? _webtoonZoomControllerFor(index) : _transformationController;
-      return GestureDetector(
-        onDoubleTapDown: (details) => _doubleTapDetails = details,
-        onDoubleTap: () {
-          _handleDoubleTapZoom(
-            controllerOverride: enablePerPageZoom ? transform : null,
-            pageIndex: index,
-          );
-        },
-        child: InteractiveViewer(
-          transformationController: transform,
-          minScale: _minZoomScale,
-          maxScale: _maxZoomScale,
-          panEnabled: enablePerPageZoom ? (transform.value.getMaxScaleOnAxis() > 1.05) : _isZoomed,
-          onInteractionUpdate: (details) {
-            if (enablePerPageZoom) return;
-            _syncGesturePipelineState();
-            _gesturePipeline.handleInteractionUpdate(details);
-          },
-          onInteractionEnd: (details) {
-            if (enablePerPageZoom) return;
-            _syncGesturePipelineState();
-            _gesturePipeline.handleInteractionEnd(details);
-          },
-          child: image,
-        ),
-      );
-    }
-
-    return image;
-  }
-
-  Widget _buildChapterTransitionCard() {
-    return ReaderChapterTransitionCard(
-      chapter: _chapter,
-      nextChapter: _nextChapter,
-      onReadNext: () {
-        if (_nextChapter == null) return;
-        unawaited(
-            _readerController.loadChapter(_chapterTargetId(_nextChapter!)));
-      },
-    );
-  }
-
+  // ─── ReaderInputHost (ISS-132) ───
   @override
-  Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
-    if (_isLoading) {
-      return Scaffold(
-        backgroundColor: _canvasBackgroundColor,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: primaryColor),
-              const SizedBox(height: 16),
-              Text(
-                _chapter?.name ?? 'Loading Chapter...',
-                style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_pageUrls.isEmpty) {
-      return Scaffold(
-        backgroundColor: _canvasBackgroundColor,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.broken_image_rounded, size: 64, color: Colors.grey),
-                const SizedBox(height: 16),
-                Text(
-                  'Could not load ${_chapter?.name.replaceAll(RegExp(r'\s+'), ' ').trim() ?? "chapter pages"}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Check network or source availability',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-                const SizedBox(height: 20),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 10,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      ),
-                      icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                      onPressed: () => _readerController.loadChapter(_currentChapterId),
-                      label: const Text('Retry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Color(0x33FFFFFF)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                      ),
-                      icon: const Icon(Icons.open_in_browser_rounded, size: 18),
-                      onPressed: _openChapterInBrowser,
-                      label: const Text('Open in Browser', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    if (SettingsService.instance.cfProxyUrl.isEmpty)
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.amberAccent,
-                          side: const BorderSide(color: Colors.amberAccent),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                        ),
-                        icon: const Icon(Icons.security_rounded, size: 18),
-                        onPressed: () => context.push('/settings/advanced'),
-                        label: const Text('Configure FlareSolverr', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    OutlinedButton.icon(
-                      key: const Key('reader_clear_cookies_button'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white70,
-                        side: const BorderSide(color: Color(0x33FFFFFF)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                      ),
-                      icon: const Icon(Icons.cleaning_services_outlined, size: 18),
-                      onPressed: () => unawaited(_clearCookiesAndCache()),
-                      label: const Text('Clear cookies', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return PopScope(
-      canPop: _showControls,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        if (!_showControls) {
-          setState(() {
-            _showControls = true;
-            unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
-          });
-        }
-      },
-      child: Scaffold(
-      backgroundColor: _canvasBackgroundColor,
-      body: Focus(
-        focusNode: _focusNode,
-        autofocus: true,
-        onKeyEvent: _handleKeyEvent,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return Listener(
-              onPointerDown: (e) {
-                _syncGesturePipelineState();
-                _gesturePipeline.handlePointerDown(e);
-              },
-              onPointerUp: (e) {
-                _syncGesturePipelineState();
-                _gesturePipeline.handlePointerUp(e);
-              },
-              onPointerCancel: (e) {
-                _syncGesturePipelineState();
-                _gesturePipeline.handlePointerCancel(e);
-              },
-              onPointerSignal: (pointerSignal) {
-                _syncGesturePipelineState();
-                _gesturePipeline.handlePointerSignal(pointerSignal);
-              },
-              child: GestureDetector(
-                onTapUp: (details) => _handleTapZone(details, constraints),
-                child: Stack(
-                children: [
-                  // ── 1. READER CANVAS ──────────────────────────────
-                  ScrollConfiguration(
-                    behavior: ScrollConfiguration.of(context).copyWith(
-                      dragDevices: {
-                        PointerDeviceKind.touch,
-                        PointerDeviceKind.mouse,
-                        PointerDeviceKind.trackpad,
-                        PointerDeviceKind.stylus,
-                      },
-                    ),
-                    child: _readingMode == ReadingMode.longStrip ||
-                            _readingMode == ReadingMode.longStripGaps
-                        ? _buildLiveWebtoonCanvas(constraints)
-                        : _buildLivePagedCanvas(constraints),
-                  ),
-
-                  // ── 1b. FIRST-RUN TAP ZONE OVERLAY ───────────────
-                  if (_showTapZoneOverlay)
-                    Positioned.fill(
-                      child: TapZoneOverlay(
-                        preset: _activeTapZonePreset(),
-                        invert: _invertTaps,
-                        rtlPaged: _readingMode == ReadingMode.pagedRtl,
-                        onDismissed: _dismissTapZoneOverlay,
-                      ),
-                    ),
-
-                  // ── 2–4. OVERLAY HUD (R1.8 extracted) ──
-                  Positioned.fill(
-                    child: ReaderOverlayHud(
-                    showControls: _showControls,
-                    primaryColor: primaryColor,
-                    chapter: _chapter,
-                    readingMode: _readingMode,
-                    readerTheme: _readerTheme,
-                    incognitoMode: _settings.incognitoMode,
-                    prevChapter: _prevChapter,
-                    nextChapter: _nextChapter,
-                    pageUrlsLength: _pageUrls.length,
-                    pageIndicator: _pageIndicator,
-                    scrollIndicatorVisible: _scrollIndicatorVisible,
-                    isDraggingSlider: _isDraggingSlider,
-                    sliderDragValue: _sliderDragValue,
-                    isAutoScrolling: _isAutoScrolling,
-                    isUserTouching: _isUserTouching,
-                    autoScrollSpeed: _autoScrollSpeed,
-                    isAutoScrollHudCollapsed: _isAutoScrollHudCollapsed,
-                    autoScrollShowFloatingHud: _settings.autoScrollShowFloatingHud,
-                    onExit: _safeExitReader,
-                    onToggleBookmark: _toggleReaderBookmark,
-                    onToggleIncognito: () {
-                      setState(() => _settings.incognitoMode = !_settings.incognitoMode);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(_settings.incognitoMode
-                              ? 'Incognito Mode Active (History & tracking paused)'
-                              : 'Incognito Mode Deactivated'),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    onShowChapters: _showChapterSelectorSheet,
-                    onShowListen: _showListenSheet,
-                    onShowSettings: _showReaderSettingsSheet,
-                    onLoadPrevChapter: _prevChapter != null
-                        ? () => _readerController.loadChapter(_chapterTargetId(_prevChapter!))
-                        : null,
-                    onLoadNextChapter: _nextChapter != null
-                        ? () => _readerController.loadChapter(_chapterTargetId(_nextChapter!))
-                        : null,
-                    onCycleReadingMode: _cycleReadingMode,
-                    onToggleAutoScroll: _toggleAutoScroll,
-                    onShowAutoScrollSpeed: _showAutoScrollSpeedDialog,
-                    onSliderChangeStart: () {
-                      setState(() => _isDraggingSlider = true);
-                    },
-                    onSliderChanged: (val) {
-                      final targetPage = val.round();
-                      setState(() {
-                        _sliderDragValue = val;
-                        _currentPage = targetPage;
-                      });
-                      _setPageIndicator(targetPage);
-                      if (_readingMode == ReadingMode.pagedLtr ||
-                          _readingMode == ReadingMode.pagedRtl) {
-                        if (_pageController.hasClients) {
-                          _pageController.jumpToPage(_pagedControllerIndexForPage(targetPage));
-                        }
-                      } else if (_scrollController.hasClients) {
-                        _jumpToWebtoonPage(targetPage);
-                      }
-                    },
-                    onSliderChangeEnd: (val) {
-                      final targetPage = val.round();
-                      setState(() {
-                        _isDraggingSlider = false;
-                        _sliderDragValue = null;
-                        _currentPage = targetPage;
-                      });
-                      _setPageIndicator(targetPage);
-                      _debouncedUpdateProgress(targetPage);
-                    },
-                    onAutoScrollSpeedDelta: (delta) {
-                      setState(() {
-                        _autoScrollSpeed =
-                            (_autoScrollSpeed + delta).clamp(10.0, 2000.0);
-                      });
-                    },
-                    onAutoScrollSpeedCycle: () {
-                      setState(() {
-                        if (_autoScrollSpeed < 180.0) {
-                          _autoScrollSpeed = 250.0;
-                        } else if (_autoScrollSpeed < 450.0) {
-                          _autoScrollSpeed = 500.0;
-                        } else {
-                          _autoScrollSpeed = _settings.defaultAutoScrollSpeed;
-                        }
-                      });
-                    },
-                    onCollapseAutoScrollHud: () {
-                      setState(() => _isAutoScrollHudCollapsed = true);
-                    },
-                    onExpandAutoScrollHud: () {
-                      setState(() => _isAutoScrollHudCollapsed = false);
-                    },
-                  ),
-                  ),
-            ],
-          ),
-        ),
-      );
-    },
-        ),
-      ),
-    ),
-  );
-}
+  TickerProvider get vsync => this;
+  @override
+  void rebuild(VoidCallback fn) => _rebuild(fn);
+  @override
+  ReadingMode get readingMode => _readingMode;
+  @override
+  set readingMode(ReadingMode v) => _readingMode = v;
+  @override
+  ReaderThemeMode get readerTheme => _readerTheme;
+  @override
+  set readerTheme(ReaderThemeMode v) => _readerTheme = v;
+  @override
+  ReaderColorFilter get colorFilter => _colorFilter;
+  @override
+  set colorFilter(ReaderColorFilter v) => _colorFilter = v;
+  @override
+  ImageScaleType get scaleType => _scaleType;
+  @override
+  set scaleType(ImageScaleType v) => _scaleType = v;
+  @override
+  bool get cropBorders => _cropBorders;
+  @override
+  set cropBorders(bool v) => _cropBorders = v;
+  @override
+  bool get invertTaps => _invertTaps;
+  @override
+  set invertTaps(bool v) => _invertTaps = v;
+  @override
+  int get currentPage => _currentPage;
+  @override
+  set currentPage(int v) => _currentPage = v;
+  @override
+  bool get showControls => _showControls;
+  @override
+  set showControls(bool v) => _showControls = v;
+  @override
+  bool get isDraggingSlider => _isDraggingSlider;
+  @override
+  ScrollController get scrollController => _scrollController;
+  @override
+  PageController get pageController => _pageController;
+  @override
+  TransformationController get transformationController => _transformationController;
+  @override
+  AnimationController? get zoomAnimController => _zoomAnimController;
+  @override
+  Map<int, TransformationController> get webtoonZoomControllers => _webtoonZoomControllers;
+  @override
+  Map<String, double> get cachedPageHeights => _cachedPageHeights;
+  @override
+  Map<String, double> get cachedPageAspects => _cachedPageAspects;
+  @override
+  ValueNotifier<int> get pageIndicator => _pageIndicator;
+  @override
+  ValueNotifier<bool> get scrollIndicatorVisible => _scrollIndicatorVisible;
+  @override
+  List<SpreadSlot> currentSpreadSlots() => _currentSpreadSlots();
+  @override
+  Future<void> persistReadingMode(ReadingMode mode) => _persistReadingMode(mode);
+  @override
+  void fetchPagesAround(int page) => _fetchPagesAround(page);
 }

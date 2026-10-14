@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../db/isar_service.dart';
 import '../db/models/chapter.dart';
 import '../db/models/manga.dart';
+import '../engine/local_source_service.dart' show kLocalSourceName;
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/bandwidth_policy.dart';
@@ -17,6 +18,7 @@ import '../sync/websocket_service.dart';
 import 'battery_state_service.dart';
 import 'notification_service.dart';
 import 'settings_service.dart';
+import 'update_restrictions.dart';
 
 /// Exception thrown when a library update is cancelled by the user.
 class LibraryUpdateCancelledException implements Exception {
@@ -282,19 +284,13 @@ class LibraryUpdateService extends ChangeNotifier {
       );
 
       // ── STEP 1: Snapshot existing chapters to compute exact delta ────────
-      final beforeChapters = await IsarService.instance.getAllChapters();
-      final Set<String> knownKeys = <String>{};
-      for (final ch in beforeChapters) {
-        if (ch.serverId > 0) {
-          knownKeys.add('srv_${ch.serverId}');
-        }
-        if (ch.url.isNotEmpty) {
-          knownKeys.add('url_${ch.url}');
-        }
-        if (ch.mangaId > 0 && ch.chapterNumber > 0) {
-          knownKeys.add('mid_${ch.mangaId}_num_${ch.chapterNumber}');
-        }
-      }
+      // IMP-024: only library manga (+ orphan) chapters, not the whole table;
+      // the diff below only ever reports chapters of library manga.
+      final beforeLibrary = await IsarService.instance.getLibraryManga();
+      final Set<int> beforeLibraryIds = {
+        for (final m in beforeLibrary) ...[if (m.serverId > 0) m.serverId, m.id],
+      };
+      final beforeChapters = await IsarService.instance.getChaptersForMangaIdsAndOrphans(beforeLibraryIds);
 
       // ── STEP 2: Update Server or Local Extensions ─────────────────────────
       final libraryMangas = await IsarService.instance.getLibraryManga();
@@ -357,8 +353,13 @@ class LibraryUpdateService extends ChangeNotifier {
           notifyListeners();
         }
 
+        // ISS-068: WS events wake the loop; polling is only a slow fallback.
+        var wake = Completer<void>();
+        DateTime? lastWsAt;
         final wsSub = WebSocketService.instance.onUpdateStatus.listen((event) {
           sawWsEvent = true;
+          lastWsAt = DateTime.now();
+          if (!wake.isCompleted) wake.complete();
           final parsed = parseLibraryUpdateEvent(event);
           completedMangaIds.addAll(parsed.completedMangaIds);
           applyJobs(
@@ -372,11 +373,29 @@ class LibraryUpdateService extends ChangeNotifier {
 
         try {
           while (DateTime.now().isBefore(deadline)) {
+            _checkCancelled();
             if (sawWsEvent && !lastIsRunning) break;
 
-            // Fallback / supplement: poll every 1.5s when WS is quiet.
-            await Future<void>.delayed(const Duration(milliseconds: 1500));
+            // Event-driven: wait for a WS event, cancel, or the fallback
+            // interval. A WS that went quiet mid-run counts as gone, so the
+            // poll takes over at the fast interval (no frozen progress bar).
+            final wsFresh = !shouldApplyPolledStatus(
+              sawWsEvent: sawWsEvent,
+              lastWsAt: lastWsAt,
+              now: DateTime.now(),
+            );
+            final interval = libraryUpdatePollInterval(sawWsEvent: wsFresh);
+            var woke = false;
+            await Future.any<void>([
+              wake.future.then((_) => woke = true),
+              Future<void>.delayed(interval),
+              if (_cancelCompleter != null) _cancelCompleter!.future,
+            ]);
+            _checkCancelled();
+            if (wake.isCompleted) wake = Completer<void>();
             if (sawWsEvent && !lastIsRunning) break;
+            // A WS event already carried fresh progress; no poll needed.
+            if (woke) continue;
 
             final status = await GraphQLClientService.instance.fetchServerUpdateStatus();
             final jobsInfo = (status?['libraryUpdateStatus'] as Map<String, dynamic>?)?['jobsInfo']
@@ -391,7 +410,7 @@ class LibraryUpdateService extends ChangeNotifier {
             final finishedJobs = extractCount(jobsInfo?['finishedJobs']);
             final skippedCategories = extractCount(jobsInfo?['skippedCategoriesCount']);
             final skippedMangas = extractCount(jobsInfo?['skippedMangasCount']);
-            if (!sawWsEvent) {
+            if (shouldApplyPolledStatus(sawWsEvent: sawWsEvent, lastWsAt: lastWsAt, now: DateTime.now())) {
               applyJobs(
                 isRunning: isRunning,
                 finishedJobs: finishedJobs,
@@ -415,7 +434,7 @@ class LibraryUpdateService extends ChangeNotifier {
         for (final mangaId in completedMangaIds) {
           try {
             await GraphQLClientService.instance.fetchMangaAndChapters(mangaId);
-          } catch (_) {}
+          } catch (e) { debugPrint('[library_update_service] ignored: $e'); }
         }
         await SyncEngine.instance.triggerSync();
       }
@@ -424,10 +443,19 @@ class LibraryUpdateService extends ChangeNotifier {
       // server-linked manga locally (just because a JS ext exists) caused
       // Cloudflare 403 storms and phantom chapters (ISS-058).
       final libraryManga = await IsarService.instance.getLibraryManga();
-      final localManga = libraryManga.where((m) {
-        if (!GraphQLClientService.instance.isConfigured) return true;
-        return m.sourceName.startsWith('local_js_') || m.serverId <= 0;
-      }).toList();
+      final settings = SettingsService.instance;
+      final restricted = applyUpdateRestrictions(
+        libraryManga.where((m) {
+          if (!GraphQLClientService.instance.isConfigured) return true;
+          return m.sourceName.startsWith('local_js_') || m.serverId <= 0;
+        }),
+        // IMP-003 (skipCompleted / excludeCompleted in Mihon terms).
+        skipCompleted: settings.updateSkipCompleted,
+        skipWithUnread: settings.updateSkipWithUnread,
+        skipNotStarted: settings.updateSkipNotStarted,
+      );
+      final localManga = restricted.keep;
+      _skippedMangasCount += restricted.skipped;
       final int totalManga = localManga.length;
 
       if (totalManga > 0) {
@@ -456,6 +484,8 @@ class LibraryUpdateService extends ChangeNotifier {
           notifyListeners();
 
           if (manga.sourceName.isEmpty) continue;
+          // IMP-002: Local-source series are refreshed by LocalSourceService.scan().
+          if (manga.sourceName == kLocalSourceName) continue;
 
           try {
             final targetUrl = manga.url.isNotEmpty ? manga.url : manga.title;
@@ -548,7 +578,6 @@ class LibraryUpdateService extends ChangeNotifier {
       _progress = 0.85;
       notifyListeners();
 
-      final afterChapters = await IsarService.instance.getAllChapters();
       final libraryMangaList = await IsarService.instance.getLibraryManga();
       final Map<int, String> mangaTitleMap = {
         for (final m in libraryMangaList)
@@ -560,29 +589,15 @@ class LibraryUpdateService extends ChangeNotifier {
           m.id,
         ],
       };
+      final afterChapters = await IsarService.instance.getChaptersForMangaIdsAndOrphans(libraryMangaIds);
 
-      final List<Chapter> newChapters = [];
-      for (final ch in afterChapters) {
-        // Only consider unread chapters belonging to manga currently in library
-        if (ch.isRead) continue;
-        if (ch.mangaId > 0 && !libraryMangaIds.contains(ch.mangaId)) continue;
-
-        bool isKnown = false;
-        if (ch.serverId > 0 && knownKeys.contains('srv_${ch.serverId}')) {
-          isKnown = true;
-        } else if (ch.url.isNotEmpty && knownKeys.contains('url_${ch.url}')) {
-          isKnown = true;
-        } else if (ch.mangaId > 0 && ch.chapterNumber > 0 && knownKeys.contains('mid_${ch.mangaId}_num_${ch.chapterNumber}')) {
-          isKnown = true;
-        }
-
-        if (!isKnown) {
-          if ((ch.mangaTitle.isEmpty) && mangaTitleMap.containsKey(ch.mangaId)) {
-            ch.mangaTitle = mangaTitleMap[ch.mangaId]!;
-          }
-          newChapters.add(ch);
-        }
-      }
+      final newChapters = detectNewLibraryChapters(
+        beforeChapters: beforeChapters,
+        afterChapters: afterChapters,
+        beforeLibraryIds: beforeLibraryIds,
+        libraryMangaIds: libraryMangaIds,
+        mangaTitleMap: mangaTitleMap,
+      );
 
       _lastFoundCount = newChapters.length;
       await LoggerService.instance.logInfo(
@@ -634,4 +649,75 @@ class LibraryUpdateService extends ChangeNotifier {
       notifyListeners();
     }
   }
+}
+/// ISS-068: fallback poll interval for server library updates. While the
+/// WebSocket is delivering `libraryUpdateStatusChanged` events, poll only as a
+/// slow safety net; before any WS event arrives, poll moderately.
+@visibleForTesting
+Duration libraryUpdatePollInterval({required bool sawWsEvent}) =>
+    sawWsEvent ? const Duration(seconds: 15) : const Duration(seconds: 3);
+
+/// ISS-068: whether a polled `libraryUpdateStatus` should drive progress.
+/// True before any WS event, and again once the WS has been silent for
+/// [staleAfter] (dropped mid-run) so the progress bar keeps moving.
+@visibleForTesting
+bool shouldApplyPolledStatus({
+  required bool sawWsEvent,
+  required DateTime? lastWsAt,
+  required DateTime now,
+  Duration staleAfter = const Duration(seconds: 10),
+}) {
+  if (!sawWsEvent || lastWsAt == null) return true;
+  return now.difference(lastWsAt) >= staleAfter;
+}
+
+/// Library-update delta: unread chapters of library manga that were not in
+/// the before-snapshot (matched by serverId, url, or mangaId+number).
+/// IMP-024 guard: only manga already in the library at the snapshot
+/// ([beforeLibraryIds]) can report new chapters, so a manga that joins the
+/// library mid-update does not report its existing chapters as new.
+@visibleForTesting
+List<Chapter> detectNewLibraryChapters({
+  required List<Chapter> beforeChapters,
+  required List<Chapter> afterChapters,
+  required Set<int> beforeLibraryIds,
+  required Set<int> libraryMangaIds,
+  Map<int, String> mangaTitleMap = const {},
+}) {
+  final Set<String> knownKeys = <String>{};
+  for (final ch in beforeChapters) {
+    if (ch.serverId > 0) {
+      knownKeys.add('srv_${ch.serverId}');
+    }
+    if (ch.url.isNotEmpty) {
+      knownKeys.add('url_${ch.url}');
+    }
+    if (ch.mangaId > 0 && ch.chapterNumber > 0) {
+      knownKeys.add('mid_${ch.mangaId}_num_${ch.chapterNumber}');
+    }
+  }
+  final List<Chapter> newChapters = [];
+  for (final ch in afterChapters) {
+    // Only consider unread chapters belonging to manga currently in library
+    if (ch.isRead) continue;
+    if (ch.mangaId > 0 && !libraryMangaIds.contains(ch.mangaId)) continue;
+    if (ch.mangaId > 0 && !beforeLibraryIds.contains(ch.mangaId)) continue;
+
+    bool isKnown = false;
+    if (ch.serverId > 0 && knownKeys.contains('srv_${ch.serverId}')) {
+      isKnown = true;
+    } else if (ch.url.isNotEmpty && knownKeys.contains('url_${ch.url}')) {
+      isKnown = true;
+    } else if (ch.mangaId > 0 && ch.chapterNumber > 0 && knownKeys.contains('mid_${ch.mangaId}_num_${ch.chapterNumber}')) {
+      isKnown = true;
+    }
+
+    if (!isKnown) {
+      if ((ch.mangaTitle.isEmpty) && mangaTitleMap.containsKey(ch.mangaId)) {
+        ch.mangaTitle = mangaTitleMap[ch.mangaId]!;
+      }
+      newChapters.add(ch);
+    }
+  }
+  return newChapters;
 }

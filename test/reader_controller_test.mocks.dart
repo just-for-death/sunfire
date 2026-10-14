@@ -5,6 +5,7 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 
 import 'dart:async' as _i14;
+import 'dart:typed_data' as _i20;
 import 'dart:ui' as _i3;
 
 import 'package:isar_community/isar.dart' as _i2;
@@ -15,6 +16,7 @@ import 'package:sunfire/src/core/db/models/category.dart' as _i15;
 import 'package:sunfire/src/core/db/models/chapter.dart' as _i6;
 import 'package:sunfire/src/core/db/models/manga.dart' as _i5;
 import 'package:sunfire/src/core/db/models/sync_record.dart' as _i16;
+import 'package:sunfire/src/core/engine/content_resolver_service.dart' as _i21;
 import 'package:sunfire/src/core/metron/metron_api_client.dart' as _i7;
 import 'package:sunfire/src/core/metron/metron_models.dart' as _i8;
 import 'package:sunfire/src/core/metron/metron_service.dart' as _i13;
@@ -53,91 +55,96 @@ class _FakeColor_1 extends _i1.SmartFake implements _i3.Color {
     : super(parent, parentInvocation);
 }
 
-class _FakeSyncResult_2 extends _i1.SmartFake implements _i4.SyncResult {
-  _FakeSyncResult_2(Object parent, Invocation parentInvocation)
+class _FakeOutboxResult_2 extends _i1.SmartFake implements _i4.OutboxResult {
+  _FakeOutboxResult_2(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeManga_3 extends _i1.SmartFake implements _i5.Manga {
-  _FakeManga_3(Object parent, Invocation parentInvocation)
+class _FakeSyncResult_3 extends _i1.SmartFake implements _i4.SyncResult {
+  _FakeSyncResult_3(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeChapter_4 extends _i1.SmartFake implements _i6.Chapter {
-  _FakeChapter_4(Object parent, Invocation parentInvocation)
+class _FakeManga_4 extends _i1.SmartFake implements _i5.Manga {
+  _FakeManga_4(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeMetronApiClient_5 extends _i1.SmartFake
+class _FakeChapter_5 extends _i1.SmartFake implements _i6.Chapter {
+  _FakeChapter_5(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeMetronApiClient_6 extends _i1.SmartFake
     implements _i7.MetronApiClient {
-  _FakeMetronApiClient_5(Object parent, Invocation parentInvocation)
+  _FakeMetronApiClient_6(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeMetronRateLimitState_6 extends _i1.SmartFake
+class _FakeMetronRateLimitState_7 extends _i1.SmartFake
     implements _i8.MetronRateLimitState {
-  _FakeMetronRateLimitState_6(Object parent, Invocation parentInvocation)
+  _FakeMetronRateLimitState_7(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeMetronSeries_7 extends _i1.SmartFake implements _i8.MetronSeries {
-  _FakeMetronSeries_7(Object parent, Invocation parentInvocation)
+class _FakeMetronSeries_8 extends _i1.SmartFake implements _i8.MetronSeries {
+  _FakeMetronSeries_8(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeIsarService_8 extends _i1.SmartFake implements _i9.IsarService {
-  _FakeIsarService_8(Object parent, Invocation parentInvocation)
+class _FakeIsarService_9 extends _i1.SmartFake implements _i9.IsarService {
+  _FakeIsarService_9(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakePageLoader_9 extends _i1.SmartFake implements _i10.PageLoader {
-  _FakePageLoader_9(Object parent, Invocation parentInvocation)
+class _FakePageLoader_10 extends _i1.SmartFake implements _i10.PageLoader {
+  _FakePageLoader_10(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakePositionManager_10 extends _i1.SmartFake
+class _FakePositionManager_11 extends _i1.SmartFake
     implements _i11.PositionManager {
-  _FakePositionManager_10(Object parent, Invocation parentInvocation)
+  _FakePositionManager_11(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeSettingsService_11 extends _i1.SmartFake
+class _FakeSettingsService_12 extends _i1.SmartFake
     implements _i12.SettingsService {
-  _FakeSettingsService_11(Object parent, Invocation parentInvocation)
+  _FakeSettingsService_12(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeDuration_12 extends _i1.SmartFake implements Duration {
-  _FakeDuration_12(Object parent, Invocation parentInvocation)
+class _FakeDuration_13 extends _i1.SmartFake implements Duration {
+  _FakeDuration_13(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakePageLoaderMetrics_13 extends _i1.SmartFake
+class _FakePageLoaderMetrics_14 extends _i1.SmartFake
     implements _i10.PageLoaderMetrics {
-  _FakePageLoaderMetrics_13(Object parent, Invocation parentInvocation)
+  _FakePageLoaderMetrics_14(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakePageLoadResult_14 extends _i1.SmartFake
+class _FakePageLoadResult_15 extends _i1.SmartFake
     implements _i10.PageLoadResult {
-  _FakePageLoadResult_14(Object parent, Invocation parentInvocation)
+  _FakePageLoadResult_15(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeSyncEngine_15 extends _i1.SmartFake implements _i4.SyncEngine {
-  _FakeSyncEngine_15(Object parent, Invocation parentInvocation)
+class _FakeSyncEngine_16 extends _i1.SmartFake implements _i4.SyncEngine {
+  _FakeSyncEngine_16(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeMetronService_16 extends _i1.SmartFake
+class _FakeMetronService_17 extends _i1.SmartFake
     implements _i13.MetronService {
-  _FakeMetronService_16(Object parent, Invocation parentInvocation)
+  _FakeMetronService_17(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeProgressUpdateResult_17 extends _i1.SmartFake
+class _FakeProgressUpdateResult_18 extends _i1.SmartFake
     implements _i11.ProgressUpdateResult {
-  _FakeProgressUpdateResult_17(Object parent, Invocation parentInvocation)
+  _FakeProgressUpdateResult_18(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
@@ -289,6 +296,40 @@ class MockIsarService extends _i1.Mock implements _i9.IsarService {
             returnValueForMissingStub: _i14.Future<void>.value(),
           )
           as _i14.Future<void>);
+
+  @override
+  _i14.Future<int> countChapters() =>
+      (super.noSuchMethod(
+            Invocation.method(#countChapters, []),
+            returnValue: _i14.Future<int>.value(0),
+          )
+          as _i14.Future<int>);
+
+  @override
+  _i14.Future<int> countChaptersWithReadEvidence() =>
+      (super.noSuchMethod(
+            Invocation.method(#countChaptersWithReadEvidence, []),
+            returnValue: _i14.Future<int>.value(0),
+          )
+          as _i14.Future<int>);
+
+  @override
+  _i14.Future<List<int>> getServerDownloadedChapterIds() =>
+      (super.noSuchMethod(
+            Invocation.method(#getServerDownloadedChapterIds, []),
+            returnValue: _i14.Future<List<int>>.value(<int>[]),
+          )
+          as _i14.Future<List<int>>);
+
+  @override
+  _i14.Future<List<_i6.Chapter>> getChaptersForMangaIdsAndOrphans(
+    Set<int>? mangaIds,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getChaptersForMangaIdsAndOrphans, [mangaIds]),
+            returnValue: _i14.Future<List<_i6.Chapter>>.value(<_i6.Chapter>[]),
+          )
+          as _i14.Future<List<_i6.Chapter>>);
 
   @override
   _i14.Future<List<_i6.Chapter>> getAllChapters() =>
@@ -465,6 +506,16 @@ class MockIsarService extends _i1.Mock implements _i9.IsarService {
             returnValueForMissingStub: _i14.Future<void>.value(),
           )
           as _i14.Future<void>);
+
+  @override
+  _i14.Stream<void> watchMangaLazy({
+    Duration? debounce = const Duration(milliseconds: 300),
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#watchMangaLazy, [], {#debounce: debounce}),
+            returnValue: _i14.Stream<void>.empty(),
+          )
+          as _i14.Stream<void>);
 
   @override
   _i14.Future<void> saveSyncRecord(_i16.SyncRecord? record) =>
@@ -796,6 +847,25 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
           as bool);
 
   @override
+  String get pageTransition =>
+      (super.noSuchMethod(
+            Invocation.getter(#pageTransition),
+            returnValue: _i17.dummyValue<String>(
+              this,
+              Invocation.getter(#pageTransition),
+            ),
+          )
+          as String);
+
+  @override
+  bool get rotateWidePages =>
+      (super.noSuchMethod(
+            Invocation.getter(#rotateWidePages),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
   bool get cropBorders =>
       (super.noSuchMethod(Invocation.getter(#cropBorders), returnValue: false)
           as bool);
@@ -951,6 +1021,92 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
           as String);
 
   @override
+  int get downloadConcurrency =>
+      (super.noSuchMethod(
+            Invocation.getter(#downloadConcurrency),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  int get downloadPerSourceLimit =>
+      (super.noSuchMethod(
+            Invocation.getter(#downloadPerSourceLimit),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  int get deleteAfterReadOffset =>
+      (super.noSuchMethod(
+            Invocation.getter(#deleteAfterReadOffset),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  String get localSourceRoot =>
+      (super.noSuchMethod(
+            Invocation.getter(#localSourceRoot),
+            returnValue: _i17.dummyValue<String>(
+              this,
+              Invocation.getter(#localSourceRoot),
+            ),
+          )
+          as String);
+
+  @override
+  String get localDownloadDirectory =>
+      (super.noSuchMethod(
+            Invocation.getter(#localDownloadDirectory),
+            returnValue: _i17.dummyValue<String>(
+              this,
+              Invocation.getter(#localDownloadDirectory),
+            ),
+          )
+          as String);
+
+  @override
+  int get downloadMinFreeSpaceMb =>
+      (super.noSuchMethod(
+            Invocation.getter(#downloadMinFreeSpaceMb),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  bool get updateSkipCompleted =>
+      (super.noSuchMethod(
+            Invocation.getter(#updateSkipCompleted),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool get updateSkipWithUnread =>
+      (super.noSuchMethod(
+            Invocation.getter(#updateSkipWithUnread),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool get updateSkipNotStarted =>
+      (super.noSuchMethod(
+            Invocation.getter(#updateSkipNotStarted),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool get deleteAfterReadExcludeBookmarked =>
+      (super.noSuchMethod(
+            Invocation.getter(#deleteAfterReadExcludeBookmarked),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
   bool get allowDeletingBookmarkedChapters =>
       (super.noSuchMethod(
             Invocation.getter(#allowDeletingBookmarkedChapters),
@@ -981,6 +1137,17 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
             returnValue: false,
           )
           as bool);
+
+  @override
+  String get prefetchNextChapter =>
+      (super.noSuchMethod(
+            Invocation.getter(#prefetchNextChapter),
+            returnValue: _i17.dummyValue<String>(
+              this,
+              Invocation.getter(#prefetchNextChapter),
+            ),
+          )
+          as String);
 
   @override
   bool get downloadOnlyWhileCharging =>
@@ -1324,6 +1491,18 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   );
 
   @override
+  set pageTransition(String? value) => super.noSuchMethod(
+    Invocation.setter(#pageTransition, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set rotateWidePages(bool? value) => super.noSuchMethod(
+    Invocation.setter(#rotateWidePages, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   set cropBorders(bool? value) => super.noSuchMethod(
     Invocation.setter(#cropBorders, value),
     returnValueForMissingStub: null,
@@ -1432,6 +1611,66 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   );
 
   @override
+  set downloadConcurrency(int? value) => super.noSuchMethod(
+    Invocation.setter(#downloadConcurrency, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set downloadPerSourceLimit(int? value) => super.noSuchMethod(
+    Invocation.setter(#downloadPerSourceLimit, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set deleteAfterReadOffset(int? value) => super.noSuchMethod(
+    Invocation.setter(#deleteAfterReadOffset, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set localSourceRoot(String? value) => super.noSuchMethod(
+    Invocation.setter(#localSourceRoot, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set localDownloadDirectory(String? value) => super.noSuchMethod(
+    Invocation.setter(#localDownloadDirectory, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set downloadMinFreeSpaceMb(int? value) => super.noSuchMethod(
+    Invocation.setter(#downloadMinFreeSpaceMb, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set updateSkipCompleted(bool? value) => super.noSuchMethod(
+    Invocation.setter(#updateSkipCompleted, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set updateSkipWithUnread(bool? value) => super.noSuchMethod(
+    Invocation.setter(#updateSkipWithUnread, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set updateSkipNotStarted(bool? value) => super.noSuchMethod(
+    Invocation.setter(#updateSkipNotStarted, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set deleteAfterReadExcludeBookmarked(bool? value) => super.noSuchMethod(
+    Invocation.setter(#deleteAfterReadExcludeBookmarked, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   set allowDeletingBookmarkedChapters(bool? value) => super.noSuchMethod(
     Invocation.setter(#allowDeletingBookmarkedChapters, value),
     returnValueForMissingStub: null,
@@ -1452,6 +1691,12 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
   @override
   set downloadOnlyOnWifi(bool? value) => super.noSuchMethod(
     Invocation.setter(#downloadOnlyOnWifi, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set prefetchNextChapter(String? value) => super.noSuchMethod(
+    Invocation.setter(#prefetchNextChapter, value),
     returnValueForMissingStub: null,
   );
 
@@ -1624,6 +1869,36 @@ class MockSettingsService extends _i1.Mock implements _i12.SettingsService {
             returnValueForMissingStub: _i14.Future<void>.value(),
           )
           as _i14.Future<void>);
+
+  @override
+  Map<String, dynamic>? readerOverrideJson(int? mangaId) =>
+      (super.noSuchMethod(Invocation.method(#readerOverrideJson, [mangaId]))
+          as Map<String, dynamic>?);
+
+  @override
+  _i14.Future<void> setReaderOverrideJson(
+    int? mangaId,
+    Map<String, Object>? json, {
+    int? updatedAtMs,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #setReaderOverrideJson,
+              [mangaId, json],
+              {#updatedAtMs: updatedAtMs},
+            ),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
+          )
+          as _i14.Future<void>);
+
+  @override
+  int readerOverrideUpdatedAt(int? mangaId) =>
+      (super.noSuchMethod(
+            Invocation.method(#readerOverrideUpdatedAt, [mangaId]),
+            returnValue: 0,
+          )
+          as int);
 
   @override
   String formatDate(DateTime? date) =>
@@ -1799,16 +2074,72 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
           as _i14.Future<bool>);
 
   @override
-  _i14.Future<void> syncChapterProgress(
+  _i14.Future<void> syncChaptersProgressBulk(
+    List<int>? chapterServerIds, {
+    required bool? isRead,
+    int? lastPageRead = 0,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #syncChaptersProgressBulk,
+              [chapterServerIds],
+              {#isRead: isRead, #lastPageRead: lastPageRead},
+            ),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
+          )
+          as _i14.Future<void>);
+
+  @override
+  _i14.Future<({bool isRead, int lastPageRead})> floorAutomaticProgress(
     int? chapterServerId, {
     required bool? isRead,
     required int? lastPageRead,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
-              #syncChapterProgress,
+              #floorAutomaticProgress,
               [chapterServerId],
               {#isRead: isRead, #lastPageRead: lastPageRead},
+            ),
+            returnValue: _i14.Future<({bool isRead, int lastPageRead})>.value((
+              isRead: false,
+              lastPageRead: 0,
+            )),
+          )
+          as _i14.Future<({bool isRead, int lastPageRead})>);
+
+  @override
+  _i14.Future<void> pushReadActionMeta(
+    List<int>? chapterServerIds,
+    int? actionAtSeconds,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#pushReadActionMeta, [
+              chapterServerIds,
+              actionAtSeconds,
+            ]),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
+          )
+          as _i14.Future<void>);
+
+  @override
+  _i14.Future<void> syncChapterProgress(
+    int? chapterServerId, {
+    required bool? isRead,
+    required int? lastPageRead,
+    bool? explicit = false,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #syncChapterProgress,
+              [chapterServerId],
+              {
+                #isRead: isRead,
+                #lastPageRead: lastPageRead,
+                #explicit: explicit,
+              },
             ),
             returnValue: _i14.Future<void>.value(),
             returnValueForMissingStub: _i14.Future<void>.value(),
@@ -1838,6 +2169,115 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
             returnValueForMissingStub: _i14.Future<void>.value(),
           )
           as _i14.Future<void>);
+
+  @override
+  _i14.Future<_i4.OutboxResult> setMangaInLibraryWithOutbox(
+    int? mangaServerId,
+    bool? inLibrary, {
+    List<int>? categoryIds,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #setMangaInLibraryWithOutbox,
+              [mangaServerId, inLibrary],
+              {#categoryIds: categoryIds},
+            ),
+            returnValue: _i14.Future<_i4.OutboxResult>.value(
+              _FakeOutboxResult_2(
+                this,
+                Invocation.method(
+                  #setMangaInLibraryWithOutbox,
+                  [mangaServerId, inLibrary],
+                  {#categoryIds: categoryIds},
+                ),
+              ),
+            ),
+          )
+          as _i14.Future<_i4.OutboxResult>);
+
+  @override
+  _i14.Future<_i4.OutboxResult> bindTrackWithOutbox(
+    int? mangaServerId,
+    int? trackerId,
+    Object? remoteId, {
+    bool? isPrivate,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #bindTrackWithOutbox,
+              [mangaServerId, trackerId, remoteId],
+              {#isPrivate: isPrivate},
+            ),
+            returnValue: _i14.Future<_i4.OutboxResult>.value(
+              _FakeOutboxResult_2(
+                this,
+                Invocation.method(
+                  #bindTrackWithOutbox,
+                  [mangaServerId, trackerId, remoteId],
+                  {#isPrivate: isPrivate},
+                ),
+              ),
+            ),
+          )
+          as _i14.Future<_i4.OutboxResult>);
+
+  @override
+  _i14.Future<_i4.OutboxResult> unbindTrackWithOutbox(int? recordId) =>
+      (super.noSuchMethod(
+            Invocation.method(#unbindTrackWithOutbox, [recordId]),
+            returnValue: _i14.Future<_i4.OutboxResult>.value(
+              _FakeOutboxResult_2(
+                this,
+                Invocation.method(#unbindTrackWithOutbox, [recordId]),
+              ),
+            ),
+          )
+          as _i14.Future<_i4.OutboxResult>);
+
+  @override
+  _i14.Future<_i4.OutboxResult> addMangaToCategoriesWithOutbox(
+    int? mangaServerId,
+    List<int>? categoryIds,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#addMangaToCategoriesWithOutbox, [
+              mangaServerId,
+              categoryIds,
+            ]),
+            returnValue: _i14.Future<_i4.OutboxResult>.value(
+              _FakeOutboxResult_2(
+                this,
+                Invocation.method(#addMangaToCategoriesWithOutbox, [
+                  mangaServerId,
+                  categoryIds,
+                ]),
+              ),
+            ),
+          )
+          as _i14.Future<_i4.OutboxResult>);
+
+  @override
+  _i14.Future<_i4.OutboxResult> removeExtensionStoreWithOutbox(
+    String? indexUrl,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#removeExtensionStoreWithOutbox, [indexUrl]),
+            returnValue: _i14.Future<_i4.OutboxResult>.value(
+              _FakeOutboxResult_2(
+                this,
+                Invocation.method(#removeExtensionStoreWithOutbox, [indexUrl]),
+              ),
+            ),
+          )
+          as _i14.Future<_i4.OutboxResult>);
+
+  @override
+  _i14.Future<bool> undoQueuedMutation(int? undoToken) =>
+      (super.noSuchMethod(
+            Invocation.method(#undoQueuedMutation, [undoToken]),
+            returnValue: _i14.Future<bool>.value(false),
+          )
+          as _i14.Future<bool>);
 
   @override
   _i14.Future<void> syncMangaLibraryState(
@@ -1946,7 +2386,7 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
               #categoryIds: categoryIds,
             }),
             returnValue: _i14.Future<_i4.SyncResult>.value(
-              _FakeSyncResult_2(
+              _FakeSyncResult_3(
                 this,
                 Invocation.method(#fetchDelta, [], {
                   #since: since,
@@ -1963,7 +2403,7 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
       (super.noSuchMethod(
             Invocation.method(#applyDeltaChanges, [deltaResult]),
             returnValue: _i14.Future<_i4.SyncResult>.value(
-              _FakeSyncResult_2(
+              _FakeSyncResult_3(
                 this,
                 Invocation.method(#applyDeltaChanges, [deltaResult]),
               ),
@@ -1976,7 +2416,7 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
       (super.noSuchMethod(
             Invocation.method(#syncMangaByIds, [mangaIds]),
             returnValue: _i14.Future<_i4.SyncResult>.value(
-              _FakeSyncResult_2(
+              _FakeSyncResult_3(
                 this,
                 Invocation.method(#syncMangaByIds, [mangaIds]),
               ),
@@ -1989,7 +2429,7 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
       (super.noSuchMethod(
             Invocation.method(#syncCategoriesByIds, [categoryIds]),
             returnValue: _i14.Future<_i4.SyncResult>.value(
-              _FakeSyncResult_2(
+              _FakeSyncResult_3(
                 this,
                 Invocation.method(#syncCategoriesByIds, [categoryIds]),
               ),
@@ -2009,7 +2449,7 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
               {#resolver: resolver},
             ),
             returnValue: _i14.Future<_i4.SyncResult>.value(
-              _FakeSyncResult_2(
+              _FakeSyncResult_3(
                 this,
                 Invocation.method(
                   #resolveConflicts,
@@ -2040,7 +2480,7 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
   _i5.Manga parseMangaNode(Map<String, dynamic>? node) =>
       (super.noSuchMethod(
             Invocation.method(#parseMangaNode, [node]),
-            returnValue: _FakeManga_3(
+            returnValue: _FakeManga_4(
               this,
               Invocation.method(#parseMangaNode, [node]),
             ),
@@ -2051,7 +2491,7 @@ class MockSyncEngine extends _i1.Mock implements _i4.SyncEngine {
   _i6.Chapter parseChapterNode(Map<String, dynamic>? node) =>
       (super.noSuchMethod(
             Invocation.method(#parseChapterNode, [node]),
-            returnValue: _FakeChapter_4(
+            returnValue: _FakeChapter_5(
               this,
               Invocation.method(#parseChapterNode, [node]),
             ),
@@ -2087,7 +2527,7 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
   _i7.MetronApiClient get client =>
       (super.noSuchMethod(
             Invocation.getter(#client),
-            returnValue: _FakeMetronApiClient_5(
+            returnValue: _FakeMetronApiClient_6(
               this,
               Invocation.getter(#client),
             ),
@@ -2098,7 +2538,7 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
   _i8.MetronRateLimitState get rateLimitState =>
       (super.noSuchMethod(
             Invocation.getter(#rateLimitState),
-            returnValue: _FakeMetronRateLimitState_6(
+            returnValue: _FakeMetronRateLimitState_7(
               this,
               Invocation.getter(#rateLimitState),
             ),
@@ -2180,7 +2620,7 @@ class MockMetronService extends _i1.Mock implements _i13.MetronService {
       (super.noSuchMethod(
             Invocation.method(#getSeriesDetail, [seriesId]),
             returnValue: _i14.Future<_i8.MetronSeries>.value(
-              _FakeMetronSeries_7(
+              _FakeMetronSeries_8(
                 this,
                 Invocation.method(#getSeriesDetail, [seriesId]),
               ),
@@ -2304,7 +2744,7 @@ class MockNavigationController extends _i1.Mock
   _i9.IsarService get isarService =>
       (super.noSuchMethod(
             Invocation.getter(#isarService),
-            returnValue: _FakeIsarService_8(
+            returnValue: _FakeIsarService_9(
               this,
               Invocation.getter(#isarService),
             ),
@@ -2315,7 +2755,7 @@ class MockNavigationController extends _i1.Mock
   _i10.PageLoader get pageLoader =>
       (super.noSuchMethod(
             Invocation.getter(#pageLoader),
-            returnValue: _FakePageLoader_9(
+            returnValue: _FakePageLoader_10(
               this,
               Invocation.getter(#pageLoader),
             ),
@@ -2326,7 +2766,7 @@ class MockNavigationController extends _i1.Mock
   _i11.PositionManager get positionManager =>
       (super.noSuchMethod(
             Invocation.getter(#positionManager),
-            returnValue: _FakePositionManager_10(
+            returnValue: _FakePositionManager_11(
               this,
               Invocation.getter(#positionManager),
             ),
@@ -2337,7 +2777,7 @@ class MockNavigationController extends _i1.Mock
   _i12.SettingsService get settings =>
       (super.noSuchMethod(
             Invocation.getter(#settings),
-            returnValue: _FakeSettingsService_11(
+            returnValue: _FakeSettingsService_12(
               this,
               Invocation.getter(#settings),
             ),
@@ -2366,6 +2806,23 @@ class MockNavigationController extends _i1.Mock
   int get currentChapterId =>
       (super.noSuchMethod(Invocation.getter(#currentChapterId), returnValue: 0)
           as int);
+
+  @override
+  int get loadGeneration =>
+      (super.noSuchMethod(Invocation.getter(#loadGeneration), returnValue: 0)
+          as int);
+
+  @override
+  set lastNextChapterNavAt(DateTime? value) => super.noSuchMethod(
+    Invocation.setter(#lastNextChapterNavAt, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set lastPrevChapterNavAt(DateTime? value) => super.noSuchMethod(
+    Invocation.setter(#lastPrevChapterNavAt, value),
+    returnValueForMissingStub: null,
+  );
 
   @override
   set onChapterLoaded(
@@ -2400,6 +2857,14 @@ class MockNavigationController extends _i1.Mock
         Invocation.setter(#onNextChapterPrefetched, value),
         returnValueForMissingStub: null,
       );
+
+  @override
+  set onNextChapterPagesReady(
+    void Function(_i6.Chapter, List<String>)? value,
+  ) => super.noSuchMethod(
+    Invocation.setter(#onNextChapterPagesReady, value),
+    returnValueForMissingStub: null,
+  );
 
   @override
   void setChapter(_i6.Chapter? chapter) => super.noSuchMethod(
@@ -2444,6 +2909,14 @@ class MockNavigationController extends _i1.Mock
   );
 
   @override
+  bool isCurrentLoad(int? loadGen) =>
+      (super.noSuchMethod(
+            Invocation.method(#isCurrentLoad, [loadGen]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
   _i14.Future<void> loadChapterAndPages(int? chapterId) =>
       (super.noSuchMethod(
             Invocation.method(#loadChapterAndPages, [chapterId]),
@@ -2463,6 +2936,57 @@ class MockNavigationController extends _i1.Mock
     Invocation.method(#setSourceName, [sourceName]),
     returnValueForMissingStub: null,
   );
+
+  @override
+  void debouncedUpdateProgress(int? page) => super.noSuchMethod(
+    Invocation.method(#debouncedUpdateProgress, [page]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void cancelProgressDebounce() => super.noSuchMethod(
+    Invocation.method(#cancelProgressDebounce, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void debouncedUpdateProgressForItem(
+    List<_i19.ReaderItem>? items,
+    int? index,
+  ) => super.noSuchMethod(
+    Invocation.method(#debouncedUpdateProgressForItem, [items, index]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void updateProgressNow(int? page) => super.noSuchMethod(
+    Invocation.method(#updateProgressNow, [page]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void mirrorPlatformReadingSession({required double? progress}) =>
+      super.noSuchMethod(
+        Invocation.method(#mirrorPlatformReadingSession, [], {
+          #progress: progress,
+        }),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void runPostLoadHousekeeping() => super.noSuchMethod(
+    Invocation.method(#runPostLoadHousekeeping, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  _i14.Future<void> triggerDownloadAhead() =>
+      (super.noSuchMethod(
+            Invocation.method(#triggerDownloadAhead, []),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
+          )
+          as _i14.Future<void>);
 
   @override
   bool canAdvanceToNextChapter() =>
@@ -2505,14 +3029,38 @@ class MockNavigationController extends _i1.Mock
   );
 
   @override
-  void dispose() => super.noSuchMethod(
-    Invocation.method(#dispose, []),
-    returnValueForMissingStub: null,
-  );
+  _i14.Future<void> completeChapterNow(_i6.Chapter? chapter, int? totalPages) =>
+      (super.noSuchMethod(
+            Invocation.method(#completeChapterNow, [chapter, totalPages]),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
+          )
+          as _i14.Future<void>);
 
   @override
-  void cancelAll() => super.noSuchMethod(
-    Invocation.method(#cancelAll, []),
+  void adoptStripChapter(_i6.Chapter? chapter, List<String>? urls) =>
+      super.noSuchMethod(
+        Invocation.method(#adoptStripChapter, [chapter, urls]),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  List<String>? peekPrefetchedPages(_i6.Chapter? chapter) =>
+      (super.noSuchMethod(Invocation.method(#peekPrefetchedPages, [chapter]))
+          as List<String>?);
+
+  @override
+  _i14.Future<void> prefetchChapter(_i6.Chapter? chapter) =>
+      (super.noSuchMethod(
+            Invocation.method(#prefetchChapter, [chapter]),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
+          )
+          as _i14.Future<void>);
+
+  @override
+  void dispose() => super.noSuchMethod(
+    Invocation.method(#dispose, []),
     returnValueForMissingStub: null,
   );
 }
@@ -2562,7 +3110,7 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
   Duration get loadTimeout =>
       (super.noSuchMethod(
             Invocation.getter(#loadTimeout),
-            returnValue: _FakeDuration_12(
+            returnValue: _FakeDuration_13(
               this,
               Invocation.getter(#loadTimeout),
             ),
@@ -2570,15 +3118,101 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
           as Duration);
 
   @override
+  int get cachedBytes =>
+      (super.noSuchMethod(Invocation.getter(#cachedBytes), returnValue: 0)
+          as int);
+
+  @override
+  int get debugActiveLoads =>
+      (super.noSuchMethod(Invocation.getter(#debugActiveLoads), returnValue: 0)
+          as int);
+
+  @override
   _i10.PageLoaderMetrics get metrics =>
       (super.noSuchMethod(
             Invocation.getter(#metrics),
-            returnValue: _FakePageLoaderMetrics_13(
+            returnValue: _FakePageLoaderMetrics_14(
               this,
               Invocation.getter(#metrics),
             ),
           )
           as _i10.PageLoaderMetrics);
+
+  @override
+  Set<String> get recoveringUrls =>
+      (super.noSuchMethod(
+            Invocation.getter(#recoveringUrls),
+            returnValue: <String>{},
+          )
+          as Set<String>);
+
+  @override
+  Set<String> get displayFailedUrls =>
+      (super.noSuchMethod(
+            Invocation.getter(#displayFailedUrls),
+            returnValue: <String>{},
+          )
+          as Set<String>);
+
+  @override
+  int get displayGeneration =>
+      (super.noSuchMethod(Invocation.getter(#displayGeneration), returnValue: 0)
+          as int);
+
+  @override
+  bool get isAlive =>
+      (super.noSuchMethod(Invocation.getter(#isAlive), returnValue: false)
+          as bool);
+
+  @override
+  set sourceName(String? value) => super.noSuchMethod(
+    Invocation.setter(#sourceName, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set onDisplayChanged(void Function()? value) => super.noSuchMethod(
+    Invocation.setter(#onDisplayChanged, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  _i14.Future<bool> isPrefetchAllowed() =>
+      (super.noSuchMethod(
+            Invocation.method(#isPrefetchAllowed, []),
+            returnValue: _i14.Future<bool>.value(false),
+          )
+          as _i14.Future<bool>);
+
+  @override
+  int trimCacheTo(int? targetBytes) =>
+      (super.noSuchMethod(
+            Invocation.method(#trimCacheTo, [targetBytes]),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  void setCurrentChapterPages(Iterable<String>? urls) => super.noSuchMethod(
+    Invocation.method(#setCurrentChapterPages, [urls]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  bool isPinnedPage(String? url) =>
+      (super.noSuchMethod(
+            Invocation.method(#isPinnedPage, [url]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  int handleMemoryPressure() =>
+      (super.noSuchMethod(
+            Invocation.method(#handleMemoryPressure, []),
+            returnValue: 0,
+          )
+          as int);
 
   @override
   void resetMetrics() => super.noSuchMethod(
@@ -2603,7 +3237,7 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
               #headers: headers,
             }),
             returnValue: _i14.Future<_i10.PageLoadResult>.value(
-              _FakePageLoadResult_14(
+              _FakePageLoadResult_15(
                 this,
                 Invocation.method(#loadPage, [], {
                   #url: url,
@@ -2616,29 +3250,6 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
             ),
           )
           as _i14.Future<_i10.PageLoadResult>);
-
-  @override
-  _i14.Future<void> prefetchChapter({
-    required int? chapterServerId,
-    required int? chapterTargetId,
-    required int? mangaId,
-    required String? sourceName,
-    required String? chapterUrl,
-    int? maxPrecacheImages = 3,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#prefetchChapter, [], {
-              #chapterServerId: chapterServerId,
-              #chapterTargetId: chapterTargetId,
-              #mangaId: mangaId,
-              #sourceName: sourceName,
-              #chapterUrl: chapterUrl,
-              #maxPrecacheImages: maxPrecacheImages,
-            }),
-            returnValue: _i14.Future<void>.value(),
-            returnValueForMissingStub: _i14.Future<void>.value(),
-          )
-          as _i14.Future<void>);
 
   @override
   void cancelAll() => super.noSuchMethod(
@@ -2671,6 +3282,197 @@ class MockPageLoader extends _i1.Mock implements _i10.PageLoader {
     Invocation.method(#cacheHeight, [url, height]),
     returnValueForMissingStub: null,
   );
+
+  @override
+  _i20.Uint8List? peekCachedBytes(String? url) =>
+      (super.noSuchMethod(Invocation.method(#peekCachedBytes, [url]))
+          as _i20.Uint8List?);
+
+  @override
+  void cacheBytes(String? url, _i20.Uint8List? bytes) => super.noSuchMethod(
+    Invocation.method(#cacheBytes, [url, bytes]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void resetDisplayState() => super.noSuchMethod(
+    Invocation.method(#resetDisplayState, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  bool hasDisplayBytes(String? url) =>
+      (super.noSuchMethod(
+            Invocation.method(#hasDisplayBytes, [url]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  _i14.Future<void> retryUndecodablePage(String? url, int? index) =>
+      (super.noSuchMethod(
+            Invocation.method(#retryUndecodablePage, [url, index]),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
+          )
+          as _i14.Future<void>);
+
+  @override
+  _i14.Future<void> recoverPage(
+    String? url,
+    int? index, {
+    bool? manual = false,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#recoverPage, [url, index], {#manual: manual}),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
+          )
+          as _i14.Future<void>);
+
+  @override
+  void warmAround(List<String>? urls, int? page) => super.noSuchMethod(
+    Invocation.method(#warmAround, [urls, page]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void prefetchUpcoming(
+    List<String>? urls,
+    int? currentIndex, {
+    int? count = 4,
+  }) => super.noSuchMethod(
+    Invocation.method(#prefetchUpcoming, [urls, currentIndex], {#count: count}),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void setSourceName(String? name) => super.noSuchMethod(
+    Invocation.method(#setSourceName, [name]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  bool isUrlFailed(String? url) =>
+      (super.noSuchMethod(
+            Invocation.method(#isUrlFailed, [url]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  void markUrlFailed(String? url) => super.noSuchMethod(
+    Invocation.method(#markUrlFailed, [url]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void clearFailedUrl(String? url) => super.noSuchMethod(
+    Invocation.method(#clearFailedUrl, [url]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  Map<String, String> buildHeaders(String? url, {String? overrideSourceName}) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #buildHeaders,
+              [url],
+              {#overrideSourceName: overrideSourceName},
+            ),
+            returnValue: <String, String>{},
+          )
+          as Map<String, String>);
+
+  @override
+  bool isPrefetched(String? key) =>
+      (super.noSuchMethod(
+            Invocation.method(#isPrefetched, [key]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool isPrefetching(String? key) =>
+      (super.noSuchMethod(
+            Invocation.method(#isPrefetching, [key]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  int? getPrefetchAttemptTime(String? key) =>
+      (super.noSuchMethod(Invocation.method(#getPrefetchAttemptTime, [key]))
+          as int?);
+
+  @override
+  void setPrefetchAttemptTime(String? key, int? epochSeconds) =>
+      super.noSuchMethod(
+        Invocation.method(#setPrefetchAttemptTime, [key, epochSeconds]),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void clearPrefetchAttemptTime(String? key) => super.noSuchMethod(
+    Invocation.method(#clearPrefetchAttemptTime, [key]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  int getPrefetchCount() =>
+      (super.noSuchMethod(
+            Invocation.method(#getPrefetchCount, []),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  void evictOldestPrefetch() => super.noSuchMethod(
+    Invocation.method(#evictOldestPrefetch, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void setPrefetchedChapter(
+    String? key,
+    String? sourceName,
+    List<String>? urls, {
+    _i21.ContentSourceType? sourceType = _i21.ContentSourceType.localExtension,
+  }) => super.noSuchMethod(
+    Invocation.method(
+      #setPrefetchedChapter,
+      [key, sourceName, urls],
+      {#sourceType: sourceType},
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  List<String>? peekPrefetchedUrls(String? key) =>
+      (super.noSuchMethod(Invocation.method(#peekPrefetchedUrls, [key]))
+          as List<String>?);
+
+  @override
+  ({String sourceName, _i21.ContentSourceType sourceType, List<String> urls})?
+  takePrefetchedChapter(String? key) =>
+      (super.noSuchMethod(Invocation.method(#takePrefetchedChapter, [key]))
+          as ({
+            String sourceName,
+            _i21.ContentSourceType sourceType,
+            List<String> urls,
+          })?);
+
+  @override
+  void markPrefetching(String? key) => super.noSuchMethod(
+    Invocation.method(#markPrefetching, [key]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void unmarkPrefetching(String? key) => super.noSuchMethod(
+    Invocation.method(#unmarkPrefetching, [key]),
+    returnValueForMissingStub: null,
+  );
 }
 
 /// A class which mocks [PositionManager].
@@ -2685,7 +3487,7 @@ class MockPositionManager extends _i1.Mock implements _i11.PositionManager {
   _i12.SettingsService get settings =>
       (super.noSuchMethod(
             Invocation.getter(#settings),
-            returnValue: _FakeSettingsService_11(
+            returnValue: _FakeSettingsService_12(
               this,
               Invocation.getter(#settings),
             ),
@@ -2696,7 +3498,7 @@ class MockPositionManager extends _i1.Mock implements _i11.PositionManager {
   _i9.IsarService get isarService =>
       (super.noSuchMethod(
             Invocation.getter(#isarService),
-            returnValue: _FakeIsarService_8(
+            returnValue: _FakeIsarService_9(
               this,
               Invocation.getter(#isarService),
             ),
@@ -2707,7 +3509,7 @@ class MockPositionManager extends _i1.Mock implements _i11.PositionManager {
   _i4.SyncEngine get syncEngine =>
       (super.noSuchMethod(
             Invocation.getter(#syncEngine),
-            returnValue: _FakeSyncEngine_15(
+            returnValue: _FakeSyncEngine_16(
               this,
               Invocation.getter(#syncEngine),
             ),
@@ -2718,7 +3520,7 @@ class MockPositionManager extends _i1.Mock implements _i11.PositionManager {
   _i13.MetronService get metronService =>
       (super.noSuchMethod(
             Invocation.getter(#metronService),
-            returnValue: _FakeMetronService_16(
+            returnValue: _FakeMetronService_17(
               this,
               Invocation.getter(#metronService),
             ),
@@ -2740,7 +3542,7 @@ class MockPositionManager extends _i1.Mock implements _i11.PositionManager {
               #parentManga: parentManga,
             }),
             returnValue: _i14.Future<_i11.ProgressUpdateResult>.value(
-              _FakeProgressUpdateResult_17(
+              _FakeProgressUpdateResult_18(
                 this,
                 Invocation.method(#updateProgress, [], {
                   #chapterSnapshot: chapterSnapshot,

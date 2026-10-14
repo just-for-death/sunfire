@@ -85,19 +85,34 @@ const ChapterSchema = CollectionSchema(
       name: r'pageCount',
       type: IsarType.long,
     ),
-    r'realUrl': PropertySchema(id: 16, name: r'realUrl', type: IsarType.string),
+    r'readStateActionAt': PropertySchema(
+      id: 16,
+      name: r'readStateActionAt',
+      type: IsarType.long,
+    ),
+    r'realUrl': PropertySchema(id: 17, name: r'realUrl', type: IsarType.string),
     r'scanlator': PropertySchema(
-      id: 17,
+      id: 18,
       name: r'scanlator',
       type: IsarType.string,
     ),
-    r'serverId': PropertySchema(id: 18, name: r'serverId', type: IsarType.long),
+    r'serverId': PropertySchema(id: 19, name: r'serverId', type: IsarType.long),
+    r'syncedIsRead': PropertySchema(
+      id: 20,
+      name: r'syncedIsRead',
+      type: IsarType.bool,
+    ),
+    r'syncedLastPageRead': PropertySchema(
+      id: 21,
+      name: r'syncedLastPageRead',
+      type: IsarType.long,
+    ),
     r'uploadDate': PropertySchema(
-      id: 19,
+      id: 22,
       name: r'uploadDate',
       type: IsarType.long,
     ),
-    r'url': PropertySchema(id: 20, name: r'url', type: IsarType.string),
+    r'url': PropertySchema(id: 23, name: r'url', type: IsarType.string),
   },
 
   estimateSize: _chapterEstimateSize,
@@ -227,11 +242,14 @@ void _chapterSerialize(
   writer.writeString(offsets[13], object.mangaTitle);
   writer.writeString(offsets[14], object.name);
   writer.writeLong(offsets[15], object.pageCount);
-  writer.writeString(offsets[16], object.realUrl);
-  writer.writeString(offsets[17], object.scanlator);
-  writer.writeLong(offsets[18], object.serverId);
-  writer.writeLong(offsets[19], object.uploadDate);
-  writer.writeString(offsets[20], object.url);
+  writer.writeLong(offsets[16], object.readStateActionAt);
+  writer.writeString(offsets[17], object.realUrl);
+  writer.writeString(offsets[18], object.scanlator);
+  writer.writeLong(offsets[19], object.serverId);
+  writer.writeBool(offsets[20], object.syncedIsRead);
+  writer.writeLong(offsets[21], object.syncedLastPageRead);
+  writer.writeLong(offsets[22], object.uploadDate);
+  writer.writeString(offsets[23], object.url);
 }
 
 Chapter _chapterDeserialize(
@@ -258,11 +276,14 @@ Chapter _chapterDeserialize(
   object.mangaTitle = reader.readString(offsets[13]);
   object.name = reader.readString(offsets[14]);
   object.pageCount = reader.readLong(offsets[15]);
-  object.realUrl = reader.readString(offsets[16]);
-  object.scanlator = reader.readStringOrNull(offsets[17]);
-  object.serverId = reader.readLong(offsets[18]);
-  object.uploadDate = reader.readLongOrNull(offsets[19]);
-  object.url = reader.readString(offsets[20]);
+  object.readStateActionAt = reader.readLongOrNull(offsets[16]);
+  object.realUrl = reader.readString(offsets[17]);
+  object.scanlator = reader.readStringOrNull(offsets[18]);
+  object.serverId = reader.readLong(offsets[19]);
+  object.syncedIsRead = reader.readBoolOrNull(offsets[20]);
+  object.syncedLastPageRead = reader.readLongOrNull(offsets[21]);
+  object.uploadDate = reader.readLongOrNull(offsets[22]);
+  object.url = reader.readString(offsets[23]);
   return object;
 }
 
@@ -306,14 +327,20 @@ P _chapterDeserializeProp<P>(
     case 15:
       return (reader.readLong(offset)) as P;
     case 16:
-      return (reader.readString(offset)) as P;
-    case 17:
-      return (reader.readStringOrNull(offset)) as P;
-    case 18:
-      return (reader.readLong(offset)) as P;
-    case 19:
       return (reader.readLongOrNull(offset)) as P;
+    case 17:
+      return (reader.readString(offset)) as P;
+    case 18:
+      return (reader.readStringOrNull(offset)) as P;
+    case 19:
+      return (reader.readLong(offset)) as P;
     case 20:
+      return (reader.readBoolOrNull(offset)) as P;
+    case 21:
+      return (reader.readLongOrNull(offset)) as P;
+    case 22:
+      return (reader.readLongOrNull(offset)) as P;
+    case 23:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -2248,6 +2275,79 @@ extension ChapterQueryFilter
     });
   }
 
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  readStateActionAtIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'readStateActionAt'),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  readStateActionAtIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'readStateActionAt'),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  readStateActionAtEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'readStateActionAt', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  readStateActionAtGreaterThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'readStateActionAt',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  readStateActionAtLessThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'readStateActionAt',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  readStateActionAtBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'readStateActionAt',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
   QueryBuilder<Chapter, Chapter, QAfterFilterCondition> realUrlEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -2606,6 +2706,106 @@ extension ChapterQueryFilter
       return query.addFilterCondition(
         FilterCondition.between(
           property: r'serverId',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> syncedIsReadIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'syncedIsRead'),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  syncedIsReadIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'syncedIsRead'),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition> syncedIsReadEqualTo(
+    bool? value,
+  ) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'syncedIsRead', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  syncedLastPageReadIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'syncedLastPageRead'),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  syncedLastPageReadIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'syncedLastPageRead'),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  syncedLastPageReadEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'syncedLastPageRead', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  syncedLastPageReadGreaterThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'syncedLastPageRead',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  syncedLastPageReadLessThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'syncedLastPageRead',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterFilterCondition>
+  syncedLastPageReadBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'syncedLastPageRead',
           lower: lower,
           includeLower: includeLower,
           upper: upper,
@@ -3037,6 +3237,18 @@ extension ChapterQuerySortBy on QueryBuilder<Chapter, Chapter, QSortBy> {
     });
   }
 
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> sortByReadStateActionAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'readStateActionAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> sortByReadStateActionAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'readStateActionAt', Sort.desc);
+    });
+  }
+
   QueryBuilder<Chapter, Chapter, QAfterSortBy> sortByRealUrl() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'realUrl', Sort.asc);
@@ -3070,6 +3282,30 @@ extension ChapterQuerySortBy on QueryBuilder<Chapter, Chapter, QSortBy> {
   QueryBuilder<Chapter, Chapter, QAfterSortBy> sortByServerIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> sortBySyncedIsRead() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncedIsRead', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> sortBySyncedIsReadDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncedIsRead', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> sortBySyncedLastPageRead() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncedLastPageRead', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> sortBySyncedLastPageReadDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncedLastPageRead', Sort.desc);
     });
   }
 
@@ -3305,6 +3541,18 @@ extension ChapterQuerySortThenBy
     });
   }
 
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> thenByReadStateActionAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'readStateActionAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> thenByReadStateActionAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'readStateActionAt', Sort.desc);
+    });
+  }
+
   QueryBuilder<Chapter, Chapter, QAfterSortBy> thenByRealUrl() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'realUrl', Sort.asc);
@@ -3338,6 +3586,30 @@ extension ChapterQuerySortThenBy
   QueryBuilder<Chapter, Chapter, QAfterSortBy> thenByServerIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> thenBySyncedIsRead() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncedIsRead', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> thenBySyncedIsReadDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncedIsRead', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> thenBySyncedLastPageRead() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncedLastPageRead', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QAfterSortBy> thenBySyncedLastPageReadDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncedLastPageRead', Sort.desc);
     });
   }
 
@@ -3477,6 +3749,12 @@ extension ChapterQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Chapter, Chapter, QDistinct> distinctByReadStateActionAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'readStateActionAt');
+    });
+  }
+
   QueryBuilder<Chapter, Chapter, QDistinct> distinctByRealUrl({
     bool caseSensitive = true,
   }) {
@@ -3496,6 +3774,18 @@ extension ChapterQueryWhereDistinct
   QueryBuilder<Chapter, Chapter, QDistinct> distinctByServerId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'serverId');
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QDistinct> distinctBySyncedIsRead() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncedIsRead');
+    });
+  }
+
+  QueryBuilder<Chapter, Chapter, QDistinct> distinctBySyncedLastPageRead() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncedLastPageRead');
     });
   }
 
@@ -3618,6 +3908,12 @@ extension ChapterQueryProperty
     });
   }
 
+  QueryBuilder<Chapter, int?, QQueryOperations> readStateActionAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'readStateActionAt');
+    });
+  }
+
   QueryBuilder<Chapter, String, QQueryOperations> realUrlProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'realUrl');
@@ -3633,6 +3929,18 @@ extension ChapterQueryProperty
   QueryBuilder<Chapter, int, QQueryOperations> serverIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'serverId');
+    });
+  }
+
+  QueryBuilder<Chapter, bool?, QQueryOperations> syncedIsReadProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncedIsRead');
+    });
+  }
+
+  QueryBuilder<Chapter, int?, QQueryOperations> syncedLastPageReadProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncedLastPageRead');
     });
   }
 
