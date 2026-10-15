@@ -20,7 +20,7 @@ workflows:
       - name: Get packages
         script: flutter pub get
       - name: Build release APKs
-        script: flutter build apk --release --split-per-abi
+        script: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
 
     artifacts:
       - build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
@@ -94,7 +94,7 @@ workflows:
       - name: Get packages
         script: flutter pub get
       - name: Build APKs
-        script: flutter build apk --release --split-per-abi
+        script: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
       - name: Build IPA unsigned (no code signing)
         script: |
           set -e

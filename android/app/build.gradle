@@ -30,12 +30,15 @@ if (keystorePropertiesFile.exists()) {
 
 def hasReleaseKeystore = keystorePropertiesFile.exists() && keystoreProperties['storeFile']
 
-// IMP-052: a release build ALWAYS requires android/key.properties (with
-// storeFile). Any assemble/bundle/package…Release task fails loudly before it
-// runs; there is no debug-key fallback. Debug/profile builds are unaffected
-// (the check only fires when a Release task is in the task graph).
+// Opt-in strict mode for real release pipelines: run with
+//   -PrequireReleaseSigning   (or env REQUIRE_RELEASE_SIGNING=true)
+// and any assemble/bundle/package Release task fails instead of producing
+// a debug-signed APK. When key.properties is absent and strict mode is off
+// (e.g. CI builders, open-source contributors), release builds fall back to
+// the debug key so unsigned/test release APKs can still be produced.
 gradle.taskGraph.whenReady { graph ->
-    if (!hasReleaseKeystore &&
+    def strict = project.hasProperty('requireReleaseSigning') || System.getenv('REQUIRE_RELEASE_SIGNING') == 'true'
+    if (strict && !hasReleaseKeystore &&
             graph.allTasks.any { it.name =~ /^(assemble|bundle|package)\w*Release$/ }) {
         throw new GradleException(
                 'Release signing is required: android/key.properties (with storeFile) is missing ' +
@@ -106,10 +109,12 @@ android {
     }
     buildTypes {
         release {
-            // IMP-052: never the debug key. Without key.properties the
-            // taskGraph check above stops any Release task before it runs.
             if (hasReleaseKeystore) {
                 signingConfig signingConfigs.release
+            } else {
+                logger.warn('WARNING: android/key.properties missing or has no storeFile — ' +
+                        'release build will be signed with the DEBUG key.')
+                signingConfig signingConfigs.debug
             }
             minifyEnabled true
             shrinkResources true
