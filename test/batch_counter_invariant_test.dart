@@ -104,6 +104,25 @@ void main() {
     _checkInvariant(mgr);
   });
 
+  test('retrying a failed member keeps the batch total', () async {
+    mgr.debugSetTasksForTest([
+      _task(1, status: LocalDownloadStatus.failed),
+      _task(2, status: LocalDownloadStatus.completed),
+    ]);
+    mgr.debugSetBatchCounters(
+        total: 2, completed: 1, failed: 1, counted: true,
+        members: {1, 2}, accounted: {1, 2});
+
+    await mgr.enqueueLocalDownload(
+        chapterId: 1, mangaId: 1, chapterName: 'Ch 1', mangaTitle: 'M');
+
+    final c = mgr.debugBatchCounters;
+    expect(c.total, 2);
+    expect(c.failed, 0);
+    expect(c.accounted, {2});
+    _checkInvariant(mgr);
+  });
+
   test('persisted counters round-trip with membership sets', () async {
     mgr.debugSetBatchCounters(
         total: 4, completed: 2, failed: 1, counted: true,

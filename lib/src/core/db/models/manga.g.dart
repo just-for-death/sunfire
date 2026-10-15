@@ -278,6 +278,7 @@ Manga _mangaDeserialize(
   object.serverId = reader.readLong(offsets[16]);
   object.sourceName = reader.readString(offsets[17]);
   object.status = reader.readStringOrNull(offsets[18]);
+  object.tagIds = reader.readLongList(offsets[19]) ?? [];
   object.thumbnailUrl = reader.readStringOrNull(offsets[20]);
   object.title = reader.readString(offsets[21]);
   object.unreadCount = reader.readLongOrNull(offsets[22]);

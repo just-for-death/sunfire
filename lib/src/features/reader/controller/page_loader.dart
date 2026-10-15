@@ -221,8 +221,19 @@ class PageLoader {
   // Closed flag.
   bool _disposed = false;
 
-  // Failed URLs tracking (avoid re-fetching known-bad URLs).
-  final Set<String> _failedUrls = {};
+  // Failed URLs tracking (avoid re-fetching known-bad URLs), with the time of
+  // the failure. Entries expire: a brief network drop during prefetch used to
+  // fail those pages instantly for the rest of the reading session.
+  final Map<String, DateTime> _failedUrls = {};
+  static const Duration failedUrlTtl = Duration(minutes: 2);
+
+  bool _isKnownFailed(String url) {
+    final at = _failedUrls[url];
+    if (at == null) return false;
+    if (DateTime.now().difference(at) < failedUrlTtl) return true;
+    _failedUrls.remove(url);
+    return false;
+  }
 
   // Prefetch attempt times (epoch seconds) for failure cooldown.
   final Map<String, int> _prefetchAttemptTimes = {};
@@ -391,6 +402,14 @@ class PageLoader {
     _displayGeneration++;
     recoveringUrls.clear();
     displayFailedUrls.clear();
+    _failedUrls.clear();
+    // Queued loads for the old chapter would otherwise be served before the
+    // new chapter's pages at equal priority. In-flight ones finish and fill
+    // the cache.
+    for (final request in _pending.drain()) {
+      if (identical(_inFlight[request.url], request.completer)) _inFlight.remove(request.url);
+      if (!request.completer.isCompleted) request.completer.complete(PageLoadResult(error: 'Cancelled'));
+    }
   }
 
   /// Whether display bytes for [url] are in the LRU.
@@ -516,10 +535,10 @@ class PageLoader {
   }
 
   /// Check if a URL is known to have failed (avoid re-fetching).
-  bool isUrlFailed(String url) => _failedUrls.contains(url);
+  bool isUrlFailed(String url) => _isKnownFailed(url);
 
   /// Mark a URL as failed.
-  void markUrlFailed(String url) => _failedUrls.add(url);
+  void markUrlFailed(String url) => _failedUrls[url] = DateTime.now();
 
   /// Clear failed URL marker (e.g., on manual retry).
   void clearFailedUrl(String url) => _failedUrls.remove(url);
@@ -670,14 +689,14 @@ class PageLoader {
     if (_disposed) return PageLoadResult(error: 'Disposed');
 
     // Check failed URL cache first
-    if (_failedUrls.contains(url)) {
+    if (_isKnownFailed(url)) {
       return PageLoadResult(error: 'URL previously failed');
     }
 
     final override = fetchOverride ?? debugDefaultFetchOverride;
     if (override != null) {
       final r = await override(url);
-      if (!r.isSuccess) _failedUrls.add(url);
+      if (!r.isSuccess) _failedUrls[url] = DateTime.now();
       return r;
     }
 
@@ -751,7 +770,7 @@ class PageLoader {
         return PageLoadResult(bytes: res.bodyBytes);
       } else {
         debugPrint('[PageLoader] ❌ Image still failed ${sanitizeUrlForLog(url)} -> ${res?.statusCode}');
-        _failedUrls.add(url);
+        _failedUrls[url] = DateTime.now();
         return PageLoadResult(error: 'HTTP ${res?.statusCode ?? 'error'}');
       }
     } finally {
@@ -891,6 +910,12 @@ class _Queue<T> {
   void insert(int index, T item) => _items.insert(index, item);
   T removeFirst() => _items.removeAt(0);
   void clear() => _items.clear();
+  List<T> drain() {
+    final out = List<T>.of(_items);
+    _items.clear();
+    return out;
+  }
+
   bool get isNotEmpty => _items.isNotEmpty;
   int get length => _items.length;
   T operator [](int index) => _items[index];

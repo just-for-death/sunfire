@@ -861,7 +861,12 @@ class ReaderInputPipeline {
       }
     }
 
-    final detectedPage = detectBestVisiblePage(viewportHeight: viewportHeight, pages: candidates);
+    final detectedPage = detectBestVisiblePage(
+      viewportHeight: viewportHeight,
+      pages: candidates,
+      scrolledToEnd: currentScroll >= maxScroll - 2,
+      lastPage: _gestureNav.pageUrls.length,
+    );
     final pageRatio = (currentScroll / maxScroll).clamp(0.0, 1.0);
     final computedPage = detectedPage ?? (((pageRatio * (_gestureNav.pageUrls.length - 1)) + 1).round().clamp(1, _gestureNav.pageUrls.length));
 
@@ -927,7 +932,13 @@ class ReaderInputPipeline {
         candidates.add((page: i + 1, top: top, bottom: bottom));
       }
     }
-    final visible = detectBestVisiblePage(viewportHeight: viewportHeight, pages: candidates);
+    final position = host.scrollController.position;
+    final visible = detectBestVisiblePage(
+      viewportHeight: viewportHeight,
+      pages: candidates,
+      scrolledToEnd: position.pixels >= position.maxScrollExtent - 2,
+      lastPage: items.length,
+    );
     if (visible == null) return;
     final contentWidth = width > 800 ? 780.0 : width;
     final r = rc.onStripItemVisible(visible - 1, contentWidth: contentWidth);

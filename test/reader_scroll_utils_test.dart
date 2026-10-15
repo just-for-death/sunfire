@@ -47,6 +47,22 @@ void main() {
     expect(shouldPersistProgressPage(page: 11, previousSaved: 10), isTrue);
   });
 
+  test('a re-read of a finished chapter records its lower pages', () {
+    expect(shouldPersistProgressPage(page: 3, previousSaved: 10, rereading: true), isTrue);
+    expect(shouldPersistProgressPage(page: 0, previousSaved: 10, rereading: true), isFalse);
+  });
+
+  test('scrolled to the end, a short last page wins over the centered page', () {
+    final pages = [
+      (page: 9, top: -200.0, bottom: 700.0),
+      (page: 10, top: 710.0, bottom: 800.0),
+    ];
+    expect(detectBestVisiblePage(viewportHeight: 800, pages: pages), 9);
+    expect(detectBestVisiblePage(viewportHeight: 800, pages: pages, scrolledToEnd: true, lastPage: 10), 10);
+    expect(detectBestVisiblePage(viewportHeight: 800, pages: pages.sublist(0, 1), scrolledToEnd: true, lastPage: 10), 9,
+        reason: 'last page not on screen');
+  });
+
   group('stale out-of-range lastPageRead cannot wedge a chapter', () {
     // mergeLastPageRead takes max(local, server) and never clamps to the page
     // count, so a stored lastPageRead larger than the chapter's current page

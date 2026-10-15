@@ -160,6 +160,34 @@ class IsarService {
         });
       });
 
+  /// Claims [key] for [owner] until [ttl] from now. True when it was free,
+  /// expired, or already held by [owner]. Isar write transactions are
+  /// serialized across isolates, so the foreground app and the WorkManager
+  /// isolate cannot both win; the expiry frees a lease left by a killed isolate.
+  Future<bool> tryAcquireLease(String key, String owner, Duration ttl) async {
+    if (!_isInitialized) return false;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return _isar.writeTxn(() async {
+      final meta = await _isar.syncMetas.filter().keyEqualTo(key).findFirst();
+      final parts = (meta?.value ?? '').split('|');
+      final heldBy = parts.first;
+      final expiresAt = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+      if (heldBy.isNotEmpty && heldBy != owner && expiresAt > now) return false;
+      await _isar.syncMetas.put((meta ?? SyncMeta())
+        ..key = key
+        ..value = '$owner|${now + ttl.inMilliseconds}');
+      return true;
+    });
+  }
+
+  Future<void> releaseLease(String key, String owner) async {
+    if (!_isInitialized) return;
+    await _isar.writeTxn(() async {
+      final meta = await _isar.syncMetas.filter().keyEqualTo(key).findFirst();
+      if (meta != null && meta.value.split('|').first == owner) await _isar.syncMetas.delete(meta.id);
+    });
+  }
+
   /// Runs a write once the database is open (awaiting an in-flight
   /// `initialize()`), or drops it with a logged warning if the database was
   /// never opened / failed to open. See [WriteGate].
@@ -332,6 +360,13 @@ class IsarService {
   Future<int> countChapters() async {
     if (!_isInitialized) return 0;
     return _isar.chapters.count();
+  }
+
+  /// Chapters marked read, counted in the DB. Opening a chapter gives it a
+  /// page position and timestamp, so those are not "read".
+  Future<int> countReadChapters() async {
+    if (!_isInitialized) return 0;
+    return _isar.chapters.filter().isReadEqualTo(true).count();
   }
 
   /// IMP-024: chapters with any read evidence (isRead, a page position, or a
@@ -793,17 +828,22 @@ class IsarService {
     if (categories.isEmpty) return;
     await _executeWrite('saveCategories', () async {
       Set<int> protectedIds = const {};
+      Set<int> pendingDeleteIds = const {};
       if (replaceAll) {
         // Categories that only exist locally (offline-created, still waiting on
         // a queued create) have ids the server doesn't know about. A server pull
         // must not wipe them, or the pending create's id remap has nothing to
         // attach to and the category reappears as an uncategorizable orphan on
         // the server. Synthetic (negative) temp ids are covered too.
-        protectedIds = (await getPendingCategoryRecords())
-            .where((r) => r.action == SyncAction.create)
-            .map((r) => int.tryParse(r.entityId))
-            .whereType<int>()
-            .toSet();
+        final pending = await getPendingCategoryRecords();
+        int? idOf(SyncRecord r) => int.tryParse(r.entityId);
+        protectedIds = pending.where((r) => r.action == SyncAction.create).map(idOf).whereType<int>().toSet();
+        // A delete still queued means the server's copy is stale; re-adding it
+        // would put the category the user deleted back on the shelf.
+        pendingDeleteIds = pending.where((r) => r.action == SyncAction.delete).map(idOf).whereType<int>().toSet();
+      }
+      if (pendingDeleteIds.isNotEmpty) {
+        categories = categories.where((c) => !pendingDeleteIds.contains(c.serverId)).toList();
       }
       await _isar.writeTxn(() async {
         final existing = await _isar.categorys.where().findAll();

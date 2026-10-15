@@ -116,7 +116,7 @@ class TagService {
           .tagIdsElementEqualTo(tagId)
           .findAll();
       for (final manga in mangas) {
-        manga.tagIds.remove(tagId);
+        manga.tagIds = manga.tagIds.where((id) => id != tagId).toList();
         await IsarService.instance.isar.mangas.put(manga);
       }
       await IsarService.instance.isar.tags.delete(tagId);
@@ -138,7 +138,7 @@ class TagService {
       if (manga.tagIds.contains(tagId)) return true;
 
       await IsarService.instance.isar.writeTxn(() async {
-        manga.tagIds.add(tagId);
+        manga.tagIds = [...manga.tagIds, tagId];
         await IsarService.instance.isar.mangas.put(manga);
       });
       return true;
@@ -161,7 +161,7 @@ class TagService {
       if (!manga.tagIds.contains(tagId)) return true;
 
       await IsarService.instance.isar.writeTxn(() async {
-        manga.tagIds.remove(tagId);
+        manga.tagIds = manga.tagIds.where((id) => id != tagId).toList();
         await IsarService.instance.isar.mangas.put(manga);
       });
       return true;

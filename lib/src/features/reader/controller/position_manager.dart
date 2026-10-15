@@ -81,6 +81,7 @@ class PositionManager {
     if (!shouldPersistProgressPage(
       page: clampedPage,
       previousSaved: previousSaved,
+      rereading: wasRead,
     )) {
       return ProgressUpdateResult.none;
     }

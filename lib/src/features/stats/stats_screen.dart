@@ -54,7 +54,7 @@ class _StatsScreenState extends State<StatsScreen> {
       // size (_totalManga / genres / sources) stays library-scoped.
       // IMP-024: counted in the DB instead of loading every chapter.
       final allChCount = await IsarService.instance.countChapters();
-      final readChCount = await IsarService.instance.countChaptersWithReadEvidence();
+      final readChCount = await IsarService.instance.countReadChapters();
 
       for (final m in mangas) {
         for (final g in m.genres) {

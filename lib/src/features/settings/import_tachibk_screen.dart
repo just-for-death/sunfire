@@ -39,7 +39,7 @@ class _ImportTachibkScreenState extends State<ImportTachibkScreen> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: const ['tachibk', 'zip'],
+        allowedExtensions: const ['tachibk', 'gz', 'zip'],
         withData: true,
       );
       if (result == null || result.files.isEmpty) {

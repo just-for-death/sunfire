@@ -163,6 +163,22 @@ class SyncManager {
         ));
       }
 
+      // A delta needs a starting point; fetchDelta refuses epoch 0. With no
+      // previous sync (or an explicit full sync) run the full sync cycle.
+      if (effectiveSince.millisecondsSinceEpoch <= 0) {
+        _emitProgress(const SyncProgress(phase: SyncPhase.fetchingManga, current: 15, total: 100));
+        await syncEngine.triggerSync();
+        _lastSyncTimestamp = DateTime.now();
+        await isarService.saveLastSyncTimestamp(_lastSyncTimestamp!);
+        _emitProgress(const SyncProgress(
+          phase: SyncPhase.completed,
+          current: 100,
+          total: 100,
+          currentManga: 'Full library sync complete',
+        ));
+        return _finish(SyncResult(success: true, lastSyncTimestamp: _lastSyncTimestamp));
+      }
+
       _emitProgress(const SyncProgress(
         phase: SyncPhase.fetchingDelta,
         current: 15,
@@ -255,7 +271,7 @@ class SyncManager {
     }
   }
 
-  /// Full library delta from epoch (still SyncEngine.fetchDelta + apply).
+  /// Full library sync: the regular SyncEngine cycle (see [_runDelta]).
   Future<SyncResult> syncFull() async {
     return syncDelta(since: DateTime.fromMillisecondsSinceEpoch(0));
   }

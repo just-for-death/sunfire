@@ -42,19 +42,12 @@ Future<SiblingChapterNav> resolveSiblingChapterNav({
   required Chapter chapter,
   Manga? parentManga,
 }) async {
-  final mId = chapter.mangaId > 0
-      ? chapter.mangaId
-      : (parentManga?.serverId ?? parentManga?.id ?? 0);
-  var siblings = await isar.getChaptersForManga(mId);
-  if (siblings.isEmpty && parentManga != null) {
-    if (parentManga.id > 0 && parentManga.id != mId) {
-      siblings = await isar.getChaptersForManga(parentManga.id);
-    }
-    if (siblings.isEmpty &&
-        parentManga.serverId > 0 &&
-        parentManga.serverId != mId) {
-      siblings = await isar.getChaptersForManga(parentManga.serverId);
-    }
+  // chapter.mangaId is the parent's serverId, which is negative for Local and
+  // standalone (JS-only) series; the local Isar id is a different id space.
+  final mId = chapter.mangaId != 0 ? chapter.mangaId : (parentManga?.canonicalKey ?? 0);
+  var siblings = mId == 0 ? <Chapter>[] : await isar.getChaptersForManga(mId);
+  if (siblings.isEmpty && parentManga != null && parentManga.serverId != 0 && parentManga.serverId != mId) {
+    siblings = await isar.getChaptersForManga(parentManga.serverId);
   }
 
   final sorted = sortSiblingChapters(siblings);

@@ -91,4 +91,22 @@ void main() {
       expect(restored.status, LocalDownloadStatus.queued);
     });
   });
+
+  group('DownloadManagerService.settledStatusAfterRun', () {
+    test('a run cut short by a gate (task reset to queued) is requeued, not completed', () {
+      expect(DownloadManagerService.settledStatusAfterRun(LocalDownloadStatus.queued, finished: false, queuePaused: false),
+          LocalDownloadStatus.queued);
+      expect(DownloadManagerService.settledStatusAfterRun(LocalDownloadStatus.downloading, finished: false, queuePaused: true),
+          LocalDownloadStatus.paused);
+    });
+
+    test('only a finished run is completed; paused and cancelled are kept', () {
+      expect(DownloadManagerService.settledStatusAfterRun(LocalDownloadStatus.downloading, finished: true, queuePaused: false),
+          LocalDownloadStatus.completed);
+      expect(DownloadManagerService.settledStatusAfterRun(LocalDownloadStatus.failed, finished: false, queuePaused: false),
+          LocalDownloadStatus.failed);
+      expect(DownloadManagerService.settledStatusAfterRun(LocalDownloadStatus.paused, finished: true, queuePaused: true),
+          LocalDownloadStatus.paused);
+    });
+  });
 }

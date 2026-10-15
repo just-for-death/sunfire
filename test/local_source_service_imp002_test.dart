@@ -127,4 +127,24 @@ void main() {
     expect(res.pageUrls.map((p) => p.split('/').last), ['0001_1.jpg', '0002_2.jpg']);
     expect(res.pageUrls.every((p) => File(p).existsSync()), isTrue);
   });
+
+  test('an extension chapter cannot open a localfs: path outside the root', () async {
+    await svc.setRoot('${tmp.path}/lib');
+    final outside = Directory('${tmp.path}/private/Ch 1');
+    await outside.create(recursive: true);
+    await File('${outside.path}/1.jpg').writeAsBytes([1]);
+
+    expect(svc.isUnderRoot('${tmp.path}/lib/S/Ch 1.cbz'), isTrue);
+    expect(svc.isUnderRoot('${tmp.path}/lib/../private/Ch 1'), isFalse);
+    expect(svc.isUnderRoot('${tmp.path}/library-other/x'), isFalse);
+    await expectLater(
+      ContentResolverService.instance.resolveChapterPages(
+        chapterServerId: -124,
+        chapterUrl: '$kLocalChapterUrlScheme${outside.path}',
+        sourceName: 'Some Extension',
+        allowLocalDownload: false,
+      ),
+      throwsException,
+    );
+  });
 }

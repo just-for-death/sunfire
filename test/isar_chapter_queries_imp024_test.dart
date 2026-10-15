@@ -111,6 +111,11 @@ void main() {
     expect(await IsarService.instance.countChaptersWithReadEvidence(), 3);
   });
 
+  test('countReadChapters ignores opened-but-unread chapters', () async {
+    await seed();
+    expect(await IsarService.instance.countReadChapters(), 1);
+  });
+
   test('getServerDownloadedChapterIds returns only server-downloaded ids', () async {
     await seed();
     expect((await IsarService.instance.getServerDownloadedChapterIds()).toSet(), {1, 3});

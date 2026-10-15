@@ -169,4 +169,30 @@ void main() {
     expect(r.isSuccess, isTrue);
     expect(c.debugActiveLoads, 0);
   });
+
+  test('chapter switch drops queued old-chapter loads and forgets failed URLs', () async {
+    final gate = Completer<void>();
+    final png = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0]);
+    final c = PageLoader(
+      sourceName: 'S',
+      mangaId: 1,
+      chapterTargetId: 2,
+      maxConcurrentLoads: 1,
+      fetchOverride: (_) async {
+        await gate.future;
+        return PageLoadResult(bytes: png);
+      },
+    );
+    addTearDown(c.dispose);
+    c.markUrlFailed('https://i/bad');
+    final running = c.loadPage(url: 'https://i/old1', index: 0);
+    final queued = c.loadPage(url: 'https://i/old2', index: 1);
+    await Future<void>.delayed(Duration.zero);
+
+    c.resetDisplayState();
+    expect((await queued).error, 'Cancelled');
+    expect(c.isUrlFailed('https://i/bad'), isFalse);
+    gate.complete();
+    expect((await running).isSuccess, isTrue, reason: 'in-flight load still fills the cache');
+  });
 }

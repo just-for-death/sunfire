@@ -186,7 +186,12 @@ class ContentResolverService {
     // ── IMP-002: Local source (folders / CBZ on device) ─────────────────
     // Never reaches the server or an extension; errors surface to the reader.
     if (isLocalChapterUrl(effectiveChapterUrl)) {
-      final paths = await LocalSourceService.instance.pagePathsForChapterUrl(effectiveChapterUrl!);
+      // A `localfs:` URL opens files on the device, so it must come from the
+      // Local source; any extension can return one in its chapter list.
+      if (!await _isLocalSourceChapter(effectiveChapterUrl!, sourceName ?? effectiveSourceName, chapterServerId)) {
+        throw Exception('Refusing a local file URL from a non-local source');
+      }
+      final paths = await LocalSourceService.instance.pagePathsForChapterUrl(effectiveChapterUrl);
       if (paths.isEmpty) throw Exception('No pages found in local chapter');
       return ChapterPagesResult(
         pageUrls: paths,
@@ -335,6 +340,17 @@ class ContentResolverService {
     return null;
   }
 
+  Future<bool> _isLocalSourceChapter(String url, String? sourceName, int chapterServerId) async {
+    if (LocalSourceService.instance.isUnderRoot(localPathFromUrl(url))) return true;
+    var name = sourceName;
+    if (name == null || name.isEmpty) {
+      final ch = await IsarService.instance.getChapterByServerId(chapterServerId);
+      final m = ch == null ? null : await IsarService.instance.getMangaByServerId(ch.mangaId);
+      name = m?.sourceName;
+    }
+    return name == kLocalSourceName;
+  }
+
   /// "Clear cookies" for the reader / source error card (ISS-073): clears the
   /// server's cookie jar + cache (`clearCookiesAndCache`) when a server is
   /// configured, and drops any local FlareSolverr-prewarmed session state.
@@ -347,16 +363,17 @@ class ContentResolverService {
     }
     try {
       MClient.clearSessionCookies();
+      QuickJsService.clearHeadersCache();
     } catch (e) {
       await LoggerService.instance.logWarning('Local cookie clear failed: $e', 'ContentResolver');
     }
     return ok;
   }
 
-  /// Decides whether another page exists (M3). When the server reported
-  /// `hasNextPage` it wins (an empty page always ends paging so a server that
-  /// over-reports cannot loop). Only local JS sources ([serverHasNextPage] ==
-  /// null) fall back to the "short page means end" heuristic.
+  /// Decides whether another page exists (M3). When the server or the local
+  /// script reported `hasNextPage` it wins (an empty page always ends paging
+  /// so a source that over-reports cannot loop). Only when neither reported it
+  /// ([serverHasNextPage] == null) does the "short page means end" heuristic apply.
   static bool computeHasNextPage({
     required bool? serverHasNextPage,
     required int pageLength,
@@ -393,7 +410,8 @@ class ContentResolverService {
       )).items;
 
   /// Like [resolveSourceManga] but also returns the server's
-  /// `fetchSourceManga.hasNextPage` (null for local extensions / no data).
+  /// `fetchSourceManga.hasNextPage`, or the local script's (null when the
+  /// script doesn't report it / no data).
   Future<({List<Map<String, dynamic>> items, bool? hasNextPage})> resolveSourceMangaPage({
     required String sourceId,
     required String sourceName,
@@ -408,7 +426,7 @@ class ContentResolverService {
   }) async {
     // ── PRIORITY 1: LOCAL EXTENSION ───────────────────────────────────────
     try {
-      final localResults = await QuickJsService.instance.fetchSourceMangaLocal(
+      final localPage = await QuickJsService.instance.fetchSourceMangaPageLocal(
         sourceName,
         isLatest: isLatest,
         page: page,
@@ -418,9 +436,10 @@ class ContentResolverService {
         selectedType: selectedType,
         dynamicFilters: dynamicFilters,
       );
+      final localResults = localPage.items;
       if (localResults.isNotEmpty) {
         await LoggerService.instance.logInfo('Fetched ${localResults.length} titles via Local Extension ($sourceName)', 'ContentResolver');
-        return (items: localResults, hasNextPage: null);
+        return (items: localResults, hasNextPage: localPage.hasNextPage);
       }
     } catch (e) {
       await LoggerService.instance.logWarning('Local extension manga listing failed for $sourceName: $e', 'ContentResolver');

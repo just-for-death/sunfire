@@ -19,7 +19,7 @@ void main() {
 
   test('_finishBatch does not save batch state right before purging it', () {
     final finishStart = src.indexOf('Future<void> _finishBatch() async {');
-    final body = src.substring(finishStart, src.indexOf('Future<void> _downloadChapterLocally', finishStart));
+    final body = src.substring(finishStart, src.indexOf('> _downloadChapterLocally(', finishStart));
     expect(body, contains('_purgeBatchCounters();'));
     expect(body, isNot(contains('_saveBatchState()')));
   });

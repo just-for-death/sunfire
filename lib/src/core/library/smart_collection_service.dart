@@ -196,24 +196,43 @@ class SmartCollectionService {
     await saveRules(rules);
   }
 
-  /// Evaluate enabled rules against one manga; assign matching tags.
+  /// Evaluate enabled rules against one manga. A rule's tag tracks its
+  /// matches: it is assigned when any enabled rule for that tag matches and
+  /// removed when none do, so a series that stops matching (finished, lost a
+  /// genre) leaves the collection. Returns the number of tag changes.
   Future<int> evaluateManga(Manga manga) async {
     final rules = loadRules().where((r) => r.enabled).toList();
     if (rules.isEmpty) return 0;
-    var assigned = 0;
+    final wanted = <String, SmartCollectionRule>{};
+    final managed = <String, SmartCollectionRule>{};
     for (final rule in rules) {
-      if (!mangaMatchesSmartRule(manga, rule)) continue;
+      final key = rule.tagName.trim().toLowerCase();
+      managed.putIfAbsent(key, () => rule);
+      if (mangaMatchesSmartRule(manga, rule)) wanted.putIfAbsent(key, () => rule);
+    }
+
+    var changed = 0;
+    final current = await TagService.instance.getTagsForManga(manga.canonicalKey);
+    final currentIds = current.map((t) => t.id).toSet();
+    for (final rule in wanted.values) {
       final tag = await TagService.instance
           .getOrCreateTag(rule.tagName, color: rule.tagColor);
-      if (tag.id <= 0) continue;
-      final ok =
-          await TagService.instance.assignTag(manga.canonicalKey, tag.id);
-      if (ok) assigned++;
+      if (tag.id <= 0 || currentIds.contains(tag.id)) continue;
+      if (await TagService.instance.assignTag(manga.canonicalKey, tag.id)) {
+        changed++;
+      }
     }
-    return assigned;
+    for (final tag in current) {
+      final key = tag.name.trim().toLowerCase();
+      if (!managed.containsKey(key) || wanted.containsKey(key)) continue;
+      if (await TagService.instance.removeTag(manga.canonicalKey, tag.id)) {
+        changed++;
+      }
+    }
+    return changed;
   }
 
-  /// Evaluate all in-library manga. Returns total tag assignments attempted.
+  /// Evaluate all in-library manga. Returns the total number of tag changes.
   Future<int> evaluateAll() async {
     if (!IsarService.instance.isInitialized) return 0;
     final library = await IsarService.instance.getLibraryManga();

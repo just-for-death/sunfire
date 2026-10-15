@@ -589,47 +589,43 @@ void mergeLastReadAt(Chapter chapter, Map<String, dynamic> chMap) {
 /// Merges one chapter node from the server library snapshot into [chapter]
 /// (an existing local row, or a fresh `Chapter()` for a first-seen id).
 ///
-/// Single-flight gate with a counter-based queue for [SyncEngine.triggerSync].
+/// Single-flight gate with a one-deep queue for [SyncEngine.triggerSync].
 ///
 /// Extracted so the queue semantics are unit-testable without spinning the
 /// full GraphQL / Isar cycle (ISS-050/051).
-/// Changed from bool to int to support multiple concurrent callers: each
-/// `triggerSync` call increments the counter; `beginPass` decrements it.
-/// This prevents dropped sync cycles under burst contention (pull-to-refresh
-/// + WS update + chapter read).
+/// Any number of calls while a pass runs collapse into ONE follow-up pass:
+/// that pass starts after every one of them, so it serves them all and none
+/// is dropped. Counting calls instead ran one full cycle (flush, library pull,
+/// chapter snapshot) per pull-to-refresh, resume or WebSocket event.
 @visibleForTesting
 class SyncCycleGate {
   bool isSyncing = false;
-  int _queuedCount = 0;
+  bool _queued = false;
 
   /// Returns `true` when the caller should run a sync cycle. If a cycle is
-  /// already running, increments the queue counter and returns `false`.
+  /// already running, requests a follow-up pass and returns `false`.
   bool tryBegin() {
     if (isSyncing) {
-      _queuedCount++;
+      _queued = true;
       return false;
     }
     isSyncing = true;
     return true;
   }
 
-  /// Backward-compat getter for tests that check the old `queued` bool.
-  /// @deprecated Use `_queuedCount` or `needsAnotherPass()` instead.
-  bool get queued => _queuedCount > 0;
+  bool get queued => _queued;
 
-  /// Decrements the queue counter at the start of a cycle body.
-  void beginPass() {
-    if (_queuedCount > 0) _queuedCount--;
-  }
+  /// Called at the start of a cycle body: this pass serves every request so far.
+  void beginPass() => _queued = false;
 
   /// After a cycle body finishes: `true` when another pass should run.
-  bool needsAnotherPass() => _queuedCount > 0;
+  bool needsAnotherPass() => _queued;
 
   /// Releases the single-flight lock and clears the queue. Call only when no
   /// further pass is needed (e.g., server switch quarantine).
   void end() {
     isSyncing = false;
-    _queuedCount = 0;
+    _queued = false;
   }
 }
 
@@ -752,6 +748,53 @@ void mergeSnapshotChapterNode(
   final seriesThumb = manga.thumbnailUrl;
   if (seriesThumb != null && seriesThumb.isNotEmpty) {
     chapter.mangaThumbnailUrl = seriesThumb;
+  }
+}
+
+/// Applies a server manga node onto a stored row, touching only fields the
+/// node actually carries. Saving a freshly parsed [Manga] instead replaced the
+/// row (unique-replace `serverId` index) and lost tags, metadata locks,
+/// `lastReadAt`, the reading-mode override and the local Isar id.
+void applyServerMangaNode(Manga manga, Map<String, dynamic> node) {
+  String? text(String key) {
+    final v = node[key]?.toString().trim();
+    return v == null || v.isEmpty || v == 'null' ? null : v;
+  }
+
+  final title = text('title') ?? text('name');
+  if (title != null) manga.title = title;
+  if (!manga.isMetadataLocked) {
+    final author = text('author');
+    if (author != null) manga.author = author;
+    final artist = text('artist');
+    if (artist != null) manga.artist = artist;
+    final description = text('description');
+    if (description != null) manga.description = description;
+  }
+  final status = text('status');
+  if (status != null) manga.status = status;
+
+  final source = node['source'];
+  final sourceName = text('sourceName') ??
+      (source is Map ? (source['displayName'] ?? source['name'])?.toString() : null);
+  if (sourceName != null && sourceName.isNotEmpty) manga.sourceName = sourceName;
+
+  final url = text('url') ?? text('sourceUrl');
+  if (url != null) manga.url = url;
+  final thumb = text('thumbnailUrl') ?? text('coverUrl');
+  if (thumb != null && (manga.thumbnailUrl == null || manga.thumbnailUrl!.isEmpty)) manga.thumbnailUrl = thumb;
+
+  if (node['inLibrary'] is bool) manga.inLibrary = node['inLibrary'] as bool;
+  final inLibraryAt = normalizeEpochToSeconds(node['inLibraryAt']);
+  if (inLibraryAt != null) manga.inLibraryAt = inLibraryAt;
+  if (node['unreadCount'] != null) manga.unreadCount = parseIntSafe(node['unreadCount']);
+
+  final rawCategoryIds = node['categoryIds'];
+  final catContainer = node['categories'];
+  if (rawCategoryIds is List) {
+    manga.categoryIds = rawCategoryIds.map(parseIntSafe).where((id) => id != 0).toList();
+  } else if (catContainer is Map && catContainer['nodes'] is List) {
+    manga.categoryIds = parseMangaCategoryIds(catContainer['nodes'] as List);
   }
 }
 
@@ -934,6 +977,13 @@ class SyncEngine {
   int? _updatesHighWaterFetchedAt;
   DateTime? _lastFullUpdatesPullAt;
 
+  // Bumped on a server switch. A cycle records the epoch it started under and
+  // stops at the next phase boundary once it no longer matches, so it never
+  // sends the old server's manga ids to the new server.
+  int _serverEpoch = 0;
+  int _cycleEpoch = 0;
+  bool get _serverSwitchedMidCycle => _serverEpoch != _cycleEpoch;
+
   /// Fires after each full sync cycle (including any one-deep queued follow-up
   /// pass) finishes. Library / onboarding listen so they can reload Isar when
   /// a mid-flight `triggerSync` was coalesced into the gate (ISS-059).
@@ -1040,7 +1090,16 @@ class SyncEngine {
     _wsUpdatePullTimer = null;
     _progressLocks.clear();
     _lastDirectPage.clear();
-    _cycleGate.end(); // abort any in-flight cycle and clear the queue
+    _updatesHighWaterFetchedAt = null;
+    _lastFullUpdatesPullAt = null;
+    _chapterFingerprints.clear();
+    _lastFullChapterSnapshotAt.clear();
+    _currentLibraryFingerprints = const {};
+    _serverEpoch++;
+    // A running cycle stops at its next phase boundary (see _serverEpoch);
+    // ending the gate here instead let a second cycle start alongside it.
+    // Queue one pass for the new server after it.
+    if (_cycleGate.isSyncing) _cycleGate.tryBegin();
     unawaited(_persistDispatchAttempts());
     if (ids.isNotEmpty) {
       await LoggerService.instance.logWarning(
@@ -1062,12 +1121,15 @@ class SyncEngine {
       return pending.future;
     }
     try {
+      _cycleEpoch = _serverEpoch;
       final online = await GraphQLClientService.instance.checkServerReachable(force: true);
       if (!online) return;
       await _flushPendingMutations();
       await _syncCategories();
       await _performFullSync(forceLibraryRemovals: true);
+      if (_serverSwitchedMidCycle) return;
       await _syncSourcesAndReplicate();
+      await IsarService.instance.saveLastSyncTimestamp(DateTime.now());
     } finally {
       final rerun = _cycleGate.needsAnotherPass();
       _cycleGate.end();
@@ -1118,6 +1180,7 @@ class SyncEngine {
     try {
       do {
         _cycleGate.beginPass();
+        _cycleEpoch = _serverEpoch;
         final isServerOnline = await GraphQLClientService.instance.checkServerReachable();
         if (!isServerOnline) {
           // Server is offline — silently keep local authoritative state without firing network queries
@@ -1132,6 +1195,10 @@ class SyncEngine {
           await LoggerService.instance.logInfo('Starting sync cycle with server...', 'SyncEngine');
           await _flushPendingMutations();
           await _pullServerState();
+          if (_serverSwitchedMidCycle) continue;
+          // Sync health's "last successful sync" reads this; only the manual
+          // delta path used to write it.
+          await IsarService.instance.saveLastSyncTimestamp(DateTime.now());
           await LoggerService.instance.logInfo('Sync cycle completed successfully', 'SyncEngine');
         } catch (e, stack) {
           await LoggerService.instance.logError('Sync cycle error: $e', exception: e, stackTrace: stack, category: 'SyncEngine');
@@ -1244,7 +1311,13 @@ class SyncEngine {
     if (GraphQLClientService.instance.isConfigured && ids.length > 1) {
       final res = await GraphQLClientService.instance
           .updateChapters(ids, isRead: isRead, lastPageRead: lastPageRead);
-      if (res != null) return;
+      if (res != null) {
+        for (final id in ids) {
+          _lastDirectPage[id] = lastPageRead;
+          await _dropSupersededRecords(SyncEntityType.chapter, '$id', _isProgressPayload);
+        }
+        return;
+      }
     }
     for (final id in ids) {
       await syncChapterProgress(id, isRead: isRead, lastPageRead: lastPageRead, explicit: true);
@@ -1379,7 +1452,13 @@ class SyncEngine {
             while (_lastDirectPage.length > 2000) {
               _lastDirectPage.remove(_lastDirectPage.keys.first);
             }
-            await _dropQueuedProgressRecords(chapterServerId);
+            if (explicit) {
+              // Newest explicit action wins, so every older queued progress
+              // record (explicit ones included) is stale now.
+              await _dropSupersededRecords(SyncEntityType.chapter, '$chapterServerId', _isProgressPayload);
+            } else {
+              await _dropQueuedProgressRecords(chapterServerId);
+            }
             return;
           }
         } catch (e) {
@@ -1433,6 +1512,14 @@ class SyncEngine {
       return;
     }
 
+    if (explicit) {
+      // An explicit reset/unread supersedes automatic progress queued before
+      // it. Left in place, a later page turn coalesced onto that older record
+      // (max page, read OR) and replayed after the reset, undoing it.
+      await _dropQueuedProgressRecords(chapterServerId);
+      _lastDirectPage.remove(chapterServerId);
+    }
+
     final record = SyncRecord()
       ..recordId = const Uuid().v4()
       ..entityType = SyncEntityType.chapter
@@ -1480,6 +1567,30 @@ class SyncEngine {
       return false;
     }
   }
+
+  /// Deletes queued records for one entity that a direct push just made
+  /// stale. Left in the queue they replay on the next flush and undo the
+  /// newer value (a removed bookmark comes back, a category edit reverts).
+  Future<void> _dropSupersededRecords(
+    SyncEntityType type,
+    String entityId,
+    bool Function(Map<String, dynamic> payload) matches,
+  ) async {
+    try {
+      for (final r in await IsarService.instance.getPendingSyncRecords()) {
+        if (r.entityType != type || r.entityId != entityId) continue;
+        final payload = jsonDecode(r.payloadJson);
+        if (payload is Map<String, dynamic> && matches(payload)) {
+          await IsarService.instance.deleteSyncRecord(r.id);
+        }
+      }
+    } catch (e) {
+      debugPrint('[SyncEngine] superseded record cleanup skipped for $entityId: $e');
+    }
+  }
+
+  static bool _isProgressPayload(Map<String, dynamic> p) =>
+      p.containsKey('lastPageRead') && !p.containsKey('isBookmarked');
 
   /// Deletes queued, not-yet-attempted pure progress records for a chapter
   /// (see [isPureChapterProgressPayload]); bookmark records are left alone.
@@ -1556,7 +1667,11 @@ class SyncEngine {
       if (isOnline) {
         try {
           final res = await GraphQLClientService.instance.updateChapterBookmark(chapterServerId, isBookmarked);
-          if (res != null) return;
+          if (res != null) {
+            await _dropSupersededRecords(
+                SyncEntityType.chapter, '$chapterServerId', (p) => p.containsKey('isBookmarked'));
+            return;
+          }
         } catch (e) {
           await LoggerService.instance.logWarning('Direct bookmark sync failed ($chapterServerId): $e, queuing for replay', 'SyncEngine');
         }
@@ -1710,7 +1825,10 @@ class SyncEngine {
       if (isOnline) {
         try {
           final res = await GraphQLClientService.instance.updateMangaLibraryState(mangaServerId, inLibrary);
-          if (res != null) return;
+          if (res != null) {
+            await _dropSupersededRecords(SyncEntityType.manga, '$mangaServerId', (p) => p.containsKey('inLibrary'));
+            return;
+          }
         } catch (e) {
           await LoggerService.instance.logWarning('Direct manga library state sync failed ($mangaServerId): $e, queuing for replay', 'SyncEngine');
         }
@@ -1859,7 +1977,11 @@ class SyncEngine {
         try {
           final res = await GraphQLClientService.instance
               .setMangaCategories(mangaServerId, categoryIds, existingCategoryIds: existingCategoryIds);
-          if (res != null) return;
+          if (res != null) {
+            await _dropSupersededRecords(
+                SyncEntityType.category, 'manga_$mangaServerId', (p) => p['op']?.toString() == 'assign');
+            return;
+          }
         } catch (e) {
           await LoggerService.instance.logWarning('Direct manga categories sync failed ($mangaServerId): $e, queuing', 'SyncEngine');
         }
@@ -2067,9 +2189,30 @@ class SyncEngine {
   @visibleForTesting
   Future<void> debugFlushPendingMutations() => _flushPendingMutations();
 
+  /// Lease holder id for this isolate; the WorkManager task runs a second
+  /// SyncEngine in its own isolate against the same queue.
+  final String _flushLeaseOwner = const Uuid().v4();
+  static const String _flushLeaseKey = 'sync_flush_lease';
+  bool _dispatchAttemptsLoaded = false;
+
   Future<void> _flushPendingMutations() async {
     final pendingRecords = await IsarService.instance.getPendingSyncRecords();
     if (pendingRecords.isEmpty) return;
+    // The background isolate never runs initialize(); without this its first
+    // failure persisted a near-empty attempt map over the real one.
+    if (!_dispatchAttemptsLoaded) await _loadDispatchAttempts();
+    if (!await IsarService.instance.tryAcquireLease(_flushLeaseKey, _flushLeaseOwner, const Duration(minutes: 5))) {
+      await LoggerService.instance.logInfo('Another isolate is flushing the sync queue; skipping this flush', 'SyncEngine');
+      return;
+    }
+    try {
+      await _flushRecords(pendingRecords);
+    } finally {
+      await IsarService.instance.releaseLease(_flushLeaseKey, _flushLeaseOwner);
+    }
+  }
+
+  Future<void> _flushRecords(List<SyncRecord> pendingRecords) async {
 
     // Replay mutations strictly in chronological order. Records created within
     // the same second (common in bursts) replay in insertion order via the
@@ -2082,6 +2225,10 @@ class SyncEngine {
       });
 
     for (final queued in executionList) {
+      // Renews this isolate's lease so a long flush is not taken over mid-run.
+      if (!await IsarService.instance.tryAcquireLease(_flushLeaseKey, _flushLeaseOwner, const Duration(minutes: 5))) {
+        return;
+      }
       // Re-read each record just before dispatch. Earlier steps of this same
       // flush (the offline-category id remap) and concurrent writes (a direct
       // progress write that dropped this record, a coalesced page turn) may
@@ -2458,6 +2605,7 @@ class SyncEngine {
   /// pending/failed records (a success between persist and restart must not
   /// keep penalizing anything).
   Future<void> _loadDispatchAttempts() async {
+    _dispatchAttemptsLoaded = true;
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_dispatchAttemptsPrefKey);
@@ -2529,7 +2677,9 @@ class SyncEngine {
     // Source replication still benefits: it now sees the freshly-pulled
     // library when remapping.
     await _syncCategories();
+    if (_serverSwitchedMidCycle) return;
     await _performFullSync();
+    if (_serverSwitchedMidCycle) return;
     await _syncSourcesAndReplicate();
   }
 
@@ -2658,6 +2808,19 @@ class SyncEngine {
             if (n is Map) parseIntSafe(n['id']): chapterRefreshFingerprint(Map<String, dynamic>.from(n)),
         };
         final serverMangas = <Manga>[];
+        final needsExtCover = <int>{};
+        // Manga with a queued library or category change keep the local value
+        // until it replays, same as chapters with queued read state. Otherwise
+        // a removal that failed to replay this cycle is undone by the pull.
+        final pendingLibraryIds = <int>{};
+        final pendingCategoryIds = <int>{};
+        for (final r in await IsarService.instance.getPendingSyncRecords()) {
+          if (r.entityType == SyncEntityType.manga) {
+            pendingLibraryIds.add(int.tryParse(r.entityId) ?? 0);
+          } else if (r.entityType == SyncEntityType.category && r.entityId.startsWith('manga_')) {
+            pendingCategoryIds.add(int.tryParse(r.entityId.substring(6)) ?? 0);
+          }
+        }
 
         for (final n in nodes) {
           // One malformed node (a non-map, or fields typed differently than
@@ -2667,8 +2830,8 @@ class SyncEngine {
           final nodeMap = Map<String, dynamic>.from(n);
           final serverId = parseIntSafe(nodeMap['id']);
           if (serverId <= 0) continue;
-          var manga = await IsarService.instance.getMangaByServerId(serverId);
-          manga ??= Manga()..serverId = serverId;
+          final stored = await IsarService.instance.getMangaByServerId(serverId);
+          final manga = stored ?? (Manga()..serverId = serverId);
 
           manga.title = nodeMap['title']?.toString() ?? 'Untitled';
           // Only overwrite author/description from server if user has NOT locked
@@ -2685,7 +2848,7 @@ class SyncEngine {
               manga.description = serverDesc.trim();
             }
           }
-          manga.inLibrary = true;
+          if (stored == null || !pendingLibraryIds.contains(serverId)) manga.inLibrary = true;
           // Normalised to seconds like every other local timestamp. This took
           // the server value verbatim, so a millis-reporting server produced a
           // date ~1000 years in the future and the Library's "Recent" sort
@@ -2706,7 +2869,7 @@ class SyncEngine {
           manga.unreadCount = parseIntSafe(nodeMap['unreadCount']);
           manga.lastFetchedAt = nowUnix;
 
-          if (nodeMap.containsKey('categories') && nodeMap['categories'] != null && nodeMap['categories'] is Map) {
+          if (nodeMap['categories'] is Map && !pendingCategoryIds.contains(serverId)) {
             final catContainer = nodeMap['categories'] as Map;
             // Missing/null nodes == uncategorised == Default (id 0).
             manga.categoryIds = parseMangaCategoryIds(catContainer['nodes'] ?? const <dynamic>[]);
@@ -2748,23 +2911,31 @@ class SyncEngine {
               currentThumb.startsWith('http');
 
           if (!hasDirectThumb) {
-            // Check if local extension can resolve direct CDN cover URL (zero network, instantaneous)
-            String? extCover;
-            if (manga.sourceName.isNotEmpty && manga.url.isNotEmpty) {
-              extCover = await QuickJsService.instance.getExtensionCoverUrl(manga.sourceName, manga.url);
-            }
-            if (extCover != null && extCover.isNotEmpty) {
-              manga.thumbnailUrl = extCover;
-            } else if (!isServerProxy) {
+            if (!isServerProxy) {
               manga.thumbnailUrl = rawThumb.startsWith('http') ? rawThumb : '$serverUrl$rawThumb';
             } else if (serverUrl.isNotEmpty && serverId > 0 && (manga.thumbnailUrl == null || manga.thumbnailUrl!.isEmpty)) {
               manga.thumbnailUrl = '$serverUrl/api/v1/manga/$serverId/thumbnail';
             }
+            if (manga.sourceName.isNotEmpty && manga.url.isNotEmpty) needsExtCover.add(serverId);
           }
 
           serverMangas.add(manga);
         }
         await IsarService.instance.saveMangas(serverMangas);
+
+        // A local extension's direct CDN cover beats the server's. Resolving it
+        // runs QuickJS, so it happens after the save and patches only the
+        // thumbnail onto the current row; resolving it mid-loop held every
+        // read row across those awaits and saved them stale.
+        for (final m in serverMangas.where((m) => needsExtCover.contains(m.serverId))) {
+          final extCover = await QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
+          if (extCover == null || extCover.isEmpty) continue;
+          final current = await IsarService.instance.getMangaByServerId(m.serverId);
+          if (current == null) continue;
+          current.thumbnailUrl = extCover;
+          m.thumbnailUrl = extCover;
+          await IsarService.instance.saveManga(current);
+        }
 
         // Pre-cache cover images to local disk for offline resilience
         for (final m in serverMangas) {
@@ -2809,7 +2980,7 @@ class SyncEngine {
           for (final local in localLib) {
             // Only soft-delete server-linked manga that the server genuinely removed.
             // Local standalone/extension manga (serverId <= 0) must never be removed by server sync.
-            if (local.serverId > 0 && !serverIds.contains(local.serverId)) {
+            if (local.serverId > 0 && !serverIds.contains(local.serverId) && !pendingLibraryIds.contains(local.serverId)) {
               local.inLibrary = false;
               toRemove.add(local);
             }
@@ -2846,7 +3017,7 @@ class SyncEngine {
       return; // Keep local data untouched.
     }
 
-    if (!serverReachable) return;
+    if (!serverReachable || _serverSwitchedMidCycle) return;
 
     // ── STEP 3: Recent updates + history BEFORE the full chapter snapshot ─
     // ISS-051: `_syncAllChaptersForLibrary` is O(library) and can run for
@@ -2858,7 +3029,9 @@ class SyncEngine {
     // first also means the snapshot finds those rows already persisted
     // (id != Isar.autoIncrement) and keeps their server `fetchedAt`.
     await _syncRecentUpdateChapters(serverUrl: serverUrl);
+    if (_serverSwitchedMidCycle) return;
     await _syncHistoryChapters(serverUrl: serverUrl);
+    if (_serverSwitchedMidCycle) return;
 
     // ── STEP 4: Pull ALL chapters for the full library (full snapshot) ────
     // Core of local-first: every chapter, page count, URL, and fetch
@@ -2921,6 +3094,7 @@ class SyncEngine {
 
       // Chunk fetch for concurrency
       for (var i = 0; i < library.length; i += 5) {
+        if (_serverSwitchedMidCycle) return;
         final chunk = library.skip(i).take(5).toList();
         await Future.wait(chunk.map((manga) async {
           try {
@@ -2936,7 +3110,7 @@ class SyncEngine {
               return;
             }
             final data = await GraphQLClientService.instance.fetchMangaDetails(manga.serverId);
-            if (data == null || !data.containsKey('manga')) return;
+            if (data == null || !data.containsKey('manga') || _serverSwitchedMidCycle) return;
 
           final mangaData = data['manga'] as Map<String, dynamic>;
 
@@ -3056,7 +3230,22 @@ class SyncEngine {
             }
           }
 
-          await IsarService.instance.saveManga(manga);
+          // `manga` was read when the cycle started, possibly minutes ago on a
+          // large library. Saving it whole would revert library removals,
+          // category edits and lastReadAt made since; write only this pass's
+          // fields onto the current row.
+          final current = await IsarService.instance.getMangaByServerId(manga.serverId);
+          if (current != null) {
+            current
+              ..author = manga.author
+              ..description = manga.description
+              ..status = manga.status
+              ..genres = manga.genres
+              ..url = manga.url
+              ..lastFetchedAt = manga.lastFetchedAt
+              ..chapterCount = manga.chapterCount;
+            await IsarService.instance.saveManga(current);
+          }
           // Only a COMPLETE snapshot may seed the skip fingerprint, or a
           // truncated pull would be frozen in place for up to 6h.
           if (chapterNodes != null && isCompleteSnapshot(data) && fp != null) {
@@ -3092,6 +3281,22 @@ class SyncEngine {
         final chNodes = historyData['chapters']['nodes'] as List<dynamic>;
         final fetchedChapters = <Chapter>[];
         final parentMangasToSave = <int, Manga>{};
+
+        // Extension cover lookups run QuickJS and can take seconds each, so they
+        // happen before any chapter or manga row is read for merging. Doing them
+        // mid-loop saved rows read long before, reverting the reader's progress.
+        final extCovers = <int, String>{};
+        for (final c in chNodes) {
+          final mangaMap = c is Map ? c['manga'] : null;
+          if (mangaMap is! Map) continue;
+          final mServerId = parseIntSafe(mangaMap['id']);
+          if (extCovers.containsKey(mServerId)) continue;
+          final m = await IsarService.instance.getMangaByServerId(mServerId);
+          final thumb = m?.thumbnailUrl;
+          final hasDirect = thumb != null && thumb.isNotEmpty && !thumb.contains('/api/v1/manga/') && thumb.startsWith('http');
+          if (m == null || hasDirect || m.sourceName.isEmpty || m.url.isEmpty) continue;
+          extCovers[mServerId] = await QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url) ?? '';
+        }
 
         for (final c in chNodes) {
           final chMap = c as Map<String, dynamic>;
@@ -3144,10 +3349,7 @@ class SyncEngine {
                 !parentManga.thumbnailUrl!.contains('/api/v1/manga/') &&
                 parentManga.thumbnailUrl!.startsWith('http');
             if (!hasDirect) {
-              String? extCover;
-              if (parentManga.sourceName.isNotEmpty && parentManga.url.isNotEmpty) {
-                extCover = await QuickJsService.instance.getExtensionCoverUrl(parentManga.sourceName, parentManga.url);
-              }
+              final extCover = extCovers[mServerId];
               if (extCover != null && extCover.isNotEmpty) {
                 parentManga.thumbnailUrl = extCover;
               } else if (mThumbFull != null && mThumbFull.isNotEmpty && !isProxy) {
@@ -3350,10 +3552,7 @@ class SyncEngine {
       // Apply manga changes
       final mangaData = deltaResult.data?['manga'] as List?;
       if (mangaData != null && mangaData.isNotEmpty) {
-        final mangaList = mangaData
-          .whereType<Map<String, dynamic>>()
-          .map((m) => parseMangaNode(m))
-          .toList();
+        final mangaList = await _mergeServerMangaNodes(mangaData.whereType<Map<String, dynamic>>());
         await IsarService.instance.saveMangas(mangaList);
         mangaCount = mangaList.length;
       }
@@ -3361,10 +3560,7 @@ class SyncEngine {
       // Apply chapter changes
       final chapterData = deltaResult.data?['chapters'] as List?;
       if (chapterData != null && chapterData.isNotEmpty) {
-        final chapters = chapterData
-          .whereType<Map<String, dynamic>>()
-          .map((c) => parseChapterNode(c))
-          .toList();
+        final chapters = await _mergeServerChapterNodes(chapterData.whereType<Map<String, dynamic>>());
         await IsarService.instance.saveChapters(chapters);
         chapterCount = chapters.length;
       }
@@ -3405,7 +3601,7 @@ class SyncEngine {
         return SyncResult(success: true, mangaUpdated: 0);
       }
 
-      final mangaList = data.map((m) => parseMangaNode(m)).toList();
+      final mangaList = await _mergeServerMangaNodes(data);
       await IsarService.instance.saveMangas(mangaList);
 
       // Also fetch chapters for these manga
@@ -3574,9 +3770,7 @@ class SyncEngine {
         return false;
       case 'tagIds':
         if (value is List) {
-          manga.tagIds
-            ..clear()
-            ..addAll(value.map((e) => parseIntSafe(e)).where((id) => id != 0));
+          manga.tagIds = value.map((e) => parseIntSafe(e)).where((id) => id != 0).toList();
           return true;
         }
         return false;
@@ -3713,13 +3907,69 @@ class SyncEngine {
     final chapterNodes = data['mangaAndChapters']['chapters']['nodes'] as List?;
     if (chapterNodes == null || chapterNodes.isEmpty) return 0;
 
-    final chapters = chapterNodes
-        .whereType<Map<String, dynamic>>()
-        .map((n) => parseChapterNode(Map<String, dynamic>.from(n)))
-        .toList();
+    final chapters = await _mergeServerChapterNodes(
+      chapterNodes.whereType<Map<dynamic, dynamic>>().map((n) => Map<String, dynamic>.from(n)..putIfAbsent('mangaId', () => mangaServerId)),
+    );
 
     await IsarService.instance.saveChapters(chapters);
     return chapters.length;
+  }
+
+  /// Server manga nodes merged onto their stored rows ([applyServerMangaNode]);
+  /// unknown series are parsed fresh.
+  Future<List<Manga>> _mergeServerMangaNodes(Iterable<Map<String, dynamic>> nodes) async {
+    final out = <Manga>[];
+    for (final node in nodes) {
+      final serverId = parseIntSafe(node['id']);
+      final existing = serverId == 0 ? null : await IsarService.instance.getMangaByServerId(serverId);
+      if (existing == null) {
+        out.add(parseMangaNode(node));
+      } else {
+        applyServerMangaNode(existing, node);
+        out.add(existing);
+      }
+    }
+    return out;
+  }
+
+  /// Server chapter nodes merged onto their stored rows with the same rules as
+  /// the chapter snapshot ([mergeSnapshotChapterNode]), so queued local
+  /// read-state changes, downloads, `lastReadAt` and stamps survive.
+  Future<List<Chapter>> _mergeServerChapterNodes(Iterable<Map<String, dynamic>> nodes) async {
+    final list = nodes.where((n) => parseIntSafe(n['id']) != 0).toList();
+    if (list.isEmpty) return const [];
+    final existingById = await IsarService.instance.getChaptersByServerIds(list.map((n) => parseIntSafe(n['id'])).toList());
+    final pending = await IsarService.instance.getPendingChapterEntityIds();
+    final mangaCache = <int, Manga?>{};
+    final out = <Chapter>[];
+    for (final node in list) {
+      final serverId = parseIntSafe(node['id']);
+      final existing = existingById[serverId];
+      if (existing == null) {
+        out.add(parseChapterNode(node)..fetchedAt = normalizeEpochToSeconds(node['fetchedAt']) ?? 0);
+        continue;
+      }
+      final mangaId = parseIntSafe(node['mangaId']) != 0 ? parseIntSafe(node['mangaId']) : existing.mangaId;
+      if (!mangaCache.containsKey(mangaId)) {
+        mangaCache[mangaId] = await IsarService.instance.getMangaByServerId(mangaId);
+      }
+      final manga = mangaCache[mangaId] ??
+          (Manga()
+            ..serverId = mangaId
+            ..title = existing.mangaTitle
+            ..thumbnailUrl = existing.mangaThumbnailUrl);
+      mergeSnapshotChapterNode(
+        existing,
+        node,
+        manga: manga,
+        hasPendingMutation: pending.contains(serverId.toString()),
+      );
+      if (node.containsKey('isDownloadedOnServer') || node.containsKey('isDownloaded')) {
+        existing.isDownloadedOnServer = node['isDownloadedOnServer'] == true || node['isDownloaded'] == true;
+      }
+      out.add(existing);
+    }
+    return out;
   }
 
   /// Parse int safely from dynamic

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -59,7 +60,9 @@ class TachiBkBackup {
   });
 }
 
-/// Parses a `.tachibk` archive (zip containing `Tachiyomi/backup.json`).
+/// Parses a `.tachibk` backup. Tachiyomi, Mihon and their forks write
+/// gzip-compressed protobuf (the `Backup` message); some third-party exporters
+/// write a zip holding `Tachiyomi/backup.json`. Both are accepted.
 class TachiBkParser {
   const TachiBkParser._();
 
@@ -85,6 +88,87 @@ class TachiBkParser {
         '${kMaxArchiveBytes ~/ (1024 * 1024)} MB limit. Pick a smaller file.',
       );
     }
+    if (bytes.length >= 2 && bytes[0] == 0x50 && bytes[1] == 0x4B) {
+      return _parseZipJson(bytes);
+    }
+    final proto = bytes.length >= 2 && bytes[0] == 0x1F && bytes[1] == 0x8B
+        ? _gunzipCapped(bytes)
+        : bytes;
+    try {
+      return _parseProtobuf(proto);
+    } on TachiBkParseException {
+      rethrow;
+    } catch (_) {
+      throw const TachiBkParseException(
+          'Not a valid .tachibk backup. Make sure you picked a backup created by Tachiyomi, Mihon or a fork.');
+    }
+  }
+
+  static Uint8List _gunzipCapped(Uint8List bytes) {
+    final out = BytesBuilder(copy: false);
+    final input = gzip.decoder.startChunkedConversion(_CappedSink(out, kMaxUncompressedBytes));
+    try {
+      const chunk = 64 * 1024;
+      for (var i = 0; i < bytes.length; i += chunk) {
+        input.add(Uint8List.sublistView(bytes, i, math.min(i + chunk, bytes.length)));
+      }
+      input.close();
+    } on TachiBkParseException {
+      rethrow;
+    } catch (e) {
+      throw TachiBkParseException('Could not decompress the backup: $e');
+    }
+    return out.takeBytes();
+  }
+
+  // Field numbers from Mihon's `Backup`, `BackupManga`, `BackupCategory` and
+  // `BackupSource` (`@ProtoNumber`). Manga reference categories by their
+  // `order`, not by name or id.
+  static TachiBkBackup _parseProtobuf(Uint8List bytes) {
+    final root = _ProtoMessage.decode(bytes);
+
+    final categoryByOrder = <int, String>{};
+    final orderedCategories = <({int order, String name})>[];
+    for (final raw in root.messages(2)) {
+      final name = raw.string(1).trim();
+      if (name.isEmpty) continue;
+      final order = raw.integer(2);
+      categoryByOrder[order] = name;
+      orderedCategories.add((order: order, name: name));
+    }
+    orderedCategories.sort((a, b) => a.order.compareTo(b.order));
+
+    final sources = <TachiBkSource>[
+      for (final raw in root.messages(101))
+        TachiBkSource(id: raw.integer(2), name: raw.string(1).trim(), lang: ''),
+    ];
+
+    final manga = <TachiBkManga>[
+      for (final raw in root.messages(1))
+        TachiBkManga(
+          sourceId: raw.integer(1),
+          url: raw.string(2).trim(),
+          title: raw.string(3).trim().isEmpty ? 'Unknown' : raw.string(3).trim(),
+          lang: '',
+          favorite: raw.has(100) ? raw.integer(100) != 0 : true,
+          categories: [
+            for (final order in raw.integers(17))
+              if (categoryByOrder[order] case final name?) name,
+          ],
+        ),
+    ];
+
+    if (manga.isEmpty && orderedCategories.isEmpty && sources.isEmpty) {
+      throw const TachiBkParseException('The backup contains no manga, categories or sources.');
+    }
+    return TachiBkBackup(
+      sources: sources,
+      manga: manga,
+      categories: [for (final c in orderedCategories) c.name],
+    );
+  }
+
+  static TachiBkBackup _parseZipJson(Uint8List bytes) {
     final Archive archive;
     try {
       archive = ZipDecoder().decodeBytes(bytes);
@@ -211,5 +295,125 @@ class TachiBkParser {
     throw TachiBkParseException(
       'Required integer field has invalid value: $value (type: ${value.runtimeType})',
     );
+  }
+}
+
+class _CappedSink implements Sink<List<int>> {
+  _CappedSink(this._out, this._limit);
+
+  final BytesBuilder _out;
+  final int _limit;
+
+  @override
+  void add(List<int> data) {
+    if (_out.length + data.length > _limit) {
+      throw TachiBkParseException(
+        'Backup uncompressed size exceeds ${_limit ~/ (1024 * 1024)} MB limit.',
+      );
+    }
+    _out.add(data);
+  }
+
+  @override
+  void close() {}
+}
+
+/// Minimal protobuf wire-format reader: fields are kept as varints (int) or
+/// length-delimited views (Uint8List) and interpreted by the caller, which
+/// knows the schema. Fixed-width fields are skipped; nothing here needs them.
+class _ProtoMessage {
+  _ProtoMessage._(this._fields);
+
+  final Map<int, List<Object>> _fields;
+
+  static _ProtoMessage decode(Uint8List bytes) {
+    final fields = <int, List<Object>>{};
+    var pos = 0;
+
+    int varint() {
+      var result = 0;
+      for (var shift = 0; shift < 70; shift += 7) {
+        if (pos >= bytes.length) throw const FormatException('truncated varint');
+        final b = bytes[pos++];
+        if (shift < 64) result |= (b & 0x7F) << shift;
+        if (b & 0x80 == 0) return result;
+      }
+      throw const FormatException('varint too long');
+    }
+
+    void advance(int n) {
+      if (n < 0 || pos + n > bytes.length) throw const FormatException('truncated field');
+      pos += n;
+    }
+
+    while (pos < bytes.length) {
+      final tag = varint();
+      final field = tag >>> 3;
+      if (field == 0) throw const FormatException('field number 0');
+      switch (tag & 7) {
+        case 0:
+          (fields[field] ??= []).add(varint());
+        case 1:
+          advance(8);
+        case 2:
+          final len = varint();
+          final start = pos;
+          advance(len);
+          (fields[field] ??= []).add(Uint8List.sublistView(bytes, start, start + len));
+        case 5:
+          advance(4);
+        default:
+          throw FormatException('unsupported wire type ${tag & 7}');
+      }
+    }
+    return _ProtoMessage._(fields);
+  }
+
+  bool has(int field) => _fields.containsKey(field);
+
+  int integer(int field) {
+    final v = _fields[field];
+    if (v == null) return 0;
+    final last = v.last;
+    return last is int ? last : 0;
+  }
+
+  String string(int field) {
+    final v = _fields[field];
+    if (v == null) return '';
+    final last = v.last;
+    return last is Uint8List ? utf8.decode(last, allowMalformed: true) : '';
+  }
+
+  Iterable<_ProtoMessage> messages(int field) sync* {
+    for (final v in _fields[field] ?? const <Object>[]) {
+      if (v is Uint8List) yield decode(v);
+    }
+  }
+
+  /// Repeated integers, packed or not.
+  List<int> integers(int field) {
+    final out = <int>[];
+    for (final v in _fields[field] ?? const <Object>[]) {
+      if (v is int) {
+        out.add(v);
+      } else if (v is Uint8List) {
+        var pos = 0;
+        while (pos < v.length) {
+          var result = 0;
+          var shift = 0;
+          while (true) {
+            if (pos >= v.length) throw const FormatException('truncated packed varint');
+            final b = v[pos++];
+            if (shift < 64) result |= (b & 0x7F) << shift;
+            if (b & 0x80 == 0) break;
+            shift += 7;
+            if (shift >= 70) throw const FormatException('varint too long');
+          }
+          out.add(result);
+        }
+      }
+    }
+    return out;
   }
 }

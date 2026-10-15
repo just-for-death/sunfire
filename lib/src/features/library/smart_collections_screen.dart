@@ -38,7 +38,7 @@ class _SmartCollectionsScreenState extends State<SmartCollectionsScreen> {
       final n = await SmartCollectionService.instance.evaluateAll();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Applied smart tags ($n assignments)')),
+        SnackBar(content: Text('Applied smart tags ($n changes)')),
       );
     } finally {
       if (mounted) setState(() => _running = false);

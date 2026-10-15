@@ -474,7 +474,7 @@ class ServerSessionService implements ServerAuthRefresher {
     } catch (e) { debugPrint('[server_session_service] ignored: $e'); }
   }
 
-  void _applyToTransports() {
+  void _applyToTransports({bool reconnectWebSocket = true}) {
     final s = _session;
     if (s == null) return;
     final gql = GraphQLClientService.instance;
@@ -483,7 +483,7 @@ class ServerSessionService implements ServerAuthRefresher {
     final header = authHeaderOverride(s.baseUrl) ?? gql.currentAuthHeader;
     final extra = extraHeaders(s.baseUrl);
     gql.updateAuthToken(header, extraHeaders: extra);
-    WebSocketService.instance.updateAuth(header, extraHeaders: extra);
+    WebSocketService.instance.updateAuth(header, extraHeaders: extra, reconnect: reconnectWebSocket);
   }
 
   Future<bool> _doRefresh() async {
@@ -538,7 +538,7 @@ class ServerSessionService implements ServerAuthRefresher {
       _lastFailedRefreshAt = null;
       needsLoginNotifier.value = false;
       await _persist();
-      _applyToTransports();
+      _applyToTransports(reconnectWebSocket: false);
       return true;
     }
     _lastFailedRefreshAt = clock();

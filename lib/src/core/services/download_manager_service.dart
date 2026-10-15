@@ -1039,28 +1039,37 @@ class DownloadManagerService extends ChangeNotifier {
     _localTasks.add(task);
     // Re-entering a failed member frees its slot for a recount (without
     // this, the accounted set would swallow the retry's outcome); a brand-new
-    // item joins the denominator. A retry joins the denominator too (it's a
-    // new attempt that will produce a counted outcome), so we add to members
-    // and total just like a new item.
+    // item joins the denominator.
     if (_batchCounted) {
-      if (wasFailed) {
-        if (_batchAccounted.remove(chapterId) && _failedInBatch > 0) {
-          _failedInBatch--;
-        }
-        // The retry is a new attempt — it joins the denominator and can
-        // produce a new counted outcome.
-        _batchMembers.add(chapterId);
-        _batchTotal++;
-      } else {
-        _batchTotal++;
-        _batchMembers.add(chapterId);
+      if (wasFailed && _batchAccounted.remove(chapterId) && _failedInBatch > 0) {
+        _failedInBatch--;
       }
+      // A chapter already in this batch (a retried failure) keeps its single
+      // slot in the denominator; only a new member grows it. Counting retries
+      // again reported "6 chapters downloaded" for a batch of 5.
+      if (_batchMembers.add(chapterId)) _batchTotal++;
       unawaited(_saveBatchState());
     }
     await _saveQueueState();
     notifyListeners();
 unawaited(
     _processLocalQueue());
+  }
+
+  /// Status a task ends in after one queue-loop run. Paused and failed
+  /// (including a deliberate cancel) are kept. A run that unwound without
+  /// writing the completion marker (a Wi-Fi/charging gate or a pause/resume
+  /// cancelled it) left only part of the chapter on disk, so it is requeued
+  /// rather than reported as completed.
+  @visibleForTesting
+  static LocalDownloadStatus settledStatusAfterRun(
+    LocalDownloadStatus current, {
+    required bool finished,
+    required bool queuePaused,
+  }) {
+    if (current == LocalDownloadStatus.paused || current == LocalDownloadStatus.failed) return current;
+    if (!finished) return queuePaused ? LocalDownloadStatus.paused : LocalDownloadStatus.queued;
+    return LocalDownloadStatus.completed;
   }
 
   // Download in reading order: ascending chapter number, grouped by manga.
@@ -1166,8 +1175,9 @@ unawaited(
         //
         // A DB bookkeeping failure is now logged and does not touch the
         // download outcome, the batch counters, or the folder.
+        var finished = false;
         try {
-          await _downloadChapterLocally(task);
+          finished = await _downloadChapterLocally(task);
         } catch (e, stack) {
           if (_pauseEpoch != epochAtStart) {
             // The queue was paused (and possibly already resumed) while this
@@ -1193,8 +1203,9 @@ unawaited(
           }
         }
 
-        if (task.status == LocalDownloadStatus.paused || task.status == LocalDownloadStatus.failed) {
-          // Task was paused or cancelled during execution; preserve its state.
+        final settled = settledStatusAfterRun(task.status, finished: finished, queuePaused: _isQueuePaused);
+        if (settled != LocalDownloadStatus.completed) {
+          task.status = settled;
         } else {
           task.status = LocalDownloadStatus.completed;
           task.progress = 1.0;
@@ -1275,7 +1286,8 @@ unawaited(
     }
   }
 
-  Future<void> _downloadChapterLocally(LocalDownloadTask task) async {
+  /// True only when every page was verified and the completion marker written.
+  Future<bool> _downloadChapterLocally(LocalDownloadTask task) async {
     // Register the CancelToken FIRST, before the page-list resolve.
     //
     // It used to be created after `resolveChapterPages`, which can take ~20s
@@ -1288,16 +1300,16 @@ unawaited(
     // written to disk in full anyway. They believed they freed the space.
     final cancelToken = CancelToken();
     _cancelTokens[task.chapterId] = cancelToken;
-    if (cancelToken.isCancelled) return;
+    if (cancelToken.isCancelled) return false;
 
     try {
-      await _downloadChapterLocallyInner(task, cancelToken);
+      return await _downloadChapterLocallyInner(task, cancelToken);
     } finally {
       _cancelTokens.remove(task.chapterId);
     }
   }
 
-  Future<void> _downloadChapterLocallyInner(LocalDownloadTask task, CancelToken cancelToken) async {
+  Future<bool> _downloadChapterLocallyInner(LocalDownloadTask task, CancelToken cancelToken) async {
     // 1. Resolve chapter pages via 3-Tier ContentResolver (supports local JS scrapers, downloads & server)
     final ch = await IsarService.instance.getChapterByServerId(task.chapterId);
     final manga = ch != null ? await IsarService.instance.getMangaByServerId(ch.mangaId) : null;
@@ -1315,7 +1327,7 @@ unawaited(
       allowLocalDownload: false,
     );
 
-    if (cancelToken.isCancelled) return;
+    if (cancelToken.isCancelled) return false;
 
     final rawPages = resolved.pageUrls;
     if (rawPages.isEmpty) {
@@ -1401,6 +1413,7 @@ unawaited(
         final packed = await packChapterFolderAsCbz(chapterDir);
         if (packed == 0) debugPrint('[DownloadManager] CBZ packing skipped for ${task.chapterId}; kept loose pages');
       }
+      return true;
     } finally {
       // `_cancelTokens` is owned and cleaned up by _downloadChapterLocally, so
       // that the entry is registered across the page-list resolve too.

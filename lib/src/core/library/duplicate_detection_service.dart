@@ -13,6 +13,7 @@ import 'dart:math' show min, max;
 import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 
 import '../db/isar_service.dart';
+import '../db/models/chapter.dart';
 import '../db/models/manga.dart';
 import '../engine/source_migration_service.dart'
     show SourceMigrationService;
@@ -182,10 +183,7 @@ class DuplicateDetectionService {
     if (includeUrlContainment) {
       final urlA = _sourceMigration.normalizeUrlForMatch(a.url);
       final urlB = _sourceMigration.normalizeUrlForMatch(b.url);
-      if (urlA.isNotEmpty && urlB.isNotEmpty &&
-          (urlA.contains(urlB) || urlB.contains(urlA))) {
-        return true;
-      }
+      if (urlPathsNest(urlA, urlB)) return true;
     }
 
     // 3. Normalized title equality (when URLs missing/different)
@@ -216,10 +214,7 @@ class DuplicateDetectionService {
     final urlA = _sourceMigration.normalizeUrlForMatch(a.url);
     final urlB = _sourceMigration.normalizeUrlForMatch(b.url);
     if (urlA.isNotEmpty && urlB.isNotEmpty && urlA == urlB) return 'Exact URL match';
-    if (urlA.isNotEmpty && urlB.isNotEmpty &&
-        (urlA.contains(urlB) || urlB.contains(urlA))) {
-      return 'URL containment';
-    }
+    if (urlPathsNest(urlA, urlB)) return 'URL containment';
 
     final titleA = _normalizeTitle(a.title);
     final titleB = _normalizeTitle(b.title);
@@ -227,6 +222,23 @@ class DuplicateDetectionService {
     if (_titleSimilarity(titleA, titleB) >= _titleSimilarityThreshold) return 'Fuzzy title match';
 
     return 'Source fuzzy + chapter overlap';
+  }
+
+  /// Whether one normalized URL path contains the other on whole path
+  /// segments: `/manga/123` vs `/manga/123/naruto`, or `/naruto` vs
+  /// `/en/naruto`. A raw substring test also grouped `/title/naruto` with
+  /// `/title/naruto-shippuden`. A one-segment prefix (`/series`) is too
+  /// generic to identify a series on its own.
+  @visibleForTesting
+  static bool urlPathsNest(String a, String b) {
+    if (a.isEmpty || b.isEmpty) return false;
+    if (a == b) return true;
+    final shorter = a.length < b.length ? a : b;
+    final longer = identical(shorter, a) ? b : a;
+    final shortSegments = shorter.split('/').where((s) => s.isNotEmpty).length;
+    if (shortSegments >= 2 && longer.startsWith('$shorter/')) return true;
+    final suffix = shorter.startsWith('/') ? shorter : '/$shorter';
+    return longer.endsWith(suffix);
   }
 
   /// ISS-143: shared [normalizeMangaTitle] (keeps kana/CJK/Hangul, folds
@@ -261,28 +273,53 @@ class DuplicateDetectionService {
   /// Returns the number of chapters merged.
   Future<int> mergeGroup(DuplicateGroup group) async {
     int merged = 0;
+    final canon = group.canonical;
+    final canonChapters = await IsarService.instance.getChaptersForManga(canon.canonicalKey);
+    final canonByNumber = <double, Chapter>{
+      for (final ch in canonChapters)
+        if (ch.chapterNumber > 0) ch.chapterNumber: ch,
+    };
 
     for (final dupe in group.duplicates) {
-      // Merge chapters
       final dupeChapters = await IsarService.instance.getChaptersForManga(dupe.canonicalKey);
+      final moved = <Chapter>[];
+      final updated = <Chapter>[];
       for (final ch in dupeChapters) {
-        ch.mangaId = group.canonical.canonicalKey;
-        await IsarService.instance.saveChapter(ch);
+        final match = ch.chapterNumber > 0 ? canonByNumber[ch.chapterNumber] : null;
+        // A downloaded copy keeps its own row: its files live under its id.
+        if (match != null && !ch.isDownloaded) {
+          mergeChapterProgress(into: match, from: ch);
+          updated.add(match);
+        } else {
+          ch.mangaId = canon.canonicalKey;
+          moved.add(ch);
+          if (ch.chapterNumber > 0) canonByNumber.putIfAbsent(ch.chapterNumber, () => ch);
+        }
         merged++;
       }
+      await IsarService.instance.saveChapters([...moved, ...updated]);
+      canonChapters.addAll(moved);
 
-      // Update canonical manga stats
-      final canon = group.canonical;
-      canon.chapterCount = canon.chapterCount + dupe.chapterCount;
-      canon.unreadCount = (canon.unreadCount ?? 0) + (dupe.unreadCount ?? 0);
-      await IsarService.instance.saveManga(canon);
-
-      // Delete duplicate
-      await IsarService.instance.deleteManga(dupe.id);
+      // Remaining dupe chapters were folded into canonical rows above and go
+      // with the duplicate.
+      await IsarService.instance.deleteManga(dupe.serverId);
     }
 
-    debugPrint('[DuplicateDetection] Merged ${group.duplicates.length} into ${group.canonical.title} ($merged chapters)');
+    canon.chapterCount = canonChapters.length;
+    canon.unreadCount = canonChapters.where((c) => !c.isRead).length;
+    await IsarService.instance.saveManga(canon);
+
+    debugPrint('[DuplicateDetection] Merged ${group.duplicates.length} into ${canon.title} ($merged chapters)');
     return merged;
+  }
+
+  /// Folds [from]'s reading state into [into] for the same chapter number.
+  @visibleForTesting
+  static void mergeChapterProgress({required Chapter into, required Chapter from}) {
+    into.isRead = into.isRead || from.isRead;
+    into.isBookmarked = into.isBookmarked || from.isBookmarked;
+    if (from.lastPageRead > into.lastPageRead) into.lastPageRead = from.lastPageRead;
+    if ((from.lastReadAt ?? 0) > (into.lastReadAt ?? 0)) into.lastReadAt = from.lastReadAt;
   }
 
   /// Merge all detected duplicate groups.

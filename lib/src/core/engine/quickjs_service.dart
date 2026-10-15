@@ -14,56 +14,9 @@ import 'javascript/m_client.dart';
 import 'local_source.dart' show LocalSource;
 import 'repo_manager.dart';
 import 'runtime_pool.dart';
+import 'source_call_lock.dart';
 import 'source_icon_helper.dart';
 import 'source_preferences.dart';
-
-class _AsyncLock {
-  Future<void>? _last;
-
-  /// Serializes [block] so callers of one source never overlap their native
-  /// QuickJS evals (flutter_qjs `evaluateAsync` is a synchronous FFI call
-  /// under the hood, so two in-flight calls on one runtime re-enter native
-  /// QuickJS — undefined behavior / crash). Waits for the previously queued
-  /// holder, but never longer than [maxWait]: without this cap a single hung
-  /// JS call (stuck scrape, dead FlareSolverr session) blocks every later call
-  /// queued behind it indefinitely — the reader's own 30s timeout only stops
-  /// IT from waiting, it doesn't free the lock. When the wait overruns, the
-  /// previous holder may STILL be executing on the shared runtime, so
-  /// [onOverrun] lets the caller switch to a fresh runtime instead of
-  /// re-entering the busy one; the overrun holder's future is re-chained so
-  /// later callers keep waiting for it too.
-  Future<T> synchronized<T>(
-    Future<T> Function() block, {
-    Duration maxWait = const Duration(seconds: 35),
-    void Function()? onOverrun,
-  }) async {
-    final prev = _last;
-    final completer = Completer<void>();
-    _last = completer.future;
-
-    var overran = false;
-    if (prev != null) {
-      try {
-        await prev.timeout(maxWait, onTimeout: () {
-          overran = true;
-        });
-      } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
-    }
-    if (overran) onOverrun?.call();
-
-    try {
-      return await block();
-    } finally {
-      if (!completer.isCompleted) completer.complete();
-      // Re-chain: if the previous holder overran, it may still be running on
-      // the shared runtime; subsequent callers must wait for it as well, not
-      // just for this caller, or they could re-enter the busy runtime.
-      _last = (prev == null || !overran)
-          ? completer.future
-          : Future.wait([prev, completer.future]);
-    }
-  }
-}
 
 class QuickJsService {
   static QuickJsService? _instance;
@@ -88,7 +41,7 @@ class QuickJsService {
   @visibleForTesting
   RuntimePool<JsExtensionService> get debugRuntimePool => _runtimePool;
 
-  final Map<String, _AsyncLock> _sourceLocks = {};
+  final Map<String, SourceCallLock> _sourceLocks = {};
 
   bool _initialized = false;
   String? _initError;
@@ -139,8 +92,8 @@ class QuickJsService {
     return null;
   }
 
-  _AsyncLock _getLockFor(String sourceName) {
-    return _sourceLocks.putIfAbsent(sourceName, () => _AsyncLock());
+  SourceCallLock _getLockFor(String sourceName) {
+    return _sourceLocks.putIfAbsent(sourceName, () => SourceCallLock());
   }
 
   /// Execute an action on a pooled [JsExtensionService] runtime with serialization lock.
@@ -685,32 +638,21 @@ class QuickJsService {
   static Map<String, String> getImageHeaders(String sourceOrUrl, [String? imageUrl]) {
     _cleanExpiredCacheEntries();
     final targetUrl = (imageUrl != null && imageUrl.isNotEmpty) ? imageUrl : sourceOrUrl;
+
+    final cacheKey = '$sourceOrUrl|$targetUrl';
+    final cached = _headersCache.get(cacheKey) ?? _headersCache.get(targetUrl);
+    if (cached != null) return _withSessionCookies(cached, targetUrl);
+
     final headers = <String, String>{
       'User-Agent': MClient.userAgent,
     };
 
-    final cacheKey = '$sourceOrUrl|$targetUrl';
-    final cachedPair = _headersCache.get(cacheKey);
-    if (cachedPair != null) {
-      headers.addAll(cachedPair);
-      if (targetUrl.isNotEmpty) {
-        headers.addAll(MClient.getCookiesPref(targetUrl));
-      }
-      return headers;
-    }
-    final cachedUrl = _headersCache.get(targetUrl);
-    if (cachedUrl != null) {
-      headers.addAll(cachedUrl);
-      if (targetUrl.isNotEmpty) {
-        headers.addAll(MClient.getCookiesPref(targetUrl));
-      }
-      return headers;
-    }
-
     // 1. Dynamically resolve the corresponding JS extension:
     String? jsCode;
+    String? sourceName;
     if (sourceOrUrl.isNotEmpty) {
       jsCode = instance.getExtensionCode(sourceOrUrl);
+      if (jsCode != null) sourceName = sourceOrUrl;
     }
 
     // If not matched by source name, lookup by domain host matching installed extensions' baseUrl
@@ -737,7 +679,7 @@ class QuickJsService {
     // 2. Query dynamic extension headers from the resolved JS source
     if (jsCode != null && jsCode.isNotEmpty) {
       try {
-        final extHeaders = instance.getSourceHeaders(jsCode, targetUrl);
+        final extHeaders = instance.getSourceHeaders(jsCode, targetUrl, sourceName);
         if (extHeaders.isNotEmpty) {
           headers.addAll(extHeaders);
         }
@@ -751,42 +693,46 @@ class QuickJsService {
       } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
     }
 
-    // 3. Attach domain / Cloudflare cookies from MClient
-    if (targetUrl.isNotEmpty) {
-      final cookies = MClient.getCookiesPref(targetUrl);
-      if (cookies.isNotEmpty) {
-        headers.addAll(cookies);
-      }
-    }
-
-    // 4. If the extension explicitly provided an empty Referer (""), respect it and remove it
+    // 3. If the extension explicitly provided an empty Referer (""), respect it and remove it
     if (headers.containsKey('Referer') && headers['Referer']!.isEmpty) {
       headers.remove('Referer');
     }
 
-    // 5. Explicitly sanitize known CDNs that enforce anti-hotlinking / Bot Fight Mode on Referers or incompatible cookies
+    // Cached without session cookies: those are attached fresh on every call
+    // so "Clear cookies" and a re-solve take effect immediately.
+    _setCacheEntry(cacheKey, Map<String, String>.from(headers));
+    return _withSessionCookies(headers, targetUrl);
+  }
+
+  /// Adds the current Cloudflare/session cookies for [targetUrl], then strips
+  /// what known anti-hotlinking CDNs reject.
+  static Map<String, String> _withSessionCookies(Map<String, String> base, String targetUrl) {
+    final headers = Map<String, String>.from(base);
+    if (targetUrl.isNotEmpty) {
+      headers.addAll(MClient.getCookiesPref(targetUrl));
+    }
     final lowerTarget = targetUrl.toLowerCase();
     if (lowerTarget.contains('cdn.readcomicsonline.ru') || lowerTarget.contains('readcomicsonline.ru/uploads/')) {
-      headers.remove('Referer');
-      headers.remove('referer');
-      headers.remove('Cookie');
-      headers.remove('cookie');
+      headers.removeWhere((k, _) {
+        final lower = k.toLowerCase();
+        return lower == 'referer' || lower == 'cookie';
+      });
     }
-
-    if (cacheKey.isNotEmpty) {
-      _setCacheEntry(cacheKey, Map<String, String>.from(headers));
-    }
-
     return headers;
   }
 
-  Map<String, String> getSourceHeaders(String jsCode, [String? targetUrl]) {
+  /// Headers the extension's `getHeaders` returns. Cached per origin rather
+  /// than per URL: each miss builds a QuickJS runtime, and covers and pages
+  /// would otherwise build one per image.
+  Map<String, String> getSourceHeaders(String jsCode, [String? targetUrl, String? sourceName]) {
     _cleanExpiredCacheEntries();
-    final cacheKey = '${jsCode.hashCode}_${targetUrl ?? ''}';
+    final target = Uri.tryParse(targetUrl ?? '');
+    final scope = (target != null && target.hasAuthority) ? target.origin : (targetUrl ?? '');
+    final cacheKey = '${jsCode.hashCode}_${sourceName ?? ''}_$scope';
     final cached = _headersCache.get(cacheKey);
     if (cached != null) return cached;
     final service = JsExtensionService(
-      sourceMeta: _sourceMetaFor(jsCode),
+      sourceMeta: _sourceMetaFor(jsCode, sourceName),
       sourceCode: jsCode,
     );
     try {
@@ -989,17 +935,43 @@ class QuickJsService {
     String? selectedStatus,
     String? selectedType,
     List<dynamic>? dynamicFilters,
+  }) async =>
+      (await fetchSourceMangaPageLocal(
+        sourceName,
+        isLatest: isLatest,
+        page: page,
+        searchQuery: searchQuery,
+        selectedSort: selectedSort,
+        selectedStatus: selectedStatus,
+        selectedType: selectedType,
+        dynamicFilters: dynamicFilters,
+      ))
+          .items;
+
+  /// One listing page plus the script's own `hasNextPage` (null when the
+  /// script doesn't report it), so paging follows the source rather than a
+  /// page-size guess.
+  Future<({List<Map<String, dynamic>> items, bool? hasNextPage})> fetchSourceMangaPageLocal(
+    String sourceName, {
+    bool isLatest = false,
+    int page = 1,
+    String? searchQuery,
+    String? selectedSort,
+    String? selectedStatus,
+    String? selectedType,
+    List<dynamic>? dynamicFilters,
   }) async {
+    const empty = (items: <Map<String, dynamic>>[], hasNextPage: null);
     await whenReady; // IMP-025
     final jsCode = getExtensionCode(sourceName);
     if (jsCode == null || jsCode.isEmpty) {
-      return [];
+      return empty;
     }
     final scrapeOverride = debugScrapeOverride;
-    if (scrapeOverride != null) return scrapeOverride(sourceName, jsCode);
+    if (scrapeOverride != null) return (items: await scrapeOverride(sourceName, jsCode), hasNextPage: null);
 
     try {
-      return await withRuntime<List<Map<String, dynamic>>>(sourceName, jsCode, (service) async {
+      return await withRuntime<({List<Map<String, dynamic>> items, bool? hasNextPage})>(sourceName, jsCode, (service) async {
         final hasLegacyFilters = (selectedSort != null && selectedSort != 'Popularity') ||
             (selectedStatus != null && selectedStatus != 'All') ||
             (selectedType != null && selectedType != 'All');
@@ -1024,6 +996,8 @@ class QuickJsService {
         }
 
         final list = result['list'] as List<dynamic>?;
+        final rawHasNext = result['hasNextPage'];
+        final hasNextPage = rawHasNext is bool ? rawHasNext : null;
         if (list != null) {
           // Belt-and-braces with the in-runtime character cap: this bounds the
           // Dart-side materialisation, which is what actually holds the objects
@@ -1035,21 +1009,21 @@ class QuickJsService {
               '$kMaxScraperPageEntries limit; truncating',
               'QuickJS',
             );
-            return list
-                .take(kMaxScraperPageEntries)
-                .map((item) => Map<String, dynamic>.from(item as Map))
-                .toList();
+            return (
+              items: list.take(kMaxScraperPageEntries).map((item) => Map<String, dynamic>.from(item as Map)).toList(),
+              hasNextPage: hasNextPage,
+            );
           }
-          return list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+          return (items: list.map((item) => Map<String, dynamic>.from(item as Map)).toList(), hasNextPage: hasNextPage);
         }
-        return [];
+        return empty;
       });
     } catch (e) {
       // UIX-21: no debug-only mock fallback here any more. It fabricated
       // manga from regexes over the extension source, so debug builds showed
       // phantom series in Browse whenever a scrape failed.
       await LoggerService.instance.logError('Local scraping failed for $sourceName: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
-      return [];
+      return empty;
     }
   }
 
@@ -1157,7 +1131,7 @@ class QuickJsService {
     // 2. Retry with a fresh runtime on failure or empty results
     try {
       final freshService = JsExtensionService(
-        sourceMeta: _sourceMetaFor(jsCode),
+        sourceMeta: _sourceMetaFor(jsCode, sourceName),
         sourceCode: jsCode,
       );
       try {

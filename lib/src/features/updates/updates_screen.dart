@@ -508,21 +508,33 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
         // out whether anything updated.
         final existingByServerId = await IsarService.instance
             .getChaptersByServerIds(chaptersToSave.map((c) => c.serverId).toList());
+        // Server fields are applied onto the stored row rather than saving the
+        // feed's bare Chapter, which would wipe lastReadAt, pageCount, realUrl,
+        // localPath, scanlator and the read-state stamps the feed never carries.
+        final merged = <int, Chapter>{};
         for (final ch in chaptersToSave) {
           final existing = existingByServerId[ch.serverId];
-          if (existing != null) {
-            ch.id = existing.id;
-            ch.isRead = ch.isRead || existing.isRead;
-            ch.lastPageRead = ch.lastPageRead > existing.lastPageRead ? ch.lastPageRead : existing.lastPageRead;
-            if (existing.url.isNotEmpty && ch.url.isEmpty) ch.url = existing.url;
-            if (existing.isBookmarked) ch.isBookmarked = true;
-            // Merge download state per-flag so a server-only existing download
-            // isn't miscopied onto the local flag (and vice-versa).
-            if (existing.isDownloadedLocally) ch.isDownloadedLocally = true;
-            if (existing.isDownloadedOnServer) ch.isDownloadedOnServer = true;
+          if (existing == null) {
+            merged[ch.serverId] = ch;
+            continue;
           }
+          existing
+            ..name = ch.name
+            ..chapterNumber = ch.chapterNumber
+            ..mangaTitle = ch.mangaTitle
+            ..isRead = ch.isRead || existing.isRead
+            ..lastPageRead = ch.lastPageRead > existing.lastPageRead ? ch.lastPageRead : existing.lastPageRead
+            ..fetchedAt = ch.fetchedAt ?? existing.fetchedAt
+            ..isDownloadedOnServer = ch.isDownloadedOnServer || existing.isDownloadedOnServer;
+          if (existing.mangaId == 0) existing.mangaId = ch.mangaId;
+          if (ch.mangaThumbnailUrl?.isNotEmpty == true) existing.mangaThumbnailUrl = ch.mangaThumbnailUrl;
+          merged[ch.serverId] = existing;
         }
-        await IsarService.instance.saveChapters(chaptersToSave);
+        for (final item in items) {
+          final ch = item['chapter'];
+          if (ch is Chapter) item['chapter'] = merged[ch.serverId] ?? ch;
+        }
+        await IsarService.instance.saveChapters(merged.values.toList());
       }
 
       // Reached the server. Clear the offline banner on ANY successful round

@@ -52,6 +52,11 @@ class MClient {
 
   static String get userAgent => _userAgent;
 
+  /// How long one FlareSolverr round trip may take. The payload gives the
+  /// solver `maxTimeout: 60000`, so the HTTP wait must outlast it.
+  static Duration get cfSolveTimeout =>
+      Duration(seconds: math.max(SettingsService.instance.networkTimeoutSeconds, 65));
+
   /// Drop every in-memory solved cookie and the FlareSolverr session names
   /// (ISS-073 "Clear cookies"). The next request re-solves from scratch.
   static void clearSessionCookies() {
@@ -76,8 +81,24 @@ class MClient {
     );
   }
 
+  // Suffixes under which every label is a different site owner. Treating
+  // `github.io` as the root sent one site's solved cookies to all of them.
+  static const Set<String> _sharedHostSuffixes = {
+    'github.io', 'gitlab.io', 'blogspot.com', 'wordpress.com', 'tumblr.com',
+    'herokuapp.com', 'netlify.app', 'vercel.app', 'pages.dev', 'workers.dev',
+    'web.app', 'firebaseapp.com', 'appspot.com', 'azurewebsites.net',
+    'cloudfront.net', 'onrender.com', 'fly.dev', 'glitch.me', 'neocities.org',
+  };
+
+  @visibleForTesting
+  static String debugRootDomain(String host) => _extractRootDomain(host);
+
   static String _extractRootDomain(String host) {
     final parts = host.split('.');
+    if (parts.length >= 3 &&
+        _sharedHostSuffixes.contains(parts.sublist(parts.length - 2).join('.').toLowerCase())) {
+      return parts.sublist(parts.length - 3).join('.');
+    }
     if (parts.length >= 3) {
       final sld = parts[parts.length - 2].toLowerCase();
       if (['co', 'com', 'org', 'net', 'edu', 'gov'].contains(sld) && parts.last.length == 2) {
@@ -227,12 +248,11 @@ class MClient {
           payload['postData'] = jsonEncode(postData);
         }
       }
-      final timeoutSecs = math.max(SettingsService.instance.networkTimeoutSeconds, 65);
       final res = await http.post(
         Uri.parse(proxyUrl),
         headers: {HttpHeaders.contentTypeHeader: 'application/json'},
         body: jsonEncode(payload),
-      ).timeout(Duration(seconds: timeoutSecs));
+      ).timeout(cfSolveTimeout);
 
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -397,7 +417,7 @@ Future<bool> _solveWithCfProxy(String proxyUrl, String targetUrl, [Map<String, S
       Uri.parse(proxyUrl),
       headers: {HttpHeaders.contentTypeHeader: 'application/json'},
       body: jsonEncode(payload),
-    ).timeout(Duration(seconds: SettingsService.instance.networkTimeoutSeconds));
+    ).timeout(MClient.cfSolveTimeout);
 
     debugPrint('[MClient] CF proxy response: ${res.statusCode}');
     if (res.statusCode != 200) return false;

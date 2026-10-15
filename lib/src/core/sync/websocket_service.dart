@@ -79,6 +79,7 @@ class WebSocketService {
   bool get isConnected => _isConnected;
 
   void initialize(String httpUrl, {String? authToken}) {
+    _lastAuthRetryAt = null;
     final trimmed = httpUrl.trim();
     if (trimmed.isEmpty) {
       _isDisposed = true;
@@ -134,12 +135,15 @@ class WebSocketService {
   /// Swap credentials and reconnect immediately with them (ISS-078: login,
   /// JWT refresh, logout). No-op when nothing changed. Unlike [initialize]
   /// this keeps the URL and does not need it.
-  void updateAuth(String? authToken, {Map<String, String>? extraHeaders}) {
+  /// [reconnect] false only stores the credentials for the next handshake:
+  /// the server checks them on connect, so a routine token refresh must not
+  /// drop a live socket (events during the reconnect were missed).
+  void updateAuth(String? authToken, {Map<String, String>? extraHeaders, bool reconnect = true}) {
     final headers = extraHeaders == null ? _extraHeaders : Map<String, String>.unmodifiable(extraHeaders);
     final changed = authToken != _authToken || !_sameHeaders(headers, _extraHeaders);
     _authToken = authToken;
     _extraHeaders = headers;
-    if (!changed || _wsUrl == null || _isDisposed) return;
+    if (!changed || !reconnect || _wsUrl == null || _isDisposed) return;
     _reconnectTimer?.cancel();
     _handshakeTimer?.cancel();
     _pingTimer?.cancel();
@@ -532,6 +536,24 @@ unawaited(
   DateTime? _connectedAt;
   bool _backoffResetOnStableAck = false;
 
+  DateTime? _lastAuthRetryAt;
+
+  /// New credentials deserve a clean, immediate retry, once. If the server
+  /// rejects the refreshed credentials again within the stability window the
+  /// refresh "worked" but the socket still can't authenticate; retrying
+  /// immediately again looped refresh → connect → reject with no delay.
+  void _reconnectAfterAuthRefresh() {
+    final now = DateTime.now();
+    final last = _lastAuthRetryAt;
+    _lastAuthRetryAt = now;
+    if (last != null && now.difference(last) < _stableConnectionDuration) {
+      _reconnectTimer = Timer(_advanceReconnectDelay(), connect);
+      return;
+    }
+    _reconnectDelaySeconds = _baseReconnectSeconds();
+    connect();
+  }
+
   /// The server rejected our credentials. Re-authenticate once and retry
   /// immediately; if that fails, stop spinning and fall back to the normal
   /// backoff so a genuinely dead login does not hammer the server forever.
@@ -553,8 +575,7 @@ unawaited(
       if (refreshed && base != null) {
         if (override != null) _authToken = override;
         _extraHeaders = Map.unmodifiable(session.extraHeaders(base));
-        _reconnectDelaySeconds = _baseReconnectSeconds();
-        connect();
+        _reconnectAfterAuthRefresh();
         return;
       }
     }
@@ -570,9 +591,7 @@ unawaited(
         if (_isDisposed || _wsUrl == null) return;
         if (fresh != null && fresh.trim().isNotEmpty) {
           _authToken = fresh.trim();
-          // A new token deserves a clean retry, not a backed-off one.
-          _reconnectDelaySeconds = _baseReconnectSeconds();
-          connect();
+          _reconnectAfterAuthRefresh();
           return;
         }
         unawaited(LoggerService.instance.logWarning(

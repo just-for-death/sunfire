@@ -127,5 +127,24 @@ void main() {
         throwsFormatException,
       );
     });
+
+    test('quoted cells may span lines', () {
+      const raw = 'title,author,tags\r\n'
+          '"Two\nLines","Ann, B",x;y\r\n'
+          '\r\n'
+          'Plain,,\n';
+      final parsed = libraryEntriesFromCsv(raw);
+      expect(parsed.map((e) => e.title), ['Two\nLines', 'Plain']);
+      expect(parsed.first.author, 'Ann, B');
+      expect(parsed.first.tags, ['x', 'y']);
+      expect(parsed[1].author, isNull);
+    });
+
+    test('parseCsvRows keeps a final row without a newline', () {
+      expect(parseCsvRows('a,b\n1,"2"""'), [
+        ['a', 'b'],
+        ['1', '2"'],
+      ]);
+    });
   });
 }

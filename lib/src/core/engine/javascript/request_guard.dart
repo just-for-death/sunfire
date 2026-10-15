@@ -1,3 +1,65 @@
+import 'package:http/http.dart' as http;
+
+const int kMaxExtensionRedirects = 5;
+const Set<int> _redirectStatuses = {301, 302, 303, 307, 308};
+
+/// Sends [method] to [uri] following redirects by hand, so every hop passes
+/// [blockedRequestReason]. The client's automatic redirect handling would let
+/// a public URL bounce the request into loopback or the LAN unchecked.
+/// Returns either the final response or the reason a hop was refused.
+Future<({http.Response? response, String? blocked})> sendWithGuardedRedirects(
+  http.Client client,
+  String method,
+  Uri uri,
+  Map<String, String> headers,
+  Object? body,
+) async {
+  var currentUri = uri;
+  var currentMethod = method;
+  Object? currentBody = body;
+  final currentHeaders = Map<String, String>.from(headers);
+
+  for (var hop = 0; ; hop++) {
+    final request = http.Request(currentMethod, currentUri)
+      ..followRedirects = false
+      ..headers.addAll(currentHeaders);
+    if (currentBody is String) {
+      request.body = currentBody;
+    } else if (currentBody is Map) {
+      request.bodyFields = currentBody.map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''));
+    } else if (currentBody is List<int>) {
+      request.bodyBytes = currentBody;
+    } else if (currentBody != null) {
+      request.body = currentBody.toString();
+    }
+
+    final response = await http.Response.fromStream(await client.send(request));
+    final location = response.headers['location'];
+    // `isRedirect` is a client-supplied flag, not derived from the status.
+    if (!_redirectStatuses.contains(response.statusCode) || location == null || location.isEmpty) {
+      return (response: response, blocked: null);
+    }
+    if (hop >= kMaxExtensionRedirects) return (response: response, blocked: null);
+
+    final next = currentUri.resolve(location);
+    final reason = blockedRequestReason(next);
+    if (reason != null) return (response: null, blocked: 'redirect to ${next.host}: $reason');
+
+    // Browser semantics: 303 always, and 301/302 for POST, continue as GET.
+    final status = response.statusCode;
+    if (status == 303 || ((status == 301 || status == 302) && currentMethod == 'POST')) {
+      currentMethod = 'GET';
+      currentBody = null;
+      currentHeaders.removeWhere((k, _) => k.toLowerCase() == 'content-type');
+    }
+    // Credentials set for one host must not ride a redirect to another; the
+    // cookie interceptor re-adds the right cookies for the new host.
+    if (next.host != currentUri.host) {
+      currentHeaders.removeWhere((k, _) => k.toLowerCase() == 'authorization' || k.toLowerCase() == 'cookie');
+    }
+    currentUri = next;
+  }
+}
 
 /// Why an extension-issued HTTP request was refused, or null when it is fine.
 ///

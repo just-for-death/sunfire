@@ -201,49 +201,25 @@ class Client {
         });
       }
 
-      http.Response response;
-
       final timeoutSecs = SettingsService.instance.networkTimeoutSeconds;
       final requestTimeout = Duration(seconds: timeoutSecs > 0 ? timeoutSecs : 30);
       final upperMethod = method.toUpperCase();
-      switch (upperMethod) {
-        case 'GET':
-          response = await client.get(uri, headers: headers).timeout(requestTimeout);
-          break;
-        case 'POST':
-          response = await client.post(
-            uri,
-            headers: headers,
-            body: effectiveBody,
-          ).timeout(requestTimeout);
-          break;
-        case 'HEAD':
-          response = await client.head(uri, headers: headers).timeout(requestTimeout);
-          break;
-        case 'PUT':
-          response = await client.put(
-            uri,
-            headers: headers,
-            body: effectiveBody,
-          ).timeout(requestTimeout);
-          break;
-        case 'DELETE':
-          response = await client.delete(
-            uri,
-            headers: headers,
-            body: effectiveBody,
-          ).timeout(requestTimeout);
-          break;
-        case 'PATCH':
-          response = await client.patch(
-            uri,
-            headers: headers,
-            body: effectiveBody,
-          ).timeout(requestTimeout);
-          break;
-        default:
-          response = await client.get(uri, headers: headers).timeout(requestTimeout);
+      // With a proxy configured the client's retry policy solves a challenge
+      // inside this call and then repeats the request; cutting that off made
+      // the catch below solve the same challenge a second time.
+      final overallTimeout = MClient.cfProxyUrl.trim().isEmpty
+          ? requestTimeout
+          : requestTimeout * 2 + MClient.cfSolveTimeout;
+      final guarded = await sendWithGuardedRedirects(client, upperMethod, uri, headers, effectiveBody)
+          .timeout(overallTimeout);
+      if (guarded.blocked != null) {
+        unawaited(LoggerService.instance.logWarning(
+          'Blocked extension HTTP redirect from $urlStr: ${guarded.blocked}',
+          'JsHttpClient',
+        ));
+        return jsonEncode({'body': '', 'statusCode': 0, 'error': 'blocked: ${guarded.blocked}'});
       }
+      final response = guarded.response!;
 
       // If Cloudflare block was received (403/503 with Cloudflare headers), attempt direct FlareSolverr fetch for supported methods (GET/POST)
       if (isCloudflare(response) && urlStr.startsWith('http')) {
@@ -255,7 +231,7 @@ class Client {
             headers: headers,
           );
           if (solved != null) {
-            return jsonEncode(solved);
+            return jsonEncode(_dropIfRedirectedToBlocked(solved));
           }
         }
       }
@@ -298,7 +274,7 @@ class Client {
           });
         }
         if (solved != null) {
-          return jsonEncode(solved);
+          return jsonEncode(_dropIfRedirectedToBlocked(solved));
         }
       }
       return jsonEncode({
@@ -308,6 +284,18 @@ class Client {
         'error': e.toString()
       });
     }
+  }
+
+  /// FlareSolverr follows redirects on its own host, so its final URL gets the
+  /// same check the first hop did before the body is handed to the script.
+  static Map<String, dynamic> _dropIfRedirectedToBlocked(Map<String, dynamic> solved) {
+    final request = solved['request'];
+    final finalUrl = request is Map ? request['url']?.toString() ?? '' : '';
+    final finalUri = Uri.tryParse(finalUrl);
+    final blocked = finalUri == null || finalUrl.isEmpty ? null : blockedRequestReason(finalUri);
+    if (blocked == null) return solved;
+    unawaited(LoggerService.instance.logWarning('Blocked proxied redirect to $finalUrl: $blocked', 'JsHttpClient'));
+    return {'body': '', 'statusCode': 0, 'error': 'blocked: $blocked'};
   }
 
   void dispose() {

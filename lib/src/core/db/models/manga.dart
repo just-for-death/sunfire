@@ -78,8 +78,9 @@ class Manga {
   /// Cached JSON string mapping issue numbers to Metron issue IDs (e.g. {"1": 10243, "2": 10244}).
   String? metronIssuesJson;
 
-  /// User-assigned tag IDs (L10.2).
-  final List<int> tagIds = [];
+  /// User-assigned tag IDs (L10.2). Must stay non-final: Isar's generator
+  /// skips final fields when loading, so every save would erase the tags.
+  List<int> tagIds = [];
 
   Manga();
 }

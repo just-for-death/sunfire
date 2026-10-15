@@ -125,4 +125,28 @@ void main() {
     expect(server.cookies.first, 'JSESSIONID=abc');
     expect(ws.debugExtraHeaders, {'Cookie': 'JSESSIONID=abc'});
   });
+
+  test('refresh that "works" but keeps being rejected backs off instead of looping', () async {
+    // Backoff is in whole seconds, so the 50ms test base would round to 0.
+    WebSocketService.reconnectBaseDelay = const Duration(seconds: 1);
+    final session = _FakeSession();
+    ws.authRefresher = session;
+    server.reject = true;
+    ws.initialize(server.url, authToken: null);
+    await server.waitFor(2);
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    // First rejection: one immediate retry with the refreshed token. The
+    // second waits for the backoff instead of reconnecting in a tight loop.
+    expect(server.auth.length, lessThanOrEqualTo(3), reason: '${server.auth.length} handshakes in ~0.6s');
+  });
+
+  test('a routine session refresh does not drop a live socket', () async {
+    final session = _FakeSession();
+    ws.authRefresher = session;
+    ws.initialize(server.url, authToken: null);
+    await server.waitFor(1);
+    ws.updateAuth('Bearer A3', reconnect: false);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(server.auth.length, 1);
+  });
 }

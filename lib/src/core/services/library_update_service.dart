@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../features/reader/chapter_number_utils.dart';
 import '../db/isar_service.dart';
 import '../db/models/chapter.dart';
 import '../db/models/manga.dart';
@@ -26,6 +27,20 @@ class LibraryUpdateCancelledException implements Exception {
   
   @override
   String toString() => 'LibraryUpdateCancelledException: Update was cancelled by user';
+}
+
+/// Whether an automated update is due. WorkManager fires periodic work
+/// anywhere inside its flex window, so a run can land a little before the
+/// exact interval; without slack that run is skipped and the real gap
+/// doubles. Allows a quarter of the interval, capped at an hour.
+bool updateIntervalElapsed({
+  required int nowSec,
+  required int lastSec,
+  required int freqHours,
+}) {
+  final intervalSec = freqHours * 3600;
+  final slackSec = (intervalSec ~/ 4).clamp(0, 3600);
+  return nowSec - lastSec >= intervalSec - slackSec;
 }
 
 class LibraryUpdateService extends ChangeNotifier {
@@ -233,6 +248,7 @@ class LibraryUpdateService extends ChangeNotifier {
     // forever ("Update already in progress"), and the outer catch could
     // rethrow with the flag still set. They are inside the try now, so the
     // flag has exactly one release path.
+    final runStartedSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     try {
       // Constraint enforcement for background or automated triggers.
       if (!isManual) {
@@ -242,9 +258,11 @@ class LibraryUpdateService extends ChangeNotifier {
           return 0;
         }
 
-        final lastTime = SettingsService.instance.lastLibraryUpdateTimestamp;
-        final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-        if (nowSec - lastTime < freqHours * 3600) {
+        if (!updateIntervalElapsed(
+          nowSec: runStartedSec,
+          lastSec: SettingsService.instance.lastLibraryUpdateTimestamp,
+          freqHours: freqHours,
+        )) {
           debugPrint('[LibraryUpdateService] Update frequency interval ($freqHours h) has not elapsed yet.');
           return 0;
         }
@@ -288,7 +306,7 @@ class LibraryUpdateService extends ChangeNotifier {
       // the diff below only ever reports chapters of library manga.
       final beforeLibrary = await IsarService.instance.getLibraryManga();
       final Set<int> beforeLibraryIds = {
-        for (final m in beforeLibrary) ...[if (m.serverId > 0) m.serverId, m.id],
+        for (final m in beforeLibrary) m.canonicalKey,
       };
       final beforeChapters = await IsarService.instance.getChaptersForMangaIdsAndOrphans(beforeLibraryIds);
 
@@ -531,11 +549,18 @@ class LibraryUpdateService extends ChangeNotifier {
                       index: cIdx,
                       takenServerIds: existingServerIds,
                     );
+                    final chName = chMap['name']?.toString() ?? 'Chapter ${cIdx + 1}';
                     final ch = Chapter()
                       ..serverId = chServerId
                       ..mangaId = mId
-                      ..name = chMap['name']?.toString() ?? 'Chapter ${cIdx + 1}'
-                      ..chapterNumber = (chMap['chapterNumber'] as num?)?.toDouble() ?? (cIdx + 1).toDouble()
+                      ..name = chName
+                      // Same numbering as the manga detail screen: the list is
+                      // newest-first, so a bare position made "Chapter 151" 1.0.
+                      ..chapterNumber = chapterSortNumberFromParts(
+                        name: chName,
+                        explicitNumber: (chMap['chapterNumber'] as num?)?.toDouble() ?? 0,
+                        fallbackIndex: cIdx,
+                      )
                       ..url = chUrl
                       ..realUrl = chUrl
                       ..mangaTitle = manga.title
@@ -584,10 +609,7 @@ class LibraryUpdateService extends ChangeNotifier {
           m.canonicalKey: m.title,
       };
       final Set<int> libraryMangaIds = {
-        for (final m in libraryMangaList) ...[
-          if (m.serverId > 0) m.serverId,
-          m.id,
-        ],
+        for (final m in libraryMangaList) m.canonicalKey,
       };
       final afterChapters = await IsarService.instance.getChaptersForMangaIdsAndOrphans(libraryMangaIds);
 
@@ -611,7 +633,7 @@ class LibraryUpdateService extends ChangeNotifier {
       }
 
       // Update timestamp
-      SettingsService.instance.lastLibraryUpdateTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      SettingsService.instance.lastLibraryUpdateTimestamp = runStartedSec;
 
       _progress = 1.0;
       _statusMessage = _lastFoundCount > 0
@@ -685,14 +707,18 @@ List<Chapter> detectNewLibraryChapters({
   Map<int, String> mangaTitleMap = const {},
 }) {
   final Set<String> knownKeys = <String>{};
+  // A series with no stored chapters is being fetched for the first time;
+  // its whole back catalogue is not "new".
+  final Set<int> mangaWithChapters = <int>{};
   for (final ch in beforeChapters) {
-    if (ch.serverId > 0) {
+    mangaWithChapters.add(ch.mangaId);
+    if (ch.serverId != 0) {
       knownKeys.add('srv_${ch.serverId}');
     }
     if (ch.url.isNotEmpty) {
       knownKeys.add('url_${ch.url}');
     }
-    if (ch.mangaId > 0 && ch.chapterNumber > 0) {
+    if (ch.mangaId != 0 && ch.chapterNumber > 0) {
       knownKeys.add('mid_${ch.mangaId}_num_${ch.chapterNumber}');
     }
   }
@@ -700,15 +726,18 @@ List<Chapter> detectNewLibraryChapters({
   for (final ch in afterChapters) {
     // Only consider unread chapters belonging to manga currently in library
     if (ch.isRead) continue;
-    if (ch.mangaId > 0 && !libraryMangaIds.contains(ch.mangaId)) continue;
-    if (ch.mangaId > 0 && !beforeLibraryIds.contains(ch.mangaId)) continue;
+    if (ch.mangaId != 0) {
+      if (!libraryMangaIds.contains(ch.mangaId)) continue;
+      if (!beforeLibraryIds.contains(ch.mangaId)) continue;
+      if (!mangaWithChapters.contains(ch.mangaId)) continue;
+    }
 
     bool isKnown = false;
-    if (ch.serverId > 0 && knownKeys.contains('srv_${ch.serverId}')) {
+    if (ch.serverId != 0 && knownKeys.contains('srv_${ch.serverId}')) {
       isKnown = true;
     } else if (ch.url.isNotEmpty && knownKeys.contains('url_${ch.url}')) {
       isKnown = true;
-    } else if (ch.mangaId > 0 && ch.chapterNumber > 0 && knownKeys.contains('mid_${ch.mangaId}_num_${ch.chapterNumber}')) {
+    } else if (ch.mangaId != 0 && ch.chapterNumber > 0 && knownKeys.contains('mid_${ch.mangaId}_num_${ch.chapterNumber}')) {
       isKnown = true;
     }
 

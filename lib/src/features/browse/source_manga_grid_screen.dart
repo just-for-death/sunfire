@@ -41,6 +41,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
   List<Map<String, dynamic>> _mangaList = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
+  int _queryGen = 0;
   int _currentPage = 1;
   bool _hasNextPage = true;
   String _searchQuery = '';
@@ -156,8 +157,12 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
       return;
     }
 
+    // A newer search/filter/mode supersedes this one and any load-more still
+    // in flight; their late results must not land in the new list.
+    final gen = ++_queryGen;
     setState(() {
       _isLoading = true;
+      _isLoadingMore = false;
       _currentPage = 1;
       _hasNextPage = true;
     });
@@ -175,6 +180,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
         dynamicFilters: (_hasDynamicFilters && (_isFilterApplied || _searchQuery.trim().isNotEmpty)) ? _dynamicFilters : null,
         filters: _serverFilterChanges.isEmpty ? null : _serverFilterChanges,
       );
+      if (gen != _queryGen) return;
       _mangaList = res.items;
       _hasNextPage = ContentResolverService.computeHasNextPage(
         serverHasNextPage: res.hasNextPage,
@@ -183,13 +189,14 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
     } catch (e, stack) {
       await LoggerService.instance.logError('Failed to fetch source manga: $e', exception: e, stackTrace: stack, category: 'SourceGrid');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && gen == _queryGen) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _loadMoreManga() async {
     if (!mounted) return;
-    if (_isLoadingMore || !_hasNextPage) return;
+    if (_isLoading || _isLoadingMore || !_hasNextPage) return;
+    final gen = _queryGen;
     setState(() => _isLoadingMore = true);
 
     try {
@@ -208,6 +215,7 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
       );
 
       final newManga = pageRes.items;
+      if (gen != _queryGen) return;
       if (mounted) {
         setState(() {
           if (newManga.isEmpty) {
@@ -244,9 +252,9 @@ class _SourceMangaGridScreenState extends State<SourceMangaGridScreen> with Sing
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _hasNextPage = false);
+      if (mounted && gen == _queryGen) setState(() => _hasNextPage = false);
     } finally {
-      if (mounted) setState(() => _isLoadingMore = false);
+      if (mounted && gen == _queryGen) setState(() => _isLoadingMore = false);
     }
   }
 

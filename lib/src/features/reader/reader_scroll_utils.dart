@@ -9,11 +9,21 @@ double estimateWebtoonPlaceholderHeight(double contentWidth, {double? cachedHeig
 }
 
 /// Pick the page nearest the viewport center among candidates intersecting the band.
+///
+/// When the list is scrolled to its end and [lastPage] is on screen, that page
+/// wins: a short last page (credits) never reaches the viewport center, so
+/// the chapter stayed unread at the second-to-last page.
 int? detectBestVisiblePage({
   required double viewportHeight,
   required List<({int page, double top, double bottom})> pages,
+  bool scrolledToEnd = false,
+  int? lastPage,
 }) {
   if (pages.isEmpty) return null;
+  if (scrolledToEnd && lastPage != null &&
+      pages.any((p) => p.page == lastPage && p.bottom > 0 && p.top < viewportHeight)) {
+    return lastPage;
+  }
   final centerY = viewportHeight * 0.5;
   int? bestPage;
   double bestScore = -1;
@@ -51,12 +61,17 @@ double resumeOffsetForPage({
 }
 
 /// Whether persisted progress should regress to [page].
+///
+/// A [rereading] chapter (already read, reopened at page 1) records its
+/// lower pages: otherwise nothing was saved until the last page, so History
+/// and Continue Reading never showed the re-read. It stays read.
 bool shouldPersistProgressPage({
   required int page,
   required int previousSaved,
+  bool rereading = false,
 }) {
   if (page <= 0) return false;
-  if (previousSaved > 0 && page < previousSaved) return false;
+  if (!rereading && previousSaved > 0 && page < previousSaved) return false;
   return true;
 }
 

@@ -9,6 +9,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../db/isar_service.dart';
@@ -85,6 +86,13 @@ class LocalSourceService extends ChangeNotifier {
   String? get root {
     final r = SettingsService.instance.localSourceRoot.trim();
     return r.isEmpty ? null : r;
+  }
+
+  /// Whether [path] is inside the configured root folder.
+  bool isUnderRoot(String path) {
+    final r = root;
+    if (r == null) return false;
+    return p.isWithin(p.normalize(r), p.normalize(path));
   }
 
   /// Sets (or clears with null/empty) the root folder. Does not scan.

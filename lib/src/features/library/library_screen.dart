@@ -154,31 +154,42 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     super.dispose();
   }
 
+  /// Library rows, after resolving direct CDN covers for series that only have
+  /// a server-proxy cover. Each lookup runs QuickJS (network-bound), so only the
+  /// thumbnail is patched onto a freshly read row and the library is re-read
+  /// afterwards; saving the list read before the loop reverted whatever a sync
+  /// or another screen changed meanwhile.
+  Future<List<Manga>> _loadLibraryHealingCovers({required bool rememberFailures}) async {
+    final list = await IsarService.instance.getLibraryManga();
+    var healed = false;
+    for (final m in list) {
+      final thumb = m.thumbnailUrl;
+      if (thumb != null && thumb.isNotEmpty && !thumb.contains('/api/v1/manga/')) continue;
+      if (m.sourceName.isEmpty || m.url.isEmpty) continue;
+      final healKey = '${m.sourceName}\u0000${m.url}';
+      if (rememberFailures && _coverHealFailed.contains(healKey)) continue;
+      final direct = await QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
+      if (direct == null || direct.isEmpty) {
+        if (rememberFailures) _coverHealFailed.add(healKey);
+        continue;
+      }
+      final current = await IsarService.instance.getMangaByServerId(m.serverId);
+      if (current == null) continue;
+      current.thumbnailUrl = direct;
+      await IsarService.instance.saveManga(current);
+      healed = true;
+    }
+    return healed ? IsarService.instance.getLibraryManga() : list;
+  }
+
   /// Load Isar immediately (never blocks on network). Then attempt a background
   /// sync to update. This guarantees the library is visible instantly even when
   /// the server is down, wiped, or unreachable.
   Future<void> _loadFromIsarThenSync() async {
     try {
-      final list = await IsarService.instance.getLibraryManga();
+      final list = await _loadLibraryHealingCovers(rememberFailures: false);
       final cats = await IsarService.instance.getCategories();
       final tags = await TagService.instance.getAllTags();
-
-      // Proactive self-healing: resolve direct CDN covers for any manga pointing to server proxy
-      bool hasHealed = false;
-      for (final m in list) {
-        if (m.thumbnailUrl == null || m.thumbnailUrl!.isEmpty || m.thumbnailUrl!.contains('/api/v1/manga/')) {
-          if (m.sourceName.isNotEmpty && m.url.isNotEmpty) {
-            final direct = await QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
-            if (direct != null && direct.isNotEmpty) {
-              m.thumbnailUrl = direct;
-              hasHealed = true;
-            }
-          }
-        }
-      }
-      if (hasHealed) {
-        await IsarService.instance.saveMangas(list);
-      }
 
       if (mounted) {
         setState(() {
@@ -255,29 +266,9 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
 
   Future<void> _loadFromIsarOnlyInner() async {
     try {
-      final list = await IsarService.instance.getLibraryManga();
+      final list = await _loadLibraryHealingCovers(rememberFailures: true);
       final cats = await IsarService.instance.getCategories();
       final tags = await TagService.instance.getAllTags();
-
-      bool hasHealed = false;
-      for (final m in list) {
-        if (m.thumbnailUrl == null || m.thumbnailUrl!.isEmpty || m.thumbnailUrl!.contains('/api/v1/manga/')) {
-          if (m.sourceName.isNotEmpty && m.url.isNotEmpty) {
-            final healKey = '${m.sourceName}\u0000${m.url}';
-            if (_coverHealFailed.contains(healKey)) continue;
-            final direct = await QuickJsService.instance.getExtensionCoverUrl(m.sourceName, m.url);
-            if (direct != null && direct.isNotEmpty) {
-              m.thumbnailUrl = direct;
-              hasHealed = true;
-            } else {
-              _coverHealFailed.add(healKey);
-            }
-          }
-        }
-      }
-      if (hasHealed) {
-        await IsarService.instance.saveMangas(list);
-      }
 
       if (mounted) {
         setState(() {

@@ -104,6 +104,16 @@ bool isCompleteSnapshot(Map<String, dynamic>? data) => data?[kSnapshotCompleteKe
 
 /// IMP-034: instance state, transport and query core. Public API lives on
 /// [GraphQLClientService]; the endpoint groups are private mixins in parts.
+/// Same scheme, host and effective port.
+bool isSameOrigin(String a, String b) {
+  final ua = Uri.tryParse(a);
+  final ub = Uri.tryParse(b);
+  if (ua == null || ub == null || ua.host.isEmpty) return false;
+  return ua.scheme.toLowerCase() == ub.scheme.toLowerCase() &&
+      ua.host.toLowerCase() == ub.host.toLowerCase() &&
+      ua.port == ub.port;
+}
+
 abstract class _GraphQLClientCore {
   late Dio _dio;
 
@@ -146,6 +156,14 @@ abstract class _GraphQLClientCore {
       }
     }
     return out.isEmpty ? const {} : out;
+  }
+
+  /// Whether [url] points at the configured server: same scheme, host and
+  /// effective port. A string prefix check would also accept
+  /// `https://srv.com.evil.net` or `:45678` and leak [authHeaders] there.
+  bool isServerUrl(String url) {
+    if (!isConfigured || _baseUrl == null) return false;
+    return isSameOrigin(_baseUrl!, url);
   }
 
   /// Current Authorization header value (or null). Used by the WS layer.

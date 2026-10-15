@@ -31,4 +31,12 @@ void main() {
     expect(svc.debugAreDuplicates(_m(1, '!!!', chapters: 10), _m(2, '???', chapters: 10)), isFalse);
     expect(svc.debugAreDuplicates(_m(1, ''), _m(2, '')), isFalse);
   });
+
+  test('URL containment only matches on whole path segments', () {
+    expect(DuplicateDetectionService.urlPathsNest('/title/naruto', '/title/naruto-shippuden'), isFalse);
+    expect(DuplicateDetectionService.urlPathsNest('/manga/123', '/manga/123/naruto'), isTrue);
+    expect(DuplicateDetectionService.urlPathsNest('/naruto', '/en/naruto'), isTrue);
+    expect(DuplicateDetectionService.urlPathsNest('/series', '/series/abc'), isFalse);
+    expect(DuplicateDetectionService.urlPathsNest('', '/a'), isFalse);
+  });
 }

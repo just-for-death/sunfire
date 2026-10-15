@@ -50,4 +50,38 @@ void main() {
     );
     expect(got.map((c) => c.serverId), [8]);
   });
+
+  test('a series fetched for the first time reports no chapters', () {
+    final got = detectNewLibraryChapters(
+      beforeChapters: [_ch(1, 10)],
+      afterChapters: [_ch(1, 10), _ch(60, 30), _ch(61, 30)],
+      beforeLibraryIds: {10, 30},
+      libraryMangaIds: {10, 30},
+    );
+    expect(got, isEmpty);
+  });
+
+  test('local series (negative ids) are filtered and diffed like server ones', () {
+    final got = detectNewLibraryChapters(
+      beforeChapters: [_ch(-1, -10), _ch(-5, -20)],
+      afterChapters: [_ch(-1, -10), _ch(-2, -10), _ch(-6, -20)],
+      beforeLibraryIds: {-10},
+      libraryMangaIds: {-10},
+    );
+    expect(got.map((c) => c.serverId), [-2]);
+  });
+
+  group('updateIntervalElapsed', () {
+    const h = 3600;
+    test('a run slightly before the interval still counts', () {
+      expect(updateIntervalElapsed(nowSec: 12 * h - 600, lastSec: 0, freqHours: 12), isTrue);
+    });
+    test('a run well before the interval is skipped', () {
+      expect(updateIntervalElapsed(nowSec: 6 * h, lastSec: 0, freqHours: 12), isFalse);
+    });
+    test('slack is a quarter of short intervals', () {
+      expect(updateIntervalElapsed(nowSec: 50 * 60, lastSec: 0, freqHours: 1), isTrue);
+      expect(updateIntervalElapsed(nowSec: 40 * 60, lastSec: 0, freqHours: 1), isFalse);
+    });
+  });
 }

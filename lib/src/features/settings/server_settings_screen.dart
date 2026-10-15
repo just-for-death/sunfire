@@ -646,12 +646,13 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     setState(() => _clientUrl = url);
                     _settings.serverUrl = url;
                     final auth = _clientAuth.toHeaderValue();
+                    // The pending queue addresses the OLD server's ids — never
+                    // replay it against the new one. Quarantine before the
+                    // client points at the new server, then tell the user what
+                    // was dropped.
+                    final dropped = await SyncEngine.instance.quarantinePendingForServerSwitch();
                     GraphQLClientService.instance.initialize(url, authToken: auth);
                     WebSocketService.instance.initialize(url, authToken: auth);
-                    // The pending queue addresses the OLD server's ids — never
-                    // replay it against the new one. Quarantine first, then
-                    // tell the user what was dropped.
-                    final dropped = await SyncEngine.instance.quarantinePendingForServerSwitch();
                     if (!mounted) return;
                     if (dropped > 0 && context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(

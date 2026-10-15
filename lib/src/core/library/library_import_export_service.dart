@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import '../db/isar_service.dart';
 import '../db/models/manga.dart';
 import '../services/tag_service.dart';
+import '../sync/sync_engine.dart';
 
 const int kLibraryExportVersion = 1;
 
@@ -191,13 +192,9 @@ String libraryEntriesToCsv(List<LibraryExportEntry> entries) {
 
 /// Parse a simple CSV produced by [libraryEntriesToCsv] (or compatible).
 List<LibraryExportEntry> libraryEntriesFromCsv(String raw) {
-  final lines = raw
-      .split(RegExp(r'\r?\n'))
-      .map((l) => l.trim())
-      .where((l) => l.isNotEmpty)
-      .toList();
-  if (lines.isEmpty) return [];
-  final header = _parseCsvLine(lines.first).map((h) => h.toLowerCase()).toList();
+  final rows = parseCsvRows(raw);
+  if (rows.isEmpty) return [];
+  final header = rows.first.map((h) => h.trim().toLowerCase()).toList();
   final titleIdx = header.indexOf('title');
   if (titleIdx < 0) {
     throw const FormatException('CSV missing title column');
@@ -205,8 +202,8 @@ List<LibraryExportEntry> libraryEntriesFromCsv(String raw) {
   int col(String name) => header.indexOf(name);
 
   final out = <LibraryExportEntry>[];
-  for (var i = 1; i < lines.length; i++) {
-    final cells = _parseCsvLine(lines[i]);
+  for (var i = 1; i < rows.length; i++) {
+    final cells = rows[i];
     String at(int idx) =>
         (idx >= 0 && idx < cells.length) ? cells[idx] : '';
     final title = at(titleIdx).trim();
@@ -228,22 +225,35 @@ List<LibraryExportEntry> libraryEntriesFromCsv(String raw) {
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .toList(),
-      chapterCount: int.tryParse(at(col('chaptercount'))) ?? 0,
-      unreadCount: int.tryParse(at(col('unreadcount'))),
+      chapterCount: int.tryParse(at(col('chaptercount')).trim()) ?? 0,
+      unreadCount: int.tryParse(at(col('unreadcount')).trim()),
     ));
   }
   return out;
 }
 
-List<String> _parseCsvLine(String line) {
-  final result = <String>[];
+/// Splits CSV text into rows of cells. Quoted cells may contain commas,
+/// doubled quotes and line breaks ([csvEscape] quotes descriptions with
+/// newlines), so records can't be found by splitting on newlines first.
+/// Blank records are dropped.
+List<List<String>> parseCsvRows(String raw) {
+  final rows = <List<String>>[];
+  var row = <String>[];
   final buf = StringBuffer();
   var inQuotes = false;
-  for (var i = 0; i < line.length; i++) {
-    final c = line[i];
+
+  void endRow() {
+    row.add(buf.toString());
+    buf.clear();
+    if (row.length > 1 || row.first.trim().isNotEmpty) rows.add(row);
+    row = <String>[];
+  }
+
+  for (var i = 0; i < raw.length; i++) {
+    final c = raw[i];
     if (inQuotes) {
       if (c == '"') {
-        if (i + 1 < line.length && line[i + 1] == '"') {
+        if (i + 1 < raw.length && raw[i + 1] == '"') {
           buf.write('"');
           i++;
         } else {
@@ -255,14 +265,24 @@ List<String> _parseCsvLine(String line) {
     } else if (c == '"') {
       inQuotes = true;
     } else if (c == ',') {
-      result.add(buf.toString());
+      row.add(buf.toString());
       buf.clear();
+    } else if (c == '\n' || c == '\r') {
+      if (c == '\r' && i + 1 < raw.length && raw[i + 1] == '\n') i++;
+      endRow();
     } else {
       buf.write(c);
     }
   }
-  result.add(buf.toString());
-  return result;
+  if (buf.isNotEmpty || row.isNotEmpty) endRow();
+  return rows;
+}
+
+bool _sameSeries(Manga manga, LibraryExportEntry entry) {
+  if (entry.url.isNotEmpty && manga.url.isNotEmpty) {
+    return manga.url == entry.url;
+  }
+  return manga.title.toLowerCase() == entry.title.toLowerCase();
 }
 
 class LibraryImportResult {
@@ -328,7 +348,19 @@ class LibraryImportExportService {
       try {
         final library = await IsarService.instance.getLibraryManga();
         Manga? manga;
-        if (entry.url.isNotEmpty) {
+        // An exported serverId only identifies this row if it still points
+        // at the same title: ids from another server or install name other
+        // series.
+        var matchedByServerId = false;
+        final exportedId = entry.serverId;
+        if (exportedId != null && exportedId != 0) {
+          final byId = await IsarService.instance.getMangaByServerId(exportedId);
+          if (byId != null && _sameSeries(byId, entry)) {
+            manga = byId;
+            matchedByServerId = true;
+          }
+        }
+        if (manga == null && entry.url.isNotEmpty) {
           for (final m in library) {
             if (m.url == entry.url &&
                 (entry.sourceName.isEmpty ||
@@ -350,12 +382,17 @@ class LibraryImportExportService {
           }
         }
 
+        final localId = stableLocalMangaServerId(
+          sourceName: entry.sourceName.isEmpty ? 'import' : entry.sourceName,
+          url: entry.url,
+          title: entry.title,
+        );
+        // The minted id may already belong to a stored row that is not in the
+        // library (a removed or browsed series); saving a fresh object would
+        // replace that row.
+        manga ??= await IsarService.instance.getMangaByServerId(localId);
+
         if (manga == null) {
-          final localId = stableLocalMangaServerId(
-            sourceName: entry.sourceName.isEmpty ? 'import' : entry.sourceName,
-            url: entry.url,
-            title: entry.title,
-          );
           manga = Manga()
             ..serverId = localId
             ..title = entry.title
@@ -380,12 +417,37 @@ class LibraryImportExportService {
             ..artist = entry.artist ?? manga.artist
             ..description = entry.description ?? manga.description
             ..status = entry.status ?? manga.status
-            ..thumbnailUrl = entry.thumbnailUrl ?? manga.thumbnailUrl
-            ..inLibrary = true;
+            ..thumbnailUrl = entry.thumbnailUrl ?? manga.thumbnailUrl;
+          if (!manga.inLibrary) {
+            manga
+              ..inLibrary = true
+              ..inLibraryAt = DateTime.now().millisecondsSinceEpoch;
+          }
           if (entry.genres.isNotEmpty) {
             manga.genres = List<String>.from(entry.genres);
           }
+          List<int>? priorCategories;
+          if (matchedByServerId && entry.categoryIds.isNotEmpty) {
+            final known = (await IsarService.instance.getCategories())
+                .map((c) => c.serverId)
+                .toSet();
+            final merged = {
+              ...manga.categoryIds,
+              ...entry.categoryIds.where(known.contains),
+            }.toList();
+            if (merged.length != manga.categoryIds.length) {
+              priorCategories = List<int>.from(manga.categoryIds);
+              manga.categoryIds = merged;
+            }
+          }
           await IsarService.instance.saveManga(manga);
+          if (priorCategories != null && manga.serverId > 0) {
+            await SyncEngine.instance.syncMangaCategories(
+              manga.serverId,
+              manga.categoryIds,
+              existingCategoryIds: priorCategories,
+            );
+          }
           updated++;
         }
 

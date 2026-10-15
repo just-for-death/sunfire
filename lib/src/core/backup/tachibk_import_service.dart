@@ -78,9 +78,8 @@ class TachiBkImportService {
 
   /// Resolves each backup manga against the given server sources.
   ///
-  /// Matching is by normalized (name, lang) — Tachiyomi source ids are their
-  /// own numbering and do not map to Suwayomi source ids, but names and
-  /// languages line up.
+  /// Matching is by source id first (Suwayomi uses the extensions' own ids),
+  /// then by normalized (name, lang) for sources whose id changed.
   static TachiBkImportPlan planImport(TachiBkBackup backup, List<ServerSourceInfo> serverSources) {
     final entries = <TachiBkImportPlanEntry>[];
     final missingCategoryNames = <String>{};
@@ -190,6 +189,14 @@ class TachiBkImportService {
     TachiBkManga m,
     List<ServerSourceInfo> serverSources,
   ) {
+    // Suwayomi runs the same extensions, so a source id from the backup is
+    // the server's id for that source and language. Protobuf backups carry no
+    // language, so this is the only exact match they have.
+    final byId = m.sourceId.toString();
+    for (final s in serverSources) {
+      if (s.id == byId) return s;
+    }
+
     // Backup records the source id per manga; look up its name/lang there.
     String sourceLang = m.lang;
     String? sourceName;

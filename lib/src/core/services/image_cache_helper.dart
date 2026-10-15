@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../constants/app_constants.dart';
 import '../db/isar_service.dart';
 import '../engine/image_validation.dart';
+import '../engine/javascript/request_guard.dart';
 import '../engine/quickjs_service.dart';
 import '../logging/logger_service.dart';
 import '../sync/graphql_client_service.dart';
@@ -273,11 +274,24 @@ class ImageCacheHelper {
   /// gained the AVIF/HEIC or JPEG XL branches. One implementation now.
   static bool _isValidImageBytes(List<int> b) => looksLikeImageHeader(b);
 
+  static const int _maxCoverBytes = 20 * 1024 * 1024;
+  static const Duration _coverReadIdleTimeout = Duration(seconds: 20);
+  static const Set<int> _redirectStatuses = {301, 302, 303, 307, 308};
+
+  /// Direct cover GET. Redirects are followed by hand so every hop passes the
+  /// extension network guard (the configured server is exempt: it is usually
+  /// on the LAN) and session credentials never follow a hop to another
+  /// origin. The body is read with an idle timeout and a size cap so a
+  /// stalled or endless response cannot hold a cover slot forever.
+  @visibleForTesting
+  static Future<Uint8List?> attemptHttpFetch(String url, Map<String, String> headers) =>
+      _attemptHttpFetch(url, headers);
+
   static Future<Uint8List?> _attemptHttpFetch(String url, Map<String, String> headers) async {
     HttpClient? client;
     try {
-      final uri = Uri.tryParse(url) ?? Uri.tryParse(Uri.encodeFull(url));
-      if (uri == null) return null;
+      final first = Uri.tryParse(url) ?? Uri.tryParse(Uri.encodeFull(url));
+      if (first == null) return null;
 
       // Shared trust rule (configured server host + loopback) — same as the
       // GraphQL client, WebSocket and download manager.
@@ -285,28 +299,66 @@ class ImageCacheHelper {
         () => GraphQLClientService.instance.isConfigured ? GraphQLClientService.instance.baseUrl : null,
       );
       client.connectionTimeout = const Duration(seconds: 10);
-      final req = await client.getUrl(uri);
-      
-      final reqHeaders = Map<String, String>.from(headers);
-      if (GraphQLClientService.instance.isConfigured &&
-          GraphQLClientService.instance.baseUrl != null &&
-          url.startsWith(GraphQLClientService.instance.baseUrl!)) {
-        reqHeaders.addAll(GraphQLClientService.instance.authHeaders);
-      }
 
-      reqHeaders.forEach((k, v) => req.headers.set(k, v));
-      final resp = await req.close();
-      if (resp.statusCode == 200) {
-        final b = await resp.fold<List<int>>([], (p, c) => p..addAll(c));
-        if (_isValidImageBytes(b)) {
-          return Uint8List.fromList(b);
+      var target = first;
+      for (var hop = 0; hop <= kMaxExtensionRedirects; hop++) {
+        final targetUrl = target.toString();
+        final isServer = GraphQLClientService.instance.isServerUrl(targetUrl);
+        if (!isServer) {
+          final blocked = blockedRequestReason(target);
+          if (blocked != null) {
+            if (kDebugMode) debugPrint('[image_cache_helper] cover fetch blocked: $blocked');
+            return null;
+          }
         }
+
+        final req = await client.getUrl(target);
+        req.followRedirects = false;
+        final sameOrigin = isSameOrigin(url, targetUrl);
+        headers.forEach((k, v) {
+          final lower = k.toLowerCase();
+          if (!sameOrigin && (lower == 'cookie' || lower == 'authorization')) return;
+          req.headers.set(k, v);
+        });
+        if (isServer) {
+          GraphQLClientService.instance.authHeaders.forEach((k, v) => req.headers.set(k, v));
+        }
+
+        final resp = await req.close().timeout(_coverReadIdleTimeout);
+        if (_redirectStatuses.contains(resp.statusCode)) {
+          final location = resp.headers.value(HttpHeaders.locationHeader);
+          await resp.drain<void>().catchError((_) {});
+          if (location == null || location.isEmpty) return null;
+          target = target.resolve(location);
+          continue;
+        }
+        if (resp.statusCode != 200 || resp.contentLength > _maxCoverBytes) {
+          await resp.drain<void>().catchError((_) {});
+          return null;
+        }
+        final body = BytesBuilder(copy: false);
+        await for (final chunk in resp.timeout(_coverReadIdleTimeout)) {
+          body.add(chunk);
+          if (body.length > _maxCoverBytes) return null;
+        }
+        final b = body.takeBytes();
+        return _isValidImageBytes(b) ? b : null;
       }
     } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] guarded direct fetch failed: $ignoredError');
     } finally {
       client?.close(force: true);
     }
     return null;
+  }
+
+  /// Writes [thumbnailUrl] onto the stored row as it is now. The row read
+  /// before the extension lookups is several network calls old; saving it
+  /// would undo a sync or edit that landed meanwhile.
+  static Future<void> persistThumbnail(int mangaServerId, String thumbnailUrl) async {
+    final fresh = await IsarService.instance.getMangaByServerId(mangaServerId);
+    if (fresh == null || fresh.thumbnailUrl == thumbnailUrl) return;
+    fresh.thumbnailUrl = thumbnailUrl;
+    await IsarService.instance.saveManga(fresh);
   }
 
   static Future<Uint8List?> _doFetch(String url, String sourceName, int mangaServerId) async {
@@ -345,8 +397,7 @@ class ImageCacheHelper {
               }
               if (bytes != null && bytes.length > 200) {
                 try {
-                  m.thumbnailUrl = directCover;
-                  await IsarService.instance.saveManga(m);
+                  await persistThumbnail(m.serverId, directCover);
                 } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
                 url = directCover;
               }
@@ -408,7 +459,7 @@ class ImageCacheHelper {
       // PASS 6: Suwayomi server proxy fallback (for server-synced manga whose remote CDN is blocked or 403)
       if (bytes == null && mangaServerId > 0 && GraphQLClientService.instance.isConfigured) {
         final serverUrl = GraphQLClientService.instance.baseUrl;
-        if (serverUrl != null && serverUrl.isNotEmpty && !url.startsWith(serverUrl)) {
+        if (serverUrl != null && serverUrl.isNotEmpty && !GraphQLClientService.instance.isServerUrl(url)) {
           final serverThumbUrl = '$serverUrl/api/v1/manga/$mangaServerId/thumbnail';
           final serverHeaders = Map<String, String>.from(GraphQLClientService.instance.authHeaders);
           bytes = await _attemptHttpFetch(serverThumbUrl, serverHeaders);
@@ -441,8 +492,7 @@ class ImageCacheHelper {
               }
               if (bytes != null && bytes.length > 200) {
                 try {
-                  m.thumbnailUrl = realCoverUrl;
-                  await IsarService.instance.saveManga(m);
+                  await persistThumbnail(m.serverId, realCoverUrl);
                 } catch (ignoredError) { if (kDebugMode) debugPrint('[image_cache_helper] ignored error: $ignoredError'); }
                 _touchMemoryCover(realCoverUrl, bytes);
               }
@@ -543,9 +593,7 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
     final headers = Map<String, String>.from(
       QuickJsService.getImageHeaders(effectiveSource, url),
     );
-    if (GraphQLClientService.instance.isConfigured &&
-        GraphQLClientService.instance.baseUrl != null &&
-        url.startsWith(GraphQLClientService.instance.baseUrl!)) {
+    if (GraphQLClientService.instance.isServerUrl(url)) {
       headers.addAll(GraphQLClientService.instance.authHeaders);
     }
     _effectiveHeaders = headers;
@@ -586,8 +634,7 @@ class _MangaCoverImageState extends State<MangaCoverImage> {
               // Nothing was persisted, so every subsequent render re-ran the whole
               // fetch cascade for the same cover, forever. `saveManga` is
               // already awaited and guarded everywhere else in this file.
-              m.thumbnailUrl = extCover;
-              await IsarService.instance.saveManga(m);
+              await ImageCacheHelper.persistThumbnail(m.serverId, extCover);
             }
           }
         }
