@@ -1117,7 +1117,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: SunfireColors.trackerBlueContainer,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(SunfireRadius.pill),
                       border: Border.all(color: SunfireColors.trackerBlue.withValues(alpha: 0.3)),
                     ),
                     child: Row(
@@ -1622,7 +1622,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: SunfireColors.trackerGreenContainer,
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(SunfireRadius.pill),
                           border: Border.all(color: SunfireColors.trackerGreen.withValues(alpha: 0.3)),
                         ),
                         child: Row(
@@ -1858,7 +1858,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: SunfireColors.trackerBlue.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(SunfireRadius.pill),
                 border: Border.all(color: SunfireColors.trackerBlue.withValues(alpha: 0.3)),
               ),
               child: Row(
@@ -1878,7 +1878,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: SunfireColors.info.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(SunfireRadius.pill),
                 border: Border.all(color: SunfireColors.info.withValues(alpha: 0.3)),
               ),
               child: Row(
@@ -1899,7 +1899,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: SunfireColors.trackerAmber.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(SunfireRadius.pill),
                   border: Border.all(color: SunfireColors.trackerAmber.withValues(alpha: 0.3)),
                 ),
                 child: Row(
@@ -1920,7 +1920,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: SunfireColors.contentTertiary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(SunfireRadius.pill),
                   border: Border.all(color: SunfireColors.contentDisabled),
                 ),
                 child: Row(

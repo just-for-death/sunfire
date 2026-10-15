@@ -1085,7 +1085,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     required VoidCallback onTap,
   }) {
     return InkWell(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(SunfireRadius.pill),
       onTap: () {
         unawaited(HapticFeedback.selectionClick());
         onTap();

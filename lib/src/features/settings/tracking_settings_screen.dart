@@ -687,7 +687,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: SunfireColors.trackerGreenContainer,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(SunfireRadius.pill),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

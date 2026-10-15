@@ -8,6 +8,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../../ui/shell/tablet_ui_prefs.dart';
 import 'widgets/section_title.dart';
@@ -146,7 +147,7 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                     return Tooltip(
                       message: entry.key,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(SunfireRadius.pill),
                         onTap: () => _settings.accentColorName = entry.key,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),

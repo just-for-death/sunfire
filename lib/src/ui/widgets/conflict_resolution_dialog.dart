@@ -65,7 +65,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
         curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(SunfireRadius.dialog),
         ),
         child: Column(
           children: [
@@ -85,7 +85,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
         padding: const EdgeInsets.all(40),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(SunfireRadius.dialog),
         ),
         child: Center(
           child: Column(
@@ -234,7 +234,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(SunfireRadius.pill),
         border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Row(

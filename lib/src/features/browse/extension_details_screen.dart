@@ -44,7 +44,7 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
               height: 72,
               decoration: BoxDecoration(
                 color: SunfireColors.error,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(SunfireRadius.card),
               ),
               child: const Center(
                 child: Icon(Icons.pets_rounded, color: SunfireColors.contentPrimary, size: 40),

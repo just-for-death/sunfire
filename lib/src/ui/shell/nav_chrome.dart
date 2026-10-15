@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../design_system/components/sunfire_nav.dart'
     show SunfireBottomNav, SunfireNavDestination, SunfireNavRail;
 import '../design_system/tokens/sunfire_colors.dart';
+import '../design_system/tokens/sunfire_spacing.dart';
 
 export '../design_system/components/sunfire_nav.dart' show SunfireNavDestination;
 
@@ -235,7 +236,7 @@ class _GlassTabItem extends StatelessWidget {
           child: Material(
             color: SunfireColors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(SunfireRadius.pill),
               onTap: onTap,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
@@ -245,7 +246,7 @@ class _GlassTabItem extends StatelessWidget {
                 decoration: selected
                     ? BoxDecoration(
                         color: accent,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(SunfireRadius.pill),
                         boxShadow: [
                           BoxShadow(
                             color: accent.withAlpha(80),
@@ -319,7 +320,7 @@ class _GlassMoreItem extends StatelessWidget {
         child: Material(
           color: SunfireColors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(SunfireRadius.pill),
             onTap: onTap,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),

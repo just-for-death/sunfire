@@ -362,7 +362,7 @@ class _BottomBar extends StatelessWidget {
             ignoring: !showControls,
             child: Center(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(SunfireRadius.pill),
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                   child: Container(
@@ -370,7 +370,7 @@ class _BottomBar extends StatelessWidget {
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: SunfireColors.overlaySurface,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(SunfireRadius.pill),
                       border: Border.all(
                           color: SunfireColors.borderStrong, width: 0.8),
                       boxShadow: const [
@@ -651,7 +651,7 @@ class _AutoScrollCapsule extends StatelessWidget {
       bottom: 24 + MediaQuery.of(context).padding.bottom,
       left: 20,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(SunfireRadius.pill),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: AnimatedContainer(
@@ -660,7 +660,7 @@ class _AutoScrollCapsule extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: SunfireColors.overlaySurface,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(SunfireRadius.pill),
               border: Border.all(
                 color: isUserTouching
                     ? SunfireColors.overlayHighlight.withValues(alpha: 0.8)
