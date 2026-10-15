@@ -7,6 +7,42 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [6.1.0] — 2026-10-16
+
+### Added
+
+- Mihon / Tachiyomi protobuf `.tachibk` backup import (gzip protobuf and
+  legacy zip JSON both accepted).
+- Durable per-source `SourceCallLock` so QuickJS evals never overlap on
+  one runtime (with overrun handling for hung scrapes).
+- Extension HTTP redirects are followed under the SSRF request guard
+  (credentials stripped on host change).
+
+### Fixed
+
+- Multi-language Mangayomi scripts (MangaDex, etc.) resolve one lang/id
+  from `langs` / `ids` instead of stringifying the whole list.
+- Extension install/update keeps the installed language — FR is never
+  silently replaced by EN.
+- First-run auto-install only pulls `en` / `all` JS extensions with a
+  real `.js` URL (non-English still installs on demand).
+- Delta sync merges server manga onto the stored row so tags, metadata
+  locks, reading-mode override and `lastReadAt` survive.
+- Burst sync (pull-to-refresh + WebSocket + resume) collapses into one
+  follow-up pass instead of stacking full cycles.
+- Cover fetches to loopback / LAN addresses are refused before any
+  request leaves the device.
+- Source migration matching is stricter so short tokens cannot claim
+  unrelated sources.
+
+### Security
+
+- Same-origin checks reject prefix look-alikes (`srv.com.evil.net`).
+- Session cookies are attached fresh per image request so clearing
+  cookies takes effect immediately.
+
+---
+
 ## [6.0.0] — 2026-10-14
 
 ### Added
@@ -345,6 +381,9 @@ talks to your server all changed.
 
 ---
 
+[6.1.0]: https://github.com/just-for-death/sunfire/releases/tag/v6.1.0
+[6.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v6.0.0
+[5.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v5.0.0
 [4.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v4.0.0
 [3.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v3.0.0
 [2.5.0]: https://github.com/just-for-death/sunfire/releases/tag/v2.5.0
