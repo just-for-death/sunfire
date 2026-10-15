@@ -13,7 +13,7 @@
             android:targetPackage="com.sunfire.app"
             android:targetClass="com.sunfire.app.MainActivity"
             android:data="sunfire://history" />
-        <categories android:name="android.shortcut.conversation" />
+        <categories android:name="android.shortcut.shortcut" />
     </shortcut>
     <shortcut
         android:shortcutId="library_updates"
@@ -26,6 +26,7 @@
             android:targetPackage="com.sunfire.app"
             android:targetClass="com.sunfire.app.MainActivity"
             android:data="sunfire://updates" />
+        <categories android:name="android.shortcut.shortcut" />
     </shortcut>
     <shortcut
         android:shortcutId="browse_sources"
@@ -38,6 +39,7 @@
             android:targetPackage="com.sunfire.app"
             android:targetClass="com.sunfire.app.MainActivity"
             android:data="sunfire://browse" />
+        <categories android:name="android.shortcut.shortcut" />
     </shortcut>
     <shortcut
         android:shortcutId="downloads"
@@ -50,5 +52,6 @@
             android:targetPackage="com.sunfire.app"
             android:targetClass="com.sunfire.app.MainActivity"
             android:data="sunfire://downloads" />
+        <categories android:name="android.shortcut.shortcut" />
     </shortcut>
 </shortcuts>

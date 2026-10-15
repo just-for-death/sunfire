@@ -13,12 +13,12 @@ import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/proxy_url_display.dart';
 import '../shared/friendly_network_error.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
-import '../../ui/design_system/tokens/sunfire_colors.dart';
 
 class AdvancedSettingsScreen extends StatefulWidget {
   const AdvancedSettingsScreen({super.key});

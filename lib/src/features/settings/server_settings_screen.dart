@@ -14,6 +14,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_manager.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/widgets/dialog_controllers.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/proxy_url_display.dart';
@@ -22,7 +23,6 @@ import 'server_login_sheet.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
-import '../../ui/design_system/tokens/sunfire_colors.dart';
 
 class ServerSettingsScreen extends StatefulWidget {
   const ServerSettingsScreen({super.key});

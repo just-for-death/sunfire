@@ -15,12 +15,12 @@ import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_manager.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/widgets/dialog_controllers.dart';
 import '../../ui/widgets/sync_ui_actions.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
-import '../../ui/design_system/tokens/sunfire_colors.dart';
 
 class LibrarySettingsScreen extends StatefulWidget {
   const LibrarySettingsScreen({super.key});

@@ -81,7 +81,7 @@
         <service
             android:name=".SyncTileService"
             android:label="@string/tile_sync_label"
-            android:icon="@mipmap/launcher_icon"
+            android:icon="@drawable/ic_sync_tile"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>
