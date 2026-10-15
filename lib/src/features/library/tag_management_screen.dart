@@ -10,6 +10,7 @@ import '../../core/db/models/tag.dart';
 import '../../core/services/tag_service.dart';
 import '../../ui/design_system/components/components.dart'
     show SunfireButton, SunfireCard;
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 
 /// Manage user-defined library tags.
 class TagManagementScreen extends StatefulWidget {
@@ -54,7 +55,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
 
   Color _parseColor(String hex) {
     final cleaned = hex.replaceFirst('#', '');
-    if (cleaned.length != 6) return const Color(0xFFFF5722);
+    if (cleaned.length != 6) return SunfireColors.unreadDot;
     return Color(int.parse('FF$cleaned', radix: 16));
   }
 
@@ -101,7 +102,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                             border: Border.all(
                               color: selected
                                   ? Theme.of(ctx).colorScheme.onSurface
-                                  : Colors.transparent,
+                                  : SunfireColors.transparent,
                               width: 2,
                             ),
                           ),

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/db/models/chapter.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 
 /// Finished / next chapter card shown after the last page.
 class ReaderChapterTransitionCard extends StatelessWidget {
@@ -145,7 +146,7 @@ class _Section extends StatelessWidget {
               chapter.scanlator!,
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.white.withValues(alpha: 0.45),
+                color: SunfireColors.contentTertiary,
                 height: 1.3,
               ),
               maxLines: 1,

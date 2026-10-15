@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../../core/db/models/tag.dart';
 import '../../core/services/tag_service.dart';
 import '../../ui/design_system/components/components.dart' show SunfireChip;
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 
 /// Bottom sheet to toggle tags on a single manga ([mangaServerId] = canonicalKey).
 class MangaTagEditorSheet extends StatefulWidget {
@@ -73,7 +74,7 @@ class _MangaTagEditorSheetState extends State<MangaTagEditorSheet> {
 
   Color _parseColor(String hex) {
     final cleaned = hex.replaceFirst('#', '');
-    if (cleaned.length != 6) return const Color(0xFFFF5722);
+    if (cleaned.length != 6) return SunfireColors.unreadDot;
     return Color(int.parse('FF$cleaned', radix: 16));
   }
 

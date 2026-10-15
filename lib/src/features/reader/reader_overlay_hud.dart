@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/db/models/chapter.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import 'controller/reader_theme.dart';
 import 'reading_mode.dart';
 
@@ -215,13 +216,13 @@ class _TopBar extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xCC000000), Colors.transparent],
+                  colors: [SunfireColors.overlayScrim, SunfireColors.transparent],
                 ),
               ),
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                    icon: const Icon(Icons.arrow_back_rounded, color: SunfireColors.contentPrimary),
                     onPressed: onExit,
                   ),
                   Expanded(
@@ -233,7 +234,7 @@ class _TopBar extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: SunfireColors.contentPrimary,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
@@ -255,7 +256,7 @@ class _TopBar extends StatelessWidget {
                       bookmarked
                           ? Icons.bookmark_rounded
                           : Icons.bookmark_border_rounded,
-                      color: bookmarked ? Colors.amberAccent : Colors.white70,
+                      color: bookmarked ? SunfireColors.overlayHighlight : SunfireColors.contentSecondary,
                     ),
                     tooltip: bookmarked ? 'Remove Bookmark' : 'Bookmark Chapter',
                     onPressed: onToggleBookmark,
@@ -265,7 +266,7 @@ class _TopBar extends StatelessWidget {
                       incognitoMode
                           ? Icons.visibility_off_rounded
                           : Icons.visibility_outlined,
-                      color: incognitoMode ? Colors.amberAccent : Colors.white70,
+                      color: incognitoMode ? SunfireColors.overlayHighlight : SunfireColors.contentSecondary,
                     ),
                     tooltip: incognitoMode
                         ? 'Incognito Mode: ON'
@@ -274,17 +275,17 @@ class _TopBar extends StatelessWidget {
                   ),
                   IconButton(
                     icon: const Icon(Icons.format_list_bulleted_rounded,
-                        color: Colors.white),
+                        color: SunfireColors.contentPrimary),
                     tooltip: 'Chapters',
                     onPressed: onShowChapters,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.headset_rounded, color: Colors.white),
+                    icon: const Icon(Icons.headset_rounded, color: SunfireColors.contentPrimary),
                     tooltip: 'Listen (OCR + TTS)',
                     onPressed: onShowListen,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.tune_rounded, color: Colors.white),
+                    icon: const Icon(Icons.tune_rounded, color: SunfireColors.contentPrimary),
                     tooltip: 'Settings',
                     onPressed: onShowSettings,
                   ),
@@ -367,13 +368,13 @@ class _BottomBar extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xE614141A),
+                      color: SunfireColors.overlaySurface,
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
-                          color: const Color(0x33FFFFFF), width: 0.8),
+                          color: SunfireColors.borderStrong, width: 0.8),
                       boxShadow: const [
                         BoxShadow(
-                          color: Color(0x66000000),
+                          color: SunfireColors.shadowDefault,
                           blurRadius: 16,
                           offset: Offset(0, 4),
                         ),
@@ -390,7 +391,7 @@ class _BottomBar extends StatelessWidget {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.skip_previous_rounded,
-                                  color: Colors.white),
+                                  color: SunfireColors.contentPrimary),
                               tooltip: 'Previous Chapter',
                               onPressed: onLoadPrevChapter,
                             ),
@@ -399,7 +400,7 @@ class _BottomBar extends StatelessWidget {
                               builder: (_, activePage, __) => Text(
                                 'Page $activePage / $pageUrlsLength',
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: SunfireColors.contentPrimary,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
                                 ),
@@ -457,12 +458,12 @@ class _BottomBar extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: isAutoScrolling
                                         ? primaryColor.withValues(alpha: 0.3)
-                                        : const Color(0x22FFFFFF),
+                                        : SunfireColors.borderStrong,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: isAutoScrolling
                                           ? primaryColor
-                                          : Colors.white24,
+                                          : SunfireColors.borderDefault,
                                       width: 0.8,
                                     ),
                                   ),
@@ -476,7 +477,7 @@ class _BottomBar extends StatelessWidget {
                                         size: 13,
                                         color: isAutoScrolling
                                             ? primaryColor
-                                            : Colors.white,
+                                            : SunfireColors.contentPrimary,
                                       ),
                                       const SizedBox(width: 3),
                                       Text(
@@ -484,7 +485,7 @@ class _BottomBar extends StatelessWidget {
                                         style: TextStyle(
                                           color: isAutoScrolling
                                               ? primaryColor
-                                              : Colors.white,
+                                              : SunfireColors.contentPrimary,
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           letterSpacing: 0.5,
@@ -496,7 +497,7 @@ class _BottomBar extends StatelessWidget {
                               ),
                             IconButton(
                               icon: const Icon(Icons.skip_next_rounded,
-                                  color: Colors.white),
+                                  color: SunfireColors.contentPrimary),
                               tooltip: 'Next Chapter',
                               onPressed: onLoadNextChapter,
                             ),
@@ -513,7 +514,7 @@ class _BottomBar extends StatelessWidget {
                               child: SliderTheme(
                                 data: SliderThemeData(
                                   activeTrackColor: primaryColor,
-                                  inactiveTrackColor: Colors.grey[800],
+                                  inactiveTrackColor: SunfireColors.overlayTrack,
                                   thumbColor: primaryColor,
                                   trackHeight: 3,
                                   thumbShape: const RoundSliderThumbShape(
@@ -585,13 +586,13 @@ class _PageCapsule extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xCC14141A),
+                  color: SunfireColors.overlaySurface,
                   borderRadius: BorderRadius.circular(16),
                   border:
-                      Border.all(color: const Color(0x33FFFFFF), width: 0.8),
+                      Border.all(color: SunfireColors.borderStrong, width: 0.8),
                   boxShadow: const [
                     BoxShadow(
-                      color: Color(0x40000000),
+                      color: SunfireColors.shadowDefault,
                       blurRadius: 8,
                       offset: Offset(0, 2),
                     ),
@@ -602,7 +603,7 @@ class _PageCapsule extends StatelessWidget {
                   builder: (context, page, _) => Text(
                     '$page / $pageUrlsLength',
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: SunfireColors.contentPrimary,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
@@ -657,17 +658,17 @@ class _AutoScrollCapsule extends StatelessWidget {
             curve: Curves.easeOutCubic,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xCC141419),
+              color: SunfireColors.overlaySurface,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: isUserTouching
-                    ? Colors.amberAccent.withValues(alpha: 0.8)
+                    ? SunfireColors.overlayHighlight.withValues(alpha: 0.8)
                     : primaryColor.withValues(alpha: 0.6),
                 width: 1.0,
               ),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x55000000),
+                  color: SunfireColors.shadowDefault,
                   blurRadius: 12,
                   offset: Offset(0, 3),
                 ),
@@ -688,7 +689,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                               : Icons.speed_rounded,
                           size: 15,
                           color: isUserTouching
-                              ? Colors.amberAccent
+                              ? SunfireColors.overlayHighlight
                               : primaryColor,
                         ),
                         const SizedBox(width: 4),
@@ -696,15 +697,15 @@ class _AutoScrollCapsule extends StatelessWidget {
                           '${autoScrollSpeed.round()}',
                           style: TextStyle(
                             color: isUserTouching
-                                ? Colors.amberAccent
-                                : Colors.white,
+                                ? SunfireColors.overlayHighlight
+                                : SunfireColors.contentPrimary,
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(width: 2),
                         const Icon(Icons.chevron_right_rounded,
-                            size: 14, color: Colors.white38),
+                            size: 14, color: SunfireColors.contentDisabled),
                       ],
                     ),
                   )
@@ -728,7 +729,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                                 : Icons.pause_rounded,
                             size: 15,
                             color: isUserTouching
-                                ? Colors.amberAccent
+                                ? SunfireColors.overlayHighlight
                                 : primaryColor,
                           ),
                         ),
@@ -743,10 +744,10 @@ class _AutoScrollCapsule extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
+                            color: SunfireColors.overlayButton,
                             borderRadius: BorderRadius.circular(8),
                             border:
-                                Border.all(color: Colors.white12, width: 0.6),
+                                Border.all(color: SunfireColors.borderSubtle, width: 0.6),
                           ),
                           child: Text(
                             isUserTouching
@@ -754,8 +755,8 @@ class _AutoScrollCapsule extends StatelessWidget {
                                 : '${autoScrollSpeed.round()} px/s',
                             style: TextStyle(
                               color: isUserTouching
-                                  ? Colors.amberAccent
-                                  : Colors.white,
+                                  ? SunfireColors.overlayHighlight
+                                  : SunfireColors.contentPrimary,
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 0.3,
@@ -775,7 +776,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                         child: const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 4),
                           child: Icon(Icons.remove_rounded,
-                              size: 15, color: Colors.white70),
+                              size: 15, color: SunfireColors.contentSecondary),
                         ),
                       ),
                       GestureDetector(
@@ -789,7 +790,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                         child: const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 4),
                           child: Icon(Icons.add_rounded,
-                              size: 15, color: Colors.white70),
+                              size: 15, color: SunfireColors.contentSecondary),
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -804,12 +805,12 @@ class _AutoScrollCapsule extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: autoScrollSpeed >= 180.0
                                 ? primaryColor.withValues(alpha: 0.35)
-                                : Colors.white.withValues(alpha: 0.08),
+                                : SunfireColors.overlayButton,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: autoScrollSpeed >= 180.0
                                   ? primaryColor
-                                  : Colors.white24,
+                                  : SunfireColors.borderDefault,
                               width: 0.8,
                             ),
                           ),
@@ -821,7 +822,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                                 size: 13,
                                 color: autoScrollSpeed >= 180.0
                                     ? primaryColor
-                                    : Colors.amberAccent,
+                                    : SunfireColors.overlayHighlight,
                               ),
                               const SizedBox(width: 2),
                               Text(
@@ -833,7 +834,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                                 style: TextStyle(
                                   color: autoScrollSpeed >= 180.0
                                       ? primaryColor
-                                      : Colors.white,
+                                      : SunfireColors.contentPrimary,
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -851,7 +852,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                         child: const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 2),
                           child: Icon(Icons.chevron_left_rounded,
-                              size: 16, color: Colors.white38),
+                              size: 16, color: SunfireColors.contentDisabled),
                         ),
                       ),
                     ],

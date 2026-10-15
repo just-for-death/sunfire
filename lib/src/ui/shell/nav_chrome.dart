@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../design_system/components/sunfire_nav.dart'
     show SunfireBottomNav, SunfireNavDestination, SunfireNavRail;
+import '../design_system/tokens/sunfire_colors.dart';
 
 export '../design_system/components/sunfire_nav.dart' show SunfireNavDestination;
 
@@ -232,7 +233,7 @@ class _GlassTabItem extends StatelessWidget {
         child: Tooltip(
           message: destination.label,
           child: Material(
-            color: Colors.transparent,
+            color: SunfireColors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
               onTap: onTap,
@@ -316,7 +317,7 @@ class _GlassMoreItem extends StatelessWidget {
         selected: selected,
         label: 'More',
         child: Material(
-          color: Colors.transparent,
+          color: SunfireColors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(20),
             onTap: onTap,

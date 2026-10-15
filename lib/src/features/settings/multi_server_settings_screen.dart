@@ -16,6 +16,7 @@ import '../../ui/design_system/components/components.dart'
         SunfireButton,
         showSunfireConfirmDialog,
         showSunfireSheet;
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/widgets/dialog_controllers.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -198,16 +199,17 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
                 ),
                 const SectionTitle(title: 'Configured servers'),
                 if (servers.isEmpty)
-                  const ListTile(
-                    title: Text('No experimental servers yet'),
+                  ListTile(
+                    title: const Text('No experimental servers yet'),
                     subtitle: Text(
                       'Add Kavita/Mihon adapters to probe them',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   )
                 else
                   ...servers.map((s) {
                     final reachable = _reachability[s.id];
+                    final mutedColor = Theme.of(context).colorScheme.onSurfaceVariant;
                     return ListTile(
                       leading: Icon(
                         reachable == true
@@ -216,10 +218,10 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
                                 ? Icons.cancel_rounded
                                 : Icons.help_outline_rounded,
                         color: reachable == true
-                            ? Colors.greenAccent
+                            ? SunfireColors.success
                             : reachable == false
-                                ? Colors.redAccent
-                                : Colors.grey,
+                                ? SunfireColors.error
+                                : mutedColor,
                       ),
                       title: Text(s.name),
                       subtitle: Text(
@@ -227,7 +229,7 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
                         '${s.capabilities?['version'] != null ? " · v${s.capabilities!['version']}" : ""}'
                         '${s.isPrimary ? " · primary" : ""}'
                         '${s.isEnabled ? "" : " (disabled)"}',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: TextStyle(fontSize: 12, color: mutedColor),
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,

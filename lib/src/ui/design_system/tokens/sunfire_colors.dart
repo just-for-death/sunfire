@@ -91,6 +91,15 @@ class SunfireColors {
   static const Color serverBadge = Color(0xFF3B82F6);     // Blue
   static const Color pinnedBadge = Color(0xFFF59E0B);     // Amber
 
+  // ── HUD and Reader Overlay Scrims ──────────────────────────────────────────
+  static const Color transparent = Color(0x00000000);
+  static const Color overlayScrim = Color(0xCC000000);     // 80% black gradient
+  static const Color overlaySurface = Color(0xCC141419);   // HUD capsule background
+  static const Color overlayButton = Color(0x14FFFFFF);    // 8% white button fill
+  static const Color overlayTrack = Color(0xFF424242);     // Inactive slider track
+  static const Color overlayHighlight = Color(0xFFFFD54F); // Amber accent (bookmark/auto-scroll)
+  static const Color shadowDefault = Color(0x55000000);    // Default shadow
+
   // ── OLED / Pure Black Variant ─────────────────────────────────────────────
   static const Color oledBlack = Color(0xFF000000);
   static const Color oledSurface1 = Color(0xFF0A0A0A);

@@ -9,6 +9,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../ui/design_system/tokens/sunfire_colors.dart';
+
 /// One week column: 7 day intensities, Monday-first. -1 = out of range
 /// (future days / before the window start), rendered as empty space.
 typedef HeatWeek = List<int>;
@@ -67,7 +69,7 @@ class ReadingHeatmap extends StatelessWidget {
     super.key,
     required this.dailyCounts,
     this.weeks = 16,
-    this.accent = const Color(0xFFFF5722),
+    this.accent = SunfireColors.unreadDot,
   });
 
   final Map<DateTime, int> dailyCounts;

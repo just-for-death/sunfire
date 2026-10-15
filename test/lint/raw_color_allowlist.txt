@@ -13,8 +13,6 @@ lib/src/features/browse/source_configuration_screen.dart 11
 lib/src/features/browse/source_manga_grid_screen.dart 27
 lib/src/features/library/duplicate_review_screen.dart 4
 lib/src/features/library/library_screen.dart 41
-lib/src/features/library/manga_tag_editor_sheet.dart 1
-lib/src/features/library/tag_management_screen.dart 2
 lib/src/features/manga_detail/manga_detail_screen.dart 35
 lib/src/features/manga_detail/tracking_bottom_sheet.dart 124
 lib/src/features/onboarding/onboarding_screen.dart 45
@@ -23,8 +21,6 @@ lib/src/features/reader/controller/reader_page_widget.dart 7
 lib/src/features/reader/controller/reader_theme.dart 4
 lib/src/features/reader/reader_auto_scroll_sheet.dart 10
 lib/src/features/reader/reader_chapter_selector_sheet.dart 9
-lib/src/features/reader/reader_chapter_transition.dart 1
-lib/src/features/reader/reader_overlay_hud.dart 45
 lib/src/features/reader/reader_screen_view.dart 3
 lib/src/features/reader/reader_settings_sheet.dart 11
 lib/src/features/reader/tap_zone_overlay.dart 7
@@ -38,13 +34,10 @@ lib/src/features/settings/extension_repos_screen.dart 15
 lib/src/features/settings/general_settings_screen.dart 13
 lib/src/features/settings/import_tachibk_screen.dart 9
 lib/src/features/settings/library_settings_screen.dart 35
-lib/src/features/settings/multi_server_settings_screen.dart 5
 lib/src/features/settings/reader_settings_screen.dart 17
 lib/src/features/settings/server_settings_screen.dart 47
 lib/src/features/settings/settings_screen.dart 12
 lib/src/features/settings/tracking_settings_screen.dart 68
 lib/src/features/settings/widgets/settings_prop_tile.dart 10
-lib/src/features/stats/reading_heatmap.dart 1
 lib/src/main_shell.dart 7
-lib/src/ui/shell/nav_chrome.dart 2
 lib/src/ui/widgets/conflict_resolution_dialog.dart 7
