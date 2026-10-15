@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/sync/conflict_resolver.dart' show ConflictResolutionStrategy;
 import '../../core/sync/sync_engine.dart' show SyncConflict, ConflictResolution;
+import '../design_system/tokens/sunfire_colors.dart';
 
 /// ConflictResolutionDialog — UI for resolving sync conflicts with visual diffs.
 ///
@@ -57,7 +58,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
     final entityId = conflict.entityId;
 
     return Dialog.fullscreen(
-      backgroundColor: Colors.transparent,
+      backgroundColor: SunfireColors.transparent,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
@@ -78,7 +79,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
 
   Widget _buildEmptyState() {
     return Dialog.fullscreen(
-      backgroundColor: Colors.transparent,
+      backgroundColor: SunfireColors.transparent,
       child: Container(
         padding: const EdgeInsets.all(40),
         decoration: BoxDecoration(
@@ -212,19 +213,19 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
     IconData icon;
     switch (entityType) {
       case 'manga':
-        color = Colors.purple;
+        color = SunfireColors.info;
         icon = Icons.menu_book_rounded;
         break;
       case 'chapter':
-        color = Colors.blue;
+        color = SunfireColors.trackerBlue;
         icon = Icons.article_rounded;
         break;
       case 'category':
-        color = Colors.green;
+        color = SunfireColors.success;
         icon = Icons.category_rounded;
         break;
       default:
-        color = Colors.grey;
+        color = SunfireColors.contentTertiary;
         icon = Icons.help_rounded;
     }
 
@@ -327,7 +328,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
         border: Border.all(
           color: isDifferent
               ? Theme.of(context).colorScheme.outlineVariant
-              : Colors.transparent,
+              : SunfireColors.transparent,
           width: isDifferent ? 1 : 0,
         ),
       ),

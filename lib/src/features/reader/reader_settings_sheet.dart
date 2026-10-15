@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/services/settings_service.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import 'controller/reader_theme.dart';
 import 'double_page_layout.dart';
 import 'reader_settings_scope.dart';
@@ -61,7 +62,7 @@ class ReaderSettingsSheet {
     final primaryColor = Theme.of(context).colorScheme.primary;
     return showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1F1F24),
+      backgroundColor: SunfireColors.surface2,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -89,7 +90,7 @@ class ReaderSettingsSheet {
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.grey[700],
+                          color: SunfireColors.contentSecondary,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -128,7 +129,7 @@ class ReaderSettingsSheet {
                             TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              color: SunfireColors.contentPrimary,
                             ),
                           ),
                         ),
@@ -138,7 +139,7 @@ class ReaderSettingsSheet {
                         model.scope == ReaderSettingsScope.manga
                             ? 'Mode, scale, crop and tap zones apply to this series only'
                             : 'Mode, scale, crop and tap zones apply to all series',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                        style: TextStyle(fontSize: 11, color: SunfireColors.contentTertiary),
                       ),
                       const SizedBox(height: 16),
                     ] else
@@ -310,7 +311,7 @@ class ReaderSettingsSheet {
                       title: const Text('Tap Zones (Paged)'),
                       subtitle: Text(model.settings.tapZonePresetPaged),
                       trailing: const Icon(Icons.chevron_right_rounded,
-                          color: Colors.white54),
+                          color: SunfireColors.contentSecondary),
                       onTap: () async {
                         final choice = await showDialog<String>(
                           context: context,
@@ -336,7 +337,7 @@ class ReaderSettingsSheet {
                       title: const Text('Tap Zones (Webtoon)'),
                       subtitle: Text(model.settings.tapZonePresetWebtoon),
                       trailing: const Icon(Icons.chevron_right_rounded,
-                          color: Colors.white54),
+                          color: SunfireColors.contentSecondary),
                       onTap: () async {
                         final choice = await showDialog<String>(
                           context: context,
@@ -363,7 +364,7 @@ class ReaderSettingsSheet {
                       title: const Text('Display Mode'),
                       subtitle: Text(model.settings.doublePageDisplayMode),
                       trailing: const Icon(Icons.chevron_right_rounded,
-                          color: Colors.white54),
+                          color: SunfireColors.contentSecondary),
                       onTap: () async {
                         final choice = await showDialog<String>(
                           context: context,
@@ -453,7 +454,7 @@ Widget _sectionHeader(String title) {
       style: const TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.bold,
-        color: Colors.grey,
+        color: SunfireColors.contentTertiary,
         letterSpacing: 1,
       ),
     ),
@@ -470,9 +471,9 @@ Widget _filterChip(
     label: Text(label),
     selected: isSelected,
     selectedColor: primaryColor,
-    backgroundColor: const Color(0x1F2A2A32),
+    backgroundColor: SunfireColors.borderSubtle,
     labelStyle: TextStyle(
-      color: isSelected ? Colors.white : Colors.grey,
+      color: isSelected ? SunfireColors.contentPrimary : SunfireColors.contentTertiary,
       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       fontSize: 12,
     ),

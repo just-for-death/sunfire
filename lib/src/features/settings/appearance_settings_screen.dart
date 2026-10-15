@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../../ui/shell/tablet_ui_prefs.dart';
 import 'widgets/section_title.dart';
@@ -48,7 +49,7 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
               final isSelected = opt == currentValue;
               return ListTile(
                 title: Text(opt),
-                trailing: isSelected ? const Icon(Icons.check_rounded, color: Colors.greenAccent) : null,
+                trailing: isSelected ? const Icon(Icons.check_rounded, color: SunfireColors.success) : null,
                 onTap: () {
                   onSelected(opt);
                   Navigator.pop(context);
@@ -85,7 +86,7 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                   ],
                 ),
                 subtitle: Text(SunfireTheme.themeModeLabel(_settings.themeMode),
-                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                 onTap: () {
                   _showRadioDialog(
                     title: 'Theme Mode',
@@ -155,8 +156,8 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                             color: entry.value,
                             shape: BoxShape.circle,
                             border: isSelected
-                                ? Border.all(color: Colors.white, width: 3)
-                                : Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
+                                ? Border.all(color: SunfireColors.contentPrimary, width: 3)
+                                : Border.all(color: SunfireColors.contentPrimary.withValues(alpha: 0.2), width: 1.5),
                             boxShadow: isSelected
                                 ? [
                                     BoxShadow(
@@ -168,7 +169,7 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                                 : null,
                           ),
                           child: isSelected
-                              ? const Icon(Icons.check_rounded, color: Colors.white, size: 24)
+                              ? const Icon(Icons.check_rounded, color: SunfireColors.contentPrimary, size: 24)
                               : null,
                         ),
                       ),
@@ -201,7 +202,7 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                 ),
                 subtitle: Text(
                   '${TabletUiPrefs.mode} — rail vs bottom bar for large windows',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                 ),
                 onTap: () {
                   _showRadioDialog(

@@ -18,6 +18,7 @@ import 'package:flutter/rendering.dart';
 import '../../../core/db/models/chapter.dart';
 import '../../../core/engine/javascript/m_client.dart';
 import '../../../core/engine/quickjs_service.dart';
+import '../../../ui/design_system/tokens/sunfire_colors.dart';
 import '../double_page_layout.dart';
 import '../reading_mode.dart';
 import 'navigation_controller.dart'
@@ -500,11 +501,11 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.broken_image_rounded, size: 48, color: Colors.grey),
+            const Icon(Icons.broken_image_rounded, size: 48, color: SunfireColors.contentTertiary),
             const SizedBox(height: 12),
             Text(
               'Failed to load image',
-              style: TextStyle(color: Colors.grey[400]),
+              style: TextStyle(color: SunfireColors.contentTertiary),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -630,7 +631,7 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color: SunfireColors.contentPrimary,
                   height: 1.2,
                 ),
                 maxLines: 2,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../ui/design_system/tokens/sunfire_colors.dart';
+
 enum SunfireBadgeVariant {
   /// Compact tag/counter/status badge (e.g. "ONGOING", "SERVER", "EN", "12 CH")
   compact,
@@ -26,7 +28,7 @@ class SunfireBadge extends StatelessWidget {
   factory SunfireBadge.server({Key? key}) => SunfireBadge(
         key: key,
         label: 'SERVER',
-        color: Colors.tealAccent,
+        color: SunfireColors.sourceLocalJs,
         fontSize: 9.0,
         fontWeight: FontWeight.bold,
       );
@@ -34,7 +36,7 @@ class SunfireBadge extends StatelessWidget {
   factory SunfireBadge.local({Key? key}) => SunfireBadge(
         key: key,
         label: 'LOCAL',
-        color: Colors.purpleAccent,
+        color: SunfireColors.info,
         fontSize: 9.0,
         fontWeight: FontWeight.bold,
       );
@@ -42,7 +44,7 @@ class SunfireBadge extends StatelessWidget {
   factory SunfireBadge.proxy({Key? key}) => SunfireBadge(
         key: key,
         label: 'PROXY',
-        color: Colors.amberAccent,
+        color: SunfireColors.trackerAmber,
         fontSize: 9.0,
         fontWeight: FontWeight.bold,
       );
@@ -80,7 +82,7 @@ class SunfireBadge extends StatelessWidget {
     final effectiveTextColor = textColor ??
         (isCompact
             ? (color ?? primary)
-            : (color ?? Colors.white70));
+            : (color ?? SunfireColors.contentSecondary));
 
     Widget badgeContent = Row(
       mainAxisSize: MainAxisSize.min,
@@ -121,7 +123,7 @@ class SunfireBadge extends StatelessWidget {
 
     if (onTap != null) {
       return Material(
-        color: Colors.transparent,
+        color: SunfireColors.transparent,
         child: InkWell(
           borderRadius: effectiveBorderRadius,
           onTap: onTap,

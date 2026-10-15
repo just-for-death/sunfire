@@ -12,6 +12,7 @@ import '../../core/library/duplicate_detection_service.dart'
     show DuplicateDetectionService, DuplicateScanResult;
 import '../../ui/design_system/components/components.dart'
     show SunfireCard;
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 
 /// Duplicate review screen for reviewing and merging duplicates.
 class DuplicateReviewScreen extends StatefulWidget {
@@ -197,7 +198,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.check_circle_rounded,
-                size: 64, color: Colors.green),
+                size: 64, color: SunfireColors.success),
             const SizedBox(height: 16),
             Text('No duplicates found!',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
@@ -228,7 +229,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
                   label: 'Groups Found',
                   value: result.groupCount.toString(),
                   icon: Icons.group_rounded,
-                  color: Colors.orange,
+                  color: SunfireColors.trackerAmber,
                 ),
               ),
               Expanded(
@@ -236,7 +237,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
                   label: 'Duplicates',
                   value: result.duplicateCount.toString(),
                   icon: Icons.content_copy_rounded,
-                  color: Colors.red,
+                  color: SunfireColors.error,
                 ),
               ),
               Expanded(
@@ -244,7 +245,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
                   label: 'Scanned',
                   value: result.totalMangaScanned.toString(),
                   icon: Icons.library_books_rounded,
-                  color: Colors.blue,
+                  color: SunfireColors.trackerBlue,
                 ),
               ),
             ],

@@ -7,6 +7,7 @@ import '../../core/db/models/manga.dart';
 import '../../core/engine/content_resolver_service.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/sync/graphql_client_service.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 
 class GlobalSearchScreen extends StatefulWidget {
@@ -202,7 +203,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         child: _loadingSources.isNotEmpty && _resultsBySource.isEmpty
             ? Center(child: CircularProgressIndicator(color: primaryColor))
             : _resultsBySource.isEmpty
-                ? const Center(child: Text('No results across sources.', style: TextStyle(color: Colors.grey)))
+                ? const Center(child: Text('No results across sources.', style: TextStyle(color: SunfireColors.contentTertiary)))
                 : ListView(
                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     padding: EdgeInsets.only(bottom: SunfireBreakpoints.scrollBottomPadding(context)),
@@ -254,9 +255,9 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                                                       thumb,
                                                       headers: QuickJsService.getImageHeaders(sourceName, thumb),
                                                       fit: BoxFit.cover,
-                                                      errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded, color: Colors.grey),
+                                                      errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded, color: SunfireColors.contentTertiary),
                                                     )
-                                                  : const Icon(Icons.book_rounded, color: Colors.grey),
+                                                  : const Icon(Icons.book_rounded, color: SunfireColors.contentTertiary),
                                             ),
                                           ),
                                           const SizedBox(height: 4),

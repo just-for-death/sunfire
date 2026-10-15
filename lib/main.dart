@@ -26,6 +26,7 @@ import 'src/core/sync/sync_engine.dart';
 import 'src/core/sync/sync_health_service.dart';
 import 'src/core/sync/sync_manager.dart';
 import 'src/core/sync/websocket_service.dart';
+import 'src/ui/design_system/tokens/sunfire_colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,11 +35,11 @@ unawaited(
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
+      statusBarColor: SunfireColors.transparent,
       statusBarIconBrightness: Brightness.light,
       statusBarBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarColor: SunfireColors.transparent,
+      systemNavigationBarDividerColor: SunfireColors.transparent,
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );

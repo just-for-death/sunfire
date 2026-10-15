@@ -15,6 +15,7 @@ import 'core/sync/server_session_service.dart';
 import 'core/sync/sync_engine.dart';
 import 'core/sync/websocket_service.dart';
 import 'features/settings/server_login_sheet.dart';
+import 'ui/design_system/tokens/sunfire_colors.dart';
 import 'ui/shell/desktop_menus.dart';
 import 'ui/shell/keyboard_shortcuts.dart';
 import 'ui/shell/nav_chrome.dart';
@@ -544,7 +545,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: const DialogTitle(
                 icon: Icons.exit_to_app_rounded,
-                iconColor: Colors.amberAccent,
+                iconColor: SunfireColors.trackerAmber,
                 text: 'Exit Sunfire',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
@@ -880,7 +881,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
     if (isExpanded) {
       return Material(
-        color: Colors.transparent,
+        color: SunfireColors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () => _handleTabSelect(index),
@@ -938,7 +939,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             message: label,
             preferBelow: false,
             child: Material(
-              color: Colors.transparent,
+              color: SunfireColors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
                 onTap: () => _handleTabSelect(index),
@@ -989,7 +990,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     required VoidCallback onTap,
   }) {
     return Material(
-      color: Colors.transparent,
+      color: SunfireColors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
@@ -1043,7 +1044,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           message: label,
           preferBelow: false,
           child: Material(
-            color: Colors.transparent,
+            color: SunfireColors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
               onTap: onTap,
@@ -1100,7 +1101,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
             child: Material(
-              color: Colors.transparent,
+              color: SunfireColors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
                 onTap: () => context.push('/settings/server'),

@@ -2077,7 +2077,7 @@ unawaited(
 
     return RepaintBoundary(
       child: Material(
-        color: Colors.transparent,
+        color: SunfireColors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () async {
@@ -2148,7 +2148,7 @@ unawaited(
                             manga.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.white, height: 1.25),
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: SunfireColors.contentPrimary, height: 1.25),
                           ),
                         ),
                       ),

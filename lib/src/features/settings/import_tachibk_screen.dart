@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../core/backup/tachibk_import_service.dart';
 import '../../core/backup/tachibk_parser.dart';
 import '../../core/logging/logger_service.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import 'widgets/settings_subpage_scaffold.dart';
 
 /// Client-side `.tachibk` restore: pick a backup file on the device, review
@@ -123,7 +124,7 @@ unawaited(
                   child: SingleChildScrollView(
                     child: Text(
                       result.messages.join('\n'),
-                      style: const TextStyle(fontSize: 12, color: Colors.white70),
+                      style: const TextStyle(fontSize: 12, color: SunfireColors.contentSecondary),
                     ),
                   ),
                 ),
@@ -174,7 +175,7 @@ unawaited(
             'and tracker bindings are not imported (chapter lists arrive from '
             'the server afterwards, so there is nothing reliable to attach '
             'them to yet).',
-            style: const TextStyle(fontSize: 13, color: Colors.white60),
+            style: const TextStyle(fontSize: 13, color: SunfireColors.contentSecondary),
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
@@ -190,7 +191,7 @@ unawaited(
             padding: const EdgeInsets.only(top: 16),
             child: Text(
               _parseError!,
-              style: const TextStyle(fontSize: 13, color: Color(0xFFFF8A80)),
+              style: const TextStyle(fontSize: 13, color: SunfireColors.error),
             ),
           ),
           if (_fileName != null && _plan != null) ...[
@@ -206,7 +207,7 @@ unawaited(
               const SizedBox(height: 8),
               Text(
                 'Categories that will be created: ${_plan!.categoriesToCreate.join(', ')}',
-                style: const TextStyle(fontSize: 12, color: Colors.white54),
+                style: const TextStyle(fontSize: 12, color: SunfireColors.contentSecondary),
               ),
             ],
             const SizedBox(height: 16),
@@ -219,7 +220,7 @@ unawaited(
               padding: EdgeInsets.only(top: 12),
               child: Text(
                 'Restore finished. Back out to refresh your library.',
-                style: TextStyle(fontSize: 12, color: Colors.greenAccent),
+                style: TextStyle(fontSize: 12, color: SunfireColors.success),
               ),
             ),
           ],
@@ -246,13 +247,13 @@ unawaited(
         ready ? '${entry.matchedSource!.name} (${entry.matchedSource!.lang})' : 'Source not installed on server',
         style: TextStyle(
           fontSize: 11.5,
-          color: ready ? Colors.white54 : const Color(0xFFFF8A80),
+          color: ready ? SunfireColors.contentSecondary : SunfireColors.error,
         ),
       ),
       controlAffinity: ListTileControlAffinity.leading,
       secondary: ready
-          ? const Icon(Icons.check_circle_outline, size: 18, color: Colors.greenAccent)
-          : const Icon(Icons.error_outline, size: 18, color: Color(0xFFFF8A80)),
+          ? const Icon(Icons.check_circle_outline, size: 18, color: SunfireColors.success)
+          : const Icon(Icons.error_outline, size: 18, color: SunfireColors.error),
     );
   }
 }

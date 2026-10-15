@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../ui/design_system/tokens/sunfire_colors.dart';
+
 class EmptyStateWidget extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -30,10 +32,10 @@ class EmptyStateWidget extends StatelessWidget {
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0x1F2A2A32),
-                border: Border.all(color: const Color(0x2BFFFFFF)),
+                color: SunfireColors.borderSubtle,
+                border: Border.all(color: SunfireColors.borderDefault),
               ),
-              child: Icon(icon, size: 64, color: Colors.grey[600]),
+              child: Icon(icon, size: 64, color: SunfireColors.contentSecondary),
             ),
             const SizedBox(height: 24),
             Text(
@@ -45,7 +47,7 @@ class EmptyStateWidget extends StatelessWidget {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 14, color: SunfireColors.contentTertiary),
             ),
             if (onAction != null && actionLabel != null) ...[
               const SizedBox(height: 24),
@@ -56,7 +58,7 @@ class EmptyStateWidget extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: onAction,
-                child: Text(actionLabel!, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                child: Text(actionLabel!, style: const TextStyle(fontWeight: FontWeight.bold, color: SunfireColors.contentPrimary)),
               ),
             ],
           ],

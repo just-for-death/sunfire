@@ -8,6 +8,7 @@ import '../../core/services/download_manager_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -141,7 +142,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                   trailing: isSelected
                       ? const Icon(
                           Icons.check_rounded,
-                          color: Colors.greenAccent,
+                          color: SunfireColors.success,
                         )
                       : null,
                   onTap: () {
@@ -210,11 +211,11 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                         ),
                         subtitle: const Text(
                           'Monitor real-time progress for both Local Device and Suwayomi Server',
-                          style: TextStyle(fontSize: 12, color: Colors.white60),
+                          style: TextStyle(fontSize: 12, color: SunfireColors.contentSecondary),
                         ),
                         trailing: const Icon(
                           Icons.chevron_right_rounded,
-                          color: Colors.white54,
+                          color: SunfireColors.contentSecondary,
                         ),
                         onTap: () => context.push('/downloads'),
                       ),
@@ -258,7 +259,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       onBoolChanged: (v) => setState(() => _settings.downloadAsCbz = v),
                     ),
 
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
 
                     // ── 2. DELETE CHAPTERS ──
                     const SectionTitle(title: 'Delete chapters'),
@@ -294,7 +295,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                         _settings.deleteFinishedChaptersWhileReading,
                         style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.grey,
+                          color: SunfireColors.contentTertiary,
                         ),
                       ),
                       onTap: _showDeleteWhileReadingDialog,
@@ -324,7 +325,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                           setState(() => _settings.deleteAfterReadOffset = v),
                     ),
 
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
 
                     // ── IMP-037: DOWNLOAD SPEED ──
                     // IMP-035: download folder + free-space reserve.
@@ -504,7 +505,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                     // (UIX-13, Jane decision a): nothing read it, since there is no
                     // local auto-download-on-update feature to filter.
 
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
 
                     // ── 4. DOWNLOAD AHEAD ──
                     const SectionTitle(title: 'Download ahead'),
@@ -533,7 +534,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                             _settings.downloadAheadChapterCount = v,
                       ),
 
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
 
                     // ── 5. NOTIFICATIONS & BACKGROUND ──
                     const SectionTitle(title: 'Notifications & Background'),
@@ -562,7 +563,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                         },
                       ),
 
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
 
                     // ── 6. NETWORK RESTRICTIONS ──
                     const SectionTitle(title: 'Network Restrictions'),

@@ -2322,7 +2322,7 @@ unawaited(
                           // Top scrim behind the app-bar icons: dark scrim in
                           // dark themes, a surface wash in Light (ISS-047).
                           cs.brightness == Brightness.dark
-                              ? const Color(0x80000000)
+                              ? SunfireColors.overlayScrim.withValues(alpha: 0.5)
                               : cs.surface.withValues(alpha: 0.5),
                           Theme.of(context).colorScheme.surface.withValues(alpha: 0.7),
                           Theme.of(context).colorScheme.surface,
@@ -2501,8 +2501,8 @@ unawaited(
                       ),
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
+                          backgroundColor: SunfireColors.transparent,
+                          shadowColor: SunfireColors.transparent,
                           foregroundColor: cs.onSurface,
                           minimumSize: const Size.fromHeight(48),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

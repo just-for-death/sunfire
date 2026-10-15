@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/sunfire_badge.dart';
+import '../../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../../ui/widgets/dialog_controllers.dart';
 
 enum SettingsPropKind {
@@ -76,7 +77,7 @@ class SettingsPropTile extends StatelessWidget {
     if (scope == SettingScope.none) return const SizedBox.shrink();
 
     final isServer = scope == SettingScope.server;
-    final color = isServer ? Colors.tealAccent : Colors.purpleAccent;
+    final color = isServer ? SunfireColors.sourceLocalJs : SunfireColors.info;
 
     return SunfireBadge(
       label: isServer ? 'SERVER' : 'LOCAL',
@@ -105,7 +106,7 @@ class SettingsPropTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (description != null && description!.isNotEmpty) ...[
-                    Text(description!, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                    Text(description!, style: const TextStyle(fontSize: 13, color: SunfireColors.contentTertiary)),
                     const SizedBox(height: 14),
                   ],
                   TextField(
@@ -129,7 +130,7 @@ class SettingsPropTile extends StatelessWidget {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                  child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -141,7 +142,7 @@ class SettingsPropTile extends StatelessWidget {
                     Navigator.pop(context);
                     onStringChanged?.call(text);
                   },
-                  child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text('Save', style: TextStyle(color: SunfireColors.contentPrimary, fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -174,7 +175,7 @@ unawaited(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (description != null && description!.isNotEmpty) ...[
-                    Text(description!, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                    Text(description!, style: const TextStyle(fontSize: 13, color: SunfireColors.contentTertiary)),
                     const SizedBox(height: 12),
                   ],
                   Text(
@@ -193,7 +194,7 @@ unawaited(
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                  child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -208,7 +209,7 @@ unawaited(
                       onDoubleChanged!(currentVal);
                     }
                   },
-                  child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text('Save', style: TextStyle(color: SunfireColors.contentPrimary, fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -243,7 +244,7 @@ unawaited(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         secondary: leading,
         title: titleContent,
-        subtitle: subtitle != null ? Text(subtitle!, style: const TextStyle(fontSize: 12, color: Colors.grey)) : null,
+        subtitle: subtitle != null ? Text(subtitle!, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)) : null,
         value: boolValue ?? false,
         onChanged: onBoolChanged,
       );
@@ -253,7 +254,7 @@ unawaited(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       leading: leading,
       title: titleContent,
-      subtitle: subtitle != null ? Text(subtitle!, style: const TextStyle(fontSize: 12, color: Colors.grey)) : null,
+      subtitle: subtitle != null ? Text(subtitle!, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)) : null,
       trailing: trailing,
       onTap: () {
         if (onTap != null) {

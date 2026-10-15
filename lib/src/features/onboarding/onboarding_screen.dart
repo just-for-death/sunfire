@@ -787,7 +787,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               style: TextStyle(color: cs.onSurface),
               decoration: InputDecoration(
                 labelText: 'Username',
-                labelStyle: TextStyle(color: Colors.grey),
+                labelStyle: TextStyle(color: SunfireColors.contentTertiary),
                 hintText: 'admin',
                 hintStyle: TextStyle(color: cs.onSurfaceVariant),
                 filled: true,
@@ -1117,7 +1117,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.shield_outlined, color: Colors.amberAccent, size: 18),
+                      Icon(Icons.shield_outlined, color: SunfireColors.trackerAmber, size: 18),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(

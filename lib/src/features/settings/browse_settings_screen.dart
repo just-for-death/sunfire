@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/widgets/proxy_url_display.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
@@ -82,7 +83,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                         allSelected
                             ? 'Currently showing all languages. Pick one or more to filter; entries with an unknown language always pass.'
                             : 'Currently filtering: ${current.join(', ')}',
-                        style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.6)),
+                        style: TextStyle(fontSize: 12, color: SunfireColors.contentPrimary.withValues(alpha: 0.6)),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -241,7 +242,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                       boolValue: _settings.showNsfwSources,
                       onBoolChanged: (v) => _settings.showNsfwSources = v,
                     ),
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
                     // ── Language display ────────────────────────────────────
                     // Both of these settings had fully-built consumers
                     // (SettingsService.languageMatchesFilter is applied to the
@@ -271,7 +272,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                       leading: const Icon(Icons.translate_rounded),
                       onTap: () => _pickLanguages(context),
                     ),
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
                     const SectionTitle(title: 'Server Scraper Engine'),
                     SettingsPropTile(
                       title: 'Parallel scrapers concurrency',
@@ -300,7 +301,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                         unawaited(_update('localSourcePath', v));
                       },
                     ),
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
                     const SectionTitle(title: 'Extension Repositories'),
                     SettingsPropTile(
                       title: 'Auto-update JS scrapers',
@@ -322,14 +323,14 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                           SunfireBadge.local(),
                         ],
                       ),
-                      subtitle: const Text('Add the official Sunfire index or community MangaYomi repositories', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                      subtitle: const Text('Add the official Sunfire index or community MangaYomi repositories', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: SunfireColors.contentTertiary),
                       onTap: () {
                         // UIS-21: use the GoRouter route so the URL stays in sync.
                         unawaited(context.push('/settings/extension-repos'));
                       },
                     ),
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
                     const SectionTitle(title: 'Cloudflare Bypass - FlareSolverr (Local App)'),
                     SettingsPropTile(
                       title: 'Local FlareSolverr URL',

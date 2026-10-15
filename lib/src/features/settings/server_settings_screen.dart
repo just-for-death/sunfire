@@ -361,7 +361,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       if (mounted) {
         messenger.showSnackBar(SnackBar(
           content: Text(res.statusCode == 200 ? '✅ Local FlareSolverr is ONLINE!' : '⚠️ Responded with HTTP ${res.statusCode}'),
-          backgroundColor: res.statusCode == 200 ? Colors.green.shade800 : Colors.orange.shade800,
+          backgroundColor: res.statusCode == 200 ? SunfireColors.success : SunfireColors.trackerAmber,
           behavior: SnackBarBehavior.floating,
         ));
       }
@@ -369,7 +369,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       if (mounted) {
         messenger.showSnackBar(SnackBar(
           content: Text('❌ Local FlareSolverr unreachable: $e'),
-          backgroundColor: Colors.red.shade800,
+          backgroundColor: SunfireColors.error,
           behavior: SnackBarBehavior.floating,
         ));
       }
@@ -415,7 +415,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                  child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
@@ -430,7 +430,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     unawaited(_update('authPassword', p));
                     Navigator.pop(context);
                   },
-                  child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text('Save', style: TextStyle(color: SunfireColors.contentPrimary, fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -466,7 +466,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
               children: [
                 const Text(
                   'Configure credentials Sunfire uses to authenticate with Suwayomi.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                 ),
                 const SizedBox(height: 12),
                 SegmentedButton<ServerAuthType>(
@@ -516,7 +516,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     ),
                   ),
                 ] else ...[
-                  const Text('No authentication credentials sent to server.', style: TextStyle(fontSize: 13, color: Colors.white60)),
+                  const Text('No authentication credentials sent to server.', style: TextStyle(fontSize: 13, color: SunfireColors.contentSecondary)),
                 ],
               ],
             ),
@@ -578,7 +578,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   ),
                   subtitle: const Text(
                     'Pull changes since last sync via SyncManager',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                   ),
                   onTap: () => unawaited(runSyncWithProgressDialog(
                     context,
@@ -714,7 +714,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   onTap: _openWebUI,
                 ),
 
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const Divider(height: 1, color: SunfireColors.borderHairline),
                 if (_serverUpdates.isNotEmpty)
                   ..._serverUpdates.map((u) {
                     final label = u.channel.isEmpty ? u.tag : '${u.channel}: ${u.tag}';
@@ -743,10 +743,10 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       SunfireBadge.server(),
                     ],
                   ),
-                  subtitle: Text(_authMode, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: Text(_authMode, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: DropdownButton<String>(
                     value: _authMode,
-                    dropdownColor: const Color(0xFF22222A),
+                    dropdownColor: SunfireColors.surface2,
                     underline: const SizedBox(),
                     items: const [
                       DropdownMenuItem(value: 'NONE', child: Text('None')),
@@ -782,7 +782,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       ServerSessionService.instance.isLoggedIn
                           ? 'Signed in as ${ServerSessionService.instance.username ?? "user"}'
                           : 'Required for ${serverLoginModeLabel(loginModeForAuthMode(_authMode)!)}',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                     ),
                     trailing: const Icon(Icons.login_rounded),
                     onTap: () async {
@@ -803,7 +803,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     ),
                 ],
 
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const Divider(height: 1, color: SunfireColors.borderHairline),
                 const SectionTitle(title: 'Server Network Bindings (Server)'),
                 SettingsPropTile(
                   title: 'IP Address',
@@ -853,7 +853,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   },
                 ),
 
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const Divider(height: 1, color: SunfireColors.borderHairline),
                 const SectionTitle(title: 'SOCKS Proxy Tunnel (Server)'),
                 SettingsPropTile(
                   title: 'Enable SOCKS Proxy',
@@ -873,7 +873,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     subtitle: Text('SOCKS $_socksProxyVersion', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                     trailing: DropdownButton<int>(
                       value: _socksProxyVersion,
-                      dropdownColor: const Color(0xFF22222A),
+                      dropdownColor: SunfireColors.surface2,
                       underline: const SizedBox(),
                       items: const [
                         DropdownMenuItem(value: 4, child: Text('SOCKS 4')),
@@ -934,7 +934,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   ),
                 ],
 
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const Divider(height: 1, color: SunfireColors.borderHairline),
                 const SectionTitle(title: 'Cloudflare Bypass - FlareSolverr (Server)'),
                 SettingsPropTile(
                   title: 'Enable FlareSolverr',
@@ -1012,7 +1012,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   ),
                 ],
 
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const Divider(height: 1, color: SunfireColors.borderHairline),
                 const SectionTitle(title: 'Cloudflare Bypass - FlareSolverr (Local App)'),
                 SettingsPropTile(
                   title: 'Local FlareSolverr URL',
@@ -1042,7 +1042,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   onTap: _isTestingLocalCf ? null : _testLocalFlareSolverr,
                 ),
 
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const Divider(height: 1, color: SunfireColors.borderHairline),
                 const SectionTitle(title: 'OPDS Server Feed (Server)'),
                 SettingsPropTile(
                   title: 'Items per page',
@@ -1118,7 +1118,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   },
                 ),
 
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const Divider(height: 1, color: SunfireColors.borderHairline),
                 const SectionTitle(title: 'KOReader Sync (Server)'),
                 ListTile(
                   key: const Key('server_settings_kosync'),
@@ -1196,7 +1196,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   ),
                 ],
 
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const Divider(height: 1, color: SunfireColors.borderHairline),
                 const SectionTitle(title: 'WebUI & Diagnostics (Server)'),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -1212,7 +1212,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   subtitle: Text(_webUIFlavor, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: DropdownButton<String>(
                     value: _webUIFlavor,
-                    dropdownColor: const Color(0xFF22222A),
+                    dropdownColor: SunfireColors.surface2,
                     underline: const SizedBox(),
                     items: const [
                       // Real schema enum WebUIFlavor values (WEBUI/VUI/CUSTOM) —
@@ -1243,7 +1243,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   subtitle: Text(_webUIChannel, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: DropdownButton<String>(
                     value: _webUIChannel,
-                    dropdownColor: const Color(0xFF22222A),
+                    dropdownColor: SunfireColors.surface2,
                     underline: const SizedBox(),
                     items: const [
                       // Real schema enum WebUIChannel values.
@@ -1273,7 +1273,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   subtitle: Text(_webUIInterface, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: DropdownButton<String>(
                     value: _webUIInterface,
-                    dropdownColor: const Color(0xFF22222A),
+                    dropdownColor: SunfireColors.surface2,
                     underline: const SizedBox(),
                     items: const [
                       // Real schema enum WebUIInterface values — 'SYSTEM' was

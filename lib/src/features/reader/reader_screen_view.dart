@@ -395,7 +395,7 @@ extension _ReaderView on _ReaderScreenState {
       return Scaffold(
         backgroundColor: _canvasBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
+          backgroundColor: SunfireColors.transparent,
           elevation: 0,
           leading: IconButton(
             icon: Icon(Icons.arrow_back, color: canvasForegroundColor(_canvasBackgroundColor)),
@@ -408,7 +408,7 @@ extension _ReaderView on _ReaderScreenState {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.broken_image_rounded, size: 64, color: Colors.grey),
+                const Icon(Icons.broken_image_rounded, size: 64, color: SunfireColors.contentTertiary),
                 const SizedBox(height: 16),
                 Text(
                   'Could not load ${_chapter?.name.replaceAll(RegExp(r'\s+'), ' ').trim() ?? "chapter pages"}',
@@ -419,7 +419,7 @@ extension _ReaderView on _ReaderScreenState {
                 const Text(
                   'Check network or source availability',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                  style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
                 ),
                 const SizedBox(height: 20),
                 Wrap(

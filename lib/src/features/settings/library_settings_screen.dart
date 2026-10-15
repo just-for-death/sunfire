@@ -625,7 +625,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       subtitle: Text(_globalUpdateInterval == 0 ? 'Disabled' : 'Every ${_globalUpdateInterval.toInt()} hours', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                       trailing: DropdownButton<double>(
                         value: _globalUpdateInterval,
-                        dropdownColor: const Color(0xFF22222A),
+                        dropdownColor: SunfireColors.surface2,
                         underline: const SizedBox(),
                         // The server accepts any positive hour count, so the
                         // fixed preset set may not contain the current value —
@@ -678,7 +678,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       trailing: const Icon(Icons.chevron_right_rounded, color: SunfireColors.contentTertiary),
                       onTap: _showSkipUpdatingDialog,
                     ),
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
                     // IMP-003: app-side smart update restrictions.
                     const SectionTitle(title: 'Smart Update Skips (Local)'),
                     SwitchListTile(
@@ -766,7 +766,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       ),
                       trailing: DropdownButton<int>(
                         value: _settings.libraryUpdateFrequencyHours,
-                        dropdownColor: const Color(0xFF22222A),
+                        dropdownColor: SunfireColors.surface2,
                         underline: const SizedBox(),
                         items: const [
                           DropdownMenuItem(value: 0, child: Text('Disabled')),
@@ -846,7 +846,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                                         updater.isUpdating
                                             ? updater.statusMessage
                                             : 'Last checked: ${_formatLastUpdated(_settings.lastLibraryUpdateTimestamp)}',
-                                        style: const TextStyle(fontSize: 13, color: Colors.grey),
+                                        style: const TextStyle(fontSize: 13, color: SunfireColors.contentTertiary),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
@@ -890,7 +890,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                         );
                       },
                     ),
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
                     const SectionTitle(title: 'Display & Badges (Local)'),
                     SettingsPropTile(
                       title: 'Show Unread Badges',
@@ -955,7 +955,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       ),
                       onTap: _showDefaultCategoryDialog,
                     ),
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
                     SectionTitle(title: 'Library Maintenance (Local)'),
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -1035,7 +1035,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       ),
                       onTap: () => context.push('/settings/library/duplicates'),
                     ),
-                    const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                    const Divider(height: 1, color: SunfireColors.borderHairline),
                     SectionTitle(title: _isConnected ? 'Categories (Server Synced)' : 'Categories (Local)'),
                     if (_neverUpdatedMangaCount > 0)
                       Padding(

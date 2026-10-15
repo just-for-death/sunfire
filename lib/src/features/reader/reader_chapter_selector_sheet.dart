@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/db/models/chapter.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import 'reader_chapter_navigation.dart';
 
 /// Modal chapter list for navigating siblings from the reader HUD.
@@ -20,7 +21,7 @@ class ReaderChapterSelectorSheet {
 
     return showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF18181D),
+      backgroundColor: SunfireColors.surface1,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -52,7 +53,7 @@ class ReaderChapterSelectorSheet {
                     height: 4,
                     margin: const EdgeInsets.only(bottom: 14),
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: SunfireColors.borderSubtle,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -64,13 +65,13 @@ class ReaderChapterSelectorSheet {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: SunfireColors.contentPrimary,
                         ),
                       ),
                       Text(
                         '${siblings.length} Total',
                         style: const TextStyle(
-                          color: Colors.grey,
+                          color: SunfireColors.contentTertiary,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -95,13 +96,13 @@ class ReaderChapterSelectorSheet {
                           child: Material(
                             color: isCurrent
                                 ? primaryColor.withValues(alpha: 0.15)
-                                : const Color(0x1F2A2A32),
+                                : SunfireColors.borderSubtle,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                               side: BorderSide(
                                 color: isCurrent
                                     ? primaryColor.withValues(alpha: 0.6)
-                                    : const Color(0x2BFFFFFF),
+                                    : SunfireColors.borderDefault,
                                 width: 0.8,
                               ),
                             ),
@@ -117,8 +118,8 @@ class ReaderChapterSelectorSheet {
                                   color: isCurrent
                                       ? primaryColor
                                       : (ch.isRead
-                                          ? Colors.grey
-                                          : Colors.white),
+                                          ? SunfireColors.contentTertiary
+                                          : SunfireColors.contentPrimary),
                                   fontWeight: isCurrent
                                       ? FontWeight.bold
                                       : FontWeight.normal,
@@ -130,7 +131,7 @@ class ReaderChapterSelectorSheet {
                                       color: primaryColor, size: 18)
                                   : (ch.isRead
                                       ? const Icon(Icons.done_rounded,
-                                          color: Colors.grey, size: 16)
+                                          color: SunfireColors.contentTertiary, size: 16)
                                       : null),
                               onTap: () {
                                 Navigator.pop(sheetContext);

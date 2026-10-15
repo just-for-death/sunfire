@@ -113,7 +113,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
               ],
             ),
             subtitle: const Text('Stream live app events, JS scrapers, network & errors', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
-            trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            trailing: const Icon(Icons.chevron_right_rounded, color: SunfireColors.contentTertiary),
             onTap: _showLogsModal,
           ),
           ListTile(
@@ -193,7 +193,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
                   : maskProxyUrlForDisplay(SettingsService.instance.cfProxyUrl),
               style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
             ),
-            trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            trailing: const Icon(Icons.chevron_right_rounded, color: SunfireColors.contentTertiary),
             onTap: _showCfProxyDialog,
           ),
 
@@ -359,12 +359,12 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
               const Text('Live Diagnostics', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const Spacer(),
               IconButton(
-                icon: Icon(_autoScroll ? Icons.vertical_align_bottom_rounded : Icons.pause_rounded, color: _autoScroll ? primaryColor : Colors.grey),
+                icon: Icon(_autoScroll ? Icons.vertical_align_bottom_rounded : Icons.pause_rounded, color: _autoScroll ? primaryColor : SunfireColors.contentTertiary),
                 tooltip: _autoScroll ? 'Auto-scroll ON' : 'Auto-scroll PAUSED',
                 onPressed: () => setState(() => _autoScroll = !_autoScroll),
               ),
               IconButton(
-                icon: const Icon(Icons.copy_rounded, color: Colors.grey),
+                icon: const Icon(Icons.copy_rounded, color: SunfireColors.contentTertiary),
                 tooltip: 'Copy all logs',
                 onPressed: () {
                   final text = filtered.map((e) => e.format()).join('\n');
@@ -411,10 +411,10 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 6.0),
                   child: FilterChip(
-                    label: Text(lvl, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : SunfireColors.contentTertiary)),
+                    label: Text(lvl, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? SunfireColors.contentPrimary : SunfireColors.contentTertiary)),
                     selected: isSelected,
                     selectedColor: _levelColor(lvl).withAlpha(120),
-                    backgroundColor: const Color(0x1F2A2A32),
+                    backgroundColor: SunfireColors.borderSubtle,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     onSelected: (_) => setState(() => _selectedLevel = lvl),
                   ),
@@ -427,9 +427,9 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.black,
+                color: SunfireColors.overlayScrim,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
+                border: Border.all(color: SunfireColors.borderDefault, width: 0.8),
               ),
               child: filtered.isEmpty
                   ? Center(child: Text('No matching log entries found.', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 12)))
@@ -451,7 +451,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
                                 TextSpan(text: '[${e.level}] ', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
                                 if (e.category != null)
                                   TextSpan(text: '[${e.category}] ', style: TextStyle(color: SunfireColors.trackerAmber)),
-                                TextSpan(text: e.message, style: const TextStyle(color: Colors.white70)),
+                                TextSpan(text: e.message, style: const TextStyle(color: SunfireColors.contentSecondary)),
                                 if (e.exception != null)
                                   TextSpan(text: '\n${e.exception}', style: TextStyle(color: SunfireColors.error)),
                               ],

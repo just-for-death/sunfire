@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/engine/source_preferences.dart';
 import '../../core/services/image_cache_helper.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/widgets/dialog_controllers.dart';
 
 class SourceConfigurationScreen extends StatefulWidget {
@@ -124,7 +125,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
                 decoration: InputDecoration(
                   hintText: _defaultBaseUrl ?? 'https://...',
                   filled: true,
-                  fillColor: Colors.black26,
+                  fillColor: SunfireColors.overlayScrim,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
               ),
@@ -221,7 +222,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
                   const SizedBox(height: 8),
                   Text(
                     'Default URL: $_defaultBaseUrl',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                   ),
                 ],
               ],
@@ -232,9 +233,9 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
             title: const Text('Source Mirror / Base URL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             subtitle: Text(
               _customBaseUrl.isNotEmpty ? _customBaseUrl : (_defaultBaseUrl ?? 'Default'),
-              style: const TextStyle(color: Colors.grey, fontSize: 13),
+              style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
             ),
-            trailing: const Icon(Icons.edit_outlined, size: 20, color: Colors.grey),
+            trailing: const Icon(Icons.edit_outlined, size: 20, color: SunfireColors.contentTertiary),
             onTap: _showEditBaseUrlDialog,
           ),
           Padding(
@@ -247,8 +248,8 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
           const Divider(),
           ListTile(
             title: const Text('Image Quality', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            subtitle: Text('$_imageQuality · preference stored; sources may ignore', style: const TextStyle(color: Colors.grey, fontSize: 13)),
-            trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            subtitle: Text('$_imageQuality · preference stored; sources may ignore', style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 13)),
+            trailing: const Icon(Icons.chevron_right_rounded, color: SunfireColors.contentTertiary),
             onTap: () {
               _showSelectionDialog(
                 title: 'Image Quality',
@@ -264,8 +265,8 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
           const Divider(),
           ListTile(
             title: const Text('Network Bypass Mode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            subtitle: Text('$_networkMode · use FlareSolverr in Settings for Cloudflare', style: const TextStyle(color: Colors.grey, fontSize: 13)),
-            trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            subtitle: Text('$_networkMode · use FlareSolverr in Settings for Cloudflare', style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 13)),
+            trailing: const Icon(Icons.chevron_right_rounded, color: SunfireColors.contentTertiary),
             onTap: () {
               _showSelectionDialog(
                 title: 'Network Bypass Mode',
@@ -286,14 +287,14 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
           const SizedBox(height: 16),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Colors.redAccent, width: 1),
+              side: const BorderSide(color: SunfireColors.error, width: 1),
               minimumSize: const Size.fromHeight(48),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+            icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error),
             label: const Text(
               'CLEAR SOURCE IMAGE CACHE',
-              style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+              style: TextStyle(color: SunfireColors.error, fontWeight: FontWeight.bold, letterSpacing: 1.0),
             ),
             onPressed: () async {
               await ImageCacheHelper.clearCache();

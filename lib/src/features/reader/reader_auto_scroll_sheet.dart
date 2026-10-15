@@ -4,6 +4,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../ui/design_system/tokens/sunfire_colors.dart';
+
 void showAutoScrollSpeedSheet(
 BuildContext context, {
 required double Function() getSpeed,
@@ -13,7 +15,7 @@ required void Function(double speed) onSaveDefault,
   final primaryColor = Theme.of(context).colorScheme.primary;
   unawaited(showModalBottomSheet<void>(
     context: context,
-    backgroundColor: const Color(0xFF141419),
+    backgroundColor: SunfireColors.surface1,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (sheetContext) {
       return StatefulBuilder(
@@ -32,7 +34,7 @@ required void Function(double speed) onSaveDefault,
                           'Auto-Scroll Speed',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: SunfireColors.contentPrimary),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -64,7 +66,7 @@ required void Function(double speed) onSaveDefault,
                             ),
                           );
                         },
-                        child: const Text('Save Default', style: TextStyle(fontSize: 11, color: Colors.amberAccent)),
+                        child: const Text('Save Default', style: TextStyle(fontSize: 11, color: SunfireColors.trackerAmber)),
                       ),
                     ],
                   ),
@@ -73,7 +75,7 @@ required void Function(double speed) onSaveDefault,
                     children: [
                       IconButton.filledTonal(
                         style: IconButton.styleFrom(
-                          backgroundColor: const Color(0x22FFFFFF),
+                          backgroundColor: SunfireColors.borderHairline,
                           minimumSize: const Size(36, 36),
                           padding: EdgeInsets.zero,
                         ),
@@ -100,7 +102,7 @@ required void Function(double speed) onSaveDefault,
                       ),
                       IconButton.filledTonal(
                         style: IconButton.styleFrom(
-                          backgroundColor: const Color(0x22FFFFFF),
+                          backgroundColor: SunfireColors.borderHairline,
                           minimumSize: const Size(36, 36),
                           padding: EdgeInsets.zero,
                         ),
@@ -114,7 +116,7 @@ required void Function(double speed) onSaveDefault,
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text('Quick Presets', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
+                  const Text('Quick Presets', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -145,11 +147,11 @@ Widget _speedChip(String label, double speed, Color primaryColor, StateSetter se
   double Function() getSpeed, void Function(double) setSpeed) {
   final isSelected = (getSpeed() - speed).abs() < 5.0;
   return ChoiceChip(
-    label: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : Colors.white70)),
+    label: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? SunfireColors.contentPrimary : SunfireColors.contentSecondary)),
     selected: isSelected,
     selectedColor: primaryColor.withValues(alpha: 0.35),
-    backgroundColor: const Color(0x1FFFFFFF),
-    side: BorderSide(color: isSelected ? primaryColor : Colors.white24, width: 0.8),
+    backgroundColor: SunfireColors.borderSubtle,
+    side: BorderSide(color: isSelected ? primaryColor : SunfireColors.borderSubtle, width: 0.8),
     onSelected: (_) {
       setSpeed(speed);
       setSheetState(() {});

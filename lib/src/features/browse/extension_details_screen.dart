@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'source_configuration_screen.dart';
 
@@ -41,11 +42,11 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: const Color(0xFFC2185B),
+                color: SunfireColors.error,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Center(
-                child: Icon(Icons.pets_rounded, color: Colors.white, size: 40),
+                child: Icon(Icons.pets_rounded, color: SunfireColors.contentPrimary, size: 40),
               ),
             ),
           ),
@@ -60,7 +61,7 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
           Center(
             child: Text(
               pkgName,
-              style: const TextStyle(color: Colors.grey, fontSize: 13),
+              style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
             ),
           ),
           const SizedBox(height: 24),
@@ -72,15 +73,15 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
                 children: [
                   Text(version, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 2),
-                  const Text('Version', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  const Text('Version', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 12)),
                 ],
               ),
-              Container(width: 1, height: 28, color: const Color(0x2BFFFFFF)),
+              Container(width: 1, height: 28, color: SunfireColors.borderDefault),
               Column(
                 children: [
                   Text(lang, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 2),
-                  const Text('Language', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  const Text('Language', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 12)),
                 ],
               ),
             ],
@@ -90,23 +91,23 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
 
           OutlinedButton(
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0x4DFFFFFF), width: 1),
+              side: const BorderSide(color: SunfireColors.contentDisabled, width: 1),
               minimumSize: const Size.fromHeight(48),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () {
               Navigator.pop(context, true);
             },
-            child: const Text('UNINSTALL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+            child: const Text('UNINSTALL', style: TextStyle(color: SunfireColors.contentPrimary, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
           ),
 
           const SizedBox(height: 28),
 
           Material(
-            color: const Color(0x1F2A2A32),
+            color: SunfireColors.borderSubtle,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+              side: const BorderSide(color: SunfireColors.borderDefault, width: 0.8),
             ),
             child: ListTile(
               title: const Text('English', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
@@ -114,7 +115,7 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.settings_outlined, color: Colors.grey),
+                    icon: const Icon(Icons.settings_outlined, color: SunfireColors.contentTertiary),
                     onPressed: () {
                       Navigator.push(
                         context,

@@ -14,6 +14,7 @@ import 'package:flutter/scheduler.dart';
 import '../../../core/engine/javascript/m_client.dart';
 import '../../../core/engine/quickjs_service.dart';
 import '../../../core/services/settings_service.dart';
+import '../../../ui/design_system/tokens/sunfire_colors.dart';
 import '../double_page_layout.dart' show isWidePage;
 import '../reader_scroll_utils.dart' show estimateWebtoonPlaceholderHeight;
 import '../reading_mode.dart';
@@ -114,9 +115,9 @@ Widget _retryTile(ReaderPageWidgetConfig config, {required double height, double
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.refresh_rounded, size: 28, color: Colors.grey),
+                    const Icon(Icons.refresh_rounded, size: 28, color: SunfireColors.contentTertiary),
                     const SizedBox(height: 6),
-                    Text('Page ${config.index + 1} Failed to Load', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                    Text('Page ${config.index + 1} Failed to Load', style: const TextStyle(color: SunfireColors.contentPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     Text('Tap to Retry', style: TextStyle(color: config.colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
                   ],
@@ -213,7 +214,7 @@ Widget buildReaderPageWidget(ReaderPageWidgetConfig config) {
         child: config.recoveringUrls.contains(config.url)
             ? CircularProgressIndicator(color: config.colorScheme.primary, strokeWidth: 2)
             : IconButton(
-                icon: const Icon(Icons.refresh_rounded, color: Colors.grey),
+                icon: const Icon(Icons.refresh_rounded, color: SunfireColors.contentTertiary),
                 tooltip: 'Retry Page ${config.index + 1}',
                 onPressed: () => config.onRecoverImage(config.url, config.index, manual: true),
               ),
@@ -239,9 +240,9 @@ Widget buildReaderPageWidget(ReaderPageWidgetConfig config) {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.refresh_rounded, size: 28, color: Colors.grey),
+                        const Icon(Icons.refresh_rounded, size: 28, color: SunfireColors.contentTertiary),
                         const SizedBox(height: 6),
-                        Text('Page ${config.index + 1} Failed to Load', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        Text('Page ${config.index + 1} Failed to Load', style: const TextStyle(color: SunfireColors.contentPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
                         Text('Tap to Retry', style: TextStyle(color: config.colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
                       ],
@@ -294,9 +295,9 @@ Widget buildReaderPageWidget(ReaderPageWidgetConfig config) {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.refresh_rounded, size: 28, color: Colors.grey),
+                            const Icon(Icons.refresh_rounded, size: 28, color: SunfireColors.contentTertiary),
                             const SizedBox(height: 6),
-                            Text('Page ${config.index + 1} Failed to Load', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                            Text('Page ${config.index + 1} Failed to Load', style: const TextStyle(color: SunfireColors.contentPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
                             Text('Tap to Retry', style: TextStyle(color: config.colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
                           ],

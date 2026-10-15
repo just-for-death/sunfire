@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import 'tap_zones.dart';
 
 /// Brief translucent overlay that paints the active tap zones (Mihon-style).
@@ -105,16 +106,16 @@ class _TapZoneOverlayState extends State<TapZoneOverlay> {
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: _colorFor(r.$1),
-                        border: Border.all(color: Colors.white24),
+                        border: Border.all(color: SunfireColors.borderSubtle),
                       ),
                       child: Center(
                         child: Text(
                           _labelFor(r.$1),
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: SunfireColors.contentPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
-                            shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+                            shadows: [Shadow(blurRadius: 4, color: SunfireColors.overlayScrim)],
                           ),
                         ),
                       ),
@@ -128,7 +129,7 @@ class _TapZoneOverlayState extends State<TapZoneOverlay> {
                     'Tap zones · ${widget.preset.settingsLabel}',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      color: Colors.white70,
+                      color: SunfireColors.contentSecondary,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
