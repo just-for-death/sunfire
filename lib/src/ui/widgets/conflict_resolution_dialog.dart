@@ -325,7 +325,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SunfireRadius.md),
         border: Border.all(
           color: isDifferent
               ? Theme.of(context).colorScheme.outlineVariant
@@ -353,7 +353,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(SunfireRadius.xs),
                   ),
                   child: Text(
                     'CONFLICT',
@@ -439,7 +439,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(SunfireRadius.sm),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(12),
@@ -447,7 +447,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
           color: isSelected
               ? color.withValues(alpha: 0.15)
               : Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(SunfireRadius.sm),
           border: Border.all(
             color: isSelected ? color : Theme.of(context).colorScheme.outlineVariant,
             width: isSelected ? 2 : 1,
@@ -508,7 +508,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SunfireRadius.md),
         border: Border.all(
           color: Theme.of(context).colorScheme.outlineVariant,
           width: 0.5,

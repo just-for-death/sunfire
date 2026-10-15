@@ -460,7 +460,7 @@ class _BottomBar extends StatelessWidget {
                                     color: isAutoScrolling
                                         ? primaryColor.withValues(alpha: 0.3)
                                         : SunfireColors.borderStrong,
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(SunfireRadius.md),
                                     border: Border.all(
                                       color: isAutoScrolling
                                           ? primaryColor
@@ -588,7 +588,7 @@ class _PageCapsule extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: SunfireColors.overlaySurface,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(SunfireRadius.lg),
                   border:
                       Border.all(color: SunfireColors.borderStrong, width: 0.8),
                   boxShadow: const [
@@ -746,7 +746,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                               horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: SunfireColors.overlayButton,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(SunfireRadius.sm),
                             border:
                                 Border.all(color: SunfireColors.borderSubtle, width: 0.6),
                           ),
@@ -807,7 +807,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                             color: autoScrollSpeed >= 180.0
                                 ? primaryColor.withValues(alpha: 0.35)
                                 : SunfireColors.overlayButton,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(SunfireRadius.sm),
                             border: Border.all(
                               color: autoScrollSpeed >= 180.0
                                   ? primaryColor

@@ -246,7 +246,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           ClipRRect(
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(SunfireRadius.md),
                                             child: Container(
                                               width: 110,
                                               height: 150,

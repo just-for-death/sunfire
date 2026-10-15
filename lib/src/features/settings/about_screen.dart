@@ -425,7 +425,7 @@ class _AboutScreenState extends State<AboutScreen> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: SunfireColors.borderSubtle,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(SunfireRadius.md),
           border: Border.all(color: SunfireColors.borderDefault, width: 0.8),
         ),
         child: const Column(

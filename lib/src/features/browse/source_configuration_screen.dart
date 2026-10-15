@@ -75,7 +75,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
       builder: (context) {
         return AlertDialog(
           // UIS-ISS-012: theme surface (was hard-coded dark hex)
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -109,7 +109,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
       builder: (context) {
         return AlertDialog(
           // UIS-ISS-012: theme surface (was hard-coded dark hex)
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
           title: const Text('Custom Source Mirror', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -127,7 +127,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
                   hintText: _defaultBaseUrl ?? 'https://...',
                   filled: true,
                   fillColor: SunfireColors.overlayScrim,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.sm)),
                 ),
               ),
             ],
@@ -186,7 +186,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(SunfireRadius.md),
               border: Border.all(
                 color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
               ),
@@ -290,7 +290,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: SunfireColors.error, width: 1),
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
             ),
             icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error),
             label: const Text(

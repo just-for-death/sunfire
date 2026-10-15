@@ -110,7 +110,7 @@ Widget _retryTile(ReaderPageWidgetConfig config, {required double height, double
           ? CircularProgressIndicator(color: config.colorScheme.primary, strokeWidth: 2)
           : InkWell(
               onTap: onRetry,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(SunfireRadius.md),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
@@ -235,7 +235,7 @@ Widget buildReaderPageWidget(ReaderPageWidgetConfig config) {
               ? CircularProgressIndicator(color: config.colorScheme.primary, strokeWidth: 2)
               : InkWell(
                   onTap: () => config.onRecoverImage(config.url, config.index, manual: true),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(SunfireRadius.md),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Column(
@@ -290,7 +290,7 @@ Widget buildReaderPageWidget(ReaderPageWidgetConfig config) {
                   ? CircularProgressIndicator(color: config.colorScheme.primary, strokeWidth: 2)
                   : InkWell(
                       onTap: () => config.onRecoverImage(config.url, config.index, manual: true),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(SunfireRadius.md),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         child: Column(

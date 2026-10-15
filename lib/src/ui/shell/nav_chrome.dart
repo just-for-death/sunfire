@@ -483,7 +483,7 @@ class NavOverflowSheet extends StatelessWidget {
             for (var i = 0; i < destinations.length; i++)
               ListTile(
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(SunfireRadius.md)),
                 selected: i == selectedIndex,
                 selectedTileColor: cs.primaryContainer.withValues(alpha: 0.4),
                 leading: Icon(i == selectedIndex
@@ -500,7 +500,7 @@ class NavOverflowSheet extends StatelessWidget {
               for (final a in extraActions)
                 ListTile(
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(SunfireRadius.md)),
                   leading: Icon(a.icon),
                   title: Text(a.label),
                   trailing: a.badgeCount != null && a.badgeCount! > 0

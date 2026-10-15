@@ -516,7 +516,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(color: SunfireTheme.tileSurface(dialogCtx), borderRadius: BorderRadius.circular(12), border: Border.all(color: SunfireTheme.tileBorder(dialogCtx))),
+                      decoration: BoxDecoration(color: SunfireTheme.tileSurface(dialogCtx), borderRadius: BorderRadius.circular(SunfireRadius.md), border: Border.all(color: SunfireTheme.tileBorder(dialogCtx))),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<int>(
                           value: currentStatus,
@@ -544,7 +544,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: SunfireTheme.tileSurface(dialogCtx), borderRadius: BorderRadius.circular(12), border: Border.all(color: SunfireTheme.tileBorder(dialogCtx))),
+                      decoration: BoxDecoration(color: SunfireTheme.tileSurface(dialogCtx), borderRadius: BorderRadius.circular(SunfireRadius.md), border: Border.all(color: SunfireTheme.tileBorder(dialogCtx))),
                       child: Row(
                         children: [
                           IconButton(
@@ -588,7 +588,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(color: SunfireTheme.tileSurface(dialogCtx), borderRadius: BorderRadius.circular(12), border: Border.all(color: SunfireTheme.tileBorder(dialogCtx))),
+                      decoration: BoxDecoration(color: SunfireTheme.tileSurface(dialogCtx), borderRadius: BorderRadius.circular(SunfireRadius.md), border: Border.all(color: SunfireTheme.tileBorder(dialogCtx))),
                       child: DropdownButtonHideUnderline(
                         child: serverScores.isNotEmpty
                             ? DropdownButton<String?>(
@@ -762,7 +762,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                   child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md))),
                   onPressed: () async {
                     Navigator.pop(dialogCtx);
                     if (!mounted) return;
@@ -931,13 +931,13 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                             child: Material(
                               color: SunfireTheme.tileSurface(context),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(SunfireRadius.md),
                                 side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                               ),
                               child: ListTile(
                                 leading: (cover != null && cover.isNotEmpty)
                                     ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
+                                        borderRadius: BorderRadius.circular(SunfireRadius.sm),
                                         child: Image.network(
                                           cover,
                                           width: 44,
@@ -946,7 +946,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                           errorBuilder: (_, __, ___) => Container(width: 44, height: 56, color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_rounded, size: SunfireIconSize.sm)),
                                         ),
                                       )
-                                    : Container(width: 44, height: 56, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.image_rounded, size: SunfireIconSize.md)),
+                                    : Container(width: 44, height: 56, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(SunfireRadius.sm)), child: const Icon(Icons.image_rounded, size: SunfireIconSize.md)),
                                 title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
                                 subtitle: Text('$totalCh Chapters • Score: ${res["score"] ?? "-"}', style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 11)),
                                 trailing: ElevatedButton(
@@ -975,7 +975,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     return Container(
       decoration: BoxDecoration(
         color: SunfireTheme.tileSurface(context),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(SunfireRadius.lg),
         border: Border.all(
           color: isLinked
               ? SunfireColors.trackerBlue.withValues(alpha: 0.5)
@@ -1014,7 +1014,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                             : isMetronConfigured
                                 ? SunfireColors.trackerBlue.withValues(alpha: 0.08)
                                 : SunfireColors.contentTertiary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(SunfireRadius.md),
                         border: Border.all(
                           color: isLinked
                               ? SunfireColors.trackerBlue.withValues(alpha: 0.5)
@@ -1156,7 +1156,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         backgroundColor: SunfireColors.trackerBlue,
                         // SunfireColors.trackerBlue is dark enough for white text
                         foregroundColor: SunfireColors.contentPrimary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                         padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                         elevation: 0,
                       ),
@@ -1182,7 +1182,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: SunfireColors.destructive,
                       side: const BorderSide(color: SunfireColors.destructive, width: 1.5),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                     ),
                     icon: const Icon(Icons.link_off_rounded, size: SunfireIconSize.std),
@@ -1199,7 +1199,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                   color: isMetronConfigured
                       ? SunfireColors.trackerBlueSubtle
                       : SunfireColors.trackerAmber.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(SunfireRadius.md),
                   border: Border.all(
                     color: isMetronConfigured
                         ? SunfireColors.trackerBlue.withValues(alpha: 0.2)
@@ -1241,7 +1241,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     backgroundColor: isMetronConfigured ? SunfireColors.trackerBlue : SunfireColors.trackerAmber,
                     // blueAccent is dark enough for white; amberAccent is light enough for black
                     foregroundColor: isMetronConfigured ? SunfireColors.contentPrimary : SunfireColors.onTrackerAmber,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     elevation: 0,
                   ),
@@ -1312,7 +1312,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: SunfireColors.trackerGreen.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(SunfireRadius.sm),
                 border: Border.all(color: SunfireColors.trackerGreen.withValues(alpha: 0.3)),
               ),
               child: Row(
@@ -1409,7 +1409,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.lg),
       child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -1439,7 +1439,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: SunfireColors.trackerAmber,
                   foregroundColor: SunfireColors.onTrackerAmber,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                 ),
                 onPressed: () {
                   Navigator.of(context).pushNamed('/settings/server');
@@ -1475,7 +1475,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               : isLoggedIn
                   ? primaryColor.withValues(alpha: 0.03)
                   : SunfireTheme.tileSurface(context),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(SunfireRadius.lg),
           border: Border.all(
             color: isBound
                 ? SunfireColors.trackerGreen.withValues(alpha: 0.5)
@@ -1486,7 +1486,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
           ),
         ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(SunfireRadius.lg),
           onTap: isBound ? () => _showEditTrackDialog(bound, trackerName) : null,
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -1508,7 +1508,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                 : isLoggedIn
                                     ? primaryColor.withValues(alpha: 0.15)
                                     : SunfireColors.contentTertiary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(SunfireRadius.md),
                             border: Border.all(
                               color: isBound
                                   ? SunfireColors.trackerGreen.withValues(alpha: 0.5)
@@ -1750,7 +1750,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           foregroundColor: isLoggedIn
                               ? Theme.of(context).colorScheme.onPrimary
                               : SunfireColors.onTrackerAmber,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                           padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                           elevation: 0,
                         ),
@@ -1807,7 +1807,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryColor,
                           foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                           padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                           elevation: 0,
                         ),

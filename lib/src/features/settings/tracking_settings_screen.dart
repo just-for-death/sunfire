@@ -199,7 +199,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
   Widget _buildMetronConnectionCard(ThemeData theme, bool isConfigured, MetronRateLimitState rateLimits) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
       elevation: isConfigured ? 2 : 0,
       color: isConfigured
           ? SunfireColors.trackerBlueSubtle
@@ -218,7 +218,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                     color: isConfigured
                         ? SunfireColors.trackerBlueContainer
                         : SunfireColors.contentTertiary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(SunfireRadius.md),
                     border: Border.all(
                       color: isConfigured
                           ? SunfireColors.trackerBlue.withValues(alpha: 0.5)
@@ -296,7 +296,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               decoration: InputDecoration(
                 labelText: 'API Token',
                 hintText: isConfigured ? 'Token configured (hidden)' : 'Enter your Metron API Token',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                 prefixIcon: Icon(Icons.key_rounded, color: isConfigured ? SunfireColors.trackerBlue : SunfireColors.contentTertiary),
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -359,7 +359,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isConfigured ? SunfireColors.trackerBlue : SunfireColors.contentTertiary,
                     foregroundColor: SunfireColors.contentPrimary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
                   icon: _isVerifying
@@ -519,7 +519,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
   Widget _buildEmptyServerTrackersCard(ThemeData theme) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
       color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -549,7 +549,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: SunfireColors.trackerAmber,
                 foregroundColor: SunfireColors.onTrackerAmber,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
               ),
               onPressed: () {
                 // Navigate to server settings
@@ -570,7 +570,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
       elevation: isAuth ? 1 : 0,
       color: isAuth
           ? SunfireColors.trackerGreen.withValues(alpha: 0.03)
@@ -589,7 +589,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                     color: isAuth
                         ? SunfireColors.trackerGreenContainer
                         : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(SunfireRadius.md),
                     border: Border.all(
                       color: isAuth
                           ? SunfireColors.trackerGreen.withValues(alpha: 0.5)
@@ -677,7 +677,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                   backgroundColor: SunfireColors.trackerAmber,
                   foregroundColor: SunfireColors.onTrackerAmber,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.sm)),
                 ),
                 onPressed: () => launchUrlString(authUrl, mode: LaunchMode.externalApplication),
                 child: const Text('Log In', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),

@@ -1064,7 +1064,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       context: context,
       builder: (ctx) => AlertDialog(
         // UIS-ISS-012: theme surface (was hard-coded dark hex)
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
         title: const Text('Mark All as Read', style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text('Mark all ${unreadItems.length} update chapters as read?'),
         actions: [
@@ -1172,7 +1172,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
       context: context,
       builder: (ctx) => AlertDialog(
         // UIS-ISS-012: theme surface (was hard-coded dark hex)
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
         title: const Text('Clear Updates Feed', style: TextStyle(fontWeight: FontWeight.bold)),
         content: const Text('Remove current chapters from the Updates feed? This will not delete any chapters or reading history.'),
         actions: [
@@ -1349,14 +1349,14 @@ unawaited(
       child: Material(
         color: SunfireTheme.tileSurface(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(SunfireRadius.lg),
           side: BorderSide(
             color: isRead ? SunfireTheme.hairline(context) : SunfireTheme.tileBorder(context),
             width: 0.8,
           ),
         ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(SunfireRadius.lg),
           onTap: () => context.push('/manga/$mangaId'),
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: isTablet ? 10 : 8),
@@ -1636,7 +1636,7 @@ unawaited(
             icon: const Icon(Icons.more_vert_rounded),
             tooltip: 'More options',
             color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
             onSelected: (val) {
               if (val == 'mark_all_read') {
                 unawaited(_markAllAsRead());
@@ -1748,7 +1748,7 @@ unawaited(
                                       ElevatedButton.icon(
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: primaryColor,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                                           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                                         ),
                                         icon: Icon(Icons.refresh_rounded, color: _cs.onPrimary, size: SunfireIconSize.std),

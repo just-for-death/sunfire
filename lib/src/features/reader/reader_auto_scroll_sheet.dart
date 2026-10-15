@@ -43,7 +43,7 @@ required void Function(double speed) onSaveDefault,
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: primaryColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(SunfireRadius.sm),
                           border: Border.all(color: primaryColor.withValues(alpha: 0.4)),
                         ),
                         child: Text(

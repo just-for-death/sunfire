@@ -99,7 +99,7 @@ class ReaderChapterSelectorSheet {
                                 ? primaryColor.withValues(alpha: 0.15)
                                 : SunfireColors.borderSubtle,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(SunfireRadius.md),
                               side: BorderSide(
                                 color: isCurrent
                                     ? primaryColor.withValues(alpha: 0.6)

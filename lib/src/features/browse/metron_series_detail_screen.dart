@@ -239,7 +239,7 @@ unawaited(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(SunfireRadius.md),
                           child: cover != null
                               ? Image.network(
                                   cover,
@@ -394,7 +394,7 @@ unawaited(
                           child: ListTile(
                             leading: issue.image != null
                                 ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: BorderRadius.circular(SunfireRadius.xs),
                                     child: Image.network(
                                       issue.image!,
                                       width: 36,

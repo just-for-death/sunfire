@@ -380,7 +380,7 @@ unawaited(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       minimumSize: const Size.fromHeight(48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                     ),
                     onPressed: () {
                       Navigator.pop(sheetContext);
@@ -543,7 +543,7 @@ unawaited(
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
                       color: SunfireTheme.tileSurface(context),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(SunfireRadius.md),
                       border: Border.all(color: SunfireTheme.tileBorder(context), width: 0.8),
                     ),
                     child: Row(
@@ -681,7 +681,7 @@ unawaited(
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: primaryColor,
                                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
                                       ),
                                       icon: const Icon(Icons.bug_report_rounded, color: SunfireColors.contentPrimary, size: SunfireIconSize.std),
                                       label: const Text('Report Issue', style: TextStyle(color: SunfireColors.contentPrimary, fontWeight: FontWeight.bold)),
@@ -766,7 +766,7 @@ unawaited(
                                       return Material(
                                         color: SunfireColors.transparent,
                                         child: InkWell(
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(SunfireRadius.lg),
                                           onTap: () async {
                                             // Local extension results carry synthetic NEGATIVE
                                             // ids (line 602 above); id == 0 means unresolvable.
@@ -808,7 +808,7 @@ unawaited(
                                               Expanded(
                                                 child: Container(
                                                   decoration: BoxDecoration(
-                                                    borderRadius: BorderRadius.circular(16),
+                                                    borderRadius: BorderRadius.circular(SunfireRadius.lg),
                                                     color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                                     border: Border.all(color: SunfireTheme.tileBorder(context), width: 0.8),
                                                     boxShadow: [
@@ -820,7 +820,7 @@ unawaited(
                                                     ],
                                                   ),
                                                   child: ClipRRect(
-                                                    borderRadius: BorderRadius.circular(16),
+                                                    borderRadius: BorderRadius.circular(SunfireRadius.lg),
                                                     child: MangaCoverImage(
                                                       mangaServerId: id,
                                                       thumbnailUrl: thumb,
@@ -889,7 +889,7 @@ unawaited(
                 children: [
                   if (thumb != null && thumb.isNotEmpty)
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(SunfireRadius.sm),
                       child: MangaCoverImage(
                         mangaServerId: mangaId,
                         thumbnailUrl: thumb,

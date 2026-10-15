@@ -949,7 +949,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.primary,
                       minimumSize: const Size.fromHeight(50),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                     ),
                     onPressed: () async {
                       final catList = selectedCatIds.toList();
@@ -1960,7 +1960,7 @@ unawaited(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: manga.inLibrary ? SunfireColors.error.withValues(alpha: 0.2) : primaryColor,
                           foregroundColor: manga.inLibrary ? SunfireColors.error : cs.onPrimary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                           padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                         ),
                         onPressed: _toggleInLibrary,
@@ -1978,7 +1978,7 @@ unawaited(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: cs.onSurface,
                           side: BorderSide(color: SunfireTheme.tileBorder(context)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                           padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                         ),
                         onPressed: () => TrackingBottomSheet.show(context, widget.mangaServerId, manga.title),
@@ -1996,7 +1996,7 @@ unawaited(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: SunfireTheme.overlayFill(context),
                         foregroundColor: cs.onSurface,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                         padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                       ),
                       onPressed: _continueReading,
@@ -2348,7 +2348,7 @@ unawaited(
                           width: 90,
                           height: 130,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(SunfireRadius.md),
                             border: Border.all(color: SunfireTheme.tileBorder(context), width: 1.2),
                             boxShadow: [
                               BoxShadow(
@@ -2456,7 +2456,7 @@ unawaited(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: manga.inLibrary ? SunfireColors.error.withValues(alpha: 0.2) : primaryColor,
                           foregroundColor: manga.inLibrary ? SunfireColors.error : cs.onPrimary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                           padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                         ),
                         onPressed: _toggleInLibrary,
@@ -2474,7 +2474,7 @@ unawaited(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: cs.onSurface,
                           side: BorderSide(color: SunfireTheme.tileBorder(context)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                           padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                         ),
                         onPressed: () => TrackingBottomSheet.show(context, widget.mangaServerId, manga.title),
@@ -2490,7 +2490,7 @@ unawaited(
                     final hasReadAny = _chapters.any((c) => c.isRead || c.lastPageRead > 0);
                     return Container(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(SunfireRadius.lg),
                         gradient: LinearGradient(
                           colors: [
                             primaryColor.withValues(alpha: 0.25),
@@ -2507,7 +2507,7 @@ unawaited(
                           shadowColor: SunfireColors.transparent,
                           foregroundColor: cs.onSurface,
                           minimumSize: const Size.fromHeight(48),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
                         ),
                         onPressed: _continueReading,
                         icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: SunfireIconSize.lg),
@@ -2572,7 +2572,7 @@ unawaited(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: SunfireTheme.tileSurface(context),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(SunfireRadius.lg),
                       border: Border.all(color: SunfireTheme.tileBorder(context), width: 0.8),
                     ),
                     child: AnimatedSize(
@@ -2742,7 +2742,7 @@ unawaited(
         child: Material(
           color: isSelected ? primaryColor.withAlpha(30) : SunfireTheme.tileSurface(context),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(SunfireRadius.md),
             side: BorderSide(
               color: isSelected ? primaryColor : SunfireTheme.hairline(context),
               width: isSelected ? 1.4 : 0.8,
@@ -2750,7 +2750,7 @@ unawaited(
           ),
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
             onTap: () {
               if (isSelecting) {
                 setState(() {

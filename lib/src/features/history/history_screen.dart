@@ -407,12 +407,12 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                 child: Material(
                                   color: SunfireTheme.tileSurface(context),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
+                                    borderRadius: BorderRadius.circular(SunfireRadius.lg),
                                     side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                                   ),
                                   child: ListTile(
                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
                                 onTap: () async {
                                   await context.push('/reader/${ch.serverId != 0 ? ch.serverId : ch.id}');
                                   if (mounted) unawaited(_loadHistory());
@@ -452,11 +452,11 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                    width: 44,
                                    height: 60,
                                    decoration: BoxDecoration(
-                                     borderRadius: BorderRadius.circular(8),
+                                     borderRadius: BorderRadius.circular(SunfireRadius.sm),
                                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                    ),
                                    child: ClipRRect(
-                                     borderRadius: BorderRadius.circular(8),
+                                     borderRadius: BorderRadius.circular(SunfireRadius.sm),
                                      child: MangaCoverImage(
                                        mangaServerId: ch.mangaId,
                                        thumbnailUrl: thumb,
@@ -475,7 +475,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                    const SizedBox(height: 6),
                                    // ── PROGRESS BAR (Sunfire & Mihon) ──
                                    ClipRRect(
-                                     borderRadius: BorderRadius.circular(4),
+                                     borderRadius: BorderRadius.circular(SunfireRadius.xs),
                                      child: LinearProgressIndicator(
                                        value: progressValue,
                                        minHeight: 4,

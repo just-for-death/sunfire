@@ -52,7 +52,7 @@ class ReaderChapterTransitionCard extends StatelessWidget {
                   backgroundColor: primaryColor,
                   foregroundColor: colorScheme.onPrimary,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(SunfireRadius.md)),
                   elevation: 0,
                 ),
                 onPressed: onReadNext,
@@ -70,7 +70,7 @@ class ReaderChapterTransitionCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color:
                     colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(SunfireRadius.md),
                 border: Border.all(
                     color: colorScheme.outlineVariant, width: 0.8),
               ),

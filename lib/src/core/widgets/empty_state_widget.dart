@@ -56,7 +56,7 @@ class EmptyStateWidget extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                 ),
                 onPressed: onAction,
                 child: Text(actionLabel!, style: const TextStyle(fontWeight: FontWeight.bold, color: SunfireColors.contentPrimary)),

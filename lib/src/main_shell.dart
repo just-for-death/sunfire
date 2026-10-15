@@ -884,7 +884,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       return Material(
         color: SunfireColors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(SunfireRadius.md),
           onTap: () => _handleTabSelect(index),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -900,7 +900,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(SunfireRadius.md),
                     border: Border(
                       left: BorderSide(color: primaryColor, width: 2.5),
                     ),
@@ -993,7 +993,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     return Material(
       color: SunfireColors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SunfireRadius.md),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),

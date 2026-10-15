@@ -454,7 +454,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (context, setDlgState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
           title: DialogTitle(
             icon: Icons.vpn_key_rounded,
             iconColor: Theme.of(context).colorScheme.tertiary,
@@ -608,7 +608,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: SunfireColors.trackerAmber.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(SunfireRadius.md),
                         border: Border.all(color: SunfireColors.trackerAmber.withValues(alpha: 0.5)),
                       ),
                       child: const Row(

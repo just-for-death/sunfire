@@ -75,7 +75,7 @@ class SunfireBadge extends StatelessWidget {
             : const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.5));
 
     final effectiveBorderRadius = borderRadius ??
-        (isCompact ? BorderRadius.circular(8) : BorderRadius.circular(12));
+        (isCompact ? BorderRadius.circular(SunfireRadius.sm) : BorderRadius.circular(12));
 
     final effectiveFontSize = fontSize ?? (isCompact ? 10.5 : 12.0);
     final effectiveFontWeight = fontWeight ?? (isCompact ? FontWeight.bold : FontWeight.w500);

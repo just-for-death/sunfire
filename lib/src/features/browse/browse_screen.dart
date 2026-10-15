@@ -1164,7 +1164,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     style: OutlinedButton.styleFrom(
                       foregroundColor: primaryColor,
                       side: BorderSide(color: primaryColor.withAlpha(100)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                     ),
                     onPressed: () {
                       unawaited(_fetchServerSources());
@@ -1218,11 +1218,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         child: Material(
           color: SunfireTheme.tileSurface(context),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(SunfireRadius.lg),
             side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
           ),
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(SunfireRadius.lg),
             onTap: () => _openSourceGrid(id, name, false),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
@@ -1298,7 +1298,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             backgroundColor: _cs.onSurface.withValues(alpha: 0.06),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.sm)),
                           ),
                           onPressed: () => _openSourceGrid(id, name, true),
                           child: Text('Latest', style: TextStyle(color: _cs.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w600)),
@@ -1617,7 +1617,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryColor,
                                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
                                 ),
                                 icon: Icon(Icons.filter_alt_off_rounded, color: _cs.onPrimary),
                                 label: Text('Show All Extensions', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold)),
@@ -1628,7 +1628,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryColor,
                                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
                                 ),
                                 icon: Icon(Icons.add_rounded, color: _cs.onPrimary),
                                 label: Text('Add Repository', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold)),
@@ -1660,7 +1660,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                             padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
                             decoration: BoxDecoration(
                               color: SunfireTheme.tileSurface(context),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(SunfireRadius.lg),
                               border: Border.all(color: SunfireTheme.tileBorder(context), width: 0.8),
                             ),
                             child: Row(
@@ -1737,7 +1737,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                 ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: primaryColor,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                                     minimumSize: Size.zero,
                                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1878,7 +1878,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 child: Material(
                   color: SunfireTheme.tileSurface(context),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(SunfireRadius.lg),
                     side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                   ),
                   child: ListTile(
@@ -1888,10 +1888,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       height: 42,
                       decoration: BoxDecoration(
                         color: primaryColor.withAlpha(38),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(SunfireRadius.md),
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(SunfireRadius.md),
                         child: SourceIconImage(
                           name: name,
                           iconUrl: iconUrl,
@@ -1906,7 +1906,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: _cs.onSurface.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(SunfireRadius.md),
                       ),
                       child: Text(
                         '$count',
@@ -2005,7 +2005,7 @@ unawaited(
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                     ),
                     onPressed: () async {
                       Navigator.pop(dialogCtx);
@@ -2071,7 +2071,7 @@ unawaited(
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryColor,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
               ),
               icon: Icon(Icons.bug_report_rounded, color: _cs.onPrimary, size: SunfireIconSize.std),
               label: Text('Report Issue', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold)),

@@ -610,12 +610,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           // Option 1: Standalone Mode (No Server Needed)
           InkWell(
             onTap: _startStandaloneSetup,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(SunfireRadius.lg),
             child: Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(SunfireRadius.lg),
                 border: Border.all(color: primaryColor.withValues(alpha: 0.5), width: 1.2),
                 boxShadow: [
                   BoxShadow(
@@ -631,7 +631,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: primaryColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(SunfireRadius.md),
                     ),
                     child: Icon(Icons.bolt_rounded, color: primaryColor, size: 28),
                   ),
@@ -668,12 +668,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 curve: Curves.easeInOut,
               );
             },
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(SunfireRadius.lg),
             child: Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(SunfireRadius.lg),
                 border: Border.all(color: SunfireTheme.tileBorder(context)),
               ),
               child: Row(
@@ -682,7 +682,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: SunfireTheme.overlayFill(context),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(SunfireRadius.md),
                     ),
                     child: const Icon(Icons.cloud_sync_rounded, color: SunfireColors.sourceServer, size: 28),
                   ),
@@ -763,7 +763,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               hintStyle: TextStyle(color: cs.onSurfaceVariant),
               filled: true,
               fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.md), borderSide: BorderSide.none),
               prefixIcon: const Icon(Icons.dns_rounded, color: SunfireColors.contentTertiary),
             ),
           ),
@@ -794,7 +794,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 hintStyle: TextStyle(color: cs.onSurfaceVariant),
                 filled: true,
                 fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.md), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.person_rounded, color: SunfireColors.contentTertiary),
               ),
             ),
@@ -810,7 +810,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 hintStyle: TextStyle(color: cs.onSurfaceVariant),
                 filled: true,
                 fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.md), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.lock_rounded, color: SunfireColors.contentTertiary),
                 suffixIcon: IconButton(
                   icon: Icon(_obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded, color: SunfireColors.contentTertiary),
@@ -830,7 +830,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 hintStyle: TextStyle(color: cs.onSurfaceVariant),
                 filled: true,
                 fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.md), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.key_rounded, color: SunfireColors.contentTertiary),
                 suffixIcon: IconButton(
                   icon: Icon(_obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded, color: SunfireColors.contentTertiary),
@@ -845,7 +845,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(SunfireRadius.md),
               border: Border.all(color: SunfireTheme.hairline(context)),
             ),
             child: Column(
@@ -938,7 +938,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
               minimumSize: const Size.fromHeight(54),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
             ),
             onPressed: _isConnecting ? null : _testAndConnectServer,
             child: _isConnecting
@@ -970,7 +970,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: primaryColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SunfireRadius.md),
         border: Border.all(color: primaryColor.withValues(alpha: 0.25)),
       ),
       child: Row(
@@ -1056,7 +1056,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     filled: true,
                     fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.md), borderSide: BorderSide.none),
                   ),
                 ),
               ),
@@ -1064,7 +1064,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               IconButton(
                 style: IconButton.styleFrom(
                   backgroundColor: primaryColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                 ),
                 onPressed: _addNewRepo,
                 icon: Icon(Icons.add, color: cs.onSurface),
@@ -1080,7 +1080,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(SunfireRadius.md),
                     border: Border.all(color: SunfireTheme.hairline(context)),
                   ),
                   child: Row(
@@ -1111,7 +1111,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(SunfireRadius.md),
                 border: Border.all(color: SunfireTheme.hairline(context)),
               ),
               child: Column(
@@ -1177,7 +1177,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(54, 54),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                   side: BorderSide(color: SunfireTheme.tileBorder(context)),
                 ),
                 onPressed: () {
@@ -1194,7 +1194,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,
                     minimumSize: const Size.fromHeight(54),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                   ),
                   onPressed: () {
                     _pageController.nextPage(
@@ -1243,7 +1243,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: primaryColor.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(SunfireRadius.md),
                 ),
                 child: Icon(Icons.sync_alt_rounded, color: primaryColor, size: SunfireIconSize.lg),
               ),
@@ -1312,7 +1312,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(SunfireRadius.md),
         border: Border.all(
           color: isActive
               ? primaryColor.withValues(alpha: 0.6)
@@ -1389,7 +1389,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(SunfireRadius.md),
             ),
             child: Column(
               children: [
@@ -1432,7 +1432,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
               minimumSize: const Size.fromHeight(56),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
               elevation: 4,
             ),
             onPressed: _finishOnboarding,

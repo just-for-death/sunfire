@@ -61,7 +61,7 @@ class LibraryUpdateProgressBanner extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(SunfireRadius.md),
             border: Border.all(color: primary.withValues(alpha: 0.3)),
           ),
           child: Column(
@@ -104,7 +104,7 @@ class LibraryUpdateProgressBanner extends StatelessWidget {
               ],
               const SizedBox(height: SunfireSpacing.sm),
               ClipRRect(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(SunfireRadius.xs),
                 child: LinearProgressIndicator(
                   value: updater.progress > 0 ? updater.progress : null,
                   minHeight: 4,

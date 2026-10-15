@@ -696,7 +696,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
                         minimumSize: const Size.fromHeight(50),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                       ),
                       onPressed: () async {
                         try {
@@ -958,7 +958,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
             style: ElevatedButton.styleFrom(
               backgroundColor: SunfireColors.error,
               foregroundColor: SunfireColors.onTrackerAmber,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Remove', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1153,13 +1153,13 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           decoration: InputDecoration(
                             hintText: 'New category name...',
                             filled: true,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.md), borderSide: BorderSide.none),
                           ),
                         ),
                       ),
                       const SizedBox(width: SunfireSpacing.sm),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                        style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md))),
                         onPressed: () async {
                           final name = textController.text.trim();
                           if (name.isNotEmpty) {
@@ -1887,7 +1887,7 @@ unawaited(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
                               color: SunfireColors.trackerAmber.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(SunfireRadius.md),
                               border: Border.all(color: SunfireColors.trackerAmber.withValues(alpha: 0.3), width: 0.8),
                             ),
                             child: const Row(
@@ -2081,7 +2081,7 @@ unawaited(
       child: Material(
         color: SunfireColors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(SunfireRadius.lg),
           onTap: () async {
             if (_isBatchMode) {
               _toggleBatchSelection(mId);
@@ -2102,7 +2102,7 @@ unawaited(
                   children: [
                     Container(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(SunfireRadius.lg),
                         color: Theme.of(context).colorScheme.surfaceContainerHighest,
                         border: Border.all(
                           color: isSelected
@@ -2119,7 +2119,7 @@ unawaited(
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(SunfireRadius.md),
                         child: MangaCoverImage(
                           mangaServerId: mId,
                           thumbnailUrl: manga.thumbnailUrl,
@@ -2218,7 +2218,7 @@ unawaited(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
                             color: SunfireColors.success.withValues(alpha: 0.8),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(SunfireRadius.sm),
                             boxShadow: [
                               BoxShadow(
                                 color: SunfireColors.overlayScrim.withValues(alpha: 0.4),
@@ -2289,7 +2289,7 @@ unawaited(
         child: Material(
           color: isSelected ? primaryColor.withAlpha(40) : SunfireTheme.tileSurface(context),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(SunfireRadius.md),
             side: BorderSide(color: isSelected ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8),
           ),
           child: ListTile(
@@ -2305,7 +2305,7 @@ unawaited(
             },
             onLongPress: () => _toggleBatchSelection(mId),
             leading: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(SunfireRadius.sm),
               child: MangaCoverImage(
                 mangaServerId: mId,
                 thumbnailUrl: manga.thumbnailUrl,
@@ -2391,7 +2391,7 @@ class _LibraryHeroStats extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: SunfireTheme.tileSurface(context),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(SunfireRadius.lg),
           border: Border.all(
             color: SunfireTheme.tileBorder(context),
             width: 0.8,
@@ -2438,7 +2438,7 @@ class _LibraryHeroStats extends StatelessWidget {
             if (totalChapters > 0) ...[
               const SizedBox(height: 10),
               ClipRRect(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(SunfireRadius.xs),
                 child: LinearProgressIndicator(
                   value: readPercentage,
                   minHeight: 4,

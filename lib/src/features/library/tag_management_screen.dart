@@ -93,7 +93,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                       final selected = c.toLowerCase() == color.toLowerCase();
                       return InkWell(
                         onTap: () => setLocal(() => color = c),
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(SunfireRadius.lg),
                         child: Container(
                           width: 28,
                           height: 28,

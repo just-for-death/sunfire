@@ -95,7 +95,7 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: SunfireColors.contentDisabled, width: 1),
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
             ),
             onPressed: () {
               Navigator.pop(context, true);
@@ -108,7 +108,7 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
           Material(
             color: SunfireColors.borderSubtle,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(SunfireRadius.lg),
               side: const BorderSide(color: SunfireColors.borderDefault, width: 0.8),
             ),
             child: ListTile(

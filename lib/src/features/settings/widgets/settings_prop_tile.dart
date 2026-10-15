@@ -117,7 +117,7 @@ class SettingsPropTile extends StatelessWidget {
                     decoration: InputDecoration(
                       hintText: hintText,
                       filled: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.md), borderSide: BorderSide.none),
                       suffixIcon: canObscure
                           ? IconButton(
                               icon: Icon(isObscured ? Icons.visibility_rounded : Icons.visibility_off_rounded),

@@ -400,7 +400,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
               filled: true,
               fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.md), borderSide: BorderSide.none),
             ),
           ),
           const SizedBox(height: SunfireSpacing.sm),
@@ -416,7 +416,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
                     selected: isSelected,
                     selectedColor: _levelColor(lvl).withAlpha(120),
                     backgroundColor: SunfireColors.borderSubtle,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                     onSelected: (_) => setState(() => _selectedLevel = lvl),
                   ),
                 );
@@ -429,7 +429,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: SunfireColors.overlayScrim,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(SunfireRadius.md),
                 border: Border.all(color: SunfireColors.borderDefault, width: 0.8),
               ),
               child: filtered.isEmpty
@@ -537,7 +537,7 @@ class _CfProxyDialogState extends State<_CfProxyDialog> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
       title: DialogTitle(
         icon: Icons.shield_outlined,
         iconColor: cs.primary,

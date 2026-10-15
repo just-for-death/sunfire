@@ -557,7 +557,7 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       foregroundColor: colorScheme.onPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                       elevation: 0,
                     ),
                     onPressed: () {
@@ -579,7 +579,7 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
                     color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(SunfireRadius.md),
                     border: Border.all(color: colorScheme.outlineVariant, width: 0.8),
                   ),
                   child: Row(

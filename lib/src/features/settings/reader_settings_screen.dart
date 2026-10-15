@@ -598,7 +598,7 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: previewBg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(SunfireRadius.lg),
         border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
       ),
       child: Stack(
@@ -643,7 +643,7 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
                   height: 8,
                   decoration: BoxDecoration(
                     color: SunfireTheme.overlayFill(context),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(SunfireRadius.xs),
                   ),
                 ),
               );

@@ -736,7 +736,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(SunfireRadius.md),
                             border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                           ),
                           child: const Text(
@@ -828,7 +828,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(SunfireRadius.md),
                               border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                             ),
                             child: Column(
@@ -856,7 +856,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                                 if (updater.isUpdating) ...[
                                   const SizedBox(height: SunfireSpacing.sm),
                                   ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: BorderRadius.circular(SunfireRadius.xs),
                                     child: LinearProgressIndicator(
                                       value: updater.progress > 0 ? updater.progress : null,
                                       minHeight: 4,
@@ -1047,7 +1047,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.55),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(SunfireRadius.md),
                             border: Border.all(
                               color: Theme.of(context).colorScheme.error.withValues(alpha: 0.35),
                             ),

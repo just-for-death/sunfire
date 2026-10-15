@@ -836,7 +836,7 @@ unawaited(
                         horizontal: 24, vertical: 16),
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(SunfireRadius.lg),
                       border: Border.all(
                         color: Theme.of(context).colorScheme.primary,
                         width: 2,

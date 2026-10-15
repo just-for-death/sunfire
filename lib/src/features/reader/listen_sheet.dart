@@ -200,7 +200,7 @@ class _ListenSheetState extends State<ListenSheet> {
             color: active
                 ? cs.primaryContainer
                 : cs.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(SunfireRadius.md),
             border: active
                 ? Border.all(color: cs.primary, width: 1.5)
                 : null,

@@ -432,7 +432,7 @@ extension _ReaderView on _ReaderScreenState {
                         backgroundColor: primaryColor,
                         // IMP-018: theme contrast pair instead of white on accent.
                         foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       ),
                       icon: const Icon(Icons.refresh_rounded, size: SunfireIconSize.std),
@@ -443,7 +443,7 @@ extension _ReaderView on _ReaderScreenState {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: canvasForegroundColor(_canvasBackgroundColor),
                         side: BorderSide(color: canvasForegroundColor(_canvasBackgroundColor).withValues(alpha: 0.2)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                       ),
                       icon: const Icon(Icons.open_in_browser_rounded, size: SunfireIconSize.std),
@@ -455,7 +455,7 @@ extension _ReaderView on _ReaderScreenState {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Theme.of(context).colorScheme.tertiary,
                           side: BorderSide(color: Theme.of(context).colorScheme.tertiary),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                         ),
                         icon: const Icon(Icons.security_rounded, size: SunfireIconSize.std),
@@ -467,7 +467,7 @@ extension _ReaderView on _ReaderScreenState {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: canvasForegroundColor(_canvasBackgroundColor).withValues(alpha: 0.7),
                         side: BorderSide(color: canvasForegroundColor(_canvasBackgroundColor).withValues(alpha: 0.2)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                       ),
                       icon: const Icon(Icons.cleaning_services_outlined, size: SunfireIconSize.std),

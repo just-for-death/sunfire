@@ -183,7 +183,7 @@ unawaited(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: SunfireColors.surface2,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(SunfireRadius.lg),
                         border: Border.all(color: SunfireColors.borderSubtle),
                       ),
                       child: Row(
@@ -193,7 +193,7 @@ unawaited(
                             child: Column(
                               children: [
                                 ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(SunfireRadius.sm),
                                   child: MangaCoverImage(
                                     mangaServerId: widget.manga.canonicalKey,
                                     thumbnailUrl: widget.manga.thumbnailUrl,
@@ -230,7 +230,7 @@ unawaited(
                             child: Column(
                               children: [
                                 ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(SunfireRadius.sm),
                                   child: targetThumb.isNotEmpty
                                       ? Image.network(
                                           targetThumb,
@@ -309,7 +309,7 @@ unawaited(
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
                   ),
                   onPressed: () async {
                     Navigator.pop(dialogCtx);
@@ -1035,7 +1035,7 @@ unawaited(
                         child: Material(
                           color: SunfireColors.borderSubtle,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(SunfireRadius.lg),
                             side: const BorderSide(color: SunfireColors.borderDefault, width: 0.8),
                           ),
                           child: ExpansionTile(
@@ -1053,7 +1053,7 @@ unawaited(
                                 ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: SunfireColors.borderDefault, borderRadius: BorderRadius.circular(4)),
+                                  decoration: BoxDecoration(color: SunfireColors.borderDefault, borderRadius: BorderRadius.circular(SunfireRadius.xs)),
                                   child: Text(lang, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                                 ),
                               ],
@@ -1072,7 +1072,7 @@ unawaited(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                           decoration: BoxDecoration(
                                             color: primaryColor.withAlpha(50),
-                                            borderRadius: BorderRadius.circular(8),
+                                            borderRadius: BorderRadius.circular(SunfireRadius.sm),
                                           ),
                                           child: Text(
                                             '${results.length}',

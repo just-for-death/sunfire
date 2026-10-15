@@ -290,7 +290,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
               child: Material(
                 color: SunfireTheme.tileSurface(context),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(SunfireRadius.lg),
                   side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                 ),
                 child: ListTile(
@@ -304,7 +304,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                       const SizedBox(height: 6),
                       if (task.status == LocalDownloadStatus.downloading) ...[
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(SunfireRadius.xs),
                           child: LinearProgressIndicator(
                             value: task.progress,
                             minHeight: 4,
@@ -384,7 +384,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: SunfireTheme.tileSurface(context),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(SunfireRadius.md),
                     border: Border.all(color: cs.secondary.withValues(alpha: 0.45), width: 1),
                   ),
                   child: Row(
@@ -431,7 +431,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg)),
                 ),
                 icon: Icon(Icons.settings_rounded, color: Theme.of(context).colorScheme.onPrimary),
                 label: Text('Server Settings', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.bold)),
@@ -517,7 +517,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
           child: Material(
             color: SunfireTheme.tileSurface(context),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(SunfireRadius.lg),
               side: BorderSide(
                 color: isError ? cs.error.withValues(alpha: 0.55) : SunfireTheme.tileBorder(context),
                 width: 0.8,
@@ -544,7 +544,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                   ],
                   const SizedBox(height: 6),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(SunfireRadius.xs),
                     child: LinearProgressIndicator(
                       value: progress > 0 && !isError ? progress : null,
                       minHeight: 4,

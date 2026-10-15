@@ -175,7 +175,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 Material(
                   color: SunfireTheme.tileSurface(context),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(SunfireRadius.lg),
                     side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                   ),
                   child: Padding(
@@ -216,7 +216,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 Material(
                   color: SunfireTheme.tileSurface(context),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(SunfireRadius.lg),
                     side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                   ),
                   child: Padding(
@@ -234,7 +234,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   Material(
                     color: SunfireTheme.tileSurface(context),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(SunfireRadius.lg),
                       side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                     ),
                     child: Padding(
@@ -249,7 +249,7 @@ class _StatsScreenState extends State<StatsScreen> {
                                 SizedBox(width: 90, child: Text(entry.key, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
                                 Expanded(
                                   child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: BorderRadius.circular(SunfireRadius.xs),
                                     child: LinearProgressIndicator(
                                       value: ratio,
                                       minHeight: 6,
@@ -277,7 +277,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   Material(
                     color: SunfireTheme.tileSurface(context),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(SunfireRadius.lg),
                       side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
                     ),
                     child: Column(
@@ -301,7 +301,7 @@ class _StatsScreenState extends State<StatsScreen> {
     return Material(
       color: SunfireTheme.tileSurface(context),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(SunfireRadius.lg),
         side: BorderSide(color: SunfireTheme.tileBorder(context), width: 0.8),
       ),
       child: Padding(

@@ -179,7 +179,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.primary
                             .withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(SunfireRadius.md),
                         border: Border.all(
                           color: Theme.of(context).colorScheme.primary
                               .withValues(alpha: 0.35),
@@ -343,7 +343,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: Theme.of(context).colorScheme.errorContainer,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(SunfireRadius.md),
                                 ),
                                 child: Row(
                                   children: [

@@ -124,7 +124,7 @@ unawaited(
                   hintText: RepoManager.officialIndexUrl,
                   prefixIcon: Icon(Icons.link_rounded, color: primaryColor),
                   filled: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.md), borderSide: BorderSide.none),
                 ),
               ),
             ],
@@ -140,7 +140,7 @@ unawaited(
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.md)),
               ),
               onPressed: () async {
                 final url = _urlController.text.trim();
