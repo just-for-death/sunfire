@@ -91,6 +91,40 @@ class SunfireColors {
   static const Color serverBadge = Color(0xFF3B82F6);     // Blue
   static const Color pinnedBadge = Color(0xFFF59E0B);     // Amber
 
+  // ── Tracker / Sync Colors (AniList blue, MAL blue, Metron teal) ───────────
+  /// Primary interactive accent for trackers — indigo-blue.
+  static const Color trackerBlue = Color(0xFF448AFF);        // blueAccent
+  static const Color trackerBlueContainer = Color(0x1A448AFF);
+  static const Color trackerBlueSubtle = Color(0x0D448AFF);
+
+  /// Positive confirmation: tracker linked, synced, auth OK.
+  static const Color trackerGreen = Color(0xFF69F0AE);       // greenAccent
+  static const Color trackerGreenContainer = Color(0x1A69F0AE);
+
+  /// Warning / pending: e.g. Metron partial match, queue pending.
+  static const Color trackerAmber = Color(0xFFFFD740);       // amberAccent
+  static const Color trackerAmberContainer = Color(0x1AFFD740);
+  static const Color onTrackerAmber = Color(0xFF000000);     // dark text on amber
+
+  // ── Browse / Extension Source Colors ─────────────────────────────────────
+  /// Local JS extension badge – teal.
+  static const Color sourceLocalJs = Color(0xFF64FFDA);      // tealAccent
+  static const Color sourceLocalJsContainer = Color(0x1A64FFDA);
+  static const Color sourceLocalJsSelected = Color(0xFF00695C); // teal.shade800
+
+  /// Server (Suwayomi APK) extension badge – light blue.
+  static const Color sourceServer = Color(0xFF80D8FF);        // lightBlueAccent
+  static const Color sourceServerContainer = Color(0x1A80D8FF);
+  static const Color sourceServerSelected = Color(0xFF0D47A1); // blue.shade800
+
+  /// Pinned source badge – amber.
+  static const Color sourcePinned = Color(0xFFFFD740);        // amberAccent
+  static const Color sourcePinnedSelected = Color(0xFFFF6F00); // amber.shade900
+
+  // ── Destructive / Cancel ─────────────────────────────────────────────────
+  static const Color destructive = Color(0xFFFF5252);         // redAccent
+  static const Color destructiveContainer = Color(0x1AFF5252);
+
   // ── HUD and Reader Overlay Scrims ──────────────────────────────────────────
   static const Color transparent = Color(0x00000000);
   static const Color overlayScrim = Color(0xCC000000);     // 80% black gradient

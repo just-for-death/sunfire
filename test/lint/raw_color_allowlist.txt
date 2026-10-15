@@ -4,7 +4,6 @@ lib/src/core/services/settings_service.dart 17
 lib/src/core/theme/ambient_palette.dart 1
 lib/src/core/widgets/empty_state_widget.dart 5
 lib/src/core/widgets/sunfire_badge.dart 5
-lib/src/features/browse/browse_screen.dart 54
 lib/src/features/browse/extension_details_screen.dart 11
 lib/src/features/browse/global_search_screen.dart 3
 lib/src/features/browse/metron_series_detail_screen.dart 19
@@ -14,7 +13,6 @@ lib/src/features/browse/source_manga_grid_screen.dart 27
 lib/src/features/library/duplicate_review_screen.dart 4
 lib/src/features/library/library_screen.dart 41
 lib/src/features/manga_detail/manga_detail_screen.dart 35
-lib/src/features/manga_detail/tracking_bottom_sheet.dart 124
 lib/src/features/onboarding/onboarding_screen.dart 45
 lib/src/features/reader/controller/reader_canvas.dart 3
 lib/src/features/reader/controller/reader_page_widget.dart 7
@@ -37,7 +35,6 @@ lib/src/features/settings/library_settings_screen.dart 35
 lib/src/features/settings/reader_settings_screen.dart 17
 lib/src/features/settings/server_settings_screen.dart 47
 lib/src/features/settings/settings_screen.dart 12
-lib/src/features/settings/tracking_settings_screen.dart 68
 lib/src/features/settings/widgets/settings_prop_tile.dart 10
 lib/src/main_shell.dart 7
 lib/src/ui/widgets/conflict_resolution_dialog.dart 7

@@ -12,6 +12,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../settings/tracking_settings_screen.dart';
 
 /// Tracker start/finish date label. Follows General → Date Format (UIS-P3-3)
@@ -294,7 +295,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Linked to "${detail.name}"! Metadata enriched & locked.'),
-              backgroundColor: Colors.green,
+              backgroundColor: SunfireColors.success,
             ),
           );
         }
@@ -323,7 +324,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(trackingFailureMessage("Couldn't link tracker", e)),
-          backgroundColor: Colors.redAccent,
+          backgroundColor: SunfireColors.destructive,
         ));
       }
     }
@@ -385,7 +386,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Scrobbled $scrobbledCount read issues to Metron!'),
-            backgroundColor: Colors.green,
+            backgroundColor: SunfireColors.success,
           ),
         );
       }
@@ -417,7 +418,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(trackingFailureMessage("Couldn't unlink tracker", e)),
-          backgroundColor: Colors.redAccent,
+          backgroundColor: SunfireColors.destructive,
         ));
       }
     }
@@ -509,7 +510,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                   shrinkWrap: true,
                   children: [
                     // ── STATUS ──────────────────────────────────────────
-                    const Text('STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const Text('STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -537,7 +538,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     const SizedBox(height: 16),
 
                     // ── CHAPTER READ (WITH +/- BUTTONS) ───────────────────
-                    const Text('CHAPTERS READ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const Text('CHAPTERS READ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -545,7 +546,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       child: Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.remove_circle_outline_rounded, color: Colors.grey),
+                            icon: const Icon(Icons.remove_circle_outline_rounded, color: SunfireColors.contentTertiary),
                             onPressed: currentChapter > 0 ? () => setDialogState(() => currentChapter--) : null,
                           ),
                           Expanded(
@@ -580,7 +581,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     // 0–10 picker is kept.
                     Text(
                       serverScores.isNotEmpty ? 'SCORE' : 'SCORE (0 - 10)',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1),
                     ),
                     const SizedBox(height: 6),
                     Container(
@@ -642,7 +643,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('START DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                              const Text('START DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary)),
                               const SizedBox(height: 6),
                               Row(
                                 children: [
@@ -672,7 +673,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                   ),
                                   if (startDisplay.isNotEmpty)
                                     IconButton(
-                                      icon: const Icon(Icons.clear_rounded, size: 15, color: Colors.grey),
+                                      icon: const Icon(Icons.clear_rounded, size: 15, color: SunfireColors.contentTertiary),
                                       tooltip: 'Clear start date',
                                       visualDensity: VisualDensity.compact,
                                       padding: EdgeInsets.zero,
@@ -692,7 +693,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('FINISH DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                              const Text('FINISH DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary)),
                               const SizedBox(height: 6),
                               Row(
                                 children: [
@@ -722,7 +723,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                   ),
                                   if (finishDisplay.isNotEmpty)
                                     IconButton(
-                                      icon: const Icon(Icons.clear_rounded, size: 15, color: Colors.grey),
+                                      icon: const Icon(Icons.clear_rounded, size: 15, color: SunfireColors.contentTertiary),
                                       tooltip: 'Clear finish date',
                                       visualDensity: VisualDensity.compact,
                                       padding: EdgeInsets.zero,
@@ -744,7 +745,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Private', style: TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: const Text('Hide this title on the tracker', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        subtitle: const Text('Hide this title on the tracker', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                         value: isPrivate,
                         onChanged: (v) => setDialogState(() => isPrivate = v),
                       ),
@@ -756,7 +757,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogCtx),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                  child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
@@ -783,7 +784,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         setState(() => _isLoading = false);
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                           content: Text(trackingFailureMessage("Couldn't update tracker", e)),
-                          backgroundColor: Colors.redAccent,
+                          backgroundColor: SunfireColors.destructive,
                         ));
                       }
                     }
@@ -843,7 +844,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               child: Container(
                 width: 40,
                 height: 4,
-                decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(color: SunfireColors.contentSecondary, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
@@ -855,7 +856,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               ],
             ),
             const SizedBox(height: 8),
-            Text(widget.mangaTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+            Text(widget.mangaTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 13)),
             const SizedBox(height: 20),
 
             // ── METRON (WESTERN COMICS) TRACKER ──
@@ -912,7 +913,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
             child: _isSearching
                 ? Center(child: CircularProgressIndicator(color: primaryColor))
                 : _searchResults.isEmpty
-                    ? const Center(child: Text('No matching manga found.', style: TextStyle(color: Colors.grey)))
+                    ? const Center(child: Text('No matching manga found.', style: TextStyle(color: SunfireColors.contentTertiary)))
                     : ListView.builder(
                         itemCount: _searchResults.length,
                         itemBuilder: (context, index) {
@@ -945,7 +946,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                       )
                                     : Container(width: 44, height: 56, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.image_rounded, size: 20)),
                                 title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                subtitle: Text('$totalCh Chapters • Score: ${res["score"] ?? "-"}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                                subtitle: Text('$totalCh Chapters • Score: ${res["score"] ?? "-"}', style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 11)),
                                 trailing: ElevatedButton(
                                   style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                                   child: Text('Bind', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
@@ -975,16 +976,16 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isLinked
-              ? Colors.blueAccent.withValues(alpha: 0.5)
+              ? SunfireColors.trackerBlue.withValues(alpha: 0.5)
               : isMetronConfigured
-                  ? Colors.blueAccent.withValues(alpha: 0.2)
+                  ? SunfireColors.trackerBlue.withValues(alpha: 0.2)
                   : SunfireTheme.tileBorder(context),
           width: isLinked ? 1.5 : 1.0,
         ),
         boxShadow: isLinked
             ? [
                 BoxShadow(
-                  color: Colors.blueAccent.withValues(alpha: 0.1),
+                  color: SunfireColors.trackerBlue.withValues(alpha: 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -1007,27 +1008,27 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       height: 48,
                       decoration: BoxDecoration(
                         color: isLinked
-                            ? Colors.blueAccent.withValues(alpha: 0.15)
+                            ? SunfireColors.trackerBlueContainer
                             : isMetronConfigured
-                                ? Colors.blueAccent.withValues(alpha: 0.08)
-                                : Colors.grey.withValues(alpha: 0.1),
+                                ? SunfireColors.trackerBlue.withValues(alpha: 0.08)
+                                : SunfireColors.contentTertiary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isLinked
-                              ? Colors.blueAccent.withValues(alpha: 0.5)
+                              ? SunfireColors.trackerBlue.withValues(alpha: 0.5)
                               : isMetronConfigured
-                                  ? Colors.blueAccent.withValues(alpha: 0.3)
-                                  : Colors.grey.withValues(alpha: 0.3),
+                                  ? SunfireColors.trackerBlue.withValues(alpha: 0.3)
+                                  : SunfireColors.contentDisabled,
                         ),
                       ),
                       child: Center(
                         child: Icon(
                           Icons.auto_stories_rounded,
                           color: isLinked
-                              ? Colors.blueAccent
+                              ? SunfireColors.trackerBlue
                               : isMetronConfigured
-                                  ? Colors.blueAccent.withValues(alpha: 0.7)
-                                  : Colors.grey,
+                                  ? SunfireColors.trackerBlue.withValues(alpha: 0.7)
+                                  : SunfireColors.contentTertiary,
                           size: 24,
                         ),
                       ),
@@ -1041,10 +1042,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         height: 14,
                         decoration: BoxDecoration(
                           color: isLinked
-                              ? Colors.blueAccent
+                              ? SunfireColors.trackerBlue
                               : isMetronConfigured
-                                  ? Colors.greenAccent
-                                  : Colors.grey,
+                                  ? SunfireColors.trackerGreen
+                                  : SunfireColors.contentTertiary,
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: Theme.of(context).colorScheme.surface,
@@ -1068,7 +1069,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           fontSize: 16,
                           color: isLinked || isMetronConfigured
                               ? Theme.of(context).colorScheme.onSurface
-                              : Colors.grey,
+                              : SunfireColors.contentTertiary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -1079,10 +1080,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                             height: 7,
                             decoration: BoxDecoration(
                               color: isLinked
-                                  ? Colors.blueAccent
+                                  ? SunfireColors.trackerBlue
                                   : isMetronConfigured
-                                      ? Colors.greenAccent
-                                      : Colors.grey,
+                                      ? SunfireColors.trackerGreen
+                                      : SunfireColors.contentTertiary,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -1096,10 +1097,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                             style: TextStyle(
                               fontSize: 12,
                               color: isLinked
-                                  ? Colors.blueAccent
+                                  ? SunfireColors.trackerBlue
                                   : isMetronConfigured
-                                      ? Colors.greenAccent
-                                      : Colors.grey,
+                                      ? SunfireColors.trackerGreen
+                                      : SunfireColors.contentTertiary,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -1113,19 +1114,19 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.blueAccent.withValues(alpha: 0.15),
+                      color: SunfireColors.trackerBlueContainer,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
+                      border: Border.all(color: SunfireColors.trackerBlue.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.link_rounded, size: 12, color: Colors.blueAccent),
+                        const Icon(Icons.link_rounded, size: 12, color: SunfireColors.trackerBlue),
                         const SizedBox(width: 4),
                         Text(
                           'LINKED',
                           style: TextStyle(
-                            color: Colors.blueAccent,
+                            color: SunfireColors.trackerBlue,
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 0.5,
@@ -1150,9 +1151,9 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        // Colors.blueAccent is dark enough for white text
-                        foregroundColor: const Color(0xFFFFFFFF),
+                        backgroundColor: SunfireColors.trackerBlue,
+                        // SunfireColors.trackerBlue is dark enough for white text
+                        foregroundColor: SunfireColors.contentPrimary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         elevation: 0,
@@ -1163,7 +1164,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                               height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: const Color(0xFFFFFFFF),
+                                color: SunfireColors.contentPrimary,
                               ),
                             )
                           : const Icon(Icons.cloud_upload_outlined, size: 18),
@@ -1177,8 +1178,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                   const SizedBox(width: 10),
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.redAccent,
-                      side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                      foregroundColor: SunfireColors.destructive,
+                      side: const BorderSide(color: SunfireColors.destructive, width: 1.5),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                     ),
@@ -1194,20 +1195,20 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: isMetronConfigured
-                      ? Colors.blueAccent.withValues(alpha: 0.05)
-                      : Colors.amberAccent.withValues(alpha: 0.05),
+                      ? SunfireColors.trackerBlueSubtle
+                      : SunfireColors.trackerAmber.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isMetronConfigured
-                        ? Colors.blueAccent.withValues(alpha: 0.2)
-                        : Colors.amberAccent.withValues(alpha: 0.3),
+                        ? SunfireColors.trackerBlue.withValues(alpha: 0.2)
+                        : SunfireColors.trackerAmber.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       isMetronConfigured ? Icons.info_outline_rounded : Icons.warning_amber_rounded,
-                      color: isMetronConfigured ? Colors.blueAccent : Colors.amberAccent,
+                      color: isMetronConfigured ? SunfireColors.trackerBlue : SunfireColors.trackerAmber,
                       size: 20,
                     ),
                     const SizedBox(width: 12),
@@ -1219,8 +1220,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         style: TextStyle(
                           fontSize: 12,
                           color: isMetronConfigured
-                              ? Colors.blueAccent.withValues(alpha: 0.8)
-                              : Colors.amberAccent.withValues(alpha: 0.8),
+                              ? SunfireColors.trackerBlue.withValues(alpha: 0.8)
+                              : SunfireColors.trackerAmber.withValues(alpha: 0.8),
                           height: 1.4,
                         ),
                       ),
@@ -1235,9 +1236,9 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isMetronConfigured ? Colors.blueAccent : Colors.amberAccent,
+                    backgroundColor: isMetronConfigured ? SunfireColors.trackerBlue : SunfireColors.trackerAmber,
                     // blueAccent is dark enough for white; amberAccent is light enough for black
-                    foregroundColor: isMetronConfigured ? const Color(0xFFFFFFFF) : const Color(0xFF000000),
+                    foregroundColor: isMetronConfigured ? SunfireColors.contentPrimary : SunfireColors.onTrackerAmber,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     elevation: 0,
@@ -1285,7 +1286,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 icon: Icons.menu_book_rounded,
                 label: 'Publisher',
                 value: _localManga?.publisher ?? 'Unknown Publisher',
-                color: Colors.blueAccent,
+                color: SunfireColors.trackerBlue,
               ),
             ),
             const SizedBox(width: 10),
@@ -1295,7 +1296,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 icon: Icons.confirmation_number_rounded,
                 label: 'Issues in Series',
                 value: issueCount > 0 ? '$issueCount issues' : 'Unknown',
-                color: Colors.greenAccent,
+                color: SunfireColors.trackerGreen,
               ),
             ),
           ],
@@ -1308,19 +1309,19 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.greenAccent.withValues(alpha: 0.1),
+                color: SunfireColors.trackerGreen.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3)),
+                border: Border.all(color: SunfireColors.trackerGreen.withValues(alpha: 0.3)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.lock_rounded, size: 14, color: Colors.greenAccent),
+                  const Icon(Icons.lock_rounded, size: 14, color: SunfireColors.trackerGreen),
                   const SizedBox(width: 6),
                   Text(
                     'Metadata Locked & Enriched',
                     style: TextStyle(
-                      color: Colors.greenAccent,
+                      color: SunfireColors.trackerGreen,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1335,7 +1336,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 'Series ID: ${_localManga!.metronSeriesId}',
                 style: TextStyle(
                   fontSize: 11,
-                  color: Colors.grey.withValues(alpha: 0.6),
+                  color: SunfireColors.contentTertiary.withValues(alpha: 0.6),
                   fontFamily: 'monospace',
                 ),
               ),
@@ -1415,7 +1416,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               Icon(
                 Icons.track_changes_outlined,
                 size: 48,
-                color: Colors.grey.withValues(alpha: 0.5),
+                color: SunfireColors.contentDisabled,
               ),
               const SizedBox(height: 12),
               Text(
@@ -1426,7 +1427,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               const SizedBox(height: 8),
               Text(
                 'Connect a Suwayomi server in Settings → Server to track manga via AniList, MyAnimeList, or Kitsu. Once connected and authorized, your trackers will appear here.',
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                style: theme.textTheme.bodySmall?.copyWith(color: SunfireColors.contentTertiary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -1434,8 +1435,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 icon: const Icon(Icons.settings_rounded, size: 18),
                 label: const Text('Open Server Settings'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amberAccent,
-                  foregroundColor: const Color(0xFF000000),
+                  backgroundColor: SunfireColors.trackerAmber,
+                  foregroundColor: SunfireColors.onTrackerAmber,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () {
@@ -1468,14 +1469,14 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
       child: Container(
         decoration: BoxDecoration(
           color: isBound
-              ? Colors.greenAccent.withValues(alpha: 0.03)
+              ? SunfireColors.trackerGreen.withValues(alpha: 0.03)
               : isLoggedIn
                   ? primaryColor.withValues(alpha: 0.03)
                   : SunfireTheme.tileSurface(context),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isBound
-                ? Colors.greenAccent.withValues(alpha: 0.5)
+                ? SunfireColors.trackerGreen.withValues(alpha: 0.5)
                 : isLoggedIn
                     ? primaryColor.withValues(alpha: 0.3)
                     : SunfireTheme.tileBorder(context),
@@ -1501,17 +1502,17 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           height: 48,
                           decoration: BoxDecoration(
                             color: isBound
-                                ? Colors.greenAccent.withValues(alpha: 0.15)
+                                ? SunfireColors.trackerGreenContainer
                                 : isLoggedIn
                                     ? primaryColor.withValues(alpha: 0.15)
-                                    : Colors.grey.withValues(alpha: 0.1),
+                                    : SunfireColors.contentTertiary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: isBound
-                                  ? Colors.greenAccent.withValues(alpha: 0.5)
+                                  ? SunfireColors.trackerGreen.withValues(alpha: 0.5)
                                   : isLoggedIn
                                       ? primaryColor.withValues(alpha: 0.5)
-                                      : Colors.grey.withValues(alpha: 0.3),
+                                      : SunfireColors.contentDisabled,
                             ),
                           ),
                           child: Center(
@@ -1522,13 +1523,13 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                     height: 28,
                                     errorBuilder: (_, __, ___) => Icon(
                                       Icons.track_changes_rounded,
-                                      color: isBound ? Colors.greenAccent : (isLoggedIn ? primaryColor : Colors.grey),
+                                      color: isBound ? SunfireColors.trackerGreen : (isLoggedIn ? primaryColor : SunfireColors.contentTertiary),
                                       size: 24,
                                     ),
                                   )
                                 : Icon(
                                     Icons.track_changes_rounded,
-                                    color: isBound ? Colors.greenAccent : (isLoggedIn ? primaryColor : Colors.grey),
+                                    color: isBound ? SunfireColors.trackerGreen : (isLoggedIn ? primaryColor : SunfireColors.contentTertiary),
                                     size: 24,
                                   ),
                           ),
@@ -1542,10 +1543,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                             height: 14,
                             decoration: BoxDecoration(
                               color: isBound
-                                  ? Colors.greenAccent
+                                  ? SunfireColors.trackerGreen
                                   : isLoggedIn
                                       ? primaryColor
-                                      : Colors.grey,
+                                      : SunfireColors.contentTertiary,
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: Theme.of(context).colorScheme.surface,
@@ -1569,7 +1570,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                               fontSize: 16,
                               color: isBound || isLoggedIn
                                   ? Theme.of(context).colorScheme.onSurface
-                                  : Colors.grey,
+                                  : SunfireColors.contentTertiary,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -1580,10 +1581,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                 height: 7,
                                 decoration: BoxDecoration(
                                   color: isBound
-                                      ? Colors.greenAccent
+                                      ? SunfireColors.trackerGreen
                                       : isLoggedIn
                                           ? primaryColor
-                                          : Colors.grey,
+                                          : SunfireColors.contentTertiary,
                                   shape: BoxShape.circle,
                                 ),
                               ),
@@ -1599,12 +1600,12 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: isBound
-                                      ? Colors.greenAccent
+                                      ? SunfireColors.trackerGreen
                                       : isLoggedIn
                                           ? primaryColor
                                           : tokenExpired
-                                              ? Colors.redAccent
-                                              : Colors.grey,
+                                              ? SunfireColors.destructive
+                                              : SunfireColors.contentTertiary,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -1618,19 +1619,19 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.greenAccent.withValues(alpha: 0.15),
+                          color: SunfireColors.trackerGreenContainer,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3)),
+                          border: Border.all(color: SunfireColors.trackerGreen.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.check_circle_rounded, size: 12, color: Colors.greenAccent),
+                            const Icon(Icons.check_circle_rounded, size: 12, color: SunfireColors.trackerGreen),
                             const SizedBox(width: 4),
                             const Text(
                               'TRACKING',
                               style: TextStyle(
-                                color: Colors.greenAccent,
+                                color: SunfireColors.trackerGreen,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 0.5,
@@ -1642,7 +1643,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     else if (!isLoggedIn && authUrl != null && authUrl.isNotEmpty)
                       TextButton.icon(
                         style: TextButton.styleFrom(
-                          foregroundColor: Colors.amberAccent,
+                          foregroundColor: SunfireColors.trackerAmber,
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         ),
                         icon: const Icon(Icons.login_rounded, size: 14),
@@ -1671,7 +1672,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       ),
                       TextButton.icon(
                         style: TextButton.styleFrom(
-                          foregroundColor: Colors.redAccent,
+                          foregroundColor: SunfireColors.destructive,
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         ),
                         icon: const Icon(Icons.link_off_rounded, size: 14),
@@ -1687,20 +1688,20 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: tokenExpired
-                            ? Colors.redAccent.withValues(alpha: 0.08)
-                            : Colors.amberAccent.withValues(alpha: 0.08),
+                            ? SunfireColors.destructive.withValues(alpha: 0.08)
+                            : SunfireColors.trackerAmber.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: tokenExpired
-                              ? Colors.redAccent.withValues(alpha: 0.3)
-                              : Colors.amberAccent.withValues(alpha: 0.3),
+                              ? SunfireColors.destructive.withValues(alpha: 0.3)
+                              : SunfireColors.trackerAmber.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(
                         children: [
                           Icon(
                             tokenExpired ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
-                            color: tokenExpired ? Colors.redAccent : Colors.amberAccent,
+                            color: tokenExpired ? SunfireColors.destructive : SunfireColors.trackerAmber,
                             size: 20,
                           ),
                           const SizedBox(width: 12),
@@ -1712,8 +1713,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                               style: TextStyle(
                                 fontSize: 12,
                                 color: tokenExpired
-                                    ? Colors.redAccent.withValues(alpha: 0.8)
-                                    : Colors.amberAccent.withValues(alpha: 0.8),
+                                    ? SunfireColors.destructive.withValues(alpha: 0.8)
+                                    : SunfireColors.trackerAmber.withValues(alpha: 0.8),
                                 height: 1.4,
                               ),
                             ),
@@ -1722,7 +1723,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                             const SizedBox(width: 10),
                             TextButton.icon(
                               style: TextButton.styleFrom(
-                                foregroundColor: Colors.amberAccent,
+                                foregroundColor: SunfireColors.trackerAmber,
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               ),
                               icon: const Icon(Icons.login_rounded, size: 14),
@@ -1742,11 +1743,11 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isLoggedIn ? primaryColor : Colors.amberAccent,
+                          backgroundColor: isLoggedIn ? primaryColor : SunfireColors.trackerAmber,
                           // primaryColor uses theme's onPrimary; amberAccent is light -> black
                           foregroundColor: isLoggedIn
                               ? Theme.of(context).colorScheme.onPrimary
-                              : const Color(0xFF000000),
+                              : SunfireColors.onTrackerAmber,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           elevation: 0,
@@ -1854,18 +1855,18 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.blueAccent.withValues(alpha: 0.12),
+                color: SunfireColors.trackerBlue.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
+                border: Border.all(color: SunfireColors.trackerBlue.withValues(alpha: 0.3)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.flag_rounded, size: 12, color: Colors.blueAccent),
+                  const Icon(Icons.flag_rounded, size: 12, color: SunfireColors.trackerBlue),
                   const SizedBox(width: 4),
                   Text(
                     _statusLabel(trackerId, currentStatus),
-                    style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: SunfireColors.trackerBlue, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -1874,18 +1875,18 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.purpleAccent.withValues(alpha: 0.12),
+                color: SunfireColors.info.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.3)),
+                border: Border.all(color: SunfireColors.info.withValues(alpha: 0.3)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.menu_book_rounded, size: 12, color: Colors.purpleAccent),
+                  const Icon(Icons.menu_book_rounded, size: 12, color: SunfireColors.info),
                   const SizedBox(width: 4),
                   Text(
                     'Ch: $currentChapter / ${totalChapters > 0 ? totalChapters : "?"}',
-                    style: const TextStyle(color: Colors.purpleAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: SunfireColors.info, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -1895,18 +1896,18 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.amberAccent.withValues(alpha: 0.12),
+                  color: SunfireColors.trackerAmber.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.3)),
+                  border: Border.all(color: SunfireColors.trackerAmber.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.star_rounded, size: 12, color: Colors.amberAccent),
+                    const Icon(Icons.star_rounded, size: 12, color: SunfireColors.trackerAmber),
                     const SizedBox(width: 4),
                     Text(
                       'Score: ${score == score.roundToDouble() ? score.toInt() : score}',
-                      style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                      style: const TextStyle(color: SunfireColors.trackerAmber, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -1916,18 +1917,18 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.12),
+                  color: SunfireColors.contentTertiary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                  border: Border.all(color: SunfireColors.contentDisabled),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.lock_outline_rounded, size: 12, color: Colors.grey),
+                    const Icon(Icons.lock_outline_rounded, size: 12, color: SunfireColors.contentTertiary),
                     const SizedBox(width: 4),
                     const Text(
                       'Private',
-                      style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),

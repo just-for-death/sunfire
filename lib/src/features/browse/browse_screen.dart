@@ -20,6 +20,7 @@ import '../../core/sync/suwayomi_parse_helpers.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'extension_details_screen.dart';
 import 'global_search_screen.dart';
@@ -477,7 +478,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB45309)),
+            style: ElevatedButton.styleFrom(backgroundColor: SunfireColors.warning),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Install anyway'),
           ),
@@ -520,7 +521,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB91C1C)),
+            style: ElevatedButton.styleFrom(backgroundColor: SunfireColors.error),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Uninstall'),
           ),
@@ -545,7 +546,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Cannot install extension: QuickJS engine unavailable ($quickJsError)'),
-              backgroundColor: Colors.redAccent,
+              backgroundColor: SunfireColors.destructive,
               duration: const Duration(seconds: 5),
             ),
           );
@@ -803,7 +804,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           controller: _tabController,
           indicatorColor: primaryColor,
           labelColor: primaryColor,
-          unselectedLabelColor: Colors.grey,
+          unselectedLabelColor: SunfireColors.contentTertiary,
           tabs: const [
             Tab(text: 'Sources'),
             Tab(text: 'Extensions'),
@@ -847,7 +848,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline_rounded, size: 44, color: Colors.grey.shade600),
+              Icon(Icons.error_outline_rounded, size: 44, color: SunfireColors.contentTertiary),
               const SizedBox(height: 12),
               const Text(
                 'Could not load sources',
@@ -859,7 +860,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 textAlign: TextAlign.center,
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
@@ -1026,22 +1027,22 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: 8),
               ChoiceChip(
-                avatar: const Icon(Icons.flash_on_rounded, size: 15, color: Colors.tealAccent),
+                avatar: const Icon(Icons.flash_on_rounded, size: 15, color: SunfireColors.sourceLocalJs),
                 label: const Text('Local JS'),
                 selected: _selectedSourceFilter == 'Local JS',
-                selectedColor: Colors.teal.shade800,
+                selectedColor: SunfireColors.sourceLocalJsSelected,
                 backgroundColor: SunfireTheme.tileSurface(context),
                 showCheckmark: false,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 labelStyle: TextStyle(
-                  color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : Colors.grey[400],
+                  color: _selectedSourceFilter == 'Local JS' ? SunfireColors.sourceLocalJs : SunfireColors.contentTertiary,
                   fontWeight: _selectedSourceFilter == 'Local JS' ? FontWeight.bold : FontWeight.w500,
                   fontSize: 13,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                   side: BorderSide(
-                    color: _selectedSourceFilter == 'Local JS' ? Colors.tealAccent : SunfireTheme.tileBorder(context),
+                    color: _selectedSourceFilter == 'Local JS' ? SunfireColors.sourceLocalJs : SunfireTheme.tileBorder(context),
                     width: _selectedSourceFilter == 'Local JS' ? 1.2 : 0.8,
                   ),
                 ),
@@ -1052,22 +1053,22 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: 8),
               ChoiceChip(
-                avatar: const Icon(Icons.cloud_queue_rounded, size: 15, color: Colors.lightBlueAccent),
+                avatar: const Icon(Icons.cloud_queue_rounded, size: 15, color: SunfireColors.sourceServer),
                 label: const Text('Server (Suwayomi)'),
                 selected: _selectedSourceFilter == 'Server',
-                selectedColor: Colors.blue.shade800,
+                selectedColor: SunfireColors.sourceServerSelected,
                 backgroundColor: SunfireTheme.tileSurface(context),
                 showCheckmark: false,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 labelStyle: TextStyle(
-                  color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : Colors.grey[400],
+                  color: _selectedSourceFilter == 'Server' ? SunfireColors.sourceServer : SunfireColors.contentTertiary,
                   fontWeight: _selectedSourceFilter == 'Server' ? FontWeight.bold : FontWeight.w500,
                   fontSize: 13,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                   side: BorderSide(
-                    color: _selectedSourceFilter == 'Server' ? Colors.lightBlueAccent : SunfireTheme.tileBorder(context),
+                    color: _selectedSourceFilter == 'Server' ? SunfireColors.sourceServer : SunfireTheme.tileBorder(context),
                     width: _selectedSourceFilter == 'Server' ? 1.2 : 0.8,
                   ),
                 ),
@@ -1078,22 +1079,22 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: 8),
               ChoiceChip(
-                avatar: const Icon(Icons.push_pin_rounded, size: 15, color: Colors.amberAccent),
+                avatar: const Icon(Icons.push_pin_rounded, size: 15, color: SunfireColors.trackerAmber),
                 label: const Text('Pinned'),
                 selected: _selectedSourceFilter == 'Pinned',
-                selectedColor: Colors.amber.shade900,
+                selectedColor: SunfireColors.sourcePinnedSelected,
                 backgroundColor: SunfireTheme.tileSurface(context),
                 showCheckmark: false,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 labelStyle: TextStyle(
-                  color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : Colors.grey[400],
+                  color: _selectedSourceFilter == 'Pinned' ? SunfireColors.trackerAmber : SunfireColors.contentTertiary,
                   fontWeight: _selectedSourceFilter == 'Pinned' ? FontWeight.bold : FontWeight.w500,
                   fontSize: 13,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                   side: BorderSide(
-                    color: _selectedSourceFilter == 'Pinned' ? Colors.amberAccent : SunfireTheme.tileBorder(context),
+                    color: _selectedSourceFilter == 'Pinned' ? SunfireColors.trackerAmber : SunfireTheme.tileBorder(context),
                     width: _selectedSourceFilter == 'Pinned' ? 1.2 : 0.8,
                   ),
                 ),
@@ -1113,18 +1114,18 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         ..add(Text('PINNED SOURCES', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)))
         ..add(const SizedBox(height: 8))
         ..addAll(pinned)
-        ..add(const Divider(height: 24, color: Color(0x1AFFFFFF)));
+        ..add(const Divider(height: 24, color: SunfireColors.borderHairline));
     }
     if (localJsUnpinned.isNotEmpty && _selectedSourceFilter != 'Server') {
       rows
-        ..add(const Text('LOCAL EXTENSIONS (ON-DEVICE)', style: TextStyle(color: Colors.tealAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)))
+        ..add(const Text('LOCAL EXTENSIONS (ON-DEVICE)', style: TextStyle(color: SunfireColors.sourceLocalJs, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)))
         ..add(const SizedBox(height: 8))
         ..addAll(localJsUnpinned)
         ..add(const SizedBox(height: 16));
     }
     if (serverUnpinned.isNotEmpty && _selectedSourceFilter != 'Local JS') {
       rows
-        ..add(const Text('SERVER SOURCES (SUWAYOMI)', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)))
+        ..add(const Text('SERVER SOURCES (SUWAYOMI)', style: TextStyle(color: SunfireColors.sourceServer, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)))
         ..add(const SizedBox(height: 8))
         ..addAll(serverUnpinned);
     }
@@ -1139,7 +1140,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   Icon(
                     _selectedSourceFilter == 'Server' ? Icons.cloud_off_rounded : Icons.search_off_rounded,
                     size: 48,
-                    color: Colors.grey.withAlpha(120),
+                    color: SunfireColors.contentDisabled,
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -1154,7 +1155,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         ? 'Make sure your Suwayomi server is connected in Settings and has extensions installed.'
                         : 'Try changing your search query or language filter.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 12),
                   ),
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
@@ -1231,7 +1232,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     constraints: const BoxConstraints(),
                     icon: Icon(
                       isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
-                      color: isPinned ? primaryColor : Colors.grey,
+                      color: isPinned ? primaryColor : SunfireColors.contentTertiary,
                       size: 18,
                     ),
                     onPressed: () => _toggleSourcePin(id),
@@ -1274,7 +1275,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                             ),
                             SunfireBadge(
                               label: isLocalJs ? 'Local' : 'Server',
-                              color: isLocalJs ? Colors.tealAccent : Colors.lightBlueAccent,
+                              color: isLocalJs ? SunfireColors.sourceLocalJs : SunfireColors.sourceServer,
                             ),
                           ],
                         ),
@@ -1503,17 +1504,17 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               FilterChip(
                 label: const Text('Local JS'),
                 selected: _selectedExtensionFilter == 'Local JS',
-                selectedColor: Colors.teal.withValues(alpha: 0.25),
+                selectedColor: SunfireColors.sourceLocalJs.withValues(alpha: 0.25),
                 backgroundColor: SunfireTheme.tileSurface(context),
                 labelStyle: TextStyle(
-                  color: _selectedExtensionFilter == 'Local JS' ? (_isLight ? Colors.teal.shade700 : Colors.tealAccent) : _cs.onSurfaceVariant,
+                  color: _selectedExtensionFilter == 'Local JS' ? (_isLight ? SunfireColors.sourceLocalJsSelected : SunfireColors.sourceLocalJs) : _cs.onSurfaceVariant,
                   fontWeight: _selectedExtensionFilter == 'Local JS' ? FontWeight.bold : FontWeight.normal,
                   fontSize: 12,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                   side: BorderSide(
-                    color: _selectedExtensionFilter == 'Local JS' ? Colors.teal : SunfireTheme.tileBorder(context),
+                    color: _selectedExtensionFilter == 'Local JS' ? SunfireColors.sourceLocalJs : SunfireTheme.tileBorder(context),
                     width: 0.8,
                   ),
                 ),
@@ -1523,17 +1524,17 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               FilterChip(
                 label: const Text('Server APK'),
                 selected: _selectedExtensionFilter == 'Server APK',
-                selectedColor: Colors.blue.withValues(alpha: 0.25),
+                selectedColor: SunfireColors.sourceServer.withValues(alpha: 0.25),
                 backgroundColor: SunfireTheme.tileSurface(context),
                 labelStyle: TextStyle(
-                  color: _selectedExtensionFilter == 'Server APK' ? (_isLight ? Colors.blue.shade700 : Colors.lightBlueAccent) : _cs.onSurfaceVariant,
+                  color: _selectedExtensionFilter == 'Server APK' ? (_isLight ? SunfireColors.sourceServerSelected : SunfireColors.sourceServer) : _cs.onSurfaceVariant,
                   fontWeight: _selectedExtensionFilter == 'Server APK' ? FontWeight.bold : FontWeight.normal,
                   fontSize: 12,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                   side: BorderSide(
-                    color: _selectedExtensionFilter == 'Server APK' ? Colors.blue : SunfireTheme.tileBorder(context),
+                    color: _selectedExtensionFilter == 'Server APK' ? SunfireColors.sourceServer : SunfireTheme.tileBorder(context),
                     width: 0.8,
                   ),
                 ),
@@ -1561,10 +1562,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: 8),
               ActionChip(
-                avatar: const Icon(Icons.download_done_rounded, size: 16, color: Colors.tealAccent),
-                label: const Text('Install All', style: TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                backgroundColor: Colors.teal.withValues(alpha: 0.15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Colors.teal, width: 0.8)),
+                avatar: const Icon(Icons.download_done_rounded, size: 16, color: SunfireColors.sourceLocalJs),
+                label: const Text('Install All', style: TextStyle(color: SunfireColors.sourceLocalJs, fontWeight: FontWeight.bold, fontSize: 12)),
+                backgroundColor: SunfireColors.sourceLocalJsContainer,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: SunfireColors.sourceLocalJs, width: 0.8)),
                 onPressed: _installAllJsExtensions,
               ),
             ],
@@ -1606,7 +1607,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                       ? 'You haven\'t installed any extensions yet. Switch to "All" or "Local JS" to install extensions.'
                                       : 'No extensions match your current search and repository filters.'),
                               textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.grey, fontSize: 13),
+                              style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
                             ),
                             const SizedBox(height: 20),
                             if (_selectedExtensionFilter != 'All') ...[
@@ -1696,12 +1697,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                       children: [
                                         Text(
                                           'v$version',
-                                          style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500),
+                                          style: const TextStyle(fontSize: 11, color: SunfireColors.contentTertiary, fontWeight: FontWeight.w500),
                                         ),
                                         const SizedBox(width: 6),
                                         SunfireBadge(
                                           label: isJs ? 'Local' : 'Server',
-                                          color: isJs ? Colors.tealAccent : Colors.lightBlueAccent,
+                                          color: isJs ? SunfireColors.sourceLocalJs : SunfireColors.sourceServer,
                                         ),
                                       ],
                                     ),
@@ -1713,20 +1714,20 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                 if (hasUpdate) ...[
                                   IconButton(
                                     visualDensity: VisualDensity.compact,
-                                    icon: const Icon(Icons.system_update_alt_rounded, color: Colors.amberAccent, size: 20),
+                                    icon: const Icon(Icons.system_update_alt_rounded, color: SunfireColors.trackerAmber, size: 20),
                                     tooltip: 'Update to v$version',
                                     onPressed: () => _toggleExtensionInstallation(ext, isUpdate: true),
                                   ),
                                 ],
                                 IconButton(
                                   visualDensity: VisualDensity.compact,
-                                  icon: const Icon(Icons.settings_outlined, color: Colors.grey, size: 18),
+                                  icon: const Icon(Icons.settings_outlined, color: SunfireColors.contentTertiary, size: 18),
                                   tooltip: 'Settings',
                                   onPressed: () => _showExtensionSettingsDialog(ext),
                                 ),
                                 IconButton(
                                   visualDensity: VisualDensity.compact,
-                                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                  icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.destructive, size: 18),
                                   tooltip: 'Uninstall',
                                   onPressed: () => _toggleExtensionInstallation(ext),
                                 ),
@@ -1857,7 +1858,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               child: Text(
                 'No sources with library manga found.\nPull down to sync your library.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
+                style: TextStyle(color: SunfireColors.contentTertiary),
               ),
             ),
           )
@@ -1898,7 +1899,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       ),
                     ),
                     title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    subtitle: Text(lang, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                    subtitle: Text(lang, style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 13)),
                     trailing: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -1988,7 +1989,7 @@ unawaited(
                             )
                           : Icon(Icons.book_rounded, color: primaryColor),
                       title: Text(manga.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      subtitle: Text(manga.author ?? 'Unknown Author', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      subtitle: Text(manga.author ?? 'Unknown Author', style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                     );
                   },
                 ),
@@ -1996,7 +1997,7 @@ unawaited(
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogCtx),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                  child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
                 ),
                 if (selectedMangaIds.isNotEmpty)
                   ElevatedButton(
@@ -2041,7 +2042,7 @@ unawaited(
             Icon(
               Icons.error_outline_rounded,
               size: 56,
-              color: Colors.redAccent.withAlpha(200),
+              color: SunfireColors.destructive,
             ),
             const SizedBox(height: 16),
             const Text(
@@ -2061,7 +2062,7 @@ unawaited(
               '• Use the web version if available\n'
               '• Report this issue on GitHub',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: Colors.grey, height: 1.5),
+              style: const TextStyle(fontSize: 13, color: SunfireColors.contentTertiary, height: 1.5),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(

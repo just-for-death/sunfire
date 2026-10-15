@@ -8,6 +8,7 @@ import '../../core/metron/metron_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../shared/friendly_network_error.dart';
 
 class TrackingSettingsScreen extends StatefulWidget {
@@ -89,7 +90,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Metron.cloud connected successfully!'),
-              backgroundColor: Colors.green,
+              backgroundColor: SunfireColors.success,
             ),
           );
         }
@@ -133,14 +134,14 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.auto_stories, size: 20, color: Colors.blueAccent),
+                const Icon(Icons.auto_stories, size: 20, color: SunfireColors.trackerBlue),
                 const SizedBox(width: 8),
                 Text(
                   'WESTERN COMICS (METRON.CLOUD)',
                   style: theme.textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.1,
-                    color: Colors.blueAccent,
+                    color: SunfireColors.trackerBlue,
                   ),
                 ),
               ],
@@ -154,7 +155,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
           ListTile(
             title: const Text('Auto-Scrobble to Metron'),
             subtitle: const Text('Mark issue as read on Metron when a chapter is finished'),
-            leading: Icon(Icons.sync_alt_rounded, color: isMetronConfigured ? Colors.blueAccent : Colors.grey),
+            leading: Icon(Icons.sync_alt_rounded, color: isMetronConfigured ? SunfireColors.trackerBlue : SunfireColors.contentTertiary),
             trailing: Switch(
               value: isMetronConfigured && SettingsService.instance.metronAutoScrobble,
               onChanged: isMetronConfigured
@@ -170,14 +171,14 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.cloud_sync, size: 20, color: Colors.amberAccent),
+                const Icon(Icons.cloud_sync, size: 20, color: SunfireColors.trackerAmber),
                 const SizedBox(width: 8),
                 Text(
                   'MANGA TRACKERS (SERVER-SIDE)',
                   style: theme.textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.1,
-                    color: Colors.amberAccent,
+                    color: SunfireColors.trackerAmber,
                   ),
                 ),
               ],
@@ -200,7 +201,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: isConfigured ? 2 : 0,
       color: isConfigured
-          ? Colors.blueAccent.withValues(alpha: 0.05)
+          ? SunfireColors.trackerBlueSubtle
           : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -214,18 +215,18 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: isConfigured
-                        ? Colors.blueAccent.withValues(alpha: 0.15)
-                        : Colors.grey.withValues(alpha: 0.15),
+                        ? SunfireColors.trackerBlueContainer
+                        : SunfireColors.contentTertiary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isConfigured
-                          ? Colors.blueAccent.withValues(alpha: 0.5)
-                          : Colors.grey.withValues(alpha: 0.3),
+                          ? SunfireColors.trackerBlue.withValues(alpha: 0.5)
+                          : SunfireColors.contentDisabled,
                     ),
                   ),
                   child: Icon(
                     isConfigured ? Icons.menu_book_rounded : Icons.menu_book_outlined,
-                    color: isConfigured ? Colors.blueAccent : Colors.grey,
+                    color: isConfigured ? SunfireColors.trackerBlue : SunfireColors.contentTertiary,
                     size: 28,
                   ),
                 ),
@@ -239,7 +240,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: isConfigured ? theme.colorScheme.onSurface : Colors.grey,
+                          color: isConfigured ? theme.colorScheme.onSurface : SunfireColors.contentTertiary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -249,7 +250,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: isConfigured ? Colors.greenAccent : Colors.grey,
+                              color: isConfigured ? SunfireColors.trackerGreen : SunfireColors.contentTertiary,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -259,7 +260,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
-                              color: isConfigured ? Colors.greenAccent : Colors.grey,
+                              color: isConfigured ? SunfireColors.trackerGreen : SunfireColors.contentTertiary,
                             ),
                           ),
                         ],
@@ -270,7 +271,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                 if (isConfigured)
                   SunfireBadge(
                     label: 'ACTIVE',
-                    color: Colors.greenAccent,
+                    color: SunfireColors.trackerGreen,
                     icon: const Icon(Icons.check_circle_rounded, size: 12),
                   ),
               ],
@@ -282,7 +283,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             if (!isConfigured) ...[
               Text(
                 'Enter your Metron API token to enable automatic scrobbling of western comics.',
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                style: theme.textTheme.bodySmall?.copyWith(color: SunfireColors.contentTertiary),
               ),
               const SizedBox(height: 12),
             ],
@@ -295,7 +296,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                 labelText: 'API Token',
                 hintText: isConfigured ? 'Token configured (hidden)' : 'Enter your Metron API Token',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                prefixIcon: Icon(Icons.key_rounded, color: isConfigured ? Colors.blueAccent : Colors.grey),
+                prefixIcon: Icon(Icons.key_rounded, color: isConfigured ? SunfireColors.trackerBlue : SunfireColors.contentTertiary),
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -304,7 +305,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                       onPressed: isConfigured
                           ? () => setState(() => _isObscured = !_isObscured)
                           : null,
-                      color: isConfigured ? Colors.blueAccent : Colors.grey,
+                      color: isConfigured ? SunfireColors.trackerBlue : SunfireColors.contentTertiary,
                     ),
                     if (!isConfigured)
                       IconButton(
@@ -320,7 +321,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                 ),
                 filled: true,
                 fillColor: isConfigured
-                    ? Colors.blueAccent.withValues(alpha: 0.03)
+                    ? SunfireColors.trackerBlue.withValues(alpha: 0.03)
                     : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
               ),
             ),
@@ -332,7 +333,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                   Icon(
                     _verificationSuccess ? Icons.check_circle_rounded : Icons.error_rounded,
                     size: 14,
-                    color: _verificationSuccess ? Colors.greenAccent : Colors.redAccent,
+                    color: _verificationSuccess ? SunfireColors.trackerGreen : SunfireColors.destructive,
                   ),
                   const SizedBox(width: 6),
                   Expanded(
@@ -340,7 +341,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                       _verificationMessage!,
                       style: TextStyle(
                         fontSize: 12,
-                        color: _verificationSuccess ? Colors.greenAccent : Colors.redAccent,
+                        color: _verificationSuccess ? SunfireColors.trackerGreen : SunfireColors.destructive,
                       ),
                     ),
                   ),
@@ -355,8 +356,8 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               children: [
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isConfigured ? Colors.blueAccent : Colors.grey,
-                    foregroundColor: Colors.white,
+                    backgroundColor: isConfigured ? SunfireColors.trackerBlue : SunfireColors.contentTertiary,
+                    foregroundColor: SunfireColors.contentPrimary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
@@ -364,7 +365,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: SunfireColors.contentPrimary),
                         )
                       : Icon(isConfigured ? Icons.check_circle_outline : Icons.save_rounded, size: 18),
                   label: Text(
@@ -391,7 +392,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                     icon: const Icon(Icons.logout_rounded, size: 18),
                     label: const Text('Disconnect', style: TextStyle(fontSize: 13)),
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.redAccent,
+                      foregroundColor: SunfireColors.destructive,
                     ),
                     onPressed: () async {
                       _tokenController.clear();
@@ -431,7 +432,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
           remaining: rateLimits.burstRemaining,
           limit: rateLimits.burstLimit,
           icon: Icons.flash_on_rounded,
-          color: Colors.orangeAccent,
+          color: SunfireColors.unreadDot,
         ),
         const SizedBox(height: 8),
         _buildRateLimitTile(
@@ -440,7 +441,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
           remaining: rateLimits.sustainedRemaining,
           limit: rateLimits.sustainedLimit,
           icon: Icons.schedule_rounded,
-          color: Colors.blueAccent,
+          color: SunfireColors.trackerBlue,
         ),
       ],
     );
@@ -463,7 +464,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isLow ? Colors.redAccent.withValues(alpha: 0.5) : color.withValues(alpha: 0.3),
+          color: isLow ? SunfireColors.destructive.withValues(alpha: 0.5) : color.withValues(alpha: 0.3),
         ),
       ),
       child: Column(
@@ -471,14 +472,14 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, size: 16, color: isLow ? Colors.redAccent : color),
+              Icon(icon, size: 16, color: isLow ? SunfireColors.destructive : color),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: isLow ? Colors.redAccent : theme.colorScheme.onSurface,
+                  color: isLow ? SunfireColors.destructive : theme.colorScheme.onSurface,
                 ),
               ),
               const Spacer(),
@@ -487,7 +488,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
-                  color: isLow ? Colors.redAccent : color,
+                  color: isLow ? SunfireColors.destructive : color,
                 ),
               ),
             ],
@@ -496,7 +497,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
           LinearProgressIndicator(
             value: progress.clamp(0.0, 1.0),
             backgroundColor: color.withValues(alpha: 0.2),
-            valueColor: AlwaysStoppedAnimation<Color>(isLow ? Colors.redAccent : color),
+            valueColor: AlwaysStoppedAnimation<Color>(isLow ? SunfireColors.destructive : color),
             minHeight: 4,
             borderRadius: BorderRadius.circular(2),
           ),
@@ -505,7 +506,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             isLow ? '⚠️ Quota running low' : 'Quota healthy',
             style: TextStyle(
               fontSize: 11,
-              color: isLow ? Colors.redAccent : Colors.greenAccent,
+              color: isLow ? SunfireColors.destructive : SunfireColors.trackerGreen,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -526,7 +527,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             Icon(
               Icons.track_changes_outlined,
               size: 48,
-              color: Colors.grey.withValues(alpha: 0.5),
+              color: SunfireColors.contentDisabled,
             ),
             const SizedBox(height: 12),
             Text(
@@ -537,7 +538,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             const SizedBox(height: 8),
             Text(
               'Connect a Suwayomi server in Settings → Server to track manga via AniList, MyAnimeList, or Kitsu. Once connected and authorized, your trackers will appear here.',
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+              style: theme.textTheme.bodySmall?.copyWith(color: SunfireColors.contentTertiary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -545,8 +546,8 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               icon: const Icon(Icons.settings_rounded, size: 18),
               label: const Text('Open Server Settings'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amberAccent,
-                foregroundColor: Colors.black,
+                backgroundColor: SunfireColors.trackerAmber,
+                foregroundColor: SunfireColors.onTrackerAmber,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () {
@@ -571,7 +572,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: isAuth ? 1 : 0,
       color: isAuth
-          ? Colors.greenAccent.withValues(alpha: 0.03)
+          ? SunfireColors.trackerGreen.withValues(alpha: 0.03)
           : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -585,13 +586,13 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                   height: 48,
                   decoration: BoxDecoration(
                     color: isAuth
-                        ? Colors.greenAccent.withValues(alpha: 0.15)
+                        ? SunfireColors.trackerGreenContainer
                         : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isAuth
-                          ? Colors.greenAccent.withValues(alpha: 0.5)
-                          : Colors.grey.withValues(alpha: 0.3),
+                          ? SunfireColors.trackerGreen.withValues(alpha: 0.5)
+                          : SunfireColors.contentDisabled,
                     ),
                   ),
                   child: Center(
@@ -602,13 +603,13 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                             height: 28,
                             errorBuilder: (_, __, ___) => Icon(
                               Icons.track_changes_rounded,
-                              color: isAuth ? Colors.greenAccent : Colors.grey,
+                              color: isAuth ? SunfireColors.trackerGreen : SunfireColors.contentTertiary,
                               size: 24,
                             ),
                           )
                         : Icon(
                             Icons.track_changes_rounded,
-                            color: isAuth ? Colors.greenAccent : Colors.grey,
+                            color: isAuth ? SunfireColors.trackerGreen : SunfireColors.contentTertiary,
                             size: 24,
                           ),
                   ),
@@ -621,7 +622,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                     width: 14,
                     height: 14,
                     decoration: BoxDecoration(
-                      color: isAuth ? Colors.greenAccent : Colors.grey,
+                      color: isAuth ? SunfireColors.trackerGreen : SunfireColors.contentTertiary,
                       shape: BoxShape.circle,
                       border: Border.all(color: theme.colorScheme.surface, width: 2),
                     ),
@@ -640,7 +641,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: isAuth ? theme.colorScheme.onSurface : Colors.grey,
+                      color: isAuth ? theme.colorScheme.onSurface : SunfireColors.contentTertiary,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -650,7 +651,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                         width: 6,
                         height: 6,
                         decoration: BoxDecoration(
-                          color: isAuth ? Colors.greenAccent : Colors.grey,
+                          color: isAuth ? SunfireColors.trackerGreen : SunfireColors.contentTertiary,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -659,7 +660,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                         isAuth ? 'Authorized & Connected' : 'Not Authorized',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isAuth ? Colors.greenAccent : Colors.grey,
+                          color: isAuth ? SunfireColors.trackerGreen : SunfireColors.contentTertiary,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -672,8 +673,8 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             if (!isAuth && authUrl != null && authUrl.isNotEmpty)
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amberAccent,
-                  foregroundColor: Colors.black,
+                  backgroundColor: SunfireColors.trackerAmber,
+                  foregroundColor: SunfireColors.onTrackerAmber,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
@@ -684,18 +685,18 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.greenAccent.withValues(alpha: 0.15),
+                  color: SunfireColors.trackerGreenContainer,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.check_circle_rounded, size: 14, color: Colors.greenAccent),
+                    const Icon(Icons.check_circle_rounded, size: 14, color: SunfireColors.trackerGreen),
                     const SizedBox(width: 4),
                     Text(
                       'Active',
                       style: TextStyle(
-                        color: Colors.greenAccent,
+                        color: SunfireColors.trackerGreen,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
