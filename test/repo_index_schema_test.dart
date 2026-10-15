@@ -173,7 +173,12 @@ void main() {
 
     test('isJs is detected from every shape an index uses', () {
       expect(parse({'name': 'A', 'sourceCodeLanguage': 1}).isJs, isTrue);
-      expect(parse({'name': 'A', 'typeSource': 'single'}).isJs, isTrue);
+      // Dart and JS entries both carry typeSource; it must not imply JS.
+      expect(parse({'name': 'A', 'typeSource': 'single'}).isJs, isFalse);
+      expect(
+        parse({'name': 'A', 'typeSource': 'multi', 'sourceCodeLanguage': 0, 'sourceCodeUrl': 'https://x.test/multisrc/madara/madara.dart'}).isJs,
+        isFalse,
+      );
       expect(parse({'name': 'A', 'pkgPath': 'javascript/manga/src/en/a.js'}).isJs, isTrue);
       expect(parse({'name': 'A', 'pkgPath': 'a.kt'}).isJs, isFalse);
     });

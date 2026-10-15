@@ -72,6 +72,9 @@ class QuickJsService {
   final Map<String, String> _canonicalDisplayNames = {};
   final Map<String, String> _installedVersions = {};
   final Map<String, String> _installedIcons = {};
+  /// Language variant each install runs as. Variants of one extension share a
+  /// script and an install slot, so this is the only place the choice lives.
+  final Map<String, String> _installedLangs = {};
 
   // JS runtime pool — reuse live JsExtensionService instances (LRU, max 5)
   // IMP-029: per-source runtimes; busy ones are never evicted or disposed.
@@ -181,7 +184,8 @@ class QuickJsService {
   }
 
   Map<String, dynamic> _sourceMetaFor(String jsCode, [String? sourceName]) {
-    final meta = extractSourceMetadata(jsCode);
+    final key = sourceName == null ? null : _resolveInstallKey(sourceName);
+    final meta = extractSourceMetadata(jsCode, lang: key == null ? null : _installedLangs[key]);
     final name = (sourceName != null && sourceName.isNotEmpty)
         ? sourceName
         : (meta['name']?.toString() ?? '');
@@ -196,14 +200,6 @@ class QuickJsService {
   /// Public invalidate when source preferences (mirror URL) change.
   void invalidateSourceRuntime(String sourceName) => _invalidateRuntime(sourceName);
 
-
-  /// When true, [initialize] loads disk state but does NOT fetch remote
-  /// catalogs. Set by main.dart before onboarding completes: installing 261
-  /// community extensions (with network traffic) before the user has chosen
-  /// server vs standalone is a surprise. Onboarding completion calls
-  /// [ensureAutoInstalled]. Defaults to false so tests and background isolates
-  /// keep the old eager behavior.
-  bool deferAutoInstall = false;
 
   /// Test-only override for the extensions scan. When set,
   /// [_loadInstalledExtensionsFromDisk] reads exactly these directories and
@@ -239,10 +235,6 @@ class QuickJsService {
     try {
       final loadOverride = debugInitLoadOverride;
       await (loadOverride != null ? loadOverride() : _loadInstalledExtensionsFromDisk());
-      // Auto-install extensions from remote repos on first run if no extensions are installed
-      if (!deferAutoInstall) {
-        await _autoInstallExtensionsFromRemoteRepos();
-      }
       _initialized = true;
       _initError = null;
     } catch (e, stack) {
@@ -254,94 +246,14 @@ class QuickJsService {
     }
   }
 
-  /// Runs the first-run remote auto-install if nothing is installed yet.
+  /// Bulk-installs en/all scrapers from [repoUrls] if nothing is installed yet.
+  /// Only the user's own repos are ever used; an empty list installs nothing.
   /// Safe to call repeatedly: no-ops when extensions already exist.
-  Future<void> ensureAutoInstalled({List<String>? repoUrls}) async {
+  Future<void> ensureAutoInstalled({required List<String> repoUrls}) async {
     await _loadInstalledExtensionsFromDisk();
-    await _autoInstallExtensionsFromRemoteRepos(repoUrls: repoUrls);
-  }
-
-  /// Bulk-installs catalog sources on first run. When [repoUrls] is given
-  /// (onboarding's explicit user choice), only those repos are used;
-  /// otherwise the official + community defaults apply. Respects an
-  /// explicit empty choice by installing nothing.
-  Future<void> _autoInstallExtensionsFromRemoteRepos({List<String>? repoUrls}) async {
+    if (_installedJsSources.isNotEmpty || repoUrls.isEmpty) return;
     try {
-      // Check if we already have extensions installed
-      if (_installedJsSources.isNotEmpty) {
-        return; // Already have extensions, skip auto-install
-      }
-
-      // Fetch from official and community repos (or the caller's explicit list)
-      final effectiveUrls = repoUrls ??
-          [
-            RepoManager.officialIndexUrl,
-            RepoManager.communityIndexUrl,
-          ];
-      if (repoUrls != null && repoUrls.isEmpty) {
-        return; // Explicit empty choice: install nothing.
-      }
-
-      final repoSources = await RepoManager.instance.fetchCombinedRepoSources(effectiveUrls);
-      
-      if (repoSources.isEmpty) {
-        await LoggerService.instance.logWarning('No extensions found in remote repos', 'QuickJS');
-        return;
-      }
-
-      // Only auto-install English and universal scrapers that have a real JS
-      // payload. Non-English sources are installed on demand (server-mode match
-      // or explicit user action in Browse → Extensions → Install All).
-      final targets = repoSources.where((s) {
-        final lang = s.lang.toLowerCase();
-        return (lang == 'en' || lang == 'all') &&
-            s.isJs &&
-            s.sourceCodeUrl.trim().isNotEmpty &&
-            s.sourceCodeUrl.toLowerCase().endsWith('.js');
-      }).toList();
-
-      if (targets.isEmpty) {
-        await LoggerService.instance.logWarning('No eligible (en/all) extensions found in remote repos', 'QuickJS');
-        return;
-      }
-
-      // Install all sources from the repos
-      int installedCount = 0;
-      for (final source in targets) {
-        try {
-          if (source.sourceCodeUrl.trim().isEmpty) {
-            if (kDebugMode) debugPrint('[QuickJS] Skipping index entry without JS url: ${source.name}');
-            continue;
-          }
-          final cleanKey = source.name.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_').toLowerCase();
-          if (_installedJsSources.containsKey(cleanKey)) continue;
-
-          // Download the JS code
-          final code = await RepoManager.instance.downloadJsSourceCode(source.sourceCodeUrl, expectedSha256: source.sha256);
-          if (code == null || code.trim().isEmpty) {
-            await LoggerService.instance.logWarning('Failed to download JS for ${source.name}', 'QuickJS');
-            continue;
-          }
-
-          // Install the extension
-          _installedJsSources[cleanKey] = code;
-          _canonicalDisplayNames[cleanKey] = source.name;
-          _installedVersions[cleanKey] = source.version;
-          if (source.iconUrl.isNotEmpty) {
-            _installedIcons[cleanKey] = source.iconUrl;
-          }
-          _invalidateRuntime(cleanKey);
-          _invalidateRuntime(source.name);
-          installedCount++;
-        } catch (e) {
-          await LoggerService.instance.logWarning('Failed to install extension ${source.name}: $e', 'QuickJS');
-        }
-      }
-
-      if (installedCount > 0) {
-        await _saveInstalledExtensions();
-        await LoggerService.instance.logInfo('Auto-installed $installedCount extensions from remote repos', 'QuickJS');
-      }
+      await RepoManager.instance.downloadAndInstallAllRepoExtensions(userRepoUrls: repoUrls);
     } catch (e) {
       await LoggerService.instance.logWarning('Auto-install from remote repos failed: $e', 'QuickJS');
     }
@@ -424,6 +336,8 @@ class QuickJsService {
               if (metaJson['iconUrl'] != null) {
                 _installedIcons[cleanKey] = metaJson['iconUrl'].toString();
               }
+              final lang = metaJson['lang']?.toString().trim().toLowerCase() ?? '';
+              if (lang.isNotEmpty) _installedLangs[cleanKey] = lang;
             }
           } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
         }
@@ -436,6 +350,7 @@ class QuickJsService {
     String jsCode, {
     String? version,
     String? iconUrl,
+    String? lang,
   }) async {
     final cleanName = sourceName
         .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
@@ -459,6 +374,8 @@ class QuickJsService {
       _canonicalDisplayNames.remove(k);
       _installedVersions.remove(k);
       _installedIcons.remove(k);
+      final staleLang = _installedLangs.remove(k);
+      if (staleLang != null) _installedLangs.putIfAbsent(cleanName, () => staleLang);
       _invalidateRuntime(k);
     }
 
@@ -470,6 +387,8 @@ class QuickJsService {
     if (iconUrl != null && iconUrl.isNotEmpty) {
       _installedIcons[cleanName] = iconUrl;
     }
+    final normalizedLang = lang?.trim().toLowerCase() ?? '';
+    if (normalizedLang.isNotEmpty) _installedLangs[cleanName] = normalizedLang;
 
     // Invalidate any previously cached runtime instance so updated JS takes effect immediately
     _invalidateRuntime(cleanName);
@@ -506,6 +425,7 @@ class QuickJsService {
         'name': displayName,
         'version': version ?? _installedVersions[cleanName] ?? '1.0.0',
         'iconUrl': iconUrl ?? _installedIcons[cleanName] ?? '',
+        if (_installedLangs[cleanName] != null) 'lang': _installedLangs[cleanName],
       }));
       await metaTmp.rename(metaFile.path);
 
@@ -531,33 +451,6 @@ class QuickJsService {
     } catch (e) {
       await LoggerService.instance.logError('Failed to persist extension $sourceName: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
       return false;
-    }
-  }
-
-  /// Saves all currently installed extensions to disk.
-  /// Used after auto-installing extensions from remote repos.
-  Future<void> _saveInstalledExtensions() async {
-    try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final extDir = Directory('${appDir.path}/extensions');
-      if (!await extDir.exists()) {
-        await extDir.create(recursive: true);
-      }
-      for (final entry in _installedJsSources.entries) {
-        final key = entry.key;
-        final code = entry.value;
-        final file = File('${extDir.path}/$key.js');
-        await file.writeAsString(code);
-
-        final metaFile = File('${extDir.path}/$key.json');
-        await metaFile.writeAsString(jsonEncode({
-          'name': _canonicalDisplayNames[key] ?? key,
-          'version': _installedVersions[key] ?? '1.0.0',
-          'iconUrl': _installedIcons[key] ?? '',
-        }));
-      }
-    } catch (e) {
-      await LoggerService.instance.logError('Failed to save installed extensions: $e', exception: e, stackTrace: StackTrace.current, category: 'QuickJS');
     }
   }
 
@@ -621,32 +514,33 @@ class QuickJsService {
   /// Public identity comparison used by UI dedup logic.
   static bool sameExtensionIdentity(String a, String b) => _sameExtensionIdentity(a, b);
 
-  bool isSourceInstalledLocally(String sourceName) {
-    if (sourceName.isEmpty) return false;
-    final stripped = sourceName.replaceAll('local_js_', '').replaceAll('localjs_', '');
-    final cleanName = stripped
-        .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
-        .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
-        .toLowerCase();
-    final canonQuery = _canonicalizeKey(sourceName);
-
-    if (_installedJsSources.containsKey(cleanName) || _installedJsSources.containsKey(sourceName)) return true;
-
-    for (final key in _installedJsSources.keys) {
-      final canonKey = _canonicalizeKey(key);
-      if (cleanName == key || canonQuery == canonKey) {
-        return true;
-      }
-      if (canonQuery.length >= 5 && canonKey.length >= 5) {
-        if (canonQuery.startsWith(canonKey) || canonKey.startsWith(canonQuery)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
+  bool isSourceInstalledLocally(String sourceName) => _resolveInstallKey(sourceName) != null;
 
   bool isLocalExtensionInstalled(String sourceName) => isSourceInstalledLocally(sourceName);
+
+  /// Whether repo entry [name] is installed as its [lang] variant. Language
+  /// variants share one install slot, so installing another variant switches it.
+  bool isVariantInstalled(String name, String lang) {
+    String? key;
+    for (final k in _installedJsSources.keys) {
+      if (_sameExtensionIdentity(k, name)) {
+        key = k;
+        break;
+      }
+    }
+    if (key == null) return false;
+    return langsCompatible(getInstalledLang(key), lang);
+  }
+
+  /// Same language variant. Unknown matches anything, and en/all are treated
+  /// as one because indexes label the same single-language script either way.
+  static bool langsCompatible(String a, String b) {
+    final x = a.trim().toLowerCase();
+    final y = b.trim().toLowerCase();
+    if (x.isEmpty || y.isEmpty || x == y) return true;
+    const enLike = {'en', 'all'};
+    return enLike.contains(x) && enLike.contains(y);
+  }
 
   Future<bool> deleteLocalExtension(String sourceName) async {
     final toDelete = <String>[];
@@ -660,6 +554,7 @@ class QuickJsService {
       _canonicalDisplayNames.remove(k);
       _installedVersions.remove(k);
       _installedIcons.remove(k);
+      _installedLangs.remove(k);
       _invalidateRuntime(k);
     }
     try {
@@ -746,17 +641,23 @@ class QuickJsService {
     return null;
   }
 
-  String getSourceLang(String sourceName) {
-    final code = getExtensionCode(sourceName);
-    if (code == null || code.isEmpty) return 'EN';
+  /// Lowercase language the install runs as ('' when not installed). Legacy
+  /// installs without a recorded choice resolve from the script header.
+  String getInstalledLang(String sourceName) {
+    final key = _resolveInstallKey(sourceName);
+    if (key == null) return '';
+    final recorded = _installedLangs[key];
+    if (recorded != null && recorded.isNotEmpty) return recorded;
     try {
-      final meta = extractSourceMetadata(code);
-      final lang = meta['lang']?.toString().trim() ?? '';
-      if (lang.isEmpty) return 'EN';
-      return lang.toUpperCase();
+      return (extractSourceMetadata(_installedJsSources[key]!)['lang']?.toString() ?? '').trim().toLowerCase();
     } catch (_) {
-      return 'EN';
+      return '';
     }
+  }
+
+  String getSourceLang(String sourceName) {
+    final lang = getInstalledLang(sourceName);
+    return lang.isEmpty ? 'EN' : lang.toUpperCase();
   }
 
   static const int _maxHeadersCacheEntries = 500;
@@ -901,14 +802,18 @@ class QuickJsService {
   }
 
   String? getExtensionCode(String sourceName) {
+    final key = _resolveInstallKey(sourceName);
+    return key == null ? null : _installedJsSources[key];
+  }
+
+  /// Install key serving [sourceName]. Exact and alphanumeric matches are
+  /// tried across every install before any prefix match, so a prefix hit on
+  /// one install can never shadow an exact install of the requested source.
+  String? _resolveInstallKey(String sourceName) {
     if (sourceName.isEmpty) return null;
     // IMP-002: the on-device Local source is never a JS extension (and must
     // not fuzzy-match one, which would scrape `localfs:` paths over the net).
     if (sourceName == LocalSource.sourceName) return null;
-    if (_installedJsSources.isEmpty) {
-      // Extensions are loaded from remote repos on first run or from user-installed extensions on disk.
-      // No bundled fallback available.
-    }
     final stripped = sourceName.replaceAll('local_js_', '').replaceAll('localjs_', '');
     final cleanName = stripped
         .replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '')
@@ -916,21 +821,25 @@ class QuickJsService {
         .toLowerCase();
     final alphaOnly = cleanName.replaceAll('_', '');
 
-    if (_installedJsSources.containsKey(cleanName)) {
-      return _installedJsSources[cleanName];
+    if (_installedJsSources.containsKey(cleanName)) return cleanName;
+    if (_installedJsSources.containsKey(sourceName)) return sourceName;
+
+    String keyAlphaOf(String key) => key
+        .replaceAll('local_js_', '')
+        .replaceAll('localjs_', '')
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
+        .toLowerCase();
+
+    final canonQuery = _canonicalizeKey(sourceName);
+    for (final key in _installedJsSources.keys) {
+      final keyClean = key.replaceAll('local_js_', '').replaceAll('localjs_', '');
+      if (cleanName == keyClean || alphaOnly == keyAlphaOf(key) || canonQuery == _canonicalizeKey(key)) return key;
     }
-    if (_installedJsSources.containsKey(sourceName)) {
-      return _installedJsSources[sourceName];
-    }
-    for (final entry in _installedJsSources.entries) {
-      final keyClean = entry.key.replaceAll('local_js_', '').replaceAll('localjs_', '');
-      final keyAlpha = keyClean.replaceAll('_', '').replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
-      if (cleanName == entry.key || cleanName == keyClean || alphaOnly == keyAlpha) {
-        return entry.value;
-      }
-      if (alphaOnly.length >= 5 && keyAlpha.length >= 5) {
-        if (alphaOnly.startsWith(keyAlpha) || keyAlpha.startsWith(alphaOnly)) {
-          return entry.value;
+    if (alphaOnly.length >= 5) {
+      for (final key in _installedJsSources.keys) {
+        final keyAlpha = keyAlphaOf(key);
+        if (keyAlpha.length >= 5 && (alphaOnly.startsWith(keyAlpha) || keyAlpha.startsWith(alphaOnly))) {
+          return key;
         }
       }
     }
@@ -956,14 +865,19 @@ class QuickJsService {
     return null;
   }
 
-  Map<String, dynamic> extractSourceMetadata(String jsCode) {
+  /// Parses the `mangayomiSources` header. Multi-language scripts declare
+  /// `langs: [...]` and `ids: {lang: id}`; [lang] picks the variant to run
+  /// (the script reads `this.source.lang`), defaulting to en, else the first.
+  Map<String, dynamic> extractSourceMetadata(String jsCode, {String? lang}) {
     String name = '';
     String baseUrl = '';
     String apiUrl = '';
     String iconUrl = '';
     String version = '1.0.0';
-    String lang = 'en';
+    String resolvedLang = 'en';
+    var langs = <String>[];
     dynamic id = 0;
+    var headerParsed = false;
 
     // 1. Try standard JSON decode of mangayomiSources array
     try {
@@ -983,8 +897,20 @@ class QuickJsService {
           apiUrl = map['apiUrl']?.toString() ?? '';
           iconUrl = map['iconUrl']?.toString() ?? '';
           version = map['version']?.toString() ?? '1.0.0';
-          lang = (map['lang'] ?? map['langs'] ?? 'en').toString();
-          id = map['id'] ?? 0;
+          final rawLangs = map['langs'];
+          if (rawLangs is List) {
+            langs = rawLangs.map((e) => e.toString().trim().toLowerCase()).where((e) => e.isNotEmpty).toList();
+          }
+          final wanted = lang?.trim().toLowerCase() ?? '';
+          final single = map['lang']?.toString().trim() ?? '';
+          if (langs.isNotEmpty) {
+            resolvedLang = langs.contains(wanted) ? wanted : (langs.contains('en') ? 'en' : langs.first);
+          } else if (single.isNotEmpty) {
+            resolvedLang = single;
+          }
+          final ids = map['ids'];
+          id = ids is Map ? (ids[resolvedLang] ?? 0) : (map['id'] ?? 0);
+          headerParsed = true;
         }
       }
     } catch (ignoredError) { if (kDebugMode) debugPrint('[quickjs_service] ignored error: $ignoredError'); }
@@ -1010,11 +936,11 @@ class QuickJsService {
       final verMatch = RegExp(r'''(?:['"]?version['"]?)\s*:\s*['"]([^'"]+)['"]''').firstMatch(jsCode);
       if (verMatch != null) version = verMatch.group(1)!.trim();
     }
-    if (lang == 'en') {
+    if (!headerParsed) {
       final langMatch = RegExp(r'''(?:['"]?(?:lang|langs)['"]?)\s*:\s*['"]([^'"]+)['"]''').firstMatch(jsCode);
-      if (langMatch != null) lang = langMatch.group(1)!.trim();
+      if (langMatch != null) resolvedLang = langMatch.group(1)!.trim();
     }
-    if (id == 0) {
+    if (id == 0 && !headerParsed) {
       final idMatch = RegExp(r'''(?:['"]?id['"]?)\s*:\s*([0-9]+)''').firstMatch(jsCode);
       if (idMatch != null) id = int.tryParse(idMatch.group(1)!) ?? 0;
     }
@@ -1028,7 +954,8 @@ class QuickJsService {
       'apiUrl': apiUrl,
       'iconUrl': iconUrl,
       'version': version,
-      'lang': lang,
+      'lang': resolvedLang,
+      'langs': langs,
       'id': id,
     };
   }

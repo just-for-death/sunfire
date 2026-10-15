@@ -15,7 +15,6 @@ void main() {
     await SettingsService.instance.initialize();
     dir = await Directory.systemTemp.createTemp('sunfire_imp025');
     QuickJsService.testOnlyExtensionDirs = [dir.path];
-    QuickJsService.instance.deferAutoInstall = true; // no network
   });
 
   tearDownAll(() async {

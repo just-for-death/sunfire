@@ -2554,18 +2554,15 @@ class SyncEngine {
           await RepoManager.instance.downloadAndInstallMatchingSources(
             serverSourceNames: serverSources.map((s) => s.name).toList(),
             userRepoUrls: userRepos,
+            serverSourceLangs: ServerSourceItem.langsByName(serverSources),
           );
 
           final installedLocalJs = QuickJsService.instance.getInstalledExtensionNames();
           final libraryManga = await IsarService.instance.getLibraryManga();
 
-          final allRepoSources = await RepoManager.instance.fetchCombinedRepoSources(userRepos);
-          final availableRepoNames = allRepoSources.map((r) => r.name).toList();
-
           final report = await SourceMigrationService.instance.syncAndReplicateServerSources(
             currentServerInstalledSources: serverSources,
             currentlyInstalledLocalJs: installedLocalJs,
-            availableMangayomiRepoExtensions: availableRepoNames,
             currentLibraryManga: libraryManga,
           );
 
@@ -2573,9 +2570,8 @@ class SyncEngine {
           // syncAndReplicateServerSources already persists exactly the rows it
           // mutates (it calls saveMangas(modifiedManga) itself). The blanket
           // re-save that used to sit here was therefore pure redundancy — and
-          // actively harmful, because `libraryManga` is a snapshot read BEFORE
-          // downloadAndInstallMatchingSources, fetchCombinedRepoSources and the
-          // whole replication ran, each of which can take seconds. Any change
+          // actively harmful, because `libraryManga` is a snapshot read before
+          // the replication ran. Any change
           // made to a library manga in that window (marking a chapter read
           // rewrites unreadCount, LibraryUpdateService saves updated rows)
           // was silently reverted by this write, and on a large library it

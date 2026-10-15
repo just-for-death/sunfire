@@ -19,7 +19,6 @@ void main() {
     setUp(() async {
       extDir = await Directory.systemTemp.createTemp('sunfire_ssx');
       QuickJsService.testOnlyExtensionDirs = [extDir.path];
-      QuickJsService.instance.deferAutoInstall = true;
       SharedPreferences.setMockInitialValues({
         'server_url': 'http://127.0.0.1:45999',
         'sunfire_server_url': 'http://127.0.0.1:45999',

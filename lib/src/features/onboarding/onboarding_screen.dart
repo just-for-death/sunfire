@@ -324,6 +324,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               .downloadAndInstallMatchingSources(
                 serverSourceNames: serverSources.map((s) => s.name).toList(),
                 userRepoUrls: _userRepoUrls,
+                serverSourceLangs: ServerSourceItem.langsByName(serverSources),
               )
               .timeout(const Duration(seconds: 90));
         } on TimeoutException catch (e) {
@@ -499,11 +500,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       selectedRepos: _userRepoUrls,
     );
     SettingsService.instance.onboardingCompleted = true;
-    // Install the user's explicit catalog choice (or the defaults when they
-    // picked none) — never bulk-install hardcoded catalogs over it.
-    unawaited(QuickJsService.instance.ensureAutoInstalled(
-      repoUrls: _userRepoUrls.isEmpty ? null : List.of(_userRepoUrls),
-    ));
+    // Server mode installs only scrapers matching the server's sources (sync);
+    // a bulk catalog install there would add sources the server doesn't have.
+    if (_isStandalone) {
+      unawaited(QuickJsService.instance.ensureAutoInstalled(repoUrls: List.of(_userRepoUrls)));
+    }
     if (cleanUrl != null) {
       SettingsService.instance.serverUrl = cleanUrl;
     }

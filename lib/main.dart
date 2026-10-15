@@ -131,11 +131,6 @@ unawaited(
     debugPrint('ImageCacheHelper init error: $e');
   }
 
-  // No remote catalog traffic before the user finishes onboarding: with
-  // zero extensions installed, initialize() would otherwise download 261
-  // community scrapers on first launch. Onboarding completion calls
-  // ensureAutoInstalled() once the user has chosen server vs standalone.
-  QuickJsService.instance.deferAutoInstall = !SettingsService.instance.onboardingCompleted;
   // IMP-025: loads extensions in the background; local-source calls await
   // QuickJsService.whenReady. initialize() catches and logs its own errors.
   unawaited(QuickJsService.instance.initialize());

@@ -8,17 +8,18 @@ import '../sync/server_auth_helper.dart';
 import 'local_source_service.dart' show kLocalSourceName;
 
 class ReplicationReport {
-  final List<String> newlyInstalledLocalScrapers;
+  /// Installed local scrapers that server sources were matched to.
+  final List<String> matchedLocalScrapers;
   final List<String> newlyAddedServerFallbacks;
   final int totalReplicatedManga;
 
   ReplicationReport({
-    required this.newlyInstalledLocalScrapers,
+    required this.matchedLocalScrapers,
     required this.newlyAddedServerFallbacks,
     required this.totalReplicatedManga,
   });
 
-  bool get hasChanges => newlyInstalledLocalScrapers.isNotEmpty || newlyAddedServerFallbacks.isNotEmpty;
+  bool get hasChanges => matchedLocalScrapers.isNotEmpty || newlyAddedServerFallbacks.isNotEmpty;
 }
 
 class MigrationResult {
@@ -64,6 +65,16 @@ class ServerSourceItem {
     required this.name,
     required this.lang,
   });
+
+  /// Lowercased languages per source name (Suwayomi lists one row per language).
+  static Map<String, Set<String>> langsByName(Iterable<ServerSourceItem> items) {
+    final out = <String, Set<String>>{};
+    for (final s in items) {
+      final lang = s.lang.trim().toLowerCase();
+      if (lang.isNotEmpty) (out[s.name] ??= <String>{}).add(lang);
+    }
+    return out;
+  }
 }
 
 class DualInstallResult {
@@ -187,28 +198,27 @@ class SourceMigrationService {
       final extClean = normalizeSourceName(ext.replaceAll('.js', '').replaceAll('local_js_', ''));
       final extAlpha = extClean.replaceAll(RegExp(r'[^a-z0-9]'), '');
       final extStemmed = extAlpha.replaceAll(RegExp(r'comics?'), 'comic').replaceAll(RegExp(r'scans?'), 'scan');
-      if (extAlpha.contains(alphanumericOnly) ||
-          (alphanumericOnly.length >= 4 && alphanumericOnly.contains(extAlpha)) ||
-          extStemmed.contains(stemmedAlpha) ||
-          (stemmedAlpha.length >= 4 && stemmedAlpha.contains(extStemmed))) {
+      // The contained side must be long enough to be a real name: a 1–4 char
+      // install would otherwise claim every server source that spells it.
+      if ((alphanumericOnly.length >= 5 && extAlpha.contains(alphanumericOnly)) ||
+          (extAlpha.length >= 5 && alphanumericOnly.contains(extAlpha)) ||
+          (stemmedAlpha.length >= 5 && extStemmed.contains(stemmedAlpha)) ||
+          (extStemmed.length >= 5 && stemmedAlpha.contains(extStemmed))) {
         return ext;
       }
     }
 
-    // 3. Synonym & Token prefix match (e.g. "Flame Comics" vs "flame_scans.js", "Asura Comics" vs "asura_scans.js")
-    final serverWords = normalized.split(' ').where((w) => w.isNotEmpty && w != 'comics' && w != 'comic' && w != 'scans' && w != 'scan' && w != 'manga' && w != 'scanlations').toList();
-    if (serverWords.isNotEmpty) {
+    // 3. Same leading brand word, differing only in a generic suffix
+    // (e.g. "Flame Comics" vs "flame_scans.js", "Asura Comics" vs "asura_scans.js").
+    const generic = {'comics', 'comic', 'scans', 'scan', 'manga', 'scanlations', 'scanlation', 'the'};
+    final serverWords = normalized.split(' ').where((w) => w.isNotEmpty && !generic.contains(w)).toList();
+    if (serverWords.isNotEmpty && serverWords.first.length >= 4) {
       final primaryToken = serverWords.first;
-      if (primaryToken.length >= 3) {
-        for (final ext in availableJsExtensions) {
-          final extClean = normalizeSourceName(ext.replaceAll('.js', '').replaceAll('local_js_', ''));
-          final extTokens = extClean.split(' ').where((w) => w.isNotEmpty && w != 'comics' && w != 'comic' && w != 'scans' && w != 'scan' && w != 'manga' && w != 'scanlations').toList();
-          if (extTokens.isNotEmpty && extTokens.first == primaryToken) {
-            return ext;
-          }
-          if (extClean.contains(primaryToken)) {
-            return ext;
-          }
+      for (final ext in availableJsExtensions) {
+        final extClean = normalizeSourceName(ext.replaceAll('.js', '').replaceAll('local_js_', ''));
+        final extTokens = extClean.split(' ').where((w) => w.isNotEmpty && !generic.contains(w)).toList();
+        if (extTokens.isNotEmpty && extTokens.first == primaryToken) {
+          return ext;
         }
       }
     }
@@ -307,15 +317,22 @@ unawaited(
   /// 1. Checks if the source is also available in the Suwayomi server Keiyoushi repository catalog.
   /// 2. If available on server, installs locally AND triggers server install so server can track chapters.
   /// 3. Returns status message detailing whether it was installed dual-channel (App + Server) or App-only.
+  ///
+  /// Only an exact (normalized) name match counts: this installs software on
+  /// the user's server, so a fuzzy guess must never pick the package.
   DualInstallResult checkAndInstallSourceDualChannel({
     required String jsExtensionName,
     required List<String> serverAvailableSourceNames,
   }) {
+    String alpha(String s) => normalizeSourceName(s.replaceAll('.js', '')).replaceAll(' ', '');
+    final target = alpha(jsExtensionName);
     String? matchedServerSource;
-    for (final srv in serverAvailableSourceNames) {
-      if (matchServerSourceToLocalJs(srv, [jsExtensionName]) != null) {
-        matchedServerSource = srv;
-        break;
+    if (target.isNotEmpty) {
+      for (final srv in serverAvailableSourceNames) {
+        if (alpha(srv) == target) {
+          matchedServerSource = srv;
+          break;
+        }
       }
     }
 
@@ -332,66 +349,60 @@ unawaited(
     );
   }
 
-  /// Continuously syncs installed server sources against available Mangayomi repositories.
-  /// Automatically installs matching .js scrapers locally and re-maps attached manga items
-  /// so that any new source added on the server in future is immediately replicated locally.
+  /// Remaps library manga from a server source to the installed local JS
+  /// scraper serving it under a different name (e.g. "Flame Comics" →
+  /// "Flame Scans"). Only installed scrapers are targets: remapping to one that
+  /// is not installed would leave the manga with no working source.
   Future<ReplicationReport> syncAndReplicateServerSources({
     required List<ServerSourceItem> currentServerInstalledSources,
     required List<String> currentlyInstalledLocalJs,
-    required List<String> availableMangayomiRepoExtensions,
     List<Manga>? currentLibraryManga,
   }) async {
-    final newlyInstalled = <String>[];
-    final newlyAddedFallbacks = <String>[];
+    final matchedLocal = <String>[];
+    final serverFallbacks = <String>[];
     var remappedMangaCount = 0;
 
     final installedLocalNormalized = currentlyInstalledLocalJs
         .map((e) => normalizeSourceName(e.replaceAll('.js', '')))
         .toSet();
+    final modifiedManga = <Manga>[];
 
     for (final srv in currentServerInstalledSources) {
       final srvNorm = normalizeSourceName(srv.name);
-      
-      // If already installed locally, skip
-      if (installedLocalNormalized.contains(srvNorm)) {
+
+      // Same name locally: lookups already resolve it, nothing to remap.
+      if (installedLocalNormalized.contains(srvNorm)) continue;
+
+      final matchedJs = matchServerSourceToLocalJs(srv.name, currentlyInstalledLocalJs);
+      if (matchedJs == null) {
+        serverFallbacks.add(srv.name);
         continue;
       }
+      matchedLocal.add(matchedJs);
+      installedLocalNormalized.add(srvNorm);
 
-      // Check if a matching Mangayomi JS extension exists in the repositories
-      final matchedJs = matchServerSourceToLocalJs(srv.name, availableMangayomiRepoExtensions);
-      if (matchedJs != null) {
-        newlyInstalled.add(matchedJs);
-        installedLocalNormalized.add(srvNorm);
-
-        // Re-map attached library manga to the newly installed local JS extension and persist to DB
-        if (currentLibraryManga != null) {
-          final modifiedManga = <Manga>[];
-          for (final manga in currentLibraryManga) {
-            // IMP-002: on-device Local-source series never move to an extension.
-            if (manga.sourceName == kLocalSourceName) continue;
-            if (normalizeSourceName(manga.sourceName) == srvNorm) {
-              manga.sourceName = 'local_js_${matchedJs.replaceAll('.js', '')}';
-              remappedMangaCount++;
-              modifiedManga.add(manga);
-            }
-          }
-          if (modifiedManga.isNotEmpty) {
-            await IsarService.instance.saveMangas(modifiedManga);
-          }
+      for (final manga in currentLibraryManga ?? const <Manga>[]) {
+        // IMP-002: on-device Local-source series never move to an extension.
+        if (manga.sourceName == kLocalSourceName) continue;
+        if (normalizeSourceName(manga.sourceName) == srvNorm) {
+          manga.sourceName = 'local_js_${matchedJs.replaceAll('.js', '')}';
+          remappedMangaCount++;
+          modifiedManga.add(manga);
         }
-      } else {
-        newlyAddedFallbacks.add(srv.name);
       }
     }
-unawaited(
-    LoggerService.instance.logInfo(
-      'Continuous Source Replication: ${newlyInstalled.length} local scrapers auto-installed, ${newlyAddedFallbacks.length} server fallbacks registered, $remappedMangaCount manga remapped',
+    if (modifiedManga.isNotEmpty) {
+      await IsarService.instance.saveMangas(modifiedManga);
+    }
+    unawaited(LoggerService.instance.logInfo(
+      'Source replication: ${matchedLocal.length} server sources matched to installed scrapers, '
+      '${serverFallbacks.length} server fallbacks, $remappedMangaCount manga remapped',
       'SourceReplication',
     ));
 
     return ReplicationReport(
-      newlyInstalledLocalScrapers: newlyInstalled,
-      newlyAddedServerFallbacks: newlyAddedFallbacks,
+      matchedLocalScrapers: matchedLocal,
+      newlyAddedServerFallbacks: serverFallbacks,
       totalReplicatedManga: remappedMangaCount,
     );
   }

@@ -336,14 +336,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       }
 
       for (final js in jsList) {
+        // Dart-runtime entries (most of the community index) cannot run here.
+        if (!js.isJs || js.sourceCodeUrl.isEmpty) continue;
         if (!SettingsService.instance.showNsfwSources && js.isNsfw) continue;
         final identity = QuickJsService.extensionIdentityKey(js.name);
         final key = 'js_${identity}_${js.lang}'.toLowerCase();
         if (identity.isEmpty || !seenKeys.add(key)) continue; // merged repo lists are already deduped; skip intra-repo dupes
 
-        // Install/update state must not depend on language: non-English
-        // extensions live on disk the same way and deserve update badges.
-        final isInstalled = QuickJsService.instance.isLocalExtensionInstalled(js.name);
+        final isInstalled = QuickJsService.instance.isVariantInstalled(js.name, js.lang);
         final installedVer = isInstalled ? QuickJsService.instance.getInstalledVersion(js.name) : '';
         final hasUpdate = isInstalled && installedVer.isNotEmpty && RepoManager.compareVersions(js.version, installedVer) > 0;
 
@@ -379,16 +379,18 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         }
         final identity = QuickJsService.extensionVariantIdentityKey(installedName);
         if (identity.isEmpty) continue;
-        final key = 'js_${identity}_en'.toLowerCase();
+        final installedLang = QuickJsService.instance.getInstalledLang(installedName);
+        final lang = installedLang.isEmpty ? 'en' : installedLang;
+        final key = 'js_${identity}_$lang'.toLowerCase();
         if (!seenKeys.add(key)) continue;
 
         final installedVer = QuickJsService.instance.getInstalledVersion(installedName);
         final iconUrl = QuickJsService.instance.getSourceIconUrl(installedName);
 
         items.add({
-          'id': '${installedName}_en',
+          'id': '${installedName}_$lang',
           'name': installedName,
-          'lang': 'en',
+          'lang': lang,
           'version': installedVer.isNotEmpty ? installedVer : '1.0.0',
           'installedVersion': installedVer,
           'hasUpdate': false,
@@ -582,7 +584,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         int dependentCount = 0;
         try {
           final libraryManga = await IsarService.instance.getLibraryManga();
-          dependentCount = libraryManga.where((m) => m.sourceName == name).length;
+          dependentCount = libraryManga.where((m) => QuickJsService.sameExtensionIdentity(m.sourceName, name)).length;
         } catch (ignoredError) { if (kDebugMode) debugPrint('[browse] ignored error: $ignoredError'); }
         if (!mounted) return;
         final confirmed = await _confirmUninstallExtension(context, name, dependentCount);
@@ -616,8 +618,17 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 code,
                 version: version,
                 iconUrl: iconUrl,
+                lang: ext['lang'] as String?,
               );
               _setStateIfMounted(() {
+                for (final other in _extensionList) {
+                  if (!identical(other, ext) &&
+                      other['isJs'] == true &&
+                      QuickJsService.sameExtensionIdentity(other['name'] as String, name)) {
+                    other['isInstalled'] = false;
+                    other['hasUpdate'] = false;
+                  }
+                }
                 ext['isInstalled'] = true;
                 ext['hasUpdate'] = false;
                 ext['installedVersion'] = version;
@@ -636,12 +647,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
               customStatusMessage = isUpdate ? 'Updated $name to v$version' : dualResult.statusMessage;
 
-              if (dualResult.isAvailableOnServer && GraphQLClientService.instance.isConfigured) {
+              if (!isUpdate && dualResult.isAvailableOnServer && GraphQLClientService.instance.isConfigured) {
                 final serverExt = _extensionList.firstWhere(
-                  (e) => e['name'] == dualResult.serverSourceName,
+                  (e) => e['isJs'] == false && e['name'] == dualResult.serverSourceName,
                   orElse: () => {},
                 );
-                if (serverExt.isNotEmpty && serverExt['id'] != null) {
+                if (serverExt.isNotEmpty && serverExt['id'] != null && serverExt['isInstalled'] != true) {
                   await GraphQLClientService.instance.updateExtension(
                     serverExt['id'].toString(),
                     'INSTALL',

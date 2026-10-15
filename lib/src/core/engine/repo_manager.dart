@@ -46,12 +46,12 @@ class RepoSourceItem {
       url = '$repoBase/$pkgPath';
     }
 
-    final isJs = (json['sourceCodeLanguage'] == 1) ||
-        (json['typeSource'] != null) ||
-        url.endsWith('.js') ||
-        url.contains('/javascript/') ||
-        pkgPath.endsWith('.js') ||
-        pkgPath.contains('javascript');
+    // Mangayomi indexes mark the runtime explicitly (0 = Dart, 1 = JS). Every
+    // entry carries `typeSource`, Dart or JS, so it says nothing about this.
+    final declaredLanguage = json['sourceCodeLanguage'];
+    final isJs = declaredLanguage is num
+        ? declaredLanguage == 1
+        : url.endsWith('.js') || url.contains('/javascript/') || pkgPath.endsWith('.js') || pkgPath.contains('javascript');
 
     var icon = json['iconUrl'] as String? ?? '';
     final baseUrl = json['baseUrl'] as String? ?? '';
@@ -396,7 +396,10 @@ class RepoManager {
           bestVersionMap[key] = item;
         } else {
           final existing = bestVersionMap[key]!;
-          if (compareVersions(item.version, existing.version) > 0) {
+          // A runnable JS entry always beats a Dart one, whatever its version.
+          if (item.isJs != existing.isJs
+              ? item.isJs
+              : compareVersions(item.version, existing.version) > 0) {
             bestVersionMap[key] = item;
           }
         }
@@ -411,8 +414,10 @@ class RepoManager {
         dedupMap[fullKey] = item;
       } else {
         final existing = dedupMap[fullKey]!;
-        if (compareVersions(item.version, existing.version) > 0 ||
-            (compareVersions(item.version, existing.version) == 0 && item.name.length < existing.name.length)) {
+        final versionDiff = compareVersions(item.version, existing.version);
+        if (item.isJs != existing.isJs
+            ? item.isJs
+            : versionDiff > 0 || (versionDiff == 0 && item.name.length < existing.name.length)) {
           dedupMap[fullKey] = item;
         }
       }
@@ -491,9 +496,13 @@ class RepoManager {
   /// 1. Dedup uses raw server name (not normalized) so sources with distinct TLDs both install.
   /// 2. Domain-aware matching: "Source.com" prefers "source_com.js" over "source.js".
   /// 3. Full filename scoring: pkg basename match weighted highest.
+  ///
+  /// [serverSourceLangs] maps a server source name to the languages the server
+  /// serves it in; when known, only repo variants in those languages are used.
   Future<List<String>> downloadAndInstallMatchingSources({
     required List<String> serverSourceNames,
     required List<String> userRepoUrls,
+    Map<String, Set<String>> serverSourceLangs = const {},
   }) async {
     // Fetch all raw sources across all user repositories
     final effectiveRepoUrls = List<String>.from(userRepoUrls);
@@ -605,33 +614,25 @@ class RepoManager {
           return null;
         }
 
-        // 2. Sort by score desc, then by version desc
+        // 2. Sort by score desc, then by version desc. The en/all bonus above
+        // breaks ties between language variants without letting a weak English
+        // match outrank an exact match in the server's own language.
         candidates.sort((a, b) {
           final scoreDiff = b.score.compareTo(a.score);
           if (scoreDiff != 0) return scoreDiff;
           return compareVersions(b.item.version, a.item.version);
         });
 
-        // 3. Filter out non-English unless server source explicitly targets non-English
-        final serverLower = serverName.toLowerCase();
-        final expectsNonEnglish = serverLower.contains('(fr)') ||
-            serverLower.contains('(es)') ||
-            serverLower.contains('(ja)') ||
-            serverLower.contains('(ar)') ||
-            serverLower.contains('(id)') ||
-            serverLower.contains('(ko)') ||
-            serverLower.contains('(ru)') ||
-            serverLower.contains('(pt)') ||
-            serverLower.contains('(zh)');
-
-        final prioritized = expectsNonEnglish
+        // 3. Keep only variants in a language the server actually serves.
+        final serverLangs = serverSourceLangs[serverName] ?? const <String>{};
+        final inServerLang = serverLangs.isEmpty || serverLangs.contains('all')
             ? candidates
             : candidates.where((c) {
                 final lang = c.item.lang.toLowerCase();
-                return lang == 'en' || lang == 'all';
+                return lang == 'all' || serverLangs.contains(lang);
               }).toList();
 
-        final listToTry = prioritized.isNotEmpty ? prioritized : candidates;
+        final listToTry = inServerLang.isNotEmpty ? inServerLang : candidates;
 
         // 4. Try candidates sequentially until one downloads successfully
         for (final scored in listToTry) {
@@ -643,6 +644,7 @@ class RepoManager {
               jsCode,
               version: item.version,
               iconUrl: item.iconUrl,
+              lang: item.lang,
             );
             await LoggerService.instance.logInfo(
               '✓ Installed local JS scraper: ${item.name} (${item.lang}) v${item.version} [score=${scored.score}] for server source "$serverName"',
@@ -718,6 +720,10 @@ class RepoManager {
 
     for (final source in targets) {
       final normalizedName = source.name.trim().toLowerCase();
+      // Never switch an extension the user runs in another language.
+      if (!QuickJsService.langsCompatible(QuickJsService.instance.getInstalledLang(source.name), source.lang)) {
+        continue;
+      }
       // Skip if already installed at same or newer version
       if (alreadyInstalledNames.contains(normalizedName)) {
         final currentVer = QuickJsService.instance.getInstalledVersion(source.name);
@@ -734,6 +740,7 @@ class RepoManager {
             jsCode,
             version: source.version,
             iconUrl: source.iconUrl,
+            lang: source.lang,
           );
           installedCount++;
           alreadyInstalledNames.add(normalizedName);
@@ -785,14 +792,18 @@ class RepoManager {
         final cleanName = name.replaceAll(RegExp(r'\s*\([a-zA-Z0-9_]+\)$'), '').trim().toLowerCase();
 
         final normName = SourceMigrationService.instance.normalizeSourceName(name);
+        final installedLang = QuickJsService.instance.getInstalledLang(name);
 
-        final match = availableSources.firstWhere(
-          (s) => s.name.trim().toLowerCase() == cleanName && (s.lang.toLowerCase() == 'en' || s.lang.toLowerCase() == 'all'),
-          orElse: () => availableSources.firstWhere(
-            (s) => s.name.trim().toLowerCase() == cleanName || SourceMigrationService.instance.normalizeSourceName(s.name) == normName,
-            orElse: () => const RepoSourceItem(name: '', version: '', sourceCodeUrl: '', iconUrl: '', lang: '', isJs: true),
-          ),
-        );
+        // Language variants share one install slot, so an update must stay in
+        // the installed language or it silently swaps e.g. MangaDex FR for EN.
+        bool sameName(RepoSourceItem s) =>
+            s.name.trim().toLowerCase() == cleanName || SourceMigrationService.instance.normalizeSourceName(s.name) == normName;
+        const none = RepoSourceItem(name: '', version: '', sourceCodeUrl: '', iconUrl: '', lang: '', isJs: true);
+        final sameLang = availableSources
+            .where((s) => sameName(s) && QuickJsService.langsCompatible(s.lang, installedLang))
+            .toList();
+        final match = sameLang.firstWhere((s) => s.lang.toLowerCase() == installedLang,
+            orElse: () => sameLang.isNotEmpty ? sameLang.first : none);
 
         if (match.sourceCodeUrl.isNotEmpty && match.version.isNotEmpty && currentVer.isNotEmpty) {
           if (compareVersions(match.version, currentVer) > 0) {
@@ -811,6 +822,7 @@ class RepoManager {
                 jsCode,
                 version: match.version,
                 iconUrl: match.iconUrl,
+                lang: installedLang.isNotEmpty ? installedLang : match.lang,
               );
               updatedCount++;
               await LoggerService.instance.logInfo(
