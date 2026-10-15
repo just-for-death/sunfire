@@ -16,6 +16,7 @@ import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'source_server_filters_sheet.dart';
 
@@ -309,7 +310,7 @@ unawaited(
                   
                   if (_hasDynamicFilters) ...[
                      for (int i = 0; i < _dynamicFilters.length; i++) ...[
-                        Text((_dynamicFilters[i]['name'] ?? 'Filter').toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                        Text((_dynamicFilters[i]['name'] ?? 'Filter').toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
                         const SizedBox(height: 8),
                         if (_dynamicFilters[i]['type_name'] == 'SelectFilter' || _dynamicFilters[i]['type_name'] == 'SortFilter')
                            Wrap(
@@ -323,7 +324,7 @@ unawaited(
                                  selected: isSelected,
                                  selectedColor: primaryColor,
                                  backgroundColor: SunfireTheme.tileSurface(context),
-                                 labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                                 labelStyle: TextStyle(color: isSelected ? SunfireColors.contentPrimary : SunfireColors.contentTertiary, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
                                  onSelected: (_) {
                                    setSheetState(() => _dynamicFilters[i]['state'] = idx);
                                  },
@@ -333,7 +334,7 @@ unawaited(
                         const SizedBox(height: 16),
                      ]
                   ] else ...[
-                     const Text('Sort By', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                     const Text('Sort By', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
                      const SizedBox(height: 8),
                      Wrap(
                        spacing: 8,
@@ -344,7 +345,7 @@ unawaited(
                            selected: isSelected,
                            selectedColor: primaryColor,
                            backgroundColor: SunfireTheme.tileSurface(context),
-                           labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                           labelStyle: TextStyle(color: isSelected ? SunfireColors.contentPrimary : SunfireColors.contentTertiary, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
                            onSelected: (_) {
                              setSheetState(() => _selectedSort = s);
                            },
@@ -352,7 +353,7 @@ unawaited(
                        }).toList(),
                      ),
                      const SizedBox(height: 16),
-                     const Text('Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                     const Text('Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
                      const SizedBox(height: 8),
                      Wrap(
                        spacing: 8,
@@ -363,7 +364,7 @@ unawaited(
                            selected: isSelected,
                            selectedColor: primaryColor,
                            backgroundColor: SunfireTheme.tileSurface(context),
-                           labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                           labelStyle: TextStyle(color: isSelected ? SunfireColors.contentPrimary : SunfireColors.contentTertiary, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
                            onSelected: (_) {
                              setSheetState(() => _selectedStatus = st);
                            },
@@ -392,7 +393,7 @@ unawaited(
                       });
                       unawaited(_fetchSourceManga());
                     },
-                    child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                    child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, color: SunfireColors.contentPrimary)),
                   ),
                 ],
               ),
@@ -419,14 +420,14 @@ unawaited(
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.fingerprint_rounded, color: primaryColor),
-                title: const Text('Source ID', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                title: const Text('Source ID', style: TextStyle(fontSize: 13, color: SunfireColors.contentTertiary)),
                 subtitle: Text(widget.sourceId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.language_rounded, color: primaryColor),
-                title: const Text('Status', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                subtitle: const Text('Installed & Synced from Suwayomi Server', style: TextStyle(color: Colors.greenAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                title: const Text('Status', style: TextStyle(fontSize: 13, color: SunfireColors.contentTertiary)),
+                subtitle: const Text('Installed & Synced from Suwayomi Server', style: TextStyle(color: SunfireColors.success, fontSize: 13, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -457,7 +458,7 @@ unawaited(
                 decoration: InputDecoration(
                   hintText: 'Search ${widget.sourceName}...',
                   border: InputBorder.none,
-                  hintStyle: const TextStyle(color: Colors.white38),
+                  hintStyle: const TextStyle(color: SunfireColors.contentDisabled),
                 ),
                 onSubmitted: (val) {
                   setState(() {
@@ -562,7 +563,7 @@ unawaited(
                               curve: Curves.easeOutCubic,
                               padding: const EdgeInsets.symmetric(vertical: 7),
                               decoration: BoxDecoration(
-                                color: !_isLatestMode ? primaryColor : Colors.transparent,
+                                color: !_isLatestMode ? primaryColor : SunfireColors.transparent,
                                 borderRadius: BorderRadius.circular(11),
                                 boxShadow: !_isLatestMode
                                     ? [
@@ -580,7 +581,7 @@ unawaited(
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 12.5,
-                                    color: !_isLatestMode ? Colors.white : Colors.grey.shade400,
+                                    color: !_isLatestMode ? SunfireColors.contentPrimary : SunfireColors.contentTertiary,
                                   ),
                                 ),
                               ),
@@ -604,7 +605,7 @@ unawaited(
                               curve: Curves.easeOutCubic,
                               padding: const EdgeInsets.symmetric(vertical: 7),
                               decoration: BoxDecoration(
-                                color: _isLatestMode ? primaryColor : Colors.transparent,
+                                color: _isLatestMode ? primaryColor : SunfireColors.transparent,
                                 borderRadius: BorderRadius.circular(11),
                                 boxShadow: _isLatestMode
                                     ? [
@@ -622,7 +623,7 @@ unawaited(
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 12.5,
-                                    color: _isLatestMode ? Colors.white : Colors.grey.shade400,
+                                    color: _isLatestMode ? SunfireColors.contentPrimary : SunfireColors.contentTertiary,
                                   ),
                                 ),
                               ),
@@ -653,7 +654,7 @@ unawaited(
                                     Icon(
                                       Icons.error_outline_rounded,
                                       size: 56,
-                                      color: Colors.redAccent.withAlpha(200),
+                                      color: SunfireColors.error.withValues(alpha: 0.78),
                                     ),
                                     const SizedBox(height: 16),
                                     const Text(
@@ -672,7 +673,7 @@ unawaited(
                                       '\u2022 Connect to a Suwayomi server to use server-side sources\n'
                                       '\u2022 Report this issue on GitHub',
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(fontSize: 13, color: Colors.grey, height: 1.5),
+                                      style: const TextStyle(fontSize: 13, color: SunfireColors.contentTertiary, height: 1.5),
                                     ),
                                     const SizedBox(height: 20),
                                     ElevatedButton.icon(
@@ -681,8 +682,8 @@ unawaited(
                                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                       ),
-                                      icon: const Icon(Icons.bug_report_rounded, color: Colors.white, size: 18),
-                                      label: const Text('Report Issue', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      icon: const Icon(Icons.bug_report_rounded, color: SunfireColors.contentPrimary, size: 18),
+                                      label: const Text('Report Issue', style: TextStyle(color: SunfireColors.contentPrimary, fontWeight: FontWeight.bold)),
                                       onPressed: () {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(content: Text('Please report this issue at github.com/just-for-death/sunfire/issues')),
@@ -762,7 +763,7 @@ unawaited(
                                       if (!isServerSourced && id > 0) id = -id;
 
                                       return Material(
-                                        color: Colors.transparent,
+                                        color: SunfireColors.transparent,
                                         child: InkWell(
                                           borderRadius: BorderRadius.circular(16),
                                           onTap: () async {
@@ -903,7 +904,7 @@ unawaited(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        const Text('Quick Actions', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        const Text('Quick Actions', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -1012,7 +1013,7 @@ unawaited(
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.open_in_new_rounded, color: Colors.white),
+                leading: const Icon(Icons.open_in_new_rounded, color: SunfireColors.contentPrimary),
                 title: const Text('View Manga Details', style: TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () {
                   Navigator.pop(sheetContext);

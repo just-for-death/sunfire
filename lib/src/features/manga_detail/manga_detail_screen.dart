@@ -31,6 +31,7 @@ import '../../core/widgets/empty_state_widget.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../features/reader/chapter_number_utils.dart';
 import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../browse/global_search_screen.dart';
 import '../browse/migrate_search_screen.dart';
@@ -915,7 +916,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(_manga!.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                  Text(_manga!.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 13)),
                   const SizedBox(height: 16),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 280),
@@ -1476,7 +1477,7 @@ unawaited(
     return ListTile(
       leading: Icon(downloadToLocal ? Icons.phone_android_rounded : Icons.cloud_download_rounded, color: primaryColor),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(downloadToLocal ? 'Download to offline device' : 'Download to Suwayomi server', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+      subtitle: Text(downloadToLocal ? 'Download to offline device' : 'Download to Suwayomi server', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 11)),
       onTap: () async {
         Navigator.pop(context);
         final targets = sourceList.take(count).toList();
@@ -1588,7 +1589,7 @@ unawaited(
                 },
               ),
               ListTile(
-                leading: Icon(ch.isBookmarked ? Icons.bookmark_remove_rounded : Icons.bookmark_add_rounded, color: Colors.amber),
+                leading: Icon(ch.isBookmarked ? Icons.bookmark_remove_rounded : Icons.bookmark_add_rounded, color: SunfireColors.trackerAmber),
                 title: Text(ch.isBookmarked ? 'Remove Bookmark' : 'Add Bookmark', style: const TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1604,7 +1605,7 @@ unawaited(
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.done_all_rounded, color: Colors.grey),
+                leading: const Icon(Icons.done_all_rounded, color: SunfireColors.contentTertiary),
                 title: const Text('Mark Previous as Read', style: TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1612,13 +1613,13 @@ unawaited(
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.open_in_browser_rounded, color: Colors.blueAccent),
+                leading: const Icon(Icons.open_in_browser_rounded, color: SunfireColors.trackerBlue),
                 title: const Text('Open Chapter in Browser', style: TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(
                   ch.url.isNotEmpty ? ch.url : (_manga?.url.isNotEmpty == true ? _manga!.url : 'View web page'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1649,8 +1650,8 @@ unawaited(
                 )
               else
                 ListTile(
-                  leading: const Icon(Icons.delete_sweep_rounded, color: Colors.orangeAccent),
-                  title: const Text('Delete from Local Device', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
+                  leading: const Icon(Icons.delete_sweep_rounded, color: SunfireColors.trackerAmber),
+                  title: const Text('Delete from Local Device', style: TextStyle(color: SunfireColors.trackerAmber, fontWeight: FontWeight.bold)),
                   onTap: () async {
                     Navigator.pop(sheetContext);
                     await DownloadManagerService.instance.deleteLocalDownload(targetChId);
@@ -1677,8 +1678,8 @@ unawaited(
                   )
                 else
                   ListTile(
-                    leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                    title: const Text('Delete Download from Server', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                    leading: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error),
+                    title: const Text('Delete Download from Server', style: TextStyle(color: SunfireColors.error, fontWeight: FontWeight.bold)),
                     onTap: () async {
                       Navigator.pop(sheetContext);
                       await DownloadManagerService.instance.deleteServerDownload(ch.serverId);
@@ -1720,7 +1721,7 @@ unawaited(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.withValues(alpha: 0.6)),
+                Icon(Icons.search_off_rounded, size: 48, color: SunfireColors.contentTertiary.withValues(alpha: 0.6)),
                 const SizedBox(height: 12),
                 const Text(
                   'This series is no longer in your library.',
@@ -1731,7 +1732,7 @@ unawaited(
                 const Text(
                   'It may have been removed on another device, or its local entry was deleted.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                  style: TextStyle(fontSize: 13, color: SunfireColors.contentTertiary),
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
@@ -1809,7 +1810,7 @@ unawaited(
                   itemBuilder: (context) => const [
                     PopupMenuItem(value: 'download_local', child: Text('Download to Device')),
                     PopupMenuItem(value: 'download_server', child: Text('Download to Server')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete Downloads', style: TextStyle(color: Colors.redAccent))),
+                    PopupMenuItem(value: 'delete', child: Text('Delete Downloads', style: TextStyle(color: SunfireColors.error))),
                   ],
                 ),
               ],
@@ -1861,7 +1862,7 @@ unawaited(
                     IconButton(
                       icon: Icon(
                         manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        color: manga.inLibrary ? Colors.redAccent : cs.onSurface,
+                        color: manga.inLibrary ? SunfireColors.error : cs.onSurface,
                       ),
                       tooltip: manga.inLibrary ? 'In Library (Tap to remove)' : 'Add to Library',
                       onPressed: _toggleInLibrary,
@@ -1939,12 +1940,12 @@ unawaited(
                   children: [
                     SunfireBadge(
                       label: (manga.status ?? 'Ongoing').toUpperCase(),
-                      color: Colors.greenAccent,
+                      color: SunfireColors.success,
                     ),
                     const SizedBox(width: 8),
                     SunfireBadge(
                       label: '${sortedChapters.length} CHAPTERS',
-                      color: Colors.grey,
+                      color: SunfireColors.contentDisabled,
                       textColor: cs.onSurfaceVariant,
                     ),
                   ],
@@ -1955,8 +1956,8 @@ unawaited(
                     Expanded(
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: manga.inLibrary ? const Color(0x33FF3D00) : primaryColor,
-                          foregroundColor: manga.inLibrary ? Colors.redAccent : cs.onPrimary,
+                          backgroundColor: manga.inLibrary ? SunfireColors.error.withValues(alpha: 0.2) : primaryColor,
+                          foregroundColor: manga.inLibrary ? SunfireColors.error : cs.onPrimary,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
@@ -2229,7 +2230,7 @@ unawaited(
               IconButton(
                 icon: Icon(
                   manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                  color: manga.inLibrary ? Colors.redAccent : cs.onSurface,
+                  color: manga.inLibrary ? SunfireColors.error : cs.onSurface,
                 ),
                 tooltip: manga.inLibrary ? 'In Library (Tap to remove)' : 'Add to Library',
                 onPressed: _toggleInLibrary,
@@ -2349,7 +2350,7 @@ unawaited(
                             border: Border.all(color: SunfireTheme.tileBorder(context), width: 1.2),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: cs.brightness == Brightness.dark ? 0.6 : 0.25),
+                                color: SunfireColors.overlayScrim.withValues(alpha: cs.brightness == Brightness.dark ? 0.6 : 0.25),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               ),
@@ -2404,11 +2405,11 @@ unawaited(
                                   ),
                                   SunfireBadge(
                                     label: (manga.status ?? 'Ongoing').toUpperCase(),
-                                    color: Colors.greenAccent,
+                                    color: SunfireColors.success,
                                   ),
                                   SunfireBadge(
                                     label: '${sortedChapters.length} CH',
-                                    color: Colors.grey,
+                                    color: SunfireColors.contentDisabled,
                                     textColor: cs.onSurfaceVariant,
                                   ),
                                 ],
@@ -2451,8 +2452,8 @@ unawaited(
                     Expanded(
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: manga.inLibrary ? const Color(0x33FF3D00) : primaryColor,
-                          foregroundColor: manga.inLibrary ? Colors.redAccent : cs.onPrimary,
+                          backgroundColor: manga.inLibrary ? SunfireColors.error.withValues(alpha: 0.2) : primaryColor,
+                          foregroundColor: manga.inLibrary ? SunfireColors.error : cs.onPrimary,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
@@ -2777,7 +2778,7 @@ unawaited(
                     },
                   )
                 : ch.isBookmarked
-                    ? const Icon(Icons.bookmark_rounded, color: Colors.amber, size: 18)
+                    ? const Icon(Icons.bookmark_rounded, color: SunfireColors.trackerAmber, size: 18)
                     : null,
             title: Text(
               ch.name.trim().isNotEmpty
@@ -2788,7 +2789,7 @@ unawaited(
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13.5,
-                color: ch.isRead ? Colors.grey : cs.onSurface,
+                color: ch.isRead ? SunfireColors.contentTertiary : cs.onSurface,
               ),
             ),
             subtitle: Builder(
@@ -2808,7 +2809,7 @@ unawaited(
                         metaText,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 11.5, color: ch.isRead ? Colors.grey[600] : primaryColor),
+                        style: TextStyle(fontSize: 11.5, color: ch.isRead ? SunfireColors.contentTertiary : primaryColor),
                       ),
                     if (!ch.isRead && ch.lastPageRead > 0 && ch.pageCount > 0) ...[
                       const SizedBox(height: 4),
@@ -2832,11 +2833,11 @@ unawaited(
                 if (DownloadManagerService.instance.isChapterDownloadedLocally(targetChId))
                   const Padding(
                     padding: EdgeInsets.only(right: 2.0),
-                    child: Icon(Icons.phone_android_rounded, color: Colors.greenAccent, size: 16),
+                    child: Icon(Icons.phone_android_rounded, color: SunfireColors.success, size: 16),
                   )
                 else if (!_isLocalSource)
                   IconButton(
-                    icon: const Icon(Icons.download_rounded, color: Colors.grey, size: 18),
+                    icon: const Icon(Icons.download_rounded, color: SunfireColors.contentTertiary, size: 18),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     visualDensity: VisualDensity.compact,
@@ -2855,17 +2856,17 @@ unawaited(
                 if ((ch.serverId > 0 && DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId)) || ch.isDownloaded)
                   const Padding(
                     padding: EdgeInsets.only(right: 2.0),
-                    child: Icon(Icons.cloud_done_rounded, color: Colors.cyanAccent, size: 16),
+                    child: Icon(Icons.cloud_done_rounded, color: SunfireColors.trackerBlue, size: 16),
                   ),
                 IconButton(
-                  icon: const Icon(Icons.more_vert_rounded, color: Colors.grey, size: 18),
+                  icon: const Icon(Icons.more_vert_rounded, color: SunfireColors.contentTertiary, size: 18),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   visualDensity: VisualDensity.compact,
                   onPressed: () => _showSingleChapterOptions(ch),
                 ),
                 if (ch.isRead)
-                  const Icon(Icons.check_circle_rounded, color: Colors.grey, size: 18)
+                  const Icon(Icons.check_circle_rounded, color: SunfireColors.contentTertiary, size: 18)
                 else
                   Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 22),
               ],

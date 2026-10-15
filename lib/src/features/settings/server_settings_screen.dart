@@ -22,6 +22,7 @@ import 'server_login_sheet.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 
 class ServerSettingsScreen extends StatefulWidget {
   const ServerSettingsScreen({super.key});
@@ -591,9 +592,9 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   title: const Text('Sync Health', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                   subtitle: const Text(
                     'Pending mutations, errors, and other devices',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                   ),
-                  trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                  trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: SunfireColors.contentTertiary),
                   onTap: () => context.push('/settings/sync-health'),
                 ),
                 const Divider(height: 1),
@@ -605,20 +606,20 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.12),
+                        color: SunfireColors.trackerAmber.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
+                        border: Border.all(color: SunfireColors.trackerAmber.withValues(alpha: 0.5)),
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                          Icon(Icons.warning_amber_rounded, color: SunfireColors.trackerAmber, size: 20),
                           SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               'Device secure storage is unavailable, so server credentials are kept '
                               'in plaintext app storage. Anyone with a backup or root access could '
                               'read them.',
-                              style: TextStyle(fontSize: 12, color: Colors.orange),
+                              style: TextStyle(fontSize: 12, color: SunfireColors.trackerAmber),
                             ),
                           ),
                         ],
@@ -665,7 +666,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  leading: const Icon(Icons.vpn_key_rounded, color: Colors.tealAccent),
+                  leading: const Icon(Icons.vpn_key_rounded, color: SunfireColors.sourceLocalJs),
                   title: const Text('Client Credentials', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                   subtitle: Text(
                     switch (_clientAuth.type) {
@@ -673,9 +674,9 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       ServerAuthType.basic => 'HTTP Basic Auth (${_clientAuth.username.isNotEmpty ? _clientAuth.username : "configured"})',
                       ServerAuthType.bearer => 'Bearer Token',
                     },
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                   ),
-                  trailing: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
+                  trailing: const Icon(Icons.edit_outlined, size: 18, color: SunfireColors.contentTertiary),
                   onTap: _showClientCredentialsDialog,
                 ),
                 ListTile(
@@ -688,7 +689,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       const Text('Connection Status', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                       SunfireBadge(
                         label: _isConnected ? 'CONNECTED' : 'OFFLINE',
-                        color: _isConnected ? Colors.greenAccent : Colors.redAccent,
+                        color: _isConnected ? SunfireColors.success : SunfireColors.error,
                         fontSize: 9.0,
                         fontWeight: FontWeight.bold,
                       ),
@@ -698,14 +699,17 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     _isConnected
                         ? 'Latency: ${_latencyMs ?? "-"}ms • ${serverVersionSummaryLabel(version: _serverVersion == "Unknown" ? null : _serverVersion, buildType: _serverBuildType.isEmpty ? null : _serverBuildType)}'
                         : 'Cannot reach server at target URL',
-                    style: TextStyle(fontSize: 12, color: _isConnected ? Colors.grey : Colors.redAccent),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _isConnected ? SunfireColors.contentTertiary : SunfireColors.error,
+                    ),
                   ),
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                   leading: const Icon(Icons.web_rounded),
                   title: const Text('Open WebUI', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                  subtitle: const Text('Launch Suwayomi web dashboard in external browser', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: const Text('Launch Suwayomi web dashboard in external browser', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: const Icon(Icons.open_in_new_rounded, size: 18),
                   onTap: _openWebUI,
                 ),
@@ -765,7 +769,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                     title: const Text('Credentials', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                    subtitle: Text(_authUsername.isNotEmpty ? 'Username: $_authUsername' : 'Configure login credentials', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    subtitle: Text(_authUsername.isNotEmpty ? 'Username: $_authUsername' : 'Configure login credentials', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                     trailing: const Icon(Icons.key_rounded),
                     onTap: _showCredentialsDialog,
                   ),
@@ -866,7 +870,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                     title: const Text('SOCKS Version', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                    subtitle: Text('SOCKS $_socksProxyVersion', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    subtitle: Text('SOCKS $_socksProxyVersion', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                     trailing: DropdownButton<int>(
                       value: _socksProxyVersion,
                       dropdownColor: const Color(0xFF22222A),
@@ -1024,17 +1028,17 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  leading: const Icon(Icons.network_check_rounded, color: Colors.purpleAccent),
+                  leading: const Icon(Icons.network_check_rounded, color: SunfireColors.trackerBlue),
                   title: const Text('Test Local Connection', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                   subtitle: Text(
                     _settings.cfProxyUrl.isNotEmpty
                         ? 'Test reachability from this device to ${maskProxyUrlForDisplay(_settings.cfProxyUrl)}'
                         : 'Enter a local FlareSolverr URL above to test',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                   ),
                   trailing: _isTestingLocalCf
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.play_arrow_rounded, color: Colors.purpleAccent),
+                      : const Icon(Icons.play_arrow_rounded, color: SunfireColors.trackerBlue),
                   onTap: _isTestingLocalCf ? null : _testLocalFlareSolverr,
                 ),
 
@@ -1120,7 +1124,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   key: const Key('server_settings_kosync'),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                   title: const Text('KOReader account', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                  subtitle: Text(_koSyncSubtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: Text(_koSyncSubtitle, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: const Icon(Icons.menu_book_rounded),
                   onTap: () => unawaited(_showKoSyncDialog()),
                 ),
@@ -1153,7 +1157,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     title: const Text('Start SyncYomi now', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                     subtitle: Text(
                       _lastSyncYomiState == null ? 'Run a sync against the configured host' : 'Last: $_lastSyncYomiState',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                     ),
                     trailing: const Icon(Icons.sync_rounded),
                     onTap: () async {
@@ -1205,7 +1209,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       SunfireBadge.server(),
                     ],
                   ),
-                  subtitle: Text(_webUIFlavor, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: Text(_webUIFlavor, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: DropdownButton<String>(
                     value: _webUIFlavor,
                     dropdownColor: const Color(0xFF22222A),
@@ -1236,7 +1240,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       SunfireBadge.server(),
                     ],
                   ),
-                  subtitle: Text(_webUIChannel, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: Text(_webUIChannel, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: DropdownButton<String>(
                     value: _webUIChannel,
                     dropdownColor: const Color(0xFF22222A),
@@ -1266,7 +1270,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       SunfireBadge.server(),
                     ],
                   ),
-                  subtitle: Text(_webUIInterface, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: Text(_webUIInterface, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: DropdownButton<String>(
                     value: _webUIInterface,
                     dropdownColor: const Color(0xFF22222A),

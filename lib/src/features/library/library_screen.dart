@@ -25,6 +25,7 @@ import '../../core/widgets/empty_state_widget.dart';
 import '../../main_shell.dart';
 import '../../ui/design_system/components/sunfire_skeleton.dart';
 import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/library_update_progress_banner.dart';
@@ -662,7 +663,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                     if (_categories.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Text('No categories created yet. Tap "Edit Categories" to create one.', style: TextStyle(color: Colors.grey)),
+                        child: Text('No categories created yet. Tap "Edit Categories" to create one.', style: TextStyle(color: SunfireColors.contentTertiary)),
                       )
                     else
                       Flexible(
@@ -939,7 +940,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const DialogTitle(
           icon: Icons.delete_outline_rounded,
-          iconColor: Colors.redAccent,
+          iconColor: SunfireColors.error,
           text: 'Remove from Library',
         ),
         content: Text(
@@ -949,12 +950,12 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
+              backgroundColor: SunfireColors.error,
+              foregroundColor: SunfireColors.onTrackerAmber,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -999,25 +1000,25 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         _buildBatchActionItem(
           icon: Icons.done_all_rounded,
           label: 'Read',
-          color: const Color(0xFF10B981),
+          color: SunfireColors.success,
           onTap: () => _batchMarkRead(true),
         ),
         _buildBatchActionItem(
           icon: Icons.remove_done_rounded,
           label: 'Unread',
-          color: _isLight ? Colors.amber.shade800 : Colors.amberAccent,
+          color: _isLight ? SunfireColors.warning : SunfireColors.trackerAmber,
           onTap: () => _batchMarkRead(false),
         ),
         _buildBatchActionItem(
           icon: Icons.download_rounded,
           label: 'Download',
-          color: _isLight ? Colors.blue.shade700 : Colors.lightBlueAccent,
+          color: _isLight ? SunfireColors.trackerBlue : SunfireColors.trackerBlueContainer,
           onTap: _batchDownloadMenu,
         ),
         _buildBatchActionItem(
           icon: Icons.delete_outline_rounded,
           label: 'Remove',
-          color: Colors.redAccent,
+          color: SunfireColors.error,
           onTap: _batchRemoveFromLibrary,
         ),
       ],
@@ -1209,7 +1210,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         return ListTile(
                           title: Tooltip(message: cat.name, child: Text(cat.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
                           trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                            icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error),
                             onPressed: () async {
                               await IsarService.instance.deleteCategory(cat.serverId);
                               await SyncEngine.instance.syncCategoryDelete(cat.serverId);
@@ -1427,7 +1428,7 @@ unawaited(
                       },
                     ),
                     const SizedBox(height: 16),
-                    const Text('DISPLAY MODE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const Text('DISPLAY MODE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -1449,7 +1450,7 @@ unawaited(
                       }).toList(),
                     ),
                     const SizedBox(height: 16),
-                    const Text('GRID COLUMNS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const Text('GRID COLUMNS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -1478,7 +1479,7 @@ unawaited(
                       }).toList(),
                     ),
                     const SizedBox(height: 16),
-                    const Text('BADGES & INDICATORS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const Text('BADGES & INDICATORS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -1507,7 +1508,7 @@ unawaited(
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const Text('FILTER BY STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                    const Text('FILTER BY STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -1530,7 +1531,7 @@ unawaited(
                     ),
                     if (_tags.isNotEmpty) ...[
                       const SizedBox(height: 16),
-                      const Text('FILTER BY TAG', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                      const Text('FILTER BY TAG', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
@@ -1588,7 +1589,7 @@ unawaited(
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('SORT BY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+                        const Text('SORT BY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
                         IconButton(
                           icon: Icon(_isSortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: 20, color: primaryColor),
                           onPressed: () {
@@ -1883,17 +1884,17 @@ unawaited(
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
-                              color: Colors.orange.withAlpha(30),
+                              color: SunfireColors.trackerAmber.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.orange.withAlpha(80), width: 0.8),
+                              border: Border.all(color: SunfireColors.trackerAmber.withValues(alpha: 0.3), width: 0.8),
                             ),
                             child: const Row(
                               children: [
-                                Icon(Icons.wifi_off_rounded, color: Colors.orange, size: 16),
+                                Icon(Icons.wifi_off_rounded, color: SunfireColors.trackerAmber, size: 16),
                                 SizedBox(width: 8),
                                 Text(
                                   'Offline — Showing cached library',
-                                  style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w600),
+                                  style: TextStyle(color: SunfireColors.trackerAmber, fontSize: 12, fontWeight: FontWeight.w600),
                                 ),
                               ],
                             ),
@@ -1937,7 +1938,7 @@ unawaited(
                                     selectedColor: primaryColor.withValues(alpha: 0.25),
                                     backgroundColor: SunfireTheme.tileSurface(context),
                                     labelStyle: TextStyle(
-                                      color: isSel ? primaryColor : Colors.grey[400],
+                                      color: isSel ? primaryColor : SunfireColors.contentDisabled,
                                       fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                                       fontSize: 12,
                                     ),
@@ -2109,7 +2110,7 @@ unawaited(
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.25),
+                            color: SunfireColors.overlayScrim.withValues(alpha: 0.25),
                             blurRadius: 6,
                             offset: const Offset(0, 3),
                           ),
@@ -2136,7 +2137,7 @@ unawaited(
                           padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
                           decoration: const BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [Colors.transparent, Color(0xD9000000), Color(0xF2000000)],
+                              colors: [SunfireColors.transparent, SunfireColors.overlayScrim, SunfireColors.overlayScrim],
                               stops: [0.0, 0.5, 1.0],
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
@@ -2172,7 +2173,7 @@ unawaited(
                             borderRadius: BorderRadius.circular(10),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.5),
+                                color: SunfireColors.overlayScrim.withValues(alpha: 0.5),
                                 blurRadius: 4,
                                 offset: const Offset(0, 2),
                               ),
@@ -2191,11 +2192,11 @@ unawaited(
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xB3262CFF),
+                            color: SunfireColors.sourceLocalJs.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(6),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.45),
+                                color: SunfireColors.overlayScrim.withValues(alpha: 0.45),
                                 blurRadius: 3,
                                 offset: const Offset(0, 1),
                               ),
@@ -2203,7 +2204,7 @@ unawaited(
                           ),
                           child: Text(
                             langBadge,
-                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
+                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: SunfireColors.onTrackerAmber, letterSpacing: 0.5),
                           ),
                         ),
                       ),
@@ -2214,17 +2215,17 @@ unawaited(
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: const Color(0xCC10B981),
+                            color: SunfireColors.success.withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(8),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.4),
+                                color: SunfireColors.overlayScrim.withValues(alpha: 0.4),
                                 blurRadius: 3,
                                 offset: const Offset(0, 1),
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.download_done_rounded, size: 12, color: Colors.white),
+                          child: const Icon(Icons.download_done_rounded, size: 12, color: SunfireColors.onTrackerAmber),
                         ),
                       ),
                     if (isCoverOnly && !isSelected)
@@ -2236,7 +2237,7 @@ unawaited(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                           decoration: const BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [Colors.transparent, Color(0xCC000000)],
+                              colors: [SunfireColors.transparent, SunfireColors.overlayScrim],
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                             ),
@@ -2246,7 +2247,7 @@ unawaited(
                             manga.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: SunfireColors.onTrackerAmber),
                           ),
                         ),
                       ),
@@ -2315,7 +2316,7 @@ unawaited(
             title: Text(manga.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Row(
               children: [
-                Flexible(child: Text(manga.sourceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 12))),
+                Flexible(child: Text(manga.sourceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 12))),
                 if (langBadge != null) ...[
                   const SizedBox(width: 6),
                   Container(
@@ -2329,7 +2330,7 @@ unawaited(
                 ],
                 if (isDownloaded && _settings.showDownloadedBadges) ...[
                   const SizedBox(width: 6),
-                  const Icon(Icons.download_done_rounded, size: 14, color: Color(0xFF10B981)),
+                  const Icon(Icons.download_done_rounded, size: 14, color: SunfireColors.success),
                 ],
               ],
             ),

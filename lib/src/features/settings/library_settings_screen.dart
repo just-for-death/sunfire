@@ -20,6 +20,7 @@ import '../../ui/widgets/sync_ui_actions.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 
 class LibrarySettingsScreen extends StatefulWidget {
   const LibrarySettingsScreen({super.key});
@@ -332,7 +333,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
@@ -340,7 +341,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                 Navigator.pop(context);
                 unawaited(_addCategory(controller.text));
               },
-              child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('Add', style: TextStyle(color: SunfireColors.onTrackerAmber, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -363,7 +364,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
@@ -371,7 +372,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                 Navigator.pop(context);
                 unawaited(_renameCategory(cat, controller.text));
               },
-              child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('Save', style: TextStyle(color: SunfireColors.onTrackerAmber, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -389,15 +390,15 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              style: ElevatedButton.styleFrom(backgroundColor: SunfireColors.error),
               onPressed: () {
                 Navigator.pop(context);
                 unawaited(_deleteCategory(cat));
               },
-              child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('Delete', style: TextStyle(color: SunfireColors.onTrackerAmber, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -450,7 +451,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Completed Manga'),
-                    subtitle: const Text('Skip finished manga series', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    subtitle: const Text('Skip finished manga series', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                     value: _excludeCompleted,
                     onChanged: (val) {
                       setDlgState(() => _excludeCompleted = val ?? false);
@@ -461,7 +462,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Not Started Manga'),
-                    subtitle: const Text('Skip series with zero read chapters', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    subtitle: const Text('Skip series with zero read chapters', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                     value: _excludeNotStarted,
                     onChanged: (val) {
                       setDlgState(() => _excludeNotStarted = val ?? false);
@@ -472,7 +473,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Unread Chapters Exist'),
-                    subtitle: const Text('Skip series with unread chapters', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    subtitle: const Text('Skip series with unread chapters', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                     value: _excludeUnreadChapters,
                     onChanged: (val) {
                       setDlgState(() => _excludeUnreadChapters = val ?? false);
@@ -512,7 +513,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
               final isSelected = opt == currentValue;
               return ListTile(
                 title: Text(opt),
-                trailing: isSelected ? const Icon(Icons.check_rounded, color: Colors.greenAccent) : null,
+                trailing: isSelected ? const Icon(Icons.check_rounded, color: SunfireColors.success) : null,
                 onTap: () {
                   onSelected(opt);
                   Navigator.pop(context);
@@ -569,7 +570,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       ),
                       subtitle: const Text(
                         'Fetch changes since last sync (SyncManager → SyncEngine)',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                        style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                       ),
                       onTap: () => unawaited(runSyncWithProgressDialog(
                         context,
@@ -583,7 +584,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       title: const Text('Full Sync now', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                       subtitle: const Text(
                         'Re-fetch from the beginning of history',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                        style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                       ),
                       onTap: () => unawaited(runSyncWithProgressDialog(
                         context,
@@ -604,7 +605,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       ),
                       subtitle: const Text(
                         'Sync only chosen manga or categories',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                        style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                       ),
                       onTap: () => context.push('/settings/selective-sync'),
                     ),
@@ -621,7 +622,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           SunfireBadge.server(),
                         ],
                       ),
-                      subtitle: Text(_globalUpdateInterval == 0 ? 'Disabled' : 'Every ${_globalUpdateInterval.toInt()} hours', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      subtitle: Text(_globalUpdateInterval == 0 ? 'Disabled' : 'Every ${_globalUpdateInterval.toInt()} hours', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                       trailing: DropdownButton<double>(
                         value: _globalUpdateInterval,
                         dropdownColor: const Color(0xFF22222A),
@@ -673,8 +674,8 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           SunfireBadge.server(),
                         ],
                       ),
-                      subtitle: const Text('Configure rules to skip specific manga from global updates', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                      subtitle: const Text('Configure rules to skip specific manga from global updates', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: SunfireColors.contentTertiary),
                       onTap: _showSkipUpdatingDialog,
                     ),
                     const Divider(height: 1, color: Color(0x1AFFFFFF)),
@@ -739,7 +740,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           ),
                           child: const Text(
                             'On iPhone and iPad, library updates run when you open the app (background WorkManager is Android-only for sideload stability).',
-                            style: TextStyle(fontSize: 12.5, color: Colors.white70, height: 1.35),
+                            style: TextStyle(fontSize: 12.5, color: SunfireColors.contentSecondary, height: 1.35),
                           ),
                         ),
                       ),
@@ -761,7 +762,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                             : _settings.libraryUpdateFrequencyHours < 24
                                 ? 'Every ${_settings.libraryUpdateFrequencyHours} hour${_settings.libraryUpdateFrequencyHours > 1 ? "s" : ""}'
                                 : 'Every ${_settings.libraryUpdateFrequencyHours ~/ 24} day${(_settings.libraryUpdateFrequencyHours ~/ 24) > 1 ? "s" : ""}',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                       ),
                       trailing: DropdownButton<int>(
                         value: _settings.libraryUpdateFrequencyHours,
@@ -858,7 +859,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                                     child: LinearProgressIndicator(
                                       value: updater.progress > 0 ? updater.progress : null,
                                       minHeight: 4,
-                                      backgroundColor: const Color(0x22FFFFFF),
+                                      backgroundColor: SunfireColors.borderHairline,
                                       valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.primary),
                                     ),
                                   ),
@@ -926,7 +927,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           SunfireBadge.local(),
                         ],
                       ),
-                      subtitle: Text(_settings.libraryDisplayMode, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      subtitle: Text(_settings.libraryDisplayMode, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                       onTap: () {
                         _showRadioDialog(
                           title: 'Library Display Mode',
@@ -950,7 +951,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       ),
                       subtitle: Text(
                         _settings.defaultCategoryId == null ? 'None (Uncategorized)' : _settings.defaultCategoryName,
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                       ),
                       onTap: _showDefaultCategoryDialog,
                     ),
@@ -968,7 +969,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           SunfireBadge.local(),
                         ],
                       ),
-                      subtitle: const Text('Scan for and merge duplicate manga entries', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      subtitle: const Text('Scan for and merge duplicate manga entries', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                       onTap: () => context.push('/settings/library/duplicate-detection'),
                     ),
                     ListTile(
@@ -983,7 +984,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           SunfireBadge.local(),
                         ],
                       ),
-                      subtitle: const Text('Create color-coded tags for your library', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      subtitle: const Text('Create color-coded tags for your library', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                       onTap: () => context.push('/settings/library/tags'),
                     ),
                     ListTile(
@@ -998,7 +999,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           SunfireBadge.local(),
                         ],
                       ),
-                      subtitle: const Text('Auto-assign tags from genre, status, source, unread', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      subtitle: const Text('Auto-assign tags from genre, status, source, unread', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                       onTap: () => context.push('/settings/library/smart-collections'),
                     ),
                     ListTile(
@@ -1013,7 +1014,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                           SunfireBadge.local(),
                         ],
                       ),
-                      subtitle: const Text('JSON/CSV metadata; Tachiyomi .tachibk via Backup', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      subtitle: const Text('JSON/CSV metadata; Tachiyomi .tachibk via Backup', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                       onTap: () => context.push('/settings/library/import-export'),
                     ),
                     ListTile(
@@ -1062,8 +1063,8 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                       ),
                     if (_categories.isEmpty)
                       const ListTile(
-                        leading: Icon(Icons.info_outline_rounded, color: Colors.grey),
-                        title: Text('No categories created yet', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                        leading: Icon(Icons.info_outline_rounded, color: SunfireColors.contentTertiary),
+                        title: Text('No categories created yet', style: TextStyle(fontSize: 14, color: SunfireColors.contentTertiary)),
                         subtitle: Text('Tap + to create categories and organize your library.'),
                       )
                     else

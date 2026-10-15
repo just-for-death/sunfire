@@ -12,6 +12,7 @@ import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/widgets/dialog_title.dart';
 import 'migrate_track_copy.dart';
 
@@ -167,7 +168,7 @@ unawaited(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               title: const DialogTitle(
                 icon: Icons.swap_horiz_rounded,
-                iconColor: Colors.blueAccent,
+                iconColor: SunfireColors.trackerBlue,
                 gap: 10,
                 text: 'Migrate Manga',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
@@ -180,9 +181,9 @@ unawaited(
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF26262E),
+                        color: SunfireColors.surface2,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white10),
+                        border: Border.all(color: SunfireColors.borderSubtle),
                       ),
                       child: Row(
                         children: [
@@ -213,7 +214,7 @@ unawaited(
                                   widget.manga.sourceName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.grey, fontSize: 10),
+                                  style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 10),
                                   textAlign: TextAlign.center,
                                 ),
                               ],
@@ -252,7 +253,7 @@ unawaited(
                                   targetSourceName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.grey, fontSize: 10),
+                                  style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 10),
                                   textAlign: TextAlign.center,
                                 ),
                               ],
@@ -262,7 +263,7 @@ unawaited(
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text('WHAT TO INCLUDE', style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    const Text('WHAT TO INCLUDE', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
                     const SizedBox(height: 8),
                     CheckboxListTile(
                       value: copyHistory,
@@ -302,7 +303,7 @@ unawaited(
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogCtx),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                  child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -320,7 +321,7 @@ unawaited(
                       deleteOriginal: deleteOriginal,
                     );
                   },
-                  child: const Text('Migrate', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text('Migrate', style: TextStyle(color: SunfireColors.contentPrimary, fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -929,15 +930,15 @@ unawaited(
                   ),
                   selected: _activeFilter == 'PINNED',
                   selectedColor: primaryColor.withAlpha(50),
-                  backgroundColor: const Color(0x1F2A2A32),
+                  backgroundColor: SunfireColors.borderSubtle,
                   labelStyle: TextStyle(
-                    color: _activeFilter == 'PINNED' ? primaryColor : Colors.grey,
+                    color: _activeFilter == 'PINNED' ? primaryColor : SunfireColors.contentTertiary,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: _activeFilter == 'PINNED' ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
+                    side: BorderSide(color: _activeFilter == 'PINNED' ? primaryColor : SunfireColors.borderDefault, width: 0.8),
                   ),
                   onSelected: (_) => setState(() => _activeFilter = 'PINNED'),
                 ),
@@ -953,15 +954,15 @@ unawaited(
                   ),
                   selected: _activeFilter == 'ALL',
                   selectedColor: primaryColor.withAlpha(50),
-                  backgroundColor: const Color(0x1F2A2A32),
+                  backgroundColor: SunfireColors.borderSubtle,
                   labelStyle: TextStyle(
-                    color: _activeFilter == 'ALL' ? primaryColor : Colors.grey,
+                    color: _activeFilter == 'ALL' ? primaryColor : SunfireColors.contentTertiary,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: _activeFilter == 'ALL' ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
+                    side: BorderSide(color: _activeFilter == 'ALL' ? primaryColor : SunfireColors.borderDefault, width: 0.8),
                   ),
                   onSelected: (_) => setState(() => _activeFilter = 'ALL'),
                 ),
@@ -977,15 +978,15 @@ unawaited(
                   ),
                   selected: _activeFilter == 'HAS_RESULTS',
                   selectedColor: primaryColor.withAlpha(50),
-                  backgroundColor: const Color(0x1F2A2A32),
+                  backgroundColor: SunfireColors.borderSubtle,
                   labelStyle: TextStyle(
-                    color: _activeFilter == 'HAS_RESULTS' ? primaryColor : Colors.grey,
+                    color: _activeFilter == 'HAS_RESULTS' ? primaryColor : SunfireColors.contentTertiary,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: _activeFilter == 'HAS_RESULTS' ? primaryColor : const Color(0x2BFFFFFF), width: 0.8),
+                    side: BorderSide(color: _activeFilter == 'HAS_RESULTS' ? primaryColor : SunfireColors.borderDefault, width: 0.8),
                   ),
                   onSelected: (_) => setState(() => _activeFilter = 'HAS_RESULTS'),
                 ),
@@ -997,13 +998,13 @@ unawaited(
                     child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor),
                   ),
                   const SizedBox(width: 6),
-                  const Text('Searching...', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                  const Text('Searching...', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 11)),
                 ],
               ],
             ),
           ),
 
-          const Divider(height: 1, color: Color(0x1AFFFFFF)),
+          const Divider(height: 1, color: SunfireColors.borderHairline),
 
           // ── SOURCES EXPANDABLE LIST ─────────────────────────────
           Expanded(
@@ -1014,7 +1015,7 @@ unawaited(
                           ? 'No pinned sources found.\nSwitch to "ALL" to search across all sources.'
                           : 'No sources available for migration.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.grey),
+                      style: const TextStyle(color: SunfireColors.contentTertiary),
                     ),
                   )
                 : ListView.builder(
@@ -1031,10 +1032,10 @@ unawaited(
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6.0),
                         child: Material(
-                          color: const Color(0x1F2A2A32),
+                          color: SunfireColors.borderSubtle,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
-                            side: const BorderSide(color: Color(0x2BFFFFFF), width: 0.8),
+                            side: const BorderSide(color: SunfireColors.borderDefault, width: 0.8),
                           ),
                           child: ExpansionTile(
                             initiallyExpanded: results.isNotEmpty,
@@ -1051,7 +1052,7 @@ unawaited(
                                 ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(4)),
+                                  decoration: BoxDecoration(color: SunfireColors.borderDefault, borderRadius: BorderRadius.circular(4)),
                                   child: Text(lang, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                                 ),
                               ],
@@ -1078,14 +1079,14 @@ unawaited(
                                           ),
                                         ),
                                       const SizedBox(width: 4),
-                                      const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+                                      const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: SunfireColors.contentTertiary),
                                     ],
                                   ),
                             children: [
                               if (results.isEmpty && !isLoading)
                                 const Padding(
                                   padding: EdgeInsets.all(16.0),
-                                  child: Text('No matching results found on this source.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                  child: Text('No matching results found on this source.', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 12)),
                                 )
                               else
                                 ...results.map((res) {
@@ -1114,7 +1115,7 @@ unawaited(
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                       ),
-                                      child: const Text('Select', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                      child: const Text('Select', style: TextStyle(color: SunfireColors.contentPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
                                       onPressed: () => _showMigrationConfirmation(res, source),
                                     ),
                                   );

@@ -18,6 +18,7 @@ import '../../core/sync/server_auth_helper.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../shared/friendly_network_error.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -600,7 +601,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const Text(
             'High-performance on-device reading engine with full offline support, QuickJS scrapers, and optional Suwayomi cloud sync.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13.5, color: Colors.grey, height: 1.45),
+            style: TextStyle(fontSize: 13.5, color: SunfireColors.contentTertiary, height: 1.45),
           ),
           const SizedBox(height: 36),
 
@@ -681,7 +682,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       color: SunfireTheme.overlayFill(context),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.cloud_sync_rounded, color: Colors.lightBlueAccent, size: 28),
+                    child: const Icon(Icons.cloud_sync_rounded, color: SunfireColors.sourceServer, size: 28),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -747,7 +748,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 8),
           const Text(
             'Enter your Suwayomi server address to import your library, chapters, and history.',
-            style: TextStyle(color: Colors.grey, fontSize: 13),
+            style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
           ),
           const SizedBox(height: 24),
           TextField(
@@ -755,13 +756,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             style: TextStyle(color: cs.onSurface),
             decoration: InputDecoration(
               labelText: 'Server URL',
-              labelStyle: TextStyle(color: Colors.grey),
+              labelStyle: TextStyle(color: SunfireColors.contentTertiary),
               hintText: 'http://192.168.1.50:4567 or https://manga.example.com',
               hintStyle: TextStyle(color: cs.onSurfaceVariant),
               filled: true,
               fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-              prefixIcon: const Icon(Icons.dns_rounded, color: Colors.grey),
+              prefixIcon: const Icon(Icons.dns_rounded, color: SunfireColors.contentTertiary),
             ),
           ),
           const SizedBox(height: 18),
@@ -792,7 +793,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 filled: true,
                 fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                prefixIcon: const Icon(Icons.person_rounded, color: Colors.grey),
+                prefixIcon: const Icon(Icons.person_rounded, color: SunfireColors.contentTertiary),
               ),
             ),
             const SizedBox(height: 10),
@@ -802,15 +803,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               obscureText: _obscurePassword,
               decoration: InputDecoration(
                 labelText: 'Password',
-                labelStyle: TextStyle(color: Colors.grey),
+                labelStyle: TextStyle(color: SunfireColors.contentTertiary),
                 hintText: '••••••••',
                 hintStyle: TextStyle(color: cs.onSurfaceVariant),
                 filled: true,
                 fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                prefixIcon: const Icon(Icons.lock_rounded, color: Colors.grey),
+                prefixIcon: const Icon(Icons.lock_rounded, color: SunfireColors.contentTertiary),
                 suffixIcon: IconButton(
-                  icon: Icon(_obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded, color: Colors.grey),
+                  icon: Icon(_obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded, color: SunfireColors.contentTertiary),
                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                 ),
               ),
@@ -822,15 +823,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               obscureText: _obscurePassword,
               decoration: InputDecoration(
                 labelText: 'Bearer Token / API Key',
-                labelStyle: TextStyle(color: Colors.grey),
+                labelStyle: TextStyle(color: SunfireColors.contentTertiary),
                 hintText: 'e.g. eyJhbGciOi...',
                 hintStyle: TextStyle(color: cs.onSurfaceVariant),
                 filled: true,
                 fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                prefixIcon: const Icon(Icons.key_rounded, color: Colors.grey),
+                prefixIcon: const Icon(Icons.key_rounded, color: SunfireColors.contentTertiary),
                 suffixIcon: IconButton(
-                  icon: Icon(_obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded, color: Colors.grey),
+                  icon: Icon(_obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded, color: SunfireColors.contentTertiary),
                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                 ),
               ),
@@ -850,7 +851,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.shield_outlined, color: Colors.amberAccent, size: 20),
+                    Icon(Icons.shield_outlined, color: SunfireColors.trackerAmber, size: 20),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -865,7 +866,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 const SizedBox(height: 4),
                 const Text(
                   'Bypasses Cloudflare Turnstile challenges for protected sources and extensions.',
-                  style: TextStyle(fontSize: 11.5, color: Colors.grey),
+                  style: TextStyle(fontSize: 11.5, color: SunfireColors.contentTertiary),
                 ),
                 const SizedBox(height: 10),
                 TextField(
@@ -873,7 +874,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   style: TextStyle(color: cs.onSurface, fontSize: 13),
                   decoration: InputDecoration(
                     labelText: 'Proxy Endpoint',
-                    labelStyle: TextStyle(color: Colors.grey, fontSize: 12),
+                    labelStyle: TextStyle(color: SunfireColors.contentTertiary, fontSize: 12),
                     hintText: 'http://192.168.1.50:8191/v1',
                     hintStyle: TextStyle(color: cs.onSurfaceVariant),
                     filled: true,
@@ -894,7 +895,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     _flareSolverrStatus!,
                     style: TextStyle(
                       fontSize: 11,
-                      color: _flareSolverrStatus!.startsWith('✓') ? Colors.greenAccent : Colors.redAccent,
+                      color: _flareSolverrStatus!.startsWith('✓') ? SunfireColors.success : SunfireColors.error,
                     ),
                   ),
                 ],
@@ -906,14 +907,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: _connectionSuccess ? const Color(0x224CAF50) : const Color(0x22F44336),
+                color: _connectionSuccess ? SunfireColors.success.withValues(alpha: 0.15) : SunfireColors.error.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
                   Icon(
                     _connectionSuccess ? Icons.check_circle_rounded : Icons.error_outline_rounded,
-                    color: _connectionSuccess ? Colors.green : Colors.redAccent,
+                    color: _connectionSuccess ? SunfireColors.success : SunfireColors.error,
                     size: 18,
                   ),
                   const SizedBox(width: 8),
@@ -921,7 +922,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     child: Text(
                       _connectionStatus!,
                       style: TextStyle(
-                        color: _connectionSuccess ? Colors.greenAccent : Colors.redAccent,
+                        color: _connectionSuccess ? SunfireColors.success : SunfireColors.error,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1022,7 +1023,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 8),
           const Text(
             'Add the official Sunfire catalog for updates, and optionally a community MangaYomi index for extra sources:',
-            style: TextStyle(color: Colors.grey, fontSize: 13),
+            style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
           ),
           const SizedBox(height: 16),
           if (!_containsRepo(RepoManager.officialIndexUrl))
@@ -1082,19 +1083,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20),
+                      const Icon(Icons.check_circle_rounded, color: SunfireColors.success, size: 20),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                            crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: cs.onSurface)),
-                            Text(url, style: const TextStyle(color: Colors.grey, fontSize: 11), overflow: TextOverflow.ellipsis),
+                            Text(url, style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 11), overflow: TextOverflow.ellipsis),
                           ],
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
+                        icon: const Icon(Icons.close_rounded, size: 18, color: SunfireColors.contentTertiary),
                         onPressed: () => _removeRepo(url),
                       ),
                     ],
@@ -1129,14 +1130,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  const Text('For Cloudflare protected sources and extensions', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  const Text('For Cloudflare protected sources and extensions', style: TextStyle(fontSize: 11, color: SunfireColors.contentTertiary)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _flareSolverrController,
                     style: TextStyle(color: cs.onSurface, fontSize: 12),
                     decoration: InputDecoration(
                       labelText: 'Proxy Endpoint',
-                      labelStyle: const TextStyle(color: Colors.grey, fontSize: 11),
+                      labelStyle: TextStyle(color: SunfireColors.contentTertiary, fontSize: 11),
                       hintText: 'http://192.168.1.50:8191/v1',
                       hintStyle: TextStyle(color: cs.onSurfaceVariant),
                       filled: true,
@@ -1157,7 +1158,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       _flareSolverrStatus!,
                       style: TextStyle(
                         fontSize: 11,
-                        color: _flareSolverrStatus!.startsWith('✓') ? Colors.greenAccent : Colors.redAccent,
+                        color: _flareSolverrStatus!.startsWith('✓') ? SunfireColors.success : SunfireColors.error,
                       ),
                     ),
                   ],
@@ -1250,7 +1251,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Replicating State', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface)),
-                    Text('Building 100% offline local database', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    Text('Building 100% offline local database', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   ],
                 ),
               ),
@@ -1285,9 +1286,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             const Center(
               child: Column(
                 children: [
-                  SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.orangeAccent, strokeWidth: 2.5)),
+                  SizedBox(
+                height: 24, width: 24, child: CircularProgressIndicator(color: SunfireColors.trackerAmber, strokeWidth: 2.5)),
                   SizedBox(height: 12),
-                  Text('Please keep app open...', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  Text('Please keep app open...', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 12)),
                 ],
               ),
             ),
@@ -1313,14 +1315,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           color: isActive
               ? primaryColor.withValues(alpha: 0.6)
               : isCompleted
-                  ? Colors.green.withValues(alpha: 0.3)
+                  ? SunfireColors.success.withValues(alpha: 0.3)
                   : SunfireTheme.overlayFill(context),
         ),
       ),
       child: Row(
         children: [
           if (isCompleted)
-            const Icon(Icons.check_circle_rounded, color: Colors.green, size: 24)
+            const Icon(Icons.check_circle_rounded, color: SunfireColors.success, size: 24)
           else if (isActive)
             SizedBox(
               height: 20,
@@ -1328,7 +1330,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2.5),
             )
           else
-            const Icon(Icons.radio_button_unchecked_rounded, color: Colors.grey, size: 24),
+            const Icon(Icons.radio_button_unchecked_rounded, color: SunfireColors.contentTertiary, size: 24),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -1336,7 +1338,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: cs.onSurface)),
                 const SizedBox(height: 3),
-                Text(subtitle, style: TextStyle(fontSize: 12, color: isActive ? cs.onSurfaceVariant : Colors.grey)),
+                Text(subtitle, style: TextStyle(fontSize: 12, color: isActive ? cs.onSurfaceVariant : SunfireColors.contentTertiary)),
               ],
             ),
           ),
@@ -1356,11 +1358,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              color: Color(0x224CAF50),
+            decoration: BoxDecoration(
+              color: SunfireColors.success.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check_rounded, size: 64, color: Colors.greenAccent),
+            child: const Icon(Icons.check_rounded, size: 64, color: SunfireColors.success),
           ),
           const SizedBox(height: 28),
           Text(
@@ -1391,7 +1393,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.bolt_rounded, color: Colors.amber, size: 20),
+                    Icon(Icons.bolt_rounded, color: SunfireColors.trackerAmber, size: 20),
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -1406,7 +1408,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: [
                     Icon(
                       _isStandalone ? Icons.cloud_outlined : Icons.cloud_done_rounded,
-                      color: _isStandalone ? Colors.grey : Colors.lightBlueAccent,
+                      color: _isStandalone ? SunfireColors.contentTertiary : SunfireColors.sourceServer,
                       size: 20,
                     ),
                     const SizedBox(width: 10),

@@ -1,6 +1,5 @@
-/// Sunfire color tokens for the manga reader.
-/// Uses FlexColorScheme compatible seeds with OLED/True Black support.
-library;
+// Sunfire color tokens for the manga reader.
+// Uses FlexColorScheme compatible seeds with OLED/True Black support.
 
 import 'package:flutter/material.dart';
 

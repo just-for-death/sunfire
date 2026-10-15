@@ -18,6 +18,7 @@ import '../../ui/widgets/proxy_url_display.dart';
 import '../shared/friendly_network_error.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 
 class AdvancedSettingsScreen extends StatefulWidget {
   const AdvancedSettingsScreen({super.key});
@@ -111,15 +112,15 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
                 SunfireBadge.local(),
               ],
             ),
-            subtitle: const Text('Stream live app events, JS scrapers, network & errors', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            subtitle: const Text('Stream live app events, JS scrapers, network & errors', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
             trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
             onTap: _showLogsModal,
           ),
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            leading: const Icon(Icons.cleaning_services_rounded, color: Colors.redAccent),
+            leading: const Icon(Icons.cleaning_services_rounded, color: SunfireColors.error),
             title: const Text('Clear Diagnostic Logs', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-            subtitle: const Text('Truncate on-device log file and in-memory buffer', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            subtitle: const Text('Truncate on-device log file and in-memory buffer', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
             onTap: () async {
               await LoggerService.instance.clearLogs();
               if (context.mounted) {
@@ -131,9 +132,9 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
           ),
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            leading: const Icon(Icons.sync_problem_rounded, color: Colors.orangeAccent),
+            leading: const Icon(Icons.sync_problem_rounded, color: SunfireColors.trackerAmber),
             title: const Text('Force Reconcile With Server', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-            subtitle: const Text('Apply server library removals even if the wipe-guard would skip them', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            subtitle: const Text('Apply server library removals even if the wipe-guard would skip them', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
             onTap: () async {
               final ok = await showDialog<bool>(
                 context: context,
@@ -162,9 +163,9 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
           ),
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            leading: const Icon(Icons.refresh_rounded, color: Colors.lightBlueAccent),
+            leading: const Icon(Icons.refresh_rounded, color: SunfireColors.trackerBlue),
             title: const Text('Retry Failed Sync', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-            subtitle: const Text('Re-queue sync records that failed or were abandoned after 5 retries', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            subtitle: const Text('Re-queue sync records that failed or were abandoned after 5 retries', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
             onTap: () async {
               final count = await SyncEngine.instance.retryFailedSyncRecords();
               if (context.mounted) {
@@ -176,7 +177,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
           ),
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            leading: const Icon(Icons.shield_outlined, color: Colors.amberAccent),
+            leading: const Icon(Icons.shield_outlined, color: SunfireColors.trackerAmber),
             title: Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 6,
@@ -190,7 +191,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
               SettingsService.instance.cfProxyUrl.isEmpty
                   ? 'Disabled (direct connection)'
                   : maskProxyUrlForDisplay(SettingsService.instance.cfProxyUrl),
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
             ),
             trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
             onTap: _showCfProxyDialog,
@@ -205,7 +206,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
           const SectionTitle(title: 'Disk & Memory Cache'),
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            leading: const Icon(Icons.delete_sweep_rounded, color: Colors.orangeAccent),
+            leading: const Icon(Icons.delete_sweep_rounded, color: SunfireColors.trackerAmber),
             title: Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 6,
@@ -215,7 +216,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
                 SunfireBadge.local(),
               ],
             ),
-            subtitle: const Text('Free cached cover thumbnails & manga page images', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            subtitle: Text('Free cached cover thumbnails & manga page images', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
             onTap: () async {
               await ImageCacheHelper.clearCache();
               imageCache.clear();
@@ -237,8 +238,8 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
             leading: const Icon(Icons.storage_rounded),
             title: const Text('Database Statistics', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
             subtitle: _isLoadingStats
-                ? const Text('Loading database metrics...', style: TextStyle(fontSize: 12, color: Colors.grey))
-                : Text('$_mangaCount manga entries • $_chapterCount cached chapters • $_categoryCount categories', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ? Text('Loading database metrics...', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary))
+                : Text('$_mangaCount manga entries • $_chapterCount cached chapters • $_categoryCount categories', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
           ),
 
           const Divider(height: 1),
@@ -249,7 +250,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             leading: const Icon(Icons.info_outline_rounded),
             title: const Text('Sunfire Client Version', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-            subtitle: Text('$_versionStr • Platform: ${Platform.operatingSystem} (${Platform.operatingSystemVersion})', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            subtitle: Text('$_versionStr • Platform: ${Platform.operatingSystem} (${Platform.operatingSystemVersion})', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
           ),
         ],
       ),
@@ -328,15 +329,15 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
   Color _levelColor(String level) {
     switch (level) {
       case 'ERROR':
-        return Colors.redAccent;
+        return SunfireColors.error;
       case 'WARN':
-        return Colors.amberAccent;
+        return SunfireColors.trackerAmber;
       case 'NETWORK':
-        return Colors.cyanAccent;
+        return SunfireColors.trackerBlue;
       case 'DEBUG':
-        return Colors.purpleAccent;
+        return SunfireColors.trackerBlue;
       default:
-        return Colors.greenAccent;
+        return SunfireColors.success;
     }
   }
 
@@ -410,7 +411,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 6.0),
                   child: FilterChip(
-                    label: Text(lvl, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.grey)),
+                    label: Text(lvl, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : SunfireColors.contentTertiary)),
                     selected: isSelected,
                     selectedColor: _levelColor(lvl).withAlpha(120),
                     backgroundColor: const Color(0x1F2A2A32),
@@ -431,7 +432,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
                 border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
               ),
               child: filtered.isEmpty
-                  ? const Center(child: Text('No matching log entries found.', style: TextStyle(color: Colors.grey, fontSize: 12)))
+                  ? Center(child: Text('No matching log entries found.', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 12)))
                   : ListView.builder(
                       controller: _scrollController,
                       itemCount: filtered.length,
@@ -446,13 +447,13 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
                             TextSpan(
                               style: const TextStyle(fontFamily: 'monospace', fontSize: 11, height: 1.3),
                               children: [
-                                TextSpan(text: '$timeStr ', style: const TextStyle(color: Colors.grey)),
+                                TextSpan(text: '$timeStr ', style: TextStyle(color: SunfireColors.contentTertiary)),
                                 TextSpan(text: '[${e.level}] ', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
                                 if (e.category != null)
-                                  TextSpan(text: '[${e.category}] ', style: const TextStyle(color: Colors.amberAccent)),
+                                  TextSpan(text: '[${e.category}] ', style: TextStyle(color: SunfireColors.trackerAmber)),
                                 TextSpan(text: e.message, style: const TextStyle(color: Colors.white70)),
                                 if (e.exception != null)
-                                  TextSpan(text: '\n${e.exception}', style: const TextStyle(color: Colors.redAccent)),
+                                  TextSpan(text: '\n${e.exception}', style: TextStyle(color: SunfireColors.error)),
                               ],
                             ),
                           ),

@@ -12,6 +12,7 @@ import '../../core/engine/repo_manager.dart';
 import '../../core/logging/logger_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -243,7 +244,7 @@ class _AboutScreenState extends State<AboutScreen> {
       context: context,
       applicationName: 'Sunfire',
       applicationVersion: _versionDisplay,
-      applicationIcon: const Icon(Icons.local_fire_department_rounded, size: 48, color: Colors.white),
+      applicationIcon: const Icon(Icons.local_fire_department_rounded, size: 48, color: SunfireColors.onTrackerAmber),
       applicationLegalese: '© Sunfire Contributors. Licensed under the MPL-2.0.',
     );
   }
@@ -367,7 +368,7 @@ class _AboutScreenState extends State<AboutScreen> {
           Center(
             child: Text(
               'Made for people who self-host their manga.',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 12, color: SunfireColors.contentSecondary),
               textAlign: TextAlign.center,
             ),
           ),
@@ -399,17 +400,17 @@ class _AboutScreenState extends State<AboutScreen> {
                 ),
               ],
             ),
-            child: const Icon(Icons.local_fire_department_rounded, size: 44, color: Colors.white),
+            child: const Icon(Icons.local_fire_department_rounded, size: 44, color: SunfireColors.onTrackerAmber),
           ),
           const SizedBox(height: 14),
           const Text(
             'Sunfire',
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.5),
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: SunfireColors.contentPrimary, letterSpacing: -0.5),
           ),
           const SizedBox(height: 2),
           Text(
             'Version $_versionDisplay',
-            style: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+            style: TextStyle(fontSize: 13, color: SunfireColors.contentTertiary),
           ),
         ],
       ),
@@ -422,9 +423,9 @@ class _AboutScreenState extends State<AboutScreen> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0x1F2A2A32),
+          color: SunfireColors.borderSubtle,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0x2BFFFFFF), width: 0.8),
+          border: Border.all(color: SunfireColors.borderDefault, width: 0.8),
         ),
         child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,16 +434,16 @@ class _AboutScreenState extends State<AboutScreen> {
               'A cross-platform manga reader and library manager for Suwayomi/Tachidesk servers. '
               'Scrapers run locally through QuickJS, downloads are readable offline, and your '
               'library, history and progress stay in sync with your own server.',
-              style: TextStyle(fontSize: 13, height: 1.5, color: Colors.white70),
+              style: TextStyle(fontSize: 13, height: 1.5, color: SunfireColors.contentSecondary),
             ),
             SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                SunfireBadge(label: 'MPL-2.0', color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold),
-                SunfireBadge(label: 'OFFLINE-FIRST', color: Colors.purpleAccent, fontSize: 9, fontWeight: FontWeight.bold),
-                SunfireBadge(label: 'NO ANALYTICS', color: Colors.amberAccent, fontSize: 9, fontWeight: FontWeight.bold),
+                SunfireBadge(label: 'MPL-2.0', color: SunfireColors.sourceLocalJs, fontSize: 9, fontWeight: FontWeight.bold),
+                SunfireBadge(label: 'OFFLINE-FIRST', color: SunfireColors.info, fontSize: 9, fontWeight: FontWeight.bold),
+                SunfireBadge(label: 'NO ANALYTICS', color: SunfireColors.trackerAmber, fontSize: 9, fontWeight: FontWeight.bold),
               ],
             ),
           ],
@@ -464,16 +465,16 @@ class _AboutScreenState extends State<AboutScreen> {
         );
         break;
       case _UpdateCheckState.available:
-        trailing = Icon(Icons.system_update_rounded, color: Colors.amberAccent.shade200);
+        trailing = Icon(Icons.system_update_rounded, color: SunfireColors.trackerAmber);
         break;
       case _UpdateCheckState.upToDate:
-        trailing = Icon(Icons.verified_rounded, color: Colors.tealAccent.shade200);
+        trailing = Icon(Icons.verified_rounded, color: SunfireColors.trackerGreen);
         break;
       case _UpdateCheckState.failed:
-        trailing = Icon(Icons.error_outline_rounded, color: Colors.redAccent.shade200);
+        trailing = Icon(Icons.error_outline_rounded, color: SunfireColors.error);
         break;
       case _UpdateCheckState.idle:
-        trailing = const Icon(Icons.chevron_right_rounded, color: Colors.grey);
+        trailing = const Icon(Icons.chevron_right_rounded, color: SunfireColors.contentTertiary);
     }
 
     String subtitle;
@@ -502,7 +503,7 @@ class _AboutScreenState extends State<AboutScreen> {
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
           leading: Icon(Icons.system_update_alt_rounded, size: 24, color: primary),
           title: const Text('Check for updates', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-          subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
           trailing: trailing,
           enabled: _updateState != _UpdateCheckState.checking,
           onTap: _updateState == _UpdateCheckState.available ? _openReleases : _checkForUpdates,
@@ -525,7 +526,7 @@ class _AboutScreenState extends State<AboutScreen> {
             child: Text(
               'Sunfire never blocks on this check. Releases also ship through '
               'Codemagic, so store updates arrive on their own.',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade600, height: 1.4),
+              style: TextStyle(fontSize: 11, color: SunfireColors.contentSecondary, height: 1.4),
             ),
           ),
       ],
@@ -594,9 +595,9 @@ class _AboutScreenState extends State<AboutScreen> {
           title: const Text('Open source licenses', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
           subtitle: const Text(
             'Every third-party package and its license',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
+            style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
           ),
-          trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+          trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: SunfireColors.contentTertiary),
           onTap: _showLicenses,
         ),
       ],
@@ -629,12 +630,12 @@ class _AboutScreenState extends State<AboutScreen> {
               children: [
                 SizedBox(
                   width: 120,
-                  child: Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  child: Text(label, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                 ),
                 Expanded(
                   child: SelectableText(
                     value,
-                    style: const TextStyle(fontSize: 12, color: Colors.white70, fontFamily: 'monospace'),
+                    style: const TextStyle(fontSize: 12, color: SunfireColors.contentPrimary, fontFamily: 'monospace'),
                   ),
                 ),
               ],
@@ -668,9 +669,9 @@ class _LinkTile extends StatelessWidget {
         url,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 11, color: Colors.grey),
+        style: TextStyle(fontSize: 11, color: SunfireColors.contentTertiary),
       ),
-      trailing: const Icon(Icons.open_in_new_rounded, size: 16, color: Colors.grey),
+      trailing: const Icon(Icons.open_in_new_rounded, size: 16, color: SunfireColors.contentTertiary),
       onTap: () => onTap(url),
     );
   }
