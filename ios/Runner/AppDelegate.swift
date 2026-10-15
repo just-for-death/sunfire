@@ -1,11 +1,13 @@
-import ActivityKit
-import UIKit
 import Flutter
+import UIKit
+import Intents
+#if canImport(ActivityKit)
+import ActivityKit
 
 // I8.3: Live Activity attributes for ongoing reading sessions.
 // (ActivityKit auto-links; no Xcode project changes needed beyond this file
 // and the NSSupportsLiveActivities Info.plist key.)
-@available(iOS 16.1, *)
+@available(iOS 16.2, *)
 struct ReadingActivityAttributes: ActivityAttributes {
   public struct ContentState: Codable, Hashable {
     var mangaTitle: String
@@ -14,6 +16,50 @@ struct ReadingActivityAttributes: ActivityAttributes {
   }
   var sessionId: String
 }
+
+@available(iOS 16.2, *)
+@MainActor
+private final class LiveActivityManager {
+  static let shared = LiveActivityManager()
+  private var currentActivity: Activity<ReadingActivityAttributes>?
+
+  func start(mangaTitle: String, chapterName: String) {
+    guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+    end()
+    let attributes = ReadingActivityAttributes(sessionId: UUID().uuidString)
+    let state = ReadingActivityAttributes.ContentState(
+      mangaTitle: mangaTitle, chapterName: chapterName, progress: 0)
+    do {
+      currentActivity = try Activity.request(
+        attributes: attributes,
+        content: .init(state: state, staleDate: nil))
+    } catch {
+      print("[Sunfire] Live Activity start failed: \(error)")
+    }
+  }
+
+  func update(mangaTitle: String, chapterName: String, progress: Double) {
+    let activity = currentActivity
+    Task {
+      await activity?.update(
+        .init(
+          state: .init(
+            mangaTitle: mangaTitle,
+            chapterName: chapterName,
+            progress: progress),
+          staleDate: nil))
+    }
+  }
+
+  func end() {
+    let activity = currentActivity
+    currentActivity = nil
+    Task {
+      await activity?.end(nil, dismissalPolicy: .immediate)
+    }
+  }
+}
+#endif
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -117,45 +163,30 @@ struct ReadingActivityAttributes: ActivityAttributes {
 
   // MARK: - I8.3 Live Activities
 
-  @available(iOS 16.1, *)
-  private var currentReadingActivity: Activity<ReadingActivityAttributes>?
-
   private func startReadingActivity(mangaTitle: String, chapterName: String) {
-    if #available(iOS 16.1, *) {
-      guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-      // End any stale session first (single active reading session).
-      endReadingActivity()
-      let attributes = ReadingActivityAttributes(
-        sessionId: UUID().uuidString)
-      let state = ReadingActivityAttributes.ContentState(
-        mangaTitle: mangaTitle, chapterName: chapterName, progress: 0)
-      do {
-        currentReadingActivity = try Activity.request(
-          attributes: attributes,
-          content: .init(state: state, staleDate: nil))
-      } catch {
-        print("[Sunfire] Live Activity start failed: \(error)")
-      }
+    #if canImport(ActivityKit)
+    if #available(iOS 16.2, *) {
+      LiveActivityManager.shared.start(mangaTitle: mangaTitle, chapterName: chapterName)
     }
+    #endif
   }
 
   private func updateReadingActivity(mangaTitle: String, chapterName: String, progress: Double) {
-    if #available(iOS 16.1, *) {
-      Task {
-        await currentReadingActivity?.update(
-          .init(state: .init(
-            mangaTitle: mangaTitle, chapterName: chapterName, progress: progress),
-            staleDate: nil))
-      }
+    #if canImport(ActivityKit)
+    if #available(iOS 16.2, *) {
+      LiveActivityManager.shared.update(
+        mangaTitle: mangaTitle,
+        chapterName: chapterName,
+        progress: progress)
     }
+    #endif
   }
 
   private func endReadingActivity() {
-    if #available(iOS 16.1, *) {
-      Task {
-        await currentReadingActivity?.end(nil, dismissalPolicy: .immediate)
-        currentReadingActivity = nil
-      }
+    #if canImport(ActivityKit)
+    if #available(iOS 16.2, *) {
+      LiveActivityManager.shared.end()
     }
+    #endif
   }
 }
