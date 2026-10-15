@@ -289,13 +289,26 @@ class QuickJsService {
         return;
       }
 
+      // Only auto-install English and universal scrapers that have a real JS
+      // payload. Non-English sources are installed on demand (server-mode match
+      // or explicit user action in Browse → Extensions → Install All).
+      final targets = repoSources.where((s) {
+        final lang = s.lang.toLowerCase();
+        return (lang == 'en' || lang == 'all') &&
+            s.isJs &&
+            s.sourceCodeUrl.trim().isNotEmpty &&
+            s.sourceCodeUrl.toLowerCase().endsWith('.js');
+      }).toList();
+
+      if (targets.isEmpty) {
+        await LoggerService.instance.logWarning('No eligible (en/all) extensions found in remote repos', 'QuickJS');
+        return;
+      }
+
       // Install all sources from the repos
       int installedCount = 0;
-      for (final source in repoSources) {
+      for (final source in targets) {
         try {
-          // Some third-party index entries carry no JS payload (empty
-          // sourceCodeUrl/pkgPath). Attempting them produced 404s like
-          // `.../main/javascript/` ("Olympus Scanlation"). Skip quietly.
           if (source.sourceCodeUrl.trim().isEmpty) {
             if (kDebugMode) debugPrint('[QuickJS] Skipping index entry without JS url: ${source.name}');
             continue;
