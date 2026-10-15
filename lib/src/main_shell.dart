@@ -474,7 +474,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               child: Container(
                 decoration: BoxDecoration(
                   color: _cs.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(SunfireRadius.card),
                   boxShadow: [
                     BoxShadow(
                       color: _cs.shadow.withValues(
@@ -543,7 +543,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             context: context,
             builder: (ctx) => AlertDialog(
               backgroundColor: _cs.surfaceContainerHigh,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.dialog)),
               title: const DialogTitle(
                 icon: Icons.exit_to_app_rounded,
                 iconColor: SunfireColors.trackerAmber,
@@ -601,7 +601,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           builder: (context, constraints) {
             final isExpanded = constraints.maxWidth >= sunfireSidebarExpandedLayoutMinWidth;
             return ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(SunfireRadius.card),
           // UIS-P2-C: same static-tint fallback as the glass tab bar
           // (UIS-17) when the platform asks to reduce effects.
           child: IOSGlassTabBar.maybeBlur(
@@ -611,7 +611,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               decoration: BoxDecoration(
                 color: _cs.surfaceContainer
                     .withValues(alpha: _reduceEffects(context) ? 0.96 : 0.8),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(SunfireRadius.card),
                 border: Border.all(
                     color: _cs.outlineVariant.withValues(alpha: 0.3), width: 0.8),
                 boxShadow: [
@@ -775,7 +775,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     ),
                   ],
                 ),
-                child: Icon(Icons.local_fire_department_rounded, color: _cs.onPrimary, size: 22),
+                child: Icon(Icons.local_fire_department_rounded, color: _cs.onPrimary, size: SunfireIconSize.lg),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -837,7 +837,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       return Column(
         children: [
           IconButton(
-            icon: Icon(Icons.view_sidebar_outlined, color: _cs.onSurfaceVariant, size: 22),
+            icon: Icon(Icons.view_sidebar_outlined, color: _cs.onSurfaceVariant, size: SunfireIconSize.lg),
             tooltip: 'Expand sidebar',
             onPressed: _toggleSidebar,
           ),
@@ -862,7 +862,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   ),
                 ],
               ),
-              child: Icon(Icons.local_fire_department_rounded, color: _cs.onPrimary, size: 22),
+              child: Icon(Icons.local_fire_department_rounded, color: _cs.onPrimary, size: SunfireIconSize.lg),
             ),
           ),
         ],
@@ -942,7 +942,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             child: Material(
               color: SunfireColors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(SunfireRadius.card),
                 onTap: () => _handleTabSelect(index),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -957,7 +957,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                               primaryColor.withValues(alpha: 0.12),
                             ],
                           ),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(SunfireRadius.card),
                           border: Border.all(color: primaryColor.withValues(alpha: 0.50), width: 1.2),
                           boxShadow: [
                             BoxShadow(
@@ -999,7 +999,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           child: Row(
             children: [
-              Icon(icon, color: _cs.onSurfaceVariant, size: 19),
+              Icon(icon, color: _cs.onSurfaceVariant, size: SunfireIconSize.md),
               const SizedBox(width: SunfireSpacing.md),
               Expanded(
                 child: Text(
@@ -1047,7 +1047,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           child: Material(
             color: SunfireColors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(SunfireRadius.card),
               onTap: onTap,
               child: SizedBox(
                 width: 40,
@@ -1055,7 +1055,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    Icon(icon, color: _cs.onSurfaceVariant, size: 21),
+                    Icon(icon, color: _cs.onSurfaceVariant, size: SunfireIconSize.md),
                     if (badgeCount != null && badgeCount > 0)
                       Positioned(
                         top: 6,
@@ -1104,13 +1104,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             child: Material(
               color: SunfireColors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(SunfireRadius.card),
                 onTap: () => context.push('/settings/server'),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
                   decoration: BoxDecoration(
                     color: _cs.surfaceContainerHighest.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(SunfireRadius.card),
                     border: Border.all(
                         color: _cs.outlineVariant.withValues(alpha: 0.3), width: 0.8),
                   ),

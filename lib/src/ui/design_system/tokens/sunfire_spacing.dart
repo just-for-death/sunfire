@@ -85,4 +85,7 @@ class SunfireIconSize {
 
   /// Hero / empty-state icons.
   static const double xl = 32;
+
+  /// Large avatar / logo tiles.
+  static const double xxl = 48;
 }

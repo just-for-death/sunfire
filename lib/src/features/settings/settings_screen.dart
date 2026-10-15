@@ -527,7 +527,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.search_rounded, size: 48, color: primaryColor.withValues(alpha: 0.5)),
+                            Icon(Icons.search_rounded, size: SunfireIconSize.xxl, color: primaryColor.withValues(alpha: 0.5)),
                             const SizedBox(height: SunfireSpacing.lg),
                             Text('Type to search settings...', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 16)),
                           ],
@@ -680,7 +680,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off_rounded, size: 48, color: SunfireColors.contentTertiary.withAlpha(120)),
+            Icon(Icons.search_off_rounded, size: SunfireIconSize.xxl, color: SunfireColors.contentTertiary.withAlpha(120)),
             const SizedBox(height: SunfireSpacing.md),
             Text('No settings found for "$_searchQuery"', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: SunfireSpacing.xs),
@@ -703,7 +703,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
               color: primaryColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(item.icon, color: primaryColor, size: 22),
+            child: Icon(item.icon, color: primaryColor, size: SunfireIconSize.lg),
           ),
           title: Row(
             children: [

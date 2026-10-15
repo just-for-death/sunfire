@@ -494,7 +494,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.dialog)),
               title: Row(
                 children: [
-                  Icon(Icons.track_changes_rounded, color: primaryColor, size: 22),
+                  Icon(Icons.track_changes_rounded, color: primaryColor, size: SunfireIconSize.lg),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -655,7 +655,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                       ),
-                                      icon: const Icon(Icons.calendar_today_rounded, size: 14),
+                                      icon: const Icon(Icons.calendar_today_rounded, size: SunfireIconSize.xs),
                                       label: Text(startDisplay.isNotEmpty ? startDisplay : 'Set Date', style: const TextStyle(fontSize: 11)),
                                       onPressed: () async {
                                         final picked = await showDatePicker(
@@ -675,7 +675,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                   ),
                                   if (startDisplay.isNotEmpty)
                                     IconButton(
-                                      icon: const Icon(Icons.clear_rounded, size: 15, color: SunfireColors.contentTertiary),
+                                      icon: const Icon(Icons.clear_rounded, size: SunfireIconSize.sm, color: SunfireColors.contentTertiary),
                                       tooltip: 'Clear start date',
                                       visualDensity: VisualDensity.compact,
                                       padding: EdgeInsets.zero,
@@ -705,7 +705,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                       ),
-                                      icon: const Icon(Icons.event_available_rounded, size: 14),
+                                      icon: const Icon(Icons.event_available_rounded, size: SunfireIconSize.xs),
                                       label: Text(finishDisplay.isNotEmpty ? finishDisplay : 'Set Date', style: const TextStyle(fontSize: 11)),
                                       onPressed: () async {
                                         final picked = await showDatePicker(
@@ -725,7 +725,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                   ),
                                   if (finishDisplay.isNotEmpty)
                                     IconButton(
-                                      icon: const Icon(Icons.clear_rounded, size: 15, color: SunfireColors.contentTertiary),
+                                      icon: const Icon(Icons.clear_rounded, size: SunfireIconSize.sm, color: SunfireColors.contentTertiary),
                                       tooltip: 'Clear finish date',
                                       visualDensity: VisualDensity.compact,
                                       padding: EdgeInsets.zero,
@@ -1318,7 +1318,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.lock_rounded, size: 14, color: SunfireColors.trackerGreen),
+                  const Icon(Icons.lock_rounded, size: SunfireIconSize.xs, color: SunfireColors.trackerGreen),
                   const SizedBox(width: 6),
                   Text(
                     'Metadata Locked & Enriched',
@@ -1367,7 +1367,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
         children: [
           Row(
             children: [
-              Icon(icon, size: 14, color: color),
+              Icon(icon, size: SunfireIconSize.xs, color: color),
               const SizedBox(width: 6),
               Text(
                 label,
@@ -1648,7 +1648,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           foregroundColor: SunfireColors.trackerAmber,
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         ),
-                        icon: const Icon(Icons.login_rounded, size: 14),
+                        icon: const Icon(Icons.login_rounded, size: SunfireIconSize.xs),
                         label: const Text('Log In', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                         onPressed: () async {
                           if (await canLaunchUrlString(authUrl)) {
@@ -1677,7 +1677,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           foregroundColor: SunfireColors.destructive,
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         ),
-                        icon: const Icon(Icons.link_off_rounded, size: 14),
+                        icon: const Icon(Icons.link_off_rounded, size: SunfireIconSize.xs),
                         label: const Text('Unbind', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                         onPressed: () => _unbindRecord(parseIntSafe(bound['id'])),
                       ),
@@ -1728,7 +1728,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                 foregroundColor: SunfireColors.trackerAmber,
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               ),
-                              icon: const Icon(Icons.login_rounded, size: 14),
+                              icon: const Icon(Icons.login_rounded, size: SunfireIconSize.xs),
                               label: const Text('Log In', style: TextStyle(fontWeight: FontWeight.w600)),
                               onPressed: () async {
                                 if (await canLaunchUrlString(authUrl)) {

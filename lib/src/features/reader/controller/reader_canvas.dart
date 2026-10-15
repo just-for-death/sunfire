@@ -502,7 +502,7 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.broken_image_rounded, size: 48, color: SunfireColors.contentTertiary),
+            const Icon(Icons.broken_image_rounded, size: SunfireIconSize.xxl, color: SunfireColors.contentTertiary),
             const SizedBox(height: SunfireSpacing.md),
             Text(
               'Failed to load image',

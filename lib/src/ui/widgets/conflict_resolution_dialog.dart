@@ -604,7 +604,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(SunfireRadius.dialog)),
         border: Border(
           top: BorderSide(
             color: Theme.of(context).colorScheme.outlineVariant,

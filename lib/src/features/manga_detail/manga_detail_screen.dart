@@ -1723,7 +1723,7 @@ unawaited(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.search_off_rounded, size: 48, color: SunfireColors.contentTertiary.withValues(alpha: 0.6)),
+                Icon(Icons.search_off_rounded, size: SunfireIconSize.xxl, color: SunfireColors.contentTertiary.withValues(alpha: 0.6)),
                 const SizedBox(height: SunfireSpacing.md),
                 const Text(
                   'This series is no longer in your library.',
@@ -2000,7 +2000,7 @@ unawaited(
                         padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                       ),
                       onPressed: _continueReading,
-                      icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: 22),
+                      icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: SunfireIconSize.lg),
                       label: Text(
                         hasReadAny ? 'Continue Reading' : 'Start Reading',
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
@@ -2883,7 +2883,7 @@ unawaited(
                 else
                   Semantics(
                     label: 'Unread',
-                    child: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 22),
+                    child: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: SunfireIconSize.lg),
                   ),
               ],
             ),

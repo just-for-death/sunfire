@@ -1029,7 +1029,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: SunfireSpacing.sm),
               ChoiceChip(
-                avatar: const ExcludeSemantics(child: Icon(Icons.flash_on_rounded, size: 15, color: SunfireColors.sourceLocalJs)),
+                avatar: const ExcludeSemantics(child: Icon(Icons.flash_on_rounded, size: SunfireIconSize.sm, color: SunfireColors.sourceLocalJs)),
                 label: const Text('Local JS'),
                 selected: _selectedSourceFilter == 'Local JS',
                 selectedColor: SunfireColors.sourceLocalJsSelected,
@@ -1055,7 +1055,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: SunfireSpacing.sm),
               ChoiceChip(
-                avatar: const ExcludeSemantics(child: Icon(Icons.cloud_queue_rounded, size: 15, color: SunfireColors.sourceServer)),
+                avatar: const ExcludeSemantics(child: Icon(Icons.cloud_queue_rounded, size: SunfireIconSize.sm, color: SunfireColors.sourceServer)),
                 label: const Text('Server (Suwayomi)'),
                 selected: _selectedSourceFilter == 'Server',
                 selectedColor: SunfireColors.sourceServerSelected,
@@ -1081,7 +1081,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: SunfireSpacing.sm),
               ChoiceChip(
-                avatar: const ExcludeSemantics(child: Icon(Icons.push_pin_rounded, size: 15, color: SunfireColors.trackerAmber)),
+                avatar: const ExcludeSemantics(child: Icon(Icons.push_pin_rounded, size: SunfireIconSize.sm, color: SunfireColors.trackerAmber)),
                 label: const Text('Pinned'),
                 selected: _selectedSourceFilter == 'Pinned',
                 selectedColor: SunfireColors.sourcePinnedSelected,

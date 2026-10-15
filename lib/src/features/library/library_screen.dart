@@ -1095,7 +1095,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ExcludeSemantics(child: Icon(icon, color: color, size: 22)),
+            ExcludeSemantics(child: Icon(icon, color: color, size: SunfireIconSize.lg)),
             const SizedBox(height: 3),
             Text(
               label,
@@ -1750,14 +1750,14 @@ unawaited(
                   ),
                 if (!_isSearching) ...[
                   IconButton(
-                    icon: const Icon(Icons.search_rounded, size: 26),
+                    icon: const Icon(Icons.search_rounded, size: SunfireIconSize.lg),
                     onPressed: () => setState(() => _isSearching = true),
                   ),
                   IconButton(
                     icon: Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        const Icon(Icons.tune_rounded, size: 26),
+                        const Icon(Icons.tune_rounded, size: SunfireIconSize.lg),
                         if (_hasCustomDisplay)
                           Positioned(
                             top: -2,
@@ -1774,7 +1774,7 @@ unawaited(
                     onPressed: _showSortAndDisplayDialog,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.label_outline_rounded, size: 26),
+                    icon: const Icon(Icons.label_outline_rounded, size: SunfireIconSize.lg),
                     tooltip: 'Categories',
                     onPressed: _showCategoryManagementDialog,
                   ),
@@ -1788,7 +1788,7 @@ unawaited(
                         icon: Badge(
                           isLabelVisible: activeCount > 0,
                           label: Text('$activeCount', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                          child: const Icon(Icons.download_rounded, size: 26),
+                          child: const Icon(Icons.download_rounded, size: SunfireIconSize.lg),
                         ),
                         tooltip: 'Downloads Queue',
                         onPressed: () => context.push('/downloads'),
@@ -2332,7 +2332,7 @@ unawaited(
                 ],
                 if (isDownloaded && _settings.showDownloadedBadges) ...[
                   const SizedBox(width: 6),
-                  const Icon(Icons.download_done_rounded, size: 14, color: SunfireColors.success),
+                  const Icon(Icons.download_done_rounded, size: SunfireIconSize.xs, color: SunfireColors.success),
                 ],
               ],
             ),

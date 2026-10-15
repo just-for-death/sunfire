@@ -692,7 +692,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.check_circle_rounded, size: 14, color: SunfireColors.trackerGreen),
+                    const Icon(Icons.check_circle_rounded, size: SunfireIconSize.xs, color: SunfireColors.trackerGreen),
                     const SizedBox(width: SunfireSpacing.xs),
                     Text(
                       'Active',

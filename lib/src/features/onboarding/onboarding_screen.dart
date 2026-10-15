@@ -735,7 +735,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
               const SizedBox(width: SunfireSpacing.xs),
-              Icon(Icons.cloud_sync_rounded, color: primaryColor, size: 26),
+              Icon(Icons.cloud_sync_rounded, color: primaryColor, size: SunfireIconSize.lg),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -975,7 +975,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       child: Row(
         children: [
-          Icon(icon, color: primaryColor, size: 22),
+          Icon(icon, color: primaryColor, size: SunfireIconSize.lg),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

@@ -223,7 +223,7 @@ unawaited(
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Icon(Icons.arrow_forward_rounded, color: primaryColor, size: 22),
+                            child: Icon(Icons.arrow_forward_rounded, color: primaryColor, size: SunfireIconSize.lg),
                           ),
                           // Target Manga Preview
                           Expanded(
@@ -238,9 +238,9 @@ unawaited(
                                           width: 48,
                                           height: 68,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded, size: 48),
+                                          errorBuilder: (_, __, ___) => const Icon(Icons.book_rounded, size: SunfireIconSize.xxl),
                                         )
-                                      : const Icon(Icons.book_rounded, size: 48),
+                                      : const Icon(Icons.book_rounded, size: SunfireIconSize.xxl),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
@@ -924,7 +924,7 @@ unawaited(
                   label: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.push_pin_rounded, size: 14),
+                      Icon(Icons.push_pin_rounded, size: SunfireIconSize.xs),
                       SizedBox(width: 4),
                       Text('PINNED'),
                     ],
@@ -948,7 +948,7 @@ unawaited(
                   label: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.done_all_rounded, size: 14),
+                      Icon(Icons.done_all_rounded, size: SunfireIconSize.xs),
                       SizedBox(width: 4),
                       Text('ALL'),
                     ],
@@ -972,7 +972,7 @@ unawaited(
                   label: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.check_circle_outline_rounded, size: 14),
+                      Icon(Icons.check_circle_outline_rounded, size: SunfireIconSize.xs),
                       SizedBox(width: 4),
                       Text('HAS RESULTS'),
                     ],
@@ -1080,7 +1080,7 @@ unawaited(
                                           ),
                                         ),
                                       const SizedBox(width: SunfireSpacing.xs),
-                                      const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: SunfireColors.contentTertiary),
+                                      const Icon(Icons.arrow_forward_ios_rounded, size: SunfireIconSize.xs, color: SunfireColors.contentTertiary),
                                     ],
                                   ),
                             children: [

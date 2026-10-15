@@ -216,7 +216,7 @@ unawaited(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline, size: 48, color: SunfireColors.error),
+                        const Icon(Icons.error_outline, size: SunfireIconSize.xxl, color: SunfireColors.error),
                         const SizedBox(height: SunfireSpacing.md),
                         Text('Failed to load series details', style: theme.textTheme.titleMedium),
                         const SizedBox(height: 6),

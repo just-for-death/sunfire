@@ -389,7 +389,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.battery_charging_full_rounded, color: cs.secondary, size: 22),
+                      Icon(Icons.battery_charging_full_rounded, color: cs.secondary, size: SunfireIconSize.lg),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(

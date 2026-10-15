@@ -245,7 +245,7 @@ class _AboutScreenState extends State<AboutScreen> {
       context: context,
       applicationName: 'Sunfire',
       applicationVersion: _versionDisplay,
-      applicationIcon: const Icon(Icons.local_fire_department_rounded, size: 48, color: SunfireColors.onTrackerAmber),
+      applicationIcon: const Icon(Icons.local_fire_department_rounded, size: SunfireIconSize.xxl, color: SunfireColors.onTrackerAmber),
       applicationLegalese: '© Sunfire Contributors. Licensed under the MPL-2.0.',
     );
   }
@@ -325,7 +325,7 @@ class _AboutScreenState extends State<AboutScreen> {
           ListTile(
             key: const Key('about_server_up_to_date'),
             dense: true,
-            leading: Icon(Icons.check_circle_outline_rounded, color: cs.primary, size: 22),
+            leading: Icon(Icons.check_circle_outline_rounded, color: cs.primary, size: SunfireIconSize.lg),
             title: const Text('Server is up to date', style: TextStyle(fontSize: 13)),
           ),
       ],

@@ -430,7 +430,7 @@ unawaited(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.extension_off_outlined, size: 48, color: SunfireColors.contentTertiary.withAlpha(120)),
+                        Icon(Icons.extension_off_outlined, size: SunfireIconSize.xxl, color: SunfireColors.contentTertiary.withAlpha(120)),
                         const SizedBox(height: SunfireSpacing.md),
                         const Text('No custom repositories configured', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 6),
