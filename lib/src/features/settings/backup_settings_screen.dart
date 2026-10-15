@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/sync/family_sharing.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -139,7 +140,7 @@ unawaited(
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Export your Suwayomi library, categories, reading tracking, and history into a .tachibk archive.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  const Text('Export your Suwayomi library, categories, reading tracking, and history into a .tachibk archive.', style: TextStyle(fontSize: 13, color: SunfireColors.contentTertiary)),
                   const SizedBox(height: 16),
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
@@ -176,7 +177,7 @@ unawaited(
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                  child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
@@ -200,7 +201,7 @@ unawaited(
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: const Text('⚠️ Backup request failed — server did not create a backup. Check the server is reachable.'),
-                              backgroundColor: Colors.orange.shade800,
+                              backgroundColor: SunfireColors.trackerAmber,
                             ),
                           );
                         }
@@ -211,7 +212,7 @@ unawaited(
                       }
                     }
                   },
-                  child: const Text('Create', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text('Create', style: TextStyle(color: SunfireColors.contentPrimary, fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -563,7 +564,7 @@ unawaited(
                       if (e.totalChapters > 0)
                         '${e.readChapters}/${e.totalChapters} read',
                     ].join(' · '),
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                   ),
                 );
               },
@@ -618,7 +619,7 @@ unawaited(
                       SunfireBadge.server(),
                     ],
                   ),
-                  subtitle: const Text('Generate a .tachibk archive on Suwayomi host', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: const Text('Generate a .tachibk archive on Suwayomi host', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   onTap: _showCreateBackupDialog,
                 ),
                 ListTile(
@@ -635,17 +636,17 @@ unawaited(
                       SunfireBadge.server(),
                     ],
                   ),
-                  subtitle: const Text('Validate and restore a .tachibk file to Suwayomi', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: const Text('Validate and restore a .tachibk file to Suwayomi', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   onTap: _restoring ? null : () => unawaited(_pickValidateAndRestore()),
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                   leading: const Icon(Icons.restore_from_trash_rounded),
                   title: const Text('Restore from .tachibk File (Device)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                  subtitle: const Text('Parse a .tachibk backup on this device and import it into your server library', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: const Text('Parse a .tachibk backup on this device and import it into your server library', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   onTap: () => context.push('/settings/import-backup'),
                 ),
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const Divider(height: 1, color: SunfireColors.borderHairline),
                 const SectionTitle(title: 'Family Sharing (Read-only)'),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -661,7 +662,7 @@ unawaited(
                   ),
                   subtitle: const Text(
                     'Copy a read-only library JSON (no credentials) to the clipboard',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                   ),
                   onTap: () => unawaited(_exportFamilyShare()),
                 ),
@@ -671,11 +672,11 @@ unawaited(
                   title: const Text('Import share package', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                   subtitle: const Text(
                     'Paste or pick a share JSON — preview only, never writes to Isar',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                   ),
                   onTap: () => unawaited(_importFamilyShare()),
                 ),
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const Divider(height: 1, color: SunfireColors.borderHairline),
                 const SectionTitle(title: 'Automatic Backup Schedule (Server)'),
                 SettingsPropTile(
                   title: 'Backup location',
@@ -715,7 +716,7 @@ unawaited(
                       SunfireBadge.server(),
                     ],
                   ),
-                  subtitle: Text('Triggers at $_backupTime UTC', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: Text('Triggers at $_backupTime UTC', style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   onTap: () async {
                     final parts = _backupTime.split(':');
                     final hour = int.tryParse(parts.first) ?? 0;
@@ -746,7 +747,7 @@ unawaited(
                     unawaited(_update('backupTTL', v));
                   },
                 ),
-                const Divider(height: 1, color: Color(0x1AFFFFFF)),
+                const Divider(height: 1, color: SunfireColors.borderHairline),
                 const SectionTitle(title: 'Auto-Backup Content Inclusions (Server)'),
                 SettingsPropTile(
                   title: 'Include Categories',

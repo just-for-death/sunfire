@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'about_screen.dart';
 import 'advanced_settings_screen.dart';
@@ -460,13 +461,13 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
           Text(title, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
           for (final tag in tags)
             if (tag == 'SERVER')
-              _buildScopeTag('SERVER', Colors.tealAccent)
+              _buildScopeTag('SERVER', SunfireColors.sourceLocalJs)
             else if (tag == 'LOCAL')
-              _buildScopeTag('LOCAL', Colors.purpleAccent),
+              _buildScopeTag('LOCAL', SunfireColors.info),
         ],
       ),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-      trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: SunfireColors.contentTertiary),
       onTap: onTap,
     );
   }
@@ -484,10 +485,10 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: const TextStyle(fontSize: 16, color: Colors.white),
+                style: const TextStyle(fontSize: 16, color: SunfireColors.contentPrimary),
                 decoration: const InputDecoration(
                   hintText: 'Search settings, proxy, auth...',
-                  hintStyle: TextStyle(color: Colors.white38, fontSize: 15),
+                  hintStyle: TextStyle(color: SunfireColors.contentDisabled, fontSize: 15),
                   border: InputBorder.none,
                 ),
                 onChanged: (val) => setState(() => _searchQuery = val),
@@ -527,7 +528,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                           children: [
                             Icon(Icons.search_rounded, size: 48, color: primaryColor.withValues(alpha: 0.5)),
                             const SizedBox(height: 16),
-                            Text('Type to search settings...', style: TextStyle(color: Colors.grey.shade400, fontSize: 16)),
+                            Text('Type to search settings...', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 16)),
                           ],
                         ),
                       ),
@@ -678,11 +679,11 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.withAlpha(120)),
+            Icon(Icons.search_off_rounded, size: 48, color: SunfireColors.contentTertiary.withAlpha(120)),
             const SizedBox(height: 12),
             Text('No settings found for "$_searchQuery"', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 4),
-            const Text('Try searching for proxy, auth, download, or theme', style: TextStyle(color: Colors.grey, fontSize: 13)),
+            const Text('Try searching for proxy, auth, download, or theme', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 13)),
           ],
         ),
       );
@@ -715,7 +716,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
               ),
               SunfireBadge(
                 label: item.category.toUpperCase(),
-                color: Colors.white60,
+                color: SunfireColors.contentSecondary,
                 fontSize: 9.0,
                 fontWeight: FontWeight.bold,
               ),
@@ -723,11 +724,11 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
           ),
           subtitle: Text(
             item.subtitle,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
+            style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+          trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: SunfireColors.contentTertiary),
           onTap: () {
             final route = item.route;
             if (route != null) {

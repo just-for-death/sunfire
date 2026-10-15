@@ -5,6 +5,7 @@ import '../../core/engine/repo_manager.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -113,7 +114,7 @@ unawaited(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Enter a raw GitHub or web URL pointing to a MangaYomi index.json:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const Text('Enter a raw GitHub or web URL pointing to a MangaYomi index.json:', style: TextStyle(fontSize: 13, color: SunfireColors.contentTertiary)),
               const SizedBox(height: 12),
               TextField(
                 controller: _urlController,
@@ -133,7 +134,7 @@ unawaited(
                 _urlController.clear();
                 Navigator.pop(context);
               },
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              child: const Text('Cancel', style: TextStyle(color: SunfireColors.contentTertiary)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -161,7 +162,7 @@ unawaited(
                   }
                 }
               },
-              child: const Text('Add Repo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('Add Repo', style: TextStyle(color: SunfireColors.contentPrimary, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -340,7 +341,7 @@ unawaited(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                   leading: Icon(Icons.local_fire_department_rounded, color: primaryColor),
                   title: const Text(RepoManager.officialRepoTitle, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  subtitle: const Text('9 maintained sources (same as bundled extensions)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: const Text('9 maintained sources (same as bundled extensions)', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: TextButton(
                     onPressed: () => _addPreset(RepoManager.officialIndexUrl),
                     child: const Text('Add'),
@@ -351,7 +352,7 @@ unawaited(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                   leading: Icon(Icons.auto_awesome_rounded, color: primaryColor),
                   title: const Text(RepoManager.communityRepoTitle, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  subtitle: const Text('100+ public scrapers (MangaDex, ComicK, etc.)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: const Text('100+ public scrapers (MangaDex, ComicK, etc.)', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: TextButton(
                     onPressed: () => _addPreset(RepoManager.communityIndexUrl),
                     child: const Text('Add'),
@@ -365,7 +366,7 @@ unawaited(
                       ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
                       : Icon(Icons.cloud_sync_rounded, color: primaryColor),
                   title: const Text('Refresh Server Stores', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  subtitle: const Text('Re-download store indexes on Suwayomi', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  subtitle: const Text('Re-download store indexes on Suwayomi', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   trailing: TextButton(
                     onPressed: _showAddServerStoreDialog,
                     child: const Text('Add'),
@@ -375,7 +376,7 @@ unawaited(
                 if (!_serverStoresLoading && _serverStores.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Text('No server stores yet — add an index URL.', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                    child: Text('No server stores yet — add an index URL.', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 13)),
                   )
                 else
                   ..._serverStores.map((store) {
@@ -392,17 +393,17 @@ unawaited(
                           Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                           SunfireBadge.server(),
                           if (store.badgeLabel.isNotEmpty)
-                            Text(store.badgeLabel, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                            Text(store.badgeLabel, style: const TextStyle(fontSize: 11, color: SunfireColors.contentTertiary)),
                         ],
                       ),
                       subtitle: Text(
                         count != null ? '${store.indexUrl} · $count extensions' : store.indexUrl,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                       ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                        icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error, size: 20),
                         onPressed: () => unawaited(_removeServerStore(store)),
                       ),
                     );
@@ -417,7 +418,7 @@ unawaited(
                 title: const Text('Update Extensions Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                 subtitle: Text(
                   _lastRefreshText ?? 'Fetch indexes and install available updates from configured repos',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                 ),
                 onTap: _isRefreshing ? null : _refreshReposNow,
               ),
@@ -428,14 +429,14 @@ unawaited(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.extension_off_outlined, size: 48, color: Colors.grey.withAlpha(120)),
+                        Icon(Icons.extension_off_outlined, size: 48, color: SunfireColors.contentTertiary.withAlpha(120)),
                         const SizedBox(height: 12),
                         const Text('No custom repositories configured', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 6),
                         const Text(
                           'Add the official Sunfire index or a community MangaYomi index.json to discover and update scrapers.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                          style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
                         ),
                       ],
                     ),
@@ -463,9 +464,9 @@ unawaited(
                         SunfireBadge.local(),
                       ],
                     ),
-                    subtitle: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    subtitle: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                     trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                      icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error, size: 20),
                       onPressed: () async {
                         await _settings.removeCustomRepo(url);
                         if (context.mounted) {

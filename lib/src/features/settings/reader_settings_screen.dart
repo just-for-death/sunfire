@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../reader/double_page_layout.dart';
 import '../reader/tap_zones.dart';
 import 'widgets/section_title.dart';
@@ -51,7 +52,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
               final isSelected = opt == currentValue;
               return ListTile(
                 title: Text(opt),
-                trailing: isSelected ? const Icon(Icons.check_rounded, color: Colors.greenAccent) : null,
+                trailing: isSelected ? const Icon(Icons.check_rounded, color: SunfireColors.success) : null,
                 onTap: () {
                   onSelected(opt);
                   Navigator.pop(context);
@@ -68,11 +69,11 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
     final isSelected = (_settings.defaultAutoScrollSpeed - speed).abs() < 5.0;
     final primaryColor = Theme.of(context).colorScheme.primary;
     return ChoiceChip(
-      label: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : Colors.white70)),
+      label: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? SunfireColors.contentPrimary : SunfireColors.contentSecondary)),
       selected: isSelected,
       selectedColor: primaryColor.withValues(alpha: 0.35),
-      backgroundColor: const Color(0x1AFFFFFF),
-      side: BorderSide(color: isSelected ? primaryColor : Colors.white24, width: 0.8),
+      backgroundColor: SunfireColors.borderHairline,
+      side: BorderSide(color: isSelected ? primaryColor : SunfireColors.borderSubtle, width: 0.8),
       onSelected: (_) {
         unawaited(HapticFeedback.selectionClick());
         _settings.defaultAutoScrollSpeed = speed;
@@ -104,7 +105,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                     SunfireBadge.local(),
                   ],
                 ),
-                subtitle: Text(_settings.readingMode, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                subtitle: Text(_settings.readingMode, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                 onTap: () {
                   _showRadioDialog(
                     title: 'Default Reading Mode',
@@ -126,7 +127,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                     SunfireBadge.local(),
                   ],
                 ),
-                subtitle: Text(_settings.readerTheme, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                subtitle: Text(_settings.readerTheme, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                 onTap: () {
                   _showRadioDialog(
                     title: 'Background Theme',
@@ -148,7 +149,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                     SunfireBadge.local(),
                   ],
                 ),
-                subtitle: Text(_settings.colorFilter, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                subtitle: Text(_settings.colorFilter, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                 onTap: () {
                   _showRadioDialog(
                     title: 'Color Filter',
@@ -170,7 +171,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                     SunfireBadge.local(),
                   ],
                 ),
-                subtitle: Text(_settings.scaleType, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                subtitle: Text(_settings.scaleType, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                 onTap: () {
                   _showRadioDialog(
                     title: 'Default Image Scale',
@@ -194,7 +195,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                 ),
                 subtitle: Text(
                   _prefetchLabels[_settings.prefetchNextChapter] ?? 'Always',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                 ),
                 onTap: () {
                   _showRadioDialog(
@@ -209,7 +210,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                 },
               ),
 
-              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              const Divider(height: 1, color: SunfireColors.borderHairline),
 
               // ── 2. NAVIGATION & INTERACTION ──
               const SectionTitle(title: 'Navigation & Gestures'),
@@ -302,7 +303,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                   );
                 },
               ),
-              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              const Divider(height: 1, color: SunfireColors.borderHairline),
               const SectionTitle(title: 'Double-Page Spreads'),
               SettingsPropTile(
                 title: 'Display Mode',
@@ -374,7 +375,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                 onBoolChanged: (val) => _settings.keepScreenAwake = val,
               ),
 
-              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              const Divider(height: 1, color: SunfireColors.borderHairline),
 
               // ── 3. AUTO-SCROLL (WEBTOON / LONG STRIP) ──
               const SectionTitle(title: 'Auto-Scroll (Webtoon & Long Strip)'),
@@ -394,7 +395,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Quick Presets', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white70)),
+                        const Text('Quick Presets', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: SunfireColors.contentSecondary)),
                         Text(
                           '${_settings.defaultAutoScrollSpeed.round()} px/s',
                           style: TextStyle(
@@ -431,7 +432,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                   children: [
                     IconButton.filledTonal(
                       style: IconButton.styleFrom(
-                        backgroundColor: const Color(0x22FFFFFF),
+                        backgroundColor: SunfireColors.borderHairline,
                         minimumSize: const Size(36, 36),
                         padding: EdgeInsets.zero,
                       ),
@@ -455,7 +456,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                     ),
                     IconButton.filledTonal(
                       style: IconButton.styleFrom(
-                        backgroundColor: const Color(0x22FFFFFF),
+                        backgroundColor: SunfireColors.borderHairline,
                         minimumSize: const Size(36, 36),
                         padding: EdgeInsets.zero,
                       ),
@@ -590,7 +591,7 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
     final primaryColor = cs.primary;
     // Reader canvas is black in dark/OLED; Light uses scheme surface so the
     // preview stays readable (ISS-044).
-    final previewBg = cs.brightness == Brightness.dark ? Colors.black : cs.surface;
+    final previewBg = cs.brightness == Brightness.dark ? SunfireColors.surface0 : cs.surface;
     return Container(
       height: 120,
       clipBehavior: Clip.antiAlias,

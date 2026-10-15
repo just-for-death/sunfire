@@ -7,6 +7,7 @@ import '../../core/db/isar_service.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/metron/metron_models.dart';
 import '../../core/metron/metron_service.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import 'global_search_screen.dart';
 
 class MetronSeriesDetailScreen extends StatefulWidget {
@@ -98,7 +99,7 @@ unawaited(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  const Icon(Icons.link_rounded, color: Colors.blueAccent),
+                  const Icon(Icons.link_rounded, color: SunfireColors.trackerBlue),
                   const SizedBox(width: 8),
                   const Text('Link Metron to Library Comic', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const Spacer(),
@@ -127,7 +128,7 @@ unawaited(
                               errorBuilder: (_, __, ___) => Container(
                                 width: 40,
                                 height: 56,
-                                color: Colors.grey.shade800,
+                                color: SunfireColors.surface2,
                                 child: const Icon(Icons.book, size: 20),
                               ),
                             ),
@@ -135,13 +136,13 @@ unawaited(
                         : Container(
                             width: 40,
                             height: 56,
-                            decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(6)),
+                            decoration: BoxDecoration(color: SunfireColors.surface2, borderRadius: BorderRadius.circular(6)),
                             child: const Icon(Icons.book, size: 20),
                           ),
                     title: Text(m.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text('${m.sourceName} • ${m.chapterCount} chapters', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    subtitle: Text('${m.sourceName} • ${m.chapterCount} chapters', style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                     trailing: isAlreadyLinked
-                        ? const Icon(Icons.check_circle, color: Colors.greenAccent)
+                        ? const Icon(Icons.check_circle, color: SunfireColors.success)
                         : TextButton(
                             child: const Text('Link'),
                             onPressed: () async {
@@ -188,7 +189,7 @@ unawaited(
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Linked "${_series!.name}" to "${manga.title}"! Metadata enriched.'),
-          backgroundColor: Colors.green,
+          backgroundColor: SunfireColors.success,
         ),
       );
     }
@@ -214,11 +215,11 @@ unawaited(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+                        const Icon(Icons.error_outline, size: 48, color: SunfireColors.error),
                         const SizedBox(height: 12),
                         Text('Failed to load series details', style: theme.textTheme.titleMedium),
                         const SizedBox(height: 6),
-                        Text(_errorMessage!, style: const TextStyle(color: Colors.grey, fontSize: 12), textAlign: TextAlign.center),
+                        Text(_errorMessage!, style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 12), textAlign: TextAlign.center),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
                           icon: const Icon(Icons.refresh),
@@ -247,14 +248,14 @@ unawaited(
                                   errorBuilder: (_, __, ___) => Container(
                                     width: 110,
                                     height: 160,
-                                    color: Colors.grey.shade800,
+                                    color: SunfireColors.surface2,
                                     child: const Icon(Icons.book, size: 40),
                                   ),
                                 )
                               : Container(
                                   width: 110,
                                   height: 160,
-                                  color: Colors.grey.shade800,
+                                  color: SunfireColors.surface2,
                                   child: const Icon(Icons.book, size: 40),
                                 ),
                         ),
@@ -272,24 +273,24 @@ unawaited(
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: Colors.blueAccent.withValues(alpha: 0.15),
+                                    color: SunfireColors.trackerBlue.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
                                     series!.publisher!.name,
-                                    style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                                    style: const TextStyle(color: SunfireColors.trackerBlue, fontWeight: FontWeight.bold, fontSize: 12),
                                   ),
                                 ),
                               const SizedBox(height: 6),
                               Text(
                                 '${series?.yearBegan != null ? "Year: ${series!.yearBegan}" : ""} • ${series?.issueCount ?? _issues.length} Issues',
-                                style: const TextStyle(color: Colors.grey, fontSize: 13),
+                                style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
                               ),
                               if (series?.status != null) ...[
                                 const SizedBox(height: 4),
                                 Text(
                                   'Status: ${series!.status}',
-                                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                  style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 12),
                                 ),
                               ],
                             ],
@@ -347,7 +348,7 @@ unawaited(
                       const SizedBox(height: 6),
                       Text(
                         series.description!.trim(),
-                        style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.white70),
+                        style: const TextStyle(fontSize: 13, height: 1.4, color: SunfireColors.contentSecondary),
                       ),
                       const SizedBox(height: 16),
                     ],
@@ -382,7 +383,7 @@ unawaited(
                     if (_issues.isEmpty)
                       const Padding(
                         padding: EdgeInsets.all(16),
-                        child: Text('No issue details available for this series.', style: TextStyle(color: Colors.grey)),
+                        child: Text('No issue details available for this series.', style: TextStyle(color: SunfireColors.contentTertiary)),
                       )
                     else
                       ..._issues.map((issue) {
@@ -398,14 +399,14 @@ unawaited(
                                       width: 36,
                                       height: 50,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(width: 36, height: 50, color: Colors.grey.shade800),
+                                      errorBuilder: (_, __, ___) => Container(width: 36, height: 50, color: SunfireColors.surface2),
                                     ),
                                   )
-                                : Container(width: 36, height: 50, color: Colors.grey.shade800, child: const Icon(Icons.book, size: 16)),
+                                : Container(width: 36, height: 50, color: SunfireColors.surface2, child: const Icon(Icons.book, size: 16)),
                             title: Text(issue.issueName ?? 'Issue #${issue.number}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                             subtitle: Text(
                               issue.storeDate ?? issue.coverDate ?? 'Release date unknown',
-                              style: const TextStyle(color: Colors.grey, fontSize: 12),
+                              style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 12),
                             ),
                           ),
                         );

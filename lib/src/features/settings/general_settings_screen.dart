@@ -5,6 +5,7 @@ import '../../core/engine/quickjs_service.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_colors.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -54,7 +55,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
               final isSelected = opt == currentValue;
               return ListTile(
                 title: Text(opt),
-                trailing: isSelected ? const Icon(Icons.check_rounded, color: Colors.greenAccent) : null,
+                trailing: isSelected ? const Icon(Icons.check_rounded, color: SunfireColors.success) : null,
                 onTap: () {
                   onSelected(opt);
                   Navigator.pop(context);
@@ -92,7 +93,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
                 ),
                 subtitle: Text(
                   _codeToLanguageMap[_settings.appLocale] ?? _settings.appLocale,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                 ),
                 onTap: () {
                   _showRadioDialog(
@@ -117,7 +118,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
                     SunfireBadge.local(),
                   ],
                 ),
-                subtitle: Text(_settings.dateFormat, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                subtitle: Text(_settings.dateFormat, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                 onTap: () {
                   _showRadioDialog(
                     title: 'Date Format',
@@ -128,7 +129,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
                 },
               ),
 
-              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              const Divider(height: 1, color: SunfireColors.borderHairline),
 
               // ── 2. LAUNCH & NAVIGATION ──
               const SectionTitle(title: 'Launch & Navigation'),
@@ -144,7 +145,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
                     SunfireBadge.local(),
                   ],
                 ),
-                subtitle: Text(_settings.startScreen, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                subtitle: Text(_settings.startScreen, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                 onTap: () {
                   _showRadioDialog(
                     title: 'Default Start Screen',
@@ -163,7 +164,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
                 onBoolChanged: (val) => _settings.confirmExit = val,
               ),
 
-              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              const Divider(height: 1, color: SunfireColors.borderHairline),
 
               // ── 3. PRIVACY & SECURITY ──
               const SectionTitle(title: 'Privacy & Security'),
@@ -176,7 +177,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
                 onBoolChanged: (val) => _settings.incognitoMode = val,
               ),
 
-              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              const Divider(height: 1, color: SunfireColors.borderHairline),
 
               // ── 4. NETWORK & CONNECTION ──
               const SectionTitle(title: 'Network & Timeouts'),
@@ -192,7 +193,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
                     SunfireBadge.local(),
                   ],
                 ),
-                subtitle: Text('${_settings.networkTimeoutSeconds} seconds', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                subtitle: Text('${_settings.networkTimeoutSeconds} seconds', style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                 onTap: () {
                   _showRadioDialog(
                     title: 'Network Request Timeout',
@@ -206,13 +207,13 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
                 },
               ),
 
-              const Divider(height: 1, color: Color(0x1AFFFFFF)),
+              const Divider(height: 1, color: SunfireColors.borderHairline),
 
               // ── 5. CACHE MANAGEMENT ──
               const SectionTitle(title: 'Cache & Storage'),
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                leading: const Icon(Icons.delete_sweep_rounded, color: Colors.orangeAccent),
+                leading: const Icon(Icons.delete_sweep_rounded, color: SunfireColors.trackerAmber),
                 title: Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
                   spacing: 6,
@@ -222,7 +223,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
                     SunfireBadge.local(),
                   ],
                 ),
-                subtitle: const Text('Purge cached cover thumbnails and page images', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                subtitle: const Text('Purge cached cover thumbnails and page images', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                 onTap: () async {
                   await ImageCacheHelper.clearCache();
                   imageCache.clear();
@@ -236,7 +237,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
               ),
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                leading: const Icon(Icons.cleaning_services_rounded, color: Colors.amberAccent),
+                leading: const Icon(Icons.cleaning_services_rounded, color: SunfireColors.trackerAmber),
                 title: Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
                   spacing: 6,
@@ -246,7 +247,7 @@ class _GeneralSettingsScreenState extends State<GeneralSettingsScreen> {
                     SunfireBadge.local(),
                   ],
                 ),
-                subtitle: const Text('Reset in-memory extension headers and referrer caches', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                subtitle: const Text('Reset in-memory extension headers and referrer caches', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                 onTap: () {
                   QuickJsService.clearHeadersCache();
                   if (context.mounted) {
