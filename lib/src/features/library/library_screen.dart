@@ -1095,7 +1095,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 22),
+            ExcludeSemantics(child: Icon(icon, color: color, size: 22)),
             const SizedBox(height: 3),
             Text(
               label,
@@ -1728,7 +1728,7 @@ unawaited(
                         }),
                       ),
                       filled: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg), borderSide: BorderSide.none),
                     ),
                     onChanged: (val) => setState(() => _searchQuery = val),
                   )

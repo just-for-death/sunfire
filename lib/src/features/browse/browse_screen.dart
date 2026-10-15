@@ -969,7 +969,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
                   filled: true,
                   contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg), borderSide: BorderSide.none),
                 ),
                 onChanged: (val) => setState(() => _sourceSearchQuery = val),
               ),
@@ -1029,7 +1029,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: SunfireSpacing.sm),
               ChoiceChip(
-                avatar: const Icon(Icons.flash_on_rounded, size: 15, color: SunfireColors.sourceLocalJs),
+                avatar: const ExcludeSemantics(child: Icon(Icons.flash_on_rounded, size: 15, color: SunfireColors.sourceLocalJs)),
                 label: const Text('Local JS'),
                 selected: _selectedSourceFilter == 'Local JS',
                 selectedColor: SunfireColors.sourceLocalJsSelected,
@@ -1055,7 +1055,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: SunfireSpacing.sm),
               ChoiceChip(
-                avatar: const Icon(Icons.cloud_queue_rounded, size: 15, color: SunfireColors.sourceServer),
+                avatar: const ExcludeSemantics(child: Icon(Icons.cloud_queue_rounded, size: 15, color: SunfireColors.sourceServer)),
                 label: const Text('Server (Suwayomi)'),
                 selected: _selectedSourceFilter == 'Server',
                 selectedColor: SunfireColors.sourceServerSelected,
@@ -1081,7 +1081,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: SunfireSpacing.sm),
               ChoiceChip(
-                avatar: const Icon(Icons.push_pin_rounded, size: 15, color: SunfireColors.trackerAmber),
+                avatar: const ExcludeSemantics(child: Icon(Icons.push_pin_rounded, size: 15, color: SunfireColors.trackerAmber)),
                 label: const Text('Pinned'),
                 selected: _selectedSourceFilter == 'Pinned',
                 selectedColor: SunfireColors.sourcePinnedSelected,
@@ -1409,7 +1409,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               hintText: 'Search extensions...',
               prefixIcon: Icon(Icons.search_rounded, color: primaryColor),
               filled: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg), borderSide: BorderSide.none),
             ),
             onChanged: (val) => setState(() => _extensionSearchQuery = val),
           ),
@@ -1464,7 +1464,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     );
                   }),
                   ActionChip(
-                    avatar: const Icon(Icons.add_rounded, size: 18),
+                    avatar: const ExcludeSemantics(child: Icon(Icons.add_rounded, size: 18)),
                     label: const Text('Add Repo'),
                     backgroundColor: SunfireTheme.tileSurface(context),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill)),
@@ -1564,7 +1564,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: SunfireSpacing.sm),
               ActionChip(
-                avatar: const Icon(Icons.download_done_rounded, size: 16, color: SunfireColors.sourceLocalJs),
+                avatar: const ExcludeSemantics(child: Icon(Icons.download_done_rounded, size: 16, color: SunfireColors.sourceLocalJs)),
                 label: const Text('Install All', style: TextStyle(color: SunfireColors.sourceLocalJs, fontWeight: FontWeight.bold, fontSize: 12)),
                 backgroundColor: SunfireColors.sourceLocalJsContainer,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill), side: const BorderSide(color: SunfireColors.sourceLocalJs, width: 0.8)),
