@@ -25,7 +25,7 @@ class ReaderChapterSelectorSheet {
       backgroundColor: SunfireColors.surface1,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(SunfireRadius.sheet)),
       ),
       builder: (sheetContext) {
         return DraggableScrollableSheet(

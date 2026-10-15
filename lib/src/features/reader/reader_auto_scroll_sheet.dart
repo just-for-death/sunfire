@@ -17,7 +17,7 @@ required void Function(double speed) onSaveDefault,
   unawaited(showModalBottomSheet<void>(
     context: context,
     backgroundColor: SunfireColors.surface1,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(SunfireRadius.sheet))),
     builder: (sheetContext) {
       return StatefulBuilder(
         builder: (context, setSheetState) {

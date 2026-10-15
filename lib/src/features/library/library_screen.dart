@@ -640,7 +640,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     await showModalBottomSheet<void>(
       context: context,
       // UIS-ISS-012: theme surface (was hard-coded dark hex)
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(SunfireRadius.sheet))),
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (sheetBuilderContext, setSheetState) {
@@ -829,7 +829,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     await showModalBottomSheet<void>(
       context: context,
       // UIS-ISS-012: theme surface (was hard-coded dark hex)
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(SunfireRadius.sheet))),
       builder: (sheetCtx) {
         return SafeArea(
           child: Padding(
@@ -939,7 +939,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       context: context,
       builder: (ctx) => AlertDialog(
         // UIS-ISS-012: theme surface (was hard-coded dark hex)
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.dialog)),
         title: const DialogTitle(
           icon: Icons.delete_outline_rounded,
           iconColor: SunfireColors.error,
@@ -1119,7 +1119,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       context: context,
       // UIS-ISS-012: theme surface (was hard-coded dark hex)
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(SunfireRadius.sheet))),
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -1313,7 +1313,7 @@ unawaited(
       context: context,
       // UIS-ISS-012: theme surface (was hard-coded dark hex)
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(SunfireRadius.sheet))),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {

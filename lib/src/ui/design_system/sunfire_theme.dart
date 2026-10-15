@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/settings_service.dart';
 import 'tokens/sunfire_colors.dart';
+import 'tokens/sunfire_spacing.dart';
 import 'tokens/sunfire_typography.dart';
 
 /// Central theme management for Sunfire.
@@ -285,7 +286,7 @@ class SunfireTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(SunfireRadius.sheet)),
         ),
         showDragHandle: true,
       ),

@@ -1935,7 +1935,7 @@ unawaited(
 
             return AlertDialog(
               // UIS-ISS-012: theme surface (was hard-coded dark hex)
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.dialog)),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [

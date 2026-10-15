@@ -166,7 +166,7 @@ unawaited(
           builder: (dialogCtx, setDialogState) {
             return AlertDialog(
               // UIS-ISS-012: theme surface (was hard-coded dark hex)
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.dialog)),
               title: const DialogTitle(
                 icon: Icons.swap_horiz_rounded,
                 iconColor: SunfireColors.trackerBlue,
@@ -365,7 +365,7 @@ unawaited(
         canPop: false,
         child: AlertDialog(
           // UIS-ISS-012: theme surface (was hard-coded dark hex)
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.dialog)),
           content: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Row(

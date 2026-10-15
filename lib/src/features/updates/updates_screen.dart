@@ -1239,7 +1239,7 @@ unawaited(
     showModalBottomSheet<void>(
       context: context,
       // UIS-ISS-012: theme surface (was hard-coded dark hex)
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(SunfireRadius.sheet))),
       builder: (sheetContext) {
         return Padding(
           padding: const EdgeInsets.all(20.0),

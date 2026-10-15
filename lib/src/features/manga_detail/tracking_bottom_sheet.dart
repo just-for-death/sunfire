@@ -37,7 +37,7 @@ class TrackingBottomSheet extends StatefulWidget {
       isScrollControlled: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(SunfireRadius.sheet)),
       ),
       builder: (context) => TrackingBottomSheet(
         mangaServerId: mangaServerId,
@@ -491,7 +491,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
           builder: (dialogCtx, setDialogState) {
             return AlertDialog(
               backgroundColor: cs.surfaceContainerHigh,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.dialog)),
               title: Row(
                 children: [
                   Icon(Icons.track_changes_rounded, color: primaryColor, size: 22),

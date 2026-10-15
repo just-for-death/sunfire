@@ -76,7 +76,7 @@ class _AdvancedSettingsScreenState extends State<AdvancedSettingsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(SunfireRadius.sheet))),
       builder: (context) => const _LiveLogViewerSheet(),
     ));
   }

@@ -66,7 +66,7 @@ class ReaderSettingsSheet {
       backgroundColor: SunfireColors.surface2,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(SunfireRadius.sheet)),
       ),
       builder: (context) {
         return StatefulBuilder(
