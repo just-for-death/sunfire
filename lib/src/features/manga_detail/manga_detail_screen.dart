@@ -33,6 +33,7 @@ import '../../features/reader/chapter_number_utils.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/design_system/tokens/sunfire_spacing.dart';
+import '../../ui/design_system/tokens/sunfire_typography.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../browse/global_search_screen.dart';
 import '../browse/migrate_search_screen.dart';
@@ -1923,7 +1924,7 @@ unawaited(
                 const SizedBox(height: 20),
                 Text(
                   manga.title,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+                  style: SunfireTypography.withWeight(SunfireTypography.titleLarge, FontWeight.bold),
                 ),
                 const SizedBox(height: 6),
                 Wrap(

@@ -1732,7 +1732,7 @@ unawaited(
                     ),
                     onChanged: (val) => setState(() => _searchQuery = val),
                   )
-                : const Text('Library', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+                : Text('Library', style: SunfireTypography.withWeight(SunfireTypography.headlineMedium, FontWeight.bold)),
         actions: _isBatchMode
             ? null
             : [
@@ -2150,7 +2150,7 @@ unawaited(
                             manga.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: SunfireColors.contentPrimary, height: 1.25),
+                            style: SunfireTypography.withColor(SunfireTypography.mangaTitle, SunfireColors.contentPrimary),
                           ),
                         ),
                       ),
@@ -2206,7 +2206,7 @@ unawaited(
                           ),
                           child: Text(
                             langBadge,
-                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: SunfireColors.onTrackerAmber, letterSpacing: 0.5),
+                            style: SunfireTypography.withColor(SunfireTypography.languageBadge, SunfireColors.onTrackerAmber),
                           ),
                         ),
                       ),
