@@ -938,7 +938,7 @@ unawaited(
                     fontSize: 12,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(SunfireRadius.pill),
                     side: BorderSide(color: _activeFilter == 'PINNED' ? primaryColor : SunfireColors.borderDefault, width: 0.8),
                   ),
                   onSelected: (_) => setState(() => _activeFilter = 'PINNED'),
@@ -962,7 +962,7 @@ unawaited(
                     fontSize: 12,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(SunfireRadius.pill),
                     side: BorderSide(color: _activeFilter == 'ALL' ? primaryColor : SunfireColors.borderDefault, width: 0.8),
                   ),
                   onSelected: (_) => setState(() => _activeFilter = 'ALL'),
@@ -986,7 +986,7 @@ unawaited(
                     fontSize: 12,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(SunfireRadius.pill),
                     side: BorderSide(color: _activeFilter == 'HAS_RESULTS' ? primaryColor : SunfireColors.borderDefault, width: 0.8),
                   ),
                   onSelected: (_) => setState(() => _activeFilter = 'HAS_RESULTS'),

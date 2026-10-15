@@ -1443,7 +1443,7 @@ unawaited(
                           selectedColor: primaryColor,
                           backgroundColor: SunfireTheme.tileSurface(context),
                           labelStyle: TextStyle(color: isSel ? _cs.onPrimary : _cs.onSurfaceVariant, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill), side: BorderSide(color: isSel ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8)),
                           onSelected: (_) {
                             setState(() => _settings.libraryDisplayMode = mode);
                             setSheetState(() {});
@@ -1472,7 +1472,7 @@ unawaited(
                           selectedColor: primaryColor,
                           backgroundColor: SunfireTheme.tileSurface(context),
                           labelStyle: TextStyle(color: isSel ? _cs.onPrimary : _cs.onSurfaceVariant, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill), side: BorderSide(color: isSel ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8)),
                           onSelected: (_) {
                             setState(() => _settings.gridColumnCount = item['val'] as int);
                             setSheetState(() {});
@@ -1523,7 +1523,7 @@ unawaited(
                           selectedColor: primaryColor,
                           backgroundColor: SunfireTheme.tileSurface(context),
                           labelStyle: TextStyle(color: isSel ? _cs.onPrimary : _cs.onSurfaceVariant, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isSel ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill), side: BorderSide(color: isSel ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8)),
                           onSelected: (_) {
                             setState(() => _statusFilter = filter);
                             setSheetState(() {});
@@ -1825,7 +1825,7 @@ unawaited(
                     fontSize: 13,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(SunfireRadius.pill),
                     side: BorderSide(
                       color: isSelected ? primaryColor : SunfireTheme.tileBorder(context),
                       width: isSelected ? 1.2 : 0.8,
@@ -1945,7 +1945,7 @@ unawaited(
                                       fontSize: 12,
                                     ),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(SunfireRadius.pill),
                                       side: BorderSide(
                                         color: isSel ? primaryColor.withValues(alpha: 0.6) : SunfireTheme.tileBorder(context),
                                         width: 0.8,

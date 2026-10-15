@@ -1015,7 +1015,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   fontSize: 13,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(SunfireRadius.pill),
                   side: BorderSide(
                     color: _selectedSourceFilter == 'All' ? primaryColor : SunfireTheme.tileBorder(context),
                     width: _selectedSourceFilter == 'All' ? 1.2 : 0.8,
@@ -1041,7 +1041,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   fontSize: 13,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(SunfireRadius.pill),
                   side: BorderSide(
                     color: _selectedSourceFilter == 'Local JS' ? SunfireColors.sourceLocalJs : SunfireTheme.tileBorder(context),
                     width: _selectedSourceFilter == 'Local JS' ? 1.2 : 0.8,
@@ -1067,7 +1067,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   fontSize: 13,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(SunfireRadius.pill),
                   side: BorderSide(
                     color: _selectedSourceFilter == 'Server' ? SunfireColors.sourceServer : SunfireTheme.tileBorder(context),
                     width: _selectedSourceFilter == 'Server' ? 1.2 : 0.8,
@@ -1093,7 +1093,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   fontSize: 13,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(SunfireRadius.pill),
                   side: BorderSide(
                     color: _selectedSourceFilter == 'Pinned' ? SunfireColors.trackerAmber : SunfireTheme.tileBorder(context),
                     width: _selectedSourceFilter == 'Pinned' ? 1.2 : 0.8,
@@ -1433,7 +1433,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         color: (_selectedRepoUrl.isEmpty || _selectedRepoUrl == 'ALL') ? _cs.onPrimary : _cs.onSurfaceVariant,
                         fontWeight: (_selectedRepoUrl.isEmpty || _selectedRepoUrl == 'ALL') ? FontWeight.bold : FontWeight.normal,
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill)),
                       onSelected: (_) {
                         setState(() => _selectedRepoUrl = 'ALL');
                         unawaited(_fetchExtensions());
@@ -1454,7 +1454,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                           color: isSelected ? _cs.onPrimary : _cs.onSurfaceVariant,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill)),
                         onSelected: (_) {
                           setState(() => _selectedRepoUrl = repoUrl);
                           unawaited(_fetchExtensions());
@@ -1466,7 +1466,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     avatar: const Icon(Icons.add_rounded, size: 18),
                     label: const Text('Add Repo'),
                     backgroundColor: SunfireTheme.tileSurface(context),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill)),
                     onPressed: () => _showAddRepoDialog(),
                   ),
                 ],
@@ -1493,7 +1493,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   fontSize: 12,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(SunfireRadius.pill),
                   side: BorderSide(
                     color: _selectedExtensionFilter == 'All' ? primaryColor : SunfireTheme.tileBorder(context),
                     width: 0.8,
@@ -1513,7 +1513,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   fontSize: 12,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(SunfireRadius.pill),
                   side: BorderSide(
                     color: _selectedExtensionFilter == 'Local JS' ? SunfireColors.sourceLocalJs : SunfireTheme.tileBorder(context),
                     width: 0.8,
@@ -1533,7 +1533,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   fontSize: 12,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(SunfireRadius.pill),
                   side: BorderSide(
                     color: _selectedExtensionFilter == 'Server APK' ? SunfireColors.sourceServer : SunfireTheme.tileBorder(context),
                     width: 0.8,
@@ -1553,7 +1553,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   fontSize: 12,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(SunfireRadius.pill),
                   side: BorderSide(
                     color: _selectedExtensionFilter == 'Installed' ? primaryColor : SunfireTheme.tileBorder(context),
                     width: 0.8,
@@ -1566,7 +1566,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 avatar: const Icon(Icons.download_done_rounded, size: 16, color: SunfireColors.sourceLocalJs),
                 label: const Text('Install All', style: TextStyle(color: SunfireColors.sourceLocalJs, fontWeight: FontWeight.bold, fontSize: 12)),
                 backgroundColor: SunfireColors.sourceLocalJsContainer,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: SunfireColors.sourceLocalJs, width: 0.8)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill), side: const BorderSide(color: SunfireColors.sourceLocalJs, width: 0.8)),
                 onPressed: _installAllJsExtensions,
               ),
             ],

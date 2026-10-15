@@ -2160,7 +2160,7 @@ unawaited(
                             fontSize: 12,
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(SunfireRadius.pill),
                             side: BorderSide(
                               color: isSel ? primaryColor : SunfireTheme.tileBorder(context),
                               width: 0.8,
@@ -2687,7 +2687,7 @@ unawaited(
                             fontSize: 12,
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(SunfireRadius.pill),
                             side: BorderSide(
                               color: isSel ? primaryColor : SunfireTheme.tileBorder(context),
                               width: 0.8,
