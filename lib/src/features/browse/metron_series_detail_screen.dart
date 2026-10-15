@@ -130,7 +130,7 @@ unawaited(
                                 width: 40,
                                 height: 56,
                                 color: SunfireColors.surface2,
-                                child: const Icon(Icons.book, size: 20),
+                                child: const Icon(Icons.book, size: SunfireIconSize.md),
                               ),
                             ),
                           )
@@ -138,7 +138,7 @@ unawaited(
                             width: 40,
                             height: 56,
                             decoration: BoxDecoration(color: SunfireColors.surface2, borderRadius: BorderRadius.circular(6)),
-                            child: const Icon(Icons.book, size: 20),
+                            child: const Icon(Icons.book, size: SunfireIconSize.md),
                           ),
                     title: Text(m.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text('${m.sourceName} • ${m.chapterCount} chapters', style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
@@ -403,7 +403,7 @@ unawaited(
                                       errorBuilder: (_, __, ___) => Container(width: 36, height: 50, color: SunfireColors.surface2),
                                     ),
                                   )
-                                : Container(width: 36, height: 50, color: SunfireColors.surface2, child: const Icon(Icons.book, size: 16)),
+                                : Container(width: 36, height: 50, color: SunfireColors.surface2, child: const Icon(Icons.book, size: SunfireIconSize.sm)),
                             title: Text(issue.issueName ?? 'Issue #${issue.number}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                             subtitle: Text(
                               issue.storeDate ?? issue.coverDate ?? 'Release date unknown',

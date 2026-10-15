@@ -7,6 +7,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/design_system/tokens/sunfire_spacing.dart';
+import '../../ui/design_system/tokens/sunfire_typography.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'reading_heatmap.dart';
 
@@ -130,7 +131,7 @@ class _StatsScreenState extends State<StatsScreen> {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: isTablet ? 64.0 : kToolbarHeight,
-        title: const Text('Statistics', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        title: Text('Statistics', style: SunfireTypography.withWeight(SunfireTypography.titleLarge, FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () {
@@ -283,7 +284,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       children: (_sourceCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).map((e) {
                         return ListTile(
                           dense: true,
-                          leading: Icon(Icons.source_rounded, color: primaryColor, size: 20),
+                          leading: Icon(Icons.source_rounded, color: primaryColor, size: SunfireIconSize.md),
                           title: Text(e.key, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                           trailing: Text('${e.value} manga', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
                         );
@@ -308,9 +309,9 @@ class _StatsScreenState extends State<StatsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color, size: 24),
+            Icon(icon, color: color, size: SunfireIconSize.lg),
             const SizedBox(height: SunfireSpacing.md),
-            Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color, letterSpacing: -0.5)),
+            Text(value, style: SunfireTypography.withColor(SunfireTypography.withWeight(SunfireTypography.titleLarge, FontWeight.bold), color)),
             const SizedBox(height: SunfireSpacing.xs),
             Text(label, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],

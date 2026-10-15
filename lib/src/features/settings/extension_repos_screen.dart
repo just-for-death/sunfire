@@ -404,7 +404,7 @@ unawaited(
                         style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                       ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error, size: 20),
+                        icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error, size: SunfireIconSize.md),
                         onPressed: () => unawaited(_removeServerStore(store)),
                       ),
                     );
@@ -454,7 +454,7 @@ unawaited(
                         color: primaryColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(Icons.hub_rounded, color: primaryColor, size: 20),
+                      child: Icon(Icons.hub_rounded, color: primaryColor, size: SunfireIconSize.md),
                     ),
                     title: Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -467,7 +467,7 @@ unawaited(
                     ),
                     subtitle: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                     trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error, size: 20),
+                      icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.error, size: SunfireIconSize.md),
                       onPressed: () async {
                         await _settings.removeCustomRepo(url);
                         if (context.mounted) {

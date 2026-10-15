@@ -236,7 +236,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
               _customBaseUrl.isNotEmpty ? _customBaseUrl : (_defaultBaseUrl ?? 'Default'),
               style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
             ),
-            trailing: const Icon(Icons.edit_outlined, size: 20, color: SunfireColors.contentTertiary),
+            trailing: const Icon(Icons.edit_outlined, size: SunfireIconSize.md, color: SunfireColors.contentTertiary),
             onTap: _showEditBaseUrlDialog,
           ),
           Padding(

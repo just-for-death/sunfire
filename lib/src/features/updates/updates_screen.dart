@@ -26,6 +26,7 @@ import '../../main_shell.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/design_system/tokens/sunfire_spacing.dart';
+import '../../ui/design_system/tokens/sunfire_typography.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../../ui/widgets/library_update_progress_banner.dart';
 import 'updates_feed_grouping.dart';
@@ -1572,7 +1573,7 @@ unawaited(
             : Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Updates', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+            Text('Updates', style: SunfireTypography.withWeight(SunfireTypography.headlineMedium, FontWeight.bold)),
             if (_liveUpdateStatus != null && _liveUpdateStatus!.isNotEmpty)
               Text(
                 _liveUpdateStatus!,
@@ -1660,7 +1661,7 @@ unawaited(
                 value: 'clear_feed',
                 child: Row(
                   children: [
-                    Icon(Icons.clear_all_rounded, size: 20, color: SunfireColors.error),
+                    Icon(Icons.clear_all_rounded, size: SunfireIconSize.md, color: SunfireColors.error),
                     SizedBox(width: 10),
                     Text('Clear feed', style: TextStyle(color: SunfireColors.error)),
                   ],
@@ -1750,7 +1751,7 @@ unawaited(
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                                         ),
-                                        icon: Icon(Icons.refresh_rounded, color: _cs.onPrimary, size: 18),
+                                        icon: Icon(Icons.refresh_rounded, color: _cs.onPrimary, size: SunfireIconSize.std),
                                         label: Text('Check Now', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold)),
                                         onPressed: _checkServerForUpdates,
                                       )
@@ -1760,7 +1761,7 @@ unawaited(
                                           _unreadOnly = false;
                                           _searchQuery = '';
                                         }),
-                                        icon: const Icon(Icons.filter_alt_off_rounded, size: 18),
+                                        icon: const Icon(Icons.filter_alt_off_rounded, size: SunfireIconSize.std),
                                         label: const Text('Clear filters', style: TextStyle(fontWeight: FontWeight.bold)),
                                       ),
                                   ],

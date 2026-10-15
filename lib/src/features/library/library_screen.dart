@@ -653,7 +653,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.folder_open_rounded, color: primaryColor, size: 24),
+                        Icon(Icons.folder_open_rounded, color: primaryColor, size: SunfireIconSize.lg),
                         const SizedBox(width: 10),
                         Text(
                           'Categories (${_selectedMangaIds.length} selected)',
@@ -840,7 +840,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
               children: [
                 Row(
                   children: [
-                    Icon(Icons.download_rounded, color: primaryColor, size: 24),
+                    Icon(Icons.download_rounded, color: primaryColor, size: SunfireIconSize.lg),
                     const SizedBox(width: 10),
                     Text(
                       'Download ($selectedCount selected)',
@@ -1343,7 +1343,7 @@ unawaited(
                       children: [
                         const Text('Library View & Sort', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                         TextButton.icon(
-                          icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                          icon: const Icon(Icons.bookmark_add_outlined, size: SunfireIconSize.std),
                           label: const Text('Save Preset', style: TextStyle(fontSize: 12)),
                           onPressed: () async {
                             final nameCtrl = TextEditingController();
@@ -1593,7 +1593,7 @@ unawaited(
                       children: [
                         Text('SORT BY', style: SunfireTypography.withColor(SunfireTypography.sectionHeader, SunfireColors.contentTertiary)),
                         IconButton(
-                          icon: Icon(_isSortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: 20, color: primaryColor),
+                          icon: Icon(_isSortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: SunfireIconSize.md, color: primaryColor),
                           onPressed: () {
                             setState(() => _isSortAscending = !_isSortAscending);
                             setSheetState(() {});
@@ -1892,7 +1892,7 @@ unawaited(
                             ),
                             child: const Row(
                               children: [
-                                Icon(Icons.wifi_off_rounded, color: SunfireColors.trackerAmber, size: 16),
+                                Icon(Icons.wifi_off_rounded, color: SunfireColors.trackerAmber, size: SunfireIconSize.sm),
                                 SizedBox(width: 8),
                                 Text(
                                   'Offline — Showing cached library',
@@ -2161,7 +2161,7 @@ unawaited(
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle),
-                          child: Icon(Icons.check_rounded, size: 16, color: _cs.onPrimary),
+                          child: Icon(Icons.check_rounded, size: SunfireIconSize.sm, color: _cs.onPrimary),
                         ),
                       ),
                     if (_settings.showUnreadBadges && (manga.unreadCount ?? 0) > 0 && !isSelected)
@@ -2227,7 +2227,7 @@ unawaited(
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.download_done_rounded, size: 12, color: SunfireColors.onTrackerAmber),
+                          child: const Icon(Icons.download_done_rounded, size: SunfireIconSize.xs, color: SunfireColors.onTrackerAmber),
                         ),
                       ),
                     if (isCoverOnly && !isSelected)

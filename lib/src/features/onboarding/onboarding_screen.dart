@@ -20,6 +20,7 @@ import '../../core/sync/websocket_service.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/design_system/tokens/sunfire_spacing.dart';
+import '../../ui/design_system/tokens/sunfire_typography.dart';
 import '../shared/friendly_network_error.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -651,7 +652,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ],
                     ),
                   ),
-                  Icon(Icons.arrow_forward_ios_rounded, size: 16, color: cs.onSurfaceVariant),
+                  Icon(Icons.arrow_forward_ios_rounded, size: SunfireIconSize.sm, color: cs.onSurfaceVariant),
                 ],
               ),
             ),
@@ -702,7 +703,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ],
                     ),
                   ),
-                  Icon(Icons.arrow_forward_ios_rounded, size: 16, color: cs.onSurfaceVariant),
+                  Icon(Icons.arrow_forward_ios_rounded, size: SunfireIconSize.sm, color: cs.onSurfaceVariant),
                 ],
               ),
             ),
@@ -852,7 +853,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.shield_outlined, color: SunfireColors.trackerAmber, size: 20),
+                    Icon(Icons.shield_outlined, color: SunfireColors.trackerAmber, size: SunfireIconSize.md),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -1016,7 +1017,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   'Extension Repositories',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface),
+                  style: SunfireTypography.withColor(SunfireTypography.withWeight(SunfireTypography.titleLarge, FontWeight.bold), cs.onSurface),
                 ),
               ),
             ],
@@ -1084,7 +1085,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_rounded, color: SunfireColors.success, size: 20),
+                      const Icon(Icons.check_circle_rounded, color: SunfireColors.success, size: SunfireIconSize.md),
                       const SizedBox(width: SunfireSpacing.md),
                       Expanded(
                         child: Column(
@@ -1096,7 +1097,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 18, color: SunfireColors.contentTertiary),
+                        icon: const Icon(Icons.close_rounded, size: SunfireIconSize.std, color: SunfireColors.contentTertiary),
                         onPressed: () => _removeRepo(url),
                       ),
                     ],
@@ -1118,7 +1119,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.shield_outlined, color: SunfireColors.trackerAmber, size: 18),
+                      Icon(Icons.shield_outlined, color: SunfireColors.trackerAmber, size: SunfireIconSize.std),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1214,7 +1215,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                       ),
                       SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, color: cs.onSurface, size: 20),
+                      Icon(Icons.arrow_forward_rounded, color: cs.onSurface, size: SunfireIconSize.md),
                     ],
                   ),
                 ),
@@ -1244,14 +1245,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   color: primaryColor.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.sync_alt_rounded, color: primaryColor, size: 24),
+                child: Icon(Icons.sync_alt_rounded, color: primaryColor, size: SunfireIconSize.lg),
               ),
               const SizedBox(width: SunfireSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Replicating State', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                    Text('Replicating State', maxLines: 1, overflow: TextOverflow.ellipsis, style: SunfireTypography.withColor(SunfireTypography.withWeight(SunfireTypography.titleLarge, FontWeight.bold), cs.onSurface)),
                     Text('Building 100% offline local database', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
                   ],
                 ),
@@ -1323,7 +1324,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Row(
         children: [
           if (isCompleted)
-            const Icon(Icons.check_circle_rounded, color: SunfireColors.success, size: 24)
+            const Icon(Icons.check_circle_rounded, color: SunfireColors.success, size: SunfireIconSize.lg)
           else if (isActive)
             SizedBox(
               height: 20,
@@ -1331,7 +1332,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2.5),
             )
           else
-            const Icon(Icons.radio_button_unchecked_rounded, color: SunfireColors.contentTertiary, size: 24),
+            const Icon(Icons.radio_button_unchecked_rounded, color: SunfireColors.contentTertiary, size: SunfireIconSize.lg),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -1394,7 +1395,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.bolt_rounded, color: SunfireColors.trackerAmber, size: 20),
+                    Icon(Icons.bolt_rounded, color: SunfireColors.trackerAmber, size: SunfireIconSize.md),
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(

@@ -852,7 +852,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
             const SizedBox(height: SunfireSpacing.lg),
             Row(
               children: [
-                Icon(Icons.sync_alt_rounded, color: primaryColor, size: 24),
+                Icon(Icons.sync_alt_rounded, color: primaryColor, size: SunfireIconSize.lg),
                 const SizedBox(width: 10),
                 const Text('Manga Tracking', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               ],
@@ -943,10 +943,10 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                           width: 44,
                                           height: 56,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => Container(width: 44, height: 56, color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_rounded, size: 16)),
+                                          errorBuilder: (_, __, ___) => Container(width: 44, height: 56, color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_rounded, size: SunfireIconSize.sm)),
                                         ),
                                       )
-                                    : Container(width: 44, height: 56, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.image_rounded, size: 20)),
+                                    : Container(width: 44, height: 56, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.image_rounded, size: SunfireIconSize.md)),
                                 title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
                                 subtitle: Text('$totalCh Chapters • Score: ${res["score"] ?? "-"}', style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 11)),
                                 trailing: ElevatedButton(
@@ -1123,7 +1123,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.link_rounded, size: 12, color: SunfireColors.trackerBlue),
+                        const Icon(Icons.link_rounded, size: SunfireIconSize.xs, color: SunfireColors.trackerBlue),
                         const SizedBox(width: SunfireSpacing.xs),
                         Text(
                           'LINKED',
@@ -1169,7 +1169,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                 color: SunfireColors.contentPrimary,
                               ),
                             )
-                          : const Icon(Icons.cloud_upload_outlined, size: 18),
+                          : const Icon(Icons.cloud_upload_outlined, size: SunfireIconSize.std),
                       label: Text(
                         _isScrobbling ? 'Scrobbling...' : 'Scrobble All Read Chapters',
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -1185,7 +1185,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                     ),
-                    icon: const Icon(Icons.link_off_rounded, size: 18),
+                    icon: const Icon(Icons.link_off_rounded, size: SunfireIconSize.std),
                     label: const Text('Unlink', style: TextStyle(fontWeight: FontWeight.w600)),
                     onPressed: _unlinkMetron,
                   ),
@@ -1434,7 +1434,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               ),
               const SizedBox(height: SunfireSpacing.lg),
               ElevatedButton.icon(
-                icon: const Icon(Icons.settings_rounded, size: 18),
+                icon: const Icon(Icons.settings_rounded, size: SunfireIconSize.std),
                 label: const Text('Open Server Settings'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: SunfireColors.trackerAmber,
@@ -1628,7 +1628,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.check_circle_rounded, size: 12, color: SunfireColors.trackerGreen),
+                            const Icon(Icons.check_circle_rounded, size: SunfireIconSize.xs, color: SunfireColors.trackerGreen),
                             const SizedBox(width: SunfireSpacing.xs),
                             const Text(
                               'TRACKING',
@@ -1754,7 +1754,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                           elevation: 0,
                         ),
-                        icon: const Icon(Icons.search_rounded, size: 18),
+                        icon: const Icon(Icons.search_rounded, size: SunfireIconSize.std),
                         label: Text(
                           isLoggedIn ? 'Search & Bind' : 'Authorize Tracker',
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
@@ -1785,7 +1785,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.info_outline_rounded, color: primaryColor, size: 20),
+                          Icon(Icons.info_outline_rounded, color: primaryColor, size: SunfireIconSize.md),
                           const SizedBox(width: SunfireSpacing.md),
                           Expanded(
                             child: Text(
@@ -1811,7 +1811,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                           padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                           elevation: 0,
                         ),
-                        icon: const Icon(Icons.search_rounded, size: 18),
+                        icon: const Icon(Icons.search_rounded, size: SunfireIconSize.std),
                         label: const Text('Search & Bind', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                         onPressed: () {
                           _searchQuery = widget.mangaTitle;
@@ -1864,7 +1864,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.flag_rounded, size: 12, color: SunfireColors.trackerBlue),
+                  const Icon(Icons.flag_rounded, size: SunfireIconSize.xs, color: SunfireColors.trackerBlue),
                   const SizedBox(width: SunfireSpacing.xs),
                   Text(
                     _statusLabel(trackerId, currentStatus),
@@ -1884,7 +1884,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.menu_book_rounded, size: 12, color: SunfireColors.info),
+                  const Icon(Icons.menu_book_rounded, size: SunfireIconSize.xs, color: SunfireColors.info),
                   const SizedBox(width: SunfireSpacing.xs),
                   Text(
                     'Ch: $currentChapter / ${totalChapters > 0 ? totalChapters : "?"}',
@@ -1905,7 +1905,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.star_rounded, size: 12, color: SunfireColors.trackerAmber),
+                    const Icon(Icons.star_rounded, size: SunfireIconSize.xs, color: SunfireColors.trackerAmber),
                     const SizedBox(width: SunfireSpacing.xs),
                     Text(
                       'Score: ${score == score.roundToDouble() ? score.toInt() : score}',
@@ -1926,7 +1926,7 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.lock_outline_rounded, size: 12, color: SunfireColors.contentTertiary),
+                    const Icon(Icons.lock_outline_rounded, size: SunfireIconSize.xs, color: SunfireColors.contentTertiary),
                     const SizedBox(width: SunfireSpacing.xs),
                     const Text(
                       'Private',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/design_system/tokens/sunfire_spacing.dart';
+import '../../ui/design_system/tokens/sunfire_typography.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'source_configuration_screen.dart';
 
@@ -55,7 +56,7 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
           Center(
             child: Text(
               name,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: SunfireTypography.withWeight(SunfireTypography.titleLarge, FontWeight.bold),
             ),
           ),
           const SizedBox(height: SunfireSpacing.xs),

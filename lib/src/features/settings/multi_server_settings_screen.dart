@@ -236,7 +236,7 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.network_check_rounded, size: 20),
+                            icon: const Icon(Icons.network_check_rounded, size: SunfireIconSize.md),
                             tooltip: 'Test connection',
                             onPressed: () async {
                               final messenger = ScaffoldMessenger.of(context);
@@ -253,7 +253,7 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.info_outline_rounded, size: 20),
+                            icon: const Icon(Icons.info_outline_rounded, size: SunfireIconSize.md),
                             tooltip: 'Probe capabilities',
                             onPressed: () async {
                               final messenger = ScaffoldMessenger.of(context);

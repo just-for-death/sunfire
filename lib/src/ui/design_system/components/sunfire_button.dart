@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../tokens/sunfire_motion.dart';
+import '../tokens/sunfire_spacing.dart';
 
 /// Button variants.
 enum SunfireButtonVariant { primary, secondary, tertiary, ghost }
@@ -87,7 +88,7 @@ class SunfireButton extends StatelessWidget {
             : FilledButton.icon(
                 onPressed: onPressed,
                 style: style,
-                icon: Icon(icon, size: 18),
+                icon: Icon(icon, size: SunfireIconSize.std),
                 label: Text(label));
         break;
       case SunfireButtonVariant.secondary:
@@ -97,7 +98,7 @@ class SunfireButton extends StatelessWidget {
             : OutlinedButton.icon(
                 onPressed: onPressed,
                 style: style,
-                icon: Icon(icon, size: 18),
+                icon: Icon(icon, size: SunfireIconSize.std),
                 label: Text(label));
         break;
       case SunfireButtonVariant.tertiary:
@@ -107,7 +108,7 @@ class SunfireButton extends StatelessWidget {
             : TextButton.icon(
                 onPressed: onPressed,
                 style: style,
-                icon: Icon(icon, size: 18),
+                icon: Icon(icon, size: SunfireIconSize.std),
                 label: Text(label));
         break;
       case SunfireButtonVariant.ghost:
@@ -125,7 +126,7 @@ class SunfireButton extends StatelessWidget {
                   foregroundColor: WidgetStatePropertyAll(
                       Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
-                icon: Icon(icon, size: 18),
+                icon: Icon(icon, size: SunfireIconSize.std),
                 label: Text(label));
         break;
     }

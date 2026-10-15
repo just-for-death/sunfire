@@ -63,3 +63,26 @@ class SunfireRadius {
   /// Chip / pill radius.
   static const double pill = full;
 }
+
+/// Icon size scale (matches the sizes already dominant in the app).
+class SunfireIconSize {
+  SunfireIconSize._();
+
+  /// Tiny / badge icons.
+  static const double xs = 12;
+
+  /// Small / chip avatar icons.
+  static const double sm = 16;
+
+  /// Standard list / button icons (most common).
+  static const double std = 18;
+
+  /// Medium / section icons.
+  static const double md = 20;
+
+  /// Large / header icons.
+  static const double lg = 24;
+
+  /// Hero / empty-state icons.
+  static const double xl = 32;
+}

@@ -123,7 +123,7 @@ class _Section extends StatelessWidget {
         Row(
           children: [
             if (chapter.isDownloaded) ...[
-              Icon(Icons.check_circle_rounded, color: labelColor, size: 18),
+              Icon(Icons.check_circle_rounded, color: labelColor, size: SunfireIconSize.std),
               const SizedBox(width: SunfireSpacing.sm),
             ],
             Expanded(

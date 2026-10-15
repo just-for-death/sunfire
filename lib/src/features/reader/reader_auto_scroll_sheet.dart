@@ -80,7 +80,7 @@ required void Function(double speed) onSaveDefault,
                           minimumSize: const Size(36, 36),
                           padding: EdgeInsets.zero,
                         ),
-                        icon: const Icon(Icons.remove_rounded, size: 18),
+                        icon: const Icon(Icons.remove_rounded, size: SunfireIconSize.std),
                         onPressed: () {
                           unawaited(HapticFeedback.selectionClick());
                           setSpeed((getSpeed() - 10.0).clamp(10.0, 2000.0));
@@ -107,7 +107,7 @@ required void Function(double speed) onSaveDefault,
                           minimumSize: const Size(36, 36),
                           padding: EdgeInsets.zero,
                         ),
-                        icon: const Icon(Icons.add_rounded, size: 18),
+                        icon: const Icon(Icons.add_rounded, size: SunfireIconSize.std),
                         onPressed: () {
                           unawaited(HapticFeedback.selectionClick());
                           setSpeed((getSpeed() + 10.0).clamp(10.0, 2000.0));

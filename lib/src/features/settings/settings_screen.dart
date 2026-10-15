@@ -456,7 +456,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
   }) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Icon(icon, size: 24),
+      leading: Icon(icon, size: SunfireIconSize.lg),
       title: Row(
         children: [
           Text(title, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
@@ -468,7 +468,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
         ],
       ),
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
-      trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: SunfireColors.contentTertiary),
+      trailing: const Icon(Icons.chevron_right_rounded, size: SunfireIconSize.md, color: SunfireColors.contentTertiary),
       onTap: onTap,
     );
   }
@@ -729,7 +729,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: SunfireColors.contentTertiary),
+          trailing: const Icon(Icons.chevron_right_rounded, size: SunfireIconSize.md, color: SunfireColors.contentTertiary),
           onTap: () {
             final route = item.route;
             if (route != null) {

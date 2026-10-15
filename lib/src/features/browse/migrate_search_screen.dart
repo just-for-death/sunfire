@@ -892,7 +892,7 @@ unawaited(
               children: [
                 if (_searchController.text.isNotEmpty)
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 20),
+                    icon: const Icon(Icons.close_rounded, size: SunfireIconSize.md),
                     onPressed: () {
                       _searchController.clear();
                       setState(() {});

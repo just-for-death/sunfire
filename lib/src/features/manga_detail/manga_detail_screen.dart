@@ -1739,7 +1739,7 @@ unawaited(
                 const SizedBox(height: SunfireSpacing.lg),
                 FilledButton.icon(
                   onPressed: () => context.canPop() ? context.pop() : context.go('/library'),
-                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  icon: const Icon(Icons.arrow_back_rounded, size: SunfireIconSize.std),
                   label: const Text('Back to library'),
                 ),
               ],
@@ -1965,7 +1965,7 @@ unawaited(
                         ),
                         onPressed: _toggleInLibrary,
                         onLongPress: manga.inLibrary ? _showCategoryPickerDialog : null,
-                        icon: Icon(manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: 18),
+                        icon: Icon(manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: SunfireIconSize.std),
                         label: Text(
                           manga.inLibrary ? 'IN LIBRARY' : 'ADD TO LIBRARY',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
@@ -1982,7 +1982,7 @@ unawaited(
                           padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                         ),
                         onPressed: () => TrackingBottomSheet.show(context, widget.mangaServerId, manga.title),
-                        icon: const Icon(Icons.sync_alt_rounded, size: 18),
+                        icon: const Icon(Icons.sync_alt_rounded, size: SunfireIconSize.std),
                         label: const Text('TRACKING', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                     ),
@@ -2037,7 +2037,7 @@ unawaited(
                         );
                       }),
                       ActionChip(
-                        avatar: const Icon(Icons.sell_outlined, size: 16),
+                        avatar: const Icon(Icons.sell_outlined, size: SunfireIconSize.sm),
                         label: const Text('Tags'),
                         onPressed: _showTagEditor,
                       ),
@@ -2049,7 +2049,7 @@ unawaited(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
                       onPressed: _showTagEditor,
-                      icon: const Icon(Icons.sell_outlined, size: 18),
+                      icon: const Icon(Icons.sell_outlined, size: SunfireIconSize.std),
                       label: const Text('Add tags'),
                     ),
                   ),
@@ -2125,10 +2125,10 @@ unawaited(
                     decoration: InputDecoration(
                       hintText: 'Search chapters (e.g. 10 or Prologue)...',
                       hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                      prefixIcon: Icon(Icons.search_rounded, color: primaryColor, size: 20),
+                      prefixIcon: Icon(Icons.search_rounded, color: primaryColor, size: SunfireIconSize.md),
                       suffixIcon: _chapterSearch.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.clear_rounded, size: 18),
+                              icon: const Icon(Icons.clear_rounded, size: SunfireIconSize.std),
                               onPressed: () => setState(() => _chapterSearch = ''),
                             )
                           : null,
@@ -2461,7 +2461,7 @@ unawaited(
                         ),
                         onPressed: _toggleInLibrary,
                         onLongPress: manga.inLibrary ? _showCategoryPickerDialog : null,
-                        icon: Icon(manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: 20),
+                        icon: Icon(manga.inLibrary ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: SunfireIconSize.md),
                         label: Text(
                           manga.inLibrary ? 'IN LIBRARY' : 'ADD TO LIBRARY',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
@@ -2478,7 +2478,7 @@ unawaited(
                           padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                         ),
                         onPressed: () => TrackingBottomSheet.show(context, widget.mangaServerId, manga.title),
-                        icon: const Icon(Icons.sync_alt_rounded, size: 20),
+                        icon: const Icon(Icons.sync_alt_rounded, size: SunfireIconSize.md),
                         label: const Text('TRACKING', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       ),
                     ),
@@ -2510,7 +2510,7 @@ unawaited(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
                         onPressed: _continueReading,
-                        icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: 24),
+                        icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: SunfireIconSize.lg),
                         label: Text(
                           hasReadAny ? 'Continue Reading' : 'Start Reading',
                           style: TextStyle(color: cs.onSurface, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: -0.2),
@@ -2548,7 +2548,7 @@ unawaited(
                         );
                       }),
                       ActionChip(
-                        avatar: const Icon(Icons.sell_outlined, size: 16),
+                        avatar: const Icon(Icons.sell_outlined, size: SunfireIconSize.sm),
                         label: const Text('Tags'),
                         onPressed: _showTagEditor,
                       ),
@@ -2560,7 +2560,7 @@ unawaited(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
                       onPressed: _showTagEditor,
-                      icon: const Icon(Icons.sell_outlined, size: 18),
+                      icon: const Icon(Icons.sell_outlined, size: SunfireIconSize.std),
                       label: const Text('Add tags'),
                     ),
                   ),
@@ -2654,10 +2654,10 @@ unawaited(
                     decoration: InputDecoration(
                       hintText: 'Search chapters (e.g. 10 or Prologue)...',
                       hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                      prefixIcon: Icon(Icons.search_rounded, color: primaryColor, size: 20),
+                      prefixIcon: Icon(Icons.search_rounded, color: primaryColor, size: SunfireIconSize.md),
                       suffixIcon: _chapterSearch.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.clear_rounded, size: 18),
+                              icon: const Icon(Icons.clear_rounded, size: SunfireIconSize.std),
                               onPressed: () => setState(() => _chapterSearch = ''),
                             )
                           : null,
@@ -2780,7 +2780,7 @@ unawaited(
                     },
                   )
                 : ch.isBookmarked
-                    ? const Icon(Icons.bookmark_rounded, color: SunfireColors.trackerAmber, size: 18)
+                    ? const Icon(Icons.bookmark_rounded, color: SunfireColors.trackerAmber, size: SunfireIconSize.std)
                     : null,
             title: Text(
               ch.name.trim().isNotEmpty
@@ -2833,13 +2833,17 @@ unawaited(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (DownloadManagerService.instance.isChapterDownloadedLocally(targetChId))
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(right: 2.0),
-                    child: Icon(Icons.phone_android_rounded, color: SunfireColors.success, size: 16),
+                    child: Semantics(
+                      label: 'Downloaded on this device',
+                      child: Icon(Icons.phone_android_rounded, color: SunfireColors.success, size: SunfireIconSize.sm),
+                    ),
                   )
                 else if (!_isLocalSource)
                   IconButton(
-                    icon: const Icon(Icons.download_rounded, color: SunfireColors.contentTertiary, size: 18),
+                    icon: const Icon(Icons.download_rounded, color: SunfireColors.contentTertiary, size: SunfireIconSize.std),
+                    tooltip: 'Download chapter',
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     visualDensity: VisualDensity.compact,
@@ -2856,21 +2860,31 @@ unawaited(
                     },
                   ),
                 if ((ch.serverId > 0 && DownloadManagerService.instance.isChapterDownloadedOnServer(ch.serverId)) || ch.isDownloaded)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(right: 2.0),
-                    child: Icon(Icons.cloud_done_rounded, color: SunfireColors.trackerBlue, size: 16),
+                    child: Semantics(
+                      label: 'Downloaded on server',
+                      child: Icon(Icons.cloud_done_rounded, color: SunfireColors.trackerBlue, size: SunfireIconSize.sm),
+                    ),
                   ),
                 IconButton(
-                  icon: const Icon(Icons.more_vert_rounded, color: SunfireColors.contentTertiary, size: 18),
+                  icon: const Icon(Icons.more_vert_rounded, color: SunfireColors.contentTertiary, size: SunfireIconSize.std),
+                  tooltip: 'Chapter options',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   visualDensity: VisualDensity.compact,
                   onPressed: () => _showSingleChapterOptions(ch),
                 ),
                 if (ch.isRead)
-                  const Icon(Icons.check_circle_rounded, color: SunfireColors.contentTertiary, size: 18)
+                  Semantics(
+                    label: 'Read',
+                    child: Icon(Icons.check_circle_rounded, color: SunfireColors.contentTertiary, size: SunfireIconSize.std),
+                  )
                 else
-                  Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 22),
+                  Semantics(
+                    label: 'Unread',
+                    child: Icon(Icons.play_circle_fill_rounded, color: primaryColor, size: 22),
+                  ),
               ],
             ),
           ),

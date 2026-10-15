@@ -14,6 +14,7 @@ import '../../ui/design_system/components/components.dart'
     show SunfireCard;
 import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/design_system/tokens/sunfire_spacing.dart';
+import '../../ui/design_system/tokens/sunfire_typography.dart';
 
 /// Duplicate review screen for reviewing and merging duplicates.
 class DuplicateReviewScreen extends StatefulWidget {
@@ -343,7 +344,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
       padding: const EdgeInsets.only(bottom: 6, left: 16),
       child: Row(
         children: [
-          Icon(Icons.content_copy_rounded, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          Icon(Icons.content_copy_rounded, size: SunfireIconSize.sm, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(width: SunfireSpacing.sm),
           Expanded(
             child: Column(
@@ -380,7 +381,7 @@ class _SummaryTile extends StatelessWidget {
       children: [
         Icon(icon, color: color, size: 28),
         const SizedBox(height: SunfireSpacing.xs),
-        Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+        Text(value, style: SunfireTypography.withWeight(SunfireTypography.titleLarge, FontWeight.bold)),
         Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ],
     );

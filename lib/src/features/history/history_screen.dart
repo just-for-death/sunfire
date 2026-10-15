@@ -16,6 +16,7 @@ import '../../ui/design_system/components/sunfire_chip.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/design_system/tokens/sunfire_spacing.dart';
+import '../../ui/design_system/tokens/sunfire_typography.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 
 /// S6.7: timeline filter for the History screen.
@@ -306,7 +307,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: isTablet ? 64.0 : kToolbarHeight,
-        title: const Text('History', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+        title: Text('History', style: SunfireTypography.withWeight(SunfireTypography.headlineMedium, FontWeight.bold)),
         actions: [
           if (_historyItems.isNotEmpty)
             IconButton(

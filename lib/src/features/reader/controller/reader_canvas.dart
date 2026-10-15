@@ -510,7 +510,7 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
             ),
             const SizedBox(height: SunfireSpacing.sm),
             OutlinedButton.icon(
-              icon: const Icon(Icons.refresh_rounded, size: 18),
+              icon: const Icon(Icons.refresh_rounded, size: SunfireIconSize.std),
               label: const Text('Retry'),
               onPressed: () => widget.onImageRecovered?.call(url, index),
             ),
@@ -584,7 +584,7 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline_rounded, color: primaryColor, size: 20),
+                      Icon(Icons.info_outline_rounded, color: primaryColor, size: SunfireIconSize.md),
                       const SizedBox(width: 14),
                       const Expanded(
                         child: Text(
@@ -623,7 +623,7 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
         Row(
           children: [
             if (chapter.isDownloaded) ...[
-              Icon(Icons.check_circle_rounded, color: labelColor, size: 18),
+              Icon(Icons.check_circle_rounded, color: labelColor, size: SunfireIconSize.std),
               const SizedBox(width: SunfireSpacing.sm),
             ],
             Expanded(

@@ -361,7 +361,7 @@ class _AboutScreenState extends State<AboutScreen> {
           Center(
             child: OutlinedButton.icon(
               onPressed: _copyDiagnostics,
-              icon: const Icon(Icons.copy_rounded, size: 18),
+              icon: const Icon(Icons.copy_rounded, size: SunfireIconSize.std),
               label: const Text('Copy diagnostics'),
             ),
           ),
@@ -502,7 +502,7 @@ class _AboutScreenState extends State<AboutScreen> {
       children: [
         ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-          leading: Icon(Icons.system_update_alt_rounded, size: 24, color: primary),
+          leading: Icon(Icons.system_update_alt_rounded, size: SunfireIconSize.lg, color: primary),
           title: const Text('Check for updates', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
           subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
           trailing: trailing,
@@ -516,7 +516,7 @@ class _AboutScreenState extends State<AboutScreen> {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: _openReleases,
-                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                icon: const Icon(Icons.open_in_new_rounded, size: SunfireIconSize.std),
                 label: Text('View v${release?.version} on GitHub'),
               ),
             ),
@@ -592,13 +592,13 @@ class _AboutScreenState extends State<AboutScreen> {
         ),
         ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-          leading: Icon(Icons.description_rounded, size: 24, color: primary),
+          leading: Icon(Icons.description_rounded, size: SunfireIconSize.lg, color: primary),
           title: const Text('Open source licenses', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
           subtitle: const Text(
             'Every third-party package and its license',
             style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
           ),
-          trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: SunfireColors.contentTertiary),
+          trailing: const Icon(Icons.chevron_right_rounded, size: SunfireIconSize.md, color: SunfireColors.contentTertiary),
           onTap: _showLicenses,
         ),
       ],
@@ -664,7 +664,7 @@ class _LinkTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      leading: Icon(icon, size: 24, color: Theme.of(context).colorScheme.primary),
+      leading: Icon(icon, size: SunfireIconSize.lg, color: Theme.of(context).colorScheme.primary),
       title: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
       subtitle: Text(
         url,
@@ -672,7 +672,7 @@ class _LinkTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(fontSize: 11, color: SunfireColors.contentTertiary),
       ),
-      trailing: const Icon(Icons.open_in_new_rounded, size: 16, color: SunfireColors.contentTertiary),
+      trailing: const Icon(Icons.open_in_new_rounded, size: SunfireIconSize.sm, color: SunfireColors.contentTertiary),
       onTap: () => onTap(url),
     );
   }

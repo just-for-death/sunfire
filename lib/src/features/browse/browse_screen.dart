@@ -873,7 +873,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   });
                   unawaited(_fetchServerSources());
                 },
-                icon: const Icon(Icons.refresh_rounded, size: 18),
+                icon: const Icon(Icons.refresh_rounded, size: SunfireIconSize.std),
                 label: const Text('Retry'),
               ),
             ],
@@ -1170,7 +1170,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       unawaited(_fetchServerSources());
                       unawaited(_fetchExtensions());
                     },
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    icon: const Icon(Icons.refresh_rounded, size: SunfireIconSize.std),
                     label: const Text('Refresh Sources'),
                   ),
                 ],
@@ -1304,7 +1304,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                           child: Text('Latest', style: TextStyle(color: _cs.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w600)),
                         ),
                       ),
-                    Icon(Icons.chevron_right_rounded, color: _cs.onSurfaceVariant.withValues(alpha: 0.6), size: 20),
+                    Icon(Icons.chevron_right_rounded, color: _cs.onSurfaceVariant.withValues(alpha: 0.6), size: SunfireIconSize.md),
                   ],
                 ),
               ],
@@ -1464,7 +1464,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     );
                   }),
                   ActionChip(
-                    avatar: const ExcludeSemantics(child: Icon(Icons.add_rounded, size: 18)),
+                    avatar: const ExcludeSemantics(child: Icon(Icons.add_rounded, size: SunfireIconSize.std)),
                     label: const Text('Add Repo'),
                     backgroundColor: SunfireTheme.tileSurface(context),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill)),
@@ -1564,7 +1564,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: SunfireSpacing.sm),
               ActionChip(
-                avatar: const ExcludeSemantics(child: Icon(Icons.download_done_rounded, size: 16, color: SunfireColors.sourceLocalJs)),
+                avatar: const ExcludeSemantics(child: Icon(Icons.download_done_rounded, size: SunfireIconSize.sm, color: SunfireColors.sourceLocalJs)),
                 label: const Text('Install All', style: TextStyle(color: SunfireColors.sourceLocalJs, fontWeight: FontWeight.bold, fontSize: 12)),
                 backgroundColor: SunfireColors.sourceLocalJsContainer,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill), side: const BorderSide(color: SunfireColors.sourceLocalJs, width: 0.8)),
@@ -1716,20 +1716,20 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                 if (hasUpdate) ...[
                                   IconButton(
                                     visualDensity: VisualDensity.compact,
-                                    icon: const Icon(Icons.system_update_alt_rounded, color: SunfireColors.trackerAmber, size: 20),
+                                    icon: const Icon(Icons.system_update_alt_rounded, color: SunfireColors.trackerAmber, size: SunfireIconSize.md),
                                     tooltip: 'Update to v$version',
                                     onPressed: () => _toggleExtensionInstallation(ext, isUpdate: true),
                                   ),
                                 ],
                                 IconButton(
                                   visualDensity: VisualDensity.compact,
-                                  icon: const Icon(Icons.settings_outlined, color: SunfireColors.contentTertiary, size: 18),
+                                  icon: const Icon(Icons.settings_outlined, color: SunfireColors.contentTertiary, size: SunfireIconSize.std),
                                   tooltip: 'Settings',
                                   onPressed: () => _showExtensionSettingsDialog(ext),
                                 ),
                                 IconButton(
                                   visualDensity: VisualDensity.compact,
-                                  icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.destructive, size: 18),
+                                  icon: const Icon(Icons.delete_outline_rounded, color: SunfireColors.destructive, size: SunfireIconSize.std),
                                   tooltip: 'Uninstall',
                                   onPressed: () => _toggleExtensionInstallation(ext),
                                 ),
@@ -1845,7 +1845,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               children: [
                 IconButton(
                   tooltip: _migrateSortByCount ? 'Sort alphabetically' : 'Sort by count',
-                  icon: Icon(_migrateSortByCount ? Icons.sort_rounded : Icons.sort_by_alpha_rounded, color: primaryColor, size: 20),
+                  icon: Icon(_migrateSortByCount ? Icons.sort_rounded : Icons.sort_by_alpha_rounded, color: primaryColor, size: SunfireIconSize.md),
                   onPressed: () => setState(() => _migrateSortByCount = !_migrateSortByCount),
                 ),
               ],
@@ -2073,7 +2073,7 @@ unawaited(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
-              icon: Icon(Icons.bug_report_rounded, color: _cs.onPrimary, size: 18),
+              icon: Icon(Icons.bug_report_rounded, color: _cs.onPrimary, size: SunfireIconSize.std),
               label: Text('Report Issue', style: TextStyle(color: _cs.onPrimary, fontWeight: FontWeight.bold)),
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(

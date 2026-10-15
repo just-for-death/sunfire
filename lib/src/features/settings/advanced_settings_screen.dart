@@ -387,10 +387,10 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
             onChanged: (val) => setState(() => _searchQuery = val.trim()),
             decoration: InputDecoration(
               hintText: 'Filter logs by text or category...',
-              prefixIcon: Icon(Icons.search_rounded, color: primaryColor, size: 20),
+              prefixIcon: Icon(Icons.search_rounded, color: primaryColor, size: SunfireIconSize.md),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 18),
+                      icon: const Icon(Icons.close_rounded, size: SunfireIconSize.std),
                       onPressed: () {
                         _searchController.clear();
                         setState(() => _searchQuery = '');

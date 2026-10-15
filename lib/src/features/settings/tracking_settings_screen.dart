@@ -135,7 +135,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.auto_stories, size: 20, color: SunfireColors.trackerBlue),
+                const Icon(Icons.auto_stories, size: SunfireIconSize.md, color: SunfireColors.trackerBlue),
                 const SizedBox(width: SunfireSpacing.sm),
                 Text(
                   'WESTERN COMICS (METRON.CLOUD)',
@@ -172,7 +172,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.cloud_sync, size: 20, color: SunfireColors.trackerAmber),
+                const Icon(Icons.cloud_sync, size: SunfireIconSize.md, color: SunfireColors.trackerAmber),
                 const SizedBox(width: SunfireSpacing.sm),
                 Text(
                   'MANGA TRACKERS (SERVER-SIDE)',
@@ -273,7 +273,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                   SunfireBadge(
                     label: 'ACTIVE',
                     color: SunfireColors.trackerGreen,
-                    icon: const Icon(Icons.check_circle_rounded, size: 12),
+                    icon: const Icon(Icons.check_circle_rounded, size: SunfireIconSize.xs),
                   ),
               ],
             ),
@@ -368,7 +368,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2, color: SunfireColors.contentPrimary),
                         )
-                      : Icon(isConfigured ? Icons.check_circle_outline : Icons.save_rounded, size: 18),
+                      : Icon(isConfigured ? Icons.check_circle_outline : Icons.save_rounded, size: SunfireIconSize.std),
                   label: Text(
                     _isVerifying
                         ? 'Verifying...'
@@ -380,7 +380,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                 ),
                 const SizedBox(width: SunfireSpacing.sm),
                 TextButton.icon(
-                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  icon: const Icon(Icons.open_in_new_rounded, size: SunfireIconSize.std),
                   label: const Text('Get Token'),
                   onPressed: () => launchUrlString(
                     'https://metron.cloud/account/',
@@ -390,7 +390,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                 const Spacer(),
                 if (isConfigured)
                   TextButton.icon(
-                    icon: const Icon(Icons.logout_rounded, size: 18),
+                    icon: const Icon(Icons.logout_rounded, size: SunfireIconSize.std),
                     label: const Text('Disconnect', style: TextStyle(fontSize: 13)),
                     style: TextButton.styleFrom(
                       foregroundColor: SunfireColors.destructive,
@@ -473,7 +473,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, size: 16, color: isLow ? SunfireColors.destructive : color),
+              Icon(icon, size: SunfireIconSize.sm, color: isLow ? SunfireColors.destructive : color),
               const SizedBox(width: SunfireSpacing.sm),
               Text(
                 label,
@@ -544,7 +544,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             ),
             const SizedBox(height: SunfireSpacing.lg),
             ElevatedButton.icon(
-              icon: const Icon(Icons.settings_rounded, size: 18),
+              icon: const Icon(Icons.settings_rounded, size: SunfireIconSize.std),
               label: const Text('Open Server Settings'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: SunfireColors.trackerAmber,

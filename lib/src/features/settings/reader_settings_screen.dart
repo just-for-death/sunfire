@@ -437,7 +437,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                         minimumSize: const Size(36, 36),
                         padding: EdgeInsets.zero,
                       ),
-                      icon: const Icon(Icons.remove_rounded, size: 18),
+                      icon: const Icon(Icons.remove_rounded, size: SunfireIconSize.std),
                       tooltip: '-10 px/s',
                       onPressed: () {
                         unawaited(HapticFeedback.selectionClick());
@@ -461,7 +461,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                         minimumSize: const Size(36, 36),
                         padding: EdgeInsets.zero,
                       ),
-                      icon: const Icon(Icons.add_rounded, size: 18),
+                      icon: const Icon(Icons.add_rounded, size: SunfireIconSize.std),
                       tooltip: '+10 px/s',
                       onPressed: () {
                         unawaited(HapticFeedback.selectionClick());
@@ -627,7 +627,7 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.auto_stories_rounded, size: 16, color: primaryColor),
+                      Icon(Icons.auto_stories_rounded, size: SunfireIconSize.sm, color: primaryColor),
                       const SizedBox(width: SunfireSpacing.sm),
                       Text(
                         'Webtoon Panel ${(index ~/ 3) + 1}',
@@ -662,7 +662,7 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.play_circle_fill_rounded, size: 12, color: primaryColor),
+                  Icon(Icons.play_circle_fill_rounded, size: SunfireIconSize.xs, color: primaryColor),
                   const SizedBox(width: SunfireSpacing.xs),
                   Text(
                     'LIVE PREVIEW: ${widget.speed.round()} px/s',

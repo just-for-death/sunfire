@@ -822,7 +822,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 ),
               ),
               IconButton(
-                icon: Icon(Icons.view_sidebar_rounded, color: _cs.onSurfaceVariant, size: 20),
+                icon: Icon(Icons.view_sidebar_rounded, color: _cs.onSurfaceVariant, size: SunfireIconSize.md),
                 tooltip: 'Collapse sidebar',
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
@@ -1024,7 +1024,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   ),
                 )
               else
-                Icon(Icons.chevron_right_rounded, color: _cs.onSurfaceVariant.withValues(alpha: 0.6), size: 18),
+                Icon(Icons.chevron_right_rounded, color: _cs.onSurfaceVariant.withValues(alpha: 0.6), size: SunfireIconSize.std),
             ],
           ),
         ),

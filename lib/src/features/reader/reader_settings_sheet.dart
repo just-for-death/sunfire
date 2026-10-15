@@ -109,12 +109,12 @@ class ReaderSettingsSheet {
                           ButtonSegment(
                             value: ReaderSettingsScope.manga,
                             label: Text('This series'),
-                            icon: Icon(Icons.menu_book_rounded, size: 16),
+                            icon: Icon(Icons.menu_book_rounded, size: SunfireIconSize.sm),
                           ),
                           ButtonSegment(
                             value: ReaderSettingsScope.global,
                             label: Text('All'),
-                            icon: Icon(Icons.public_rounded, size: 16),
+                            icon: Icon(Icons.public_rounded, size: SunfireIconSize.sm),
                           ),
                         ],
                         selected: {model.scope},

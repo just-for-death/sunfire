@@ -683,7 +683,7 @@ unawaited(
                                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                       ),
-                                      icon: const Icon(Icons.bug_report_rounded, color: SunfireColors.contentPrimary, size: 18),
+                                      icon: const Icon(Icons.bug_report_rounded, color: SunfireColors.contentPrimary, size: SunfireIconSize.std),
                                       label: const Text('Report Issue', style: TextStyle(color: SunfireColors.contentPrimary, fontWeight: FontWeight.bold)),
                                       onPressed: () {
                                         ScaffoldMessenger.of(context).showSnackBar(

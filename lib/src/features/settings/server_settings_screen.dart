@@ -595,7 +595,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     'Pending mutations, errors, and other devices',
                     style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                   ),
-                  trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: SunfireColors.contentTertiary),
+                  trailing: const Icon(Icons.chevron_right_rounded, size: SunfireIconSize.md, color: SunfireColors.contentTertiary),
                   onTap: () => context.push('/settings/sync-health'),
                 ),
                 const Divider(height: 1),
@@ -613,7 +613,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: SunfireColors.trackerAmber, size: 20),
+                          Icon(Icons.warning_amber_rounded, color: SunfireColors.trackerAmber, size: SunfireIconSize.md),
                           SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -677,7 +677,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     },
                     style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                   ),
-                  trailing: const Icon(Icons.edit_outlined, size: 18, color: SunfireColors.contentTertiary),
+                  trailing: const Icon(Icons.edit_outlined, size: SunfireIconSize.std, color: SunfireColors.contentTertiary),
                   onTap: _showClientCredentialsDialog,
                 ),
                 ListTile(
@@ -711,7 +711,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   leading: const Icon(Icons.web_rounded),
                   title: const Text('Open WebUI', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                   subtitle: const Text('Launch Suwayomi web dashboard in external browser', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary)),
-                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: SunfireIconSize.std),
                   onTap: _openWebUI,
                 ),
 

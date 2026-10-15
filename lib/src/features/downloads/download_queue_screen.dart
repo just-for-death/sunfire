@@ -10,6 +10,7 @@ import '../../core/sync/websocket_service.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_spacing.dart';
+import '../../ui/design_system/tokens/sunfire_typography.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 
 class DownloadQueueScreen extends StatefulWidget {
@@ -113,7 +114,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: isTablet ? 64.0 : kToolbarHeight,
-        title: const Text('Download Manager', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        title: Text('Download Manager', style: SunfireTypography.withWeight(SunfireTypography.titleLarge, FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () {

@@ -170,7 +170,7 @@ class _AppearanceSettingsScreenState extends State<AppearanceSettingsScreen> {
                                 : null,
                           ),
                           child: isSelected
-                              ? const Icon(Icons.check_rounded, color: SunfireColors.contentPrimary, size: 24)
+                              ? const Icon(Icons.check_rounded, color: SunfireColors.contentPrimary, size: SunfireIconSize.lg)
                               : null,
                         ),
                       ),

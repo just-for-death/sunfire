@@ -240,7 +240,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
+          Icon(icon, size: SunfireIconSize.sm, color: color),
           const SizedBox(width: 6),
           Text(
             entityType.toUpperCase(),
@@ -410,7 +410,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.merge_type_rounded, size: 16),
+                    icon: const Icon(Icons.merge_type_rounded, size: SunfireIconSize.sm),
                     label: const Text('Merge'),
                     onPressed: () => onChanged(ConflictResolution.merge),
                     style: OutlinedButton.styleFrom(
@@ -556,7 +556,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.tonalIcon(
-              icon: const Icon(Icons.done_all_rounded, size: 18),
+              icon: const Icon(Icons.done_all_rounded, size: SunfireIconSize.std),
               label: const Text('Apply strategy to all'),
               onPressed: () => widget.onResolveAll(_batchStrategy),
             ),
@@ -576,7 +576,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
       label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16),
+          Icon(icon, size: SunfireIconSize.sm),
           const SizedBox(width: 6),
           Text(label),
         ],
@@ -594,7 +594,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
             : Theme.of(context).colorScheme.onSurface,
       ),
       avatar: isSelected
-          ? Icon(Icons.check_rounded, size: 16, color: Theme.of(context).colorScheme.onPrimaryContainer)
+          ? Icon(Icons.check_rounded, size: SunfireIconSize.sm, color: Theme.of(context).colorScheme.onPrimaryContainer)
           : null,
     );
   }
@@ -621,7 +621,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
           ),
           const SizedBox(width: SunfireSpacing.md),
           FilledButton.icon(
-            icon: const Icon(Icons.check_rounded, size: 18),
+            icon: const Icon(Icons.check_rounded, size: SunfireIconSize.std),
             label: const Text('Apply Resolutions'),
             onPressed: () {
               widget.onResolve(conflict, Map.from(_fieldResolutions));

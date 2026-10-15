@@ -253,8 +253,8 @@ unawaited(
       ),
       controlAffinity: ListTileControlAffinity.leading,
       secondary: ready
-          ? const Icon(Icons.check_circle_outline, size: 18, color: SunfireColors.success)
-          : const Icon(Icons.error_outline, size: 18, color: SunfireColors.error),
+          ? const Icon(Icons.check_circle_outline, size: SunfireIconSize.std, color: SunfireColors.success)
+          : const Icon(Icons.error_outline, size: SunfireIconSize.std, color: SunfireColors.error),
     );
   }
 }

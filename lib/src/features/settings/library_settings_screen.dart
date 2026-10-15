@@ -869,7 +869,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                                   SizedBox(
                                     width: double.infinity,
                                     child: FilledButton.tonalIcon(
-                                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                                      icon: const Icon(Icons.refresh_rounded, size: SunfireIconSize.std),
                                       label: const Text('Check for New Chapters Now'),
                                       onPressed: () async {
                                         final count = await LibraryUpdateService.instance.checkForNewChapters(isManual: true);
@@ -1108,7 +1108,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.edit_outlined, size: 20),
+                                icon: const Icon(Icons.edit_outlined, size: SunfireIconSize.md),
                                 tooltip: 'Rename',
                                 onPressed: () => _showRenameCategoryDialog(cat),
                               ),
