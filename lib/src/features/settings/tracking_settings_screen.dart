@@ -9,6 +9,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../shared/friendly_network_error.dart';
 
 class TrackingSettingsScreen extends StatefulWidget {
@@ -127,7 +128,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
         title: const Text('Tracking & Scrobbling'),
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.lg),
         children: [
           // ── METRON (WESTERN COMICS) ──────────────────────────
           Padding(
@@ -135,7 +136,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             child: Row(
               children: [
                 const Icon(Icons.auto_stories, size: 20, color: SunfireColors.trackerBlue),
-                const SizedBox(width: 8),
+                const SizedBox(width: SunfireSpacing.sm),
                 Text(
                   'WESTERN COMICS (METRON.CLOUD)',
                   style: theme.textTheme.labelMedium?.copyWith(
@@ -164,7 +165,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
 
           // ── MANGA TRACKERS (SUWAYOMI SERVER) ──────────────────
           Padding(
@@ -172,7 +173,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             child: Row(
               children: [
                 const Icon(Icons.cloud_sync, size: 20, color: SunfireColors.trackerAmber),
-                const SizedBox(width: 8),
+                const SizedBox(width: SunfireSpacing.sm),
                 Text(
                   'MANGA TRACKERS (SERVER-SIDE)',
                   style: theme.textTheme.labelMedium?.copyWith(
@@ -230,7 +231,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                     size: 28,
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: SunfireSpacing.lg),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,7 +278,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               ],
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
 
             // Token input section
             if (!isConfigured) ...[
@@ -285,7 +286,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                 'Enter your Metron API token to enable automatic scrobbling of western comics.',
                 style: theme.textTheme.bodySmall?.copyWith(color: SunfireColors.contentTertiary),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: SunfireSpacing.md),
             ],
 
             TextField(
@@ -327,7 +328,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             ),
 
             if (_verificationMessage != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: SunfireSpacing.sm),
               Row(
                 children: [
                   Icon(
@@ -349,7 +350,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               ),
             ],
 
-            const SizedBox(height: 12),
+            const SizedBox(height: SunfireSpacing.md),
 
             // Action buttons
             Row(
@@ -377,7 +378,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                   ),
                   onPressed: isConfigured || !_isVerifying ? _verifyAndSaveToken : null,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: SunfireSpacing.sm),
                 TextButton.icon(
                   icon: const Icon(Icons.open_in_new_rounded, size: 18),
                   label: const Text('Get Token'),
@@ -425,7 +426,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
           'Rate Limit Quota',
           style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: SunfireSpacing.sm),
         _buildRateLimitTile(
           theme,
           label: 'Burst (1 min)',
@@ -434,7 +435,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
           icon: Icons.flash_on_rounded,
           color: SunfireColors.unreadDot,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: SunfireSpacing.sm),
         _buildRateLimitTile(
           theme,
           label: 'Daily Sustained',
@@ -473,7 +474,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
           Row(
             children: [
               Icon(icon, size: 16, color: isLow ? SunfireColors.destructive : color),
-              const SizedBox(width: 8),
+              const SizedBox(width: SunfireSpacing.sm),
               Text(
                 label,
                 style: TextStyle(
@@ -501,7 +502,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             minHeight: 4,
             borderRadius: BorderRadius.circular(2),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: SunfireSpacing.xs),
           Text(
             isLow ? '⚠️ Quota running low' : 'Quota healthy',
             style: TextStyle(
@@ -529,19 +530,19 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               size: 48,
               color: SunfireColors.contentDisabled,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: SunfireSpacing.md),
             Text(
               'No Server Trackers Found',
               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: SunfireSpacing.sm),
             Text(
               'Connect a Suwayomi server in Settings → Server to track manga via AniList, MyAnimeList, or Kitsu. Once connected and authorized, your trackers will appear here.',
               style: theme.textTheme.bodySmall?.copyWith(color: SunfireColors.contentTertiary),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
             ElevatedButton.icon(
               icon: const Icon(Icons.settings_rounded, size: 18),
               label: const Text('Open Server Settings'),
@@ -630,7 +631,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                 ),
               ],
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: SunfireSpacing.lg),
             // Tracker info
             Expanded(
               child: Column(
@@ -692,7 +693,7 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.check_circle_rounded, size: 14, color: SunfireColors.trackerGreen),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: SunfireSpacing.xs),
                     Text(
                       'Active',
                       style: TextStyle(

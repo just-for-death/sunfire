@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'source_configuration_screen.dart';
 
@@ -50,21 +51,21 @@ class _ExtensionDetailsScreenState extends State<ExtensionDetailsScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           Center(
             child: Text(
               name,
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: SunfireSpacing.xs),
           Center(
             child: Text(
               pkgName,
               style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: SunfireSpacing.xl),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,

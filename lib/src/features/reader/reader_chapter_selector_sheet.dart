@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/db/models/chapter.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import 'reader_chapter_navigation.dart';
 
 /// Modal chapter list for navigating siblings from the reader HUD.
@@ -78,7 +79,7 @@ class ReaderChapterSelectorSheet {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: SunfireSpacing.md),
                   Expanded(
                     child: ListView.builder(
                       controller: scrollController,

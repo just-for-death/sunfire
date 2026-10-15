@@ -17,6 +17,7 @@ import '../../ui/design_system/components/components.dart'
         showSunfireConfirmDialog,
         showSunfireSheet;
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/widgets/dialog_controllers.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -90,7 +91,7 @@ class _MultiServerSettingsScreenState extends State<MultiServerSettingsScreen> {
                     hintText: 'Bearer token or API key',
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: SunfireSpacing.sm),
                 DropdownButtonFormField<ServerType>(
                   initialValue: type,
                   decoration: const InputDecoration(labelText: 'Type'),

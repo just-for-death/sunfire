@@ -13,6 +13,7 @@ import '../../core/library/duplicate_detection_service.dart'
 import '../../ui/design_system/components/components.dart'
     show SunfireCard;
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 
 /// Duplicate review screen for reviewing and merging duplicates.
 class DuplicateReviewScreen extends StatefulWidget {
@@ -123,7 +124,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
               onPressed: _selectedGroups.isEmpty ? _mergeAll : _mergeSelected,
               style: TextButton.styleFrom(foregroundColor: cs.onPrimaryContainer),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: SunfireSpacing.sm),
             if (_selectedGroups.isNotEmpty)
               TextButton(
                 onPressed: () => setState(() => _selectedGroups.clear()),
@@ -148,7 +149,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const CircularProgressIndicator(),
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
             Text('Scanning library for duplicates...',
                 style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
@@ -162,7 +163,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const CircularProgressIndicator(),
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
             Text('Merging duplicates...',
                 style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
@@ -177,10 +178,10 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
           children: [
             Icon(Icons.find_replace_rounded,
                 size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
             Text('No scan results',
                 style: TextStyle(fontSize: 18, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 8),
+            const SizedBox(height: SunfireSpacing.sm),
             FilledButton.icon(
               icon: const Icon(Icons.search_rounded),
               label: const Text('Start Scan'),
@@ -199,13 +200,13 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
           children: [
             Icon(Icons.check_circle_rounded,
                 size: 64, color: SunfireColors.success),
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
             Text('No duplicates found!',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
+            const SizedBox(height: SunfireSpacing.sm),
             Text('Scanned ${result.totalMangaScanned} manga in ${result.scanDuration.inMilliseconds}ms',
                 style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
             FilledButton.icon(
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Rescan'),
@@ -306,7 +307,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: SunfireSpacing.md),
                       Wrap(
                         spacing: 6,
                         runSpacing: 4,
@@ -323,7 +324,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: SunfireSpacing.md),
                       // Duplicate list
                       ...group.duplicates.map<Widget>((Manga d) => _buildDuplicateItem(d, context)),
                     ],
@@ -343,7 +344,7 @@ class _DuplicateReviewScreenState extends State<DuplicateReviewScreen> {
       child: Row(
         children: [
           Icon(Icons.content_copy_rounded, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          const SizedBox(width: 8),
+          const SizedBox(width: SunfireSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,7 +379,7 @@ class _SummaryTile extends StatelessWidget {
     return Column(
       children: [
         Icon(icon, color: color, size: 28),
-        const SizedBox(height: 4),
+        const SizedBox(height: SunfireSpacing.xs),
         Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
         Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ],

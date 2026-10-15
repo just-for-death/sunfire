@@ -19,6 +19,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../shared/friendly_network_error.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -578,7 +579,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             child: Icon(Icons.wb_sunny_rounded, size: 68, color: primaryColor),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: SunfireSpacing.xl),
           Text(
             'Sunfire',
             style: TextStyle(
@@ -588,7 +589,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: cs.onSurface,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           Text(
             'The Local-First Manga Reader',
             style: TextStyle(
@@ -597,7 +598,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: cs.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           const Text(
             'High-performance on-device reading engine with full offline support, QuickJS scrapers, and optional Suwayomi cloud sync.',
             textAlign: TextAlign.center,
@@ -633,7 +634,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     child: Icon(Icons.bolt_rounded, color: primaryColor, size: 28),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: SunfireSpacing.lg),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -684,7 +685,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     child: const Icon(Icons.cloud_sync_rounded, color: SunfireColors.sourceServer, size: 28),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: SunfireSpacing.lg),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -722,7 +723,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 24),
+          const SizedBox(height: SunfireSpacing.xl),
           Row(
             children: [
               IconButton(
@@ -732,7 +733,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   curve: Curves.easeInOut,
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: SunfireSpacing.xs),
               Icon(Icons.cloud_sync_rounded, color: primaryColor, size: 26),
               const SizedBox(width: 10),
               Expanded(
@@ -745,12 +746,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           const Text(
             'Enter your Suwayomi server address to import your library, chapters, and history.',
             style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: SunfireSpacing.xl),
           TextField(
             controller: _serverUrlController,
             style: TextStyle(color: cs.onSurface),
@@ -767,7 +768,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 18),
           Text('Authentication', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: cs.onSurfaceVariant)),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           SegmentedButton<ServerAuthType>(
             segments: const [
               ButtonSegment(value: ServerAuthType.none, label: Text('None')),
@@ -780,7 +781,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               visualDensity: VisualDensity.compact,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: SunfireSpacing.md),
           if (_authType == ServerAuthType.basic) ...[
             TextField(
               controller: _serverUsernameController,
@@ -837,7 +838,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           // FlareSolverr Proxy (Optional)
           Container(
             padding: const EdgeInsets.all(14),
@@ -863,7 +864,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: SunfireSpacing.xs),
                 const Text(
                   'Bypasses Cloudflare Turnstile challenges for protected sources and extensions.',
                   style: TextStyle(fontSize: 11.5, color: SunfireColors.contentTertiary),
@@ -902,7 +903,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           if (_connectionStatus != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -917,7 +918,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     color: _connectionSuccess ? SunfireColors.success : SunfireColors.error,
                     size: 18,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: SunfireSpacing.sm),
                   Expanded(
                     child: Text(
                       _connectionStatus!,
@@ -931,7 +932,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ],
               ),
             ),
-          const SizedBox(height: 24),
+          const SizedBox(height: SunfireSpacing.xl),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
@@ -943,7 +944,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ? SizedBox(height: 22, width: 22, child: CircularProgressIndicator(color: cs.onSurface, strokeWidth: 2.5))
                 : Text('Connect & Import Server', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onPrimary)),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: SunfireSpacing.md),
           TextButton(
             onPressed: _startStandaloneSetup,
             child: Center(
@@ -1005,7 +1006,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Expanded(
             child: ListView(
               children: [
-          const SizedBox(height: 12),
+          const SizedBox(height: SunfireSpacing.md),
           Row(
             children: [
               Icon(Icons.extension_rounded, color: primaryColor, size: 28),
@@ -1020,12 +1021,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           const Text(
             'Add the official Sunfire catalog for updates, and optionally a community MangaYomi index for extra sources:',
             style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           if (!_containsRepo(RepoManager.officialIndexUrl))
             _buildPresetRepoCard(
               primaryColor: primaryColor,
@@ -1058,7 +1059,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: SunfireSpacing.sm),
               IconButton(
                 style: IconButton.styleFrom(
                   backgroundColor: primaryColor,
@@ -1069,12 +1070,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           ...List.generate(_userRepoUrls.length, (idx) {
                 final url = _userRepoUrls[idx];
                 final label = RepoManager.deriveRepoTitle(url);
                 return Container(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  margin: const EdgeInsets.symmetric(vertical: SunfireSpacing.xs),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surfaceContainerHigh,
@@ -1084,7 +1085,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: Row(
                     children: [
                       const Icon(Icons.check_circle_rounded, color: SunfireColors.success, size: 20),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: SunfireSpacing.md),
                       Expanded(
                         child: Column(
                            crossAxisAlignment: CrossAxisAlignment.start,
@@ -1102,7 +1103,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 );
           }),
-          const SizedBox(height: 12),
+          const SizedBox(height: SunfireSpacing.md),
           if (_isStandalone) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -1129,9 +1130,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: SunfireSpacing.xs),
                   const Text('For Cloudflare protected sources and extensions', style: TextStyle(fontSize: 11, color: SunfireColors.contentTertiary)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                   TextField(
                     controller: _flareSolverrController,
                     style: TextStyle(color: cs.onSurface, fontSize: 12),
@@ -1153,7 +1154,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                   ),
                   if (_flareSolverrStatus != null) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: SunfireSpacing.xs),
                     Text(
                       _flareSolverrStatus!,
                       style: TextStyle(
@@ -1169,7 +1170,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: SunfireSpacing.md),
           Row(
             children: [
               OutlinedButton(
@@ -1186,7 +1187,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 },
                 child: Icon(Icons.arrow_back_rounded, color: cs.onSurface),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: SunfireSpacing.md),
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -1245,7 +1246,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
                 child: Icon(Icons.sync_alt_rounded, color: primaryColor, size: 24),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: SunfireSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1265,7 +1266,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             isCompleted: _hydrationStep > 1,
             primaryColor: primaryColor,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           _buildHydrationStatusItem(
             title: 'Library & Chapters Hydrated',
             subtitle: _libraryStatusText,
@@ -1273,7 +1274,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             isCompleted: _hydrationStep > 2,
             primaryColor: primaryColor,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           _buildHydrationStatusItem(
             title: 'Reading History & Feeds Synced',
             subtitle: _historyStatusText,
@@ -1374,7 +1375,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: SunfireSpacing.md),
           Text(
             _isStandalone
                 ? '$_matchedSourcesCount on-device JS scrapers activated. Your local library is ready!'

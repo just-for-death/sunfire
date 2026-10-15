@@ -8,6 +8,7 @@ import '../../core/engine/content_resolver_service.dart';
 import '../../core/engine/quickjs_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 
 class GlobalSearchScreen extends StatefulWidget {
@@ -223,13 +224,13 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: primaryColor),
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: SunfireSpacing.sm),
                             SizedBox(
                               height: 190,
                               child: ListView.builder(
                                 scrollDirection: Axis.horizontal,
                                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                padding: const EdgeInsets.symmetric(horizontal: SunfireSpacing.lg),
                                 itemCount: mangas.length,
                                 itemBuilder: (context, index) {
                                   final m = mangas[index];
@@ -260,7 +261,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                                                   : const Icon(Icons.book_rounded, color: SunfireColors.contentTertiary),
                                             ),
                                           ),
-                                          const SizedBox(height: 4),
+                                          const SizedBox(height: SunfireSpacing.xs),
                                           Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                         ],
                                       ),

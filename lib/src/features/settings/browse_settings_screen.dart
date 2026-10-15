@@ -6,6 +6,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/widgets/proxy_url_display.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
@@ -86,7 +87,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                         style: TextStyle(fontSize: 12, color: SunfireColors.contentPrimary.withValues(alpha: 0.6)),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: SunfireSpacing.sm),
                     Flexible(
                       child: ListView(
                         shrinkWrap: true,
@@ -122,7 +123,7 @@ class _BrowseSettingsScreenState extends State<BrowseSettingsScreen> {
                               child: const Text('Reset'),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: SunfireSpacing.md),
                           Expanded(
                             child: FilledButton(
                               onPressed: () {

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/db/models/manga.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../core/services/recommendations.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 
 typedef RecommendationLoader = Future<List<MangaRecommendation>> Function(Manga target);
 
@@ -59,7 +60,7 @@ class _MoreLikeThisRowState extends State<MoreLikeThisRow> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('More like this', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
+              const SizedBox(height: SunfireSpacing.sm),
               SizedBox(
                 height: 196,
                 child: ListView.separated(
@@ -87,7 +88,7 @@ class _MoreLikeThisRowState extends State<MoreLikeThisRow> {
                                 height: 140,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: SunfireSpacing.xs),
                             Text(m.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
                             if (r.reasons.isNotEmpty)
                               Text(r.reasons.first,

@@ -8,6 +8,7 @@ import '../../core/backup/tachibk_import_service.dart';
 import '../../core/backup/tachibk_parser.dart';
 import '../../core/logging/logger_service.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import 'widgets/settings_subpage_scaffold.dart';
 
 /// Client-side `.tachibk` restore: pick a backup file on the device, review
@@ -177,7 +178,7 @@ unawaited(
             'them to yet).',
             style: const TextStyle(fontSize: 13, color: SunfireColors.contentSecondary),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           FilledButton.icon(
             onPressed: (_parsing || _applying) ? null : _pickAndParse,
             icon: const Icon(Icons.folder_open_rounded),
@@ -195,22 +196,22 @@ unawaited(
             ),
           ),
           if (_fileName != null && _plan != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: SunfireSpacing.md),
             Text(
               '$_fileName — ${_plan!.readyEntries.length} importable, '
               '${_plan!.skippedEntries.length} skipped (missing source)',
               style: TextStyle(fontSize: 13, color: primaryColor),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: SunfireSpacing.sm),
             ..._plan!.entries.map(_buildEntryTile),
             if (_plan!.categoriesToCreate.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: SunfireSpacing.sm),
               Text(
                 'Categories that will be created: ${_plan!.categoriesToCreate.join(', ')}',
                 style: const TextStyle(fontSize: 12, color: SunfireColors.contentSecondary),
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
             FilledButton.icon(
               onPressed: (_applying || !_plan!.readyEntries.any((e) => e.include)) ? null : _applyImport,
               icon: const Icon(Icons.settings_backup_restore_rounded),

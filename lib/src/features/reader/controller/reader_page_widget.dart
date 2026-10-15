@@ -15,6 +15,7 @@ import '../../../core/engine/javascript/m_client.dart';
 import '../../../core/engine/quickjs_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../double_page_layout.dart' show isWidePage;
 import '../reader_scroll_utils.dart' show estimateWebtoonPlaceholderHeight;
 import '../reading_mode.dart';
@@ -118,7 +119,7 @@ Widget _retryTile(ReaderPageWidgetConfig config, {required double height, double
                     const Icon(Icons.refresh_rounded, size: 28, color: SunfireColors.contentTertiary),
                     const SizedBox(height: 6),
                     Text('Page ${config.index + 1} Failed to Load', style: const TextStyle(color: SunfireColors.contentPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: SunfireSpacing.xs),
                     Text('Tap to Retry', style: TextStyle(color: config.colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
                   ],
                 ),
@@ -243,7 +244,7 @@ Widget buildReaderPageWidget(ReaderPageWidgetConfig config) {
                         const Icon(Icons.refresh_rounded, size: 28, color: SunfireColors.contentTertiary),
                         const SizedBox(height: 6),
                         Text('Page ${config.index + 1} Failed to Load', style: const TextStyle(color: SunfireColors.contentPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: SunfireSpacing.xs),
                         Text('Tap to Retry', style: TextStyle(color: config.colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
                       ],
                     ),
@@ -298,7 +299,7 @@ Widget buildReaderPageWidget(ReaderPageWidgetConfig config) {
                             const Icon(Icons.refresh_rounded, size: 28, color: SunfireColors.contentTertiary),
                             const SizedBox(height: 6),
                             Text('Page ${config.index + 1} Failed to Load', style: const TextStyle(color: SunfireColors.contentPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: SunfireSpacing.xs),
                             Text('Tap to Retry', style: TextStyle(color: config.colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
                           ],
                         ),

@@ -6,6 +6,7 @@ import '../../core/db/isar_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'reading_heatmap.dart';
 
@@ -152,24 +153,24 @@ class _StatsScreenState extends State<StatsScreen> {
                 Row(
                   children: [
                     Expanded(child: _buildMetricCard(context, 'Reading Streak', _readingStreakDays == 1 ? '1 day' : '$_readingStreakDays days', Icons.local_fire_department_rounded, SunfireColors.warning)),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: SunfireSpacing.md),
                     Expanded(child: _buildMetricCard(context, 'Chapters Read', '$_totalReadChapters', Icons.check_circle_rounded, SunfireColors.success)),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: SunfireSpacing.md),
                 Row(
                   children: [
                     Expanded(child: _buildMetricCard(context, 'Library Manga', '$_totalManga', Icons.auto_stories_rounded, primaryColor)),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: SunfireSpacing.md),
                     Expanded(child: _buildMetricCard(context, 'Est. Read Time', _formatReadingTime(_totalReadTimeSeconds), Icons.timer_rounded, SunfireColors.info)),
                   ],
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: SunfireSpacing.xl),
 
                 // ── READ PROGRESS BAR ──
                 Text('OVERALL READING PROGRESS', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                const SizedBox(height: 8),
+                const SizedBox(height: SunfireSpacing.sm),
                 Material(
                   color: SunfireTheme.tileSurface(context),
                   shape: RoundedRectangleBorder(
@@ -191,7 +192,7 @@ class _StatsScreenState extends State<StatsScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: SunfireSpacing.sm),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(6),
                           child: LinearProgressIndicator(
@@ -206,11 +207,11 @@ class _StatsScreenState extends State<StatsScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: SunfireSpacing.xl),
 
                 // ── READING HEATMAP (R9.5) ──
                 Text('READING ACTIVITY', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                const SizedBox(height: 8),
+                const SizedBox(height: SunfireSpacing.sm),
                 Material(
                   color: SunfireTheme.tileSurface(context),
                   shape: RoundedRectangleBorder(
@@ -223,12 +224,12 @@ class _StatsScreenState extends State<StatsScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: SunfireSpacing.xl),
 
                 // ── TOP GENRES ──
                 if (_genreCounts.isNotEmpty) ...[
                   Text('TOP GENRES', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                   Material(
                     color: SunfireTheme.tileSurface(context),
                     shape: RoundedRectangleBorder(
@@ -256,7 +257,7 @@ class _StatsScreenState extends State<StatsScreen> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: SunfireSpacing.md),
                                 Text('${entry.value}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                               ],
                             ),
@@ -265,13 +266,13 @@ class _StatsScreenState extends State<StatsScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: SunfireSpacing.xl),
                 ],
 
                 // ── SOURCES BREAKDOWN ──
                 if (_sourceCounts.isNotEmpty) ...[
                   Text('SOURCES IN LIBRARY', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                   Material(
                     color: SunfireTheme.tileSurface(context),
                     shape: RoundedRectangleBorder(
@@ -308,9 +309,9 @@ class _StatsScreenState extends State<StatsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(icon, color: color, size: 24),
-            const SizedBox(height: 12),
+            const SizedBox(height: SunfireSpacing.md),
             Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color, letterSpacing: -0.5)),
-            const SizedBox(height: 4),
+            const SizedBox(height: SunfireSpacing.xs),
             Text(label, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
         ),

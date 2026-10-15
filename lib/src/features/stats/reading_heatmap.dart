@@ -10,6 +10,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 
 /// One week column: 7 day intensities, Monday-first. -1 = out of range
 /// (future days / before the window start), rendered as empty space.
@@ -95,7 +96,7 @@ class ReadingHeatmap extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: SunfireSpacing.sm),
         Row(
           children: [
             Text('Less',
@@ -114,7 +115,7 @@ class ReadingHeatmap extends StatelessWidget {
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: SunfireSpacing.xs),
             ],
             Text('More',
                 style: TextStyle(

@@ -16,6 +16,7 @@ import 'core/sync/sync_engine.dart';
 import 'core/sync/websocket_service.dart';
 import 'features/settings/server_login_sheet.dart';
 import 'ui/design_system/tokens/sunfire_colors.dart';
+import 'ui/design_system/tokens/sunfire_spacing.dart';
 import 'ui/shell/desktop_menus.dart';
 import 'ui/shell/keyboard_shortcuts.dart';
 import 'ui/shell/nav_chrome.dart';
@@ -427,13 +428,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   tooltip: extended ? 'Collapse sidebar' : 'Expand sidebar',
                   onPressed: _toggleSidebar,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: SunfireSpacing.sm),
                 // Kotatsu-style rail header FAB.
                 SunfireContinueReadingButton(
                   extended: extended,
                   onOpen: (route) => context.push(route),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: SunfireSpacing.sm),
               ],
             ),
             trailing: ListenableBuilder(
@@ -634,9 +635,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                         ? CrossAxisAlignment.start
                         : CrossAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 16),
+                      const SizedBox(height: SunfireSpacing.lg),
                       _buildSidebarHeader(primaryColor, isExpanded),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: SunfireSpacing.md),
                       // UIS-P2-B: Kotatsu-style "Continue reading" header action.
                       Padding(
                         padding: EdgeInsets.symmetric(
@@ -646,7 +647,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                           onOpen: (route) => context.push(route),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: SunfireSpacing.md),
                       Expanded(
                         child: ListView(
                           physics: const BouncingScrollPhysics(),
@@ -678,7 +679,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                             const SizedBox(height: 2),
                             _buildSidebarItem(4, Icons.settings_rounded, Icons.settings_outlined, 'Settings', isExpanded, primaryColor),
                             if (isExpanded) ...[
-                              const SizedBox(height: 16),
+                              const SizedBox(height: SunfireSpacing.lg),
                               Padding(
                                 padding: const EdgeInsets.only(left: 10.0, bottom: 6.0),
                                 child: Text(
@@ -914,7 +915,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   color: isSelected ? primaryColor : _cs.onSurfaceVariant,
                   size: 20,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: SunfireSpacing.md),
                 Expanded(
                   child: Text(
                     label,
@@ -999,7 +1000,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           child: Row(
             children: [
               Icon(icon, color: _cs.onSurfaceVariant, size: 19),
-              const SizedBox(width: 12),
+              const SizedBox(width: SunfireSpacing.md),
               Expanded(
                 child: Text(
                   label,
@@ -1216,7 +1217,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: SunfireSpacing.sm),
             Container(
               width: 7,
               height: 7,

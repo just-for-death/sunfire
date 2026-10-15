@@ -7,6 +7,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../reader/double_page_layout.dart';
 import '../reader/tap_zones.dart';
 import 'widgets/section_title.dart';
@@ -406,7 +407,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: SunfireSpacing.sm),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -471,7 +472,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                 ),
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(height: SunfireSpacing.sm),
 
               // Behavioral Switches
               SettingsPropTile(
@@ -627,7 +628,7 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.auto_stories_rounded, size: 16, color: primaryColor),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: SunfireSpacing.sm),
                       Text(
                         'Webtoon Panel ${(index ~/ 3) + 1}',
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: cs.onSurface),
@@ -662,7 +663,7 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.play_circle_fill_rounded, size: 12, color: primaryColor),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: SunfireSpacing.xs),
                   Text(
                     'LIVE PREVIEW: ${widget.speed.round()} px/s',
                     style: TextStyle(

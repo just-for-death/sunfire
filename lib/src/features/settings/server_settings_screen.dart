@@ -15,6 +15,7 @@ import '../../core/sync/sync_manager.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/widgets/dialog_controllers.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/proxy_url_display.dart';
@@ -397,7 +398,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                     controller: userController,
                     decoration: const InputDecoration(labelText: 'Username', filled: true),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: SunfireSpacing.md),
                   TextField(
                     controller: passController,
                     obscureText: obscure,
@@ -468,7 +469,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   'Configure credentials Sunfire uses to authenticate with Suwayomi.',
                   style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: SunfireSpacing.md),
                 SegmentedButton<ServerAuthType>(
                   segments: const [
                     ButtonSegment(value: ServerAuthType.none, label: Text('None', style: TextStyle(fontSize: 12))),
@@ -478,7 +479,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                   selected: {selectedType},
                   onSelectionChanged: (set) => setDlgState(() => selectedType = set.first),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: SunfireSpacing.lg),
                 if (selectedType == ServerAuthType.basic) ...[
                   TextField(
                     controller: userController,
@@ -488,7 +489,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: SunfireSpacing.md),
                   TextField(
                     controller: passController,
                     obscureText: obscure,

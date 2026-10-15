@@ -9,6 +9,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -348,7 +349,7 @@ class _DownloadsSettingsScreenState extends State<DownloadsSettingsScreen> {
                                   children: [
                                     Icon(Icons.sd_card_alert_rounded,
                                         color: Theme.of(context).colorScheme.onErrorContainer),
-                                    const SizedBox(width: 12),
+                                    const SizedBox(width: SunfireSpacing.md),
                                     Expanded(
                                       child: Text(
                                         'Low storage: downloads paused. Free up space or lower the reserve below.',

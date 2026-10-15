@@ -13,6 +13,7 @@ import '../../core/logging/logger_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -356,7 +357,7 @@ class _AboutScreenState extends State<AboutScreen> {
           _buildLegalTiles(primary),
           const SectionTitle(title: 'Diagnostics'),
           _buildDiagnosticsRows(),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           Center(
             child: OutlinedButton.icon(
               onPressed: _copyDiagnostics,
@@ -364,7 +365,7 @@ class _AboutScreenState extends State<AboutScreen> {
               label: const Text('Copy diagnostics'),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: SunfireSpacing.xl),
           Center(
             child: Text(
               'Made for people who self-host their manga.',
@@ -419,7 +420,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
   Widget _buildDescription() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: SunfireSpacing.lg),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(

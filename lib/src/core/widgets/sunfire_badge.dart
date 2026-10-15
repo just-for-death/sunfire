@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 
 enum SunfireBadgeVariant {
   /// Compact tag/counter/status badge (e.g. "ONGOING", "SERVER", "EN", "12 CH")
@@ -90,7 +91,7 @@ class SunfireBadge extends StatelessWidget {
       children: [
         if (icon != null) ...[
           icon!,
-          const SizedBox(width: 4),
+          const SizedBox(width: SunfireSpacing.xs),
         ],
         Flexible(
           child: Text(

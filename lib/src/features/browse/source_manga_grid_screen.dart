@@ -17,6 +17,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'source_server_filters_sheet.dart';
 
@@ -306,12 +307,12 @@ unawaited(
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: SunfireSpacing.lg),
                   
                   if (_hasDynamicFilters) ...[
                      for (int i = 0; i < _dynamicFilters.length; i++) ...[
                         Text((_dynamicFilters[i]['name'] ?? 'Filter').toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: SunfireSpacing.sm),
                         if (_dynamicFilters[i]['type_name'] == 'SelectFilter' || _dynamicFilters[i]['type_name'] == 'SortFilter')
                            Wrap(
                              spacing: 8,
@@ -331,11 +332,11 @@ unawaited(
                                );
                              }).toList(),
                            ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: SunfireSpacing.lg),
                      ]
                   ] else ...[
                      const Text('Sort By', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
-                     const SizedBox(height: 8),
+                     const SizedBox(height: SunfireSpacing.sm),
                      Wrap(
                        spacing: 8,
                        children: ['Popularity', 'Latest', 'Title', 'Rating'].map((s) {
@@ -352,9 +353,9 @@ unawaited(
                          );
                        }).toList(),
                      ),
-                     const SizedBox(height: 16),
+                     const SizedBox(height: SunfireSpacing.lg),
                      const Text('Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
-                     const SizedBox(height: 8),
+                     const SizedBox(height: SunfireSpacing.sm),
                      Wrap(
                        spacing: 8,
                        children: ['All', 'Ongoing', 'Completed', 'Hiatus'].map((st) {
@@ -373,7 +374,7 @@ unawaited(
                      ),
                   ],
                   
-                  const SizedBox(height: 24),
+                  const SizedBox(height: SunfireSpacing.xl),
                   
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -656,13 +657,13 @@ unawaited(
                                       size: 56,
                                       color: SunfireColors.error.withValues(alpha: 0.78),
                                     ),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: SunfireSpacing.lg),
                                     const Text(
                                       'QuickJS Engine Unavailable',
                                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                                       textAlign: TextAlign.center,
                                     ),
-                                    const SizedBox(height: 12),
+                                    const SizedBox(height: SunfireSpacing.md),
                                     Text(
                                       'The JavaScript extension engine could not be initialized.\n\n'
                                       'Error: $quickJsError\n\n'
@@ -831,7 +832,7 @@ unawaited(
                                                   ),
                                                 ),
                                               ),
-                                              const SizedBox(height: 8),
+                                              const SizedBox(height: SunfireSpacing.sm),
                                               Text(
                                                 title,
                                                 maxLines: 2,
@@ -851,7 +852,7 @@ unawaited(
                                 ),
                                 if (_isLoadingMore)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                                     alignment: Alignment.center,
                                     child: SizedBox(
                                       width: 24,
@@ -898,7 +899,7 @@ unawaited(
                         fit: BoxFit.cover,
                       ),
                     ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: SunfireSpacing.md),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -910,7 +911,7 @@ unawaited(
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: SunfireSpacing.lg),
               ListTile(
                 leading: Icon(Icons.favorite_rounded, color: primaryColor),
                 title: const Text('Add to Library (Default Category)', style: TextStyle(fontWeight: FontWeight.bold)),

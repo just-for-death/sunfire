@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/settings_service.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import 'controller/reader_theme.dart';
 import 'double_page_layout.dart';
 import 'reader_settings_scope.dart';
@@ -95,13 +96,13 @@ class ReaderSettingsSheet {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: SunfireSpacing.lg),
                     const Text(
                       'Reader Settings',
                       style:
                           TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: SunfireSpacing.md),
                     if (model.hasParentManga) ...[
                       SegmentedButton<ReaderSettingsScope>(
                         segments: const [
@@ -134,16 +135,16 @@ class ReaderSettingsSheet {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: SunfireSpacing.sm),
                       Text(
                         model.scope == ReaderSettingsScope.manga
                             ? 'Mode, scale, crop and tap zones apply to this series only'
                             : 'Mode, scale, crop and tap zones apply to all series',
                         style: TextStyle(fontSize: 11, color: SunfireColors.contentTertiary),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: SunfireSpacing.lg),
                     ] else
-                      const SizedBox(height: 8),
+                      const SizedBox(height: SunfireSpacing.sm),
                     _sectionHeader('READING MODE'),
                     Wrap(
                       spacing: 8,

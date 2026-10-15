@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/sync/server_session_service.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/widgets/dialog_title.dart';
 
 /// Shows the Suwayomi UI_LOGIN / SIMPLE_LOGIN form (ISS-078 / B2).
@@ -122,7 +123,7 @@ class _ServerLoginSheetState extends State<_ServerLoginSheet> {
             DialogTitle(icon: Icons.login_rounded, text: title),
             const SizedBox(height: 6),
             Text(subtitle, style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
             TextField(
               key: const Key('server_login_username'),
               controller: _user,
@@ -133,7 +134,7 @@ class _ServerLoginSheetState extends State<_ServerLoginSheet> {
                 prefixIcon: Icon(Icons.person_outline_rounded),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: SunfireSpacing.md),
             TextField(
               key: const Key('server_login_password'),
               controller: _pass,
@@ -150,7 +151,7 @@ class _ServerLoginSheetState extends State<_ServerLoginSheet> {
               ),
             ),
             if (_error != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: SunfireSpacing.md),
               Text(_error!, key: const Key('server_login_error'), style: TextStyle(color: cs.error, fontSize: 13)),
             ],
             const SizedBox(height: 20),
@@ -161,7 +162,7 @@ class _ServerLoginSheetState extends State<_ServerLoginSheet> {
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Text('Sign in'),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: SunfireSpacing.sm),
             TextButton(
               onPressed: _busy ? null : () => Navigator.of(context).pop(false),
               child: const Text('Cancel'),

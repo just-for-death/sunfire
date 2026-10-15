@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 
 void showAutoScrollSpeedSheet(
 BuildContext context, {
@@ -37,7 +38,7 @@ required void Function(double speed) onSaveDefault,
                           style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: SunfireColors.contentPrimary),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: SunfireSpacing.sm),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
@@ -115,9 +116,9 @@ required void Function(double speed) onSaveDefault,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                   const Text('Quick Presets', style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -132,7 +133,7 @@ required void Function(double speed) onSaveDefault,
                       _speedChip('Light (1600 px/s)', 1600.0, primaryColor, setSheetState, getSpeed, setSpeed),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: SunfireSpacing.md),
                 ],
               ),
             ),

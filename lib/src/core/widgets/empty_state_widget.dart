@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 
 class EmptyStateWidget extends StatelessWidget {
   final IconData icon;
@@ -37,20 +38,20 @@ class EmptyStateWidget extends StatelessWidget {
               ),
               child: Icon(icon, size: 64, color: SunfireColors.contentSecondary),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: SunfireSpacing.xl),
             Text(
               title,
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: SunfireSpacing.md),
             Text(
               subtitle,
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: SunfireColors.contentTertiary),
             ),
             if (onAction != null && actionLabel != null) ...[
-              const SizedBox(height: 24),
+              const SizedBox(height: SunfireSpacing.xl),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/services/library_update_service.dart';
+import '../design_system/tokens/sunfire_spacing.dart';
 
 /// Human-readable skipped line for the library-update banner (ISS-086 / Q4).
 ///
@@ -101,7 +102,7 @@ class LibraryUpdateProgressBanner extends StatelessWidget {
                   ),
                 ),
               ],
-              const SizedBox(height: 8),
+              const SizedBox(height: SunfireSpacing.sm),
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(

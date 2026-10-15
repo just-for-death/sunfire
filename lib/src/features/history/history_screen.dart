@@ -15,6 +15,7 @@ import '../../main_shell.dart';
 import '../../ui/design_system/components/sunfire_chip.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 
 /// S6.7: timeline filter for the History screen.
@@ -230,14 +231,14 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
             selected: _filter == HistoryFilter.all,
             onSelected: (_) => setState(() => _filter = HistoryFilter.all),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: SunfireSpacing.sm),
           SunfireChip(
             label: 'Completed',
             selected: _filter == HistoryFilter.completed,
             onSelected: (_) =>
                 setState(() => _filter = HistoryFilter.completed),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: SunfireSpacing.sm),
           SunfireChip(
             label: 'In progress',
             selected: _filter == HistoryFilter.inProgress,
@@ -481,7 +482,7 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                                        valueColor: AlwaysStoppedAnimation<Color>(ch.isRead ? SunfireColors.success : primaryColor),
                                      ),
                                    ),
-                                   const SizedBox(height: 4),
+                                   const SizedBox(height: SunfireSpacing.xs),
                                    Text(progressText, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                                  ],
                                ),

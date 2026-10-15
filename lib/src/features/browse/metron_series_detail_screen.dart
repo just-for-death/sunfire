@@ -8,6 +8,7 @@ import '../../core/db/models/manga.dart';
 import '../../core/metron/metron_models.dart';
 import '../../core/metron/metron_service.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import 'global_search_screen.dart';
 
 class MetronSeriesDetailScreen extends StatefulWidget {
@@ -100,7 +101,7 @@ unawaited(
               child: Row(
                 children: [
                   const Icon(Icons.link_rounded, color: SunfireColors.trackerBlue),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: SunfireSpacing.sm),
                   const Text('Link Metron to Library Comic', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const Spacer(),
                   IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
@@ -216,11 +217,11 @@ unawaited(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Icon(Icons.error_outline, size: 48, color: SunfireColors.error),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: SunfireSpacing.md),
                         Text('Failed to load series details', style: theme.textTheme.titleMedium),
                         const SizedBox(height: 6),
                         Text(_errorMessage!, style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 12), textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: SunfireSpacing.lg),
                         ElevatedButton.icon(
                           icon: const Icon(Icons.refresh),
                           label: const Text('Retry'),
@@ -259,7 +260,7 @@ unawaited(
                                   child: const Icon(Icons.book, size: 40),
                                 ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: SunfireSpacing.lg),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,7 +288,7 @@ unawaited(
                                 style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 13),
                               ),
                               if (series?.status != null) ...[
-                                const SizedBox(height: 4),
+                                const SizedBox(height: SunfireSpacing.xs),
                                 Text(
                                   'Status: ${series!.status}',
                                   style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 12),
@@ -299,7 +300,7 @@ unawaited(
                       ],
                     ),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: SunfireSpacing.lg),
 
                     // Primary Actions
                     Row(
@@ -311,7 +312,7 @@ unawaited(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: theme.colorScheme.primary,
                               foregroundColor: theme.colorScheme.onPrimary,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
                             onPressed: () {
@@ -331,7 +332,7 @@ unawaited(
                             icon: const Icon(Icons.link_rounded),
                             label: const Text('Link to Library'),
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
                             onPressed: _showLinkToLibraryDialog,
@@ -350,13 +351,13 @@ unawaited(
                         series.description!.trim(),
                         style: const TextStyle(fontSize: 13, height: 1.4, color: SunfireColors.contentSecondary),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: SunfireSpacing.lg),
                     ],
 
                     // Genres
                     if (series?.genres != null && series!.genres.isNotEmpty) ...[
                       Text('Genres', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: SunfireSpacing.sm),
                       Wrap(
                         spacing: 8,
                         runSpacing: 6,
@@ -378,7 +379,7 @@ unawaited(
                         Text('Issues (${_issues.length})', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: SunfireSpacing.sm),
 
                     if (_issues.isEmpty)
                       const Padding(
@@ -388,7 +389,7 @@ unawaited(
                     else
                       ..._issues.map((issue) {
                         return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          margin: const EdgeInsets.symmetric(vertical: SunfireSpacing.xs),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           child: ListTile(
                             leading: issue.image != null

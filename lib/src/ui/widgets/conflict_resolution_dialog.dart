@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import '../../core/sync/conflict_resolver.dart' show ConflictResolutionStrategy;
 import '../../core/sync/sync_engine.dart' show SyncConflict, ConflictResolution;
 import '../design_system/tokens/sunfire_colors.dart';
+import '../design_system/tokens/sunfire_spacing.dart';
 
 /// ConflictResolutionDialog — UI for resolving sync conflicts with visual diffs.
 ///
@@ -95,7 +96,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                 size: 80,
                 color: Theme.of(context).colorScheme.primary,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: SunfireSpacing.xl),
               Text(
                 'All Conflicts Resolved',
                 style: TextStyle(
@@ -104,7 +105,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: SunfireSpacing.sm),
               Text(
                 'No pending conflicts to resolve.',
                 style: TextStyle(
@@ -149,7 +150,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                     color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: SunfireSpacing.xs),
                 Text(
                   '$entityType #$entityId  •  Conflict $current of $total',
                   style: TextStyle(
@@ -195,13 +196,13 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildEntityTypeBadge(conflict.entityType),
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           if (fields.isEmpty) ...[
             _buildSingleFieldConflict(conflict),
           ] else ...[
             ...fields.map((field) => _buildFieldDiff(conflict, field)),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           _buildBatchActions(),
         ],
       ),
@@ -365,7 +366,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: SunfireSpacing.md),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -380,7 +381,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                   onTap: () => onChanged(ConflictResolution.localWins),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: SunfireSpacing.md),
               // Arrow indicator
               if (isDifferent) ...[
                 Icon(
@@ -388,7 +389,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                   size: 24,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: SunfireSpacing.md),
               ],
               // Remote column
               Expanded(
@@ -404,7 +405,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
             ],
           ),
           if (isDifferent) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: SunfireSpacing.sm),
             Row(
               children: [
                 Expanded(
@@ -473,7 +474,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: SunfireSpacing.sm),
             Text(
               value.isEmpty ? '(empty)' : value,
               style: TextStyle(
@@ -487,7 +488,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
               overflow: TextOverflow.ellipsis,
             ),
             if (timestamp != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: SunfireSpacing.xs),
               Text(
                 'Updated ${_formatTimestamp(timestamp)}',
                 style: TextStyle(
@@ -524,7 +525,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
               color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: SunfireSpacing.md),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -551,7 +552,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: SunfireSpacing.md),
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.tonalIcon(
@@ -618,7 +619,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Skip'),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: SunfireSpacing.md),
           FilledButton.icon(
             icon: const Icon(Icons.check_rounded, size: 18),
             label: const Text('Apply Resolutions'),

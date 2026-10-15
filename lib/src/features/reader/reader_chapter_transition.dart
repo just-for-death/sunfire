@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/db/models/chapter.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 
 /// Finished / next chapter card shown after the last page.
 class ReaderChapterTransitionCard extends StatelessWidget {
@@ -42,7 +43,7 @@ class ReaderChapterTransitionCard extends StatelessWidget {
               chapter: nextChapter!,
               labelColor: primaryColor,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: SunfireSpacing.xl),
             SizedBox(
               width: double.infinity,
               height: 44,
@@ -123,7 +124,7 @@ class _Section extends StatelessWidget {
           children: [
             if (chapter.isDownloaded) ...[
               Icon(Icons.check_circle_rounded, color: labelColor, size: 18),
-              const SizedBox(width: 8),
+              const SizedBox(width: SunfireSpacing.sm),
             ],
             Expanded(
               child: Text(

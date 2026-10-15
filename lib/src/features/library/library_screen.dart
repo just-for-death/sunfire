@@ -26,6 +26,8 @@ import '../../main_shell.dart';
 import '../../ui/design_system/components/sunfire_skeleton.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
+import '../../ui/design_system/tokens/sunfire_typography.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/library_update_progress_banner.dart';
@@ -659,7 +661,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: SunfireSpacing.md),
                     if (_categories.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
@@ -689,7 +691,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           }).toList(),
                         ),
                       ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: SunfireSpacing.lg),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
@@ -1142,7 +1144,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: SunfireSpacing.md),
                   Row(
                     children: [
                       Expanded(
@@ -1155,7 +1157,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: SunfireSpacing.sm),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                         onPressed: () async {
@@ -1199,7 +1201,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: SunfireSpacing.lg),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 280),
                     child: ListView.builder(
@@ -1394,7 +1396,7 @@ unawaited(
                               'SAVED PRESETS',
                               style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _cs.onSurfaceVariant, letterSpacing: 1),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: SunfireSpacing.sm),
                             Wrap(
                               spacing: 8,
                               runSpacing: 6,
@@ -1427,9 +1429,9 @@ unawaited(
                         );
                       },
                     ),
-                    const SizedBox(height: 16),
-                    const Text('DISPLAY MODE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: SunfireSpacing.lg),
+                    Text('DISPLAY MODE', style: SunfireTypography.withColor(SunfireTypography.sectionHeader, SunfireColors.contentTertiary)),
+                    const SizedBox(height: SunfireSpacing.sm),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -1449,9 +1451,9 @@ unawaited(
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 16),
-                    const Text('GRID COLUMNS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: SunfireSpacing.lg),
+                    Text('GRID COLUMNS', style: SunfireTypography.withColor(SunfireTypography.sectionHeader, SunfireColors.contentTertiary)),
+                    const SizedBox(height: SunfireSpacing.sm),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -1478,9 +1480,9 @@ unawaited(
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 16),
-                    const Text('BADGES & INDICATORS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: SunfireSpacing.lg),
+                    Text('BADGES & INDICATORS', style: SunfireTypography.withColor(SunfireTypography.sectionHeader, SunfireColors.contentTertiary)),
+                    const SizedBox(height: SunfireSpacing.sm),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -1507,9 +1509,9 @@ unawaited(
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    const Text('FILTER BY STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: SunfireSpacing.lg),
+                    Text('FILTER BY STATUS', style: SunfireTypography.withColor(SunfireTypography.sectionHeader, SunfireColors.contentTertiary)),
+                    const SizedBox(height: SunfireSpacing.sm),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -1530,9 +1532,9 @@ unawaited(
                       }).toList(),
                     ),
                     if (_tags.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      const Text('FILTER BY TAG', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: SunfireSpacing.lg),
+                      Text('FILTER BY TAG', style: SunfireTypography.withColor(SunfireTypography.sectionHeader, SunfireColors.contentTertiary)),
+                      const SizedBox(height: SunfireSpacing.sm),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -1585,11 +1587,11 @@ unawaited(
                         ],
                       ),
                     ],
-                    const SizedBox(height: 16),
+                    const SizedBox(height: SunfireSpacing.lg),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('SORT BY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SunfireColors.contentTertiary, letterSpacing: 1)),
+                        Text('SORT BY', style: SunfireTypography.withColor(SunfireTypography.sectionHeader, SunfireColors.contentTertiary)),
                         IconButton(
                           icon: Icon(_isSortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: 20, color: primaryColor),
                           onPressed: () {

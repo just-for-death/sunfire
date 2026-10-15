@@ -13,6 +13,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/widgets/dialog_title.dart';
 import 'migrate_track_copy.dart';
 
@@ -262,9 +263,9 @@ unawaited(
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: SunfireSpacing.lg),
                     const Text('WHAT TO INCLUDE', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: SunfireSpacing.sm),
                     CheckboxListTile(
                       value: copyHistory,
                       activeColor: primaryColor,
@@ -942,7 +943,7 @@ unawaited(
                   ),
                   onSelected: (_) => setState(() => _activeFilter = 'PINNED'),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: SunfireSpacing.sm),
                 FilterChip(
                   label: const Row(
                     mainAxisSize: MainAxisSize.min,
@@ -966,7 +967,7 @@ unawaited(
                   ),
                   onSelected: (_) => setState(() => _activeFilter = 'ALL'),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: SunfireSpacing.sm),
                 FilterChip(
                   label: const Row(
                     mainAxisSize: MainAxisSize.min,
@@ -991,7 +992,7 @@ unawaited(
                   onSelected: (_) => setState(() => _activeFilter = 'HAS_RESULTS'),
                 ),
                 if (isAnyLoading) ...[
-                  const SizedBox(width: 12),
+                  const SizedBox(width: SunfireSpacing.md),
                   SizedBox(
                     width: 14,
                     height: 14,
@@ -1078,7 +1079,7 @@ unawaited(
                                             style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold),
                                           ),
                                         ),
-                                      const SizedBox(width: 4),
+                                      const SizedBox(width: SunfireSpacing.xs),
                                       const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: SunfireColors.contentTertiary),
                                     ],
                                   ),

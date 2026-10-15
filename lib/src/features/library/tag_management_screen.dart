@@ -11,6 +11,7 @@ import '../../core/services/tag_service.dart';
 import '../../ui/design_system/components/components.dart'
     show SunfireButton, SunfireCard;
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 
 /// Manage user-defined library tags.
 class TagManagementScreen extends StatefulWidget {
@@ -82,9 +83,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                     ),
                     textInputAction: TextInputAction.done,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: SunfireSpacing.lg),
                   const Text('Color'),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -209,12 +210,12 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: SunfireSpacing.sm),
                         const Text(
                           'Create color-coded tags to organize your library.',
                           textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: SunfireSpacing.lg),
                         SunfireButton.primary(
                           label: 'Create tag',
                           onPressed: () => unawaited(_showEditor()),
@@ -226,7 +227,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: _tags.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, __) => const SizedBox(height: SunfireSpacing.sm),
                   itemBuilder: (context, index) {
                     final tag = _tags[index];
                     return SunfireCard(

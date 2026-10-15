@@ -9,6 +9,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import 'controller/ocr_service.dart';
 import 'controller/tts_service.dart';
 
@@ -160,7 +161,7 @@ class _ListenSheetState extends State<ListenSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: SunfireSpacing.md),
             Expanded(child: _buildBody(cs)),
           ],
         ),
@@ -179,7 +180,7 @@ class _ListenSheetState extends State<ListenSheet> {
           children: [
             Icon(Icons.text_fields_rounded,
                 size: 48, color: cs.onSurfaceVariant),
-            const SizedBox(height: 12),
+            const SizedBox(height: SunfireSpacing.md),
             Text(_error!,
                 style: TextStyle(color: cs.onSurfaceVariant)),
           ],

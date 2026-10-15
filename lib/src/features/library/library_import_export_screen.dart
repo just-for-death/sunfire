@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import '../../core/library/library_import_export_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/components/components.dart' show SunfireButton;
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 
 class LibraryImportExportScreen extends StatefulWidget {
   const LibraryImportExportScreen({super.key});
@@ -135,28 +136,28 @@ class _LibraryImportExportScreenState extends State<LibraryImportExportScreen> {
             'Export titles, sources, URLs, genres, tags, and progress summaries. '
             'For full Tachiyomi backups use Settings → Backup → Import .tachibk.',
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           SunfireButton.primary(
             label: 'Export JSON',
             icon: Icons.upload_file_outlined,
             onPressed: _busy ? null : () => unawaited(_exportJson()),
             expanded: true,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           SunfireButton.secondary(
             label: 'Export CSV',
             icon: Icons.table_chart_outlined,
             onPressed: _busy ? null : () => unawaited(_exportCsv()),
             expanded: true,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: SunfireSpacing.xl),
           SunfireButton.secondary(
             label: 'Import JSON',
             icon: Icons.download_outlined,
             onPressed: _busy ? null : () => unawaited(_importFile(csv: false)),
             expanded: true,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           SunfireButton.secondary(
             label: 'Import CSV',
             icon: Icons.download_outlined,
@@ -164,11 +165,11 @@ class _LibraryImportExportScreenState extends State<LibraryImportExportScreen> {
             expanded: true,
           ),
           if (_busy) ...[
-            const SizedBox(height: 24),
+            const SizedBox(height: SunfireSpacing.xl),
             const Center(child: CircularProgressIndicator()),
           ],
           if (_status != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
             Text(_status!),
           ],
         ],

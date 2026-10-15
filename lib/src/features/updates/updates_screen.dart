@@ -25,6 +25,7 @@ import '../../core/sync/websocket_service.dart';
 import '../../main_shell.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../../ui/widgets/library_update_progress_banner.dart';
 import 'updates_feed_grouping.dart';
@@ -1247,7 +1248,7 @@ unawaited(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(ch.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
+              const SizedBox(height: SunfireSpacing.lg),
               ListTile(
                 leading: Icon(Icons.cloud_download_rounded, color: primaryColor),
                 title: const Text('Download to Suwayomi Server', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1390,7 +1391,7 @@ unawaited(
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: SunfireSpacing.md),
                 // Manga title and chapter info
                 Expanded(
                   child: Column(
@@ -1454,7 +1455,7 @@ unawaited(
                         ),
                       ],
                       if (_languageBadgeLabel(item['lang'] as String? ?? '') != null) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: SunfireSpacing.xs),
                         Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
@@ -1479,7 +1480,7 @@ unawaited(
                     ],
                   ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: SunfireSpacing.xs),
                 // Quick Actions Row
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1728,12 +1729,12 @@ unawaited(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(Icons.notifications_none_rounded, size: 64, color: primaryColor.withAlpha(120)),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: SunfireSpacing.lg),
                                     Text(
                                       _updatesList.isEmpty ? 'No Recent Updates' : 'No Matching Updates',
                                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                                     ),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: SunfireSpacing.sm),
                                     Text(
                                       _updatesList.isEmpty
                                           ? 'Pull down to check for updates or\nadd more manga to your library.'
@@ -1787,7 +1788,7 @@ unawaited(
                                           letterSpacing: -0.3,
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
+                                      const SizedBox(width: SunfireSpacing.sm),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                         decoration: BoxDecoration(

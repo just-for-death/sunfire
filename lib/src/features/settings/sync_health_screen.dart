@@ -11,6 +11,7 @@ import '../../core/sync/sync_health_service.dart';
 import '../../core/sync/sync_manager.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/widgets/sync_ui_actions.dart';
 
 class SyncHealthScreen extends StatefulWidget {
@@ -128,7 +129,7 @@ class _SyncHealthScreenState extends State<SyncHealthScreen> {
           ),
           const Divider(),
           const Text('Other devices', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           if (devices.isEmpty)
             const Text('No other devices reported yet.')
           else
@@ -145,7 +146,7 @@ class _SyncHealthScreenState extends State<SyncHealthScreen> {
                 ),
               ),
             ),
-          const SizedBox(height: 24),
+          const SizedBox(height: SunfireSpacing.xl),
           FilledButton.icon(
             onPressed: () => unawaited(
               runSyncWithProgressDialog(
@@ -157,7 +158,7 @@ class _SyncHealthScreenState extends State<SyncHealthScreen> {
             icon: const Icon(Icons.sync),
             label: const Text('Run delta sync now'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           OutlinedButton.icon(
             onPressed: () => unawaited(
               runSyncWithProgressDialog(

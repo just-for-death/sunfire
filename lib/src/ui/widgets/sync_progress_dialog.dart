@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../../core/sync/sync_conflict_helpers.dart';
 import '../../core/sync/sync_engine.dart' show SyncPhase, SyncProgress;
 import '../../core/sync/sync_manager.dart';
+import '../design_system/tokens/sunfire_spacing.dart';
 
 /// Shows live [SyncManager] progress; cancel is best-effort between stages.
 class SyncProgressDialog extends StatefulWidget {
@@ -93,7 +94,7 @@ class _SyncProgressDialogState extends State<SyncProgressDialog> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                   Text(
                     syncPhaseLabel(_progress.phase.name),
                     style: TextStyle(
@@ -114,7 +115,7 @@ class _SyncProgressDialogState extends State<SyncProgressDialog> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  const SizedBox(height: 16),
+                  const SizedBox(height: SunfireSpacing.lg),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(6),
                     child: LinearProgressIndicator(
@@ -122,7 +123,7 @@ class _SyncProgressDialogState extends State<SyncProgressDialog> {
                       minHeight: 8,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                   Text(
                     _progress.total > 0
                         ? '${_progress.current} / ${_progress.total}'

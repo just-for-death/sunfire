@@ -6,6 +6,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -115,7 +116,7 @@ unawaited(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Enter a raw GitHub or web URL pointing to a MangaYomi index.json:', style: TextStyle(fontSize: 13, color: SunfireColors.contentTertiary)),
-              const SizedBox(height: 12),
+              const SizedBox(height: SunfireSpacing.md),
               TextField(
                 controller: _urlController,
                 autofocus: true,
@@ -430,7 +431,7 @@ unawaited(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.extension_off_outlined, size: 48, color: SunfireColors.contentTertiary.withAlpha(120)),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: SunfireSpacing.md),
                         const Text('No custom repositories configured', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 6),
                         const Text(

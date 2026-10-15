@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/sync/graphql_client_service.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 
 /// Opens a server-side filter sheet (ISS-079 / B4). Returns applied changes
 /// (empty list = reset / none), or null if cancelled.
@@ -184,7 +185,7 @@ class _SourceServerFiltersSheetState extends State<SourceServerFiltersSheet> {
       builder: (context, scroll) {
         return Column(
           children: [
-            const SizedBox(height: 8),
+            const SizedBox(height: SunfireSpacing.sm),
             Container(
               width: 40,
               height: 4,

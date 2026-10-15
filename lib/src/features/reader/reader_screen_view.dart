@@ -380,7 +380,7 @@ extension _ReaderView on _ReaderScreenState {
             mainAxisSize: MainAxisSize.min,
             children: [
               CircularProgressIndicator(color: primaryColor),
-              const SizedBox(height: 16),
+              const SizedBox(height: SunfireSpacing.lg),
               Text(
                 _chapter?.name ?? 'Loading Chapter...',
                 style: TextStyle(color: canvasForegroundColor(_canvasBackgroundColor).withValues(alpha: 0.7), fontSize: 14, fontWeight: FontWeight.bold),
@@ -409,13 +409,13 @@ extension _ReaderView on _ReaderScreenState {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(Icons.broken_image_rounded, size: 64, color: SunfireColors.contentTertiary),
-                const SizedBox(height: 16),
+                const SizedBox(height: SunfireSpacing.lg),
                 Text(
                   'Could not load ${_chapter?.name.replaceAll(RegExp(r'\s+'), ' ').trim() ?? "chapter pages"}',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: canvasForegroundColor(_canvasBackgroundColor), fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: SunfireSpacing.sm),
                 const Text(
                   'Check network or source availability',
                   textAlign: TextAlign.center,

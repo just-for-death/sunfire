@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/widgets/sunfire_badge.dart';
 import '../../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../../ui/widgets/dialog_controllers.dart';
 
 enum SettingsPropKind {
@@ -176,7 +177,7 @@ unawaited(
                 children: [
                   if (description != null && description!.isNotEmpty) ...[
                     Text(description!, style: const TextStyle(fontSize: 13, color: SunfireColors.contentTertiary)),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: SunfireSpacing.md),
                   ],
                   Text(
                     formatted,

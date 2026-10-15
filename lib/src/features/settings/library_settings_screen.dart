@@ -16,6 +16,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_manager.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/widgets/dialog_controllers.dart';
 import '../../ui/widgets/sync_ui_actions.dart';
 import 'widgets/section_title.dart';
@@ -276,12 +277,12 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(cat.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: SunfireSpacing.xs),
                     Text(
                       'Server category include flags (ISS-071 / Q5)',
                       style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: SunfireSpacing.md),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Include in library updates'),
@@ -683,7 +684,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     const SectionTitle(title: 'Smart Update Skips (Local)'),
                     SwitchListTile(
                       key: const ValueKey('updateSkipCompleted'),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: SunfireSpacing.lg),
                       title: Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
                         spacing: 6,
@@ -698,7 +699,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     ),
                     SwitchListTile(
                       key: const ValueKey('updateSkipWithUnread'),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: SunfireSpacing.lg),
                       title: Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
                         spacing: 6,
@@ -713,7 +714,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                     ),
                     SwitchListTile(
                       key: const ValueKey('updateSkipNotStarted'),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: SunfireSpacing.lg),
                       title: Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
                         spacing: 6,
@@ -840,7 +841,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                                       size: 18,
                                       color: Theme.of(context).colorScheme.primary,
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: SunfireSpacing.sm),
                                     Expanded(
                                       child: Text(
                                         updater.isUpdating
@@ -853,7 +854,7 @@ class _LibrarySettingsScreenState extends State<LibrarySettingsScreen> {
                                   ],
                                 ),
                                 if (updater.isUpdating) ...[
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: SunfireSpacing.sm),
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(4),
                                     child: LinearProgressIndicator(

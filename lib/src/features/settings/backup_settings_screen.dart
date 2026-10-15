@@ -11,6 +11,7 @@ import '../../core/sync/family_sharing.dart';
 import '../../core/sync/graphql_client_service.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import 'widgets/section_title.dart';
 import 'widgets/settings_prop_tile.dart';
 import 'widgets/settings_subpage_scaffold.dart';
@@ -141,7 +142,7 @@ unawaited(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text('Export your Suwayomi library, categories, reading tracking, and history into a .tachibk archive.', style: TextStyle(fontSize: 13, color: SunfireColors.contentTertiary)),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: SunfireSpacing.lg),
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Include Categories', style: TextStyle(fontSize: 14)),
@@ -360,7 +361,7 @@ unawaited(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(filename, style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
+                const SizedBox(height: SunfireSpacing.sm),
                 if (validation == null)
                   const Text('Could not validate — restore may still work, but missing sources are unknown.')
                 else if (validation.isClean)
@@ -379,7 +380,7 @@ unawaited(
                     ),
                   ),
                 ],
-                const SizedBox(height: 12),
+                const SizedBox(height: SunfireSpacing.md),
                 const Text('This replaces library data on the server. Continue?', style: TextStyle(fontSize: 13)),
               ],
             ),
@@ -411,7 +412,7 @@ unawaited(
           content: Row(
             children: [
               const CircularProgressIndicator(),
-              const SizedBox(width: 16),
+              const SizedBox(width: SunfireSpacing.lg),
               Expanded(child: Text(label)),
             ],
           ),

@@ -19,6 +19,7 @@ import '../../../core/db/models/chapter.dart';
 import '../../../core/engine/javascript/m_client.dart';
 import '../../../core/engine/quickjs_service.dart';
 import '../../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../double_page_layout.dart';
 import '../reading_mode.dart';
 import 'navigation_controller.dart'
@@ -360,9 +361,9 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
                 style: TextStyle(color: fg.withValues(alpha: 0.54), fontSize: 13),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: SunfireSpacing.sm),
               Divider(color: fg.withValues(alpha: 0.24), height: 1),
-              const SizedBox(height: 8),
+              const SizedBox(height: SunfireSpacing.sm),
               Text(
                 name == null ? 'No next chapter' : 'Next: $name',
                 style: TextStyle(
@@ -502,12 +503,12 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.broken_image_rounded, size: 48, color: SunfireColors.contentTertiary),
-            const SizedBox(height: 12),
+            const SizedBox(height: SunfireSpacing.md),
             Text(
               'Failed to load image',
               style: TextStyle(color: SunfireColors.contentTertiary),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: SunfireSpacing.sm),
             OutlinedButton.icon(
               icon: const Icon(Icons.refresh_rounded, size: 18),
               label: const Text('Retry'),
@@ -548,7 +549,7 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
                   chapter: widget.nextChapter!,
                   labelColor: primaryColor,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: SunfireSpacing.xl),
                 SizedBox(
                   width: double.infinity,
                   height: 44,
@@ -623,7 +624,7 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
           children: [
             if (chapter.isDownloaded) ...[
               Icon(Icons.check_circle_rounded, color: labelColor, size: 18),
-              const SizedBox(width: 8),
+              const SizedBox(width: SunfireSpacing.sm),
             ],
             Expanded(
               child: Text(

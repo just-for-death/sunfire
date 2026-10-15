@@ -6,6 +6,7 @@ import '../../core/engine/quickjs_service.dart';
 import '../../core/engine/source_preferences.dart';
 import '../../core/services/image_cache_helper.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/widgets/dialog_controllers.dart';
 
 class SourceConfigurationScreen extends StatefulWidget {
@@ -118,7 +119,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
                 'Override the default endpoint with a community mirror or proxy if blocked in your region.',
                 style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: SunfireSpacing.md),
               TextField(
                 controller: controller,
                 autofocus: true,
@@ -219,7 +220,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
                   ],
                 ),
                 if (_defaultBaseUrl != null && _defaultBaseUrl!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                   Text(
                     'Default URL: $_defaultBaseUrl',
                     style: const TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
@@ -284,7 +285,7 @@ class _SourceConfigurationScreenState extends State<SourceConfigurationScreen> {
             },
           ),
           const Divider(),
-          const SizedBox(height: 16),
+          const SizedBox(height: SunfireSpacing.lg),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: SunfireColors.error, width: 1),

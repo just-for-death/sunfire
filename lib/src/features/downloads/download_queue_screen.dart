@@ -9,6 +9,7 @@ import '../../core/sync/graphql_client_service.dart';
 import '../../core/sync/websocket_service.dart';
 import '../../core/widgets/empty_state_widget.dart';
 import '../../ui/design_system/sunfire_theme.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 
 class DownloadQueueScreen extends StatefulWidget {
@@ -310,7 +311,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                             valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: SunfireSpacing.xs),
                         Text(
                           '${(task.progress * 100).toInt()}% • Downloading...',
                           style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
@@ -416,9 +417,9 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.cloud_off_rounded, size: 54, color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(120)),
-              const SizedBox(height: 16),
+              const SizedBox(height: SunfireSpacing.lg),
               const Text('No Suwayomi Server Connected', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 8),
+              const SizedBox(height: SunfireSpacing.sm),
               Text(
                 'Connect a Suwayomi server in Settings to manage remote server downloads, or use the Local Device tab for offline reading.',
                 textAlign: TextAlign.center,
@@ -552,7 +553,7 @@ class _DownloadQueueScreenState extends State<DownloadQueueScreen> with SingleTi
                       ),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: SunfireSpacing.xs),
                   Text(
                     statusLine,
                     style: TextStyle(

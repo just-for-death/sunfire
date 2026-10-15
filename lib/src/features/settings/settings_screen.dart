@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'about_screen.dart';
 import 'advanced_settings_screen.dart';
@@ -527,7 +528,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.search_rounded, size: 48, color: primaryColor.withValues(alpha: 0.5)),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: SunfireSpacing.lg),
                             Text('Type to search settings...', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 16)),
                           ],
                         ),
@@ -680,9 +681,9 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.search_off_rounded, size: 48, color: SunfireColors.contentTertiary.withAlpha(120)),
-            const SizedBox(height: 12),
+            const SizedBox(height: SunfireSpacing.md),
             Text('No settings found for "$_searchQuery"', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 4),
+            const SizedBox(height: SunfireSpacing.xs),
             const Text('Try searching for proxy, auth, download, or theme', style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 13)),
           ],
         ),

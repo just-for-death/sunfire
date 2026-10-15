@@ -32,6 +32,7 @@ import '../../core/widgets/sunfire_badge.dart';
 import '../../features/reader/chapter_number_utils.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import '../browse/global_search_screen.dart';
 import '../browse/migrate_search_screen.dart';
@@ -915,9 +916,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                   Text(_manga!.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: SunfireColors.contentTertiary, fontSize: 13)),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: SunfireSpacing.lg),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 280),
                     child: ListView(
@@ -942,7 +943,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                       }).toList(),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: SunfireSpacing.lg),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.primary,
@@ -1458,7 +1459,7 @@ unawaited(
                         ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: SunfireSpacing.lg),
                   _buildDownloadOptionTile('Next chapter', 1, unreadChapters, primaryColor, downloadToLocal),
                   _buildDownloadOptionTile('Next 5 chapters', 5, unreadChapters, primaryColor, downloadToLocal),
                   _buildDownloadOptionTile('Next 10 chapters', 10, unreadChapters, primaryColor, downloadToLocal),
@@ -1579,7 +1580,7 @@ unawaited(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(ch.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
+              const SizedBox(height: SunfireSpacing.lg),
               ListTile(
                 leading: Icon(Icons.check_box_outlined, color: primaryColor),
                 title: const Text('Select', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1722,7 +1723,7 @@ unawaited(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.search_off_rounded, size: 48, color: SunfireColors.contentTertiary.withValues(alpha: 0.6)),
-                const SizedBox(height: 12),
+                const SizedBox(height: SunfireSpacing.md),
                 const Text(
                   'This series is no longer in your library.',
                   textAlign: TextAlign.center,
@@ -1734,7 +1735,7 @@ unawaited(
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 13, color: SunfireColors.contentTertiary),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: SunfireSpacing.lg),
                 FilledButton.icon(
                   onPressed: () => context.canPop() ? context.pop() : context.go('/library'),
                   icon: const Icon(Icons.arrow_back_rounded, size: 18),
@@ -1903,7 +1904,7 @@ unawaited(
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: SunfireSpacing.md),
                 Center(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(18),
@@ -1935,14 +1936,14 @@ unawaited(
                     Text(manga.sourceName, style: TextStyle(color: primaryColor, fontSize: 13, fontWeight: FontWeight.bold)),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: SunfireSpacing.md),
                 Row(
                   children: [
                     SunfireBadge(
                       label: (manga.status ?? 'Ongoing').toUpperCase(),
                       color: SunfireColors.success,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: SunfireSpacing.sm),
                     SunfireBadge(
                       label: '${sortedChapters.length} CHAPTERS',
                       color: SunfireColors.contentDisabled,
@@ -1950,7 +1951,7 @@ unawaited(
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: SunfireSpacing.lg),
                 Row(
                   children: [
                     Expanded(
@@ -1959,7 +1960,7 @@ unawaited(
                           backgroundColor: manga.inLibrary ? SunfireColors.error.withValues(alpha: 0.2) : primaryColor,
                           foregroundColor: manga.inLibrary ? SunfireColors.error : cs.onPrimary,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                         ),
                         onPressed: _toggleInLibrary,
                         onLongPress: manga.inLibrary ? _showCategoryPickerDialog : null,
@@ -1970,14 +1971,14 @@ unawaited(
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: SunfireSpacing.sm),
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: cs.onSurface,
                           side: BorderSide(color: SunfireTheme.tileBorder(context)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                         ),
                         onPressed: () => TrackingBottomSheet.show(context, widget.mangaServerId, manga.title),
                         icon: const Icon(Icons.sync_alt_rounded, size: 18),
@@ -1986,7 +1987,7 @@ unawaited(
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: SunfireSpacing.md),
                 Builder(
                   builder: (context) {
                     final hasReadAny = _chapters.any((c) => c.isRead || c.lastPageRead > 0);
@@ -1995,7 +1996,7 @@ unawaited(
                         backgroundColor: SunfireTheme.overlayFill(context),
                         foregroundColor: cs.onSurface,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                       ),
                       onPressed: _continueReading,
                       icon: Icon(Icons.play_arrow_rounded, color: primaryColor, size: 22),
@@ -2006,7 +2007,7 @@ unawaited(
                     );
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: SunfireSpacing.lg),
                 if (manga.genres.isNotEmpty) ...[
                   Wrap(
                     spacing: 8,
@@ -2019,7 +2020,7 @@ unawaited(
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: SunfireSpacing.md),
                 ],
                 MoreLikeThisRow(manga: manga),
                 if (_tags.isNotEmpty) ...[
@@ -2041,7 +2042,7 @@ unawaited(
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: SunfireSpacing.lg),
                 ] else ...[
                   Align(
                     alignment: Alignment.centerLeft,
@@ -2051,7 +2052,7 @@ unawaited(
                       label: const Text('Add tags'),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                 ],
                 Text(
                   manga.description ?? 'No synopsis available for this manga.',
@@ -2455,7 +2456,7 @@ unawaited(
                           backgroundColor: manga.inLibrary ? SunfireColors.error.withValues(alpha: 0.2) : primaryColor,
                           foregroundColor: manga.inLibrary ? SunfireColors.error : cs.onPrimary,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                         ),
                         onPressed: _toggleInLibrary,
                         onLongPress: manga.inLibrary ? _showCategoryPickerDialog : null,
@@ -2466,14 +2467,14 @@ unawaited(
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: SunfireSpacing.md),
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: cs.onSurface,
                           side: BorderSide(color: SunfireTheme.tileBorder(context)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: SunfireSpacing.md),
                         ),
                         onPressed: () => TrackingBottomSheet.show(context, widget.mangaServerId, manga.title),
                         icon: const Icon(Icons.sync_alt_rounded, size: 20),
@@ -2482,7 +2483,7 @@ unawaited(
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: SunfireSpacing.md),
                 Builder(
                   builder: (context) {
                     final hasReadAny = _chapters.any((c) => c.isRead || c.lastPageRead > 0);
@@ -2517,7 +2518,7 @@ unawaited(
                     );
                   }
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: SunfireSpacing.lg),
                 if (manga.genres.isNotEmpty) ...[
                   Wrap(
                     spacing: 8,
@@ -2530,7 +2531,7 @@ unawaited(
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: SunfireSpacing.md),
                 ],
                 MoreLikeThisRow(manga: manga),
                 if (_tags.isNotEmpty) ...[
@@ -2552,7 +2553,7 @@ unawaited(
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: SunfireSpacing.lg),
                 ] else ...[
                   Align(
                     alignment: Alignment.centerLeft,
@@ -2562,7 +2563,7 @@ unawaited(
                       label: const Text('Add tags'),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                 ],
                 GestureDetector(
                   onTap: () => setState(() => _isDescExpanded = !_isDescExpanded),
@@ -2586,7 +2587,7 @@ unawaited(
                             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13.5, height: 1.45),
                           ),
                           if (manga.description != null && manga.description!.length > 100) ...[
-                            const SizedBox(height: 8),
+                            const SizedBox(height: SunfireSpacing.sm),
                             Text(
                               _isDescExpanded ? 'Show less' : 'Read more',
                               style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
@@ -2645,7 +2646,7 @@ unawaited(
                   ],
                 ),
                 if (_isSearchingChapters) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: SunfireSpacing.sm),
                   TextField(
                     autofocus: true,
                     style: TextStyle(color: cs.onSurface, fontSize: 14),
@@ -2667,7 +2668,7 @@ unawaited(
                     onChanged: (val) => setState(() => _chapterSearch = val),
                   ),
                 ],
-                const SizedBox(height: 8),
+                const SizedBox(height: SunfireSpacing.sm),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -2812,7 +2813,7 @@ unawaited(
                         style: TextStyle(fontSize: 11.5, color: ch.isRead ? SunfireColors.contentTertiary : primaryColor),
                       ),
                     if (!ch.isRead && ch.lastPageRead > 0 && ch.pageCount > 0) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: SunfireSpacing.xs),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(3),
                         child: LinearProgressIndicator(

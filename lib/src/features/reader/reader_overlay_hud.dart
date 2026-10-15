@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/db/models/chapter.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import 'controller/reader_theme.dart';
 import 'reading_mode.dart';
 
@@ -434,7 +435,7 @@ class _BottomBar extends StatelessWidget {
                                       size: 13,
                                       color: primaryColor,
                                     ),
-                                    const SizedBox(width: 4),
+                                    const SizedBox(width: SunfireSpacing.xs),
                                     Text(
                                       readingModeHudLabel(readingMode),
                                       style: TextStyle(
@@ -692,7 +693,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                               ? SunfireColors.overlayHighlight
                               : primaryColor,
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: SunfireSpacing.xs),
                         Text(
                           '${autoScrollSpeed.round()}',
                           style: TextStyle(
@@ -764,7 +765,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: SunfireSpacing.xs),
                       GestureDetector(
                         onTap: () {
                           unawaited(HapticFeedback.selectionClick());
@@ -843,7 +844,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: SunfireSpacing.xs),
                       GestureDetector(
                         onTap: () {
                           unawaited(HapticFeedback.lightImpact());

@@ -21,6 +21,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/sunfire_theme.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/shell/sunfire_breakpoints.dart';
 import 'extension_details_screen.dart';
 import 'global_search_screen.dart';
@@ -849,7 +850,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.error_outline_rounded, size: 44, color: SunfireColors.contentTertiary),
-              const SizedBox(height: 12),
+              const SizedBox(height: SunfireSpacing.md),
               const Text(
                 'Could not load sources',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -862,7 +863,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 12, color: SunfireColors.contentTertiary),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: SunfireSpacing.lg),
               FilledButton.icon(
                 onPressed: () {
                   setState(() {
@@ -972,7 +973,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 onChanged: (val) => setState(() => _sourceSearchQuery = val),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: SunfireSpacing.sm),
             PopupMenuButton<String>(
               icon: Icon(Icons.filter_list_rounded, color: primaryColor),
               onSelected: (lang) {
@@ -1025,7 +1026,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   unawaited(_savePersistentFilters());
                 },
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: SunfireSpacing.sm),
               ChoiceChip(
                 avatar: const Icon(Icons.flash_on_rounded, size: 15, color: SunfireColors.sourceLocalJs),
                 label: const Text('Local JS'),
@@ -1051,7 +1052,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   unawaited(_savePersistentFilters());
                 },
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: SunfireSpacing.sm),
               ChoiceChip(
                 avatar: const Icon(Icons.cloud_queue_rounded, size: 15, color: SunfireColors.sourceServer),
                 label: const Text('Server (Suwayomi)'),
@@ -1077,7 +1078,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   unawaited(_savePersistentFilters());
                 },
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: SunfireSpacing.sm),
               ChoiceChip(
                 avatar: const Icon(Icons.push_pin_rounded, size: 15, color: SunfireColors.trackerAmber),
                 label: const Text('Pinned'),
@@ -1106,27 +1107,27 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: SunfireSpacing.md),
       ],
     ];
     if (pinned.isNotEmpty) {
       rows
         ..add(Text('PINNED SOURCES', style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)))
-        ..add(const SizedBox(height: 8))
+        ..add(const SizedBox(height: SunfireSpacing.sm))
         ..addAll(pinned)
         ..add(const Divider(height: 24, color: SunfireColors.borderHairline));
     }
     if (localJsUnpinned.isNotEmpty && _selectedSourceFilter != 'Server') {
       rows
         ..add(const Text('LOCAL EXTENSIONS (ON-DEVICE)', style: TextStyle(color: SunfireColors.sourceLocalJs, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)))
-        ..add(const SizedBox(height: 8))
+        ..add(const SizedBox(height: SunfireSpacing.sm))
         ..addAll(localJsUnpinned)
-        ..add(const SizedBox(height: 16));
+        ..add(const SizedBox(height: SunfireSpacing.lg));
     }
     if (serverUnpinned.isNotEmpty && _selectedSourceFilter != 'Local JS') {
       rows
         ..add(const Text('SERVER SOURCES (SUWAYOMI)', style: TextStyle(color: SunfireColors.sourceServer, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)))
-        ..add(const SizedBox(height: 8))
+        ..add(const SizedBox(height: SunfireSpacing.sm))
         ..addAll(serverUnpinned);
     }
     if (filtered.isEmpty) {
@@ -1142,7 +1143,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     size: 48,
                     color: SunfireColors.contentDisabled,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: SunfireSpacing.md),
                   Text(
                     _selectedSourceFilter == 'Server'
                         ? 'No server sources found'
@@ -1157,7 +1158,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: SunfireColors.contentTertiary, fontSize: 12),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: SunfireSpacing.lg),
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: primaryColor,
@@ -1237,7 +1238,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     ),
                     onPressed: () => _toggleSourcePin(id),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: SunfireSpacing.sm),
                   Container(
                     width: 36,
                     height: 36,
@@ -1282,7 +1283,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: SunfireSpacing.sm),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1418,7 +1419,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             final customRepos = SettingsService.instance.customRepos;
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: SunfireSpacing.md),
               child: Row(
                 children: [
                   Padding(
@@ -1473,12 +1474,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             );
           },
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: SunfireSpacing.sm),
 
         // ── EXTENSION TYPE FILTER SUB-ROW ──
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: SunfireSpacing.md),
           child: Row(
             children: [
               FilterChip(
@@ -1560,7 +1561,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 ),
                 onSelected: (_) => setState(() => _selectedExtensionFilter = 'Installed'),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: SunfireSpacing.sm),
               ActionChip(
                 avatar: const Icon(Icons.download_done_rounded, size: 16, color: SunfireColors.sourceLocalJs),
                 label: const Text('Install All', style: TextStyle(color: SunfireColors.sourceLocalJs, fontWeight: FontWeight.bold, fontSize: 12)),
@@ -1571,7 +1572,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: SunfireSpacing.sm),
 
         Expanded(
           child: _isLoadingExtensions
@@ -1590,7 +1591,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                               size: 56,
                               color: primaryColor.withAlpha(120),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: SunfireSpacing.lg),
                             Text(
                               _selectedExtensionFilter == 'Server APK'
                                   ? 'No Server APKs Found'
@@ -1599,7 +1600,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                       : 'No Extensions Found'),
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: SunfireSpacing.sm),
                             Text(
                               _selectedExtensionFilter == 'Server APK'
                                   ? 'No Keiyoushi APK extensions found on your Suwayomi server. Switch to Local JS or All to use on-device extensions.'
@@ -1680,7 +1681,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                     ),
                                   ),
                                 ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: SunfireSpacing.md),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1709,7 +1710,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: SunfireSpacing.sm),
                               if (isInstalled) ...[
                                 if (hasUpdate) ...[
                                   IconButton(
@@ -1850,7 +1851,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: SunfireSpacing.sm),
         if (migrationItems.isEmpty)
           const Padding(
             padding: EdgeInsets.all(24.0),
@@ -2044,13 +2045,13 @@ unawaited(
               size: 56,
               color: SunfireColors.destructive,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
             const Text(
               'QuickJS Engine Unavailable',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: SunfireSpacing.md),
             Text(
               'The JavaScript extension engine could not be initialized on this device.\n\n'
               'Error: $error\n\n'

@@ -14,6 +14,7 @@ import '../../core/services/settings_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/sunfire_badge.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
+import '../../ui/design_system/tokens/sunfire_spacing.dart';
 import '../../ui/widgets/dialog_title.dart';
 import '../../ui/widgets/proxy_url_display.dart';
 import '../shared/friendly_network_error.dart';
@@ -355,7 +356,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
           Row(
             children: [
               Icon(Icons.terminal_rounded, color: primaryColor),
-              const SizedBox(width: 8),
+              const SizedBox(width: SunfireSpacing.sm),
               const Text('Live Diagnostics', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const Spacer(),
               IconButton(
@@ -380,7 +381,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           TextField(
             controller: _searchController,
             onChanged: (val) => setState(() => _searchQuery = val.trim()),
@@ -402,7 +403,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -422,7 +423,7 @@ class _LiveLogViewerSheetState extends State<_LiveLogViewerSheet> {
               }).toList(),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: SunfireSpacing.sm),
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -551,7 +552,7 @@ class _CfProxyDialogState extends State<_CfProxyDialog> {
               'Bypasses Cloudflare Turnstile challenges for protected sources and extensions.',
               style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: SunfireSpacing.lg),
             TextField(
               controller: _controller,
               keyboardType: TextInputType.url,
@@ -561,14 +562,14 @@ class _CfProxyDialogState extends State<_CfProxyDialog> {
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: SunfireSpacing.sm),
             // ISS-021 (1): UIX-10 keeps the URL in secure storage only.
             Text(
               'Saved in secure storage. If secure storage is unavailable on this device, the URL is kept for this session only.',
               style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
             ),
             if (_testStatus.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: SunfireSpacing.md),
               Text(
                 _testStatus,
                 style: TextStyle(
