@@ -11,7 +11,6 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/db/models/chapter.dart';
@@ -63,7 +62,6 @@ class GesturePipeline {
   List<String> _pageUrls = const [];
   Chapter? _nextChapter;
   Chapter? _prevChapter;
-  DateTime? _autoScrollStartTime;
   Offset? _doubleTapDetails;
 
   // R9.1: smart-zoom inputs (set by owner; null = unknown -> fallback).
@@ -83,9 +81,9 @@ class GesturePipeline {
   CurvedAnimation? _activeZoomCurve;
   VoidCallback? _zoomTickListener;
   int _zoomGeneration = 0;
-  Ticker? _autoScrollTicker;
   ScrollController? _scrollController;
   DateTime? _lastNextPageNavAt;
+  DateTime? _lastPrevPageNavAt;
 
   // ─── Callbacks (set by owner) ────────────────────────────────────
   /// Called when tap zones should be shown/hidden
@@ -108,6 +106,10 @@ class GesturePipeline {
 
   /// Called to stop auto-scroll
   void Function()? onStopAutoScroll;
+
+  /// Called when auto-scroll is requested. The owner drives the single
+  /// ticker (GesturePipeline owns no ticker); unset = flags only.
+  void Function()? onAutoScrollStarted;
 
   /// Called to scroll vertically by delta (webtoon mode)
   void Function(double delta)? onScrollVerticalBy;
@@ -338,7 +340,6 @@ class GesturePipeline {
   /// Handle pointer up (for auto-scroll resume)
   void handlePointerUp(PointerUpEvent event) {
     if (_isUserTouching) {
-      _autoScrollStartTime = DateTime.now();
       _isUserTouching = false;
       onUserTouchingChanged?.call(false);
     }
@@ -347,7 +348,6 @@ class GesturePipeline {
   /// Handle pointer cancel (for auto-scroll resume)
   void handlePointerCancel(PointerCancelEvent event) {
     if (_isUserTouching) {
-      _autoScrollStartTime = DateTime.now();
       _isUserTouching = false;
       onUserTouchingChanged?.call(false);
     }
@@ -381,47 +381,19 @@ class GesturePipeline {
     _syncZoomedFlag();
   }
 
-  /// Update auto-scroll ticker (called from ticker callback)
-  void updateAutoScroll(Duration elapsed) {
-    if (!_isAutoScrolling) return;
-    if (_isUserTouching && settings.autoScrollPauseOnTouch) return;
-
-    double safeDt = elapsed.inMilliseconds / 1000.0;
-    if (safeDt <= 0 || safeDt > 1.0) return;
-
-    double easeMultiplier = 1.0;
-    if (settings.autoScrollSmoothEaseIn && _autoScrollStartTime != null) {
-      final elapsedMs = DateTime.now().difference(_autoScrollStartTime!).inMilliseconds;
-      if (elapsedMs < 1000) {
-        easeMultiplier = (elapsedMs / 1000.0).clamp(0.0, 1.0);
-      }
-    }
-
-    final step = _autoScrollSpeed * safeDt * easeMultiplier;
-    _scrollVerticalBy(step);
-  }
-
-  /// Start auto-scroll
+  /// Start auto-scroll. Single-ticker rule: the owner (ReaderInputPipeline)
+  /// drives the ticker; this only flips state and notifies. There is no
+  /// second ticker to leak or fight, and stop always fully clears state.
   void startAutoScroll() {
-    if (_isAutoScrolling) return;
     _isAutoScrolling = true;
     _isUserTouching = false;
-    _autoScrollStartTime = DateTime.now();
-
-    _autoScrollTicker?.stop();
-    _autoScrollTicker?.dispose();
-    _autoScrollTicker = Ticker(updateAutoScroll);
-    _autoScrollTicker!.start();
+    onAutoScrollStarted?.call();
   }
 
-  /// Stop auto-scroll
+  /// Stop auto-scroll. Unconditional: a stale flag with a live ticker is
+  /// impossible because no ticker lives here.
   void stopAutoScroll() {
-    if (!_isAutoScrolling) return;
     _isAutoScrolling = false;
-    _autoScrollTicker?.stop();
-    _autoScrollTicker?.dispose();
-    _autoScrollTicker = null;
-    _autoScrollStartTime = null;
     _isUserTouching = false;
   }
 
@@ -557,11 +529,11 @@ class GesturePipeline {
 
       if (hasPrevViewport && pageControllerHasClients?.call() == true) {
         final now = DateTime.now();
-        if (_lastNextPageNavAt != null &&
-            now.difference(_lastNextPageNavAt!) < const Duration(milliseconds: 250)) {
+        if (_lastPrevPageNavAt != null &&
+            now.difference(_lastPrevPageNavAt!) < const Duration(milliseconds: 250)) {
           return;
         }
-        _lastNextPageNavAt = now;
+        _lastPrevPageNavAt = now;
         unawaited(HapticFeedback.lightImpact());
         onAnimatePage?.call(duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
       } else if (_prevChapter != null) {
@@ -713,14 +685,6 @@ class GesturePipeline {
     _scrollController = null;
     _activeZoomCurve = null;
     _zoomTickListener = null;
-
-    try {
-      _autoScrollTicker?.stop();
-    } catch (e) { debugPrint('[gesture_pipeline] ignored: $e'); }
-    try {
-      _autoScrollTicker?.dispose();
-    } catch (e) { debugPrint('[gesture_pipeline] ignored: $e'); }
-    _autoScrollTicker = null;
 
     // Do not dispose webtoon zoom controllers — UI owns the map.
     _webtoonZoomControllers = {};

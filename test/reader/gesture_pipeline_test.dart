@@ -16,6 +16,7 @@ import 'package:sunfire/src/features/reader/reading_mode.dart';
 import 'package:sunfire/src/features/reader/tap_zones.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late SettingsService settings;
   late GesturePipeline pipeline;
   late bool toggledControls;
@@ -118,5 +119,29 @@ void main() {
     pipeline.handleTapZone(tapAt(280, 300), constraints);
     expect(prevPageCalls, 1);
     expect(nextPageCalls, 0);
+  });
+
+  test('prev-page throttle is independent of next-page throttle', () {
+    // Bypass the live-reader delegates to exercise the internal throttle.
+    pipeline.onGoToNextPage = null;
+    pipeline.onGoToPrevPage = null;
+    pipeline.pageControllerHasClients = () => true;
+    var animates = 0;
+    pipeline.onAnimatePage = ({Duration? duration, Curve? curve}) => animates++;
+    pipeline.handleTapZone(tapAt(280, 300), constraints); // next
+    expect(animates, 1);
+    pipeline.handleTapZone(tapAt(20, 300), constraints); // prev, immediately after
+    expect(animates, 2, reason: 'a Next tap must not swallow the Prev tap');
+  });
+
+  test('start notifies owner; stop always clears state', () {
+    var started = 0;
+    pipeline.onAutoScrollStarted = () => started++;
+    pipeline.startAutoScroll();
+    expect(pipeline.isAutoScrolling, isTrue);
+    expect(started, 1);
+    pipeline.stopAutoScroll();
+    pipeline.stopAutoScroll(); // idempotent: no ticker left to leak
+    expect(pipeline.isAutoScrolling, isFalse);
   });
 }

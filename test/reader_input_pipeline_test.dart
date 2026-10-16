@@ -1,6 +1,7 @@
 // ISS-132: unit tests for the screen-owned ReaderInputPipeline (moved out of
 // the _ReaderGestures extension) and its single GesturePipeline (IMP-049a).
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sunfire/src/core/db/isar_service.dart';
@@ -20,8 +21,9 @@ class _FakeHost implements ReaderInputHost {
   int rebuilds = 0;
   @override
   bool mounted = true;
+  BuildContext? debugContext;
   @override
-  BuildContext get context => throw UnimplementedError('no context in unit tests');
+  BuildContext get context => debugContext ?? (throw UnimplementedError('no context in unit tests'));
   @override
   TickerProvider get vsync => const TestVSync();
   @override
@@ -195,5 +197,53 @@ void main() {
     input.stopAutoScroll();
     input.disposeAutoScrollTicker();
     expect(input.hasAutoScrollTicker, isFalse);
+  });
+
+  group('tap / double-tap disambiguation', () {
+    TapUpDetails tapAt(double dx, double dy) => TapUpDetails(
+          kind: PointerDeviceKind.touch,
+          globalPosition: Offset(dx, dy),
+          localPosition: Offset(dx, dy),
+        );
+    const constraints = BoxConstraints.tightFor(width: 300, height: 600);
+
+    Future<void> pumpHost(WidgetTester tester) async {
+      late BuildContext ctx;
+      await tester.pumpWidget(MaterialApp(
+          home: Builder(builder: (c) {
+        ctx = c;
+        return const SizedBox();
+      })));
+      host.debugContext = ctx;
+      host.readingMode = ReadingMode.pagedLtr;
+      input.wirePipelineCallbacks();
+    }
+
+    testWidgets('prev/next taps wait out the double-tap window', (tester) async {
+      await pumpHost(tester);
+      var next = 0;
+      input.gesturePipeline.onGoToNextPage = () => next++;
+      input.handleTapZone(tapAt(280, 300), constraints); // right third -> next
+      expect(next, 0, reason: 'page turn waits for double-tap timeout');
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(next, 1);
+    });
+
+    testWidgets('menu-zone tap toggles immediately', (tester) async {
+      await pumpHost(tester);
+      final before = host.showControls;
+      input.handleTapZone(tapAt(150, 300), constraints); // center -> menu
+      expect(host.showControls, isNot(before));
+    });
+
+    testWidgets('cancelPendingTap suppresses the delayed turn (double-tap wins)', (tester) async {
+      await pumpHost(tester);
+      var next = 0;
+      input.gesturePipeline.onGoToNextPage = () => next++;
+      input.handleTapZone(tapAt(280, 300), constraints);
+      input.cancelPendingTap();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(next, 0);
+    });
   });
 }

@@ -329,6 +329,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   /// is flushed by NavigationController (synced to our current page here).
   void _onChapterLoadStarted() {
     ++_loadGeneration;
+    _input.cancelPendingTap();
     _gestureNav.cancelProgressDebounce();
     _gestureNav.setCurrentPage(_currentPage);
     _stopAutoScroll();

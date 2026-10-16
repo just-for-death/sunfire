@@ -107,6 +107,12 @@ class ReaderInputPipeline {
   DateTime? _lastNextPageNavAt;
   bool showTapZoneOverlay = false;
 
+  /// Double-tap window: prev/next turns wait this long so a double-tap zoom
+  /// can cancel them. Below Flutter's kDoubleTapTimeout (300ms) so the zoom
+  /// itself never feels late.
+  static const Duration _kTapConfirmDelay = Duration(milliseconds: 260);
+  Timer? _pendingTapTimer;
+
   // iOS Hardware Volume Rocker Turn
   double? _lastIosVolume;
   DateTime _lastIosVolumeTurnTime = DateTime.now();
@@ -138,7 +144,10 @@ class ReaderInputPipeline {
   }
 
   /// Screen dispose, step 3.
-  void cancelScrollIndicatorTimer() => _scrollIndicatorTimer?.cancel();
+  void cancelScrollIndicatorTimer() {
+    _scrollIndicatorTimer?.cancel();
+    cancelPendingTap();
+  }
 
 
   /// R1.8: bind GesturePipeline callbacks to live reader actions once.
@@ -146,8 +155,14 @@ class ReaderInputPipeline {
     final gp = _gesturePipeline;
     gp.onToggleControls = toggleControls;
     gp.onStopAutoScroll = () {
+      gp.setIsAutoScrolling(false);
       stopAutoScroll();
       if (host.mounted) host.rebuild(() => isAutoScrolling = false);
+    };
+    // Single ticker lives here: a start request from anywhere (screen,
+    // ReaderController, Siri/shortcut resume) drives this ticker.
+    gp.onAutoScrollStarted = () {
+      if (!isAutoScrolling) startAutoScroll();
     };
     gp.onScrollVerticalBy = scrollVerticalBy;
     gp.onGoToNextPage = goToNextPage;
@@ -462,9 +477,54 @@ class ReaderInputPipeline {
   }
 
   void handleTapZone(TapUpDetails details, BoxConstraints constraints) {
-    // R1.8: GesturePipeline owns tap-zone routing.
+    // Double-tap disambiguation: menu toggles / auto-scroll stops / overlay
+    // dismisses stay instant; prev/next page turns wait out the double-tap
+    // window so a double-tap zoom never turns the page first (the pending
+    // turn is cancelled by handleDoubleTapZoom).
     syncGesturePipelineState();
-    _gesturePipeline.handleTapZone(details, constraints);
+    final action = _peekTapZoneAction(details, constraints);
+    if (action == null || action == TapZoneAction.menu) {
+      _gesturePipeline.handleTapZone(details, constraints);
+      return;
+    }
+    _pendingTapTimer?.cancel();
+    _pendingTapTimer = Timer(_kTapConfirmDelay, () {
+      _pendingTapTimer = null;
+      if (!host.mounted) return;
+      syncGesturePipelineState();
+      _gesturePipeline.handleTapZone(details, constraints);
+    });
+  }
+
+  /// Cancel a delayed page turn (a double-tap zoom won the gesture arena).
+  void cancelPendingTap() {
+    _pendingTapTimer?.cancel();
+    _pendingTapTimer = null;
+  }
+
+  /// Peek the tap-zone action without executing it. Null = handled
+  /// immediately by the caller (auto-scroll stop, overlay dismiss, zoomed
+  /// toggle). Mirrors GesturePipeline.handleTapZone's pre-checks.
+  TapZoneAction? _peekTapZoneAction(TapUpDetails details, BoxConstraints constraints) {
+    if (isAutoScrolling || showTapZoneOverlay) return null;
+    final webtoonZoomed = isWebtoonReadingMode(host.readingMode) &&
+        (host.webtoonZoomControllers[host.currentPage - 1]?.value.getMaxScaleOnAxis() ?? 1.0) > 1.05;
+    final preset = activeTapZonePreset();
+    if (!_settings.tapZonesEnabled || preset == TapZonePreset.off || isZoomed || webtoonZoomed) {
+      return null;
+    }
+    final raw = resolveTapZoneAction(
+      preset: preset,
+      dx: details.localPosition.dx,
+      dy: details.localPosition.dy,
+      width: constraints.maxWidth,
+      height: constraints.maxHeight,
+    );
+    return applyTapZoneModifiers(
+      raw,
+      invert: host.invertTaps,
+      rtlPaged: host.readingMode == ReadingMode.pagedRtl,
+    );
   }
 
   void syncReaderControllerPresentation() {
@@ -481,7 +541,9 @@ class ReaderInputPipeline {
   }
 
   void handleDoubleTapZoom({TransformationController? controllerOverride, int? pageIndex}) {
-    // R1.8: GesturePipeline owns double-tap smart zoom.
+    // R1.8: GesturePipeline owns double-tap smart zoom. Cancel any delayed
+    // page turn first: this tap's first half already scheduled one.
+    cancelPendingTap();
     syncGesturePipelineState(pageIndexForAspect: pageIndex);
     _gesturePipeline.setDoubleTapDetails(
         doubleTapDetails?.localPosition ?? Offset.zero);
