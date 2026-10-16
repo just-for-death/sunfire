@@ -223,7 +223,9 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _input.cancelRecenterGuard();
     WidgetsBinding.instance.removeObserver(this);
     _input.disposeAutoScrollTicker();
-    if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
+    // Restore on every platform where initVolumeKeyListener (or its Android
+    // branch) hides the HUD — otherwise it stays hidden system-wide.
+    if (!kIsWeb && (Platform.isIOS || Platform.isMacOS || Platform.isAndroid)) {
       try {
         VolumeController.instance.removeListener();
         VolumeController.instance.showSystemUI = true;

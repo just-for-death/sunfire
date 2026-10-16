@@ -2,6 +2,7 @@
 // the _ReaderGestures extension) and its single GesturePipeline (IMP-049a).
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sunfire/src/core/db/isar_service.dart';
@@ -197,6 +198,22 @@ void main() {
     input.stopAutoScroll();
     input.disposeAutoScrollTicker();
     expect(input.hasAutoScrollTicker, isFalse);
+  });
+
+  test('held-key auto-repeat is swallowed without navigating', () {
+    input.wirePipelineCallbacks();
+    final node = FocusNode();
+    final r = input.handleKeyEvent(
+      node,
+      KeyRepeatEvent(
+        logicalKey: LogicalKeyboardKey.space,
+        physicalKey: PhysicalKeyboardKey.space,
+        timeStamp: Duration.zero,
+      ),
+    );
+    expect(r, KeyEventResult.handled);
+    expect(host.currentPage, 1);
+    node.dispose();
   });
 
   group('tap / double-tap disambiguation', () {

@@ -795,6 +795,11 @@ class ReaderInputPipeline {
     if (pos.pixels > 20) return false;
     // Ignore while user is actively dragging / a fling is in progress.
     if (pos.isScrollingNotifier.value) return false;
+    return _canLoadPrevChapter();
+  }
+
+  /// 700ms chapter-load gate shared by paged and webtoon prev-chapter paths.
+  bool _canLoadPrevChapter() {
     final now = DateTime.now();
     if (_gestureNav.lastPrevChapterNavAt != null &&
         now.difference(_gestureNav.lastPrevChapterNavAt!) < const Duration(milliseconds: 700)) {
@@ -804,6 +809,9 @@ class ReaderInputPipeline {
   }
 
   KeyEventResult handleKeyEvent(FocusNode node, KeyEvent event) {
+    // Held keys arrive as KeyRepeatEvent (not KeyDownEvent); swallow them or
+    // a held Space/arrow/volume rocker spams page turns and chapter loads.
+    if (event is KeyRepeatEvent) return KeyEventResult.handled;
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     final key = event.logicalKey;
@@ -827,7 +835,12 @@ class ReaderInputPipeline {
     if (key == LogicalKeyboardKey.escape) {
       safeExitReader();
       return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.audioVolumeDown && _settings.volumeKeyTurn) {
+    }
+    // Volume rocker: exactly one path per platform. iOS/macOS use the
+    // volume-level listener (initVolumeKeyListener); Android/desktop/web use
+    // these key events. Handling both on one platform double-turns pages.
+    final volumeKeysOnThisPlatform = !(Platform.isIOS || Platform.isMacOS);
+    if (key == LogicalKeyboardKey.audioVolumeDown && _settings.volumeKeyTurn && volumeKeysOnThisPlatform) {
       // Debounce with the same window as the platform volume listener so a
       // single physical press isn't turned twice (keyboard event + listener).
       final now = DateTime.now();
@@ -836,7 +849,7 @@ class ReaderInputPipeline {
         goToNextPage();
       }
       return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.audioVolumeUp && _settings.volumeKeyTurn) {
+    } else if (key == LogicalKeyboardKey.audioVolumeUp && _settings.volumeKeyTurn && volumeKeysOnThisPlatform) {
       final now = DateTime.now();
       if (now.difference(_lastIosVolumeTurnTime).inMilliseconds >= 280) {
         _lastIosVolumeTurnTime = now;
@@ -1085,7 +1098,8 @@ class ReaderInputPipeline {
         _lastNextPageNavAt = now;
         unawaited(HapticFeedback.lightImpact());
         turnPage(host.pageController, forward: true, mode: parsePageTransition(_settings.pageTransition));
-      } else if (_gestureNav.nextChapter != null) {
+      } else if (_gestureNav.nextChapter != null && canAdvanceToNextChapter()) {
+        _gestureNav.lastNextChapterNavAt = DateTime.now();
         unawaited(_readerController.loadChapter(NavigationController.targetIdOf(_gestureNav.nextChapter!)));
       }
     } else {
@@ -1093,7 +1107,8 @@ class ReaderInputPipeline {
         final maxScroll = host.scrollController.position.maxScrollExtent;
         final currentOffset = host.scrollController.offset;
         if (maxScroll > 50 && currentOffset >= maxScroll - 20) {
-          if (_gestureNav.nextChapter != null) {
+          if (_gestureNav.nextChapter != null && canAdvanceToNextChapter()) {
+            _gestureNav.lastNextChapterNavAt = DateTime.now();
             unawaited(_readerController.loadChapter(NavigationController.targetIdOf(_gestureNav.nextChapter!)));
           }
         } else {
@@ -1131,7 +1146,8 @@ class ReaderInputPipeline {
         _lastPrevPageNavAt = now;
         unawaited(HapticFeedback.lightImpact());
         turnPage(host.pageController, forward: false, mode: parsePageTransition(_settings.pageTransition));
-      } else if (_gestureNav.prevChapter != null) {
+      } else if (_gestureNav.prevChapter != null && _canLoadPrevChapter()) {
+        _gestureNav.lastPrevChapterNavAt = DateTime.now();
         unawaited(_readerController.loadChapter(NavigationController.targetIdOf(_gestureNav.prevChapter!)));
       }
     } else {
