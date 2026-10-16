@@ -73,6 +73,15 @@ class SpreadSlot {
     if (invertDoublePages) return (secondaryIndex!, primaryIndex);
     return (primaryIndex, secondaryIndex);
   }
+
+  /// Visual left/right for [isRtl] reading direction. RTL mirrors pairing by
+  /// default; the user override XORs with it, so an explicit invert in RTL
+  /// restores LTR order instead of double-mirroring.
+  (int left, int? right) visualOrderForDirection({
+    required bool isRtl,
+    required bool invertDoublePages,
+  }) =>
+      visualOrder(invertDoublePages: isRtl != invertDoublePages);
 }
 
 /// Whether double-page layout should be active for the current orientation.

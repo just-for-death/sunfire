@@ -88,6 +88,10 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   // Floating scroll indicator for Webtoon mode
   final ValueNotifier<bool> _scrollIndicatorVisible = ValueNotifier(false);
   final ValueNotifier<int> _pageIndicator = ValueNotifier(1);
+  /// Layout-width bucket for cached heights (declared here: extensions
+  /// cannot hold instance fields). Heights are width-dependent, so
+  /// rotation/resize invalidates them instead of mislaying-out the strip.
+  int _heightWidthBucket = -1;
   final Map<String, double> _cachedPageHeights = {};
   final Map<int, TransformationController> _webtoonZoomControllers = {};
   int _loadGeneration = 0;
@@ -337,6 +341,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _stopAutoScroll();
     _gestureNav.pageLoader.resetDisplayState();
     _cachedPageHeights.clear();
+    _heightWidthBucket = -1;
     _cachedPageAspects.clear();
     for (final c in _webtoonZoomControllers.values) {
       c.dispose();

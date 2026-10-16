@@ -1033,6 +1033,7 @@ class ReaderInputPipeline {
     resetZoom();
     final slots = host.currentSpreadSlots();
     final useDouble = slots.isNotEmpty &&
+        !isVerticalPagedReadingMode(host.readingMode) &&
         shouldUseDoublePages(
           mode: parseDoublePageDisplayMode(_settings.doublePageDisplayMode),
           isLandscape: MediaQuery.sizeOf(host.context).width > MediaQuery.sizeOf(host.context).height,
@@ -1064,6 +1065,7 @@ class ReaderInputPipeline {
     final pageIndex = (page1Based - 1).clamp(0, _gestureNav.pageUrls.isEmpty ? 0 : _gestureNav.pageUrls.length - 1);
     final slots = host.currentSpreadSlots();
     final useDouble = slots.isNotEmpty &&
+        !isVerticalPagedReadingMode(host.readingMode) &&
         shouldUseDoublePages(
           mode: parseDoublePageDisplayMode(_settings.doublePageDisplayMode),
           isLandscape: MediaQuery.sizeOf(host.context).width > MediaQuery.sizeOf(host.context).height,
@@ -1078,6 +1080,7 @@ class ReaderInputPipeline {
     if (isPaged) {
       final slots = host.currentSpreadSlots();
       final useDouble = slots.isNotEmpty &&
+          !isVerticalPagedReadingMode(host.readingMode) &&
           shouldUseDoublePages(
             mode: parseDoublePageDisplayMode(_settings.doublePageDisplayMode),
             isLandscape: MediaQuery.sizeOf(host.context).width > MediaQuery.sizeOf(host.context).height,
@@ -1129,6 +1132,7 @@ class ReaderInputPipeline {
     if (isPaged) {
       final slots = host.currentSpreadSlots();
       final useDouble = slots.isNotEmpty &&
+          !isVerticalPagedReadingMode(host.readingMode) &&
           shouldUseDoublePages(
             mode: parseDoublePageDisplayMode(_settings.doublePageDisplayMode),
             isLandscape: MediaQuery.sizeOf(host.context).width > MediaQuery.sizeOf(host.context).height,

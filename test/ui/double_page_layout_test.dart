@@ -75,6 +75,14 @@ void main() {
       expect(slot.visualOrder(invertDoublePages: false), (2, 3));
       expect(slot.visualOrder(invertDoublePages: true), (3, 2));
     });
+
+    test('visualOrderForDirection mirrors RTL by default, XORs the override', () {
+      const slot = SpreadSlot(primaryIndex: 2, secondaryIndex: 3);
+      expect(slot.visualOrderForDirection(isRtl: false, invertDoublePages: false), (2, 3));
+      expect(slot.visualOrderForDirection(isRtl: true, invertDoublePages: false), (3, 2));
+      expect(slot.visualOrderForDirection(isRtl: true, invertDoublePages: true), (2, 3));
+      expect(slot.visualOrderForDirection(isRtl: false, invertDoublePages: true), (3, 2));
+    });
   });
 
   test('isWidePage threshold', () {

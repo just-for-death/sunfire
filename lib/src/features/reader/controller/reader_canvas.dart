@@ -193,7 +193,11 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
   }
 
   Widget _buildSpreadItem(BuildContext context, SpreadSlot slot, int spreadIndex) {
-    final order = slot.visualOrder(
+    // RTL mirrors pairing by default; the user override XORs with it (so an
+    // explicit invert in RTL restores LTR order instead of double-mirroring).
+    final rtl = widget.readingMode == ReadingMode.pagedRtl;
+    final order = slot.visualOrderForDirection(
+      isRtl: rtl,
       invertDoublePages: widget.controller.settings.invertDoublePages,
     );
     final left = order.$1;
@@ -463,14 +467,14 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
           panEnabled: enablePerPageZoom
               ? (transform.value.getMaxScaleOnAxis() > 1.05)
               : widget.controller.isZoomed,
-          onInteractionUpdate: (_) {
+          onInteractionUpdate: (details) {
             if (!enablePerPageZoom) {
-              // Zoom state sync handled by controller
+              widget.controller.gesturePipeline.handleInteractionUpdate(details);
             }
           },
-          onInteractionEnd: (_) {
+          onInteractionEnd: (details) {
             if (!enablePerPageZoom) {
-              // Zoom state sync handled by controller
+              widget.controller.gesturePipeline.handleInteractionEnd(details);
             }
           },
           child: image,

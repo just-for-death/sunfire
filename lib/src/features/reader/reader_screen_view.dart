@@ -314,6 +314,7 @@ extension _ReaderView on _ReaderScreenState {
   }
 
   Widget _buildPageWidget(String url, int index, {BoxConstraints? constraints, bool isPaged = false, double? contentWidth, bool enablePerPageZoom = false}) {
+    _resyncHeightBucket(contentWidth ?? constraints?.maxWidth);
     return buildReaderPageWidget(ReaderPageWidgetConfig(
       url: url,
       devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
@@ -670,6 +671,10 @@ extension _ReaderView on _ReaderScreenState {
     _cachedPageHeights[url] = h;
     // R1.8: keep PageLoader height cache in sync for layout consumers.
     _pageLoader?.cacheHeight(url, h);
+    // The placeholder was an estimate: rebuild once (guarded to the live
+    // chapter) so the strip adopts the intrinsic height now instead of
+    // jumping on the next unrelated rebuild.
+    if (_pageUrls.contains(url)) _rebuild(() {});
   }
 
   void _schedulePageHeightCacheForProvider(String url, double width, ImageProvider provider) {
@@ -689,6 +694,7 @@ extension _ReaderView on _ReaderScreenState {
     final stream = provider.resolve(ImageConfiguration(size: Size(width, width * 2)));
     late final ImageStreamListener listener;
     var released = false;
+    Timer? watchdog;
     void release() {
       // Idempotent. An ImageStream can deliver onError and then onImage for the
       // same key (Flutter's completer transitions loading -> error, and a
@@ -698,6 +704,7 @@ extension _ReaderView on _ReaderScreenState {
       // the leak this guard exists to prevent.
       if (released) return;
       released = true;
+      watchdog?.cancel();
       _heightProbesInFlight.remove(url);
       stream.removeListener(listener);
     }
@@ -709,6 +716,20 @@ extension _ReaderView on _ReaderScreenState {
       release();
     });
     stream.addListener(listener);
+    // A hung stream (or a page scrolled away before completion) must not
+    // pin the dedup entry forever and block all future probes for the URL.
+    watchdog = Timer(const Duration(seconds: 30), release);
+  }
+
+  /// Layout-width bucket lives on the state (extensions cannot hold
+  /// instance fields); see [_heightWidthBucket].
+  void _resyncHeightBucket(double? width) {
+    if (width == null) return;
+    final bucket = (width / 8).round();
+    if (bucket == _heightWidthBucket) return;
+    _heightWidthBucket = bucket;
+    _cachedPageHeights.clear();
+    _pageLoader?.clearHeights();
   }
 
   void _applyMangaReadingMode(Manga? manga) {

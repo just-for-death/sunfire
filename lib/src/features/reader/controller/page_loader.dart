@@ -363,6 +363,10 @@ class PageLoader {
     _cachedHeights[url] = height;
   }
 
+  /// Drop all intrinsic heights (rotation/resize invalidates width-dependent
+  /// layout estimates).
+  void clearHeights() => _cachedHeights.clear();
+
   /// I3: synchronous peek at LRU image bytes (bumps recency on hit).
   Uint8List? peekCachedBytes(String url) {
     if (_disposed) return null;

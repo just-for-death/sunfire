@@ -59,6 +59,15 @@ void main() {
     l.dispose();
   });
 
+  test('clearHeights drops intrinsic heights (rotation invalidates estimates)', () {
+    final l = newLoader(10000);
+    l.cacheHeight('a', 1200.0);
+    expect(l.getCachedHeight('a'), 1200.0);
+    l.clearHeights();
+    expect(l.getCachedHeight('a'), 0.0);
+    l.dispose();
+  });
+
   test('handleMemoryPressure keeps only the newest quarter of the budget', () {
     final l = newLoader(1000);
     for (final k in ['a', 'b', 'c', 'd']) {
