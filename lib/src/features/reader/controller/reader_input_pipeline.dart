@@ -389,7 +389,14 @@ class ReaderInputPipeline {
     ];
     if (evict.isEmpty) return;
     for (final k in evict) {
-      host.webtoonZoomControllers.remove(k)?.dispose();
+      final c = host.webtoonZoomControllers.remove(k);
+      if (c == null) continue;
+      // Called from itemBuilder (build phase): detach now, dispose after the
+      // frame so a still-mounted InteractiveViewer is never torn down
+      // mid-build. Skip if the index was re-created meanwhile.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!identical(host.webtoonZoomControllers[k], c)) c.dispose();
+      });
     }
   }
 
@@ -421,7 +428,13 @@ class ReaderInputPipeline {
     _activeZoomCurve = curved;
     final gen = _zoomGeneration;
     void tick() {
-      transform.value = animation.value;
+      // The controller may have been disposed (prune/swap/teardown) while
+      // this animation was in flight; a write then throws StateError.
+      try {
+        transform.value = animation.value;
+      } catch (_) {
+        return;
+      }
     }
     _zoomTickListener = tick;
     controller.addListener(tick);
@@ -547,6 +560,8 @@ class ReaderInputPipeline {
     syncGesturePipelineState(pageIndexForAspect: pageIndex);
     _gesturePipeline.setDoubleTapDetails(
         doubleTapDetails?.localPosition ?? Offset.zero);
+    // Consume: a later zoom must not anchor to this page's position.
+    doubleTapDetails = null;
     _gesturePipeline.handleDoubleTapZoom(
         controllerOverride: controllerOverride);
   }

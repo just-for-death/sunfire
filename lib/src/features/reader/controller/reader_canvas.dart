@@ -684,7 +684,12 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
         .where((k) => (k - currentIndex).abs() > keepWindow)
         .toList();
     for (final k in evict) {
-      widget.webtoonZoomControllers.remove(k)?.dispose();
+      final c = widget.webtoonZoomControllers.remove(k);
+      if (c == null) continue;
+      // Detach now, dispose after the frame (see input pipeline prune).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!identical(widget.webtoonZoomControllers[k], c)) c.dispose();
+      });
     }
   }
 }

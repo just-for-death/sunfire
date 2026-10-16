@@ -81,6 +81,9 @@ TapZoneAction resolveTapZoneAction({
   required double height,
 }) {
   if (width <= 0 || height <= 0) return TapZoneAction.menu;
+  // Outside the content rect (letterbox padding, overscroll): menu, never a
+  // page turn. Clamping instead misroutes edge taps as prev/next.
+  if (dx < 0 || dy < 0 || dx > width || dy > height) return TapZoneAction.menu;
   final x = (dx / width).clamp(0.0, 1.0);
   final y = (dy / height).clamp(0.0, 1.0);
 
@@ -111,6 +114,8 @@ TapZoneAction resolveTapZoneAction({
 }
 
 /// Applies invert (swap prev/next) then optional RTL reading-direction swap.
+/// Invert + RTL together cancel out (double negation) by design — the same
+/// XOR rule as spread pairing — so an explicit invert in RTL restores LTR.
 TapZoneAction applyTapZoneModifiers(
   TapZoneAction action, {
   required bool invert,

@@ -303,7 +303,8 @@ extension _ReaderView on _ReaderScreenState {
   /// R9.3/R9.4: Listen sheet - OCR transcript with TTS playback.
   void _showListenSheet() {
     if (_pageUrls.isEmpty) return;
-    final currentUrl = _pageUrls[_currentPage - 1];
+    final safePage = _currentPage.clamp(1, _pageUrls.length);
+    final currentUrl = _pageUrls[safePage - 1];
     final headers = QuickJsService.getImageHeaders(_sourceName ?? '', currentUrl);
     unawaited(ListenSheet.show(
       context,

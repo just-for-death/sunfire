@@ -959,7 +959,13 @@ class ReaderController {
     final gen = _zoomGeneration;
     void tick() {
       if (gen != _zoomGeneration) return;
-      transform.value = animation.value;
+      // The controller may have been disposed while this animation was in
+      // flight; a write then throws StateError.
+      try {
+        transform.value = animation.value;
+      } catch (_) {
+        return;
+      }
     }
 
     _zoomTickListener = tick;

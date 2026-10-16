@@ -120,4 +120,23 @@ void main() {
       expect(tapZoneRegions(p), isNotEmpty);
     }
   });
+
+  test('out-of-bounds taps resolve to menu, never a page turn', () {
+    for (final p in TapZonePreset.values) {
+      expect(resolveTapZoneAction(preset: p, dx: -5, dy: 300, width: 300, height: 600), TapZoneAction.menu);
+      expect(resolveTapZoneAction(preset: p, dx: 305, dy: 300, width: 300, height: 600), TapZoneAction.menu);
+      expect(resolveTapZoneAction(preset: p, dx: 150, dy: -5, width: 300, height: 600), TapZoneAction.menu);
+    }
+  });
+
+  test('lShaped bottom-left agrees between resolver and regions', () {
+    // Bottom-left belongs to the full-height previous rect; the resolver
+    // must say previous too (no overlay/action disagreement).
+    expect(
+      resolveTapZoneAction(preset: TapZonePreset.lShaped, dx: 50, dy: 500, width: 300, height: 600),
+      TapZoneAction.previous,
+    );
+    final prev = tapZoneRegions(TapZonePreset.lShaped).where((r) => r.$1 == TapZoneAction.previous);
+    expect(prev.any((r) => 50 / 300 >= r.$2 && 50 / 300 < r.$4 && 500 / 600 >= r.$3 && 500 / 600 < r.$5), isTrue);
+  });
 }
