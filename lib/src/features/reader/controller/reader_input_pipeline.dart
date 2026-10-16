@@ -508,7 +508,7 @@ class ReaderInputPipeline {
   TapZoneAction? _peekTapZoneAction(TapUpDetails details, BoxConstraints constraints) {
     if (isAutoScrolling || showTapZoneOverlay) return null;
     final webtoonZoomed = isWebtoonReadingMode(host.readingMode) &&
-        (host.webtoonZoomControllers[host.currentPage - 1]?.value.getMaxScaleOnAxis() ?? 1.0) > 1.05;
+        host.webtoonZoomControllers.values.any((c) => c.value.getMaxScaleOnAxis() > 1.05);
     final preset = activeTapZonePreset();
     if (!_settings.tapZonesEnabled || preset == TapZonePreset.off || isZoomed || webtoonZoomed) {
       return null;

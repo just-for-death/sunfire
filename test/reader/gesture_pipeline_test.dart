@@ -96,6 +96,24 @@ void main() {
     expect(nextPageCalls, 0);
   });
 
+  test('pinch-in flips the zoomed flag at gesture start', () {
+    pipeline.setIsZoomed(false);
+    var zoomedStates = <bool>[];
+    pipeline.onZoomStateChanged = (z) => zoomedStates.add(z);
+    pipeline.setTransformationController(TransformationController()
+      ..value = Matrix4.diagonal3Values(2, 2, 1));
+    pipeline.handleInteractionUpdate(ScaleUpdateDetails(
+      focalPoint: Offset.zero,
+      localFocalPoint: Offset.zero,
+      scale: 2.0,
+      horizontalScale: 2.0,
+      verticalScale: 2.0,
+      rotation: 0.0,
+      pointerCount: 2,
+    ));
+    expect(zoomedStates, [true]);
+  });
+
   test('toggles controls for menu zone (center third)', () {
     pipeline.handleTapZone(tapAt(150, 300), constraints);
     expect(toggledControls, isTrue);

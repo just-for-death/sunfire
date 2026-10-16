@@ -200,9 +200,11 @@ class GesturePipeline {
       return;
     }
 
+    // Any zoomed page in the (window-pruned) controller map arms the
+    // zoomed path: a long strip shows many pages and zoom is per page.
     final webtoonZoomed = isWebtoonReadingMode(_readingMode) &&
-        _webtoonZoomControllers[_currentPage - 1]?.value.getMaxScaleOnAxis() != null &&
-        (_webtoonZoomControllers[_currentPage - 1]?.value.getMaxScaleOnAxis() ?? 1.0) > 1.05;
+        _webtoonZoomControllers.values
+            .any((c) => c.value.getMaxScaleOnAxis() > 1.05);
 
     final preset = _activeTapZonePreset();
     if (!settings.tapZonesEnabled || preset == TapZonePreset.off || _isZoomed || webtoonZoomed) {
@@ -372,7 +374,8 @@ class GesturePipeline {
 
   /// Handle zoom interaction update (from InteractiveViewer.onInteractionUpdate)
   void handleInteractionUpdate(ScaleUpdateDetails details) {
-    if (!_isZoomed) return;
+    // Always sync: pinch-zooming IN from unzoomed must flip the flag at
+    // gesture start, or taps/pan behave as if unzoomed until finger lift.
     _syncZoomedFlag();
   }
 
