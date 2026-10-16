@@ -331,6 +331,27 @@ void main() {
       });
     });
 
+    group('Dispose safety', () {
+      testWidgets('loadChapter after dispose is a silent no-op', (WidgetTester tester) async {
+        await initController(tester);
+        final loadings = <bool>[];
+        controller.onLoadingChanged = loadings.add;
+        await tester.pump(const Duration(milliseconds: 50));
+        loadings.clear(); // drain any stragglers from the initial load
+        controller.dispose();
+        await controller.loadChapter(101);
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(loadings, isEmpty);
+      });
+
+      testWidgets('strip accessors are null-safe after dispose', (WidgetTester tester) async {
+        await initController(tester);
+        controller.dispose();
+        expect(controller.activeStripItems, isNull);
+        expect(controller.onStripItemVisible(0), isNull);
+      });
+    });
+
     group('Settings Integration', () {
       testWidgets('updates theme', (WidgetTester tester) async {
         await initController(tester);

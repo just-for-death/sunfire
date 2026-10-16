@@ -122,6 +122,10 @@ class ReaderController {
   TransformationController? _transformationController;
   Map<int, TransformationController> _webtoonZoomControllers = {};
   AnimationController? _zoomAnimController;
+
+  /// True when [initialize] created the zoom AnimationController itself
+  /// (caller passed null) — then dispose owns it too.
+  bool _ownsZoomAnimController = false;
   int _currentPage = 1;
 
   // ─── Callbacks (set by UI) ───────────────────────────────────────
@@ -268,6 +272,7 @@ class ReaderController {
     AnimationController? zoomAnimController,
     required Map<int, TransformationController> webtoonZoomControllers,
   }) async {
+    _ownsZoomAnimController = zoomAnimController == null;
     attachUiControllers(
       scrollController: scrollController,
       pageController: pageController,
@@ -464,8 +469,12 @@ class ReaderController {
 
   // ─── Public API: Chapter Loading ─────────────────────────────────
 
-  /// Load a chapter and its pages via NavigationController.
+  bool _disposed = false;
+
+  /// Load a chapter and its pages via NavigationController. No-op after
+  /// dispose: pre-dispose loads check the generation below.
   Future<void> loadChapter(int chapterId) async {
+    if (_disposed) return;
     await _loadChapterAndPagesViaNavigation(chapterId);
   }
 
@@ -612,8 +621,9 @@ class ReaderController {
   /// IMP-012: the items the webtoon view shows when a strip is active (same
   /// rule as the view: seamless transitions on and 2+ chapters), else null.
   List<ReaderItem>? get activeStripItems {
+    if (_stripDisposed) return null;
     final strip = _stripChapters.value;
-    if (_stripDisposed || strip.length < 2 || !settings.seamlessTransitions) return null;
+    if (strip.length < 2 || !settings.seamlessTransitions) return null;
     return _stripItemsCache ??= buildReaderItems(strip);
   }
 
@@ -657,6 +667,7 @@ class ReaderController {
     int itemIndex, {
     double contentWidth = 0,
   }) {
+    if (_disposed) return null;
     final items = activeStripItems;
     final nav = _navigationController;
     if (items == null || nav == null) return null;
@@ -750,17 +761,20 @@ class ReaderController {
 
   /// Restore reading progress for current chapter.
   Future<void> _restoreProgress() async {
-    final chapter = _navigationController?.chapter;
-    if (chapter == null || _navigationController!.pageUrls.isEmpty) return;
+    final gen = _controllerLoadGen;
+    final nav = _navigationController;
+    final chapter = nav?.chapter;
+    if (_disposed || chapter == null || nav!.pageUrls.isEmpty) return;
 
     // Read progress from chapter object (already loaded from Isar)
-    final lastPage = chapter.lastPageRead.clamp(1, _navigationController!.pageUrls.length);
+    final lastPage = chapter.lastPageRead.clamp(1, nav.pageUrls.length);
     final isComplete = chapter.isRead;
-    
+
     // Only restore if not at start and not already at end
     if (lastPage > 1 || isComplete) {
+      if (_disposed || gen != _controllerLoadGen) return;
       _currentPage = lastPage;
-      _navigationController?.setCurrentPage(_currentPage);
+      nav.setCurrentPage(_currentPage);
       _gesturePipeline.setCurrentPage(_currentPage);
 
       // Jump to position
@@ -770,6 +784,7 @@ class ReaderController {
         _pageController!.jumpToPage(targetPage);
       } else if (!isPaged && _scrollController != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_disposed || gen != _controllerLoadGen) return;
           _jumpToWebtoonPage(_currentPage);
         });
       }
@@ -777,20 +792,24 @@ class ReaderController {
   }
 
   int _pagedControllerIndexForPage(int page) {
-    final isRtl = _readingMode == ReadingMode.pagedRtl;
-    // Simplified - UI handles spread slot calculation
-    return isRtl ? (_navigationController!.pageUrls.length - page) : (page - 1);
+    // PageView indices are always 0-based page indices; reverse:true already
+    // handles RTL direction. (A length-page mirror here double-counts and
+    // restores RTL+double to the wrong spread.)
+    return (page - 1).clamp(0, (_navigationController?.pageUrls.length ?? 1) - 1);
   }
 
   void _jumpToWebtoonPage(int page) {
-    if (_scrollController == null || !_scrollController!.hasClients || _navigationController!.pageUrls.isEmpty) return;
+    final nav = _navigationController;
+    if (_disposed || _scrollController == null || !_scrollController!.hasClients || nav == null || nav.pageUrls.isEmpty) {
+      return;
+    }
     final width = _scrollController!.position.viewportDimension;
     final contentWidth = width > 800 ? 780.0 : width;
     final offset = resumeOffsetForPage(
       targetPage: page,
-      pageCount: _navigationController!.pageUrls.length,
+      pageCount: nav.pageUrls.length,
       heightForIndex: (int i) {
-        final url = _navigationController!.pageUrls[i];
+        final url = nav.pageUrls[i];
         final cachedHeight = _pageLoader?.getCachedHeight(url) ?? 0.0;
         return estimateWebtoonPlaceholderHeight(contentWidth, cachedHeight: cachedHeight);
       },
@@ -842,12 +861,15 @@ class ReaderController {
   }
 
   void _restoreReaderPositionForMode() {
+    if (_disposed) return;
+    final gen = _controllerLoadGen;
     final isPaged = isPagedReadingMode(_readingMode);
     if (isPaged && _pageController != null && _pageController!.hasClients) {
       final targetPage = _pagedControllerIndexForPage(_currentPage);
       _pageController!.jumpToPage(targetPage);
-    } else if (!isPaged && _scrollController != null && _navigationController!.pageUrls.isNotEmpty) {
+    } else if (!isPaged && _scrollController != null && (_navigationController?.pageUrls.isNotEmpty ?? false)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_disposed || gen != _controllerLoadGen) return;
         _jumpToWebtoonPage(_currentPage);
       });
     }
@@ -1012,7 +1034,10 @@ class ReaderController {
   // ─── Private Helpers ─────────────────────────────────────────────
 
   void _debounceProgressUpdate() {
-    // Debounced progress update handled by PositionManager
+    // Route through NavigationController's coalescing timer (it snapshots the
+    // chapter and cancels superseded writes). The input pipeline persists on
+    // every page change through the same timer, so at most one write lands.
+    _navigationController?.debouncedUpdateProgress(_currentPage);
   }
 
   void _toggleControls() {
@@ -1034,6 +1059,11 @@ class ReaderController {
   // ─── Dispose ──────────────────────────────────────────────────────
 
   void dispose() {
+    // Invalidate every in-flight load/zoom/restore continuation first: they
+    // all check the generation or _disposed before touching state.
+    _disposed = true;
+    _controllerLoadGen++;
+    _cancelZoomAnimation();
     // The injected GesturePipeline is owned (and disposed) by the caller.
     // Injected NavigationController (and its PageLoader/PositionManager) are
     // owned by the caller — do not dispose. Production NavigationController
@@ -1054,6 +1084,24 @@ class ReaderController {
     _zoomAnimController = null;
     _webtoonZoomControllers = {};
     _resumeAutoScrollForChapter.clear();
+    if (_ownsZoomAnimController) {
+      try {
+        _zoomAnimController?.dispose();
+      } catch (e) { debugPrint('[reader_controller] ignored: $e'); }
+      _ownsZoomAnimController = false;
+    }
+    // Silence post-dispose emissions into a dead owner.
+    onChapterLoaded = null;
+    onPageChanged = null;
+    onLoadingChanged = null;
+    onZoomStateChanged = null;
+    onAutoScrollStateChanged = null;
+    onTapZoneOverlayChanged = null;
+    onShowMessage = null;
+    onReadingModeChanged = null;
+    onParentMangaLoaded = null;
+    onSettingsChanged = null;
+    onStripChapterSwitched = null;
     if (!_stripDisposed) {
       _stripDisposed = true;
       _stripChapters.dispose();
