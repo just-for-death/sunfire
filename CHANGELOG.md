@@ -7,6 +7,39 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [6.2.0] — 2026-10-17
+
+### Added
+
+- Auto-scroll single-ticker architecture (owner-driven, no leak).
+- Tap/double-tap disambiguation (260ms window, cancelled by double-tap zoom).
+- Independent prev/next page throttles (250ms each).
+- Haptic feedback on webtoon page turns and volume key turns.
+- Accessibility: `Semantics` labels on tap zone overlay, auto-scroll HUD controls, page navigation slider, and `liveRegion` on canvas page announcements.
+- Performance: debounced height-cache rebuilds (16ms) to reduce jank on long chapters.
+- Code quality: extracted triplicated error placeholder into `_retryTile` helper.
+
+### Fixed
+
+- Auto-scroll: single ticker owned by pipeline (was leaking on stop).
+- Zoom: flag syncs on pinch-in (was gated on already-zoomed).
+- Webtoon zoom: checks all pages in controller map (was only current page).
+- Volume rocker: single path per platform (key events off-Apple, listener on Apple); Android dispose restores volume HUD.
+- Key-repeat: held keys swallowed (was spamming page turns).
+- Chapter loads: gated by 700ms stamps (was double-loading).
+- Controller dispose: guards against disposed zoom controller crash.
+- RTL: spread pairing mirrors by default (XORs user override); paged index always page-1.
+- Webtoon: vertical-paged guard in spread math; height rebuild on probe completion.
+- Tap zones: out-of-bounds taps resolve to menu (was clamping to prev/next).
+- Listen sheet: clamps stale page index (was RangeError).
+- Prune: detaches now, disposes post-frame (was mid-build teardown).
+- Progress: routes through nav coalescing timer (was separate debounce).
+- Strip: null-safe guards after dispose.
+
+### Changed
+
+- `ReaderInputPipeline` (1,234 LOC) and `ReaderController` (1,129 LOC) hardened with dispose guards and generation counters.
+
 ## [6.1.0] — 2026-10-16
 
 ### Added
@@ -381,6 +414,7 @@ talks to your server all changed.
 
 ---
 
+[6.2.0]: https://github.com/just-for-death/sunfire/releases/tag/v6.2.0
 [6.1.0]: https://github.com/just-for-death/sunfire/releases/tag/v6.1.0
 [6.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v6.0.0
 [5.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v5.0.0
