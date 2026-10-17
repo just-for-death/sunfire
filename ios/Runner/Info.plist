@@ -11,7 +11,7 @@
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
-		<string>com.sunfire.app</string>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 		<key>CFBundleInfoDictionaryVersion</key>
 		<string>6.0</string>
 		<key>CFBundleLocalizations</key>
@@ -24,7 +24,7 @@
 			<string>pt</string>
 			<string>uk</string>
 			<string>ko</string>
-			<string>pt-pt</string>
+			<string>pt-PT</string>
 			<string>zh</string>
 			<string>zh-hans</string>
 			<string>id</string>
@@ -64,11 +64,6 @@
 		<false/>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
-		<key>LSApplicationQueriesSchemes</key>
-		<array>
-			<string>https</string>
-			<string>http</string>
-		</array>
 		<key>NSAppTransportSecurity</key>
 		<dict>
 			<!-- IMP-047: unqualified + .local hosts. On iOS 17+ this no longer
@@ -78,26 +73,8 @@
 			<true/>
 			<key>NSExceptionDomains</key>
 			<dict>
-				<key>10.0.0.0/8</key>
-				<dict>
-					<key>NSExceptionAllowsInsecureHTTPLoads</key>
-					<true/>
-				</dict>
-				<key>172.16.0.0/12</key>
-				<dict>
-					<key>NSExceptionAllowsInsecureHTTPLoads</key>
-					<true/>
-				</dict>
-				<key>192.168.0.0/16</key>
-				<dict>
-					<key>NSExceptionAllowsInsecureHTTPLoads</key>
-					<true/>
-				</dict>
-				<key>100.64.0.0/10</key>
-				<dict>
-					<key>NSExceptionAllowsInsecureHTTPLoads</key>
-					<true/>
-				</dict>
+				<!-- NSAllowsLocalNetworking (iOS 14+) covers local IP addresses.
+				     CIDR strings are not valid NSExceptionDomains keys. -->
 				<key>ts.net</key>
 				<dict>
 					<key>NSExceptionAllowsInsecureHTTPLoads</key>

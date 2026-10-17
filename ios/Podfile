@@ -30,6 +30,12 @@ target 'Runner' do
   use_frameworks!
   use_modular_headers!
 
+  # ML Kit text recognition language pods (required for non-Latin OCR).
+  pod 'GoogleMLKit/TextRecognitionChinese', '~> 9.0.0'
+  pod 'GoogleMLKit/TextRecognitionDevanagari', '~> 9.0.0'
+  pod 'GoogleMLKit/TextRecognitionJapanese', '~> 9.0.0'
+  pod 'GoogleMLKit/TextRecognitionKorean', '~> 9.0.0'
+
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
@@ -39,6 +45,8 @@ post_install do |installer|
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.5'
       config.build_settings['ENABLE_BITCODE'] = 'NO'
+      # ML Kit has no 32-bit slice; exclude armv7 from all pods.
+      config.build_settings['EXCLUDED_ARCHS[sdk=*]'] = 'armv7'
     end
   end
 end

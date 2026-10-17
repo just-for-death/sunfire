@@ -44,7 +44,6 @@ analyzer:
   exclude:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
-    - "**/*.graphql.dart"
     - build/**
     - android/**
     - ios/**

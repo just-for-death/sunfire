@@ -81,12 +81,6 @@ android {
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
 
-        externalNativeBuild {
-            cmake {
-                arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
-                cppFlags "-Wl,-z,max-page-size=16384"
-            }
-        }
     }
 
     packagingOptions {

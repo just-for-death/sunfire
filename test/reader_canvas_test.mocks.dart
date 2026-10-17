@@ -635,6 +635,14 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   }
 
   @override
+  int get debugSelectorCount =>
+      (super.noSuchMethod(
+            Invocation.getter(#debugSelectorCount),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
   bool get chapterSortAscending =>
       (super.noSuchMethod(
             Invocation.getter(#chapterSortAscending),
@@ -1047,6 +1055,22 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
             returnValue: 0,
           )
           as int);
+
+  @override
+  bool get downloadAsCbz =>
+      (super.noSuchMethod(Invocation.getter(#downloadAsCbz), returnValue: false)
+          as bool);
+
+  @override
+  String get savedLibraryFiltersJson =>
+      (super.noSuchMethod(
+            Invocation.getter(#savedLibraryFiltersJson),
+            returnValue: _i19.dummyValue<String>(
+              this,
+              Invocation.getter(#savedLibraryFiltersJson),
+            ),
+          )
+          as String);
 
   @override
   String get localSourceRoot =>
@@ -1633,6 +1657,18 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   );
 
   @override
+  set downloadAsCbz(bool? value) => super.noSuchMethod(
+    Invocation.setter(#downloadAsCbz, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set savedLibraryFiltersJson(String? value) => super.noSuchMethod(
+    Invocation.setter(#savedLibraryFiltersJson, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   set localSourceRoot(String? value) => super.noSuchMethod(
     Invocation.setter(#localSourceRoot, value),
     returnValueForMissingStub: null,
@@ -1864,6 +1900,20 @@ class MockSettingsService extends _i1.Mock implements _i3.SettingsService {
   bool get hasListeners =>
       (super.noSuchMethod(Invocation.getter(#hasListeners), returnValue: false)
           as bool);
+
+  @override
+  _i8.ValueListenable<T> select<T>(
+    String? key,
+    T Function(_i3.SettingsService)? read,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#select, [key, read]),
+            returnValue: _FakeValueListenable_6<T>(
+              this,
+              Invocation.method(#select, [key, read]),
+            ),
+          )
+          as _i8.ValueListenable<T>);
 
   @override
   _i18.Future<void> initialize() =>

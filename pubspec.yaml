@@ -6,6 +6,7 @@ version: 6.2.0+35
 
 environment:
   sdk: ">=3.13.0 <4.0.0"
+  flutter: ">=3.47.0 <4.0.0"
 
 dependencies:
   app_links: ^6.4.0
@@ -22,8 +23,7 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   flutter_foreground_task: ^11.0.3
   flutter_local_notifications: ^22.3.0
-  flutter_localizations:
-    sdk: flutter
+  # flutter_localizations removed — no l10n in use
   go_router: ^14.6.2
   intl: ^0.20.2
   isar_community: ^3.3.2
@@ -50,7 +50,7 @@ dependencies:
   volume_controller: ^3.6.1
   window_manager: ^0.5.2
   desktop_drop: ^0.8.4
-  menu_bar: ^0.5.3
+  # menu_bar removed — unused
   desktop_multi_window: ^0.3.1
   flutter_tts: ^4.2.5
   google_mlkit_text_recognition: ^0.17.1
@@ -84,9 +84,6 @@ flutter:
     - assets/icons/
     - assets/icons/launcher/
     - assets/icons/sources/
-
-flutter_gen:
-  output: lib/src/constants/gen/
 
 flutter_native_splash:
   color: "#0F0F13"
