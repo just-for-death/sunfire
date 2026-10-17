@@ -450,7 +450,10 @@ class _BottomBar extends StatelessWidget {
                               ),
                             ),
                             if (_isWebtoon)
-                              GestureDetector(
+                              Semantics(
+                                label: isAutoScrolling ? 'Pause auto-scroll' : 'Start auto-scroll',
+                                button: true,
+                                child: GestureDetector(
                                 onTap: onToggleAutoScroll,
                                 onLongPress: onShowAutoScrollSpeed,
                                 child: Container(
@@ -495,6 +498,7 @@ class _BottomBar extends StatelessWidget {
                                     ],
                                   ),
                                 ),
+                              ),
                               ),
                             IconButton(
                               icon: const Icon(Icons.skip_next_rounded,

@@ -1130,6 +1130,7 @@ class ReaderInputPipeline {
             unawaited(_readerController.loadChapter(NavigationController.targetIdOf(_gestureNav.nextChapter!)));
           }
         } else {
+          unawaited(HapticFeedback.lightImpact());
           final targetOffset = (currentOffset + webtoonPageStep()).clamp(0.0, maxScroll);
           host.scrollController.animateTo(
             targetOffset,
@@ -1179,6 +1180,7 @@ class ReaderInputPipeline {
             unawaited(_readerController.loadChapter(NavigationController.targetIdOf(_gestureNav.prevChapter!)));
           }
         } else {
+          unawaited(HapticFeedback.lightImpact());
           final targetOffset = (currentOffset - webtoonPageStep()).clamp(0.0, maxScroll);
           host.scrollController.animateTo(
             targetOffset,
