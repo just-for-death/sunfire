@@ -527,7 +527,9 @@ class _BottomBar extends StatelessWidget {
                                 ),
                                 child: ValueListenableBuilder<int>(
                                   valueListenable: pageIndicator,
-                                  builder: (_, activePage, __) => Slider(
+                                  builder: (_, activePage, __) => Semantics(
+                                    label: 'Page navigation slider',
+                                    child: Slider(
                                     value: (isDraggingSlider
                                             ? (sliderDragValue ??
                                                 activePage.toDouble())
@@ -542,6 +544,7 @@ class _BottomBar extends StatelessWidget {
                                     onChanged: onSliderChanged,
                                     onChangeEnd: onSliderChangeEnd,
                                   ),
+                                    ),
                                 ),
                               ),
                             ),
@@ -680,7 +683,10 @@ class _AutoScrollCapsule extends StatelessWidget {
               ],
             ),
             child: isCollapsed
-                ? GestureDetector(
+                ? Semantics(
+                    label: 'Expand auto-scroll controls',
+                    button: true,
+                    child: GestureDetector(
                     onTap: () {
                       unawaited(HapticFeedback.lightImpact());
                       onExpand();
@@ -713,6 +719,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                             size: 14, color: SunfireColors.contentDisabled),
                       ],
                     ),
+                  ),
                   )
                 : Row(
                     mainAxisSize: MainAxisSize.min,
@@ -849,7 +856,10 @@ class _AutoScrollCapsule extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: SunfireSpacing.xs),
-                      GestureDetector(
+                      Semantics(
+                        label: 'Collapse auto-scroll controls',
+                        button: true,
+                        child: GestureDetector(
                         onTap: () {
                           unawaited(HapticFeedback.lightImpact());
                           onCollapse();
@@ -859,6 +869,7 @@ class _AutoScrollCapsule extends StatelessWidget {
                           child: Icon(Icons.chevron_left_rounded,
                               size: 16, color: SunfireColors.contentDisabled),
                         ),
+                      ),
                       ),
                     ],
                   ),
