@@ -861,6 +861,7 @@ class ReaderInputPipeline {
       final now = DateTime.now();
       if (now.difference(_lastIosVolumeTurnTime).inMilliseconds >= 280) {
         _lastIosVolumeTurnTime = now;
+        unawaited(HapticFeedback.lightImpact());
         goToNextPage();
       }
       return KeyEventResult.handled;
@@ -868,6 +869,7 @@ class ReaderInputPipeline {
       final now = DateTime.now();
       if (now.difference(_lastIosVolumeTurnTime).inMilliseconds >= 280) {
         _lastIosVolumeTurnTime = now;
+        unawaited(HapticFeedback.lightImpact());
         goToPrevPage();
       }
       return KeyEventResult.handled;
