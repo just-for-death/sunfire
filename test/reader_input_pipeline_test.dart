@@ -1,7 +1,7 @@
 // ISS-132: unit tests for the screen-owned ReaderInputPipeline (moved out of
 // the _ReaderGestures extension) and its single GesturePipeline (IMP-049a).
-import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

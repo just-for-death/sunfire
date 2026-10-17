@@ -1069,6 +1069,10 @@ class ReaderController {
     // all check the generation or _disposed before touching state.
     _disposed = true;
     _controllerLoadGen++;
+    // The screen owns (and disposes) the zoom AnimationController; drop our
+    // reference first so _cancelZoomAnimation doesn't call stop() on a
+    // disposed controller. Curve disposal + generation bump still run.
+    _zoomAnimController = null;
     _cancelZoomAnimation();
     // The injected GesturePipeline is owned (and disposed) by the caller.
     // Injected NavigationController (and its PageLoader/PositionManager) are
