@@ -95,6 +95,7 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
   final Map<String, double> _cachedPageHeights = {};
   final Map<int, TransformationController> _webtoonZoomControllers = {};
   int _loadGeneration = 0;
+  Timer? _heightRebuildTimer;
 
   late ReadingMode _readingMode;
   ReaderSettingsScope _readerSettingsScope = ReaderSettingsScope.global;
@@ -269,6 +270,8 @@ class _ReaderScreenState extends State<ReaderScreen> with TickerProviderStateMix
     _gestureNav.pageLoader.onDisplayChanged = null;
     _gestureNav.dispose();
     _pageLoader = null;
+    _heightRebuildTimer?.cancel();
+    _heightRebuildTimer = null;
     _scrollController.removeListener(_onVerticalScroll);
     _scrollController.dispose();
     _pageController.dispose();

@@ -95,47 +95,51 @@ class _TapZoneOverlayState extends State<TapZoneOverlay> {
           builder: (context, constraints) {
             final w = constraints.maxWidth;
             final h = constraints.maxHeight;
-            return Stack(
-              children: [
-                for (final r in regions)
-                  Positioned(
-                    left: r.$2 * w,
-                    top: r.$3 * h,
-                    width: (r.$4 - r.$2) * w,
-                    height: (r.$5 - r.$3) * h,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: _colorFor(r.$1),
-                        border: Border.all(color: SunfireColors.borderSubtle),
-                      ),
-                      child: Center(
-                        child: Text(
-                          _labelFor(r.$1),
-                          style: const TextStyle(
-                            color: SunfireColors.contentPrimary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            shadows: [Shadow(blurRadius: 4, color: SunfireColors.overlayScrim)],
+            return Semantics(
+              label: 'Tap zone guide. Left and right thirds turn pages. Center toggles controls. Tap anywhere to dismiss.',
+              container: true,
+              child: Stack(
+                children: [
+                  for (final r in regions)
+                    Positioned(
+                      left: r.$2 * w,
+                      top: r.$3 * h,
+                      width: (r.$4 - r.$2) * w,
+                      height: (r.$5 - r.$3) * h,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: _colorFor(r.$1),
+                          border: Border.all(color: SunfireColors.borderSubtle),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _labelFor(r.$1),
+                            style: const TextStyle(
+                              color: SunfireColors.contentPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              shadows: [Shadow(blurRadius: 4, color: SunfireColors.overlayScrim)],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 28,
-                  child: Text(
-                    'Tap zones · ${widget.preset.settingsLabel}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: SunfireColors.contentSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 28,
+                    child: Text(
+                      'Tap zones · ${widget.preset.settingsLabel}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: SunfireColors.contentSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           },
         ),

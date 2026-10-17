@@ -226,31 +226,11 @@ Widget buildReaderPageWidget(ReaderPageWidgetConfig config) {
     // retry affordance instead of re-issuing an Image.network fetch on every
     // webtoon item rebuild. onRecoverImage(manual:) clears the flag to retry.
     if (config.failedImageUrls.contains(config.url)) {
-      image = Container(
+      image = _retryTile(
+        config,
         height: isWebtoon ? placeholderHeight : 300.0,
-        width: imageWidth ?? double.infinity,
-        color: config.canvasBackgroundColor,
-        child: Center(
-          child: config.recoveringUrls.contains(config.url)
-              ? CircularProgressIndicator(color: config.colorScheme.primary, strokeWidth: 2)
-              : InkWell(
-                  onTap: () => config.onRecoverImage(config.url, config.index, manual: true),
-                  borderRadius: BorderRadius.circular(SunfireRadius.md),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.refresh_rounded, size: 28, color: SunfireColors.contentTertiary),
-                        const SizedBox(height: 6),
-                        Text('Page ${config.index + 1} Failed to Load', style: const TextStyle(color: SunfireColors.contentPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: SunfireSpacing.xs),
-                        Text('Tap to Retry', style: TextStyle(color: config.colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                ),
-        ),
+        width: imageWidth,
+        onRetry: () => config.onRecoverImage(config.url, config.index, manual: true),
       );
     } else {
       final baseHeaders = QuickJsService.getImageHeaders(config.sourceName, config.url);
@@ -281,31 +261,11 @@ Widget buildReaderPageWidget(ReaderPageWidgetConfig config) {
           SchedulerBinding.instance.addPostFrameCallback((_) {
             unawaited(config.onRecoverImage(config.url, config.index));
           });
-          return Container(
+          return _retryTile(
+            config,
             height: isWebtoon ? placeholderHeight : 300.0,
-            width: imageWidth ?? double.infinity,
-            color: config.canvasBackgroundColor,
-            child: Center(
-              child: config.recoveringUrls.contains(config.url)
-                  ? CircularProgressIndicator(color: config.colorScheme.primary, strokeWidth: 2)
-                  : InkWell(
-                      onTap: () => config.onRecoverImage(config.url, config.index, manual: true),
-                      borderRadius: BorderRadius.circular(SunfireRadius.md),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.refresh_rounded, size: 28, color: SunfireColors.contentTertiary),
-                            const SizedBox(height: 6),
-                            Text('Page ${config.index + 1} Failed to Load', style: const TextStyle(color: SunfireColors.contentPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: SunfireSpacing.xs),
-                            Text('Tap to Retry', style: TextStyle(color: config.colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ),
-                    ),
-            ),
+            width: imageWidth,
+            onRetry: () => config.onRecoverImage(config.url, config.index, manual: true),
           );
         },
       );

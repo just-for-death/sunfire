@@ -674,8 +674,15 @@ extension _ReaderView on _ReaderScreenState {
     _pageLoader?.cacheHeight(url, h);
     // The placeholder was an estimate: rebuild once (guarded to the live
     // chapter) so the strip adopts the intrinsic height now instead of
-    // jumping on the next unrelated rebuild.
-    if (_pageUrls.contains(url)) _rebuild(() {});
+    // jumping on the next unrelated rebuild. Debounce so a burst of probes
+    // (long chapters) coalesces into a single frame.
+    if (_pageUrls.contains(url)) {
+      _heightRebuildTimer?.cancel();
+      _heightRebuildTimer = Timer(const Duration(milliseconds: 16), () {
+        _heightRebuildTimer = null;
+        if (mounted) _rebuild(() {});
+      });
+    }
   }
 
   void _schedulePageHeightCacheForProvider(String url, double width, ImageProvider provider) {

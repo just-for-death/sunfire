@@ -150,6 +150,7 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
       label: label,
       image: false,
       container: true,
+      liveRegion: true,
       child: content,
     );
   }
