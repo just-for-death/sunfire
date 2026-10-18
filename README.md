@@ -203,6 +203,15 @@ apksigner verify --print-certs app-release.apk
 # must show SHA-256: 455c1f55be9f0603b93346f42a37c49d5a3e43faa997f980866389a3b368f775
 ```
 
+### ⚠️ Update notice (v6.2.0)
+
+Releases v6.0.0 and v6.1.0 were signed with a **different certificate** than
+v5.0.0 and v6.2.0. Users upgrading from v6.0.0 or v6.1.0 **must uninstall**
+the old version first, then install v6.2.0 fresh. This is a one-time
+requirement — all future releases use the same signing key (`455c1f55...`).
+
+Users on v5.0.0 or earlier can update normally (same signing key).
+
 ---
 
 ## Platform support

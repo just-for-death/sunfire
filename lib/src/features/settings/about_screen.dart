@@ -512,13 +512,25 @@ class _AboutScreenState extends State<AboutScreen> {
         if (_updateState == _UpdateCheckState.available)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _openReleases,
-                icon: const Icon(Icons.open_in_new_rounded, size: SunfireIconSize.std),
-                label: Text('View v${release?.version} on GitHub'),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'If you are on v6.0.0 or v6.1.0, uninstall the old version '
+                  'first, then install the new one. Previous releases used a '
+                  'different signing key.',
+                  style: TextStyle(fontSize: 11, color: SunfireColors.warning, height: 1.4),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _openReleases,
+                    icon: const Icon(Icons.open_in_new_rounded, size: SunfireIconSize.std),
+                    label: Text('View v${release?.version} on GitHub'),
+                  ),
+                ),
+              ],
             ),
           ),
         if (_updateState == _UpdateCheckState.failed)
