@@ -498,6 +498,8 @@ class _BottomBar extends StatelessWidget {
                                       const SizedBox(width: 3),
                                       Text(
                                         'AUTO',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           color: isAutoScrolling
                                               ? primaryColor
@@ -726,6 +728,8 @@ class _AutoScrollCapsule extends StatelessWidget {
                         const SizedBox(width: SunfireSpacing.xs),
                         Text(
                           '${autoScrollSpeed.round()}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: isUserTouching
                                 ? SunfireColors.overlayHighlight
@@ -865,6 +869,8 @@ class _AutoScrollCapsule extends StatelessWidget {
                                     : (autoScrollSpeed >= 180.0
                                         ? 'FAST'
                                         : 'NORM'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: autoScrollSpeed >= 180.0
                                       ? primaryColor

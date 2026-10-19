@@ -1440,7 +1440,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Start Reading', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onPrimary)),
+                Flexible(
+                  child: Text(
+                    'Start Reading',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onPrimary),
+                  ),
+                ),
                 SizedBox(width: 8),
                 Icon(Icons.rocket_launch_rounded, color: cs.onSurface),
               ],

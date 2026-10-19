@@ -406,6 +406,8 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                         const SizedBox(width: 8),
                         Text(
                           '${_settings.defaultAutoScrollSpeed.round()} px/s',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -677,6 +679,8 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
                   const SizedBox(width: SunfireSpacing.xs),
                   Text(
                     'LIVE PREVIEW: ${widget.speed.round()} px/s',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,

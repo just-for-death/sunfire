@@ -1710,6 +1710,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                       children: [
                                         Text(
                                           'v$version',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(fontSize: 11, color: SunfireColors.contentTertiary, fontWeight: FontWeight.w500),
                                         ),
                                         const SizedBox(width: 6),

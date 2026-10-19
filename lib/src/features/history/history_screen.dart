@@ -247,11 +247,15 @@ class _HistoryScreenState extends State<HistoryScreen> with AutomaticKeepAliveCl
                 setState(() => _filter = HistoryFilter.inProgress),
           ),
           const Spacer(),
-          Text(
-            _syncStatusLabel,
-            style: TextStyle(
-              fontSize: 11,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+          Flexible(
+            child: Text(
+              _syncStatusLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         ],

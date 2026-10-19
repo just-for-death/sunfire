@@ -1584,9 +1584,15 @@ unawaited(
                     ],
                     const SizedBox(height: SunfireSpacing.lg),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('SORT BY', style: SunfireTypography.withColor(SunfireTypography.sectionHeader, SunfireColors.contentTertiary)),
+                        Expanded(
+                          child: Text(
+                            'SORT BY',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: SunfireTypography.withColor(SunfireTypography.sectionHeader, SunfireColors.contentTertiary),
+                          ),
+                        ),
                         IconButton(
                           icon: Icon(_isSortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: SunfireIconSize.md, color: primaryColor),
                           onPressed: () {

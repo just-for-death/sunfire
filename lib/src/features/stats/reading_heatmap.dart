@@ -100,6 +100,8 @@ class ReadingHeatmap extends StatelessWidget {
         Row(
           children: [
             Text('Less',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     fontSize: 11, color: scheme.onSurfaceVariant)),
             const SizedBox(width: 6),
@@ -118,6 +120,8 @@ class ReadingHeatmap extends StatelessWidget {
               const SizedBox(width: SunfireSpacing.xs),
             ],
             Text('More',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     fontSize: 11, color: scheme.onSurfaceVariant)),
           ],

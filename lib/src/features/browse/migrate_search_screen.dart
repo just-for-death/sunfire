@@ -926,7 +926,7 @@ unawaited(
                     children: [
                       Icon(Icons.push_pin_rounded, size: SunfireIconSize.xs),
                       SizedBox(width: 4),
-                      Text('PINNED'),
+                      Text('PINNED', maxLines: 1, overflow: TextOverflow.ellipsis),
                     ],
                   ),
                   selected: _activeFilter == 'PINNED',
@@ -950,7 +950,7 @@ unawaited(
                     children: [
                       Icon(Icons.done_all_rounded, size: SunfireIconSize.xs),
                       SizedBox(width: 4),
-                      Text('ALL'),
+                      Text('ALL', maxLines: 1, overflow: TextOverflow.ellipsis),
                     ],
                   ),
                   selected: _activeFilter == 'ALL',
@@ -974,7 +974,7 @@ unawaited(
                     children: [
                       Icon(Icons.check_circle_outline_rounded, size: SunfireIconSize.xs),
                       SizedBox(width: 4),
-                      Text('HAS RESULTS'),
+                      Text('HAS RESULTS', maxLines: 1, overflow: TextOverflow.ellipsis),
                     ],
                   ),
                   selected: _activeFilter == 'HAS_RESULTS',

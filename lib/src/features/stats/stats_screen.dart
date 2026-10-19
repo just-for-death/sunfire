@@ -196,6 +196,8 @@ class _StatsScreenState extends State<StatsScreen> {
                             const SizedBox(width: 8),
                             Text(
                               _totalChapters > 0 ? '${((_totalReadChapters / _totalChapters) * 100).toStringAsFixed(1)}%' : '0%',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
                             ),
                           ],
@@ -266,7 +268,7 @@ class _StatsScreenState extends State<StatsScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: SunfireSpacing.md),
-                                Text('${entry.value}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                Text('${entry.value}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                               ],
                             ),
                           );

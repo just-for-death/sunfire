@@ -502,6 +502,8 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               const SizedBox(width: SunfireSpacing.sm),
               Text(
                 '$remaining / $limit',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -716,6 +718,8 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                     const SizedBox(width: SunfireSpacing.xs),
                     Text(
                       'Active',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: SunfireColors.trackerGreen,
                         fontSize: 11,

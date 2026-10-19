@@ -1131,6 +1131,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                         const SizedBox(width: SunfireSpacing.xs),
                         Text(
                           'LINKED',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: SunfireColors.trackerBlue,
                             fontSize: 10,
@@ -1326,6 +1328,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                   const SizedBox(width: 6),
                   Text(
                     'Metadata Locked & Enriched',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: SunfireColors.trackerGreen,
                       fontSize: 11,
@@ -1884,6 +1888,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                   const SizedBox(width: SunfireSpacing.xs),
                   Text(
                     _statusLabel(trackerId, currentStatus),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: SunfireColors.trackerBlue, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -1904,6 +1910,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                   const SizedBox(width: SunfireSpacing.xs),
                   Text(
                     'Ch: $currentChapter / ${totalChapters > 0 ? totalChapters : "?"}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: SunfireColors.info, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -1925,6 +1933,8 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                     const SizedBox(width: SunfireSpacing.xs),
                     Text(
                       'Score: ${score == score.roundToDouble() ? score.toInt() : score}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: SunfireColors.trackerAmber, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ],

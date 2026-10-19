@@ -244,6 +244,8 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
           const SizedBox(width: 6),
           Text(
             entityType.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -464,12 +466,16 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                   color: isSelected ? color : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: isSelected ? color : Theme.of(context).colorScheme.onSurfaceVariant,
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? color : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
@@ -578,7 +584,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
         children: [
           Icon(icon, size: SunfireIconSize.sm),
           const SizedBox(width: 6),
-          Text(label),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
         ],
       ),
       selected: isSelected,

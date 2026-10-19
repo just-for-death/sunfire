@@ -1675,7 +1675,14 @@ unawaited(
                   children: [
                     Icon(Icons.clear_all_rounded, size: SunfireIconSize.md, color: SunfireColors.error),
                     SizedBox(width: 10),
-                    Text('Clear feed', style: TextStyle(color: SunfireColors.error)),
+                    Flexible(
+                      child: Text(
+                        'Clear feed',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: SunfireColors.error),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1853,6 +1860,8 @@ unawaited(
                                           ),
                                           Text(
                                             '${series.items.length} chapters',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
