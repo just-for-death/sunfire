@@ -33,9 +33,15 @@ class SettingsSubpageScaffold extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: isTablet ? 64.0 : kToolbarHeight,
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           onPressed: () {
             if (context.canPop()) {
               context.pop();
