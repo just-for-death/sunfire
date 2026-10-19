@@ -159,6 +159,7 @@ class SunfireBottomNav extends StatelessWidget {
     }
 
     return NavigationBar(
+      height: 64,
       selectedIndex: _displaySelectedIndex,
       onDestinationSelected: onTap,
       destinations: [

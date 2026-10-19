@@ -403,8 +403,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final width = MediaQuery.sizeOf(context).width;
     // UIS-P2-B: "Expanded Sidebar" drives NavigationRail.extended on
     // Android/desktop too, whenever the window has room for labels.
+    // Auto-collapse on narrow tablets to avoid cramped content area.
+    final autoCollapse = width < 720;
     final extended =
-        _isSidebarExpanded && width >= sunfireRailExtendedMinWidth;
+        !autoCollapse && _isSidebarExpanded && width >= sunfireRailExtendedMinWidth;
     return Scaffold(
       body: Row(
         children: [
@@ -589,7 +591,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   // ── IPADOS FLOATING FROSTED GLASS SIDEBAR ───────────────────────────────────
   // ════════════════════════════════════════════════════════════════════════════
   Widget _buildTabletSidebar(BuildContext context, Color primaryColor) {
-    final sidebarWidth = _isSidebarExpanded ? 242.0 : 72.0;
+    final width = MediaQuery.sizeOf(context).width;
+    // Auto-collapse on narrow tablets to avoid cramped content area.
+    final effectiveExpanded = _isSidebarExpanded && width >= 720;
+    final sidebarWidth = effectiveExpanded ? 242.0 : 72.0;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 280),
