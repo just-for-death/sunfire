@@ -459,7 +459,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
       leading: Icon(icon, size: SunfireIconSize.lg),
       title: Row(
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+          Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15))),
           for (final tag in tags)
             if (tag == 'SERVER')
               _buildScopeTag('SERVER', SunfireColors.sourceLocalJs)

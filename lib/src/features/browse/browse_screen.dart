@@ -1848,10 +1848,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
+            Expanded(child: Text(
               '${migrationItems.length} SOURCES WITH LIBRARY TITLES',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
-            ),
+            )),
             Row(
               children: [
                 IconButton(

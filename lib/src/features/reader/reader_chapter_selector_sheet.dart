@@ -69,13 +69,17 @@ class ReaderChapterSelectorSheet {
                           color: SunfireColors.contentPrimary,
                         ),
                       ),
-                      Text(
+                      Expanded(child: Text(
                         '${siblings.length} Total',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.end,
                         style: const TextStyle(
                           color: SunfireColors.contentTertiary,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
+                      ),
                       ),
                     ],
                   ),

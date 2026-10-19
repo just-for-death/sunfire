@@ -1793,14 +1793,16 @@ unawaited(
                                   ),
                                   child: Row(
                                     children: [
-                                      Text(
+                                      Expanded(child: Text(
                                         section.dateHeader,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontSize: isTablet ? 18.5 : 16.5,
                                           fontWeight: FontWeight.bold,
                                           letterSpacing: -0.3,
                                         ),
-                                      ),
+                                      )),
                                       const SizedBox(width: SunfireSpacing.sm),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),

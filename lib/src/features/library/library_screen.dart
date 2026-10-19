@@ -646,10 +646,12 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                       children: [
                         Icon(Icons.folder_open_rounded, color: primaryColor, size: SunfireIconSize.lg),
                         const SizedBox(width: 10),
-                        Text(
+                        Expanded(child: Text(
                           'Categories (${_selectedMangaIds.length} selected)',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
+                        )),
                       ],
                     ),
                     const SizedBox(height: SunfireSpacing.md),
@@ -833,10 +835,12 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
                   children: [
                     Icon(Icons.download_rounded, color: primaryColor, size: SunfireIconSize.lg),
                     const SizedBox(width: 10),
-                    Text(
+                    Expanded(child: Text(
                       'Download ($selectedCount selected)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
+                    )),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -1697,7 +1701,7 @@ unawaited(
                     icon: const Icon(Icons.close_rounded),
                     onPressed: _exitBatchMode,
                   ),
-                  Text('${_selectedMangaIds.length} Selected', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Expanded(child: Text('${_selectedMangaIds.length} Selected', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
                   const Spacer(),
                   TextButton(
                     onPressed: _selectAll,

@@ -2073,10 +2073,12 @@ unawaited(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
+                    Expanded(child: Text(
                       '${sortedChapters.length} Chapters',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
+                    )),
                     Row(
                       children: [
                         IconButton(
