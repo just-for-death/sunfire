@@ -2228,6 +2228,7 @@ unawaited(
             backgroundColor: Theme.of(context).colorScheme.surface,
             leading: IconButton(
               icon: Icon(Icons.arrow_back_rounded, color: cs.onSurface),
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
               onPressed: () => Navigator.pop(context),
             ),
             actions: [

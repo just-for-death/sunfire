@@ -361,22 +361,34 @@ class _ReaderCanvasState extends State<ReaderCanvas> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                'Finished: ${boundary.previous.name}',
-                style: TextStyle(color: fg.withValues(alpha: 0.54), fontSize: 13),
-                textAlign: TextAlign.center,
+              // UIS-12: this separator lives in a fixed-extent slot (the scroll
+              // offset maths depends on kReaderChapterBoundaryExtent), so long
+              // chapter names at large accessibility text scales overflowed the
+              // slot. Flexible + maxLines keeps it inside the slot at any scale.
+              Flexible(
+                child: Text(
+                  'Finished: ${boundary.previous.name}',
+                  style: TextStyle(color: fg.withValues(alpha: 0.54), fontSize: 13),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               const SizedBox(height: SunfireSpacing.sm),
               Divider(color: fg.withValues(alpha: 0.24), height: 1),
               const SizedBox(height: SunfireSpacing.sm),
-              Text(
-                name == null ? 'No next chapter' : 'Next: $name',
-                style: TextStyle(
-                  color: fg,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: Text(
+                  name == null ? 'No next chapter' : 'Next: $name',
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
               ),
             ],
           ),

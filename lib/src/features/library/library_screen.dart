@@ -1752,6 +1752,7 @@ unawaited(
                 if (!_isSearching) ...[
                   IconButton(
                     icon: const Icon(Icons.search_rounded, size: SunfireIconSize.lg),
+                    tooltip: 'Search',
                     onPressed: () => setState(() => _isSearching = true),
                   ),
                   IconButton(
@@ -1847,9 +1848,11 @@ unawaited(
                   padding: const EdgeInsets.only(right: 8.0),
                   child: index == 0
                       ? chip
-                      : GestureDetector(
-                          onLongPress: () => _showCategoryChipMenu(_categories[index - 1]),
-                          child: chip,
+                      : MergeSemantics(
+                          child: GestureDetector(
+                            onLongPress: () => _showCategoryChipMenu(_categories[index - 1]),
+                            child: chip,
+                          ),
                         ),
                 );
               },

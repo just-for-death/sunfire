@@ -2,7 +2,7 @@
 // end to end: Isar chapter -> NavigationController -> ReaderController ->
 // screen _onChapterLoaded. Would have caught H1 (callbacks never wired).
 import 'dart:async';
-import 'dart:ffi';
+import 'dart:ffi' hide Size;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -199,6 +199,28 @@ void main() {
     await pumpReader(tester);
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.text('Retry'), findsOneWidget);
+    await unmount(tester);
+  });
+
+  testWidgets('UIS-12: narrow 320px phone at 1.5x text has no reader overflow', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    NavigationController.debugResolveOverride = ({required chapterServerId, chapterUrl, sourceName}) async =>
+        ChapterPagesResult(pageUrls: pages, source: ContentSourceType.localExtension);
+    await pumpReader(tester);
+    expect(tester.takeException(), isNull, reason: 'reader initial layout');
+    // Reveal the overlay chrome (tap centre) and re-check with the HUD up.
+    await tester.runAsync(() async {
+      await tester.tapAt(const Offset(160, 320));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await tester.pump();
+    });
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'reader HUD layout');
     await unmount(tester);
   });
 

@@ -6,13 +6,14 @@
 // TalkBack/VoiceOver, so this is a genuine a11y regression guard — not a smoke
 // test of synthetic widgets.
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:sunfire/src/core/services/settings_service.dart';
+import 'package:sunfire/src/features/browse/browse_screen.dart';
+import 'package:sunfire/src/features/onboarding/onboarding_screen.dart';
 import 'package:sunfire/src/features/settings/appearance_settings_screen.dart';
 import 'package:sunfire/src/features/settings/downloads_settings_screen.dart';
 import 'package:sunfire/src/features/settings/extension_repos_screen.dart';
@@ -20,30 +21,7 @@ import 'package:sunfire/src/features/settings/library_settings_screen.dart';
 import 'package:sunfire/src/features/settings/reader_settings_screen.dart';
 import 'package:sunfire/src/features/settings/sync_health_screen.dart';
 
-void _collectUnlabeled(SemanticsNode node, List<String> issues) {
-  // A node merged into its parent contributes its data upward; it is not a
-  // separate focus target, so auditing it in isolation is a false positive.
-  if (node.isMergedIntoParent || node.isInvisible) return;
-  final data = node.getSemanticsData();
-  final actionable = data.hasAction(SemanticsAction.tap) ||
-      data.hasAction(SemanticsAction.longPress) ||
-      data.flagsCollection.isButton;
-  if (actionable) {
-    final label = data.label.trim();
-    final tooltip = data.tooltip.trim();
-    if (label.isEmpty && tooltip.isEmpty) {
-      issues.add(
-        'unlabeled actionable node ${node.id} rect=${node.rect} '
-        'hint="${data.hint}" value="${data.value}" '
-        'flags=${data.flagsCollection}',
-      );
-    }
-  }
-  node.visitChildren((child) {
-    _collectUnlabeled(child, issues);
-    return true;
-  });
-}
+import '../support/a11y_semantics_audit.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -66,6 +44,8 @@ void main() {
     'ExtensionReposScreen': const ExtensionReposScreen(),
     'ReaderSettingsScreen': const ReaderSettingsScreen(),
     'SyncHealthScreen': const SyncHealthScreen(),
+    'BrowseScreen': const BrowseScreen(),
+    'OnboardingScreen': const OnboardingScreen(),
   };
 
   for (final entry in screens.entries) {
@@ -78,6 +58,7 @@ void main() {
       await SettingsService.instance.initialize();
       await tester.pumpWidget(MaterialApp(home: entry.value));
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
 
       // Lay out every lazily-built child before auditing.
       for (var i = 0; i < 12; i++) {
@@ -97,7 +78,7 @@ void main() {
       expect(root, isNotNull, reason: 'no semantics root');
 
       final issues = <String>[];
-      _collectUnlabeled(root!, issues);
+      collectUnlabeledActionable(root!, issues);
       expect(issues, isEmpty, reason: '${entry.key} a11y:\n${issues.join('\n')}');
       handle.dispose();
     });

@@ -12,6 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:sunfire/src/core/services/settings_service.dart';
+import 'package:sunfire/src/features/browse/browse_screen.dart';
+import 'package:sunfire/src/features/onboarding/onboarding_screen.dart';
 import 'package:sunfire/src/features/settings/appearance_settings_screen.dart';
 import 'package:sunfire/src/features/settings/downloads_settings_screen.dart';
 import 'package:sunfire/src/features/settings/extension_repos_screen.dart';
@@ -48,6 +50,7 @@ void main() {
     await SettingsService.instance.initialize();
     await tester.pumpWidget(MaterialApp(home: screen));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
   }
 
   // Scroll every scrollable to the bottom so lazily-built children lay out.
@@ -77,6 +80,8 @@ void main() {
     'ExtensionReposScreen': const ExtensionReposScreen(),
     'ReaderSettingsScreen': const ReaderSettingsScreen(),
     'SyncHealthScreen': const SyncHealthScreen(),
+    'BrowseScreen': const BrowseScreen(),
+    'OnboardingScreen': const OnboardingScreen(),
   };
 
   const sizes = <String, Size>{
