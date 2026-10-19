@@ -22,9 +22,15 @@ void main() {
     expect(prefetchSourceMatches(prefetchedSource: 'A', currentSource: 'A'), isTrue);
   });
 
-  test('value-side source check: unknown on either side keeps the entry', () {
+  test('value-side source check: one known, one unknown keeps the entry', () {
     expect(prefetchSourceMatches(prefetchedSource: 'unknown', currentSource: 'MangaX'), isTrue);
     expect(prefetchSourceMatches(prefetchedSource: 'MangaX', currentSource: null), isTrue);
     expect(prefetchSourceMatches(prefetchedSource: 'MangaX', currentSource: ''), isTrue);
+  });
+
+  test('value-side source check: both unknown DENIES the entry', () {
+    expect(prefetchSourceMatches(prefetchedSource: 'unknown', currentSource: 'unknown'), isFalse);
+    expect(prefetchSourceMatches(prefetchedSource: null, currentSource: ''), isFalse);
+    expect(prefetchSourceMatches(prefetchedSource: '', currentSource: 'unknown'), isFalse);
   });
 }

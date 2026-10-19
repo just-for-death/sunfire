@@ -169,6 +169,7 @@ class NavigationController {
 
   Future<void> loadChapterAndPages(int chapterId) async {
     _cancelInFlightResolve();
+    cancelProgressDebounce(); // Cancel any pending progress write from previous chapter
     final loadGen = ++_loadGeneration;
     _currentChapterId = chapterId;
     onLoadingChanged?.call(true);
@@ -509,6 +510,7 @@ class NavigationController {
   // ── Reading session (moved from ReaderScreen; ISS-125) ───────────────
 
   Timer? _progressDebounceTimer;
+  Future<void>? _progressDebounceFuture;
 
   /// Debounced progress write. Snapshots chapter + page count now so a rapid
   /// chapter switch never writes the page to the WRONG chapter.
@@ -517,12 +519,18 @@ class NavigationController {
     final totalPagesSnapshot = _pageUrls.length;
     if (chapterSnapshot == null) return;
     _progressDebounceTimer?.cancel();
+    _progressDebounceFuture?.ignore();
     _progressDebounceTimer = Timer(const Duration(milliseconds: 500), () {
-      unawaited(_updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot));
+      _progressDebounceFuture = _updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot);
     });
   }
 
-  void cancelProgressDebounce() => _progressDebounceTimer?.cancel();
+  void cancelProgressDebounce() {
+    _progressDebounceTimer?.cancel();
+    _progressDebounceFuture?.ignore();
+    _progressDebounceTimer = null;
+    _progressDebounceFuture = null;
+  }
 
   /// IMP-012: debounced progress for item [index] of a multi-chapter webtoon
   /// strip. Writes to the chapter that owns the item (never the chapter the
@@ -532,8 +540,9 @@ class NavigationController {
     final target = PositionManager.progressTargetForItem(items, index);
     if (target == null) return;
     _progressDebounceTimer?.cancel();
+    _progressDebounceFuture?.ignore();
     _progressDebounceTimer = Timer(const Duration(milliseconds: 500), () {
-      unawaited(_updateProgressWithSnapshot(target.page, target.chapter, target.totalPages));
+      _progressDebounceFuture = _updateProgressWithSnapshot(target.page, target.chapter, target.totalPages);
     });
   }
 
@@ -542,7 +551,7 @@ class NavigationController {
     final chapterSnapshot = _chapter;
     final totalPagesSnapshot = _pageUrls.length;
     if (chapterSnapshot == null || totalPagesSnapshot == 0) return;
-    unawaited(_updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot));
+    _updateProgressWithSnapshot(page, chapterSnapshot, totalPagesSnapshot).ignore();
   }
 
   Future<void> _updateProgressWithSnapshot(int page, Chapter chapterSnapshot, int totalPagesSnapshot) async {

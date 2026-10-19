@@ -16,14 +16,18 @@ String readerPrefetchKey({required int chapterTargetId, required int mangaId}) =
 /// Whether a prefetched entry resolved against [prefetchedSource] may be served
 /// while the reader's current source is [currentSource].
 ///
-/// Discards only a *known* conflict (e.g. after a migration). If either side
-/// does not know its source (`null`, empty, or the writer's `'unknown'`
-/// placeholder) the entry is kept: the URLs were resolved for this exact
-/// chapter row.
+/// Rules:
+/// - Both known & equal → allow
+/// - One known, one unknown → allow (use the known one)
+/// - Both unknown → DENY (can't verify they're the same actual source)
+/// - Both known & different → DENY
 bool prefetchSourceMatches({required String? prefetchedSource, required String? currentSource}) {
   bool unknown(String? s) => s == null || s.isEmpty || s == 'unknown';
-  if (unknown(prefetchedSource) || unknown(currentSource)) return true;
-  return prefetchedSource == currentSource;
+  final pKnown = !unknown(prefetchedSource);
+  final cKnown = !unknown(currentSource);
+  if (pKnown && cKnown) return prefetchedSource == currentSource;
+  if (pKnown || cKnown) return true; // exactly one known → trust it
+  return false; // both unknown → can't verify, discard
 }
 
 /// Fraction of a chapter after which the next chapter is prefetched (ISS-032).

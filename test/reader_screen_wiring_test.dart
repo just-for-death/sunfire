@@ -239,6 +239,7 @@ void main() {
       positionManager: MockPositionManager(),
       settings: SettingsService.instance,
     );
+    // Source-free key; value-side source check allows one-known/one-unknown
     loader.setPrefetchedChapter(readerPrefetchKey(chapterTargetId: 70, mangaId: 7), 'SrcX', pages);
     await nav.loadChapterAndPages(70);
     expect(resolverCalls, 0);
