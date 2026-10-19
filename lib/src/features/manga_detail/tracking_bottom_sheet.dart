@@ -1090,20 +1090,24 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                             ),
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            isLinked
-                                ? 'Linked & Enriched'
-                                : isMetronConfigured
-                                    ? 'Connected — Not Linked'
-                                    : 'Not Configured',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isLinked
-                                  ? SunfireColors.trackerBlue
+                          Expanded(
+                            child: Text(
+                              isLinked
+                                  ? 'Linked & Enriched'
                                   : isMetronConfigured
-                                      ? SunfireColors.trackerGreen
-                                      : SunfireColors.contentTertiary,
-                              fontWeight: FontWeight.w500,
+                                      ? 'Connected — Not Linked'
+                                      : 'Not Configured',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isLinked
+                                    ? SunfireColors.trackerBlue
+                                    : isMetronConfigured
+                                        ? SunfireColors.trackerGreen
+                                        : SunfireColors.contentTertiary,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ],
@@ -1369,12 +1373,16 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
             children: [
               Icon(icon, size: SunfireIconSize.xs, color: color),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: color.withValues(alpha: 0.7),
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: color.withValues(alpha: 0.7),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
@@ -1591,24 +1599,28 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                isBound
-                                    ? 'Tracking Active'
-                                    : isLoggedIn
-                                        ? 'Authorized — Not Linked'
-                                        : tokenExpired
-                                            ? 'Session Expired'
-                                            : 'Not Authorized',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isBound
-                                      ? SunfireColors.trackerGreen
+                              Expanded(
+                                child: Text(
+                                  isBound
+                                      ? 'Tracking Active'
                                       : isLoggedIn
-                                          ? primaryColor
+                                          ? 'Authorized — Not Linked'
                                           : tokenExpired
-                                              ? SunfireColors.destructive
-                                              : SunfireColors.contentTertiary,
-                                  fontWeight: FontWeight.w500,
+                                              ? 'Session Expired'
+                                              : 'Not Authorized',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isBound
+                                        ? SunfireColors.trackerGreen
+                                        : isLoggedIn
+                                            ? primaryColor
+                                            : tokenExpired
+                                                ? SunfireColors.destructive
+                                                : SunfireColors.contentTertiary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ],
@@ -1668,9 +1680,13 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Tap card to edit status & progress',
-                        style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.w600),
+                      Flexible(
+                        child: Text(
+                          'Tap card to edit status & progress',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
                       ),
                       TextButton.icon(
                         style: TextButton.styleFrom(

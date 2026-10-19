@@ -374,9 +374,15 @@ unawaited(
 
                     // Issue List
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Issues (${_issues.length})', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                        Expanded(
+                          child: Text(
+                            'Issues (${_issues.length})',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: SunfireSpacing.sm),

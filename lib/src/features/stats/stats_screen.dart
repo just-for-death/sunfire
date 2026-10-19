@@ -184,9 +184,16 @@ class _StatsScreenState extends State<StatsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Chapters Completion', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const Expanded(
+                              child: Text(
+                                'Chapters Completion',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
                             Text(
                               _totalChapters > 0 ? '${((_totalReadChapters / _totalChapters) * 100).toStringAsFixed(1)}%' : '0%',
                               style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),

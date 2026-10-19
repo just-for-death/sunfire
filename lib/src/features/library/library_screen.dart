@@ -1889,9 +1889,13 @@ unawaited(
                               children: [
                                 Icon(Icons.wifi_off_rounded, color: SunfireColors.trackerAmber, size: SunfireIconSize.sm),
                                 SizedBox(width: 8),
-                                Text(
-                                  'Offline — Showing cached library',
-                                  style: TextStyle(color: SunfireColors.trackerAmber, fontSize: 12, fontWeight: FontWeight.w600),
+                                Expanded(
+                                  child: Text(
+                                    'Offline — Showing cached library',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: SunfireColors.trackerAmber, fontSize: 12, fontWeight: FontWeight.w600),
+                                  ),
                                 ),
                               ],
                             ),

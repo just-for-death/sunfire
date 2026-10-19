@@ -276,9 +276,15 @@ unawaited(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('${widget.sourceName} Filters', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      Expanded(
+                        child: Text(
+                          '${widget.sourceName} Filters',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                      ),
                       TextButton(
                         onPressed: () {
                           // Reset EVERYTHING, not just Select/Sort chips: stale

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../../core/db/models/chapter.dart';
 import '../../ui/design_system/tokens/sunfire_colors.dart';
 import '../../ui/design_system/tokens/sunfire_spacing.dart';
+import '../../ui/shell/sunfire_breakpoints.dart';
 import 'controller/reader_theme.dart';
 import 'reading_mode.dart';
 
@@ -588,9 +589,12 @@ class _PageCapsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Tablets have a wider content gutter and larger touch targets, so the
+    // capsule sits further from the edge and is a touch bigger.
+    final isTablet = SunfireBreakpoints.isTabletLayout(context);
     return Positioned(
-      bottom: 24 + MediaQuery.of(context).padding.bottom,
-      right: 20,
+      bottom: (isTablet ? 32.0 : 24.0) + MediaQuery.of(context).padding.bottom,
+      right: isTablet ? 32.0 : 20.0,
       child: ValueListenableBuilder<bool>(
         valueListenable: scrollIndicatorVisible,
         builder: (context, showIndicator, _) {
@@ -602,8 +606,10 @@ class _PageCapsule extends StatelessWidget {
             child: IgnorePointer(
               ignoring: !showIndicator || showControls,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isTablet ? 14 : 10,
+                  vertical: isTablet ? 8 : 5,
+                ),
                 decoration: BoxDecoration(
                   color: SunfireColors.overlaySurface,
                   borderRadius: BorderRadius.circular(SunfireRadius.lg),
@@ -623,9 +629,9 @@ class _PageCapsule extends StatelessWidget {
                     '$page / $pageUrlsLength',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: SunfireColors.contentPrimary,
-                      fontSize: 11,
+                      fontSize: isTablet ? 13 : 11,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
                     ),
@@ -667,9 +673,10 @@ class _AutoScrollCapsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = SunfireBreakpoints.isTabletLayout(context);
     return Positioned(
-      bottom: 24 + MediaQuery.of(context).padding.bottom,
-      left: 20,
+      bottom: (isTablet ? 32.0 : 24.0) + MediaQuery.of(context).padding.bottom,
+      left: isTablet ? 32.0 : 20.0,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(SunfireRadius.pill),
         child: BackdropFilter(

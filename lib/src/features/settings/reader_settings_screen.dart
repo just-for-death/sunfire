@@ -394,9 +394,16 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Quick Presets', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: SunfireColors.contentSecondary)),
+                        const Expanded(
+                          child: Text(
+                            'Quick Presets',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: SunfireColors.contentSecondary),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Text(
                           '${_settings.defaultAutoScrollSpeed.round()} px/s',
                           style: TextStyle(
@@ -629,9 +636,13 @@ class _AutoScrollLivePreviewState extends State<_AutoScrollLivePreview> with Sin
                     children: [
                       Icon(Icons.auto_stories_rounded, size: SunfireIconSize.sm, color: primaryColor),
                       const SizedBox(width: SunfireSpacing.sm),
-                      Text(
-                        'Webtoon Panel ${(index ~/ 3) + 1}',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: cs.onSurface),
+                      Flexible(
+                        child: Text(
+                          'Webtoon Panel ${(index ~/ 3) + 1}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: cs.onSurface),
+                        ),
                       ),
                     ],
                   ),

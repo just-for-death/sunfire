@@ -137,12 +137,16 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               children: [
                 const Icon(Icons.auto_stories, size: SunfireIconSize.md, color: SunfireColors.trackerBlue),
                 const SizedBox(width: SunfireSpacing.sm),
-                Text(
-                  'WESTERN COMICS (METRON.CLOUD)',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.1,
-                    color: SunfireColors.trackerBlue,
+                Expanded(
+                  child: Text(
+                    'WESTERN COMICS (METRON.CLOUD)',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.1,
+                      color: SunfireColors.trackerBlue,
+                    ),
                   ),
                 ),
               ],
@@ -174,12 +178,16 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
               children: [
                 const Icon(Icons.cloud_sync, size: SunfireIconSize.md, color: SunfireColors.trackerAmber),
                 const SizedBox(width: SunfireSpacing.sm),
-                Text(
-                  'MANGA TRACKERS (SERVER-SIDE)',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.1,
-                    color: SunfireColors.trackerAmber,
+                Expanded(
+                  child: Text(
+                    'MANGA TRACKERS (SERVER-SIDE)',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.1,
+                      color: SunfireColors.trackerAmber,
+                    ),
                   ),
                 ),
               ],
@@ -256,12 +264,16 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                             ),
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            isConfigured ? 'Connected & Active' : 'Not Configured',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: isConfigured ? SunfireColors.trackerGreen : SunfireColors.contentTertiary,
+                          Expanded(
+                            child: Text(
+                              isConfigured ? 'Connected & Active' : 'Not Configured',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: isConfigured ? SunfireColors.trackerGreen : SunfireColors.contentTertiary,
+                              ),
                             ),
                           ),
                         ],
@@ -475,15 +487,19 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
             children: [
               Icon(icon, size: SunfireIconSize.sm, color: isLow ? SunfireColors.destructive : color),
               const SizedBox(width: SunfireSpacing.sm),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isLow ? SunfireColors.destructive : theme.colorScheme.onSurface,
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isLow ? SunfireColors.destructive : theme.colorScheme.onSurface,
+                  ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: SunfireSpacing.sm),
               Text(
                 '$remaining / $limit',
                 style: TextStyle(
@@ -657,12 +673,16 @@ class _TrackingSettingsScreenState extends State<TrackingSettingsScreen> {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        isAuth ? 'Authorized & Connected' : 'Not Authorized',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isAuth ? SunfireColors.trackerGreen : SunfireColors.contentTertiary,
-                          fontWeight: FontWeight.w500,
+                      Expanded(
+                        child: Text(
+                          isAuth ? 'Authorized & Connected' : 'Not Authorized',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isAuth ? SunfireColors.trackerGreen : SunfireColors.contentTertiary,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
