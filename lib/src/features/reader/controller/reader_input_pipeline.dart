@@ -532,6 +532,7 @@ class ReaderInputPipeline {
       dy: details.localPosition.dy,
       width: constraints.maxWidth,
       height: constraints.maxHeight,
+      isTablet: MediaQuery.sizeOf(host.context).width >= 600,
     );
     return applyTapZoneModifiers(
       raw,

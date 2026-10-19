@@ -81,7 +81,8 @@ class _TapZoneOverlayState extends State<TapZoneOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    final regions = tapZoneRegions(widget.preset);
+    final isTablet = MediaQuery.sizeOf(context).width >= 600;
+    final regions = tapZoneRegions(widget.preset, isTablet: isTablet);
     return AnimatedOpacity(
       opacity: _opacity,
       duration: const Duration(milliseconds: 280),

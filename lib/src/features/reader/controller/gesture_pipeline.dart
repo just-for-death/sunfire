@@ -223,6 +223,7 @@ class GesturePipeline {
       dy: dy,
       width: width,
       height: height,
+      isTablet: width >= 600,
     );
     final action = applyTapZoneModifiers(
       raw,

@@ -79,6 +79,7 @@ TapZoneAction resolveTapZoneAction({
   required double dy,
   required double width,
   required double height,
+  bool isTablet = false,
 }) {
   if (width <= 0 || height <= 0) return TapZoneAction.menu;
   // Outside the content rect (letterbox padding, overscroll): menu, never a
@@ -87,26 +88,53 @@ TapZoneAction resolveTapZoneAction({
   final x = (dx / width).clamp(0.0, 1.0);
   final y = (dy / height).clamp(0.0, 1.0);
 
+  // On tablets, use smaller tap zones (15% edges) to give more room
+  // for the menu area in the center of the wider screen.
+  final tabletEdge = isTablet ? 0.15 : null;
+
   switch (preset) {
     case TapZonePreset.off:
       return TapZoneAction.menu;
     case TapZonePreset.defaultZones:
+      if (isTablet) {
+        if (x < tabletEdge!) return TapZoneAction.previous;
+        if (x > 1 - tabletEdge) return TapZoneAction.next;
+        return TapZoneAction.menu;
+      }
       if (x < 1 / 3) return TapZoneAction.previous;
       if (x > 2 / 3) return TapZoneAction.next;
       return TapZoneAction.menu;
     case TapZonePreset.lShaped:
+      if (isTablet) {
+        if (x < tabletEdge!) return TapZoneAction.previous;
+        if (x > 1 - tabletEdge || y > 2 / 3) return TapZoneAction.next;
+        return TapZoneAction.menu;
+      }
       if (x < 1 / 3) return TapZoneAction.previous;
       if (x > 2 / 3 || y > 2 / 3) return TapZoneAction.next;
       return TapZoneAction.menu;
     case TapZonePreset.kindle:
-      // Kindle convention: majority of the screen advances.
+      if (isTablet) {
+        if (x < 1 - tabletEdge!) return TapZoneAction.next;
+        return TapZoneAction.previous;
+      }
       if (x < 2 / 3) return TapZoneAction.next;
       return TapZoneAction.previous;
     case TapZonePreset.edge:
+      if (isTablet) {
+        if (x < 0.08) return TapZoneAction.previous;
+        if (x > 0.92) return TapZoneAction.next;
+        return TapZoneAction.menu;
+      }
       if (x < 0.12) return TapZoneAction.previous;
       if (x > 0.88) return TapZoneAction.next;
       return TapZoneAction.menu;
     case TapZonePreset.leftRight:
+      if (isTablet) {
+        if (x < 0.35) return TapZoneAction.previous;
+        if (x > 0.65) return TapZoneAction.next;
+        return TapZoneAction.menu;
+      }
       if (x < 0.45) return TapZoneAction.previous;
       if (x > 0.55) return TapZoneAction.next;
       return TapZoneAction.menu;
@@ -134,7 +162,21 @@ TapZoneAction applyTapZoneModifiers(
 
 /// Region rectangles (normalized 0–1) for overlay painting / tests.
 /// Each entry is (action, left, top, right, bottom).
-List<(TapZoneAction, double, double, double, double)> tapZoneRegions(TapZonePreset preset) {
+List<(TapZoneAction, double, double, double, double)> tapZoneRegions(TapZonePreset preset, {bool isTablet = false}) {
+  if (isTablet && preset == TapZonePreset.defaultZones) {
+    return const [
+      (TapZoneAction.previous, 0, 0, 0.15, 1),
+      (TapZoneAction.menu, 0.15, 0, 0.85, 1),
+      (TapZoneAction.next, 0.85, 0, 1, 1),
+    ];
+  }
+  if (isTablet && preset == TapZonePreset.edge) {
+    return const [
+      (TapZoneAction.previous, 0, 0, 0.08, 1),
+      (TapZoneAction.menu, 0.08, 0, 0.92, 1),
+      (TapZoneAction.next, 0.92, 0, 1, 1),
+    ];
+  }
   switch (preset) {
     case TapZonePreset.off:
       return const [(TapZoneAction.menu, 0, 0, 1, 1)];
