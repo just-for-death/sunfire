@@ -525,21 +525,48 @@ extension _ReaderView on _ReaderScreenState {
                 onTapUp: (details) => _handleTapZone(details, constraints),
                 child: Stack(
                 children: [
-                  // ── 1. READER CANVAS ──────────────────────────────
-                  ScrollConfiguration(
-                    behavior: ScrollConfiguration.of(context).copyWith(
-                      dragDevices: {
-                        PointerDeviceKind.touch,
-                        PointerDeviceKind.mouse,
-                        PointerDeviceKind.trackpad,
-                        PointerDeviceKind.stylus,
-                      },
+                  // ── 1. READER CANVAS (+ iPad sidebar on tablets) ──
+                  if (SunfireBreakpoints.isTabletLayout(context) && _showControls && _siblingChapters.isNotEmpty)
+                    Row(
+                      children: [
+                        ReaderChapterSidebar(
+                          siblings: _siblingChapters,
+                          current: _chapter,
+                          onSelect: (ch) => unawaited(_readerController.loadChapter(_chapterTargetId(ch))),
+                        ),
+                        Expanded(
+                          child: ScrollConfiguration(
+                            behavior: ScrollConfiguration.of(context).copyWith(
+                              dragDevices: {
+                                PointerDeviceKind.touch,
+                                PointerDeviceKind.mouse,
+                                PointerDeviceKind.trackpad,
+                                PointerDeviceKind.stylus,
+                              },
+                            ),
+                            child: _readingMode == ReadingMode.longStrip ||
+                                    _readingMode == ReadingMode.longStripGaps
+                                ? _buildLiveWebtoonCanvas(constraints)
+                                : _buildLivePagedCanvas(constraints),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(context).copyWith(
+                        dragDevices: {
+                          PointerDeviceKind.touch,
+                          PointerDeviceKind.mouse,
+                          PointerDeviceKind.trackpad,
+                          PointerDeviceKind.stylus,
+                        },
+                      ),
+                      child: _readingMode == ReadingMode.longStrip ||
+                              _readingMode == ReadingMode.longStripGaps
+                          ? _buildLiveWebtoonCanvas(constraints)
+                          : _buildLivePagedCanvas(constraints),
                     ),
-                    child: _readingMode == ReadingMode.longStrip ||
-                            _readingMode == ReadingMode.longStripGaps
-                        ? _buildLiveWebtoonCanvas(constraints)
-                        : _buildLivePagedCanvas(constraints),
-                  ),
 
                   // ── 1b. FIRST-RUN TAP ZONE OVERLAY ───────────────
                   if (_showTapZoneOverlay)
