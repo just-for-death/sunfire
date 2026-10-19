@@ -208,10 +208,10 @@ class _TopBar extends StatelessWidget {
             ignoring: !showControls,
             child: Container(
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + 8,
-                left: 16,
-                right: 16,
-                bottom: 12,
+                top: MediaQuery.of(context).padding.top + 4,
+                left: 8,
+                right: 8,
+                bottom: 8,
               ),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
@@ -223,7 +223,8 @@ class _TopBar extends StatelessWidget {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded, color: SunfireColors.contentPrimary),
+                    icon: const Icon(Icons.arrow_back_rounded, size: 20, color: SunfireColors.contentPrimary),
+                    visualDensity: VisualDensity.compact,
                     onPressed: onExit,
                   ),
                   Expanded(
@@ -257,8 +258,10 @@ class _TopBar extends StatelessWidget {
                       bookmarked
                           ? Icons.bookmark_rounded
                           : Icons.bookmark_border_rounded,
+                      size: 20,
                       color: bookmarked ? SunfireColors.overlayHighlight : SunfireColors.contentSecondary,
                     ),
+                    visualDensity: VisualDensity.compact,
                     tooltip: bookmarked ? 'Remove Bookmark' : 'Bookmark Chapter',
                     onPressed: onToggleBookmark,
                   ),
@@ -267,26 +270,30 @@ class _TopBar extends StatelessWidget {
                       incognitoMode
                           ? Icons.visibility_off_rounded
                           : Icons.visibility_outlined,
+                      size: 20,
                       color: incognitoMode ? SunfireColors.overlayHighlight : SunfireColors.contentSecondary,
                     ),
+                    visualDensity: VisualDensity.compact,
                     tooltip: incognitoMode
                         ? 'Incognito Mode: ON'
                         : 'Incognito Mode: OFF',
                     onPressed: onToggleIncognito,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.format_list_bulleted_rounded,
-                        color: SunfireColors.contentPrimary),
+                    icon: const Icon(Icons.format_list_bulleted_rounded, size: 20, color: SunfireColors.contentPrimary),
+                    visualDensity: VisualDensity.compact,
                     tooltip: 'Chapters',
                     onPressed: onShowChapters,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.headset_rounded, color: SunfireColors.contentPrimary),
+                    icon: const Icon(Icons.headset_rounded, size: 20, color: SunfireColors.contentPrimary),
+                    visualDensity: VisualDensity.compact,
                     tooltip: 'Listen (OCR + TTS)',
                     onPressed: onShowListen,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.tune_rounded, color: SunfireColors.contentPrimary),
+                    icon: const Icon(Icons.tune_rounded, size: 20, color: SunfireColors.contentPrimary),
+                    visualDensity: VisualDensity.compact,
                     tooltip: 'Settings',
                     onPressed: onShowSettings,
                   ),
