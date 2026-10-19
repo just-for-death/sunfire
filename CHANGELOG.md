@@ -7,20 +7,30 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
-## [Unreleased]
+## [7.0.0] — 2026-10-19
 
 ### Added
 
 - Tablet reader HUD: wider edge insets and a larger page capsule on tablets.
-- Guards: width-unsafe-`Text`-in-`Row` lint with a frozen allowlist; narrow-width
-  + large-text overflow tests across 6 screens; semantics-tree a11y audit of 6
-  shipped screens; real-screen performance budgets; component golden baselines.
+- Guards: width-unsafe-`Text`-in-`Row` lint with a frozen allowlist (driven to
+  empty this release); narrow-width + large-text overflow tests across the
+  settings, browse and onboarding screens; DB-backed overflow and
+  semantics-tree a11y audits for the library, manga-detail and reader screens;
+  real-screen performance budgets; component and full-screen golden baselines.
 
 ### Fixed
 
+- Reader: the webtoon chapter-boundary separator overflowed its fixed-extent
+  slot with long chapter names at large accessibility text scales; both labels
+  now clip to two ellipsized lines.
+- Library: the search button and the category long-press target now expose
+  screen-reader labels; the manga-detail back button exposes a localized
+  tooltip.
 - Overflow: width-unsafe `Text` inside `Row`s (tracking sheet/settings, stats,
-  manga detail, metron detail, source grid, library offline banner) now
-  wrap/ellipsize instead of overflowing on narrow phones and large text.
+  manga detail, metron detail, source grid, library offline banner, updates,
+  history, browse, migrate-search, reader settings/HUD, reading heatmap and the
+  conflict dialog) now wrap/ellipsize instead of overflowing on narrow phones
+  and large text.
 - Reader settings: "Webtoon Panel" preset tile no longer overflows at 1.3x/1.5x
   text scale.
 - Settings subpages: back button exposes a localized tooltip for screen readers.
@@ -440,6 +450,8 @@ talks to your server all changed.
 
 ---
 
+[7.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v7.0.0
+[6.3.0]: https://github.com/just-for-death/sunfire/releases/tag/v6.3.0
 [6.2.0]: https://github.com/just-for-death/sunfire/releases/tag/v6.2.0
 [6.1.0]: https://github.com/just-for-death/sunfire/releases/tag/v6.1.0
 [6.0.0]: https://github.com/just-for-death/sunfire/releases/tag/v6.0.0

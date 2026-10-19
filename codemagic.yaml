@@ -1,5 +1,5 @@
 # ==============================================================================
-# Codemagic CI/CD for Sunfire Manga Reader — v6.2.0
+# Codemagic CI/CD for Sunfire Manga Reader — v7.0.0
 # Copied from Catalyst's approach
 # ==============================================================================
 
@@ -9,7 +9,7 @@ workflows:
   # WORKFLOW 1: ANDROID RELEASE APKs
   # ────────────────────────────────────────────────────────────────────────────
   android-release:
-    name: Android Release APKs - v6.2.0
+    name: Android Release APKs - v7.0.0
     max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
@@ -31,7 +31,7 @@ workflows:
   # WORKFLOW 2: iOS UNSIGNED IPA (AltStore / TrollStore / Sideloadly)
   # ────────────────────────────────────────────────────────────────────────────
   ios-unsigned-ipa:
-    name: iOS Unsigned IPA (Sideload) - v6.2.0
+    name: iOS Unsigned IPA (Sideload) - v7.0.0
     max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
@@ -76,7 +76,7 @@ workflows:
   # WORKFLOW 3: BOTH PLATFORMS — triggers on v* tags
   # ────────────────────────────────────────────────────────────────────────────
   all-release:
-    name: iOS + Android v6.2.0 (unsigned IPA)
+    name: iOS + Android v7.0.0 (unsigned IPA)
     max_build_duration: 90
     instance_type: mac_mini_m1
     environment:
