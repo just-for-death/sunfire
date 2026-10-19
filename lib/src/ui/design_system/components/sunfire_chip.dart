@@ -33,7 +33,7 @@ class SunfireChip extends StatelessWidget {
     switch (variant) {
       case SunfireChipVariant.filter:
         return FilterChip(
-          label: Text(label),
+          label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
           selected: selected,
           onSelected: onSelected,
           avatar: avatar,
@@ -41,14 +41,14 @@ class SunfireChip extends StatelessWidget {
         );
       case SunfireChipVariant.choice:
         return ChoiceChip(
-          label: Text(label),
+          label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
           selected: selected,
           onSelected: onSelected,
           avatar: avatar,
         );
       case SunfireChipVariant.input:
         return InputChip(
-          label: Text(label),
+          label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
           selected: selected,
           onSelected: onSelected,
           onDeleted: onDeleted,

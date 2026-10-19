@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'dart:ui' show Size;
-import 'package:flutter/painting.dart' show ImageInfo;
 
 /// Estimated webtoon page height before the real image size is known.
 double estimateWebtoonPlaceholderHeight(double contentWidth, {double? cachedHeight}) {
@@ -73,11 +72,6 @@ bool shouldPersistProgressPage({
   if (page <= 0) return false;
   if (!rereading && previousSaved > 0 && page < previousSaved) return false;
   return true;
-}
-
-Size? sizeFromImageInfo(ImageInfo info) {
-  final img = info.image;
-  return Size(img.width.toDouble(), img.height.toDouble());
 }
 
 double fittedHeightForWidth(Size intrinsic, double width) {

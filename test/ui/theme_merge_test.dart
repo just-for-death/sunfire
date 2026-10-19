@@ -177,7 +177,6 @@ void main() {
       'lib/src/features/manga_detail/tracking_bottom_sheet.dart',
       'lib/src/features/browse/source_manga_grid_screen.dart',
       'lib/src/features/browse/global_search_screen.dart',
-      'lib/src/core/theme/ambient_palette.dart',
     ];
     for (final path in files) {
       final src = File(path).readAsStringSync();

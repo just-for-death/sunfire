@@ -400,6 +400,8 @@ class _BottomBar extends StatelessWidget {
                               valueListenable: pageIndicator,
                               builder: (_, activePage, __) => Text(
                                 'Page $activePage / $pageUrlsLength',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   color: SunfireColors.contentPrimary,
                                   fontWeight: FontWeight.bold,
@@ -438,6 +440,8 @@ class _BottomBar extends StatelessWidget {
                                     const SizedBox(width: SunfireSpacing.xs),
                                     Text(
                                       readingModeHudLabel(readingMode),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         color: primaryColor,
                                         fontSize: 10,
@@ -610,6 +614,8 @@ class _PageCapsule extends StatelessWidget {
                   valueListenable: pageIndicator,
                   builder: (context, page, _) => Text(
                     '$page / $pageUrlsLength',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: SunfireColors.contentPrimary,
                       fontSize: 11,
@@ -765,6 +771,8 @@ class _AutoScrollCapsule extends StatelessWidget {
                             isUserTouching
                                 ? 'PAUSED'
                                 : '${autoScrollSpeed.round()} px/s',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: isUserTouching
                                   ? SunfireColors.overlayHighlight
