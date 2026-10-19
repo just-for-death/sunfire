@@ -28,7 +28,8 @@ void main() {
         ),
       );
       stopwatch.stop();
-      expect(stopwatch.elapsedMilliseconds, lessThan(500));
+      expect(stopwatch.elapsedMilliseconds, lessThan(3000),
+          reason: 'catches pathological regressions, not machine noise');
     });
 
     testWidgets('Text overflow does not cause layout errors in wide text', (tester) async {

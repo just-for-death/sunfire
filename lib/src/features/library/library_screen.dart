@@ -1795,9 +1795,14 @@ unawaited(
         bottom: !_settings.showCategoryTabs || _categories.isEmpty
             ? null
             : PreferredSize(
-                preferredSize: const Size.fromHeight(52),
+                // Scale the category strip with accessibility text size instead
+                // of clipping labels at a hard-coded 44px.
+                preferredSize: Size.fromHeight(
+                  52 * MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.6),
+                ),
                 child: Container(
-                  height: 44,
+                  height:
+                      44 * MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.6),
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,

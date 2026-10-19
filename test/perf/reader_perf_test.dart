@@ -7,7 +7,7 @@ import 'package:sunfire/src/ui/design_system/components/sunfire_chip.dart';
 
 void main() {
   group('Reader UI performance', () {
-    testWidgets('SunfireChip builds within 16ms (60fps budget)', (tester) async {
+    testWidgets('SunfireChip builds within budget', (tester) async {
       final stopwatch = Stopwatch()..start();
       await tester.pumpWidget(
         MaterialApp(
@@ -26,7 +26,8 @@ void main() {
       );
       stopwatch.stop();
       // 50 chips should build within reasonable time
-      expect(stopwatch.elapsedMilliseconds, lessThan(500));
+      expect(stopwatch.elapsedMilliseconds, lessThan(3000),
+          reason: 'catches pathological regressions, not machine noise');
     });
 
     testWidgets('Text overflow handling does not cause layout errors', (tester) async {

@@ -2,16 +2,16 @@
 # Lower entries as files are migrated; never raise. A file not listed must be 0.
 # Remaining entries are static, short labels inside min-sized / horizontally
 # scrolling rows that cannot realistically overflow.
-lib/src/features/manga_detail/tracking_bottom_sheet.dart 5
+lib/src/features/browse/browse_screen.dart 1
 lib/src/features/browse/migrate_search_screen.dart 3
-lib/src/features/settings/reader_settings_screen.dart 3
+lib/src/features/history/history_screen.dart 1
+lib/src/features/library/library_screen.dart 1
+lib/src/features/manga_detail/tracking_bottom_sheet.dart 5
+lib/src/features/onboarding/onboarding_screen.dart 1
 lib/src/features/reader/reader_overlay_hud.dart 3
-lib/src/ui/widgets/conflict_resolution_dialog.dart 3
-lib/src/features/updates/updates_screen.dart 2
+lib/src/features/settings/reader_settings_screen.dart 2
 lib/src/features/settings/tracking_settings_screen.dart 2
 lib/src/features/stats/reading_heatmap.dart 2
 lib/src/features/stats/stats_screen.dart 2
-lib/src/features/onboarding/onboarding_screen.dart 1
-lib/src/features/library/library_screen.dart 1
-lib/src/features/history/history_screen.dart 1
-lib/src/features/browse/browse_screen.dart 1
+lib/src/features/updates/updates_screen.dart 2
+lib/src/ui/widgets/conflict_resolution_dialog.dart 3
