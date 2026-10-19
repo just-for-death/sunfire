@@ -29,9 +29,18 @@
 /// Keeping it here means there is exactly one answer to "is this seconds or
 /// millis", reachable from every layer without a cycle. `sync_engine.dart`
 /// re-exports it so existing imports keep working.
+/// Threshold for distinguishing epoch seconds from epoch milliseconds.
+/// Values > 1e11 are treated as milliseconds and divided by 1000.
+/// Values <= 1e11 are treated as seconds.
+const int kEpochThreshold = 100000000000;
+
+/// Epoch granularity for synthetic ID generation: 1e12 microseconds = ~1000 seconds.
+/// Used to bucket synthetic IDs into epochs that change every ~1000 seconds.
+const int kSyntheticIdEpochGranularity = 1000000000000;
+
 int? normalizeEpochToSeconds(Object? raw) {
   if (raw == null) return null;
   final parsed = raw is num ? raw.toInt() : int.tryParse(raw.toString().trim());
   if (parsed == null || parsed <= 0) return null;
-  return parsed > 100000000000 ? parsed ~/ 1000 : parsed;
+  return parsed > kEpochThreshold ? parsed ~/ 1000 : parsed;
 }

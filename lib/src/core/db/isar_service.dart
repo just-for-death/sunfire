@@ -3,10 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:isar_community/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/chapter_url_attribution.dart';
 import '../logging/logger_service.dart';
-import 'epoch_seconds.dart';
+import 'epoch_seconds.dart' show kSyntheticIdEpochGranularity, normalizeEpochToSeconds;
 import 'list_chunks.dart';
 import 'models/category.dart';
 import 'models/chapter.dart';
@@ -23,12 +24,13 @@ class IsarService {
   static IsarService? _instance;
   late Isar _isar;
   bool _isInitialized = false;
+  
+  // Persistent synthetic ID counter to survive process restarts.
+  // Stored as: _syntheticIdCounter (0-9999) + _syntheticIdEpoch (DateTime.microsecondsSinceEpoch / 1_000_000_000_000)
+  // When epoch increases, counter resets; when epoch same, counter continues.
   static int _syntheticIdCounter = 0;
-
-  static int _generateSyntheticServerId() {
-    _syntheticIdCounter = (_syntheticIdCounter + 1) % 10000;
-    return -(DateTime.now().microsecondsSinceEpoch % 1000000000 * 10000 + _syntheticIdCounter);
-  }
+  static int _syntheticIdEpoch = 0;
+  static bool _syntheticIdInitialized = false;
 
   /// Reserves an id for an offline-created entity that has no server id yet.
   /// Negative range never collides with real Suwayomi ids, and
@@ -39,38 +41,80 @@ class IsarService {
   /// True for ids produced by [generateSyntheticServerId] (offline-temp ids).
   static bool isSyntheticServerId(int id) => id < 0;
 
-  /// Global mutex to serialize synthetic ID minting across concurrent callers.
-  /// Without this, two concurrent `saveMangas` calls can both call `exists(id)`
-  /// outside a transaction, get `false`, mint the same ID, and the second
-  /// `putAll` silently replaces the first under `unique: true, replace: true`.
-  static final _SyntheticIdMintLock _mintLock = _SyntheticIdMintLock();
+  /// Initializes the persistent synthetic ID state from SharedPreferences.
+  /// Must be called before any ID generation (done in [initialize]).
+  static Future<void> _initSyntheticIdState() async {
+    if (_syntheticIdInitialized) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final storedEpoch = prefs.getInt('_isar_synthetic_id_epoch') ?? 0;
+      final storedCounter = prefs.getInt('_isar_synthetic_id_counter') ?? 0;
+      final currentEpoch = DateTime.now().microsecondsSinceEpoch ~/ kSyntheticIdEpochGranularity;
+      if (currentEpoch > storedEpoch) {
+        _syntheticIdEpoch = currentEpoch;
+        _syntheticIdCounter = 0;
+      } else {
+        _syntheticIdEpoch = storedEpoch;
+        _syntheticIdCounter = storedCounter;
+      }
+    } catch (_) {
+      // In tests, SharedPreferences may not be initialized. Use defaults.
+      final currentEpoch = DateTime.now().microsecondsSinceEpoch ~/ kSyntheticIdEpochGranularity;
+      _syntheticIdEpoch = currentEpoch;
+      _syntheticIdCounter = 0;
+    }
+    _syntheticIdInitialized = true;
+  }
+
+  static Future<void> _persistSyntheticIdState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('_isar_synthetic_id_epoch', _syntheticIdEpoch);
+      await prefs.setInt('_isar_synthetic_id_counter', _syntheticIdCounter);
+    } catch (_) {
+      // In tests, SharedPreferences may not be initialized. Skip persistence.
+    }
+  }
+
+  static int _generateSyntheticServerId() {
+    // Epoch is microsecondsSinceEpoch / 1e12 (changes every ~1000s).
+    // Counter increments within the same epoch (0-9999).
+    final currentEpoch = DateTime.now().microsecondsSinceEpoch ~/ kSyntheticIdEpochGranularity;
+    if (currentEpoch > _syntheticIdEpoch) {
+      _syntheticIdEpoch = currentEpoch;
+      _syntheticIdCounter = 0;
+    } else {
+      _syntheticIdCounter = (_syntheticIdCounter + 1) % 10000;
+    }
+    // Persist every 100 mints to avoid excessive I/O.
+    if (_syntheticIdCounter % 100 == 0) {
+      unawaited(_persistSyntheticIdState());
+    }
+    return -(_syntheticIdEpoch * 10000 + _syntheticIdCounter + 1);
+  }
 
   /// Mints a synthetic id guaranteed unused per [exists]: the time-modulo
   /// formula repeats every ~1000s and the counter resets per process, so a
   /// blind mint can collide across sessions and silently replace a row under
   /// unique-replace indexes. Retries (bounded) until free. [reserved] covers
   /// ids minted earlier in the same batch that are not on disk yet.
-  /// This method is serialized globally via [_mintLock] to prevent cross-
-  /// caller races (see _mintUniqueSyntheticServerId race audit finding).
   static Future<int> _mintUniqueSyntheticServerId(
     Future<bool> Function(int id) exists, [
     Set<int>? reserved,
   ]) async {
-    return _mintLock.run(() async {
-      for (var attempt = 0; attempt < 25; attempt++) {
-        final id = _generateSyntheticServerId();
-        if (reserved != null && reserved.contains(id)) continue;
-        if (!await exists(id)) {
-          reserved?.add(id);
-          return id;
-        }
+    for (var attempt = 0; attempt < 25; attempt++) {
+      final id = _generateSyntheticServerId();
+      if (reserved != null && reserved.contains(id)) continue;
+      if (!await exists(id)) {
+        reserved?.add(id);
+        return id;
       }
-      // Practically unreachable (25 consecutive 1-in-10^13 collisions), but
-      // never return a known-taken id: fall back to Int64-range random.
-      final fallback =
-          -(DateTime.now().microsecondsSinceEpoch % 9223372036854775807);
-      return fallback == 0 ? -1 : fallback;
-    });
+    }
+    // Practically unreachable (25 consecutive 1-in-10^13 collisions), but
+    // never return a known-taken id: fall back to Int64-range random.
+    final fallback =
+        -(DateTime.now().microsecondsSinceEpoch % 9223372036854775807);
+    return fallback == 0 ? -1 : fallback;
   }
 
   IsarService._();
@@ -125,6 +169,7 @@ class IsarService {
     if (existing != null) {
       _isar = existing;
       _isInitialized = true;
+      await _initSyntheticIdState();
       return;
     }
     final dir = await getApplicationDocumentsDirectory();
@@ -141,6 +186,7 @@ class IsarService {
       inspector: kDebugMode,
     );
     _isInitialized = true;
+    await _initSyntheticIdState();
   }
 
   // ── META HELPERS ─────────────────────────────────────────
@@ -808,7 +854,7 @@ class IsarService {
         // put silently REPLACES the first (plus its manga assignments).
         if (category.serverId == 0) {
           category.serverId = await _mintUniqueSyntheticServerId(
-            (id) async => (await _isar.categorys
+            (int id) async => (await _isar.categorys
                     .filter()
                     .serverIdEqualTo(id)
                     .findFirst()) !=
@@ -1076,39 +1122,5 @@ class IsarService {
         await _isar.syncRecords.delete(id);
       });
     });
-  }
-}
-
-/// Global mutex for synthetic ID minting. Ensures only one caller at a time
-/// can execute the `exists` check + mint loop, preventing cross-caller
-/// collisions under `unique: true, replace: true` indexes.
-class _SyntheticIdMintLock {
-  final _queue = <Completer<void>>[];
-  bool _held = false;
-
-  Future<T> run<T>(Future<T> Function() action) async {
-    if (!_held) {
-      _held = true;
-      try {
-        return await action();
-      } finally {
-        _held = false;
-        if (_queue.isNotEmpty) {
-          _queue.removeAt(0).complete();
-        }
-      }
-    }
-    final completer = Completer<void>();
-    _queue.add(completer);
-    await completer.future;
-    _held = true;
-    try {
-      return await action();
-    } finally {
-      _held = false;
-      if (_queue.isNotEmpty) {
-        _queue.removeAt(0).complete();
-      }
-    }
   }
 }

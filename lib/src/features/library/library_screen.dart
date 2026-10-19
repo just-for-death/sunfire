@@ -79,6 +79,10 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
   bool _isBatchMode = false;
   final Set<int> _selectedMangaIds = {};
 
+  // Memoized filtered manga list, invalidated when source data or filters change.
+  List<Manga>? _filteredMangaCache;
+  bool _filteredMangaDirty = true;
+
   // Tab-switch reload coalescing (see _onTabChanged)
   Timer? _tabReloadTimer;
   bool _isLoadingIsar = false;
@@ -278,6 +282,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
           _clampCategoryIndex();
           _clampTagSelection();
         });
+        _invalidateFilteredManga();
       }
     } catch (e, stack) {
       unawaited(LoggerService.instance.logError('Failed to load library from Isar: $e', exception: e, stackTrace: stack, category: 'Library'));
@@ -310,6 +315,7 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     } finally {
       if (mounted) setState(() => _isSyncing = false);
     }
+    _invalidateFilteredManga();
   }
 
   Future<void> _handleRefresh() async {
@@ -427,7 +433,14 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     }
   }
 
+  void _invalidateFilteredManga() {
+    _filteredMangaDirty = true;
+  }
+
   List<Manga> get _filteredManga {
+    if (!_filteredMangaDirty && _filteredMangaCache != null) {
+      return _filteredMangaCache!;
+    }
     var list = List<Manga>.from(_allManga);
 
     // 0. Status Filter
@@ -530,6 +543,8 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
       return _isSortAscending ? cmp : -cmp;
     });
 
+    _filteredMangaCache = list;
+    _filteredMangaDirty = false;
     return list;
   }
 
@@ -1521,6 +1536,7 @@ unawaited(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SunfireRadius.pill), side: BorderSide(color: isSel ? primaryColor : SunfireTheme.tileBorder(context), width: 0.8)),
                           onSelected: (_) {
                             setState(() => _statusFilter = filter);
+                    _invalidateFilteredManga();
                             setSheetState(() {});
                           },
                         );
@@ -1551,6 +1567,7 @@ unawaited(
                             ),
                             onSelected: (_) {
                               setState(() => _selectedTagId = null);
+                      _invalidateFilteredManga();
                               setSheetState(() {});
                             },
                           ),
@@ -1575,6 +1592,7 @@ unawaited(
                               ),
                               onSelected: (_) {
                                 setState(() => _selectedTagId = tag.id);
+                          _invalidateFilteredManga();
                                 setSheetState(() {});
                               },
                             );
@@ -1597,6 +1615,7 @@ unawaited(
                           icon: Icon(_isSortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: SunfireIconSize.md, color: primaryColor),
                           onPressed: () {
                             setState(() => _isSortAscending = !_isSortAscending);
+                    _invalidateFilteredManga();
                             setSheetState(() {});
                           },
                         ),
@@ -1610,6 +1629,7 @@ unawaited(
                           _sortBy = 'Title';
                           _isSortAscending = true;
                         });
+                        _invalidateFilteredManga();
                         Navigator.pop(context);
                       },
                     ),
@@ -1621,6 +1641,7 @@ unawaited(
                           _sortBy = 'Unread';
                           _isSortAscending = false;
                         });
+                        _invalidateFilteredManga();
                         Navigator.pop(context);
                       },
                     ),
@@ -1632,6 +1653,7 @@ unawaited(
                           _sortBy = 'Recent';
                           _isSortAscending = false;
                         });
+                        _invalidateFilteredManga();
                         Navigator.pop(context);
                       },
                     ),
@@ -1643,6 +1665,7 @@ unawaited(
                           _sortBy = 'Last Read';
                           _isSortAscending = false;
                         });
+                        _invalidateFilteredManga();
                         Navigator.pop(context);
                       },
                     ),
@@ -1654,6 +1677,7 @@ unawaited(
                           _sortBy = 'Chapters';
                           _isSortAscending = false;
                         });
+                        _invalidateFilteredManga();
                         Navigator.pop(context);
                       },
                     ),
@@ -1731,7 +1755,10 @@ unawaited(
                       filled: true,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(SunfireRadius.lg), borderSide: BorderSide.none),
                     ),
-                    onChanged: (val) => setState(() => _searchQuery = val),
+                    onChanged: (val) {
+                      setState(() => _searchQuery = val);
+                      _invalidateFilteredManga();
+                    },
                   )
                 : Text('Library', style: SunfireTypography.withWeight(SunfireTypography.headlineMedium, FontWeight.bold)),
         actions: _isBatchMode
@@ -1841,6 +1868,7 @@ unawaited(
                   onSelected: (selected) {
                     if (selected) {
                       setState(() => _selectedCategoryIndex = index);
+                      _invalidateFilteredManga();
                     }
                   },
                 );
@@ -1966,6 +1994,7 @@ unawaited(
                                     ),
                                     onSelected: (_) {
                                       setState(() => _statusFilter = filter);
+                    _invalidateFilteredManga();
                                     },
                                   ),
                                 );

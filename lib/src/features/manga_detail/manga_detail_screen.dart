@@ -479,11 +479,15 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final chaptersNeedEnrichment = _chapters.isEmpty ||
         _chapters.every((c) => c.name.trim().isEmpty || c.url.trim().isEmpty);
     if (((isLocalExtension && !serverFirst) || chaptersNeedEnrichment) && _manga != null && !_isLocalSource && _manga!.sourceName.isNotEmpty) {
+      // Generation guard: a newer load supersedes this one; don't run local scrape
+      if (loadGen != _loadGeneration) return;
       try {
         final localData = await QuickJsService.instance.fetchMangaDetailsLocal(
           _manga!.sourceName,
           _manga!.url.isNotEmpty ? _manga!.url : _manga!.title,
         );
+        // Generation guard: a newer load may have started while we waited
+        if (loadGen != _loadGeneration) return;
         if (localData.isNotEmpty) {
           if (localData['description'] != null && (_manga!.description == null || _manga!.description!.isEmpty)) {
             _manga!.description = localData['description'].toString();
@@ -497,6 +501,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
               _manga!.thumbnailUrl = directImg;
             }
           }
+          // Generation guard before persisting manga metadata
+          if (loadGen != _loadGeneration) return;
           await IsarService.instance.saveManga(_manga!);
 
           final rawChList = (localData['chapters'] ?? localData['chapterList'] ?? localData['epList'] ?? localData['episodes']);
@@ -599,6 +605,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
                 }
               }
             }
+            // Generation guard before persisting chapters
+            if (loadGen != _loadGeneration) return;
             await IsarService.instance.saveChapters(fetched);
             _chapters = fetched;
             if (_manga != null) {
@@ -614,6 +622,8 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
       ..title = 'Manga #${widget.mangaServerId}'
       ..inLibrary = false;
 
+    // Generation guard before final manga persistence
+    if (loadGen != _loadGeneration) return;
     if (_manga != null) {
       await IsarService.instance.saveManga(_manga!);
     }
@@ -1030,24 +1040,9 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
         setState(() {});
       }
     } finally {
-      // Both flags are cleared unconditionally, NOT gated on this pass still
-      // owning the generation.
-      //
-      // This method bumps `_loadGeneration` without touching either flag, so
-      // gating on the token here reproduced the exact trap the gate was meant to
-      // avoid: a pull-to-refresh in flight, followed by a tap that calls this
-      // (returning from the reader or the migrate screen), means the refresh's
-      // own `finally` sees a bumped generation and declines to clear
-      // `_isRefreshing` — leaving it true for the life of this State. Every
-      // later refresh then hit `if (_isRefreshing) return;` and silently did
-      // nothing: no spinner, no error, no reload, until the user left the
-      // series and came back.
-      //
-      // Clearing unconditionally is safe because neither flag is owned by a
-      // specific pass: `_isLoading` is set only when there is no content, and
-      // `_isRefreshing` only when there is, and whichever load is current will
-      // re-set the one it needs.
-      if (mounted) {
+      // Both flags are cleared ONLY if this pass still owns the generation.
+      // If a newer load has superseded us, its flags take precedence.
+      if (loadGen == _loadGeneration && mounted) {
         setState(() {
           _isLoading = false;
           _isRefreshing = false;

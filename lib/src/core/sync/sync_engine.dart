@@ -2251,9 +2251,14 @@ class SyncEngine {
       // (inside the try below, after the payload is decoded). Category edits,
       // library membership and other tracker ops are deliberate user actions
       // and still go through.
+      //
+      // FIX: Instead of just continuing (leaving record pending for replay when
+      // Incognito is disabled), mark as ABANDONED so it never replays. The user
+      // explicitly chose not to sync this activity.
       if (SettingsService.instance.incognitoMode &&
           record.entityType == SyncEntityType.chapter &&
           record.action == SyncAction.update) {
+        await _abandonRecord(record);
         continue;
       }
       try {
@@ -2264,10 +2269,12 @@ class SyncEngine {
         // Incognito also holds back tracker *progress* replays (they leak
         // reading activity to MAL/AniList). Deliberate tracker ops still go
         // through. The record stays pending for when Incognito is turned off.
+        // FIX: Abandon tracker progress records too.
         if (SettingsService.instance.incognitoMode &&
             record.entityType == SyncEntityType.tracker &&
             record.action == SyncAction.update &&
             payload['op']?.toString() == 'mangaProgress') {
+          await _abandonRecord(record);
           continue;
         }
         bool success = false;
@@ -2330,10 +2337,11 @@ class SyncEngine {
                 // nothing was logged. The user believes it synced.
                 //
                 // A payload that cannot be interpreted must never be reported
-                // as delivered.
-                success = false;
+                // as delivered. Abandon it immediately with a distinct error so
+                // the user can see the failure in the sync UI.
+                await _abandonRecord(record);
                 await LoggerService.instance.logWarning(
-                  'Discarding chapter mutation ${record.id}: payload has no usable chapterId '
+                  'Abandoning chapter mutation ${record.id}: payload has no usable chapterId '
                   '(${record.payloadJson})',
                   'SyncEngine',
                 );
@@ -2665,6 +2673,23 @@ class SyncEngine {
     }
     current.state = nextState;
     await IsarService.instance.saveSyncRecord(current);
+  }
+
+  /// Marks a sync record as abandoned so it will never be dispatched again.
+  /// Used for Incognito mode: when the user enables Incognito, any pending
+  /// chapter/tracker progress records are abandoned instead of being left
+  /// pending (which would replay when Incognito is disabled).
+  Future<void> _abandonRecord(SyncRecord record) async {
+    final current = await IsarService.instance.getSyncRecord(record.id);
+    if (current == null) return;
+    current.state = SyncRecordState.abandoned;
+    await IsarService.instance.saveSyncRecord(current);
+    _dispatchAttempts.remove(current.id);
+    unawaited(_persistDispatchAttempts());
+    await LoggerService.instance.logInfo(
+      'Abandoned incognito-suppressed sync record ${current.id} (type=${current.entityType}, action=${current.action})',
+      'SyncEngine',
+    );
   }
 
   Future<void> _pullServerState() async {

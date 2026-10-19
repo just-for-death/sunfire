@@ -294,24 +294,19 @@ class NavigationController {
     // On-demand self-healing: If chapter has empty/blank URL in DB, scrape parent manga details immediately!
     if ((chapterUrlToResolve == null || chapterUrlToResolve.isEmpty) && _chapter != null) {
       try {
-        final manga = await _mangaFor(_chapter!.mangaId);
+        // Capture the chapter BEFORE the async call to avoid writing to the
+        // wrong chapter if a newer load supersedes this one.
+        final targetChapter = _chapter!;
+        final manga = await _mangaFor(targetChapter.mangaId);
         final effectiveSource = sourceName ?? manga?.sourceName ?? '';
         if (manga != null && effectiveSource.isNotEmpty) {
-          final String? resolvedUrl = await _selfHealChapterUrl(effectiveSource, _chapter!, loadGen);
+          final String? resolvedUrl = await _selfHealChapterUrl(effectiveSource, targetChapter, loadGen);
           if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
             chapterUrlToResolve = resolvedUrl;
-            // Write through a captured local, never `_chapter!`.
-            // The generation guard above sits BEFORE this block, but the
-            // `saveChapter` await below re-opens the window: a stale
-            // continuation resuming after the user switched chapters would
-            // read the NEW `_chapter` and persist the OLD chapter's
-            // resolved URL onto it. That chapter then resolved against a
-            // foreign URL and could never load again — permanent Isar
-            // corruption requiring a re-scrape of the whole series.
-            final target = _chapter!;
-            target.url = resolvedUrl;
-            target.realUrl = resolvedUrl;
-            await IsarService.instance.saveChapter(target).timeout(ioTimeout);
+            // Write through the captured local, never the current `_chapter`.
+            targetChapter.url = resolvedUrl;
+            targetChapter.realUrl = resolvedUrl;
+            await IsarService.instance.saveChapter(targetChapter).timeout(ioTimeout);
             // Re-check after the await: nothing below may act on a
             // generation that has already been superseded.
             if (loadGen != _loadGeneration) return <String>[];

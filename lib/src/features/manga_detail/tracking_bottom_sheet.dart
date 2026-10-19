@@ -368,7 +368,19 @@ class _TrackingBottomSheetState extends State<TrackingBottomSheet> {
       // series has that serverId, and _scrobbleAllReadChapters then pushes
       // their chapter numbers to MAL/AniList — permanently corrupting tracker
       // progress for an unrelated series, with a success snackbar.
-      final mId = _localManga?.canonicalKey ?? widget.mangaServerId;
+      //
+      // FIX: If _localManga is null (route used local Isar id), load it by
+      // local id and use its synthetic serverId. Only accept local-id hits
+      // that are actually standalone (serverId < 0).
+      Manga? mangaForQuery = _localManga;
+      if (mangaForQuery == null) {
+        final byLocal = await IsarService.instance.getManga(widget.mangaServerId);
+        if (byLocal != null && byLocal.serverId < 0) {
+          mangaForQuery = byLocal;
+        }
+      }
+      if (mangaForQuery == null) return;
+      final mId = mangaForQuery.canonicalKey; // negative synthetic for local
       var chapters = await IsarService.instance.getChaptersForManga(mId);
       if (chapters.isEmpty && widget.mangaServerId != mId) {
         chapters = await IsarService.instance.getChaptersForManga(widget.mangaServerId);
