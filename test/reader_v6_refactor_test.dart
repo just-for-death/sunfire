@@ -63,7 +63,7 @@ void main() {
   group('ISS-128 page build has no fetch side effects', () {
     testWidgets('building a remote page does not start a fetch (desktop or not)', (tester) async {
       final calls = <String>[];
-      final loader = PageLoader(sourceName: 'S', mangaId: 1, chapterTargetId: 2);
+      final loader = PageLoader(sourceName: 'S', mangaId: 1, chapterTargetId: 2, testMode: true);
       addTearDown(loader.dispose);
       await tester.pumpWidget(MaterialApp(
         home: Builder(
@@ -79,7 +79,7 @@ void main() {
     });
 
     testWidgets('bytes come from the PageLoader LRU (single cache)', (tester) async {
-      final loader = PageLoader(sourceName: 'S', mangaId: 1, chapterTargetId: 2);
+      final loader = PageLoader(sourceName: 'S', mangaId: 1, chapterTargetId: 2, testMode: true);
       addTearDown(loader.dispose);
       loader.cacheBytes('https://img.invalid/p0.jpg', Uint8List.fromList(List.filled(8, 0)));
       await tester.pumpWidget(MaterialApp(home: buildReaderPageWidget(_config(index: 0, loader: loader))));
@@ -89,7 +89,7 @@ void main() {
 
   group('PageLoader helpers (Steps 1-2, 5)', () {
     test('prefetched chapter is consumed exactly once', () {
-      final l = PageLoader(sourceName: 'S', mangaId: 1, chapterTargetId: 2);
+      final l = PageLoader(sourceName: 'S', mangaId: 1, chapterTargetId: 2, testMode: true);
       l.setPrefetchedChapter('2|1', 'S', ['a', 'b']);
       expect(l.isPrefetched('2|1'), isTrue);
       final p = l.takePrefetchedChapter('2|1');
@@ -100,7 +100,7 @@ void main() {
     });
 
     test('failed URL tracking + mutable source', () {
-      final l = PageLoader(sourceName: 'S', mangaId: 1, chapterTargetId: 2);
+      final l = PageLoader(sourceName: 'S', mangaId: 1, chapterTargetId: 2, testMode: true);
       l.markUrlFailed('u');
       expect(l.isUrlFailed('u'), isTrue);
       l.clearFailedUrl('u');
@@ -111,7 +111,7 @@ void main() {
     });
 
     test('a known-failed URL short-circuits without network', () async {
-      final l = PageLoader(sourceName: 'S', mangaId: 1, chapterTargetId: 2);
+      final l = PageLoader(sourceName: 'S', mangaId: 1, chapterTargetId: 2, testMode: true);
       l.markUrlFailed('https://img.invalid/x.jpg');
       final r = await l.loadPage(url: 'https://img.invalid/x.jpg', index: 0, priority: PageLoadPriority.current);
       expect(r.bytes, isNull);

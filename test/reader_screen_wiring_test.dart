@@ -90,6 +90,7 @@ void main() {
   late List<String> pages;
 
   setUpAll(() async {
+    pageLoaderTestMode = true;
     tempDir = await Directory.systemTemp.createTemp('sunfire_reader_wiring');
     final native = _findIsarNative();
     if (native == null) fail('libisar.so not found');
@@ -106,13 +107,8 @@ void main() {
     }
   });
 
-  // Static timeouts/seams are process-global: always restore them.
-  tearDown(() {
-    NavigationController.debugResetTestOverrides();
-    PageLoader.debugDefaultFetchOverride = null;
-  });
-
   tearDownAll(() async {
+    pageLoaderTestMode = false;
     NavigationController.debugResetTestOverrides();
     await IsarService.instance.isar.close();
     try {
@@ -169,7 +165,11 @@ void main() {
   Future<void> unmount(WidgetTester tester) async {
     await tester.runAsync(() async {
       await tester.pumpWidget(const SizedBox());
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // Give time for the reader screen to dispose (cancels PageLoader timers, etc.)
+      for (var i = 0; i < 5; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await tester.pump();
+      }
     });
   }
 

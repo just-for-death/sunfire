@@ -24,6 +24,11 @@ import '../../../core/services/settings_service.dart';
 import '../../../core/sync/bandwidth_policy.dart';
 import '../../../core/utils/url_sanitizer.dart';
 
+/// When true, PageLoader skips starting its periodic cleanup timer.
+/// Set to true in test setUpAll and back to false in tearDownAll to avoid
+/// "A Timer is still pending" failures in the test framework.
+bool pageLoaderTestMode = false;
+
 /// Result of a page load operation.
 class PageLoadResult {
   final Uint8List? bytes;
@@ -117,9 +122,16 @@ class PageLoader {
     this.fetchOverride,
     String Function()? prefetchMode,
     Future<bool> Function()? isOnWifi,
+    bool testMode = false,
   })  : _prefetchMode = prefetchMode ?? (() => SettingsService.instance.prefetchNextChapter),
         _isOnWifi = isOnWifi ??
-            (() async => await BandwidthPolicy.instance.currentClass() == ConnectionClass.unmetered);
+            (() async => await BandwidthPolicy.instance.currentClass() == ConnectionClass.unmetered) {
+    // Periodic cleanup of expired failed-URL entries to prevent unbounded growth.
+    // Disabled in test mode to avoid pending timers in test framework.
+    if (!testMode && !pageLoaderTestMode) {
+      _failedUrlsCleanupTimer = Timer.periodic(failedUrlTtl, (_) => clearExpiredFailedUrls());
+    }
+  }
 
   // ISS-130: injected so the prefetch gate is testable.
   final String Function() _prefetchMode;
@@ -220,6 +232,9 @@ class PageLoader {
 
   // Closed flag.
   bool _disposed = false;
+
+  // Periodic cleanup timer for expired failed-URL entries.
+  Timer? _failedUrlsCleanupTimer;
 
   // Failed URLs tracking (avoid re-fetching known-bad URLs), with the time of
   // the failure. Entries expire: a brief network drop during prefetch used to
@@ -343,6 +358,8 @@ class PageLoader {
   void dispose() {
     _disposed = true;
     cancelAll();
+    _failedUrlsCleanupTimer?.cancel();
+    _failedUrlsCleanupTimer = null;
     _cache.clear();
     _cachedHeights.clear();
     _prefetchedChapters.clear();
@@ -546,6 +563,12 @@ class PageLoader {
 
   /// Clear failed URL marker (e.g., on manual retry).
   void clearFailedUrl(String url) => _failedUrls.remove(url);
+
+  /// Clear all expired failed-URL entries.
+  void clearExpiredFailedUrls() {
+    final now = DateTime.now();
+    _failedUrls.removeWhere((_, at) => now.difference(at) >= failedUrlTtl);
+  }
 
   /// Build standard headers for image requests.
   Map<String, String> buildHeaders(String url, {String? overrideSourceName}) {
