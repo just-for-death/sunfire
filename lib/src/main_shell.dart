@@ -785,6 +785,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   children: [
                     Text(
                       'Sunfire',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: _cs.onSurface,
                         fontSize: 17,
@@ -919,6 +921,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 Expanded(
                   child: Text(
                     label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: isSelected ? _cs.onSurface : _cs.onSurfaceVariant,
                       fontSize: 13.5,
@@ -1004,6 +1008,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               Expanded(
                 child: Text(
                   label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: _cs.onSurfaceVariant,
                     fontSize: 13,
@@ -1135,6 +1141,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                           children: [
                             Text(
                               isConfigured ? 'Suwayomi Server' : 'Standalone Mode',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: _cs.onSurface,
                                 fontSize: 12,
