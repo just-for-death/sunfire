@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:sunfire/src/ui/design_system/components/sunfire_chip.dart';
-import 'package:sunfire/src/ui/design_system/tokens/sunfire_colors.dart';
 
 void main() {
   group('Browse UI golden tests', () {
