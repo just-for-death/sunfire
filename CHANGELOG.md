@@ -7,6 +7,32 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- Tablet reader HUD: wider edge insets and a larger page capsule on tablets.
+- Guards: width-unsafe-`Text`-in-`Row` lint with a frozen allowlist; narrow-width
+  + large-text overflow tests across 6 screens; semantics-tree a11y audit of 6
+  shipped screens; real-screen performance budgets; component golden baselines.
+
+### Fixed
+
+- Overflow: width-unsafe `Text` inside `Row`s (tracking sheet/settings, stats,
+  manga detail, metron detail, source grid, library offline banner) now
+  wrap/ellipsize instead of overflowing on narrow phones and large text.
+- Reader settings: "Webtoon Panel" preset tile no longer overflows at 1.3x/1.5x
+  text scale.
+- Settings subpages: back button exposes a localized tooltip for screen readers.
+- Library: category strip scales with accessibility text size (was clipped at 44px).
+
+### Changed
+
+- Perf tests use generous budgets that catch pathological regressions rather
+  than machine-to-machine noise.
+
+---
+
 ## [6.2.0] — 2026-10-17
 
 ### Added
