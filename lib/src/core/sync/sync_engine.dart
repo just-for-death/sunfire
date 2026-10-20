@@ -168,7 +168,7 @@ class SyncConfig {
     this.batchSize = 50,
     this.maxRetries = 3,
     this.retryDelay = const Duration(seconds: 5),
-    this.timeout = const Duration(minutes: 5),
+    this.timeout = const Duration(seconds: 30),
     this.syncCategories = true,
     this.syncManga = true,
     this.syncChapters = true,
@@ -2200,7 +2200,7 @@ class SyncEngine {
     // The background isolate never runs initialize(); without this its first
     // failure persisted a near-empty attempt map over the real one.
     if (!_dispatchAttemptsLoaded) await _loadDispatchAttempts();
-    if (!await IsarService.instance.tryAcquireLease(_flushLeaseKey, _flushLeaseOwner, const Duration(minutes: 5))) {
+    if (!await IsarService.instance.tryAcquireLease(_flushLeaseKey, _flushLeaseOwner, const Duration(seconds: 30))) {
       await LoggerService.instance.logInfo('Another isolate is flushing the sync queue; skipping this flush', 'SyncEngine');
       return;
     }
@@ -2225,7 +2225,7 @@ class SyncEngine {
 
     for (final queued in executionList) {
       // Renews this isolate's lease so a long flush is not taken over mid-run.
-      if (!await IsarService.instance.tryAcquireLease(_flushLeaseKey, _flushLeaseOwner, const Duration(minutes: 5))) {
+      if (!await IsarService.instance.tryAcquireLease(_flushLeaseKey, _flushLeaseOwner, const Duration(seconds: 30))) {
         return;
       }
       // Re-read each record just before dispatch. Earlier steps of this same
@@ -2336,12 +2336,12 @@ class SyncEngine {
                 // nothing was logged. The user believes it synced.
                 //
                 // A payload that cannot be interpreted must never be reported
-                // as delivered. Abandon it immediately with a distinct error so
-                // the user can see the failure in the sync UI.
-                await _abandonRecord(freshRecord);
+                // as delivered. Treat as transient failure so it can be retried
+                // or surfaced to the user, not silently abandoned.
+                await _recordDispatchFailure(freshRecord, transient: true);
                 await LoggerService.instance.logWarning(
-                  'Abandoning chapter mutation ${freshRecord.id}: payload has no usable chapterId '
-                  '(${freshRecord.payloadJson})',
+                  'Corrupt chapter mutation ${freshRecord.id}: payload has no usable chapterId '
+                  '(${freshRecord.payloadJson}) — will retry',
                   'SyncEngine',
                 );
               }
@@ -2445,7 +2445,11 @@ class SyncEngine {
                   // Creating blindly duplicates the category; defer to the
                   // next flush (which probes first) via an explicit transient
                   // failure, skipping the generic epilogue below.
-                  await _recordDispatchFailure(record, transient: true);
+                  // Only treat as transient if it's a transport failure; permanent
+                  // errors (4xx) should not retry endlessly.
+                  final res = await GraphQLClientService.instance.fetchCategories();
+                  final isTransient = res == null || GraphQLClientService.instance.lastRequestWasTransportFailure;
+                  await _recordDispatchFailure(record, transient: isTransient);
                   continue;
                 }
                 created ??= (await GraphQLClientService.instance.createCategory(name))?['createCategory']?['category'] as Map<String, dynamic>?;
@@ -2685,23 +2689,6 @@ class SyncEngine {
     }
     current.state = nextState;
     await IsarService.instance.saveSyncRecord(current);
-  }
-
-  /// Marks a sync record as abandoned so it will never be dispatched again.
-  /// Used for Incognito mode: when the user enables Incognito, any pending
-  /// chapter/tracker progress records are abandoned instead of being left
-  /// pending (which would replay when Incognito is disabled).
-  Future<void> _abandonRecord(SyncRecord record) async {
-    final current = await IsarService.instance.getSyncRecord(record.id);
-    if (current == null) return;
-    current.state = SyncRecordState.abandoned;
-    await IsarService.instance.saveSyncRecord(current);
-    _dispatchAttempts.remove(current.id);
-    unawaited(_persistDispatchAttempts());
-    await LoggerService.instance.logInfo(
-      'Abandoned incognito-suppressed sync record ${current.id} (type=${current.entityType}, action=${current.action})',
-      'SyncEngine',
-    );
   }
 
   Future<void> _pullServerState() async {

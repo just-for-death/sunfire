@@ -113,7 +113,20 @@ void applyFloodCapToNewChapters(
 /// value. A positive synthetic chapter id aliases a real server chapter in the
 /// `unique: true, replace: true` index, is pushed to the server as bogus reading
 /// progress, and is picked up by the sync engine's chapter prune.
-const int _kMaxMangaIdForChapterStride = 90000000000; // 9e10; 9e10 * 1e5 = 9e15
+/// Maximum manga ID that can be used in the chapter ID stride.
+/// 
+/// `mintLocalChapterServerId` computes `mangaId.abs() * _kChapterIdStride + index`.
+/// The manga ID from `stableLocalMangaServerId` is 40 bits (up to ~1.1e12).
+/// 
+/// We need: maxMangaId * _kChapterIdStride < 2^63
+/// maxMangaId = 2^40 - 1 ≈ 1.1e12
+/// _kChapterIdStride = 100000
+/// 
+/// Product: 1.1e12 * 1e5 = 1.1e17 << 2^63 (9.2e18) — safe.
+/// 
+/// We set this to 2^40 (1099511627776) to accommodate the full 40-bit manga ID
+/// space from [stableLocalMangaServerId].
+const int _kMaxMangaIdForChapterStride = 1099511627776; // 2^40
 
 /// Per-chapter id stride. Wide enough that a series' chapters occupy a
 /// contiguous band, narrow enough to keep [mintLocalChapterServerId] far away

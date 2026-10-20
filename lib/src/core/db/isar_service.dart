@@ -86,10 +86,8 @@ class IsarService {
     } else {
       _syntheticIdCounter = (_syntheticIdCounter + 1) % 10000;
     }
-    // Persist every 100 mints to avoid excessive I/O.
-    if (_syntheticIdCounter % 100 == 0) {
-      unawaited(_persistSyntheticIdState());
-    }
+    // Persist on every mint to ensure counter state survives process crashes.
+    unawaited(_persistSyntheticIdState());
     return -(_syntheticIdEpoch * 10000 + _syntheticIdCounter + 1);
   }
 
@@ -333,6 +331,7 @@ class IsarService {
       if (chapter.serverId == 0) {
         chapter.serverId = await _mintUniqueSyntheticServerId(
           (id) async => await _isar.chapters.filter().serverIdEqualTo(id).findFirst() != null,
+          <int>{},
         );
       }
       await _isar.writeTxn(() async {
