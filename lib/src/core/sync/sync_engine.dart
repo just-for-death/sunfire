@@ -2276,24 +2276,31 @@ class SyncEngine {
         switch (record.entityType) {
           case SyncEntityType.chapter:
             if (record.action == SyncAction.update) {
-              final chapterId = parseIntSafe(payload['chapterId']);
+              // Re-read record immediately before dispatch to ensure we have
+              // the latest payload (concurrent coalescing may have updated it).
+              final freshRecord = await IsarService.instance.getSyncRecord(record.id);
+              if (freshRecord == null || freshRecord.state != SyncRecordState.pending) {
+                continue;
+              }
+              final freshPayload = jsonDecode(freshRecord.payloadJson) as Map<String, dynamic>;
+              final chapterId = parseIntSafe(freshPayload['chapterId']);
               if (chapterId > 0) {
                 var allOk = true;
                 var attempted = false;
                 bool wasTransportFailure = false;
-                if (chapterMutationNeedsBookmark(payload)) {
+                if (chapterMutationNeedsBookmark(freshPayload)) {
                   attempted = true;
-                  final isBookmarked = parseBoolSafe(payload['isBookmarked']);
+                  final isBookmarked = parseBoolSafe(freshPayload['isBookmarked']);
                   final res = await GraphQLClientService.instance
                       .updateChapterBookmarkWithClassification(chapterId, isBookmarked);
                   allOk = allOk && res.data != null;
                   wasTransportFailure = wasTransportFailure || res.wasTransportFailure;
                 }
-                if (chapterMutationNeedsReadProgress(payload)) {
+                if (chapterMutationNeedsReadProgress(freshPayload)) {
                   attempted = true;
-                  var isRead = parseBoolSafe(payload['isRead']);
-                  var lastPageRead = parseIntSafe(payload['lastPageRead']);
-                  final explicitAction = payload['explicit'] == true;
+                  var isRead = parseBoolSafe(freshPayload['isRead']);
+                  var lastPageRead = parseIntSafe(freshPayload['lastPageRead']);
+                  final explicitAction = freshPayload['explicit'] == true;
                   if (!explicitAction) {
                     // ISS-142: a stale queued automatic update must not
                     // rewind progress another device already pushed.
@@ -2305,7 +2312,7 @@ class SyncEngine {
                       .updateChapterReadStatusWithClassification(chapterId, isRead, lastPageRead);
                   allOk = allOk && res.data != null;
                   wasTransportFailure = wasTransportFailure || res.wasTransportFailure;
-                  final actionAt = payload['actionAt'];
+                  final actionAt = freshPayload['actionAt'];
                   if (explicitAction && res.data != null && actionAt is num) {
                     unawaited(pushReadActionMeta([chapterId], actionAt.toInt()));
                   }
@@ -2331,10 +2338,10 @@ class SyncEngine {
                 // A payload that cannot be interpreted must never be reported
                 // as delivered. Abandon it immediately with a distinct error so
                 // the user can see the failure in the sync UI.
-                await _abandonRecord(record);
+                await _abandonRecord(freshRecord);
                 await LoggerService.instance.logWarning(
-                  'Abandoning chapter mutation ${record.id}: payload has no usable chapterId '
-                  '(${record.payloadJson})',
+                  'Abandoning chapter mutation ${freshRecord.id}: payload has no usable chapterId '
+                  '(${freshRecord.payloadJson})',
                   'SyncEngine',
                 );
               }
@@ -2342,25 +2349,31 @@ class SyncEngine {
             break;
           case SyncEntityType.tracker:
             if (record.action == SyncAction.update) {
-              final op = payload['op']?.toString() ?? '';
+              // Re-read record immediately before dispatch.
+              final freshRecord = await IsarService.instance.getSyncRecord(record.id);
+              if (freshRecord == null || freshRecord.state != SyncRecordState.pending) {
+                continue;
+              }
+              final freshPayload = jsonDecode(freshRecord.payloadJson) as Map<String, dynamic>;
+              final op = freshPayload['op']?.toString() ?? '';
               if (op == 'mangaProgress') {
-                final mangaId = parseIntSafe(payload['mangaId']);
+                final mangaId = parseIntSafe(freshPayload['mangaId']);
                 final res = await GraphQLClientService.instance.trackProgressWithClassification(mangaId);
                 success = res.data != null;
                 if (!success) failTransient = res.wasTransportFailure;
               } else if (op == 'bind') {
                 await GraphQLClientService.instance.bindTrack(
-                  parseIntSafe(payload['mangaId']),
-                  parseIntSafe(payload['trackerId']),
-                  payload['remoteId'],
-                  isPrivate: payload['private'] is bool ? payload['private'] as bool : null,
+                  parseIntSafe(freshPayload['mangaId']),
+                  parseIntSafe(freshPayload['trackerId']),
+                  freshPayload['remoteId'],
+                  isPrivate: freshPayload['private'] is bool ? freshPayload['private'] as bool : null,
                 );
                 success = true;
               } else if (op == 'unbind') {
-                await GraphQLClientService.instance.unbindTrack(parseIntSafe(payload['recordId']));
+                await GraphQLClientService.instance.unbindTrack(parseIntSafe(freshPayload['recordId']));
                 success = true;
               } else {
-                final mangaId = parseIntSafe(payload['mangaId']);
+                final mangaId = parseIntSafe(freshPayload['mangaId']);
                 final res = await GraphQLClientService.instance.trackProgressWithClassification(mangaId);
                 success = res.data != null;
                 if (!success) failTransient = res.wasTransportFailure;
@@ -2369,10 +2382,16 @@ class SyncEngine {
             break;
           case SyncEntityType.manga:
             if (record.action == SyncAction.update || record.action == SyncAction.delete) {
-              final mangaId = parseIntSafe(payload['mangaId']);
-              final inLibrary = parseBoolSafe(payload['inLibrary']);
-              final cats = inLibrary && payload['categoryIds'] is List
-                  ? (payload['categoryIds'] as List).map(parseIntSafe).toList()
+              // Re-read record immediately before dispatch.
+              final freshRecord = await IsarService.instance.getSyncRecord(record.id);
+              if (freshRecord == null || freshRecord.state != SyncRecordState.pending) {
+                continue;
+              }
+              final freshPayload = jsonDecode(freshRecord.payloadJson) as Map<String, dynamic>;
+              final mangaId = parseIntSafe(freshPayload['mangaId']);
+              final inLibrary = parseBoolSafe(freshPayload['inLibrary']);
+              final cats = inLibrary && freshPayload['categoryIds'] is List
+                  ? (freshPayload['categoryIds'] as List).map(parseIntSafe).toList()
                   : const <int>[];
               // Throws ServerMutationException (classified) on failure.
               if (cats.isEmpty) {
