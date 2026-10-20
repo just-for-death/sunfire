@@ -777,10 +777,11 @@ unawaited(
                 await SyncEngine.instance.stampLocalReadActivity(tc);
               }
               if (tc.serverId > 0) {
-                await SyncEngine.instance.syncChapterProgress(
-                  tc.serverId,
+                await SyncEngine.instance.commitChapterReadState(
+                  tc,
                   isRead: tc.isRead,
                   lastPageRead: tc.lastPageRead,
+                  explicit: true,
                 );
               }
             }

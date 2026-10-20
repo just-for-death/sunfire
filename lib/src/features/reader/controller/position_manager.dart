@@ -118,10 +118,11 @@ class PositionManager {
     }
 
     if (chapterSnapshot.serverId > 0) {
-      unawaited(syncEngine.syncChapterProgress(
-        chapterSnapshot.serverId,
+      unawaited(syncEngine.commitChapterReadState(
+        chapterSnapshot,
         isRead: chapterSnapshot.isRead,
         lastPageRead: clampedPage,
+        explicit: false,
       ));
     }
 

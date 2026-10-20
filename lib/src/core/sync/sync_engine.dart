@@ -1250,6 +1250,7 @@ class SyncEngine {
     Chapter chapter, {
     required bool isRead,
     int? lastPageRead,
+    bool explicit = false,
   }) async {
     if (SettingsService.instance.incognitoMode) return false;
     chapter.applyReadState(isRead);
@@ -1274,7 +1275,7 @@ class SyncEngine {
           chapter.serverId,
           isRead: isRead,
           lastPageRead: chapter.lastPageRead,
-          explicit: true,
+          explicit: explicit,
         ),
       );
     }

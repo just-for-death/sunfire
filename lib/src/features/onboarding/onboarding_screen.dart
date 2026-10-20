@@ -413,13 +413,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         e, st,
       );
     } catch (e, st) {
-      // Unexpected error — log full details but don't crash the onboarding
+      // Unexpected error — log full details but don't crash the onboarding.
+      // Do NOT offer "Continue in Local-First Mode" for unexpected errors —
+      // the user must either retry or go back. Silently continuing hides the
+      // real issue and may leave the user with a broken state.
       unawaited(LoggerService.instance.logError('Initial hydration unexpected error', exception: e, stackTrace: st, category: 'Onboarding'));
       if (!mounted) return;
       _showHydrationError(
         'Unexpected error during setup',
-        'An unexpected error occurred. The app will start in local-first mode. Check logs for details.',
+        'An unexpected error occurred. Please retry or check logs. The app cannot start in local-first mode for unexpected errors.',
         e, st,
+        allowLocalFirst: false,
       );
     } finally {
       if (mounted) {
@@ -431,7 +435,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   /// Shows an error dialog during hydration and offers to continue in local-first mode
-  void _showHydrationError(String title, String message, Object error, StackTrace stackTrace) {
+  void _showHydrationError(String title, String message, Object error, StackTrace stackTrace, {bool allowLocalFirst = true}) {
     if (!mounted) return;
     unawaited(showDialog<void>(
       context: context,
@@ -440,13 +444,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         title: Text(title),
         content: Text(message),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              _continueInLocalFirstMode();
-            },
-            child: const Text('Continue in Local-First Mode'),
-          ),
+          if (allowLocalFirst)
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                _continueInLocalFirstMode();
+              },
+              child: const Text('Continue in Local-First Mode'),
+            ),
           TextButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();

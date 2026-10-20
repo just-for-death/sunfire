@@ -915,7 +915,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     // Centralised so the Incognito guard is applied here exactly as it is in
     // the reader — previously this path wrote to Isar and pushed to the server
     // with Incognito on.
-    final wrote = await SyncEngine.instance.commitChapterReadState(ch, isRead: newState);
+    final wrote = await SyncEngine.instance.commitChapterReadState(ch, isRead: newState, explicit: true);
     if (!wrote) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1206,6 +1206,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
 
     if (confirmed != true) return;
 
+    // Clear the list FIRST so any in-flight background fetch merges into the
+    // new empty list, not the old one being cleared.
+    setState(() {
+      _updatesList = [];
+    });
+
     final chaptersToReset = <Chapter>[];
     for (final it in _updatesList) {
       final ch = it['chapter'] as Chapter;
@@ -1214,21 +1220,6 @@ class _UpdatesScreenState extends State<UpdatesScreen> with AutomaticKeepAliveCl
     }
 
     await IsarService.instance.saveChapters(chaptersToReset);
-
-    // Guarded, and assigned rather than cleared in place.
-    //
-    // This ran `setState` after two awaits (the dialog, then the Isar write) with
-    // no check, while the `if (mounted)` sat on the very next line — an omission
-    // rather than a judgement call, since `setState` after unmount is a
-    // null-check crash in release, not an assert.
-    //
-    // `_updatesList.clear()` also mutated the list in place, so an in-flight
-    // background fetch — which has no re-entrancy guard — merged its results
-    // into the list the user had just emptied and repopulated it.
-    if (!mounted) return;
-    setState(() {
-      _updatesList = [];
-    });
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

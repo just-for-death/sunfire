@@ -1177,7 +1177,7 @@ class _MangaDetailScreenState extends State<MangaDetailScreen> {
     final newState = !ch.isRead;
     // Centralised so the Incognito guard matches the reader's. Previously this
     // path persisted to Isar and pushed to the server with Incognito on.
-    final wrote = await SyncEngine.instance.commitChapterReadState(ch, isRead: newState);
+    final wrote = await SyncEngine.instance.commitChapterReadState(ch, isRead: newState, explicit: true);
     if (!wrote) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

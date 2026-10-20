@@ -2148,12 +2148,17 @@ class MockSyncEngine extends _i1.Mock implements _i5.SyncEngine {
     _i7.Chapter? chapter, {
     required bool? isRead,
     int? lastPageRead,
+    bool? explicit = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #commitChapterReadState,
               [chapter],
-              {#isRead: isRead, #lastPageRead: lastPageRead},
+              {
+                #isRead: isRead,
+                #lastPageRead: lastPageRead,
+                #explicit: explicit,
+              },
             ),
             returnValue: _i15.Future<bool>.value(false),
           )
@@ -2871,6 +2876,14 @@ class MockNavigationController extends _i1.Mock
           as _i13.SettingsService);
 
   @override
+  bool get ownsSubControllers =>
+      (super.noSuchMethod(
+            Invocation.getter(#ownsSubControllers),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
   List<_i7.Chapter> get siblingChapters =>
       (super.noSuchMethod(
             Invocation.getter(#siblingChapters),
@@ -3461,6 +3474,12 @@ class MockPageLoader extends _i1.Mock implements _i11.PageLoader {
   @override
   void clearFailedUrl(String? url) => super.noSuchMethod(
     Invocation.method(#clearFailedUrl, [url]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void clearExpiredFailedUrls() => super.noSuchMethod(
+    Invocation.method(#clearExpiredFailedUrls, []),
     returnValueForMissingStub: null,
   );
 
