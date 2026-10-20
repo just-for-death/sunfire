@@ -353,6 +353,7 @@ class ReaderController {
       pageLoader: _pageLoader!,
       positionManager: _positionManager!,
       settings: settings,
+      ownsSubControllers: false,
     );
 
     _wireNavigationCallbacks();
@@ -487,10 +488,14 @@ class ReaderController {
 
     try {
       // If sub-controllers not initialized yet, load chapter first to get source info
+      // Check generation token before and after async operations to prevent
+      // double-initialization race with concurrent loadChapter calls.
       if (_navigationController == null) {
         final loadedChapter = await isarService.getChapterByServerId(chapterId);
+        if (gen != _controllerLoadGen) return; // Superseded by newer load
         if (loadedChapter == null) {
           final byLocalId = await isarService.getChapterByLocalId(chapterId);
+          if (gen != _controllerLoadGen) return;
           if (byLocalId != null && byLocalId.id == chapterId && byLocalId.serverId <= 0) {
             _initSubControllers(byLocalId);
           }
@@ -611,6 +616,12 @@ class ReaderController {
   }
 
   List<ReaderChapterPages> _stripLog = const [];
+
+  /// History of trimmed chapters (for scroll-back restoration).
+  /// Chapters trimmed from the front of the strip are moved here instead
+  /// of being discarded, so they can be restored if the user scrolls back up.
+  final List<ReaderChapterPages> _stripHistory = [];
+
   List<ReaderItem>? _stripItemsCache;
 
   int _stripIndexOf(Chapter c) {
@@ -682,11 +693,11 @@ class ReaderController {
       final from = cur == null ? -1 : _stripIndexOf(cur);
       final to = _stripIndexOf(item.chapter);
       if (cur != null && from >= 0 && to > from) {
-        // Forward across the separator: every chapter left behind is done.
-        for (var c = from; c < to; c++) {
-          final e = _stripLog[c];
-          unawaited(nav.completeChapterNow(e.chapter, e.urls.length));
-        }
+        // Forward across the separator: only the chapter being LEFT is done.
+        // Previously this marked ALL chapters between from and to as complete,
+        // but the user may have scrolled past them without reading.
+        final e = _stripLog[from];
+        unawaited(nav.completeChapterNow(e.chapter, e.urls.length));
       }
       final entry = _stripLog[to];
       nav.adoptStripChapter(entry.chapter, entry.urls);
@@ -715,6 +726,8 @@ class ReaderController {
         removedExtent += _stripExtents[removedItems] ?? kReaderChapterBoundaryExtent;
         removedItems++;
       }
+      // Move trimmed chapters to history instead of discarding them
+      _stripHistory.insertAll(0, _stripLog.sublist(0, curIdx));
       _stripLog = _stripLog.sublist(curIdx);
       final shifted = <int, double>{
         for (final e in _stripExtents.entries)

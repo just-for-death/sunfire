@@ -149,7 +149,7 @@ class DownloadManagerService extends ChangeNotifier {
         }
       });
     } catch (e) {
-      debugPrint('[DownloadManager] Connectivity listener error: $e');
+      unawaited(LoggerService.instance.logError('Connectivity listener error', exception: e, category: 'DownloadManager'));
     }
   }
 
@@ -170,7 +170,7 @@ class DownloadManagerService extends ChangeNotifier {
         }
       });
     } catch (e) {
-      debugPrint('[DownloadManager] Battery listener error: $e');
+      unawaited(LoggerService.instance.logError('Battery listener error', exception: e, category: 'DownloadManager'));
     }
   }
 
@@ -226,7 +226,7 @@ class DownloadManagerService extends ChangeNotifier {
       final results = await Connectivity().checkConnectivity();
       return isNetworkAllowed(results);
     } catch (e) {
-      debugPrint('[DownloadManager] Network check error: $e');
+      unawaited(LoggerService.instance.logError('Network check error', exception: e, category: 'DownloadManager'));
       return true; // Fail-open for safety
     }
   }
@@ -262,7 +262,7 @@ class DownloadManagerService extends ChangeNotifier {
         if (e is File) total += await e.length();
       }
       await BandwidthPolicy.instance.recordBytes(total);
-    } catch (e) { debugPrint('[download_manager_service] ignored: $e'); }
+    } catch (e) { unawaited(LoggerService.instance.logError('Ignored error', exception: e, category: 'DownloadManager')); }
   }
 
   /// Serializes every queue-state write into a single chain.
@@ -289,7 +289,7 @@ class DownloadManagerService extends ChangeNotifier {
 
   Future<void> _saveQueueState() {
     _pendingSave = _pendingSave.then((_) => _writeQueueState()).catchError((Object e) {
-      debugPrint('[DownloadManager] Error saving queue state: $e');
+      unawaited(LoggerService.instance.logError('Error saving queue state', exception: e, category: 'DownloadManager'));
     });
     return _pendingSave;
   }
@@ -299,7 +299,7 @@ class DownloadManagerService extends ChangeNotifier {
     // bare setStrings from landing out of order. Uses its own chain, independent
     // of the queue write chain.
     _batchSaveChain = _batchSaveChain.then((_) => _writeBatchState()).catchError((Object e) {
-      debugPrint('[DownloadManager] Error saving batch state: $e');
+      unawaited(LoggerService.instance.logError('Error saving batch state', exception: e, category: 'DownloadManager'));
     });
     return _batchSaveChain;
   }
@@ -316,7 +316,7 @@ class DownloadManagerService extends ChangeNotifier {
         'accounted': _batchAccounted.toList(),
       }));
     } catch (e) {
-      debugPrint('[DownloadManager] Error saving batch state: $e');
+      unawaited(LoggerService.instance.logError('Error saving batch state', exception: e, category: 'DownloadManager'));
     }
   }
 
@@ -344,7 +344,7 @@ class DownloadManagerService extends ChangeNotifier {
             ..clear()
             ..addAll(accountedRaw.cast<int>());
         } else {
-          debugPrint('[DownloadManager] Batch state has invalid members/accounted — resetting');
+          unawaited(LoggerService.instance.logWarning('Batch state has invalid members/accounted — resetting', 'DownloadManager'));
           _batchMembers.clear();
           _batchAccounted.clear();
           _batchCounted = false;
@@ -364,7 +364,7 @@ class DownloadManagerService extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint('[DownloadManager] Error loading batch state: $e');
+      unawaited(LoggerService.instance.logError('Error loading batch state', exception: e, category: 'DownloadManager'));
     }
   }
 
@@ -373,7 +373,7 @@ class DownloadManagerService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_batchStatePrefKey);
     } catch (e) {
-      debugPrint('[DownloadManager] Error clearing batch state: $e');
+      unawaited(LoggerService.instance.logError('Error clearing batch state', exception: e, category: 'DownloadManager'));
     }
   }
 
@@ -454,7 +454,7 @@ class DownloadManagerService extends ChangeNotifier {
         jsonEncode({'v': 1, 'paused': _isQueuePaused, 'tasks': jsonList}),
       );
     } catch (e) {
-      debugPrint('[DownloadManager] Error saving queue state: $e');
+      unawaited(LoggerService.instance.logError('Error saving queue state', exception: e, category: 'DownloadManager'));
     }
   }
 
@@ -492,7 +492,7 @@ class DownloadManagerService extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      debugPrint('[DownloadManager] Error loading queue state: $e');
+      unawaited(LoggerService.instance.logError('Error loading queue state', exception: e, category: 'DownloadManager'));
     }
   }
 
@@ -555,7 +555,7 @@ class DownloadManagerService extends ChangeNotifier {
       try {
         token.cancel('Resource constraint enabled');
       } catch (e) {
-        debugPrint('[DownloadManager] Token cancel error: $e');
+        unawaited(LoggerService.instance.logError('Token cancel error', exception: e, category: 'DownloadManager'));
       }
     }
     await _saveQueueState();
@@ -722,7 +722,7 @@ class DownloadManagerService extends ChangeNotifier {
       try {
         token.cancel('Queue paused');
       } catch (e) {
-        debugPrint('[DownloadManager] Token cancel error: $e');
+        unawaited(LoggerService.instance.logError('Token cancel error', exception: e, category: 'DownloadManager'));
       }
     }
     _cancelTokens.clear();
@@ -1431,7 +1431,9 @@ unawaited(
         name.endsWith('.png') ||
         name.endsWith('.webp') ||
         name.endsWith('.gif') ||
-        name.endsWith('.bmp');
+        name.endsWith('.bmp') ||
+        name.endsWith('.avif') ||
+        name.endsWith('.jxl');
   }
 
   /// Header-only, async validity probe for a saved page (UIX-11): the file
@@ -1450,7 +1452,7 @@ unawaited(
     } finally {
       try {
         await raf?.close();
-      } catch (e) { debugPrint('[download_manager_service] ignored: $e'); }
+      } catch (e) { unawaited(LoggerService.instance.logError('Ignored error', exception: e, category: 'DownloadManager')); }
     }
   }
 
@@ -1470,7 +1472,7 @@ unawaited(
       final stalePartial = File('${file.path}.part');
       if (await stalePartial.exists()) await stalePartial.delete();
     } catch (e) {
-      debugPrint('[DownloadManager] Could not clear stale partial page: $e');
+      unawaited(LoggerService.instance.logError('Could not clear stale partial page', exception: e, category: 'DownloadManager'));
     }
     // Resume guard: accept an existing file ONLY if it is a valid, non-trivial
     // image. A truncated JPEG from a killed writeAsBytes would still start
@@ -1704,7 +1706,7 @@ unawaited(
         await chapterDir.delete(recursive: true);
       }
     } catch (e) {
-      debugPrint('[DownloadManager] Cleanup incomplete download error: $e');
+      unawaited(LoggerService.instance.logError('Cleanup incomplete download error', exception: e, category: 'DownloadManager'));
     }
   }
 

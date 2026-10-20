@@ -456,25 +456,26 @@ void main() {
           reason: 'records after the corrupt one were still dispatched');
     });
 
-    test('Incognito on: chapter updates (progress and bookmark) are abandoned', () async {
+    test('Incognito on: chapter updates (progress and bookmark) stay pending', () async {
       SettingsService.instance.incognitoMode = true;
       final progress = await queue(SyncEntityType.chapter, jsonEncode({'chapterId': 1, 'isRead': true, 'lastPageRead': 3}));
       final bookmark = await queue(SyncEntityType.chapter, jsonEncode({'chapterId': 2, 'isBookmarked': true}));
 
       await SyncEngine.instance.debugFlushPendingMutations();
 
-      expect((await reload(progress)).state, SyncRecordState.abandoned);
-      expect((await reload(bookmark)).state, SyncRecordState.abandoned);
+      // Records should stay pending (not abandoned) so they replay when Incognito is turned off
+      expect((await reload(progress)).state, SyncRecordState.pending);
+      expect((await reload(bookmark)).state, SyncRecordState.pending);
     });
 
-    test('Incognito on: tracker mangaProgress is abandoned', () async {
+    test('Incognito on: tracker mangaProgress stays pending', () async {
       SettingsService.instance.incognitoMode = true;
       final r = await queue(SyncEntityType.tracker, jsonEncode({'op': 'mangaProgress', 'mangaId': 9}));
 
       await SyncEngine.instance.debugFlushPendingMutations();
 
       final after = await reload(r);
-      expect(after.state, SyncRecordState.abandoned);
+      expect(after.state, SyncRecordState.pending);
       expect(after.retryCount, 0);
     });
 

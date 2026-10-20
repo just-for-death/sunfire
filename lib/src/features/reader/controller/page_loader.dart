@@ -913,10 +913,12 @@ class _ByteLruCache {
         remove(protect);
         return;
       }
-      // Over budget with pinned pages only: drop the oldest pinned page,
-      // never the one just inserted.
-      final oldest = _map.keys.firstWhere((k) => k != protect);
-      remove(oldest);
+      // Over budget with pinned pages only: NEVER evict pinned pages.
+      // Return early to avoid evicting pinned pages. The caller must handle
+      // the OOM situation (e.g., by reducing maxMemoryBytes or waiting for
+      // natural cache turnover). This prevents current chapter images from
+      // being evicted mid-read.
+      return;
     }
   }
 }

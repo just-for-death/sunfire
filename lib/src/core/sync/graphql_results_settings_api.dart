@@ -64,6 +64,23 @@ mixin _GraphQLResultsSettingsApi on _GraphQLClientCore {
     )).data;
   }
 
+  /// Public version of [deleteCategory] with transport classification.
+  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
+      deleteCategoryWithClassification(int categoryId) async {
+    const mutStr = r'''
+      mutation($categoryId: Int!) {
+        deleteCategory(input: { categoryId: $categoryId }) {
+          clientMutationId
+        }
+      }
+    ''';
+    return _queryAndClassify(
+      mutStr,
+      variables: {'categoryId': categoryId},
+      label: 'deleteCategory',
+    );
+  }
+
   Future<Map<String, dynamic>?> setMangaCategories(
     int mangaId,
     List<int> categoryIds, {

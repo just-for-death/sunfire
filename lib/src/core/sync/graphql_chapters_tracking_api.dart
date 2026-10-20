@@ -182,6 +182,18 @@ mixin _GraphQLChaptersTrackingApi on _GraphQLClientCore {
     );
   }
 
+  /// Public version of [trackProgress] with transport classification.
+  /// Use this instead of [trackProgress] when the caller needs to
+  /// distinguish transport failures from GraphQL rejections for retry logic.
+  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
+      trackProgressWithClassification(int mangaId) async {
+    return _queryAndClassify(
+      kTrackProgressMutation,
+      variables: {'mangaId': mangaId},
+      label: 'trackProgress',
+    );
+  }
+
   Future<Map<String, dynamic>?> fetchTrackRecords(int mangaId) async {
     const queryStr = r'''
       query($mangaId: Int!) {

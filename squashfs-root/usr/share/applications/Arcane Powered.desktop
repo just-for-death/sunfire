@@ -1,0 +1,10 @@
+[Desktop Entry]
+Categories=
+Comment=A Tauri App
+Exec=arcane-powered-desktop
+StartupWMClass=arcane-powered-desktop
+Icon=arcane-powered-desktop
+Name=Arcane Powered
+Terminal=false
+Type=Application
+MimeType=x-scheme-handler/arcane-powered

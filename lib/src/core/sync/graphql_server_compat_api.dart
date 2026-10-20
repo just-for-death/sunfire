@@ -121,6 +121,23 @@ extension GraphQLServerCompatApi on GraphQLClientService {
     return res != null && res.containsKey('removeExtensionStore');
   }
 
+  /// Removes a store with transport classification.
+  Future<({Map<String, dynamic>? data, bool wasTransportFailure})>
+      removeExtensionStoreWithClassification(String indexUrl) async {
+    final url = indexUrl.trim();
+    if (url.isEmpty) return (data: null, wasTransportFailure: false);
+    return _queryAndClassify(
+      r'''
+        mutation RemoveExtensionStore($indexUrl: String!) {
+          removeExtensionStore(input: { indexUrl: $indexUrl }) { extensionStore { indexUrl } }
+        }
+      ''',
+      variables: {'indexUrl': url},
+      label: 'removeExtensionStore',
+      op: GraphQLOp.write,
+    );
+  }
+
   /// `fetchExtensions` mutation: server re-downloads every store index and
   /// returns the refreshed stores + extensions. Idempotent (slowRead policy).
   Future<FetchExtensionsResult?> refreshExtensionStores() async {

@@ -1800,10 +1800,9 @@ class SyncEngine {
   }
 
   Future<void> _removeExtensionStoreOrThrow(String url) async {
-    final c = GraphQLClientService.instance;
-    final ok = await c.removeExtensionStore(url);
-    if (!ok) {
-      throw ServerMutationException('removeExtensionStore', isTransportFailure: c.lastRequestWasTransportFailure);
+    final res = await GraphQLClientService.instance.removeExtensionStoreWithClassification(url);
+    if (res.data == null) {
+      throw ServerMutationException('removeExtensionStore', isTransportFailure: res.wasTransportFailure);
     }
   }
 
@@ -2135,11 +2134,11 @@ class SyncEngine {
     if (data == null) return false;
     final nodes = data['trackRecords']?['nodes'];
     if (nodes is! List || nodes.isEmpty) return true; // nothing bound — treat as success
-    final res = await GraphQLClientService.instance.trackProgress(mangaServerId);
-    if (res == null) {
+    final res = await GraphQLClientService.instance.trackProgressWithClassification(mangaServerId);
+    if (res.data == null) {
       // ISS-098: carry the transport classification out via the exception.
       throw ServerMutationException('trackProgress',
-          isTransportFailure: GraphQLClientService.instance.lastRequestWasTransportFailure);
+          isTransportFailure: res.wasTransportFailure);
     }
     return true;
   }
@@ -2251,14 +2250,9 @@ class SyncEngine {
       // (inside the try below, after the payload is decoded). Category edits,
       // library membership and other tracker ops are deliberate user actions
       // and still go through.
-      //
-      // FIX: Instead of just continuing (leaving record pending for replay when
-      // Incognito is disabled), mark as ABANDONED so it never replays. The user
-      // explicitly chose not to sync this activity.
       if (SettingsService.instance.incognitoMode &&
           record.entityType == SyncEntityType.chapter &&
           record.action == SyncAction.update) {
-        await _abandonRecord(record);
         continue;
       }
       try {
@@ -2269,12 +2263,10 @@ class SyncEngine {
         // Incognito also holds back tracker *progress* replays (they leak
         // reading activity to MAL/AniList). Deliberate tracker ops still go
         // through. The record stays pending for when Incognito is turned off.
-        // FIX: Abandon tracker progress records too.
         if (SettingsService.instance.incognitoMode &&
             record.entityType == SyncEntityType.tracker &&
             record.action == SyncAction.update &&
             payload['op']?.toString() == 'mangaProgress') {
-          await _abandonRecord(record);
           continue;
         }
         bool success = false;
@@ -2353,8 +2345,9 @@ class SyncEngine {
               final op = payload['op']?.toString() ?? '';
               if (op == 'mangaProgress') {
                 final mangaId = parseIntSafe(payload['mangaId']);
-                success = await _pushTrackerProgressForManga(mangaId);
-                if (!success) failTransient = GraphQLClientService.instance.lastRequestWasTransportFailure;
+                final res = await GraphQLClientService.instance.trackProgressWithClassification(mangaId);
+                success = res.data != null;
+                if (!success) failTransient = res.wasTransportFailure;
               } else if (op == 'bind') {
                 await GraphQLClientService.instance.bindTrack(
                   parseIntSafe(payload['mangaId']),
@@ -2368,9 +2361,9 @@ class SyncEngine {
                 success = true;
               } else {
                 final mangaId = parseIntSafe(payload['mangaId']);
-                final res = await GraphQLClientService.instance.trackProgress(mangaId);
-                success = res != null;
-                if (!success) failTransient = GraphQLClientService.instance.lastRequestWasTransportFailure;
+                final res = await GraphQLClientService.instance.trackProgressWithClassification(mangaId);
+                success = res.data != null;
+                if (!success) failTransient = res.wasTransportFailure;
               }
             }
             break;
@@ -2483,10 +2476,10 @@ class SyncEngine {
               }
             } else if (op == 'delete' || record.action == SyncAction.delete) {
               final categoryId = parseIntSafe(payload['categoryId'] ?? record.entityId);
-              final res = await GraphQLClientService.instance.deleteCategory(categoryId);
-              success = res != null;
+              final res = await GraphQLClientService.instance.deleteCategoryWithClassification(categoryId);
+              success = res.data != null;
               // ISS-098: a transport failure must not burn the retry budget.
-              if (!success) failTransient = GraphQLClientService.instance.lastRequestWasTransportFailure;
+              if (!success) failTransient = res.wasTransportFailure;
             } else if (op == 'addTo') {
               // ISS-105: add-only replay; throws → classified in the catch.
               final mangaId = parseIntSafe(payload['mangaId']);

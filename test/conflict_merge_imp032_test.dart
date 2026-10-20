@@ -42,17 +42,35 @@ void main() {
     expect(ConflictResolver.maxProgress(3, 3.5), 3.5);
   });
 
-  test('resolveChapter keeps the furthest page and OR-merges isRead', () {
+  test('resolveChapter keeps the furthest page and uses lastReadAt for isRead', () {
     final local = Chapter()
       ..id = 1
       ..lastPageRead = 18
-      ..isRead = false;
+      ..isRead = false
+      ..lastReadAt = 100; // local read more recently
     final remote = Chapter()
       ..serverId = 9
       ..lastPageRead = 2
-      ..isRead = true;
+      ..isRead = true
+      ..lastReadAt = 50; // remote read earlier
     final r = ConflictResolver().resolveChapter(local: local, remote: remote);
     expect(r.lastPageRead, 18);
-    expect(r.isRead, isTrue);
+    expect(r.isRead, isFalse, reason: 'local read more recently, so local isRead=false wins');
+  });
+
+  test('resolveChapter uses remote isRead when remote lastReadAt is newer', () {
+    final local = Chapter()
+      ..id = 1
+      ..lastPageRead = 18
+      ..isRead = false
+      ..lastReadAt = 50; // local read earlier
+    final remote = Chapter()
+      ..serverId = 9
+      ..lastPageRead = 2
+      ..isRead = true
+      ..lastReadAt = 100; // remote read more recently
+    final r = ConflictResolver().resolveChapter(local: local, remote: remote);
+    expect(r.lastPageRead, 18);
+    expect(r.isRead, isTrue, reason: 'remote read more recently, so remote isRead=true wins');
   });
 }

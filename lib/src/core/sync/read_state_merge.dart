@@ -127,7 +127,8 @@ ReadStateMerge mergeChapterReadState(Chapter local, Chapter remote) {
     return ReadStateMerge(isRead: local.isRead, lastPageRead: local.lastPageRead, actionAt: la);
   }
   return ReadStateMerge(
-    isRead: local.isRead || remote.isRead,
+    // Automatic merge: use lastReadAt timestamp (newer wins) to allow "mark unread"
+      isRead: (local.lastReadAt ?? 0) >= (remote.lastReadAt ?? 0) ? local.isRead : remote.isRead,
     lastPageRead: local.lastPageRead > remote.lastPageRead ? local.lastPageRead : remote.lastPageRead,
     actionAt: la == 0 ? null : la,
   );

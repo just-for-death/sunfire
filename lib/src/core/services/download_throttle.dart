@@ -20,7 +20,7 @@ class SourceThrottle {
 
   final int Function() _limit;
   final Map<String, int> _active = {};
-  final Map<String, Queue<Completer<void>>> _waiters = {};
+  final Map<String, Queue<_WaitEntry>> _waiters = {};
 
   int activeFor(String source) => _active[source] ?? 0;
 
@@ -33,22 +33,29 @@ class SourceThrottle {
     }
   }
 
-  Future<void> _acquire(String source) {
+  Future<void> _acquire(String source) async {
     final limit = clampDownloadConcurrency(_limit());
     final active = _active[source] ?? 0;
     if (active < limit) {
       _active[source] = active + 1;
-      return Future<void>.value();
+      return;
     }
-    final c = Completer<void>();
-    (_waiters[source] ??= Queue<Completer<void>>()).add(c);
-    return c.future;
+    final completer = Completer<void>();
+    final entry = _WaitEntry(completer);
+    (_waiters[source] ??= Queue<_WaitEntry>()).add(entry);
+    try {
+      await completer.future;
+    } catch (_) {
+      // If the future completes with an error (e.g., cancelled), remove from queue.
+      _waiters[source]?.remove(entry);
+      rethrow;
+    }
   }
 
   void _release(String source) {
     final q = _waiters[source];
     if (q != null && q.isNotEmpty) {
-      q.removeFirst().complete(); // hand the slot over; active count unchanged
+      q.removeFirst().completer.complete(); // hand the slot over; active count unchanged
       return;
     }
     final active = (_active[source] ?? 1) - 1;
@@ -58,6 +65,12 @@ class SourceThrottle {
       _active[source] = active;
     }
   }
+}
+
+/// Internal entry for a waiting task with cancellation support.
+class _WaitEntry {
+  _WaitEntry(this.completer);
+  final Completer<void> completer;
 }
 
 /// Runs [count] jobs with at most [concurrency] in flight (a sliding worker

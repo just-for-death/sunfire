@@ -36,12 +36,18 @@ class NavigationController {
     required this.pageLoader,
     required this.positionManager,
     required this.settings,
+    this.ownsSubControllers = true,
   });
 
   final IsarService isarService;
   final PageLoader pageLoader;
   final PositionManager positionManager;
   final SettingsService settings;
+
+  /// Whether this controller owns the injected sub-controllers and should
+  /// dispose them. Set to false when sub-controllers are injected from
+  /// outside (e.g., tests, or ReaderController with _subControllersInjected).
+  final bool ownsSubControllers;
 
   // Navigation debouncing (single copy; the screen reads/writes these).
   DateTime? lastNextChapterNavAt;
@@ -853,8 +859,10 @@ class NavigationController {
   void dispose() {
     _progressDebounceTimer?.cancel();
     _cancelInFlightResolve();
-    pageLoader.dispose();
-    positionManager.dispose();
+    if (ownsSubControllers) {
+      pageLoader.dispose();
+      positionManager.dispose();
+    }
   }
 }
 // ── IMP-012: seamless webtoon chapters (multi-chapter item model) ─────
